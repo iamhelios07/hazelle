@@ -3,13 +3,15 @@ import { lazy, useLayoutEffect, useState, useSyncExternalStore, type ReactNode }
 import type { Stored } from '../../model/kinds';
 import { binsChat, isBinned, live } from '../../model/library';
 import type { SideAt } from '../chat/ChatScreen';
+import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
 import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
+import { NO_CHARACTER } from '../common/words';
 import { useImport } from '../library/ImportFlow';
 import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
-import { Button, Empty, Intro, ListDetail, NavBar, Progress, Screen, Text, useSplit, useWide } from '../ui';
+import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
@@ -157,7 +159,7 @@ function CharacterPage({ at, wide }: { at: At<'shelf' | 'edit'>; wide: boolean }
   const stored = useStored('character', at.character);
   if (at.character === null) return (
     <Screen align="center">
-      <Intro title="캐릭터 없이" />
+      <Intro title={NO_CHARACTER} />
       <Button icon={MessageSquarePlus} onClick={() => navigate({ kind: 'new-chat', character: null })}>새 채팅</Button>
     </Screen>
   );
@@ -193,8 +195,13 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
   const item = chatModel.model;
   if (!item || chatModel.state !== 'loaded') return (
     <Screen align="center" top={<NavBar title={summary.title} {...backBar(back)} />}>
-      {chatModel.state === 'failed' ? <Text>{describeFailure(chatModel.error!)}</Text> : <Progress steps={[{ label: '채팅을 불러오는 중' }]} />}
-      {chatModel.state === 'failed' && <Button onClick={chatModel.retry}>다시 시도</Button>}
+      {chatModel.state === 'failed' ? (
+        <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: chatModel.retry }}>
+          {describeFailure(chatModel.error!)}
+        </Callout>
+      ) : (
+        <Progress steps={[{ label: '채팅을 불러오는 중' }]} />
+      )}
     </Screen>
   );
   if (character !== null && !shelf) return missing(at, 'orphaned-chat', wide);

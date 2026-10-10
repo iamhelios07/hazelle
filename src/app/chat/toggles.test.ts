@@ -28,9 +28,10 @@ describe('toggle panel rows', () => {
     expect(rows.changed).toBe(2);
     expect(toggleRows(set([], { sims: '1' }), PROMPT.length).changed).toBe(1);
 
-    expect(shownRows(rows.card, '', false, new Set(['weather'])).map(({ toggle }) => toggle.key)).toEqual(['weather', 'storm']);
-    expect(shownRows(rows.card, '', true, new Set()).map(({ toggle }) => toggle.key)).toEqual(['storm']);
-    expect(shownRows(rows.card, '날씨', false, new Set()).map(({ toggle }) => toggle.key)).toEqual(['weather']);
+    const every = new Set(rows.card);
+    expect(shownRows(rows.card, every, false, new Set(['weather'])).map(({ toggle }) => toggle.key)).toEqual(['weather', 'storm']);
+    expect(shownRows(rows.card, every, true, new Set()).map(({ toggle }) => toggle.key)).toEqual(['storm']);
+    expect(shownRows(rows.card, new Set([rows.card[1]!]), false, new Set()).map(({ toggle }) => toggle.key)).toEqual(['weather']);
   });
 
   it('sets a module’s toggles apart from the card’s, and a key both declare with the card’s', () => {

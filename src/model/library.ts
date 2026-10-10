@@ -103,8 +103,8 @@ export const readableTexts = (card: Card) =>
 // At 0 or less it is due, and purgeExpired removes it.
 export const daysLeft = ({ deleted }: Mark, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);
 
-export const matches = ({ card, alias }: Character, query: string) =>
-  `${card.name} ${card.nickname ?? ''} ${alias ?? ''}`.toLowerCase().includes(query.trim().toLowerCase());
+// What a search over characters reads: the card's name and nickname and the alias the user gave it.
+export const characterTexts = ({ card, alias }: Character) => [card.name, card.nickname ?? '', alias ?? ''];
 
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 

@@ -40,6 +40,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
     return (
       <>
         <Facts
+          variant="tiles"
           items={[
             { label: '모델', value: receipt.modelName },
             { label: '연결', value: receipt.source },

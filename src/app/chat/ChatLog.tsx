@@ -2,10 +2,11 @@ import { GitBranch } from 'lucide-react';
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
 import { shown } from '../../model/chat';
 import type { Stored } from '../../model/kinds';
+import { ACTS } from '../common/acts';
 import { day } from '../common/time';
 import { useChatSummary } from '../session';
 import { navigate } from '../shell/router';
-import { Button, Divider, Empty, Progress, Text, Viewport } from '../ui';
+import { Callout, Divider, Empty, Progress, Text, Viewport } from '../ui';
 import { ChatMessage } from './ChatMessage';
 import { foldTerm } from './search';
 import type { OpenChat } from './useChat';
@@ -34,10 +35,9 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const origin = item?.chat.origin;
   const { character, me, modelName } = speakers(chat);
   const term = search ? foldTerm(search.term) : '';
-  if (chat.displayPending) return chat.displayError === undefined ? <Progress steps={[{ label: '채팅을 불러오는 중' }]} /> : <>
-    <Text>채팅을 표시하지 못했어요.</Text>
-    <Button variant="secondary" size="sm" onClick={chat.retryDisplay}>다시 시도</Button>
-  </>;
+  if (chat.displayPending) return chat.displayError === undefined ? <Progress steps={[{ label: '채팅을 불러오는 중' }]} /> : (
+    <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: chat.retryDisplay }}>채팅을 표시하지 못했어요.</Callout>
+  );
   return <>
     {notUsed && <Text variant="note" align="center">{notUsed}</Text>}
     {messages.length === 0 ? <Empty variant="story">

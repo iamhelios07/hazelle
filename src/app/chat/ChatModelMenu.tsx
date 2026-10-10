@@ -1,13 +1,12 @@
-import { useState } from 'react';
 import { sameModelRef, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
 import { modelProfile } from '../../runtime/profiles';
 import { starredModels } from '../common/RolePicker';
-import { noResults } from '../common/search';
+import { useSearch } from '../common/useSearch';
 import { noStarred } from '../common/words';
 import { useSummaries, useConnections, useStore } from '../session';
 import { navigate } from '../shell/router';
-import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, SearchField, type MenuHandle } from '../ui';
+import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, type MenuHandle } from '../ui';
 
 type Props = {
   // null when no layer names one.
@@ -45,16 +44,13 @@ function ProfileItem({ current }: { current: ModelRef }) {
 function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
   const connections = useConnections();
   const summaries = useSummaries();
-  const [query, setQuery] = useState('');
-
   const starred = starredModels(connections, 'main');
   const recent = recentModels(
     summaries.map(({ value }) => value.recent),
     RECENT,
   ).flatMap((ref) => starred.filter((choice) => sameModelRef(choice.ref, ref)));
   const rest = starred.filter((choice) => !recent.includes(choice));
-  const words = query.trim().toLowerCase();
-  const found = starred.filter((choice) => `${choice.name} ${choice.source}`.toLowerCase().includes(words));
+  const search = useSearch(starred, '즐겨찾기한 모델 검색', (choice) => [choice.name, choice.source]);
 
   const item = (choice: (typeof starred)[number]) => (
     <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={choice.source} checked={!!current && sameModelRef(choice.ref, current)} onClick={() => onPick(choice.ref)} />
@@ -63,15 +59,15 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
   if (starred.length === 0) return <Empty variant="menu">{noStarred('선택할 수 있어요')}</Empty>;
   return (
     <>
-      <SearchField size="sm" label="즐겨찾기한 모델 검색" value={query} onChange={setQuery} />
-      {words ? (
-        found.length ? (
+      {search.field}
+      {search.words ? (
+        search.none ? (
+          <Empty variant="menu">{search.none}</Empty>
+        ) : (
           <>
             <MenuHeading>검색 결과</MenuHeading>
-            {found.map(item)}
+            {search.found.map(item)}
           </>
-        ) : (
-          <Empty variant="menu">{noResults(query.trim())}</Empty>
         )
       ) : (
         <>

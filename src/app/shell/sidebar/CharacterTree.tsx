@@ -1,8 +1,9 @@
-import { Import, LayoutGrid, MessageSquarePlus, PackageOpen } from 'lucide-react';
+import { LayoutGrid, MessageSquarePlus, PackageOpen } from 'lucide-react';
 import { useMemo } from 'react';
 import type { ChatSummary } from '../../../model/chat';
-import { matches, type FolderTree, type Shelf } from '../../../model/library';
-import { noResults } from '../../common/search';
+import { characterTexts, type FolderTree, type Shelf } from '../../../model/library';
+import { ACTS, importOf } from '../../common/acts';
+import { matches, noResults, SEARCH_FROM } from '../../common/search';
 import { ago } from '../../common/time';
 import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../library/ImportFlow';
@@ -55,10 +56,10 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
       folder.children.forEach((child) => visit(child, depth + 1));
       byFolder.get(folder.id)!.direct.forEach((shelf) => add(shelf, depth + 1));
     };
-    if (words) characters.filter(({ character }) => matches(character, query)).forEach((shelf) => add(shelf, 0));
+    if (words) characters.filter(({ character }) => matches(words, ...characterTexts(character))).forEach((shelf) => add(shelf, 0));
     else { folders.forEach((folder) => visit(folder, 0)); loose.forEach((shelf) => add(shelf, 0)); add(none, 0); }
     return result;
-  }, [words, characters, query, folders, loose, none, opened, byFolder]);
+  }, [words, characters, folders, loose, none, opened, byFolder]);
 
   return (
     <Sidebar
@@ -66,14 +67,14 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
       actions={
         <>
           {page && <Row kind="toolbar">
-            <Button variant="secondary" size="sm" icon={Import} onClick={pick}>
-              봇 가져오기
+            <Button variant="secondary" size="sm" icon={ACTS.import.icon} onClick={pick}>
+              {importOf('봇')}
             </Button>
             <IconButton icon={PackageOpen} label="Risu에서 이사" size="sm" onClick={move} />
             <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery' })} />
             <IconButton icon={MessageSquarePlus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Row>}
-          {characters.length > 0 && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={onQuery} />}
+          {(characters.length >= SEARCH_FROM || words !== '') && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={onQuery} />}
         </>
       }
       footer={page && <SidebarFooter />}

@@ -1,6 +1,7 @@
 import { ImageIcon } from 'lucide-react';
 import { sameModelRef } from '../../connectors/assignment';
 import { drawingModels, type ImageRoute } from '../../runtime/illustrate';
+import { newOf } from '../common/acts';
 import { follows, NOT_STARRED } from '../common/words';
 import { useConnections } from '../session';
 import { navigate } from '../shell/router';
@@ -41,7 +42,7 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
               <ImageModelMenu routes={routes} chat={chat} />
             ) : (
               <Button variant="ghost" size="sm" onClick={() => navigate({ kind: 'add-connection' })}>
-                연결 추가
+                {newOf('연결')}
               </Button>
             )
           }

@@ -1,9 +1,9 @@
-import { Copy, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { pictureRef } from '../../engine/assets';
 import type { ChatItem } from '../../model/chat';
 import { assetDataUrls } from '../../runtime/assets';
 import { chatFile } from '../../runtime/chat-file';
+import { ACTS } from '../common/acts';
 import { download } from '../common/download';
 import { sizeText } from '../common/size';
 import { useCopyHtml } from '../common/useCopy';
@@ -86,12 +86,12 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
       actions={
         <>
           {form === 'log' && (
-            <Button variant="secondary" icon={Copy} disabled={!ready} onClick={() => copyHtml(prepared!.html)}>
-              복사
+            <Button variant="secondary" icon={ACTS.copy.icon} disabled={!ready} onClick={() => copyHtml(prepared!.html)}>
+              {ACTS.copy.label}
             </Button>
           )}
-          <Button icon={Download} disabled={!ready} onClick={() => void saveFile()}>
-            저장
+          <Button icon={ACTS.export.icon} disabled={!ready} onClick={() => void saveFile()}>
+            {ACTS.export.label}
           </Button>
         </>
       }

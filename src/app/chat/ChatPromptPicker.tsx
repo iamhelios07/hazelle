@@ -51,7 +51,8 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
   });
   const order = (a: Stored<'prompt'>, b: Stored<'prompt'>) => (used.get(a.id) ?? Infinity) - (used.get(b.id) ?? Infinity) || a.value.name.localeCompare(b.value.name, 'ko');
   const own = prompt.own && prompt.kind === 'prompt' ? prompt.prompt.id : null;
-  const found = prompts.filter((item) => matches(query, item.value.name)).sort(order);
+  const words = query.trim();
+  const found = prompts.filter((item) => matches(words, item.value.name)).sort(order);
 
   function choose(value: string | null) {
     actions.closeDialog();
@@ -79,22 +80,22 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
   const footer = (
     <Row kind="actions">
       {prompt.kind === 'prompt' && (
-        <Button variant="link" size="sm" onClick={() => open(prompt.prompt.id)}>
+        <Button variant="link" onClick={() => open(prompt.prompt.id)}>
           이 프롬프트 편집
         </Button>
       )}
-      <Button variant="link" size="sm" onClick={() => open(null)}>
+      <Button variant="link" onClick={() => open(null)}>
         프롬프트 관리
       </Button>
     </Row>
   );
   return (
     <Dialog title="이 채팅의 프롬프트" onClose={actions.closeDialog} toolbar={toolbar} footer={footer}>
-      {found.length === 0 && <Empty>{noResults(query.trim())}</Empty>}
+      {words && found.length === 0 && <Empty>{noResults(words)}</Empty>}
       <List label="프롬프트">
-        {!query.trim() && <ListItem title={follows('기본 프롬프트')} description={fallback?.value.name ?? '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
+        {!words && <ListItem title={follows('기본 프롬프트')} description={fallback?.value.name ?? '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
         {found.map((item) => (
-          <ListItem key={item.id} title={item.value.name} tags={item.id === settings.prompt ? ['기본'] : []} selected={item.id === own} onClick={() => choose(item.id)} />
+          <ListItem key={item.id} title={item.value.name} badge={item.id === settings.prompt ? '기본' : undefined} selected={item.id === own} onClick={() => choose(item.id)} />
         ))}
       </List>
     </Dialog>

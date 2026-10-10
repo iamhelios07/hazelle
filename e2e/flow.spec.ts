@@ -34,7 +34,7 @@ test('a new account imports a card, chats through the fake provider and finds th
   });
 
   await test.step('connect the fake provider and make its model the default', async () => {
-    await page.getByRole('button', { name: /^연결 추가/ }).click();
+    await page.getByRole('button', { name: /^새 연결/ }).click();
     await page.getByRole('button', { name: /^직접 연결/ }).click();
     await page.getByLabel('주소', { exact: true }).fill(FAKE_ADDRESS);
     await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();

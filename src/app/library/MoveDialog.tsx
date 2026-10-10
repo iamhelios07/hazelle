@@ -1,5 +1,5 @@
-import { FileUp } from 'lucide-react';
 import { useState } from 'react';
+import { ACTS, importOf } from '../common/acts';
 import { Button, Dialog, FileButton, Section, Stack, Text } from '../ui';
 
 // Risu에서 이사: says which Risu backup files to get and takes them, the text's and, for an account user, the full backup
@@ -12,7 +12,7 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
       title="Risu에서 이사"
       onClose={onClose}
       actions={
-        <Button size="md" disabled={text === null} onClick={() => onRead(pictures ? [text!, pictures] : [text!])}>
+        <Button disabled={text === null} onClick={() => onRead(pictures ? [text!, pictures] : [text!])}>
           백업 읽기
         </Button>
       }
@@ -33,11 +33,11 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
 
 function Slot({ title, note, file, onFile }: { title: string; note: string; file: File | null; onFile: (file: File) => void }) {
   return (
-    <Section title={title}>
+    <Section level={3} title={title}>
       <Stack gap="related">
         <Text variant="note">{note}</Text>
-        <FileButton accept=".bin" size="sm" icon={FileUp} onFile={onFile}>
-          {file ? file.name : '파일 선택'}
+        <FileButton accept=".bin" size="sm" icon={ACTS.import.icon} onFile={onFile}>
+          {file ? file.name : importOf('파일')}
         </FileButton>
       </Stack>
     </Section>

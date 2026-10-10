@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
-import { noResults, SEARCH_FROM } from '../common/search';
 import { ToggleChoice } from '../common/ToggleChoice';
-import { PAGES } from '../common/words';
-import { Button, ChoiceGroup, Empty, Row, SearchField, Section, SettingRow, SidePanel, Stack, Switch, Text } from '../ui';
+import { useSearch } from '../common/useSearch';
+import { PAGES, RESET } from '../common/words';
+import { Button, Empty, Row, Section, SettingRow, SidePanel, Stack, Switch, Tab, Tabs, Text } from '../ui';
 import { shownRows, splitByCard, type ToggleRow } from './toggles';
 import type { OpenChat } from './useChat';
 
@@ -11,11 +11,12 @@ const defaultOf = (toggle: Toggle) => `기본값: ${toggle.kind === 'check' ? (t
 
 export function ChatToggles({ chat }: { chat: OpenChat }) {
   const { prompt, card, toggles, actions } = chat;
-  const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'changed'>('all');
   const changedKeys = () => new Set([...toggles.prompt, ...toggles.card].filter((row) => row.changed).map((row) => row.toggle.key));
   const [first, setFirst] = useState(changedKeys);
-  const total = toggles.prompt.length + toggles.card.length;
+  const all = [...toggles.prompt, ...toggles.card];
+  const search = useSearch(all, '토글 검색', (row) => [row.toggle.label]);
+  const found = new Set(search.found);
   const packs = splitByCard(toggles.card, card?.toggles ?? '');
 
   const groups = [
@@ -24,8 +25,13 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
     { title: PAGES.modules, rows: packs.modules },
   ]
     .filter((group) => group.rows.length > 0)
-    .map((group) => ({ ...group, shown: shownRows(group.rows, query, filter === 'changed', first) }));
+    .map((group) => ({ ...group, shown: shownRows(group.rows, found, filter === 'changed', first) }));
   const visible = groups.filter((group) => group.shown.length > 0);
+
+  function show(next: typeof filter) {
+    setFilter(next);
+    setFirst(changedKeys());
+  }
 
   const row = ({ toggle, value, changed }: ToggleRow) => (
     <SettingRow
@@ -51,8 +57,8 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       footer={
         <>
           {toggles.changed ? `변경 ${toggles.changed}개` : '모두 기본값'}
-          <Button variant="secondary" size="sm" disabled={toggles.changed === 0} onClick={actions.resetToggles}>
-            기본값으로 되돌리기
+          <Button variant="link" size="sm" disabled={toggles.changed === 0} onClick={actions.resetToggles}>
+            {RESET}
           </Button>
         </>
       }
@@ -71,32 +77,24 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
           </Row>
         )}
       </Stack>
-      {total >= SEARCH_FROM && (
-        <Stack gap="related">
-          <SearchField size="sm" label="토글 검색" value={query} onChange={setQuery} />
-          <ChoiceGroup
-            label="보기"
-            options={[
-              { value: 'all', label: `전체 ${total}` },
-              { value: 'changed', label: `변경 ${toggles.changed}` },
-            ]}
-            value={filter}
-            onChange={(next) => {
-              setFilter(next);
-              setFirst(changedKeys());
-            }}
-          />
-        </Stack>
+      {search.field && (
+        <Row kind="toolbar">
+          {search.field}
+          <Tabs label="보기">
+            <Tab label="전체" count={all.length} current={filter === 'all'} onClick={() => show('all')} />
+            <Tab label="변경" count={toggles.changed} current={filter === 'changed'} onClick={() => show('changed')} />
+          </Tabs>
+        </Row>
       )}
       {visible.map((group) => (
         <Section key={group.title} level={3} title={group.title} note={String(group.rows.length)}>
           {group.shown.map(row)}
         </Section>
       ))}
-      {total === 0 ? (
+      {all.length === 0 ? (
         <Empty variant="section">{card ? '이 채팅의 프롬프트와 캐릭터 카드에는 토글이 없어요.' : '이 채팅의 프롬프트에는 토글이 없어요.'}</Empty>
       ) : (
-        visible.length === 0 && <Empty variant="section">{query.trim() ? noResults(query.trim()) : '변경한 토글이 없어요.'}</Empty>
+        visible.length === 0 && <Empty variant="section">{search.none ?? '변경한 토글이 없어요.'}</Empty>
       )}
     </SidePanel>
   );
