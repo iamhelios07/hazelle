@@ -1,6 +1,6 @@
 import { effortLevels, type ReasoningTakes } from './settings';
 import type { CacheMark, ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
-import { count, isRecord, modelEntries, nameOf } from './values';
+import { count, flag, isRecord, modelEntries, nameOf } from './values';
 
 // Copilot serves only clients it knows, so every request names VS Code's Copilot Chat, as provider-hub
 // did. The versions are the ones it last sent successfully.
@@ -27,8 +27,6 @@ const github = (url: string, secret: string, accept = 'application/json'): HttpR
   headers: { authorization: `Bearer ${secret}`, accept, ...USER_AGENT },
   body: null,
 });
-
-const flag = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
 
 // An older list without supported_endpoints was served entirely over chat completions.
 function protocol(raw: Record<string, unknown>): Model['protocol'] {

@@ -1,12 +1,10 @@
 import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
-import { add, counted, type Tally } from './convert';
+import { add, counted, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
 import { unpack } from './risum';
 import { readToggles } from './toggles';
-
-type Json = Record<string, unknown>;
 
 // What a preset holds that the prompt does not take, in the order the summary lists it.
 const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
@@ -44,7 +42,6 @@ const SKIPPED = new Map<unknown, PresetUnsupportedKind>([
 type Repeating = { [K in SlotKind]: (typeof SLOTS)[K]['repeats'] extends true ? K : never }[SlotKind];
 const REPEATING: Record<Repeating, true> = { chat: true };
 
-const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const fail = (kind: PresetFailure['kind']): PresetResult => ({ ok: false, failure: { kind } });
 
 // Risu's preset container (compat spec, out-of-scope formats), told apart by extension as Risu does: a .risup is

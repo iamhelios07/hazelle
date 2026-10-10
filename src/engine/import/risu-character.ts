@@ -1,16 +1,13 @@
 import { splitThoughts } from '../../connectors/thoughts';
 import { isRecord, list } from '../../connectors/values';
 import { assemble, imageType, type Resolve } from './card';
-import { add, convert, counted, type Tally } from './convert';
+import { add, convert, counted, record, text, type Json, type Tally } from './convert';
 import { MOVE_UNSUPPORTED_KINDS, type MoveUnsupported, type MoveUnsupportedKind, type Picture, type RisuCharacter, type RisuChat } from './types';
 
-type Json = Record<string, unknown>;
 export type Read = () => Promise<Uint8Array<ArrayBuffer>>;
 // The backup's entry for a Risu asset key; null when the backup lacks it.
 export type Entry = (key: string) => Read | null;
 
-const text = (value: unknown) => (typeof value === 'string' ? value : '');
-const record = (value: unknown): Json => (isRecord(value) ? value : {});
 const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 const INLAY = /\{\{inlay(?:ed|eddata)?::/;
 

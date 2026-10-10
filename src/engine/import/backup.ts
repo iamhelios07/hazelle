@@ -1,5 +1,5 @@
 import { isRecord, list } from '../../connectors/values';
-import { add, convertModule, counted, type Tally } from './convert';
+import { add, convertModule, counted, record, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
 import { convertPreset } from './preset';
@@ -18,7 +18,6 @@ import {
   type RisuPreset,
 } from './types';
 
-type Json = Record<string, unknown>;
 type Span = { source: BackupSource; offset: number; length: number };
 type Cold = (key: string) => Promise<unknown>;
 
@@ -32,8 +31,6 @@ const COLD_READS = 8;
 const SECRETS = new Set(['openAIKey', 'proxyKey', 'forceReplaceUrl', 'forceReplaceUrl2', 'textgenWebUIStreamURL', 'textgenWebUIBlockingURL']);
 
 const utf8 = new TextDecoder();
-const text = (value: unknown) => (typeof value === 'string' ? value : '');
-const record = (value: unknown): Json => (isRecord(value) ? value : {});
 const fail = (kind: BackupFailure['kind'], detail?: string): BackupResult => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
 
 // Several files are read as one: the database comes from the first whose database is not encrypted, and every entry is

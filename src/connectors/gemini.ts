@@ -2,7 +2,7 @@ import { streamError } from './errors';
 import type { Reasoning } from './settings';
 import { embedUsage } from './chat-completions';
 import type { ChatMessage, Codec, EmbedPurpose, Model, Phase, StreamFacts, Terminal } from './types';
-import { count, isRecord, list } from './values';
+import { count, isRecord, list, vector } from './values';
 
 // The Gemini API (generateContent), checked against ai.google.dev/api on 2026-10-04.
 
@@ -195,7 +195,7 @@ export const gemini: Codec = {
     }),
     parse(payload, expected) {
       if (!isRecord(payload) || !Array.isArray(payload.embeddings) || payload.embeddings.length !== expected) return null;
-      const vectors = payload.embeddings.map((embedding) => (isRecord(embedding) && Array.isArray(embedding.values) && embedding.values.length > 0 && embedding.values.every((value) => typeof value === 'number' && Number.isFinite(value)) ? (embedding.values as number[]) : null));
+      const vectors = payload.embeddings.map((embedding) => (isRecord(embedding) && vector(embedding.values) ? embedding.values : null));
       if (vectors.some((values) => values === null)) return null;
       const usage = isRecord(payload.usageMetadata) ? payload.usageMetadata : {};
       return { vectors: vectors as number[][], usage: embedUsage(count(usage.promptTokenCount)), raw: usage };

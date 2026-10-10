@@ -1,18 +1,8 @@
+import { bareModel } from './chat-completions';
 import type { ConnectionType, Model } from './types';
 
 // Voyage AI documents no model list (docs research/embeddings-spike.md), so its embedding models are written here.
-const embedding = (id: string): Model => ({
-  id,
-  name: id,
-  input: ['text'],
-  output: ['embedding'],
-  contextLength: 32_000,
-  maxOutput: null,
-  reasoning: null,
-  tools: null,
-  protocol: null,
-  takes: { settings: null, reasoning: null },
-});
+const embedding = (id: string): Model => ({ ...bareModel(id), input: ['text'], output: ['embedding'], contextLength: 32_000 });
 
 export const voyage: ConnectionType = {
   id: 'voyage',

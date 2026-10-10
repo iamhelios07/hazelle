@@ -1,4 +1,5 @@
 import type { Model, PictureRequest } from '../connectors/types';
+import { isRecord } from '../connectors/values';
 import type { Figure, Scene, Shape } from '../model/illustration';
 import type { IllustratePrompt, PictureTags } from '../model/prompt';
 
@@ -33,7 +34,6 @@ export function illustratorPrompt(): IllustratePrompt {
   };
 }
 
-// What the scene writer reads in the source slot.
 export const numbered = (paragraphs: readonly string[]) => paragraphs.map((paragraph, index) => `[${index + 1}] ${paragraph}`).join('\n');
 
 // unreadable: no JSON object. fields: one the format asks for is missing or of the wrong type. paragraph: it names no
@@ -41,7 +41,6 @@ export const numbered = (paragraphs: readonly string[]) => paragraphs.map((parag
 export type SceneInvalid = 'unreadable' | 'fields' | 'paragraph';
 
 const SHAPES: readonly Shape[] = ['portrait', 'landscape', 'square'];
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === 'string';
 const isPlace = (value: unknown): value is number => typeof value === 'number' && value >= 0 && value <= 1;
 
@@ -85,7 +84,6 @@ export const PICTURE_DEFAULTS: PictureTags = {
   quality: 'best quality, amazing quality, very aesthetic, absurdres',
   negative: 'lowres, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, blurry, jpeg artifacts, signature, watermark, username, text, worst quality, low quality',
 };
-
 
 const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 

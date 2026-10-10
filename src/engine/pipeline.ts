@@ -307,7 +307,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
     const sent = cachePoints(parts);
     return {
       messages: sent.map(({ message }) => message),
-    parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
+      parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
@@ -384,7 +384,7 @@ function translation({ scope, take, prompt, translations, notes, request, langua
   const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, message: seed, seed, role: 'user' as const, text: request.text, time: null }];
   const laid = lay(scope, history, variables, seed, remembered(countTokens), language);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', note: notes, recent: recentOf(scope, texts, before, translations), source });
-  return { source, messages: cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message) };
+  return { source, messages: taskMessages(parts) };
 }
 
 // 이전 메시지: the messages before the one at before, as displayed, each with its translation unless the slot holds none.
@@ -421,7 +421,7 @@ function illustration({ scope, take, prompt, index, paragraphs, seed, countToken
   const { texts, variables } = renderChat('display', scope, take);
   const laid = lay(scope, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
-  return { messages: cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message) };
+  return { messages: taskMessages(parts) };
 }
 
 export type MemoryTaskInput = {
@@ -455,7 +455,7 @@ function memoryTask({ scope, prompt, memory, before, budget, span: { from, to },
   const shown = spanText(span.map((text, offset) => ({ speaker: speakers[from + offset]!, text: text.trim() })));
   const held = chapter ? chapterBefore(before) : memoryBefore(memory, before, stateLimit(budget), countTokens);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'memory', memory: held, span: shown });
-  const messages = cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
+  const messages = taskMessages(parts);
   const format = chapter ? chapterFormat(to - from, chapter.target) : memoryFormat(to - from, recordsTarget(span.reduce((sum, text) => sum + countTokens(text), 0), budget));
   return { messages: [...messages, { role: 'user', content: format }], span };
 }
@@ -472,6 +472,10 @@ export function autoCachePoints(roles: readonly ('chat' | 'depth' | 'memory' | n
   const memory = roles.indexOf('memory');
   const anchor = memory > 0 && (first === -1 || memory < first) ? [memory - 1] : [];
   return [...new Set([...anchor, ...(first > 0 ? [first - 1] : []), ...(last === -1 ? [] : [last])])];
+}
+
+function taskMessages(parts: Part[]): ChatMessage[] {
+  return cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
 }
 
 function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
