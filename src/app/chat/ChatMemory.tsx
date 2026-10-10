@@ -215,7 +215,7 @@ function FactRow({ chat, fact }: { chat: string; fact: Fact }) {
     const removed = await save.remove(() => removeFact(store, chat, fact));
     if (!removed) return;
     if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
-    toast.undoable(`'${name}' 상태를 삭제했어요.`, () => void setFact(store, chat, removed.data, null).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
+    toast.undoable(`'${name}' 상태를 삭제했어요.`, () => setFact(store, chat, removed.data, null));
   }
 
   return (
@@ -309,7 +309,7 @@ function ThreadRow({ chat, thread, name, onDrop }: { chat: string; thread: Threa
     const removed = await save.remove(() => removeThread(store, chat, thread.id));
     if (!removed) return;
     if (!removed.ok) return removed.error === 'gone' ? onDrop() : toast.failed(removed, '삭제하지 못했어요.');
-    toast.undoable('미해결 사건을 삭제했어요.', () => void setThread(store, chat, removed.data, false).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
+    toast.undoable('미해결 사건을 삭제했어요.', () => setThread(store, chat, removed.data, false));
   }
 
   return (

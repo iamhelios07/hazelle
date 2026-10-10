@@ -20,7 +20,7 @@ export function useMessageEdit(id: string | null, last: Shown | undefined, regen
   function remove(message: Shown) {
     if (!id) return;
     void deleteMessage(session, id, message).then((saved) => saved.ok || toast.failed(saved));
-    toast.undoable('메시지를 삭제했어요.', () => void undeleteMessage(session, id, message));
+    toast.undoable('메시지를 삭제했어요.', () => undeleteMessage(session, id, message));
   }
 
   return {

@@ -114,7 +114,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   function remove() {
     void removeConnection(store, id).then((result) => result.ok || toast.failed(result));
     navigate({ kind: 'connections' });
-    toast.undoable(`'${connection.label}' 연결을 삭제했어요.`, () => void restoreConnection(store, stored));
+    toast.undoable(`'${connection.label}' 연결을 삭제했어요.`, () => restoreConnection(store, stored));
   }
 
   const signIn = resolveConnection(connection)?.type?.signIn;

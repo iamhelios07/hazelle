@@ -36,14 +36,10 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
     if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
   }
 
-  function mark(at: number | null) {
-    void setModuleDeleted(store, id, at).then((saved) => saved.ok || toast.failed(saved));
-  }
-
   function remove() {
-    mark(Date.now());
+    void setModuleDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
     navigate({ kind: 'modules' });
-    toast.undoable(`'${moduleName(name)}' 모듈을 삭제했어요.`, () => mark(null), BIN_KEEPS);
+    toast.undoable(`'${moduleName(name)}' 모듈을 삭제했어요.`, () => setModuleDeleted(store, id, null), BIN_KEEPS);
   }
 
   return (

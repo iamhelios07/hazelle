@@ -6,6 +6,7 @@ import type { Stored } from '../../model/kinds';
 import { modelUsage, type ModelUsage } from '../../model/chat';
 import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
+import { illustrationPrompt } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
 import { money } from '../common/money';
 import { UNKNOWN } from '../common/words';
@@ -38,8 +39,12 @@ export const ModelScreen = (props: Props) => (imageOnly(props.model) ? <ImageMod
 // A model that only draws takes no 설정 묶음 and leaves no reply to count: how it draws is the 삽화 prompt's (design §6.6),
 // and its allowance is its connection's meter.
 function ImageModelScreen({ connection, model, back }: Props) {
-  const settings = useSettings();
-  const prompt = settings.illustratePrompt;
+  const { store } = useSession();
+  // A binned or missing default opens the list, never the missing page.
+  const openPrompt = () => {
+    const prompt = illustrationPrompt(store, undefined);
+    navigate(prompt.kind === 'prompt' ? { kind: 'prompt', id: prompt.prompt.id, pane: null } : { kind: 'prompts' });
+  };
   return (
     <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}>
       <SettingGroup label="이미지 설정">
@@ -47,7 +52,7 @@ function ImageModelScreen({ connection, model, back }: Props) {
           label="이미지 설정"
           help="태그, 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
           control={
-            <Button variant="secondary" size="sm" onClick={() => navigate(prompt ? { kind: 'prompt', id: prompt, pane: null } : { kind: 'prompts' })}>
+            <Button variant="secondary" size="sm" onClick={openPrompt}>
               삽화 프롬프트 열기
             </Button>
           }

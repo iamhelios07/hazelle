@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatFile, readChatFile } from './chat-file';
-import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, removeMessage, selectVersion, setCast, startChat } from './chat-log';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, removeMessage, selectVersion, setCast, setChatNote, setChatPrompt, startChat, withOwn } from './chat-log';
+import { setChatModel, withMainModel } from './assignment';
 import type { Files } from './files';
 import { summaryId } from './summary';
 import { greetingPreview, projectGreetings } from './greetings';
@@ -50,6 +51,20 @@ describe('setCast', () => {
     expect(store.get('chat', id)!.value.cast).toEqual(['a', 'b', 'c', 'd', 'e']);
     await setCast(store, id, []);
     expect('cast' in store.get('chat', id)!.value).toBe(false);
+  });
+});
+
+describe('a chat not saved yet', () => {
+  it('takes its picks through the same transforms the saved chat is written with', async () => {
+    const { store } = await server.account();
+    const id = crypto.randomUUID();
+    const unsaved: Chat = { title: null, character: null, models: {}, note: 'old' };
+    expect(await startChat(store, id, unsaved, null)).toBeNull();
+    const ref = { connection: 'c', model: 'm' };
+    await setChatModel(store, id, ref);
+    await setChatPrompt(store, id, 'p');
+    await setChatNote(store, id, null);
+    expect(store.get('chat', id)!.value).toEqual(withOwn(withOwn(withMainModel(unsaved, ref), 'prompt', 'p'), 'note', null));
   });
 });
 

@@ -157,7 +157,7 @@ function useScriptActions({ owner, pack, onOpen }: ItemProps, list: ScriptList, 
     if (!done) return;
     if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
     onOpen(false);
-    toast.undoable(`'${name}' ${SCRIPTS[list]}${list === 'regex' ? '을' : '를'} 삭제했어요.`, () => void restoreScript(store, owner, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
+    toast.undoable(`'${name}' ${SCRIPTS[list]}${list === 'regex' ? '을' : '를'} 삭제했어요.`, () => restoreScript(store, owner, done.data));
   }
 
   const move = (by: -1 | 1, icon: LucideIcon, label: string) => {

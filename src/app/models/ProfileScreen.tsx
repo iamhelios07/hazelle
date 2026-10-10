@@ -264,7 +264,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     const cleared: ModelSettings = {};
     for (const key of Object.keys(shown) as (keyof ModelSettings)[]) cleared[key] = undefined;
     setDrafts({});
-    if (await save(cleared)) toast.undoable(`'${stored.value.name}' 설정을 기본값으로 되돌렸어요.`, () => void setProfileSettings(store, id, previous));
+    if (await save(cleared)) toast.undoable(`'${stored.value.name}' 설정을 기본값으로 되돌렸어요.`, () => setProfileSettings(store, id, previous));
   }
 
   async function remove() {
@@ -276,7 +276,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     }
     navigate({ kind: 'models' });
     const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 선택해야 사용할 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
-    toast.undoable(`'${removed.data.value.name}' 설정을 삭제했어요.`, () => void restoreProfile(store, id), note);
+    toast.undoable(`'${removed.data.value.name}' 설정을 삭제했어요.`, () => restoreProfile(store, id), note);
   }
 
   const detailSet =

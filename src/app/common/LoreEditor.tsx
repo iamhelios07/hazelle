@@ -67,7 +67,7 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
     const held = removal.entries.length;
     toast.undoable(
       `'${folder.name}' 폴더를 삭제했어요.`,
-      () => void restoreLoreFolder(store, owner, removal).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')),
+      () => restoreLoreFolder(store, owner, removal),
       held > 0 ? `항목 ${held}개는 폴더 밖으로 옮겼어요.` : undefined,
     );
   }
@@ -148,7 +148,7 @@ function EntryRow({ stored, folders, startOpen }: RowProps) {
     const done = await save.remove(() => removeLore(store, stored.id));
     if (!done) return;
     if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
-    toast.undoable(`'${loreName(shown.name)}' 항목을 삭제했어요.`, () => void restoreLore(store, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
+    toast.undoable(`'${loreName(shown.name)}' 항목을 삭제했어요.`, () => restoreLore(store, done.data));
   }
 
   return (

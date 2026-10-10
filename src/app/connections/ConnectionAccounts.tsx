@@ -35,7 +35,7 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
   function remove(account: Account) {
     void removeAccount(store, id, account.id).then((result) => {
       if (!result.ok) return toast.failed(result);
-      toast.undoable(`${accountName(account)} 계정을 뺐어요.`, () => void putAccountBack(store, id, result.data).then((back) => back.ok || toast.failed(back)));
+      toast.undoable(`${accountName(account)} 계정을 뺐어요.`, () => putAccountBack(store, id, result.data));
     });
   }
 
