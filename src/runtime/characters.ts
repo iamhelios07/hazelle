@@ -238,14 +238,6 @@ export const setIllustrate = (store: ObjectStore, character: string | null, chan
 
 export const setOwnIllustrate = (store: ObjectStore, character: string, own: boolean) => setOwnScoped(store, character, 'illustrate', own);
 
-// Until 2026-10-06 every character kept its own switches in translate; the shared ones replaced them (design §6.3), and
-// each session drops any left, so a device still on the old code that writes one loses it at the next load. Delete
-// once every account has loaded since v0.1.10.
-export async function dropCharacterTranslate(store: ObjectStore): Promise<void> {
-  const old = store.list('character').filter(({ value }) => 'translate' in value);
-  await Promise.all(old.map(({ id }) => store.update('character', id, (current) => without(current as Character & { translate?: unknown }, 'translate'))));
-}
-
 // 번역가의 노트 add up: the 전역 one, then the character's. Stored as typed, since trimming an autosave eats the newline
 // being typed; read trimmed.
 export function translatorNotes(store: ObjectStore, character: string | null): string {

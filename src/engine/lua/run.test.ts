@@ -29,6 +29,7 @@ const SNAPSHOT: Snapshot = {
     variables: [],
     greeting: null,
     model: null,
+    axModel: null,
     clock: { now: 0, timeZone: 'UTC' },
     assets: [],
     modules: [],

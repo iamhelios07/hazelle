@@ -99,7 +99,7 @@ it('round-trips streamed objects and files and filters unreachable objects from 
 it('restores a backup built by the previous zipSync format', async () => {
   const source = await pictureObjects();
   const file = new Blob([zipSync({
-    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })),
     'objects.jsonl': strToU8(source.objects.map((object) => JSON.stringify(object)).join('\n')),
     [`files/${source.ref.id}`]: [source.bytes, { level: 0 }],
   })]);
@@ -209,14 +209,14 @@ it('exports without a picture the operator blocked and what names it, and counts
 it('refuses a file with a body its kind cannot hold', async () => {
   const object = { ...persona('invalid', 1), value: { name: null, description: '', picture: null } };
   const file = new Blob([zipSync({
-    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })),
     'objects.jsonl': strToU8(JSON.stringify(object)),
   })]);
   expect(await readBackup(file)).toEqual({ ok: false, error: 'not-backup' });
 });
 
-it('distinguishes another backup version from a damaged file', async () => {
-  const file = new Blob([zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })) })]);
+it('refuses a backup of an earlier version, apart from a damaged file', async () => {
+  const file = new Blob([zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })) })]);
   expect(await readBackup(file)).toEqual({ ok: false, error: 'other-version' });
 });
 
@@ -250,7 +250,7 @@ it('restores pictures in bounded uploader windows before writing objects', async
   }));
   const objects = pictures.map(({ ref }, i): Stored<'asset'> => ({ id: `asset-${i}`, kind: 'asset', parent: 'character', rev: i, value: { file: ref, name: String(i), type: 'image/png', size: 1 } }));
   const file = new Blob([zipSync({
-    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })),
     'objects.jsonl': strToU8(objects.map((object) => JSON.stringify(object)).join('\n')),
     ...Object.fromEntries(pictures.map(({ bytes, ref }) => [`files/${ref.id}`, bytes])),
   })]);
@@ -273,7 +273,7 @@ it('decodes JSONL once and replays staged depths in source order when resuming',
   const chat: Stored<'chat'> = { id: 'chat', kind: 'chat', parent: null, rev: 2, value: { title: null, character: null, models: {} } };
   const objects = [...messages, chat, persona('person', 3)];
   const file = new Blob([zipSync({
-    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })),
     'objects.jsonl': strToU8(objects.map((object) => JSON.stringify(object)).join('\n')),
   })]);
   const inflate = vi.spyOn(zip, 'unzipEntry');

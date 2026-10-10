@@ -53,8 +53,9 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요.',
 };
 
-// Keyed by engine/import/tool's failure details; a detail missing here reads as 파일을 읽지 못했어요.
-const TOOL_FAILURE: Record<string, string> = {
+// Keyed by the failure details of engine/import/tool and of a chat file; a detail missing here reads as 파일을 읽지 못했어요.
+const DETAIL_FAILURE: Record<string, string> = {
+  'other-version': '이전 버전에서 만든 채팅 파일이라 가져올 수 없어요.',
   'tool-too-large': '도구 파일이 너무 커요.',
   'tool-encoding': 'UTF-8 텍스트 파일이 아니에요.',
   'tool-api': '헤이젤 도구 파일이 아니에요. 맨 위에 //@api 1이 있어야 해요.',
@@ -70,9 +71,9 @@ const TOOL_FAILURE: Record<string, string> = {
 const unsaved = (file: string, failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
 
 function describeImportFailure({ kind, detail, line }: ImportFailure): string {
-  const tool = detail && TOOL_FAILURE[detail];
-  if (!tool) return FAILURE[kind];
-  return line ? `${tool} ${line}` : tool;
+  const known = detail && DETAIL_FAILURE[detail];
+  if (!known) return FAILURE[kind];
+  return line ? `${known} ${line}` : known;
 }
 
 // Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,

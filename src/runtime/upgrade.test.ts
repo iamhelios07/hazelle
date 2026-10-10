@@ -48,6 +48,10 @@ describe('upgradeValue', () => {
     expect(upgradeValue('character', { card: { regex, triggers: [] }, statusScripts: ['regex-0', 0, 1] })).toEqual({ card: { regex, triggers: [] }, statusScripts: ['regex-0', 'new'] });
   });
 
+  it('drops the translation switches a character kept before they were shared, and leaves its own', () => {
+    expect(upgradeValue('character', { folder: null, translate: { replies: true }, ownTranslate: { replies: false } })).toEqual({ folder: null, ownTranslate: { replies: false } });
+  });
+
   it('drops 옆에 두기 from a character', () => {
     expect(upgradeValue('character', { folder: null, keepStatus: true })).toEqual({ folder: null });
   });

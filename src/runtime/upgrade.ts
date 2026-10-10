@@ -15,6 +15,7 @@ const GROUP = 'group-1';
 type Upgraded = 'connection' | 'character' | 'module' | 'memory';
 
 // Every decrypted value and every backup line passes here before anything reads it. null for a value already current.
+// No step is retired: an E2E value is upgraded only when a client reads it, so the server can still hold any old shape.
 export function upgradeValue(kind: string, value: unknown): Record<string, unknown> | null {
   if (!isRecord(value)) return null;
   if (kind === 'connection') return upgradeConnection(value);
@@ -45,8 +46,14 @@ function upgradeConnection(value: Record<string, unknown>) {
 // gives.
 function upgradeCharacter(value: Record<string, unknown>) {
   let upgraded: Record<string, unknown> | null = null;
-  for (const step of [translationsByText, cardScriptIds, statusIds, dropKeepStatus]) upgraded = step(upgraded ?? value) ?? upgraded;
+  for (const step of [dropTranslate, translationsByText, cardScriptIds, statusIds, dropKeepStatus]) upgraded = step(upgraded ?? value) ?? upgraded;
   return upgraded;
+}
+
+// Until 2026-10-06 every character kept its own translation switches in translate; the shared ones replaced them
+// (design §6.3).
+function dropTranslate(value: Record<string, unknown>) {
+  return 'translate' in value ? without(value, 'translate') : null;
 }
 
 // Until 2026-10-07 only greetings were translated on the character, in greetingTranslations by greeting.

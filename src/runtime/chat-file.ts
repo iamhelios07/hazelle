@@ -8,10 +8,10 @@ import { storedMemory } from './memory-read';
 import type { Session } from './session';
 import { readRow } from './upgrade';
 
-// version is the format's one version key: a file of any other version is refused, never read as this one. Version 1
-// is version 2 without illustrations, so a file of either reads.
-const FORMAT = { format: 'hazelle-chat', version: 2 };
-const READS = new Set([1, 2]);
+// version is the format's one version key: a file of any other version is refused, never read as this one. Version 3
+// and every later file stays readable: a new stored shape adds a step in runtime/upgrade.ts, never a version bump that
+// refuses older files (user ruling 2026-10-10).
+const FORMAT = { format: 'hazelle-chat', version: 3 };
 
 // character: the one the chat was with where it was saved, by its id and name there. pictures: each illustration's
 // picture by its file id, so the chat's pictures go wherever the file goes.
@@ -63,8 +63,8 @@ export async function chatFile({ store, files }: Pick<Session, 'store' | 'files'
 export function readChatFile(json: unknown): { ok: true; file: ChatFile } | { ok: false; error: ChatFileError } {
   const refused = { ok: false, error: 'not-chat-file' } as const;
   if (!isRecord(json) || json.format !== FORMAT.format) return refused;
-  if (!READS.has(json.version as number)) return { ok: false, error: 'other-version' };
-  const { character, rows, pictures = {} } = json;
+  if (json.version !== FORMAT.version) return { ok: false, error: 'other-version' };
+  const { character, rows, pictures } = json;
   if (character !== null && !(isRecord(character) && typeof character.id === 'string' && typeof character.name === 'string')) return refused;
   if (!Array.isArray(rows) || !isRecord(pictures)) return refused;
   const read = rows.map(readRow);

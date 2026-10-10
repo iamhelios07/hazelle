@@ -6,7 +6,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addCharacter, copyCharacter, dropCharacterTranslate, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addCharacter, copyCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
@@ -380,16 +380,6 @@ describe('translation switches', () => {
     expect([translateSwitches(store, luna!), translateSwitches(store, sol!)]).toMatchObject([{ replies: false, own: true }, { replies: true, own: false }]);
     await setOwnTranslate(store, luna!, false);
     expect(translateSwitches(store, luna!)).toMatchObject({ replies: true, own: false });
-  });
-
-  it('drop the switches a character kept before they were shared, and leave its own', async () => {
-    const { store } = await server.account();
-    const old = await store.create('character', { ...bare('루나'), translate: { replies: true, input: false } } as Character);
-    const own = await store.create('character', bare('솔', { ownTranslate: { replies: true, input: false } }));
-
-    await dropCharacterTranslate(store);
-    expect(old.ok && store.get('character', old.data.id)?.value).not.toHaveProperty('translate');
-    expect(own.ok && translateSwitches(store, own.data.id)).toMatchObject({ replies: true, own: true });
   });
 });
 

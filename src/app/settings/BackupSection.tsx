@@ -10,7 +10,7 @@ import { Button, Dialog, FileButton, Progress, Section, SettingGroup, SettingRow
 
 const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup-crashed', { message: string; detail?: string }> = {
   'not-backup': { message: '헤이젤 백업 파일이 아니거나 손상된 파일이에요.' },
-  'other-version': { message: '이 버전에서 지원하지 않는 백업 파일이에요.', detail: '새로고침한 뒤 다시 시도해 주세요.' },
+  'other-version': { message: '이전 버전에서 만든 백업이라 가져올 수 없어요.' },
   'backup-storage': { message: '백업을 준비하지 못했어요.', detail: '기기 저장 공간과 브라우저 저장 설정을 확인해 주세요.' },
   'backup-crashed': { message: '백업 작업이 중간에 멈췄어요.', detail: '새로고침한 뒤 다시 시도해 주세요.' },
 };

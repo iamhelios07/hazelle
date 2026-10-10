@@ -46,6 +46,7 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => {
     variables: new Map(),
     toggle: () => null,
     model: { id: 'model', maxContext: null, prefill: null },
+    axModel: 'aux',
     screen: null,
     clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
     language: null,
@@ -210,6 +211,11 @@ describe('evaluate', () => {
   it("tells which modules are on by namespace, and lists the character's pictures apart from each module's", () => {
     const assets = [{ id: 'a', name: 'own' }, { id: 'b', name: 'wall', module: 'phone' }, { id: 'c', name: 'loose', module: null }];
     expect(run('{{moduleenabled::phone}}{{moduleenabled::radio}} {{assetlist}} {{moduleassetlist::phone}}|{{moduleassetlist::radio}}', { modules: ['phone'], assets })).toBe('10 ["own"] ["wall"]|');
+  });
+
+  it('reads {{axmodel}} as the 보조 모델 beside {{model}}, and leaves both as written when the chat resolves none', () => {
+    expect(run('{{model}}|{{axmodel}}')).toBe('model|aux');
+    expect(run('{{model}}|{{axmodel}}', { model: null, axModel: null })).toBe('{{model}}|{{axmodel}}');
   });
 
   it('leaves a tag with an argument out of range as written', () => {

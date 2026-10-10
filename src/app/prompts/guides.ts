@@ -49,6 +49,7 @@ const SAMPLE: CbsContext = {
   ]),
   toggle: (key) => (key === '존댓말' ? '1' : null),
   model: null,
+  axModel: null,
   screen: null,
   clock: { now: Date.UTC(2026, 9, 1, 3), timeZone: 'Asia/Seoul' },
   language: 'Korean',

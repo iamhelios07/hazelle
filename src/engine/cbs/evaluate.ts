@@ -34,6 +34,8 @@ export type CbsContext = {
   // prefill: whether the model takes an assistant prefill, as its connection says; never read from the id.
   // null when unknown, and model null when the chat has no model.
   model: { id: string; maxContext: number | null; prefill: boolean | null } | null;
+  // The 보조 모델's id, as {{axmodel}} reads it; null when the chat resolves none.
+  axModel: string | null;
   // The window's size, as Risu reads window.innerWidth: null in the prompt, and when the display does not know it.
   screen: { width: number; height: number } | null;
   // now in ms since the epoch; timeZone an IANA name, since the engine reads no zone of the device it runs on.

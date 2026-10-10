@@ -7,8 +7,8 @@ import { authorNote, type ChatScope } from '../../engine/render';
 export type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
 
 // The card without its scripts and triggers, which no tag reads and a run is handed apart.
-function cbsScope({ card, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick }: ChatScope): Snapshot['scope'] {
-  return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick };
+function cbsScope({ card, persona, prompt, note, lore, messages, variables, greeting, model, axModel, clock, assets, modules, faces, screen, pick }: ChatScope): Snapshot['scope'] {
+  return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, axModel, clock, assets, modules, faces, screen, pick };
 }
 
 export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: string[], variables: [string, string][]): Snapshot {
