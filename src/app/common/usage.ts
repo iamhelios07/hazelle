@@ -1,5 +1,5 @@
 import type { ModelUsage } from '../../model/chat';
-import { UNKNOWN } from './receipt';
+import { UNKNOWN } from './words';
 
 // A total leaves out the calls that did not report it, and says how many there were.
 export function tally({ total, unknown }: ModelUsage['input'], calls: number): string {

@@ -7,7 +7,7 @@ import { modelUsage, type ModelUsage } from '../../model/chat';
 import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { money } from '../common/money';
-import { UNKNOWN } from '../common/receipt';
+import { UNKNOWN } from '../common/words';
 import { tally } from '../common/usage';
 import { ago } from '../common/time';
 import { useProfiles, useSettings, useSession } from '../session';

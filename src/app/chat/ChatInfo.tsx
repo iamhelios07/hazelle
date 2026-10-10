@@ -6,7 +6,8 @@ import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest } from './ChatSent';
-import { cost, seconds, speed, tokens, UNKNOWN } from '../common/receipt';
+import { cost, seconds, speed, tokens } from '../common/receipt';
+import { UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
 import type { OpenChat } from './useChat';
 

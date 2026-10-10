@@ -29,7 +29,7 @@ export const MEMORY_CLAIM = '이 모듈이 장기 기억을 대신 맡으려고 
 export const MEMORY_CLAIM_HELP = '허용하면 이 모듈을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
 export const TOOL_LATE = '도구가 늦어서 이번엔 빼고 보냈어요';
 export const TOOL_STALE = '다음 응답이 나와서 도구가 바꾼 내용은 넣지 않았어요';
-export const toolVersion = (version: string) => version || '알 수 없음';
+export const toolVersion = (version: string) => version || UNKNOWN;
 export const TOOL_STUCK = '도구가 응답하지 않아 멈췄어요';
 export const TOOL_DISABLED = '도구가 세 번 멈춰서 껐어요. 새로고침하면 다시 켜져요';
 export const TOOL_FIELD_CHANGED = '도구가 바뀌어서 다시 설정해야 해요.';
@@ -98,3 +98,9 @@ export const ARCA_LOG = '아카라이브용 HTML';
 // An empty model setting is unset: nothing is sent, and the provider's default applies. It is never shown as a number.
 // Not 기본값, which reads as the default 설정 named 기본.
 export const UNSET = '모델 원래 값';
+
+// A value nobody reported, said as such rather than as a made-up figure.
+export const UNKNOWN = '알 수 없음';
+export const RESET = '기본값으로 되돌리기';
+export const UNDO = '되돌리기';
+export const STOP = '멈추기';

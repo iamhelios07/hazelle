@@ -1,10 +1,9 @@
 import type { Cost } from '../../connectors/types';
 import { money } from './money';
 import { monthDay } from './time';
+import { UNKNOWN } from './words';
 
 // A fact the provider did not report reads as unknown, never as zero.
-export const UNKNOWN = '알 수 없음';
-
 export const seconds = (ms: number | null) => (ms === null ? UNKNOWN : `${(ms / 1000).toFixed(1)}초`);
 export const tokens = (count: number | null) => (count === null ? UNKNOWN : count.toLocaleString('ko-KR'));
 
