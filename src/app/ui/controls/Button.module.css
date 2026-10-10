@@ -26,7 +26,7 @@
 }
 
 .lg {
-  height: var(--control-xl);
+  height: var(--control-lg);
   font-size: var(--text-lg);
 }
 
@@ -93,6 +93,12 @@
   height: var(--control-xs);
   padding: 0 var(--space-4);
   border-radius: 0;
+}
+
+.ghost.xs {
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 
 .button:disabled:not(.busy) {

@@ -38,11 +38,7 @@
 }
 
 .input {
+  composes: compactField from '../foundation/surface.module.css';
   width: var(--phrase-input-width);
-  height: var(--control-chip);
-  padding: 0 var(--space-12);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
   font-size: var(--text-sm);
 }

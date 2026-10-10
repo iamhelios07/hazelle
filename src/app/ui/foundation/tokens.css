@@ -114,6 +114,8 @@
   --color-focus: var(--color-accent);
   --color-sidebar: var(--palette-ink-850);
   --color-divider: var(--palette-ink-780);
+  /* The lines of a list of rows: between the rows and round the box that holds them. A pane's edge is --color-divider. */
+  --color-row-line: var(--color-surface-raised);
   --color-scrim: var(--palette-scrim);
   --color-you-bg: var(--palette-mint-800);
   --color-you-text: var(--palette-mint-100);
@@ -261,7 +263,6 @@
   --control-chip: 34px;
   --control-md: 44px;
   --control-lg: 50px;
-  --control-xl: 54px;
   --icon-xs: 16px;
   --icon-sm: 18px;
   --icon-md: 22px;
@@ -337,7 +338,6 @@
   --editor-max-width: 760px;
   --editor-header: 68px;
   --editor-foot: 140px;
-  --tile-min-width: 260px;
   /* Reading width (읽기 설정): the story column, message gutters included. */
   --read-narrow: 700px;
   --read-normal: 800px;

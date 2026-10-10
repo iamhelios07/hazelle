@@ -1,0 +1,38 @@
+.box {
+  border: var(--border-thin) solid var(--color-row-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-box);
+}
+
+.ruled + .ruled {
+  border-top: var(--border-thin) solid var(--color-row-line);
+}
+
+/* On an input or a textarea only: every other element matches :read-only. */
+.field {
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.field:read-only {
+  background: var(--color-bg);
+}
+
+.field[aria-invalid='true'] {
+  border-color: var(--color-warn-border);
+}
+
+/* As tall as ChipButton's field, so a column of setting controls lines up. */
+.compactField {
+  composes: field;
+  height: var(--control-compact);
+  padding: 0 var(--space-12);
+}
+
+.dot {
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}

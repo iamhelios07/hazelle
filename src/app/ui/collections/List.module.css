@@ -7,14 +7,12 @@
 }
 
 .box {
+  composes: box from '../foundation/surface.module.css';
   overflow: hidden;
-  border: var(--border-thin) solid var(--color-surface-raised);
-  border-radius: var(--radius-lg);
-  background: var(--color-box);
 }
 
-.item + .item {
-  border-top: var(--border-thin) solid var(--color-surface-raised);
+.item {
+  composes: ruled from '../foundation/surface.module.css';
 }
 
 .code {
@@ -29,8 +27,7 @@
 }
 
 .aside {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  composes: note from '../foundation/type.module.css';
 }
 
 .titled {
@@ -57,5 +54,5 @@
   margin: 0 0 var(--space-8) var(--space-24);
   padding: 0 0 0 var(--space-12);
   list-style: none;
-  border-left: var(--border-thin) solid var(--color-surface-raised);
+  border-left: var(--border-thin) solid var(--color-row-line);
 }

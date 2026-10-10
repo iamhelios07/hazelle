@@ -1,11 +1,9 @@
 .group {
+  composes: box from '../foundation/surface.module.css';
   container-type: inline-size;
   display: flex;
   flex-direction: column;
   margin-inline: calc(var(--box-hang) * -1);
-  border: var(--border-thin) solid var(--color-surface-raised);
-  border-radius: var(--radius-lg);
-  background: var(--color-box);
 }
 
 .row {
@@ -22,14 +20,14 @@
   gap: var(--space-8);
 }
 
-.row + .row {
-  border-top: var(--border-thin) solid var(--color-surface-raised);
+/* Given to group rows only (SettingGroup.tsx): the shared rule loads after this file, so a panel row could not undo it. */
+.ruled {
+  composes: ruled from '../foundation/surface.module.css';
 }
 
 .row.panel {
   min-height: var(--control-md);
   padding: 0;
-  border-top: 0;
 }
 
 .words {
@@ -45,9 +43,7 @@
 }
 
 .label {
-  color: var(--color-text);
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
+  composes: fieldLabel from '../foundation/type.module.css';
 }
 
 .sentence {
@@ -63,19 +59,14 @@
 }
 
 .changed {
+  composes: dot from '../foundation/surface.module.css';
   display: inline-block;
-  width: var(--dot);
-  height: var(--dot);
   margin-inline-end: var(--space-8);
-  border-radius: var(--radius-full);
-  background: var(--color-accent);
   vertical-align: middle;
 }
 
 .sub {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
+  composes: note from '../foundation/type.module.css';
 }
 
 .control {
@@ -94,20 +85,23 @@
   justify-self: start;
 }
 
+.error {
+  composes: error from '../foundation/type.module.css';
+}
+
+.note {
+  composes: note from '../foundation/type.module.css';
+}
+
 .error,
 .note {
   grid-column: 1 / -1;
   justify-self: end;
-  color: var(--color-warn);
-  font-size: var(--text-sm);
-}
-
-.note {
-  color: var(--color-text-muted);
 }
 
 /* The box, not the screen, decides: in a narrow list column on a wide screen, a field chip beside the words squeezes
-   them to a syllable a line. A switch is narrow enough to stay beside them. */
+   them to a syllable a line. A switch is narrow enough to stay beside them. 440px is --screen-narrow (and
+   --dialog-width): a container query cannot read var(), so change them together. */
 @container (max-width: 440px) {
   .row:not(:has(> .control > [role='switch']:only-child)) {
     grid-template-columns: minmax(0, 1fr);

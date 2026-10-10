@@ -9,8 +9,7 @@
 }
 
 .label {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
+  composes: note from '../foundation/type.module.css';
 }
 
 .code {

@@ -17,16 +17,13 @@
 }
 
 .label {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
+  composes: fieldLabel from '../foundation/type.module.css';
 }
 
 .input {
+  composes: field from '../foundation/surface.module.css';
   height: var(--control-lg);
   padding: 0 var(--space-16);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
   font-size: var(--text-lg);
 }
 
@@ -42,22 +39,10 @@
   resize: vertical;
 }
 
-.input:read-only {
-  background: var(--color-bg);
-}
-
-.input[aria-invalid='true'] {
-  border-color: var(--color-warn-border);
-}
-
 .hint {
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-  color: var(--color-text-muted);
+  composes: note from '../foundation/type.module.css';
 }
 
 .error {
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-  color: var(--color-warn);
+  composes: error from '../foundation/type.module.css';
 }

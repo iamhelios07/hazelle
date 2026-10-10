@@ -84,10 +84,9 @@
 }
 
 .note {
+  composes: note from '../foundation/type.module.css';
   flex: 1;
   min-width: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 

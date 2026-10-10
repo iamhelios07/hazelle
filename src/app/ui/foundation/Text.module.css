@@ -3,8 +3,7 @@
 }
 
 .note {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
+  composes: note from './type.module.css';
 }
 
 .highlight {
