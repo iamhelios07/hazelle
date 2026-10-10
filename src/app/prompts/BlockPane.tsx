@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, Ellipsis, GitBranch, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, GitBranch, X } from 'lucide-react';
 import type { Ref } from 'react';
+import { ACTS, addOf, newOf } from '../common/acts';
 import type { Block, ChatRange, ChatSlot, PromptSort, RecentSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
-import { Button, ChoiceGroup, Divider, Empty, IconButton, MarkupArea, Menu, MenuHeading, MenuItem, Row, Section, SettingRow, Stack, Stepper, Switch, Tag, Text, TitleField } from '../ui';
+import { Button, ChoiceGroup, Divider, Empty, Hint, MarkupArea, Menu, MenuHeading, MenuItem, MoreMenu, Row, Section, SettingRow, Stack, Stepper, Switch, Tag, Text, TitleField } from '../ui';
 import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, SLOT, type CacheMark } from './blocks';
 import { CommandMenu } from './CommandMenu';
 import { RECENT_MAX, type Snippet } from './edits';
@@ -51,7 +52,12 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         <TitleField ref={nameRef} label="블록 이름" value={block.name ?? ''} placeholder={placeholder} onChange={(name) => onChange({ ...block, name: name || null })} />
         <Row kind="toolbar">
           {'role' in block && <ChoiceGroup<Role> label="보내는 역할" showLabel layout="segmented" options={ROLES} value={block.role} onChange={(role) => onRole(block, role)} />}
-          {block.kind === 'text' && block.mark && <Tag tone="accent">{MARKS[block.mark].label}</Tag>}
+          {block.kind === 'text' && block.mark && (
+            <>
+              <Tag tone="accent">{MARKS[block.mark].label}</Tag>
+              <Hint label={MARKS[block.mark].label}>{`캐릭터 카드에 '${MARKS[block.mark].card}'가 있으면 그 내용으로 대체되고, 이 텍스트는 카드의 {{original}} 자리에 들어가요.`}</Hint>
+            </>
+          )}
           {block.kind === 'text' && (
             <Menu
               label="조건 삽입"
@@ -73,11 +79,11 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
                 />
               ))}
               <Divider variant="menu" />
-              <MenuItem icon={Plus} label="새 토글 만들기" onClick={onNewToggle} />
+              <MenuItem icon={ACTS.create.icon} label={newOf('토글')} onClick={onNewToggle} />
             </Menu>
           )}
           {block.kind === 'text' && <CommandMenu sort={sort} onInsert={onInsert} />}
-          <Menu label={`'${title}' 더 보기`} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`'${title}' 더 보기`} title="더 보기" {...opener} />}>
+          <MoreMenu label={`'${title}' 더 보기`}>
             {block.kind === 'text' && sort === 'conversation' && (
               <>
                 <MenuHeading>카드 내용으로 대체</MenuHeading>
@@ -91,14 +97,9 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
             {index > 0 && <MenuItem icon={ArrowUp} label="위로 옮기기" onClick={() => onMove(index - 1)} />}
             {index < count - 1 && <MenuItem icon={ArrowDown} label="아래로 옮기기" onClick={() => onMove(index + 1)} />}
             <MenuItem icon={X} tone="warn" label="빼기" onClick={onRemove} />
-          </Menu>
+          </MoreMenu>
         </Row>
       </Stack>
-      {block.kind === 'text' && block.mark && (
-        <Text variant="note">
-          {`캐릭터 카드에 '${MARKS[block.mark].card}'가 있으면 그 내용으로 대체되고, 이 텍스트는 카드의 {{original}} 자리에 들어가요.`}
-        </Text>
-      )}
       {block.kind === 'slot' && <Text>{SLOT[block.slot].line}</Text>}
       {block.kind === 'text' && (
         <MarkupArea
@@ -136,8 +137,8 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
       {'wrapper' in block &&
         (block.wrapper === null ? (
           <Row kind="actions">
-            <Button variant="ghost" size="sm" icon={Plus} onClick={() => onWrapper(block, '{{slot}}')}>
-              감싸는 텍스트 추가
+            <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => onWrapper(block, '{{slot}}')}>
+              {addOf('감싸는 텍스트')}
             </Button>
           </Row>
         ) : (
@@ -146,7 +147,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
             level={3}
             note={`{{slot}} 자리에 ${SLOT[block.slot].name}이(가) 들어가요.`}
             action={
-              <Button variant="ghost" size="xs" onClick={() => onWrapper(block, null)}>
+              <Button variant="ghost" onClick={() => onWrapper(block, null)}>
                 빼기
               </Button>
             }

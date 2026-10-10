@@ -1,9 +1,9 @@
 import { BookOpen, Braces } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import type { PromptSort } from '../../model/prompt';
-import { noResults } from '../common/search';
+import { useSearch } from '../common/useSearch';
 import { COMMAND } from '../common/words';
-import { Button, CodeBlock, Dialog, Empty, MarkupArea, Menu, MenuHeading, MenuItem, Row, SearchField, Stack, Text } from '../ui';
+import { Button, CodeBlock, Dialog, Empty, MarkupArea, Menu, MenuHeading, MenuItem, Row, Stack, Text } from '../ui';
 import { commandSnippet, COMMANDS, type Command } from './commands';
 import type { Snippet } from './edits';
 import { GUIDES, SAMPLE_NOTE, tryExample, type Example, type GuideId } from './guides';
@@ -38,26 +38,24 @@ const describe = ({ names, what, example }: Command) =>
 
 // Mounted only while the menu is open, so each opening starts with an empty search.
 function Commands({ sort, onInsert, onGuide }: { sort: PromptSort; onInsert: (command: Command) => void; onGuide: (id: GuideId) => void }) {
-  const [query, setQuery] = useState('');
   const groups = COMMANDS.filter((group) => !group.sorts || group.sorts.includes(sort));
   const all = groups.flatMap((group) => group.commands);
   const often = all.filter((command) => command.uses?.[sort]);
-  const words = query.trim().toLowerCase();
-  const found = all.filter((command) => `${command.form} ${command.names.join(' ')} ${command.what}`.toLowerCase().includes(words));
+  const search = useSearch(all, `${COMMAND} 검색`, (command) => [command.form, ...command.names, command.what]);
   const item = (command: Command, sub = describe(command), key = command.form) => <MenuItem key={key} label={command.form} sub={sub} onClick={() => onInsert(command)} />;
   const guideItem = (id: GuideId, sub?: string) => <MenuItem key={`guide:${id}`} icon={BookOpen} label={`${GUIDES[id].title} 사용법`} sub={sub} onClick={() => onGuide(id)} />;
 
   return (
     <>
-      <SearchField size="sm" label={`${COMMAND} 검색`} value={query} onChange={setQuery} />
-      {words ? (
-        found.length ? (
+      {search.field}
+      {search.words ? (
+        search.none === null ? (
           <>
             <MenuHeading>검색 결과</MenuHeading>
-            {found.map((command) => item(command))}
+            {search.found.map((command) => item(command))}
           </>
         ) : (
-          <Empty variant="menu">{noResults(query.trim())}</Empty>
+          <Empty variant="menu">{search.none}</Empty>
         )
       ) : (
         <>

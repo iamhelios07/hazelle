@@ -79,12 +79,11 @@ export function usePresetImport(onOpen: (id: string) => void): { take: (files: F
           onClose={() => setResults(null)}
           actions={
             <>
-              <Button variant="secondary" size="md" onClick={() => setResults(null)}>
+              <Button variant="secondary" onClick={() => setResults(null)}>
                 닫기
               </Button>
               {only && (
                 <Button
-                  size="md"
                   onClick={() => {
                     setResults(null);
                     onOpen(only.id);

@@ -1,3 +1,5 @@
+import type { Stored } from '../../model/kinds';
+
 export function aliased(name: string, alias: string | undefined): string {
   const note = alias?.trim();
   return note ? `${name} · ${note}` : name;
@@ -19,3 +21,14 @@ export function aliasNotes(people: readonly Named[]): { note: string; faint: boo
     return counts.get(name)! > 1 ? { note: '별명 없음', faint: true } : { note: '', faint: false };
   });
 }
+
+export type PersonaFace = { persona: Stored<'persona'>; note: string; faint: boolean };
+
+// Personas as faces to pick from, notes taken over all of them so a search keeps each face's note.
+export function personaFaces(personas: readonly Stored<'persona'>[]): PersonaFace[] {
+  const sorted = personas.toSorted((a, b) => byName(a.value, b.value));
+  const notes = aliasNotes(sorted.map(({ value }) => value));
+  return sorted.map((persona, index) => ({ persona, ...notes[index]! }));
+}
+
+export const personaTexts = ({ persona: { value } }: PersonaFace) => [value.name, value.alias ?? ''];

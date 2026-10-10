@@ -1,10 +1,11 @@
-import { Copy, Cpu, Ellipsis, ImageIcon, SlidersHorizontal } from 'lucide-react';
+import { Cpu, ImageIcon, SlidersHorizontal } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
+import { ACTS } from '../common/acts';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
@@ -12,7 +13,7 @@ import { BIN_KEEPS, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import { typing, useShortcut } from '../shortcuts';
 import { useOwnUndo, useToast } from '../toast';
-import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
+import { Button, Callout, Divider, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
 import { conditionSnippet, countUses, draftOf, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
@@ -48,23 +49,11 @@ const MODEL = 'model';
 const TOGGLES = 'toggles';
 const PICTURE = 'picture';
 const SORT_WORDS = {
-  conversation: { default: '기본 프롬프트', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: ['기본 프롬프트는 삭제할 수 없어요.', '다른 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'] },
-  translate: {
-    default: '기본 번역 프롬프트',
-    makeDefault: '번역 프롬프트를 선택하지 않은 채팅에 사용해요',
-    refused: ['기본 번역 프롬프트는 삭제할 수 없어요.', '다른 번역 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'],
-  },
-  memory: {
-    default: '기본 기억 프롬프트',
-    makeDefault: '장기 기억을 이 프롬프트로 정리해요',
-    refused: ['기본 기억 프롬프트는 삭제할 수 없어요.', '다른 기억 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'],
-  },
-  illustrate: {
-    default: '기본 삽화 프롬프트',
-    makeDefault: '삽화 프롬프트를 선택하지 않은 채팅에 사용해요',
-    refused: ['기본 삽화 프롬프트는 삭제할 수 없어요.', '다른 삽화 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'],
-  },
-} satisfies Record<PromptSort, { default: string; makeDefault: string; refused: [string, string] }>;
+  conversation: { default: '기본 프롬프트', makeDefault: '새 채팅이 이 프롬프트로 시작해요' },
+  translate: { default: '기본 번역 프롬프트', makeDefault: '번역 프롬프트를 선택하지 않은 채팅에 사용해요' },
+  memory: { default: '기본 기억 프롬프트', makeDefault: '장기 기억을 이 프롬프트로 정리해요' },
+  illustrate: { default: '기본 삽화 프롬프트', makeDefault: '삽화 프롬프트를 선택하지 않은 채팅에 사용해요' },
+} satisfies Record<PromptSort, { default: string; makeDefault: string }>;
 const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
 
 type Pane = 'toggles' | null;
@@ -251,9 +240,10 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const erase = async () => {
     const removed = await save.remove(() => removePrompt(store, stored.id));
     if (!removed) return;
-    if (!removed.ok) return removed.error === 'default' ? toast.error(words.refused[0], { detail: words.refused[1] }) : toast.failed(removed, '삭제하지 못했어요.');
+    // 삭제 is hidden on the default; 'default' still comes back when another device made it the default meanwhile.
+    if (!removed.ok) return removed.error === 'default' ? toast.error(`${words.default}는 삭제할 수 없어요.`) : toast.failed(removed, '삭제하지 못했어요.');
     onErased();
-    toast.undoable(`'${promptName(removed.data.value.name)}'을(를) 삭제했어요.`, () => {
+    toast.undoable(`'${promptName(removed.data.value.name)}' 프롬프트를 삭제했어요.`, () => {
       void restorePrompt(store, stored.id).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
     }, BIN_KEEPS);
   };
@@ -312,7 +302,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
         note={`${draft.blocks.length}개`}
         action={
           !split && (
-            <Button variant="link" size="xs" onClick={() => setReordering(!reordering)}>
+            <Button variant="link" onClick={() => setReordering(!reordering)}>
               {reordering ? '완료' : '순서 바꾸기'}
             </Button>
           )
@@ -399,9 +389,10 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       )
     );
 
+  const status = save.status ? SAVE_STATUS[save.status] : undefined;
   if (!split && drilled) {
     const title = open === MODEL ? '모델' : open === PICTURE ? '이미지' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
-    return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_STATUS[save.status ?? 'saved'] }, body: page, open });
+    return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status }, body: page, open });
   }
 
   const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `'${promptName(stored.value.origin.name)}'의 사본` : null;
@@ -411,30 +402,23 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       <span>{[sort === 'conversation' && (uses.chats ? `채팅 ${uses.chats}개가 쓰는 중` : '쓰는 채팅 없음'), origin].filter(Boolean).join(' · ')}</span>
     </>
   );
-  const more = (
-    <Menu label="프롬프트 더 보기" place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} label="프롬프트 더 보기" title="더 보기" {...opener} />}>
-      {!split && <MenuItem icon={Copy} label="사본 만들기" onClick={() => void copy()} />}
-      {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
-      <MenuItem label="삭제" tone="warn" onClick={() => void erase()} />
-    </Menu>
-  );
   const head: NavBarProps = {
     title: draft.name,
     rename: { label: '프롬프트 이름', placeholder: promptName(''), onChange: (name) => update(() => ({ name })) },
     subtitle,
     onBack,
     backLabel,
-    status: SAVE_STATUS[save.status ?? 'saved'],
-    actions: (
-      <>
-        {split && (
-          <Button variant="secondary" size="sm" icon={Copy} onClick={() => void copy()}>
-            사본 만들기
-          </Button>
-        )}
-        {more}
-      </>
-    ),
+    status,
+    menu: {
+      label: '프롬프트 더 보기',
+      items: (
+        <>
+          <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
+          {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
+          {!isDefault && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void erase()} />}
+        </>
+      ),
+    },
   };
 
   if (split) return frame({ head, side: outline, body: page, open });

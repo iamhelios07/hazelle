@@ -5,7 +5,7 @@ import type { PictureSettings, PictureTags } from '../../model/prompt';
 import { drawingModels } from '../../runtime/illustrate';
 import { typedText } from '../common/typed';
 import { readTyped } from '../common/typedNumber';
-import { UNSET } from '../common/words';
+import { RESET, UNSET } from '../common/words';
 import { useConnections } from '../session';
 import { Button, ChipButton, MarkupArea, Menu, MenuHeading, MenuItem, NumberInput, Section, SettingGroup, SettingRow, Stack } from '../ui';
 
@@ -71,8 +71,8 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
         help="모든 삽화에 넣어요. 작가 태그는 맨 앞에, 품질 태그는 장면 뒤에 붙어요. 가중치({강조}, [약화], 1.5::태그::)에 따라 색이 달라져요."
         action={
           tags && (
-            <Button variant="link" size="xs" onClick={() => onTags(undefined)}>
-              기본값으로 되돌리기
+            <Button variant="link" onClick={() => onTags(undefined)}>
+              {RESET}
             </Button>
           )
         }

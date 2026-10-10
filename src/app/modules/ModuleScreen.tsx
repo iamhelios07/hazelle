@@ -1,6 +1,7 @@
 import { ToolSection } from './ToolSection';
 import type { Stored } from '../../model/kinds';
 import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
+import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { LoreEditor } from '../common/LoreEditor';
 import { ScriptsEditor } from '../common/ScriptsEditor';
@@ -9,7 +10,7 @@ import { useLibrary, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Avatar, Button, Empty, List, ListItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Switch, Text, useWide } from '../ui';
+import { Avatar, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, useWide } from '../ui';
 import { useHolds } from './ModulesScreen';
 
 const ALWAYS_ON = `${ALWAYS} 켜기`;
@@ -42,7 +43,16 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   }
 
   return (
-    <Screen top={<NavBar title={moduleName(value.name)} {...backBar(back)} />}>
+    <Screen
+      width="form"
+      top={
+        <NavBar
+          title={moduleName(value.name)}
+          {...backBar(back)}
+          menu={{ label: '모듈 더 보기', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
+        />
+      }
+    >
       {value.description.trim() && <Text>{value.description}</Text>}
       <Text variant="note">{holds}</Text>
       <SettingGroup label={ALWAYS_ON}>
@@ -61,7 +71,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '따로 켠 프롬프트 없음' : '켠 프롬프트 없음'}</Empty>
+          <Empty variant="section">{always ? '따로 켠 프롬프트가 없어요.' : '켠 프롬프트가 없어요.'}</Empty>
         )}
       </Section>
       <Section title={USED_BY}>
@@ -72,16 +82,11 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '따로 켠 캐릭터 없음' : '켠 캐릭터 없음'}</Empty>
+          <Empty variant="section">{always ? '따로 켠 캐릭터가 없어요.' : '켠 캐릭터가 없어요.'}</Empty>
         )}
       </Section>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />
-      <Row kind="actions">
-        <Button variant="danger" size="sm" onClick={remove}>
-          이 모듈 삭제
-        </Button>
-      </Row>
     </Screen>
   );
 }

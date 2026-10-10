@@ -1,4 +1,4 @@
-import { FolderPlus, Plus } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { Lore, LoreFolder } from '../../model/library';
@@ -7,12 +7,14 @@ import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, remove
 import type { PackOwner } from '../../model/library';
 import { useChildren, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, NumberInput, PhraseField, Row, SearchField, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
+import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
+import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
-import { matches, noResults, SEARCH_FROM } from './search';
 import { SLOT_NAMES } from './prompt-words';
 import { typedText } from './typed';
+import { readTyped } from './typedNumber';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
+import { useSearch } from './useSearch';
 import { loreName } from './words';
 
 type Position = Lore['position'];
@@ -28,8 +30,8 @@ const KEYS_SHOWN = 3;
 // undefined: left empty. null: not a number.
 const readNumber = (draft: string) => {
   if (draft.trim() === '') return undefined;
-  const value = Number(draft);
-  return Number.isFinite(value) ? value : null;
+  const typed = readTyped(draft, false);
+  return typed.ok ? typed.value : null;
 };
 
 function when({ enabled, constant, keys }: Lore) {
@@ -48,7 +50,6 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
   const [added, setAdded] = useState<string | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
-  const [words, setWords] = useState('');
 
   // The entry's row mounts as the store takes it, so it is named as added before then.
   async function add(folder: string | null) {
@@ -77,16 +78,16 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
     );
   }
 
-  const rows = (list: Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} startOpen={entry.id === added} />);
+  const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} startOpen={entry.id === added} />);
   const [loose, ...grouped] = groups;
-  const found = words.trim() ? entries.filter(({ value }) => matches(words, loreName(value.name), ...value.keys)) : null;
-  const listed = found ? (
-    found.length > 0 ? (
+  const search = useSearch(entries, '로어북 검색', ({ value }) => [loreName(value.name), ...value.keys]);
+  const listed = search.words ? (
+    search.none === null ? (
       <List box label="찾은 로어북 항목">
-        {rows(found)}
+        {rows(search.found)}
       </List>
     ) : (
-      <Empty variant="section">{noResults(words)}</Empty>
+      <Empty variant="section">{search.none}</Empty>
     )
   ) : entries.length === 0 && folders.length === 0 ? (
     <Empty variant="section">항목이 없어요.</Empty>
@@ -94,31 +95,35 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
     <List box label="로어북 항목">
       {rows(loose!.entries)}
       {grouped.map(({ folder, entries: inside }) => (
-        <FolderRow key={folder!.id} name={folder!.name} count={inside.length}>
+        <FolderItem
+          key={folder!.id}
+          name={folder!.name}
+          count={inside.length}
+          menu={
+            <>
+              <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming({ folder, name: folder!.name })} />
+              <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => removeFolder(folder!)} />
+            </>
+          }
+        >
           {inside.length > 0 && <List label={`${folder!.name} 항목`}>{rows(inside)}</List>}
           <Row kind="actions">
-            <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add(folder!.id)}>
-              새 항목
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setNaming({ folder, name: folder!.name })}>
-              이름 바꾸기
-            </Button>
-            <Button variant="danger" size="sm" onClick={() => removeFolder(folder!)}>
-              폴더 삭제
+            <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add(folder!.id)}>
+              {addOf('항목')}
             </Button>
           </Row>
-        </FolderRow>
+        </FolderItem>
       ))}
     </List>
   );
   return (
     <Section title="로어북" note={`${entries.length}개`} help="대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.">
       <Stack gap="related">
-        {entries.length >= SEARCH_FROM && <SearchField size="sm" label="로어북 검색" value={words} onChange={setWords} />}
+        {search.field}
         {listed}
         <Row kind="actions">
-          <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add(null)}>
-            새 항목
+          <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add(null)}>
+            {addOf('항목')}
           </Button>
           <Button variant="secondary" size="sm" icon={FolderPlus} onClick={() => setNaming({ folder: null, name: '' })}>
             새 폴더
@@ -130,9 +135,9 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
   );
 }
 
-function FolderRow({ name, count, children }: { name: string; count: number; children: ReactNode }) {
+function FolderItem({ name, count, menu, children }: { name: string; count: number; menu: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  return <ListItem title={name} aside={`${count}개`} expanded={open} onClick={() => setOpen(!open)} detail={open && <Stack gap="related">{children}</Stack>} />;
+  return <ListItem title={name} aside={`${count}개`} expanded={open} onClick={() => setOpen(!open)} control={<MoreMenu label={`'${name}' 더 보기`}>{menu}</MoreMenu>} detail={open && <Stack gap="related">{children}</Stack>} />;
 }
 
 type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; startOpen: boolean };

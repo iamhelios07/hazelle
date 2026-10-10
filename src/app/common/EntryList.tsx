@@ -1,7 +1,7 @@
-import { Plus, Trash2 } from 'lucide-react';
 import { Fragment, useRef, type ReactNode } from 'react';
 import { useOwnUndo } from '../toast';
 import { Button, IconButton } from '../ui';
+import { ACTS } from './acts';
 
 type Entry<T> = { value: T; name: string; set: (value: T) => void; remove: ReactNode };
 
@@ -35,11 +35,11 @@ export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed
             value,
             name: name(index),
             set: (next) => onChange(entries.map((old, at) => (at === index ? next : old))),
-            remove: <IconButton icon={Trash2} label={`${name(index)} 삭제`} size="sm" onClick={() => remove(index)} />,
+            remove: <IconButton icon={ACTS.remove.icon} label={`${name(index)} ${ACTS.remove.label}`} size="sm" onClick={() => remove(index)} />,
           })}
         </Fragment>
       ))}
-      <Button variant="secondary" icon={Plus} onClick={() => onChange([...entries, blank])}>
+      <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => onChange([...entries, blank])}>
         {addLabel}
       </Button>
     </>

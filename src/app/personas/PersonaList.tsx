@@ -1,13 +1,12 @@
-import { Plus } from 'lucide-react';
-import { useState } from 'react';
 import { addPersona } from '../../runtime/personas';
-import { aliasNotes, byName } from '../common/alias';
+import { ACTS, newOf } from '../common/acts';
+import { personaFaces, personaTexts } from '../common/alias';
 import type { Frame } from '../common/frame';
-import { matches, noResults, SEARCH_FROM } from '../common/search';
+import { useSearch } from '../common/useSearch';
 import { PAGES } from '../common/words';
 import { usePersonas, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, CardGrid, Empty, FaceCard, Row, SearchField } from '../ui';
+import { Button, CardGrid, Empty, FaceCard, Row } from '../ui';
 
 type Props = {
   onPick: (id: string) => void;
@@ -19,11 +18,8 @@ type Props = {
 export function PersonaList({ onPick, current, frame }: Props) {
   const store = useStore();
   const toast = useToast();
-  const personas = usePersonas().toSorted((a, b) => byName(a.value, b.value));
   const settings = useSettings();
-  const [query, setQuery] = useState('');
-  const notes = aliasNotes(personas.map(({ value }) => value));
-  const found = personas.flatMap((persona, index) => (matches(query, persona.value.name, persona.value.alias ?? '') ? [{ persona, ...notes[index]! }] : []));
+  const search = useSearch(personaFaces(usePersonas()), '페르소나 검색', personaTexts);
 
   function add() {
     const id = crypto.randomUUID();
@@ -32,21 +28,17 @@ export function PersonaList({ onPick, current, frame }: Props) {
   }
 
   const actions = (
-    <Button variant="secondary" size="sm" icon={Plus} onClick={add}>
-      새 페르소나
+    <Button variant="secondary" icon={ACTS.create.icon} onClick={add}>
+      {newOf('페르소나')}
     </Button>
   );
   const body = (
     <>
-      {personas.length >= SEARCH_FROM && (
-        <Row kind="toolbar">
-          <SearchField size="sm" label="페르소나 검색" value={query} onChange={setQuery} />
-        </Row>
-      )}
-      {found.length === 0 && query.trim() && <Empty>{noResults(query.trim())}</Empty>}
-      <CardGrid label="페르소나" variant="face" current={current} keys={found.map(({ persona }) => persona.id)}>
+      {search.field && <Row kind="toolbar">{search.field}</Row>}
+      {search.none && <Empty>{search.none}</Empty>}
+      <CardGrid label="페르소나" variant="face" current={current} keys={search.found.map(({ persona }) => persona.id)}>
         {(index) => {
-          const { persona: { id, value }, note, faint } = found[index]!;
+          const { persona: { id, value }, note, faint } = search.found[index]!;
           return <FaceCard image={value.picture} name={value.name} note={note} faint={faint} selected={null} current={current === id} tag={settings.persona === id ? '현재' : undefined} onClick={() => onPick(id)} />;
         }}
       </CardGrid>
