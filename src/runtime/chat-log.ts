@@ -2,7 +2,6 @@ import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
 import { CAST_MAX, fold, shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
-import type { Stored } from '../model/kinds';
 import type { Illustration } from '../model/illustration';
 import { live } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
@@ -235,10 +234,12 @@ export const removeChat = (store: ObjectStore, id: string) => markDeleted(store,
 
 export const restoreChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, null);
 
+export type Own = 'prompt' | 'persona' | 'note';
+
 // null clears it, and the chat follows the default again.
-function setOwn(store: ObjectStore, chat: string, field: 'prompt' | 'persona' | 'note', value: string | null): Promise<ApiResult<Stored<'chat'>>> {
-  return store.update('chat', chat, (current) => (value === null ? without(current, field) : { ...current, [field]: value }));
-}
+export const withOwn = <T extends Pick<Chat, Own>>(chat: T, field: Own, value: string | null): T => (value === null ? without(chat, field) : { ...chat, [field]: value });
+
+const setOwn = (store: ObjectStore, chat: string, field: Own, value: string | null) => store.update('chat', chat, (current) => withOwn(current, field, value));
 
 export const setChatPrompt = (store: ObjectStore, chat: string, prompt: string | null) => setOwn(store, chat, 'prompt', prompt);
 

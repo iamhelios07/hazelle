@@ -7,7 +7,7 @@ import type { IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { textTranslation, type CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
-import { chatModel, setChatModel } from '../../runtime/assignment';
+import { chatModel, setChatModel, withMainModel } from '../../runtime/assignment';
 import { illustrateSwitches, resetToggles, setIllustrate, setOwnIllustrate, setOwnTranslate, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import { removeIllustration, restoreIllustration, type Drawing } from '../../runtime/illustrate';
 import {
@@ -20,6 +20,8 @@ import {
   setChatPrompt,
   startChat,
   withCast,
+  withOwn,
+  type Own,
 } from '../../runtime/chat-log';
 import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
@@ -29,7 +31,7 @@ import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { translatorOf } from '../../runtime/translate';
-import { blocked, type Blocked, type Target } from '../../runtime/turn-context';
+import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf, translationInput } from '../../runtime/chat-context';
 import { takeTurn, type TurnFailure } from '../../runtime/turn';
 import type { CharacterPart } from '../common/characterPart';
@@ -51,7 +53,6 @@ import { useChatSearch } from './useChatSearch';
 import { useChatStatus } from './useChatStatus';
 import { useMessageEdit } from './useMessageEdit';
 
-type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
 
 // The failures a toast already said, by run: each is said once, though the chat is left and opened again.
@@ -70,9 +71,6 @@ function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap
 
 // 어떻게 바꿀까요?: the scene a picture or a failed run had, drawn again once changed. paragraphs: how many its version holds.
 export type Reshaping = { message: string; version: string; scene: Scene; paragraphs: number };
-
-const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'image-only', 'prompt-missing', 'persona-missing', 'profile-missing']);
-const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failure.kind);
 
 export type OpenChat = ReturnType<typeof useChat>;
 
@@ -196,7 +194,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function report(failure: TurnFailure | null) {
     if (!failure) return;
-    if (blocks(failure)) return setStopped(true);
+    if (isBlocked(failure)) return setStopped(true);
     const kept = failure.kind === 'unsaved' ? failure.reply : null;
     toast.error(describeTurnFailure(failure), kept === null ? undefined : { action: { label: '다시 저장', onClick: () => void talk.saveAgain(kept).then(report) } });
   }
@@ -351,7 +349,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function pickModel(ref: ModelRef) {
     if (!id) {
-      setUnsaved({ ...unsaved, models: { ...unsaved.models, main: ref } });
+      setUnsaved((current) => withMainModel(current, ref));
       return;
     }
     void setChatModel(store, id, ref).then((saved) => saved.ok || toast.failed(saved));
@@ -360,12 +358,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // null: follow the default again. A new chat holds it until its first send. The caller reports a failure.
   async function setOwn(field: Own, value: string | null): Promise<{ ok: true } | ApiFailure> {
     if (!id) {
-      setUnsaved((current) => {
-        const next = { ...current };
-        if (value === null) delete next[field];
-        else next[field] = value;
-        return next;
-      });
+      setUnsaved((current) => withOwn(current, field, value));
       return { ok: true };
     }
     return WRITE_OWN[field](store, id, value);

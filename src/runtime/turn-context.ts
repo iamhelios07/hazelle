@@ -25,6 +25,10 @@ export type Target =
 // own says whether the missing one was the chat's (the model's) own or the default.
 export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; from: PersonaSource } | { kind: 'profile-missing'; own: boolean };
 
+const BLOCKED = { 'no-model': true, 'model-gone': true, 'image-only': true, 'prompt-missing': true, 'persona-missing': true, 'profile-missing': true } as const satisfies Record<Blocked['kind'], true>;
+
+export const isBlocked = (failure: { kind: string }): failure is Blocked => Object.hasOwn(BLOCKED, failure.kind);
+
 // Read once when it is asked for, the user's new message last in its messages.
 export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 'reply'> & Pick<PromptInput, 'scope' | 'budget' | 'memory'> & { chat: Chat };
 

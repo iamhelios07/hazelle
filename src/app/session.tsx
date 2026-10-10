@@ -1,19 +1,18 @@
 import { toolId } from '../model/tool';
 import type { ToolMenu } from '../runtime/tools/facade';
-import { readsChanged, type StoreRead } from '../runtime/store';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { PictureUrl } from '../engine/assets';
 import type { ChatScope } from '../engine/render';
 import { binned, live } from '../model/library';
 import type { Kind, Stored } from '../model/kinds';
 import type { AccountFacts, Standing } from '../runtime/account';
-import { memoryId, type Memory } from '../model/memory';
+import type { Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
 import type { Illustrating, Illustrator } from '../runtime/illustrate';
 import type { Remembering } from '../runtime/memory';
 import { modulesOf } from '../runtime/modules';
 import type { Session } from '../runtime/session';
-import type { Opening } from '../runtime/read-model';
+import type { ChatScopeRead, Opening } from '../runtime/read-model';
 import type { ScriptsState } from '../runtime/scripts';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
@@ -93,11 +92,9 @@ export function useChatModel(id: string | null) {
   }, [store, id, attempt, exists]);
   const model = id === null ? null : read.chat(id);
   const value = useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
-  const subscribe = useCallback((listener: () => void) => store.subscribe((changes) => {
-    if (changes.some((change) => change.kind === 'scope' && change.id === id)) listener();
-  }), [store, id]);
-  const state = useSyncExternalStore(subscribe, () => id === null ? 'unloaded' : store.scopeState(id));
-  return { model: value, state, error: id === null ? null : store.scopeError(id), retry };
+  const scope = id === null ? null : read.scope(id);
+  const { state, error } = useSyncExternalStore(scope?.subscribe ?? subscribeNothing, scope?.snapshot ?? snapshotUnloaded);
+  return { model: value, state, error, retry };
 }
 
 export function useChatSummary(id: string | null) {
@@ -147,28 +144,11 @@ export function useBin() {
   const profiles = useKind('profile');
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
-const NO_CHILDREN: never[] = [];
-// The array is held until one of them changes, since a fresh array on every read would make React re-render forever.
-// Subscribing reads it anew, so a change between the render and the subscription is not missed.
-// illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again; parent null is a
-// chat not saved yet, which has none.
+// parent null is a chat not saved yet, which has none.
 export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'toolchat'>(kind: K, parent: string | null): Stored<K>[] {
-  const store = useStore();
-  const model = useMemo(() => {
-    let held: Stored<K>[] | null = null;
-    return {
-      subscribe: (listener: () => void) => {
-        held = null;
-        return store.subscribe((changes) => {
-          if (!changes.some((change) => (change.kind === kind || change.kind === 'scope') && change.parent === parent)) return;
-          held = null;
-          listener();
-        });
-      },
-      snapshot: () => (held ??= parent === null ? NO_CHILDREN : store.children(kind, parent)),
-    };
-  }, [store, kind, parent]);
-  return useSyncExternalStore(model.subscribe, model.snapshot);
+  const { read } = useSession();
+  const model = parent === null ? null : read.children(kind, parent);
+  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNone);
 }
 export function useSettings() {
   const { read } = useSession();
@@ -181,6 +161,10 @@ export function useUnreadable() {
 
 const subscribeNothing = () => () => {};
 const snapshotNull = () => null;
+const NONE: never[] = [];
+const snapshotNone = () => NONE;
+const UNLOADED: ChatScopeRead = { state: 'unloaded', error: null };
+const snapshotUnloaded = () => UNLOADED;
 
 export function useCharacter(id: string | null) {
   const { read } = useSession();
@@ -222,12 +206,9 @@ export function useTranslating(): Translating {
 
 // null while it has none.
 export function useChatMemory(id: string | null): Memory | null {
-  const { store } = useSession();
-  const subscribe = useCallback(
-    (listener: () => void) => (id === null ? () => {} : store.subscribe((changes) => changes.some((change) => (change.kind === 'memory' || change.kind === 'scope') && change.parent === id) && listener())),
-    [store, id],
-  );
-  return useSyncExternalStore(subscribe, () => (id === null ? null : store.children('memory', id).find((memory) => memory.id === memoryId(id)) ?? null))?.value ?? null;
+  const { read } = useSession();
+  const model = id === null ? null : read.memory(id);
+  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
 }
 
 // 삽화 runs by message: a 그리는 중 slot, or a failure with its retry.
@@ -253,22 +234,7 @@ export function useTool(module: string | null) {
 }
 
 export function useChatTools(chat: string | null): ToolMenu[] {
-  const { store, tools } = useSession();
-  const selected = useMemo(() => {
-    let held: ToolMenu[] | null = null;
-    let reads: StoreRead[] = [];
-    return {
-      subscribe: (listener: () => void) => {
-        held = null;
-        return store.subscribe((changes) => { if (readsChanged(reads, changes)) { held = null; listener(); } });
-      },
-      snapshot: () => {
-        if (held) return held;
-        const captured = store.capture(() => chat === null ? [] : tools.menus(chat));
-        reads = captured.reads;
-        return held = captured.value;
-      },
-    };
-  }, [store, tools, chat]);
-  return useSyncExternalStore(selected.subscribe, selected.snapshot);
+  const { read, tools } = useSession();
+  const model = chat === null ? null : read.tools(chat, tools);
+  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNone);
 }

@@ -1,7 +1,7 @@
 import { FileText } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { Stored } from '../../model/kinds';
-import { chatPrompt, ofSort } from '../../runtime/prompts';
+import { chatPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import { useSearch } from '../common/useSearch';
 import { DELETED_PROMPT, follows } from '../common/words';
 import { useChats, useSession, useSettings, usePrompts } from '../session';
@@ -41,7 +41,7 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
   useEffect(() => {
     if (hasFinePointer()) field.current?.focus();
   }, []);
-  const fallback = settings.prompt === undefined ? null : (prompts.find(({ id }) => id === settings.prompt) ?? null);
+  const fallback = chatPrompt(store, {});
 
   const used = new Map<string, number>();
   chats.forEach((item, index) => {
@@ -77,9 +77,9 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
     <Dialog title="이 채팅의 프롬프트" onClose={actions.closeDialog} toolbar={search.field || undefined} footer={footer}>
       {search.none && <Empty>{search.none}</Empty>}
       <List label="프롬프트">
-        {!search.words && <ListItem title={follows('기본 프롬프트')} description={fallback?.value.name ?? '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
+        {!search.words && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
         {search.found.map((item) => (
-          <ListItem key={item.id} title={item.value.name} badge={item.id === settings.prompt ? '기본' : undefined} selected={item.id === own} onClick={() => choose(item.id)} />
+          <ListItem key={item.id} title={item.value.name} badge={isDefaultPrompt(settings, item) ? '기본' : undefined} selected={item.id === own} onClick={() => choose(item.id)} />
         ))}
       </List>
     </Dialog>

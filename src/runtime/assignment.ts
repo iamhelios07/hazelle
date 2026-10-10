@@ -47,8 +47,10 @@ export function routeOf(store: Pick<ObjectStore, 'get'>, ref: ModelRef): Route |
   return connection && model ? { connection, model } : { kind: 'model-gone' };
 }
 
+export const withMainModel = <T extends Pick<Chat, 'models'>>(chat: T, ref: ModelRef): T => ({ ...chat, models: { ...chat.models, main: ref } });
+
 export function setChatModel(store: ObjectStore, chat: string, ref: ModelRef): Promise<ApiResult<Stored<'chat'>>> {
-  return store.update('chat', chat, (current) => ({ ...current, models: { ...current.models, main: ref } }));
+  return store.update('chat', chat, (current) => withMainModel(current, ref));
 }
 
 // null leaves the role to the layer below, or to the role it falls back to.

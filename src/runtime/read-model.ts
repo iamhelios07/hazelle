@@ -6,14 +6,21 @@ import { withMarks, withoutMarks } from '../model/illustration';
 import type { Illustrating, Illustrator } from './illustrate';
 import type { Kind, Stored, Values } from '../model/kinds';
 import { indexFolders, isLive, live, nest, shelve, type CharacterShelf, type FolderContents, type FolderTree, type Shelf } from '../model/library';
+import type { Memory } from '../model/memory';
 import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
+import type { ApiFailure } from './api';
+import type { ScopeState } from './chat-scope';
 import { EvaluationStopped, EvaluationStuck } from './evaluation';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
 import { withTurn, type Shown, type Talk, type Turn } from './talk';
 import { evaluateChat } from './chat-context';
+import { storedMemory } from './memory-read';
+import { SCOPED } from './object-cache';
 import { summaryId, type ChatModel } from './summary';
+import type { ToolMenu, Tools } from './tools/facade';
 
+// Held until set: a snapshot that is a fresh value on every read would make React re-render forever.
 class Snapshot<T> {
   private readonly changes = new ChangeSignal();
   constructor(private value: T) {}
@@ -39,6 +46,8 @@ export type Library = {
 };
 
 const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => (shelf && isLive(shelf.character) ? shelf : null);
+
+export type ChatScopeRead = { state: ScopeState; error: ApiFailure | null };
 
 export type OpenDisplay = Pick<ScriptDisplay, 'display' | 'subscribe'>;
 
@@ -75,6 +84,10 @@ export class ReadModels {
   private readonly byKind = new Map<Kind, Snapshot<Stored<Kind>[]>>();
   private readonly byObject = new Map<string, { kind: Kind; state: Snapshot<Stored<Kind> | null> }>();
   private readonly byCharacter = new Map<string, Snapshot<CharacterShelf<ChatSummary> | null>>();
+  private readonly byChildren = new Map<string, { kind: Kind; parent: string; state: Snapshot<Stored<Kind>[]> }>();
+  private readonly byMemory = new Map<string, Snapshot<Memory | null>>();
+  private readonly byTools = new Map<string, { chat: string; host: Pick<Tools, 'menus'>; reads: StoreRead[]; state: Snapshot<ToolMenu[]> }>();
+  private readonly byScope = new Map<string, Snapshot<ChatScopeRead>>();
   private folders: FolderTree[];
   readonly chats = new Snapshot<ChatSummary[]>([]);
   readonly library: Snapshot<Library>;
@@ -121,6 +134,47 @@ export class ReadModels {
     return memo(this.byCharacter, id, () => new Snapshot(liveShelf(this.library.snapshot().byCharacter.get(id))));
   }
 
+  children<K extends Kind>(kind: K, parent: string): Snapshot<Stored<K>[]> {
+    return memo(this.byChildren, `${kind}:${parent}`, () => ({ kind, parent, state: new Snapshot<Stored<Kind>[]>(this.childrenOf(kind, parent)) })).state as Snapshot<Stored<K>[]>;
+  }
+
+  // null while it has none.
+  memory(chat: string): Snapshot<Memory | null> {
+    return memo(this.byMemory, chat, () => new Snapshot(this.memoryOf(chat)));
+  }
+
+  // host: the session's one tool host, whose menus answer from the store alone.
+  tools(chat: string, host: Pick<Tools, 'menus'>): Snapshot<ToolMenu[]> {
+    return memo(this.byTools, chat, () => {
+      const held = { chat, host, reads: [] as StoreRead[], state: new Snapshot<ToolMenu[]>([]) };
+      held.state.set(this.menusOf(held));
+      return held;
+    }).state;
+  }
+
+  scope(chat: string): Snapshot<ChatScopeRead> {
+    return memo(this.byScope, chat, () => new Snapshot(this.scopeOf(chat)));
+  }
+
+  // A chat's own kinds (store SCOPED) are there only while it is loaded, and a scope change reads them again.
+  private childrenOf<K extends Kind>(kind: K, parent: string): Stored<K>[] {
+    return SCOPED.has(kind) && this.store.scopeState(parent) !== 'loaded' ? [] : this.store.children(kind, parent);
+  }
+
+  private memoryOf(chat: string): Memory | null {
+    return this.store.scopeState(chat) === 'loaded' ? storedMemory(this.store, chat)?.value ?? null : null;
+  }
+
+  private menusOf(held: { chat: string; host: Pick<Tools, 'menus'>; reads: StoreRead[] }): ToolMenu[] {
+    const { value, reads } = this.store.capture(() => held.host.menus(held.chat));
+    held.reads = reads;
+    return value;
+  }
+
+  private scopeOf(chat: string): ChatScopeRead {
+    return { state: this.store.scopeState(chat), error: this.store.scopeError(chat) };
+  }
+
   screen(id: string, talk: Pick<Talk, 'snapshot' | 'subscribe'>, drawings: Drawings, opening: Opening): ChatScreenRead {
     return new ChatScreenRead(this, talk, drawings, id, opening);
   }
@@ -158,6 +212,15 @@ export class ReadModels {
       const object = this.byObject.get(`${change.kind}:${change.id}`);
       if (object) object.state.set(this.store.get(object.kind, change.id));
     }
+    const touched = (kind: string, parent: string) => changes.some((change) => (change.kind === kind || change.kind === 'scope') && change.parent === parent);
+    for (const { kind, parent, state } of this.byChildren.values()) {
+      if (!touched(kind, parent)) continue;
+      const next = this.childrenOf(kind, parent);
+      if (!sameItems(state.snapshot(), next)) state.set(next);
+    }
+    for (const [chat, state] of this.byMemory) if (touched('memory', chat)) state.set(this.memoryOf(chat));
+    for (const held of this.byTools.values()) if (readsChanged(held.reads, changes)) held.state.set(this.menusOf(held));
+    for (const [chat, state] of this.byScope) if (changes.some((change) => change.kind === 'scope' && change.id === chat)) state.set(this.scopeOf(chat));
   }
 
   // Renaming a populated chat or changing its model does not move it.

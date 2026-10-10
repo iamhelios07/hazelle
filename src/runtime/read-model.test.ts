@@ -434,6 +434,22 @@ describe('selective account reads', () => {
 });
 
 describe('per-chat read models', () => {
+  it("reads a chat's own children again when its scope loads and unloads", async () => {
+    const { seed, open } = await account();
+    await seed('a', 'chat', null, chat);
+    await seed('a1', 'entry', 'a', message('held'));
+    const read = new ReadModels(await open());
+    const entries = read.children('entry', 'a');
+    const heard = vi.fn();
+    entries.subscribe(heard);
+    expect(entries.snapshot()).toEqual([]);
+    const release = await hold(read.store, 'a');
+    expect(entries.snapshot().map(({ id }) => id)).toEqual(['a1']);
+    release();
+    expect(entries.snapshot()).toEqual([]);
+    expect(heard).toHaveBeenCalledTimes(2);
+  });
+
   it('A: a translation or new entry in A never folds or displays B, including pulled writes', async () => {
     const { store, open } = await account();
     await store.create('chat', chat, { id: 'a' });
