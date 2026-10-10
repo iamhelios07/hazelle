@@ -33,7 +33,7 @@ const OPEN = 'data-open';
 const PICTURES = Symbol('pictures');
 // Named in Story.shadow.css. Holds the source of the picture it stands in for.
 const VEILED = 'data-veiled';
-// Named in Story.shadow.css and in engine/cbs/tags.ts, which puts it where a chat's inlay is missing.
+// Named in Story.shadow.css and in engine/assets.ts (inlayMissing), whose mark stands where a chat's inlay is missing.
 const INLAY_MISSING = 'data-inlay-missing';
 const pictureKey = (picture: Element) => `${picture.getAttribute(PICTURE)}:${picture.querySelector('img')!.getAttribute('src')}`;
 // Sent from a message when the reader opens or closes one of its pictures, so the chat keeps its view where it is.

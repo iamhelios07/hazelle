@@ -1,5 +1,5 @@
 import { isRecord } from '../../connectors/values';
-import { assetUrl, findAsset, pictureRef } from '../assets';
+import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture } from '../assets';
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
@@ -154,17 +154,15 @@ define('moduleenabled', 1, ([namespace], { context }) => (context.modules.includ
 define('moduleassetlist', 1, ([namespace], { context: { modules, assets } }) => (modules.includes(namespace!) ? serialize(assets.filter((asset) => asset.module === namespace).map(({ name }) => name)) : ''));
 
 // Items of Risu's own inlay store, which the chat holds as its inlays by the tag's id exactly, never by findAsset's near
-// match: the prompt drops them. A Gemini signature is never drawn; an item the chat lacks shows the app's mark, whose
-// text Story.tsx gives it, by this attribute.
-const INLAY_MISSING = 'data-inlay-missing';
-const inlayTag = (render: (picture: string) => string): Run => ([id], { context }) => {
+// match: the prompt drops them. A Gemini signature is never drawn; an item the chat lacks shows the app's mark.
+const inlayTag = (render: (id: string) => string): Run => ([id], { context }) => {
   if (context.stage !== 'display') return '';
   const inlay = context.inlays.find(({ name }) => name === id);
-  if (!inlay) return `<span ${INLAY_MISSING}></span>`;
-  return inlay.type === 'signature' ? '' : render(`<img src="${pictureRef('inlay', inlay.id)}">`);
+  if (!inlay) return inlayMissing;
+  return inlay.type === 'signature' ? '' : render(inlay.id);
 };
-define('inlay', 1, inlayTag((picture) => picture));
-define('inlayed inlayeddata', 1, inlayTag((picture) => `<div class="risu-inlay-image">${picture}</div>\n`));
+define('inlay', 1, inlayTag(inlayPicture));
+define('inlayed inlayeddata', 1, inlayTag((id) => `${inlayBlock(id)}\n`));
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
 define('setvar', 2, ([name, value], { context, writes }) => {
