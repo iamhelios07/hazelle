@@ -4,6 +4,7 @@ import { ago } from '../common/time';
 import { usePages } from '../common/useLoaded';
 import { NOTICES } from '../common/words';
 import { Button, Callout, Dialog, Empty, List, ListItem, Section, Text } from '../ui';
+import { ACTS } from '../common/acts';
 
 const REPLY = '내 알림에 대한 답변';
 
@@ -18,7 +19,7 @@ export function NoticesSection({ seek }: { seek: boolean }) {
   }, [newest]);
   return (
     <Section title={NOTICES.from} help="이 알림은 종단 간 암호화되지 않아요." seek={seek}>
-      {pages.failure && <Callout tone="warn">{pages.failure}</Callout>}
+      {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.from}이 없어요.</Empty>}
       {rows && rows.length > 0 && (
         <List label={NOTICES.from}>

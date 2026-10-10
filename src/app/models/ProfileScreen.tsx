@@ -17,6 +17,7 @@ import {
 } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
 import { typedText } from '../common/typed';
+import { useSearch } from '../common/useSearch';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, RESET, UNSET } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
@@ -150,7 +151,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         wide
         control={
           <Stack gap="related">
-            <ChoiceGroup layout="chips" label="추론" options={options} value={current} onChange={pick} />
+            <ChoiceGroup layout="fit" label="추론" options={options} value={current} onChange={pick} />
             {reasoning?.kind === 'budget' && (
               <NumberInput label="추론 예산" unit="토큰" value={draft} invalid={!typed?.ok} onChange={(next) => type('budget', next, (tokens) => ({ reasoning: { kind: 'budget', tokens } }))} />
             )}
@@ -331,10 +332,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                 </Button>
               )}
             >
-              {others.map(({ connection, models }) => [
-                <MenuHeading key={connection.id}>{connection.value.label}</MenuHeading>,
-                ...models.map((model) => <MenuItem key={`${connection.id}/${model.id}`} label={model.name} sub={`지금: ${profileName(model)}`} onClick={() => attach(connection.id, model.id)} />),
-              ])}
+              <AddChoices groups={others} now={profileName} onPick={attach} />
             </Menu>
           )
         }
@@ -375,5 +373,26 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         </SettingGroup>
       </Disclosure>
     </Screen>
+  );
+}
+
+type Group = { connection: Stored<'connection'>; models: ProfileUser['model'][] };
+
+// Mounted only while the menu is open, so each opening starts with an empty search.
+function AddChoices({ groups, now, onPick }: { groups: Group[]; now: (model: Group['models'][number]) => string; onPick: (connection: string, model: string) => void }) {
+  const choices = groups.flatMap(({ connection, models }) => models.map((model) => ({ connection, model })));
+  const search = useSearch(choices, '모델 검색', ({ connection, model }) => [model.name, connection.value.label]);
+  const shown = groups.flatMap(({ connection }) => {
+    const found = search.found.filter((choice) => choice.connection === connection);
+    return found.length === 0 ? [] : [
+      <MenuHeading key={connection.id}>{connection.value.label}</MenuHeading>,
+      ...found.map(({ model }) => <MenuItem key={`${connection.id}/${model.id}`} label={model.name} sub={`지금: ${now(model)}`} onClick={() => onPick(connection.id, model.id)} />),
+    ];
+  });
+  return (
+    <>
+      {search.field}
+      {search.none ? <Empty variant="menu">{search.none}</Empty> : shown}
+    </>
   );
 }

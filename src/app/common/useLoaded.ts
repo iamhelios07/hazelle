@@ -53,6 +53,8 @@ export function usePages<T extends { id: number }>(load: (before: number | null)
     busy,
     failure,
     older: () => void fetch(rows!.at(-1)!.id),
+    // Rows are kept only on success, so none yet means the first page failed and some means an older one did.
+    retry: () => void fetch(rows === null ? null : (rows.at(-1)?.id ?? null)),
     patch: (id: number, change: Partial<T>) => setRows((shown) => shown && shown.map((row) => (row.id === id ? { ...row, ...change } : row))),
   };
 }

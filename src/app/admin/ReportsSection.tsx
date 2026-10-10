@@ -6,6 +6,7 @@ import { NOTICES } from '../common/words';
 import { Button, Callout, Dialog, Empty, List, ListItem, Section, Text } from '../ui';
 import { NoticeDialog } from './NoticeDialog';
 import { usePages } from '../common/useLoaded';
+import { ACTS } from '../common/acts';
 
 // A restore starts only from a report the account sent, so it is asked from the report.
 export function ReportsSection({ onActed, onRestore }: { onActed: () => void; onRestore: (report: Report) => void }) {
@@ -14,7 +15,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   const { rows } = pages;
   return (
     <Section title={NOTICES.received}>
-      {pages.failure && <Callout tone="warn">{pages.failure}</Callout>}
+      {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.received}이 없어요.</Empty>}
       {rows && rows.length > 0 && (
         <List label={NOTICES.received}>

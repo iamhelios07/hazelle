@@ -6,6 +6,7 @@ import { Button, Callout, Empty, List, ListItem, Section } from '../ui';
 import { restoreError } from './RestoresDialog';
 import { moment } from './time';
 import { usePages } from '../common/useLoaded';
+import { ACTS } from '../common/acts';
 
 // The actions server/admin logs. One it does not list shows as the server wrote it.
 const ACTIONS: Record<string, string> = {
@@ -46,7 +47,7 @@ export function LogSection() {
   const { rows } = pages;
   return (
     <Section title="기록">
-      {pages.failure && <Callout tone="warn">{pages.failure}</Callout>}
+      {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">기록이 없어요.</Empty>}
       {rows && rows.length > 0 && (
         <List label="기록">
