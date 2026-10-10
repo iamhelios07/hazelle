@@ -53,8 +53,9 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
       await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();
       await page.getByRole('button', { name: '모델 선택', exact: true }).click();
       await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기`, exact: true }).click();
-    }
-    await page.goto('/models');
+      // Through the app, not page.goto: a reload would drop the star still on its way to the server.
+      await page.getByRole('button', { name: '모델', exact: true }).click();
+    } else await page.goto('/models');
     for (const role of ['대화 모델', '보조 모델']) {
       const picker = page.getByRole('button', { name: new RegExp(`^${role} · `) });
       if ((await picker.innerText()).includes(FAKE_MODEL)) continue;
@@ -169,7 +170,8 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     await page.getByRole('button', { name: '모델 선택', exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기`, exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_EMBED} 즐겨찾기`, exact: true }).click();
-    await page.goto('/models');
+    // Through the app, not page.goto: a reload would drop the stars still on their way to the server.
+    await page.getByRole('button', { name: '모델', exact: true }).click();
     for (const role of ['대화 모델', '보조 모델']) {
       const picker = page.getByRole('button', { name: new RegExp(`^${role} · `) });
       if ((await picker.innerText()).includes(FAKE_MODEL)) continue;

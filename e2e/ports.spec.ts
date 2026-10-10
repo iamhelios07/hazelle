@@ -41,7 +41,8 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
     await page.getByRole('button', { name: '모델 선택', exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기`, exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_EMBED} 즐겨찾기`, exact: true }).click();
-    await page.goto('/models');
+    // Through the app, not page.goto: a reload would drop the stars still on their way to the server.
+    await page.getByRole('button', { name: '모델', exact: true }).click();
     for (const [role, model] of [['대화 모델', FAKE_MODEL], ['보조 모델', FAKE_MODEL], ['임베딩 모델', FAKE_EMBED]] as const) {
       const picker = page.getByRole('button', { name: new RegExp(`^${role} · `) });
       if ((await picker.innerText()).includes(model)) continue;

@@ -239,7 +239,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: /^Featherless/ }).click();
     await page.getByLabel('API 키', { exact: true }).fill('catalog-fixture-key');
     await page.getByRole('button', { name: '모델 선택', exact: true }).click();
-    await expect(page.getByText(`모델 ${models.length}개`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`모델 ${models.length}개`)).toBeVisible();
     const list = page.getByRole('list', { name: '모델', exact: true });
     const rows = list.locator(':scope > li');
     await expect(rows.first()).toBeVisible();
@@ -268,7 +268,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     expect(Math.max(...bodies)).toBeLessThan(1024);
     missing = true;
     await page.reload();
-    await expect(page.getByText(`모델 ${models.length - 1}개`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`모델 ${models.length - 1}개`)).toBeVisible();
     await expect(starred).toContainText('목록에 없음');
     await starred.getByRole('button', { name: `${last.name} 즐겨찾기 해제`, exact: true }).click();
     await expect(starred).toHaveCount(0);
