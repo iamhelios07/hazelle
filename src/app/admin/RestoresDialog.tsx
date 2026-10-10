@@ -1,6 +1,7 @@
 import { History, Play, Undo2, X } from 'lucide-react';
 import { useState } from 'react';
-import type { RestoreAction, RestorePhase } from '../../contracts/admin';
+import type { RestoreAction, RestoreError, RestorePhase } from '../../contracts/admin';
+import type { ServerError } from '../../contracts/http';
 import { beginRestore, continueRestore, readRestores, readSnapshotTime, type Report, type Restore, type RestoreRun } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
 import { ACTS } from '../common/acts';
@@ -32,8 +33,8 @@ const UNVERIFIED: Words = { tag: '확인 필요', says: '복원은 끝났지만 
 const wordsOf = ({ phase, verified }: RestoreRun): Words => (phase === 'done' ? (verified ? DONE : UNVERIFIED) : PHASES[phase]);
 const says = (run: RestoreRun) => `${wordsOf(run).says}${run.error === null ? '' : ` 오류: ${restoreError(run.error)}`}`;
 
-// The server's error codes this page knows; another shows as the server wrote it.
-const ERRORS: Record<string, string> = {
+// A stored code this build does not know shows as the server wrote it.
+const ERRORS: Record<RestoreError, string> & Partial<Record<string, string>> = {
   'too-early': '그 시각의 기록이 저장소에 없어요. 더 늦은 시각으로 새로 복원해 주세요.',
   'store-unavailable': '그 계정의 저장소나 스냅샷을 읽지 못했어요. 잠시 뒤 이어서 해 주세요.',
   'not-rewound': '저장소가 아직 그 시점으로 돌아가지 않았어요. 잠시 뒤 이어서 해 주세요.',
@@ -41,7 +42,7 @@ const ERRORS: Record<string, string> = {
   stuck: '같은 단계가 반복되어 멈췄어요. 계속되면 서버 기록을 확인해 주세요.',
 };
 export const restoreError = (code: string) => ERRORS[code] ?? code;
-const REFUSED: Record<string, string> = {
+const REFUSED: Partial<Record<ServerError, string>> = {
   'bad-report': '그 계정이 보낸, 확인 처리하지 않은 알림으로만 복원할 수 있어요.',
   'bad-time': '10분 전부터 6일 전 사이의 시각으로만 복원할 수 있어요.',
   'cannot-undo': '그 계정의 마지막 복원만, 완료 후 7일 안에 한 번 되돌릴 수 있어요.',
@@ -82,7 +83,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
       const answer = await request();
       setAsking(null);
       if (!answer.ok) {
-        toast.error(`${username} 계정을 복원하지 못했어요.`, { detail: REFUSED[answer.error] ?? describeFailure(answer) });
+        toast.error(`${username} 계정을 복원하지 못했어요.`, { detail: describeFailure(answer, REFUSED) });
         return null;
       }
       const ended = answer.data;

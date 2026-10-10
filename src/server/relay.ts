@@ -1,4 +1,4 @@
-import { RELAY_HEADER } from '../contracts/http';
+import { RELAY_HEADER, type RelayError } from '../contracts/http';
 import { PolicyRefusal } from './ssrf';
 
 export type UpstreamInit = {
@@ -12,8 +12,6 @@ export type UpstreamInit = {
 // Rejects with PolicyRefusal for a destination the outbound policy refuses (outbound.ts), with anything else for a call
 // that failed on the way.
 export type Upstream = (url: URL, init: UpstreamInit) => Promise<Response>;
-
-type RelayError ='bad-envelope' | 'not-https' | 'not-public' | 'upstream-unreachable' | 'upstream-redirect';
 
 type Envelope = { url: URL; method: string; headers: Record<string, string>; body: string | null };
 

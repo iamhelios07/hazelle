@@ -17,7 +17,7 @@ import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
 import type { FrontendOptions } from './frontend-worker';
-import type { Services } from './http';
+import { fail, type Services } from './http';
 import { tokenBucket } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshPrices } from './prices';
@@ -104,7 +104,7 @@ root.get('/api/health', async (c) => {
 });
 root.route('/', app);
 // An unknown API path is a real 404, never the page.
-root.all('/api/*', (c) => c.json({ error: 'not-found' }, 404));
+root.all('/api/*', (c) => fail(c, 404, 'not-found'));
 
 const server = serve({ fetch: (request) => root.fetch(request, services, ctx), hostname: '127.0.0.1', port: 0 }) as Server;
 await once(server, 'listening');

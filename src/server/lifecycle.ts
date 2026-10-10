@@ -1,9 +1,9 @@
-import type { ExecutionContext } from 'hono';
-import type { RestoreAction, RestorePhase } from '../contracts/admin';
+import type { Context, ExecutionContext } from 'hono';
+import type { RestoreAction, RestoreError, RestorePhase } from '../contracts/admin';
 import type { Life, Unavailable } from './account-store';
 import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
-import type { Services } from './http';
+import { fail, refused, type Services } from './http';
 
 // An account's lifecycle lives on its service row, where a rewind of its store cannot touch it, and its store loads that
 // row when it starts (account-store.ts). Every change is: write the service, restart the store, read back what it
@@ -40,6 +40,8 @@ async function reload(env: Services, incarnation: string): Promise<Life | Unavai
 
 // left: the account's row is deleted, by this run or an earlier one. Its pictures are removed after the answer.
 // operator: the account is the installation's only operator, which neither path may delete.
+export type Left = 'left' | 'busy' | 'unavailable' | 'operator';
+
 // Every change below runs inside a backup hold (backup/backups.ts), so a generation never captures one half done.
 export function leaveAccount(
   env: Services,
@@ -47,8 +49,20 @@ export function leaveAccount(
   accountId: string,
   incarnation: string,
   operator: boolean,
-): Promise<'left' | 'busy' | 'unavailable' | 'operator'> {
+): Promise<Left> {
   return env.backups.hold(() => leave(env, ctx, accountId, incarnation, operator));
+}
+
+// What 탈퇴 and the operator's removal answer when the account is not gone; each route answers 'left' its own way.
+export function refuseLeft(c: Context, left: Exclude<Left, 'left'>): Response {
+  switch (left) {
+    case 'busy':
+      return fail(c, 409, 'account-busy');
+    case 'operator':
+      return fail(c, 403, 'sole-operator');
+    case 'unavailable':
+      return refused(c, { unavailable: true });
+  }
 }
 
 async function leave(
@@ -57,7 +71,7 @@ async function leave(
   accountId: string,
   incarnation: string,
   operator: boolean,
-): Promise<'left' | 'busy' | 'unavailable' | 'operator'> {
+): Promise<Left> {
   const db = env.db;
   // The operator's log row is written with the intent, before anything is destroyed.
   const [intent] = await db.batch([
@@ -204,7 +218,7 @@ export async function cancelRestore(env: Services, id: number): Promise<Run | nu
 }
 
 // undefined: go on from the re-read operation. null: stop, nothing to record. A string: stop with this error code.
-async function step(env: Services, operation: Operation, armedTooOften: () => boolean): Promise<string | null | undefined> {
+async function step(env: Services, operation: Operation, armedTooOften: () => boolean): Promise<RestoreError | null | undefined> {
   const { id, incarnation } = operation;
   const db = env.db;
   switch (operation.phase) {
@@ -295,7 +309,7 @@ function advance(db: Db, id: number, from: RestorePhase, to: RestorePhase, set?:
 }
 
 // true: this run ended it.
-async function release(env: Services, operation: Operation, to: 'cancelled' | 'failed', from: RestorePhase[], error: string | null) {
+async function release(env: Services, operation: Operation, to: 'cancelled' | 'failed', from: RestorePhase[], error: RestoreError | null) {
   const db = env.db;
   const [ended] = await db.batch([
     db
@@ -308,7 +322,7 @@ async function release(env: Services, operation: Operation, to: 'cancelled' | 'f
 }
 
 // Written once per operation: gated on the account's release, which only the run that won the terminal phase makes.
-function terminalLog(db: Db, action: string, operation: Operation, error: string | null) {
+function terminalLog(db: Db, action: string, operation: Operation, error: RestoreError | null) {
   return db
     .prepare(
       `INSERT INTO admin_log (at, action, target, detail)

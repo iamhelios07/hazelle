@@ -5,7 +5,7 @@ import { RETENTION_MS, StoreUnavailable } from './db/account-db';
 import { fileBlocks } from './files';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fail, ID, readObject, refused, type AppEnv, type Services } from './http';
-import { beginRestore, cancelRestore, leaveAccount, restoreActions, runRestore, store, undoable } from './lifecycle';
+import { beginRestore, cancelRestore, leaveAccount, refuseLeft, restoreActions, runRestore, store, undoable } from './lifecycle';
 import { requireSession } from './session';
 
 // Reports are plaintext rows no byte cap counts, so one account's unresolved ones are bounded.
@@ -286,9 +286,7 @@ admin.delete('/accounts/:id', async (c) => {
   const incarnation = await incarnationOf(c, id);
   if (incarnation === null) return fail(c, 404, 'not-found');
   const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, true);
-  if (left === 'busy') return fail(c, 409, 'account-busy');
-  if (left === 'operator') return fail(c, 403, 'sole-operator');
-  if (left === 'unavailable') return refused(c, { unavailable: true });
+  if (left !== 'left') return refuseLeft(c, left);
   return c.body(null, 204);
 });
 
