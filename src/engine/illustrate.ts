@@ -33,7 +33,6 @@ export function illustratorPrompt(): IllustratePrompt {
   };
 }
 
-// What the scene writer reads in the source slot.
 export const numbered = (paragraphs: readonly string[]) => paragraphs.map((paragraph, index) => `[${index + 1}] ${paragraph}`).join('\n');
 
 // unreadable: no JSON object. fields: one the format asks for is missing or of the wrong type. paragraph: it names no
@@ -85,7 +84,6 @@ export const PICTURE_DEFAULTS: PictureTags = {
   quality: 'best quality, amazing quality, very aesthetic, absurdres',
   negative: 'lowres, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, blurry, jpeg artifacts, signature, watermark, username, text, worst quality, low quality',
 };
-
 
 const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 

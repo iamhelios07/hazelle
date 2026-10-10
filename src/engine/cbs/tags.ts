@@ -78,7 +78,8 @@ const UNSUPPORTED = new Set([
   'jb',
   'jailbreak',
   'jbtoggled',
-  // Marked N, but nothing to read: no auxiliary model is assigned yet, and the spec gives the rest no semantics.
+  // Marked N, but nothing to read: CbsContext carries the 대화 모델 alone, never the 보조 모델, and the spec gives the
+  // rest no semantics.
   'axmodel',
   'metadata',
   'declare',

@@ -253,7 +253,6 @@ const RISU_LORE: LoreSource = {
   }),
 };
 
-// CCv3 character_book entries.
 const BOOK_LORE: LoreSource = {
   folderId: (raw) => keys(raw.keys)[0] ?? '',
   name: (raw) => text(raw.name) || text(raw.comment),
