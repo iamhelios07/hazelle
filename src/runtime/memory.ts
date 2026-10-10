@@ -1,8 +1,7 @@
 import { ChangeSignal } from '../change-signal';
-import { chatMemory, memoryOwner, memorySetup, sourcesOf } from './memory-read';
+import { chatMemory, memoryOwner, memorySetup, sourcesOf, storedMemory } from './memory-read';
 import { chatSent, type ChatSent } from './memory-view';
 import type { ModelSettings } from '../connectors/settings';
-import type { Phase } from '../connectors/types';
 import { chapterCap, chapterTarget, coveredBy, fingerprint, isChapter, memoryBudget, nextChapters, nextSpan, owned, parseChapter, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type Invalid, type Scene } from '../engine/memory';
 import type { RanAway } from '../engine/pipeline';
 import { fold, shown, type Chat, type Message, type Receipt } from '../model/chat';
@@ -14,14 +13,14 @@ import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
 import { evaluationFailure } from './evaluation';
 import { taskModel, type Route, type RouteFailure } from './assignment';
-import { generate, resume, type Reply } from './generate';
+import { gather, generate, resume, type Reply } from './generate';
 import { modelProfile } from './profiles';
 import { memoryPrompt } from './prompts';
 import type { Session } from './session';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
-import { receiptOf } from './talk';
+import { receiptOf, unsettled } from './talk';
 import { budgetOf, promptBudget, sentSettings } from './chat-context';
 import { wouldSend } from './turn-context';
 import { indexRecords, unembedded, type Indexed } from './retrieval';
@@ -44,11 +43,11 @@ type Write<T = Stored<'memory'>> = Promise<ApiResult<T>>;
 async function changeMemory(store: ObjectStore, chat: string, change: (memory: Memory) => Memory | null): Write {
   return store.withChat(chat, async () => {
     const id = memoryId(chat);
-    if (!store.children('memory', chat).find((entry) => entry.id === id)) {
+    if (!storedMemory(store, chat)) {
       const value = change(emptyMemory());
       if (value === null) return { ok: false, error: 'gone' };
       const created = await store.create('memory', value, { id, parent: chat });
-      if (created.ok || created.error !== 'conflict' || !store.children('memory', chat).find((entry) => entry.id === id)) return created;
+      if (created.ok || created.error !== 'conflict' || !storedMemory(store, chat)) return created;
     }
     return store.update('memory', id, change);
   });
@@ -278,7 +277,7 @@ export class Rememberer {
 
   constructor(
     private readonly session: Pick<Session, 'store' | 'read' | 'credentials' | 'costs' | 'scripts'>,
-    // The calls this page reads (runtime/streams), shared with Talk, Translator and Streams.
+    // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {
     // Another device's reply arrives here as entries too; only the device that saved it summarizes new messages, so two
@@ -547,12 +546,10 @@ export class Rememberer {
   }
 
   // The commit's check runs inside the update, so a version conflict pulls and checks again against the newer memory.
-  // A record keeps its call's receipt without a pending cost: memory calls' costs are not settled yet.
   private async finish(chat: string, id: string, first: string, call: Parameters<typeof receiptOf>[0], answer: Reply, text: string, job: Job, span: { role: string; text: string }[]): Promise<Outcome> {
     if (answer.cut === 'stopped') return 'stopped';
     const { store } = this.session;
-    const made = receiptOf(call, answer);
-    const receipt = made.cost === 'pending' ? { ...made, cost: null } : made;
+    const receipt = unsettled(receiptOf(call, answer));
     const outcome = await (async (): Promise<Outcome> => {
       if (answer.state !== 'done') return { kind: 'failed', receipt };
       const texts = span.map(({ text }) => text);
@@ -581,13 +578,3 @@ const shownFor = (record: Written, read: ChatRead, places: ReadonlyMap<string, n
   const at = places.get(message);
   return at === undefined ? [] : [read.shown[at]!];
 });
-
-function gather() {
-  let text = '';
-  return {
-    add: (phase: Phase, chunk: string) => {
-      if (phase === 'text') text += chunk;
-    },
-    value: () => text,
-  };
-}

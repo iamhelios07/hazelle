@@ -4,6 +4,7 @@ import type { Kind, Stored } from '../model/kinds';
 import { memoryId } from '../model/memory';
 import { fromBase64, toBase64 } from '../vault/aead';
 import type { ApiResult } from './api';
+import { storedMemory } from './memory-read';
 import type { Session } from './session';
 import { readRow } from './upgrade';
 
@@ -41,7 +42,7 @@ export async function chatFile({ store, files }: Pick<Session, 'store' | 'files'
   const chat = store.get('chat', id)!;
   const character = chat.value.character === null ? null : store.get('character', chat.value.character);
   const entries = [...store.children('entry', id)].sort(entryOrder).map((entry, index) => ({ ...row(entry), rev: index + 1 }));
-  const memory = store.children('memory', id).find((each) => each.id === memoryId(id));
+  const memory = storedMemory(store, id);
   const pictures: Record<string, string> = {};
   const illustrations: Stored<'illustration'>[] = [];
   for (const illustration of store.children('illustration', id)) {

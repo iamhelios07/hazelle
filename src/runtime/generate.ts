@@ -98,6 +98,19 @@ export async function generate({ credentials, connection, model, settings, messa
   return reply(outcome, outcome.error);
 }
 
+// onText: told the whole text so far, not the chunk.
+export function gather(onText?: (text: string) => void) {
+  let text = '';
+  return {
+    add: (phase: Phase, chunk: string) => {
+      if (phase !== 'text') return;
+      text += chunk;
+      onText?.(text);
+    },
+    value: () => text,
+  };
+}
+
 // What a request would cache, as generate builds it; null where generate would refuse it before sending.
 export function cacheViewOf(connection: Connection, model: Starred, settings: ModelSettings, messages: ChatMessage[]): CacheView | null {
   const resolved = resolveConnection(connection);

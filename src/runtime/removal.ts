@@ -59,7 +59,7 @@ export function ownershipDepth(kind: Kind): number {
   return owners.length === 0 ? 0 : Math.max(...owners.map(ownershipDepth)) + 1;
 }
 
-export function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
+function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
   return store.pinned((pin) => removeOn(store, root, progress, pin));
 }
 

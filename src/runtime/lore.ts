@@ -1,12 +1,10 @@
 import { DEFAULT_ORDER } from '../engine/import/convert';
 import type { Stored } from '../model/kinds';
-import type { Lore, LoreFolder } from '../model/library';
-import type { ApiResult } from './api';
-import { allWritten } from './api';
-import type { PackOwner } from '../model/library';
+import type { Lore, LoreFolder, PackOwner } from '../model/library';
+import { allWritten, type ApiResult } from './api';
 import type { ObjectStore } from './store';
 
-export const newLore = (siblings: Lore[], folder: string | null): Lore => ({
+const newLore = (siblings: Lore[], folder: string | null): Lore => ({
   name: '',
   keys: [],
   secondaryKeys: [],

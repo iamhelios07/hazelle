@@ -5,13 +5,21 @@ import type { Route } from './assignment';
 import type { Credentials } from './credential';
 import type { ReplyError } from './generate';
 import { relayJson } from './relay';
+import type { ObjectStore } from './store';
 import { receiptError } from './talk';
 
 export type Embedded = { ok: true; model: string; vectors: number[][] } | { ok: false; reason: 'too-large' | 'flood' | 'failed' };
 
 // Checked before the network, so a tool learns what to split however the provider would have answered.
 export const EMBED_TEXTS = 64;
-export const EMBED_TOKENS = 8192;
+const EMBED_TOKENS = 8192;
+
+// A tokenizer that did not load throws Error('tokenizer').
+export const countTexts = (store: Pick<ObjectStore, 'evaluation'>) => async (texts: string[]): Promise<number[]> => {
+  const counted = await store.evaluation.count(texts);
+  if ('kind' in counted) throw new Error('tokenizer');
+  return counted;
+};
 
 // One embedding call through the relay, counted in the chat's bot cap (bot: the chat). Consent and the model pick are
 // the caller's (Scripts). receipt: null when nothing reached the network.

@@ -116,10 +116,10 @@ function illustrateReceived(session: Pick<Session, 'store' | 'illustrator'>, cha
 
 // start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.
 export function takeTurn(session: Session, chat: string, target: Target, start: { chat: Chat; greetings: Greetings | null; started: () => void } | null = null): Promise<TurnFailure | null> {
+  const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
+  const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
   if (start) {
-    const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const said = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
-    const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
     return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async (signal) => {
       const unstarted = await startChat(session.store, chat, start.chat, start.greetings);
       if (unstarted) return { kind: 'unstarted', failure: unstarted };
@@ -131,10 +131,8 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
   }
   const lease = session.store.retainChat(chat);
   const send = (): Promise<TurnFailure | null> => {
-    const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const showing = gatherTurn(session, chat, target, ids);
     if (showing === null || 'kind' in showing) return Promise.resolve(showing);
-    const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
     return unhalted(session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
       // Another device may have written to this chat while this page stood open without focus or a timer's pull, so the
       // prompt is gathered again after a pull. A turn it cannot pull does not send on what may be stale.

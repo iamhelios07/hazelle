@@ -14,6 +14,7 @@ export class BackupStorageError extends Error {}
 
 type Cell = { ordinal: number; depth: number; ids: string[]; body: string; size: number };
 const PREFIX = 'risu-alpha-backup-stage-';
+const pageAddress = (ordinal: number, depth: number) => ({ id: String(ordinal), kind: 'backup-page', parent: String(depth) });
 
 const failed = (error: unknown) => new BackupStorageError(String(error));
 const transactionDone = (tx: IDBTransaction) => new Promise<void>((resolve, reject) => {
@@ -88,8 +89,7 @@ class DiskRecords implements BackupRecords {
     for (const [depth, page] of depths) {
       signal.throwIfAborted();
       const ordinal = this.next++;
-      const address = { id: String(ordinal), kind: 'backup-page', parent: String(depth) };
-      cells.push({ ordinal, depth, ids: page.map(({ object }) => object.id), size: page.reduce((sum, record) => sum + record.size, 0), body: await sealObject(this.key, this.name, address, page) });
+      cells.push({ ordinal, depth, ids: page.map(({ object }) => object.id), size: page.reduce((sum, record) => sum + record.size, 0), body: await sealObject(this.key, this.name, pageAddress(ordinal, depth), page) });
     }
     signal.throwIfAborted();
     const tx = this.db.transaction('records', 'readwrite');
@@ -106,8 +106,7 @@ class DiskRecords implements BackupRecords {
       for (const cell of page.cells) {
         signal.throwIfAborted();
         if (!cell.ids.some((id) => wanted.has(id))) continue;
-        const address = { id: String(cell.ordinal), kind: 'backup-page', parent: String(depth) };
-        const records = await openObject(this.key, this.name, address, cell.body) as BackupRecord[] | undefined;
+        const records = await openObject(this.key, this.name, pageAddress(cell.ordinal, depth), cell.body) as BackupRecord[] | undefined;
         if (records === undefined) throw new BackupStorageError('Temporary backup page did not open');
         for (const record of records) {
           signal.throwIfAborted();

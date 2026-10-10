@@ -6,14 +6,13 @@ import type { Chat, Receipt, Translation, Version } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { TranslatePrompt } from '../model/prompt';
 import type { Stream } from '../model/stream';
-import type { Phase } from '../connectors/types';
 import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { setTextTranslation, translateSwitches, translatorNotes } from './characters';
 import { appendTranslation, savedElsewhere } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { generate, resume, type Reply } from './generate';
+import { gather, generate, resume, type Reply } from './generate';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { modelProfile } from './profiles';
 import { translationPrompt } from './prompts';
@@ -81,18 +80,6 @@ export async function resumeTranslation(store: ObjectStore, stream: Stored<'stre
 
 type Translated = { ok: true; translation: Translation; language: string | null } | { ok: false; failure: TranslateFailure };
 
-function gather(onText: (text: string) => void) {
-  let text = '';
-  return {
-    add: (phase: Phase, chunk: string) => {
-      if (phase !== 'text') return;
-      text += chunk;
-      onText(text);
-    },
-    value: () => text,
-  };
-}
-
 function translated(call: Stream['call'], answer: Reply, text: string, language: string | null): Translated {
   if (answer.cut === 'stopped') return { ok: false, failure: { kind: 'stopped' } };
   const receipt = receiptOf(call, answer);
@@ -127,7 +114,7 @@ export class Translator {
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
     private readonly costs: Costs,
-    // The calls this page reads (runtime/streams), shared with Talk and Streams.
+    // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {}
 

@@ -11,6 +11,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { routeOf } from './assignment';
 import type { ChatFile } from './chat-file';
 import type { Session } from './session';
+import { storedMemory } from './memory-read';
 import { markDeleted } from './removal';
 import type { Greetings } from './greetings';
 import { withPersona } from './personas';
@@ -68,7 +69,7 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const upTo = item.messages.findIndex((candidate) => candidate.id === message);
     if (upTo === -1) return { ok: false, error: 'gone' };
     const id = crypto.randomUUID();
-    const memory = store.children('memory', item.id).find((entry) => entry.id === memoryId(item.id))?.value;
+    const memory = storedMemory(store, item.id)?.value;
     const illustrations = store.children('illustration', item.id).map(({ value }) => value);
     const { writes, after, messages, versions } = copyWrites(id, item.messages.slice(0, upTo + 1), memory, illustrations);
     writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
@@ -148,7 +149,6 @@ export async function saveNewChats(
   }
 }
 
-// Each message copied to the chat id, with the memory that still applies and the illustrations of the versions copied.
 // messages, versions: each copy's id by the original's. after: the last copy's id.
 function copyWrites(id: string, source: Message[], memory: Memory | undefined, illustrations: Illustration[]): { writes: Write[]; messages: Map<string, string>; versions: Map<string, string>; after: string } {
   let after = '';
@@ -202,8 +202,8 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 // hold; the other versions; and a select when the one shown is not the last, since adding a version selects it.
 // versions: each version's id in the branch, by its id here.
 // A field added to versions or messages must be written here too, or a branch drops it, as must a kind a chat holds
-// (copyWrites, branchToolData). The calls the bot's Lua made
-// (Version.calls) are dropped on purpose: usage counts a call where it was made.
+// (copyWrites, branchToolData). The calls the bot's Lua made (Version.calls) are dropped on purpose: usage counts a
+// call where it was made.
 function copied(id: string, { role, at, versions, selected, after }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
@@ -297,7 +297,13 @@ export function appendScripted(store: ObjectStore, chat: string, { edits, remove
   return store.batch(entries.map((value) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: chat, value })));
 }
 
-export const appendCall = (store: ObjectStore, chat: string, version: string, receipt: Receipt) => append(store, chat, { type: 'call', version, receipt, at: Date.now() });
+// A call no reply holds (a script's, retrieval's): on the last message shown, so usage and cost count it.
+export async function keepCall({ store, read, costs }: Pick<Session, 'store' | 'read' | 'costs'>, chat: string, receipt: Receipt) {
+  const last = read.chat(chat).snapshot()?.messages.at(-1);
+  if (!last) return;
+  const saved = await append(store, chat, { type: 'call', version: shown(last).id, receipt, at: Date.now() });
+  if (saved.ok) costs.settle(chat, receipt);
+}
 
 export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });
 

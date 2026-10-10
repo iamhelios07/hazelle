@@ -1,13 +1,13 @@
 import { recordText } from '../engine/memory';
 import { nearest, quantize, rank } from '../engine/retrieval';
 import type { HistoryMessage } from '../engine/history';
-import { shown, type Receipt } from '../model/chat';
+import type { Receipt } from '../model/chat';
 import { vectorsId, type MemoryRecord, type Vector, type Vectors } from '../model/memory';
 import type { Stored } from '../model/kinds';
 import { embedModel, type Route } from './assignment';
-import { appendCall } from './chat-log';
+import { keepCall } from './chat-log';
 import { chatMemory } from './memory-read';
-import { EMBED_TEXTS, embedTexts, type Embedded } from './embed';
+import { countTexts, EMBED_TEXTS, embedTexts, type Embedded } from './embed';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
 
@@ -28,20 +28,6 @@ export function unembedded(store: Pick<ObjectStore, 'get' | 'children'>, chat: s
   return { route, records, vectors, stale };
 }
 
-const counter = (store: ObjectStore) => async (texts: string[]) => {
-  const counted = await store.evaluation.count(texts);
-  if ('kind' in counted) throw new Error('tokenizer');
-  return counted;
-};
-
-// On the last message shown, so usage and cost count the call, as a tool's embedding does (runtime/scripts keep).
-async function keep(session: Reader, chat: string, receipt: Receipt) {
-  const last = session.read.chat(chat).snapshot()?.messages.at(-1);
-  if (!last) return;
-  const saved = await appendCall(session.store, chat, shown(last).id, receipt);
-  if (saved.ok) session.costs.settle(chat, receipt);
-}
-
 export type Indexed = { ok: true } | { ok: false; reason: Extract<Embedded, { ok: false }>['reason']; receipt: Receipt | null };
 
 // Embeds the records that have no vector at the current model, EMBED_TEXTS a call, and writes the chat's vectors
@@ -58,8 +44,8 @@ export async function indexRecords(session: Reader, chat: string, signal: AbortS
   for (const record of chatMemory(store, chat).records) if (!record.forgotten && kept[record.id]?.at === record.at) items[record.id] = kept[record.id]!;
   for (let from = 0; from < records.length; from += EMBED_TEXTS) {
     const batch = records.slice(from, from + EMBED_TEXTS);
-    const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: counter(store) }, route, batch.map(recordText), 'document', chat, signal);
-    if (receipt) await keep(session, chat, receipt);
+    const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: countTexts(store) }, route, batch.map(recordText), 'document', chat, signal);
+    if (receipt) await keepCall(session, chat, receipt);
     if (!answer.ok) {
       if (Object.keys(items).length) await writeVectors(store, chat, { model: route.model.id, items });
       return { ok: false, reason: answer.reason, receipt };
@@ -107,7 +93,7 @@ export async function findRecords(session: Reader, chat: string, messages: Histo
   if (vectors?.value.model !== route.model.id || !Object.keys(vectors.value.items).length) return [];
   const query = queryOf(messages);
   if (!query) return [];
-  const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: counter(store) }, route, [query], 'query', chat, AbortSignal.any([signal, AbortSignal.timeout(QUERY_WAIT)]));
-  if (receipt) await keep(session, chat, receipt);
+  const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: countTexts(store) }, route, [query], 'query', chat, AbortSignal.any([signal, AbortSignal.timeout(QUERY_WAIT)]));
+  if (receipt) await keepCall(session, chat, receipt);
   return answer.ok ? nearest(rank(answer.vectors[0]!, vectors.value.items)) : [];
 }
