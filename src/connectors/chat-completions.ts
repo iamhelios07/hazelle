@@ -2,7 +2,7 @@ import { streamError } from './errors';
 import type { Cache, NumberSetting, Reasoning, Setting } from './settings';
 import { ephemeral, wireMessage } from './anthropic-messages';
 import type { CacheMark, ChatMessage, Codec, Embeds, Model, Usage } from './types';
-import { count, isRecord, list, modelEntries } from './values';
+import { count, isRecord, list, modelEntries, vector } from './values';
 
 // OpenRouter's and Vercel's catalogs name the same fields in supported_parameters. max_tokens rather than
 // max_completion_tokens, which many compatible servers do not know; a type whose provider refuses max_tokens names its
@@ -74,8 +74,6 @@ function reasoningOf(part: Record<string, unknown>) {
   const reasoning = [part.reasoning_content, part.reasoning, part.reasoning_text].find((value) => typeof value === 'string' && value);
   return typeof reasoning === 'string' ? reasoning : null;
 }
-
-const vector = (value: unknown): value is number[] => Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'number' && Number.isFinite(item));
 
 // An embedding writes nothing, so its output is a measured zero: a price-list cost can be worked out from the input.
 export const embedUsage = (inputTokens: number | null): Usage => ({ inputTokens, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 0, reasoningTokens: null });

@@ -1,5 +1,5 @@
 import type { Comparison, Operand } from '../import/blocks';
-import type { ScriptUnit } from '../script-api';
+import { UNSET, type ScriptUnit } from '../script-api';
 import { add, cbs as evaluated, read, write, type Acting } from './state';
 
 export type Blocks = Omit<Extract<ScriptUnit, { kind: 'blocks' }>, 'id' | 'off'>;
@@ -24,7 +24,7 @@ const COMPARE: Record<Comparison['operator'], (source: string, target: string, e
   'at-least': (source, target) => Number(source) >= Number(target),
   'at-most': (source, target) => Number(source) <= Number(target),
   truthy: isTrue,
-  unset: (source) => source === 'null',
+  unset: (source) => source === UNSET,
   in: (source, target) => holds(target, source),
   contains: (source, target) => holds(source, target),
   'not-in': (source, target) => !holds(target, source),

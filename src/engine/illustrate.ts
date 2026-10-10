@@ -1,4 +1,5 @@
 import type { Model, PictureRequest } from '../connectors/types';
+import { isRecord } from '../connectors/values';
 import type { Figure, Scene, Shape } from '../model/illustration';
 import type { IllustratePrompt, PictureTags } from '../model/prompt';
 
@@ -40,7 +41,6 @@ export const numbered = (paragraphs: readonly string[]) => paragraphs.map((parag
 export type SceneInvalid = 'unreadable' | 'fields' | 'paragraph';
 
 const SHAPES: readonly Shape[] = ['portrait', 'landscape', 'square'];
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === 'string';
 const isPlace = (value: unknown): value is number => typeof value === 'number' && value >= 0 && value <= 1;
 

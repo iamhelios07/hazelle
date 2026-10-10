@@ -1,11 +1,11 @@
-import { count, isRecord, list } from '../../connectors/values';
+import { count, flag, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
 import { parseDecorators } from '../lorebook/decorators';
 import { readToggles } from './toggles';
 import { blockConditions, blockEffects } from './blocks';
 import type { Card, ImportedModule, ImportReport, LoreEntry, Pack, RegexScript, Trigger, UnsupportedKind } from './types';
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 type Entry = Omit<LoreEntry, 'name' | 'folder'>;
 
 export type Tally<K = UnsupportedKind> = Map<K, number>;
@@ -44,9 +44,8 @@ const ROLES = ['system', 'user', 'assistant'];
 // Risu's order for a new entry. CCv3 requires insertion_order, so only a malformed file goes without one.
 export const DEFAULT_ORDER = 100;
 
-const text = (value: unknown) => (typeof value === 'string' ? value : '');
-const flag = (value: unknown) => (typeof value === 'boolean' ? value : null);
-const record = (value: unknown): Json => (isRecord(value) ? value : {});
+export const text = (value: unknown) => (typeof value === 'string' ? value : '');
+export const record = (value: unknown): Json => (isRecord(value) ? value : {});
 const strings = (value: unknown) => list(value).filter((item): item is string => typeof item === 'string');
 // CCv3 key arrays stay intact; only blank keys are dropped.
 const keys = (value: unknown) => strings(value).filter((key) => key.trim() !== '');

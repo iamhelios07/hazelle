@@ -34,6 +34,8 @@ export function perMillion(value: unknown): number | null {
   return rate === null ? null : rate * 1_000_000;
 }
 
+export const vector = (value: unknown): value is number[] => Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'number' && Number.isFinite(item));
+
 export function list(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }

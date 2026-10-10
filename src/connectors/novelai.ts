@@ -1,19 +1,9 @@
 import { unzipSync } from 'fflate';
+import { bareModel } from './chat-completions';
 import { ConnectorError, type ConnectionType, type Meter, type Model, type PictureRequest } from './types';
 import { count, isRecord } from './values';
 
-const drawing = (id: string, name: string): Model => ({
-  id,
-  name,
-  input: ['text'],
-  output: ['image'],
-  contextLength: null,
-  maxOutput: null,
-  reasoning: null,
-  tools: null,
-  protocol: null,
-  takes: { settings: null, reasoning: null },
-});
+const drawing = (id: string, name: string): Model => ({ ...bareModel(id), name, input: ['text'], output: ['image'] });
 
 // Per model as NAIWeaver's NaiCaps and NaiModelDefaults state it (nai_model.dart), read from NovelAI's own frontend.
 // V4.5 places characters only on a 5×5 grid and takes at most 6 of them; V5 places them freely.

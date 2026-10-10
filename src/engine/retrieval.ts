@@ -1,5 +1,5 @@
 import type { Memory, Vector } from '../model/memory';
-import { recalledText, recordText, type ChatRead, type Standing } from './memory';
+import { placesOf, recalledText, recordText, type ChatRead, type Standing } from './memory';
 
 // Retrieval (design §6.2): the records nearest the latest message, by their summaries' embeddings, ride after the
 // last cache point within RETRIEVAL_SHARE of the memory budget on top of it. One whose summary the slot does not send
@@ -64,7 +64,7 @@ export const RETRIEVED_HEADING = 'Earlier in this chat, found for the latest mes
 // found: record ids, nearest first. A record the slot sends gives its messages; one it holds back as over or in its
 // chapter gives its summary; a stale, forgotten or put-in (이 기억 넣기) one gives nothing. Each must fit the room left.
 export function retrieval(memory: Memory, found: string[], standing: Pick<Standing, 'status'>, chat: ChatRead, room: number, countTokens: (text: string) => number): { ids: string[]; text: string } | null {
-  const places = new Map(chat.shown.map(({ message }, index) => [message, index]));
+  const places = placesOf(chat.shown);
   const ids: string[] = [];
   const texts: string[] = [];
   let left = room;
