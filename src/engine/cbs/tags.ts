@@ -50,7 +50,6 @@ const UNSUPPORTED = new Set([
   // Marked X in risu-compat-spec §d, with their aliases in src/ts/cbs.ts at ca1345fc. The internal-only `__`
   // is left out, since normalizing empties its name.
   'emotionlist',
-  'risu',
   'video',
   'audio',
   'bgm',
@@ -412,6 +411,8 @@ define('filter', 1, ([array, mode]) => {
 
 define('br newline', 0, () => '\n');
 define('blank none', 0, () => '');
+// Ruled 2026-10-10: Risu draws its own logo here; Hazelle draws nothing.
+define('risu', 0, () => '');
 // A backslash and an n, not a line break; with a count, that many.
 define('cbr', 0, ([count = '1']) => (Number(count) > MOST ? null : '\\n'.repeat(Number(count))));
 define('bo', 0, () => escapeCbs('{{'));

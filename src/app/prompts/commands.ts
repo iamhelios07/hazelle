@@ -236,6 +236,7 @@ export const COMMANDS: readonly CommandGroup[] = [
     commands: [
       { names: ['br', 'newline'], form: '{{br}}', what: '줄바꿈이에요.' },
       { names: ['blank', 'none'], form: '{{blank}}', what: '아무것도 넣지 않아요.' },
+      { names: ['risu'], form: '{{risu}}', what: 'Risu에서는 로고를 그려요. 헤이젤에서는 아무것도 넣지 않아요.' },
       { names: ['cbr'], form: '{{cbr}}', what: '줄바꿈이 아니라 \\n 두 글자를 넣어요. {{cbr::3}}은 세 번이에요.' },
       { names: [], form: '{{// 메모}}', what: '모델에 보내지 않는 메모예요.', example: ['안녕{{// 메모}}', '안녕'], uses: { conversation: '지시문에 메모를 남길 때 써요.', translate: '지시문에 메모를 남길 때 써요.' } },
       { names: ['hiddenkey'], form: '{{hiddenkey::키}}', what: '로어북 항목에 두면 다른 항목을 활성화하는 키로만 쓰이고, 모델에게는 보내지 않아요.' },
