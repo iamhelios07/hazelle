@@ -29,7 +29,7 @@ type RowProps = {
 
 export function SettingRow({ label, sentence, place = 'group', changed = false, help, sub, control, wide = false, error, note }: RowProps) {
   const id = useId();
-  const className = [styles.row, place === 'panel' && styles.panel, wide && styles.wide].filter(Boolean).join(' ');
+  const className = [styles.row, place === 'panel' ? styles.panel : styles.ruled, wide && styles.wide].filter(Boolean).join(' ');
   return (
     <div className={className} role="group" aria-labelledby={sentence ? undefined : id} aria-label={sentence ? label : undefined}>
       <div className={styles.words}>

@@ -18,10 +18,7 @@
 }
 
 .dot {
-  width: var(--dot);
-  height: var(--dot);
-  border-radius: var(--radius-full);
-  background: var(--color-accent);
+  composes: dot from '../foundation/surface.module.css';
 }
 
 .count {

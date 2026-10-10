@@ -39,7 +39,7 @@
 }
 
 .items > .row:not(.last) {
-  border-bottom: var(--border-thin) solid var(--color-surface-raised);
+  border-bottom: var(--border-thin) solid var(--color-row-line);
 }
 
 .rail {

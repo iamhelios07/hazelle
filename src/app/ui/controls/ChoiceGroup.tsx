@@ -35,7 +35,7 @@ export function ChoiceGroup<T extends string>({ label, showLabel = false, option
   // Chips stand as a field among fields, their label above as TextField's; the other layouts sit in a toolbar row.
   return (
     <div className={layout === 'chips' ? styles.field : styles.labelled}>
-      <span id={id} className={styles.label}>
+      <span id={id} className={layout === 'chips' ? styles.fieldLabel : styles.label}>
         {label}
       </span>
       {group}

@@ -127,8 +127,6 @@
   gap: var(--space-8);
 }
 
-.field > .label {
-  color: var(--color-text);
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
+.fieldLabel {
+  composes: fieldLabel from '../foundation/type.module.css';
 }

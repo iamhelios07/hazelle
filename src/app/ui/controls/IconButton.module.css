@@ -50,11 +50,8 @@
 }
 
 .dot {
+  composes: dot from '../foundation/surface.module.css';
   position: absolute;
   top: var(--space-2);
   right: var(--space-2);
-  width: var(--dot);
-  height: var(--dot);
-  border-radius: var(--radius-full);
-  background: var(--color-accent);
 }

@@ -60,7 +60,8 @@
   composes: ellipsis from '../foundation/a11y.module.css';
 }
 
-/* A setting row stacked in a narrow box (SettingGroup's container query) gives its field the whole row, as on a phone. */
+/* A setting row stacked in a narrow box (SettingGroup's container query) gives its field the whole row, as on a phone.
+   440px is --screen-narrow (and --dialog-width): a container query cannot read var(), so change them together. */
 @container (max-width: 440px) {
   .field {
     max-width: 100%;

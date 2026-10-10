@@ -16,8 +16,9 @@ and only this folder styles elements.**
 - `foundation/media.ts` lists every media query in `MEDIA` and reads them in JavaScript (`useWide`,
   `useSplit`, `useHover`). A stylesheet cannot read it, so it writes the query out in full, and
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
-- `foundation/motion.module.css` holds every keyframe, and `foundation/a11y.module.css` the
-  screen-reader-only box and the one-line ellipsis. Components take them with `composes`.
+- `foundation/motion.module.css` holds every keyframe, `foundation/a11y.module.css` the
+  screen-reader-only box and the one-line ellipsis, and `type.module.css` and `surface.module.css` the looks several
+  components share (a note, a box of rows, a field). Components take them with `composes` and never redeclare them.
 - `overlays/layers.ts` is the only document listener for keys and presses. Menus and dialogs join
   its stack with `useLayer`, and Esc or a press outside reaches the newest one only.
 - Each component is a `.tsx` named after its main export, with its own `.module.css`, in one of the
@@ -69,6 +70,8 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | — | `tokens.css`, `global.css` | Every raw value; element defaults, a bare button among them, and reduced motion |
 | foundation | — | `motion.module.css` | Every animation: fade, rise, drop, fade away, spin, pulse, blink, waiting dots |
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
+| foundation | — | `type.module.css` | Shared text looks: a note, an error line, a field's label |
+| foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field and its compact size, an accent dot |
 | foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`) | — | Every breakpoint and media query |
 | foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
 | foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |
