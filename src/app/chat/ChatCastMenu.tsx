@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { CAST_MAX } from '../../model/chat';
-import { matches } from '../../model/library';
+import { characterTexts } from '../../model/library';
 import { aliased } from '../common/alias';
-import { noResults, SEARCH_FROM } from '../common/search';
+import { useSearch } from '../common/useSearch';
 import { CAST } from '../common/words';
 import { useLibrary } from '../session';
-import { Avatar, Empty, Menu, MenuHeading, MenuItem, SearchField } from '../ui';
+import { Avatar, Empty, Menu, MenuHeading, MenuItem } from '../ui';
 import type { OpenChat } from './useChat';
 
 // No button of its own: it opens from the header's ⋯ (ChatHeaderActions).
@@ -28,17 +27,16 @@ export function ChatCastMenu({ chat }: { chat: OpenChat }) {
 function CastChoices({ chat }: { chat: OpenChat }) {
   const { cast, shelf, actions } = chat;
   const { characters } = useLibrary();
-  const [query, setQuery] = useState('');
   const offered = characters.filter(({ id }) => id !== shelf?.id);
-  const found = offered.filter(({ character }) => matches(character, query));
+  const { field, found, none } = useSearch(offered, '캐릭터 검색', ({ character }) => characterTexts(character));
   const gone = cast.filter((id) => !offered.some((each) => each.id === id));
   const full = cast.length >= CAST_MAX;
   const flip = (id: string) => actions.setCast(cast.includes(id) ? cast.filter((each) => each !== id) : [...cast, id]);
   return (
     <>
-      {offered.length >= SEARCH_FROM && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />}
+      {field}
       {full && <MenuHeading>{`최대 ${CAST_MAX}명`}</MenuHeading>}
-      {found.length === 0 && <Empty variant="menu">{query.trim() ? noResults(query.trim()) : '선택할 수 있는 다른 캐릭터가 없어요.'}</Empty>}
+      {found.length === 0 && <Empty variant="menu">{none ?? '선택할 수 있는 다른 캐릭터가 없어요.'}</Empty>}
       {found.map(({ id, character, face }) => (
         <MenuItem
           key={id}

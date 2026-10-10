@@ -1,4 +1,4 @@
-import { Bot, Copy, GitBranch, ImagePlus, Info, Languages, Package, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
+import { Bot, GitBranch, ImagePlus, Info, Languages, Package, Pin, PinOff, SquarePen } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
@@ -9,6 +9,7 @@ import type { Stored } from '../../model/kinds';
 import type { Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
+import { ACTS } from '../common/acts';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
@@ -276,13 +277,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const tools = live || message.unstored || editing !== null ? undefined : opening ? (
     <>
       {translateTool}
-      {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
+      {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
       {statusTool}
     </>
   ) : (
     <>
-      {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 생성" onClick={() => actions.regenerate(message)} />}
-      {!mine && failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 시도" onClick={() => actions.retry(message)} />}
+      {!mine && isLast && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
+      {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="xs" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}
       {!mine && !empty && !failed && (
         <IconButton
@@ -296,8 +297,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           }}
         />
       )}
-      {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message)} />}
-      {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
+      {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message)} />}
+      {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />}
       {statusTool}
@@ -310,7 +311,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         </Menu>
       )}
       <Divider variant="tools" />
-      <IconButton icon={Trash2} size="xs" label="삭제" onClick={() => actions.remove(message)} />
+      <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => actions.remove(message)} />
     </>
   );
 

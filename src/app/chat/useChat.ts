@@ -329,7 +329,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setBranching(false);
     if (!made.ok) return toast.failed(made, '채팅을 분기하지 못했어요.');
     navigate({ kind: 'chat', id: made.data });
-    toast.show('새 채팅으로 분기했어요');
+    toast.show('새 채팅으로 분기했어요.');
   }
 
   function drop() {
@@ -387,7 +387,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function reset() {
     void resetToggles(store, chat.character).then((saved) => saved.ok || toast.failed(saved));
-    toast.show(`토글 ${toggles.changed}개를 기본값으로 되돌렸어요`);
+    toast.show(`토글 ${toggles.changed}개를 기본값으로 되돌렸어요.`);
   }
 
   function rename(name: string) {

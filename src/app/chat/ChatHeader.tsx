@@ -1,5 +1,6 @@
 import { toolMenu } from './toolMenu';
 import { MoreHorizontal, SlidersHorizontal } from 'lucide-react';
+import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { CAST, EXPORT, NO_CHARACTER } from '../common/words';
 import { useDisplay } from '../display';
@@ -50,10 +51,10 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         expanded={panel?.kind === 'toggles'}
         onClick={actions.flipToggles}
       />
-      <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" dot={failed} {...opener} />}>
+      <Menu place="below-end" label="채팅 메뉴" trigger={(opener) => <IconButton icon={MoreHorizontal} label="채팅 메뉴" size="sm" dot={failed} {...opener} />}>
         {!wide && <MenuItem label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />}
         <MenuItem label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />
-        {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
+        {item && <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => actions.openDialog('rename')} />}
         {item && <MenuItem label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
         {tools.length > 0 && <>
           <Divider variant="menu" />
@@ -68,7 +69,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         {item && (
           <>
             <Divider variant="menu" />
-            <MenuItem label="이 채팅 삭제" tone="warn" onClick={actions.drop} />
+            <MenuItem icon={ACTS.remove.icon} label="이 채팅 삭제" tone="warn" onClick={actions.drop} />
           </>
         )}
       </Menu>

@@ -1,4 +1,5 @@
 import { ReadingRows, ReplyRow } from '../common/ReadingRows';
+import { RESET } from '../common/words';
 import { useDisplay } from '../display';
 import { Button, Dialog, Row, Stack } from '../ui';
 
@@ -17,8 +18,8 @@ function ReadingForm() {
       <ReadingRows place="panel" />
       <ReplyRow place="panel" />
       <Row kind="actions">
-        <Button variant="ghost" size="sm" onClick={reset}>
-          기본값으로 되돌리기
+        <Button variant="link" size="sm" onClick={reset}>
+          {RESET}
         </Button>
       </Row>
     </Stack>

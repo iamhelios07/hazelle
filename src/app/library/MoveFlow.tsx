@@ -5,6 +5,7 @@ import type { Unused } from '../../engine/pipeline';
 import { ImportWorker } from '../../runtime/import/client';
 import { ImportReadError } from '../../runtime/import/protocol';
 import { broughtFromRisu, modulesFromRisu, moveFromRisu, type Moved, type MoveStep } from '../../runtime/move';
+import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
@@ -110,7 +111,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   const names = dropped.map((file) => file.name).join(' + ');
   const note = aside > 0 ? `${names} (파일 ${aside}개 제외)` : names;
   const close = (
-    <Button variant="secondary" size="md" onClick={onClose}>
+    <Button variant="secondary" onClick={onClose}>
       닫기
     </Button>
   );
@@ -135,10 +136,8 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         actions={
           phase.again ? (
             <>
-              <Button size="md" onClick={phase.again}>
-                다시 하기
-              </Button>
               {close}
+              <Button onClick={phase.again}>{ACTS.retry.label}</Button>
             </>
           ) : (
             close
@@ -146,7 +145,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         }
       >
         <Callout tone="warn">{phase.message}</Callout>
-        {phase.again && <Text variant="note">다시 하면 이어서 가져와요.</Text>}
+        {phase.again && <Text variant="note">다시 시도하면 이어서 가져와요.</Text>}
       </Dialog>
     );
   }
@@ -168,7 +167,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       note={note}
       onClose={onClose}
       actions={
-        <Button size="md" disabled={count === 0} onClick={() => void run(backup, ticks)}>
+        <Button disabled={count === 0} onClick={() => void run(backup, ticks)}>
           {`가져오기 ${count}개`}
         </Button>
       }
@@ -208,12 +207,12 @@ function Picks({ title, rows, can, ticks, onChange }: PicksProps) {
   if (rows.length === 0) return null;
   const all = can.every((open, index) => !open || ticks[index]);
   const action = can.filter(Boolean).length > 1 && (
-    <Button variant="link" size="sm" onClick={() => onChange(can.map((open) => open && !all))}>
+    <Button variant="link" onClick={() => onChange(can.map((open) => open && !all))}>
       {all ? '모두 해제' : '모두 선택'}
     </Button>
   );
   return (
-    <Section title={title} note={`${rows.length}개`} action={action || undefined}>
+    <Section level={3} title={title} note={`${rows.length}개`} action={action || undefined}>
       <Stack gap="related">
         {rows.map((row, index) => (
           <Checkbox
@@ -251,7 +250,7 @@ function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
       {backup.unsupported.length > 0 && <Callout tone="warn">백업에서 못 가져온 것: {moveMissed(backup.unsupported).join(' · ')}</Callout>}
       <Text>{`캐릭터 ${moved.characters.length}개 · 대화 ${chats}개 · 페르소나 ${moved.personas}개 · 프롬프트 ${moved.prompts}개 · 모듈 ${moved.modules.length}개`}</Text>
       {missed.length > 0 && (
-        <Section title="가져오지 않은 것">
+        <Section level={3} title="가져오지 않은 것">
           <Outcome label="가져오지 않은 것" items={missed} />
         </Section>
       )}

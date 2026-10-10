@@ -1,4 +1,5 @@
-import { Import, MessageSquarePlus, PackageOpen, Plug } from 'lucide-react';
+import { MessageSquarePlus, PackageOpen, Plug } from 'lucide-react';
+import { ACTS, importOf, newOf } from '../common/acts';
 import { useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
@@ -21,14 +22,14 @@ export function Welcome() {
         )}
         <ActionCard
           tone={connections.length ? 'default' : 'accent'}
-          icon={Import}
-          title="봇 가져오기"
+          icon={ACTS.import.icon}
+          title={importOf('봇')}
           description="PNG · charx · JSON 파일을 끌어다 놓거나 눌러서 선택"
           onClick={pick}
         />
         <ActionCard icon={PackageOpen} title="Risu에서 이사" description="Risu 로컬 백업에서 캐릭터와 채팅을 가져와요" onClick={move} />
         {connections.length === 0 ? (
-          <ActionCard icon={Plug} title="연결 추가" description="제공자를 선택하고 API 키를 입력해요" onClick={() => navigate({ kind: 'add-connection' })} />
+          <ActionCard icon={Plug} title={newOf('연결')} description="제공자를 선택하고 API 키를 입력해요" onClick={() => navigate({ kind: 'add-connection' })} />
         ) : (
           <ActionCard icon={Plug} title="연결" description={`연결 ${connections.length}개 · 모델 즐겨찾기`} onClick={() => navigate({ kind: 'connections' })} />
         )}

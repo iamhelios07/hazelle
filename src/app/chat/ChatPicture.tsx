@@ -1,4 +1,4 @@
-import { RefreshCw, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import type { PictureUrl } from '../../engine/assets';
 import { parseScene, sceneText, SIZES, type SceneInvalid } from '../../engine/illustrate';
@@ -6,6 +6,7 @@ import { paragraphsOf, type Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import type { Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
+import { ACTS } from '../common/acts';
 import { describeIllustrateFailure } from '../common/failure';
 import { timeOfDay } from '../common/time';
 import { Button, Dialog, Failure, IconButton, StoryPicture, Switcher, TextField } from '../ui';
@@ -50,18 +51,18 @@ export function ChatPicture({ slot, message, pictures, onPage, running, url, act
         title={drawing.failure.kind === 'costs' ? '비용이 드는 이미지' : '삽화 실패'}
         actions={
           <>
+            <Button variant="secondary" size="sm" onClick={() => actions.dismissIllustration(message.id)}>
+              닫기
+            </Button>
             {drawing.failure.kind === 'costs' ? (
               <Button size="sm" onClick={() => actions.draw(message.id, drawing.version, drawing.scene, true)}>
                 그래도 만들기
               </Button>
             ) : (
               <Button size="sm" onClick={() => actions.draw(message.id, drawing.version, drawing.scene)}>
-                다시 시도
+                {ACTS.retry.label}
               </Button>
             )}
-            <Button variant="secondary" size="sm" onClick={() => actions.dismissIllustration(message.id)}>
-              닫기
-            </Button>
           </>
         }
       >
@@ -102,9 +103,9 @@ export function ChatPicture({ slot, message, pictures, onPage, running, url, act
               onPick={(index) => onPage(pictures[index]!.id)}
             />
           )}
-          <IconButton icon={RefreshCw} size="xs" label="다시 그리기" disabled={running} onClick={again} />
+          <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={again} />
           <IconButton icon={SlidersHorizontal} size="xs" label="어떻게 바꿀까요?" onClick={() => actions.reshape({ message: message.id, version, scene, paragraphs: paragraphsOf(text).length })} />
-          <IconButton icon={Trash2} size="xs" label="삭제" onClick={() => actions.dropPicture(picture)} />
+          <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => actions.dropPicture(picture)} />
         </>
       }
     />
@@ -135,7 +136,7 @@ export function SceneDialog({ reshaping, actions }: { reshaping: Reshaping; acti
       onSubmit={submit}
       actionsLayout="full"
       actions={
-        <Button type="submit" size="md">
+        <Button type="submit">
           다시 그리기
         </Button>
       }

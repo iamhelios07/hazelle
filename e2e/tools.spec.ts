@@ -29,7 +29,7 @@ async function importModule(page: Page, name: string) {
 }
 
 async function openNotepad(page: Page) {
-  await page.getByRole('button', { name: '더보기', exact: true }).click();
+  await page.getByRole('button', { name: '채팅 메뉴', exact: true }).click();
   await page.getByRole('menuitemradio', { name: /^메모장 열기/ }).click();
   const frame = page.frameLocator('iframe[title="메모장"]');
   await expect(frame.getByRole('heading', { name: '메모장', exact: true })).toBeVisible();
@@ -272,7 +272,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     const memoryPanel = async () => {
       // The chat header slides in only while the pointer is near the top.
       await page.mouse.move(720, 10);
-      await page.getByRole('button', { name: '더보기', exact: true }).click();
+      await page.getByRole('button', { name: '채팅 메뉴', exact: true }).click();
       await page.getByRole('menuitem', { name: '장기 기억', exact: true }).click();
       return page.getByRole('complementary', { name: '장기 기억', exact: true });
     };

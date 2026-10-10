@@ -66,7 +66,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
     if (!done) return;
     if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
     back();
-    toast.undoable(`${noun}${chapter ? '를' : '을'} 삭제했어요`, () => void restoreRecord(store, chat, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
+    toast.undoable(`${noun}${chapter ? '를' : '을'} 삭제했어요.`, () => void restoreRecord(store, chat, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
   }
 
   const text = (field: 'when' | 'where', label: string) => (

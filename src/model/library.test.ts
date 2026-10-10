@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import type { Stored } from './kinds';
-import { daysLeft, holds, KEEP_DELETED, matches, nest, shelve } from './library';
+import { characterTexts, daysLeft, holds, KEEP_DELETED, nest, shelve } from './library';
 
 const character = (id: string, rev: number): Stored<'character'> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: null, loreFolders: [] } });
 const chat = (id: string, character: string | null, order: number) => ({ id, chat: { character }, order });
@@ -63,12 +63,11 @@ describe('daysLeft', () => {
   });
 });
 
-describe('matches', () => {
-  it('finds the query, trimmed and in any case, in the name, the nickname or the alias', () => {
+describe('characterTexts', () => {
+  it('reads the name, the nickname and the alias', () => {
     const luna = character('Luna', 1).value;
     luna.card.nickname = '달토끼';
     luna.alias = '겨울 버전';
-    expect(['  lu ', 'LUNA', '토끼', '겨울', ''].map((query) => matches(luna, query))).toEqual([true, true, true, true, true]);
-    expect(matches(luna, 'kael')).toBe(false);
+    expect(characterTexts(luna)).toEqual(['Luna', '달토끼', '겨울 버전']);
   });
 });

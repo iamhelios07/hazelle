@@ -1,19 +1,19 @@
-import { MoreHorizontal, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
 import { embedModel } from '../../runtime/assignment';
 import { memoryOwner, memorySetup } from '../../runtime/memory-read';
 import { memoryView, type MemoryView } from '../../runtime/memory-view';
 import { removeFact, removeThread, setChatMemory, setFact, setThread } from '../../runtime/memory';
+import { ACTS, addOf } from '../common/acts';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, inSettings } from '../common/words';
+import { CHAPTER, inSettings, MODEL_ROLES, RESET } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, Menu, MenuItem, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
+import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, MenuItem, MoreMenu, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
 import { ChatMemoryRecord, MemoryRow } from './ChatMemoryRecord';
 import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
@@ -83,9 +83,9 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const embeds = !('kind' in embedModel(store));
   const rows = memoryRows(memory);
   const more = (
-    <Menu place="below-end" label="장기 기억 더 보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="장기 기억 더 보기" size="sm" {...opener} />}>
+    <MoreMenu label="장기 기억 메뉴">
       <MenuItem label="원문에서 전부 다시 만들기" onClick={() => setRebuilding(true)} />
-    </Menu>
+    </MoreMenu>
   );
 
   return (
@@ -116,7 +116,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
           {`검색할 기록을 준비하지 못했어요. ${describeMemoryFailure(unindexed)}`}
         </Callout>
       )}
-      {owner?.kind === 'built-in' && !embeds && <Text variant="note">{`임베딩 모델을 고르면 지금 대화와 관련된 지난 기록을 찾아 넣어요. ${inSettings('models')}에서 고를 수 있어요.`}</Text>}
+      {owner?.kind === 'built-in' && !embeds && <Text variant="note">{`${MODEL_ROLES.embed}을 고르면 지금 대화와 관련된 지난 기록을 찾아 넣어요. ${inSettings('models')}에서 고를 수 있어요.`}</Text>}
       {!owner && <Text variant="note">이 채팅은 장기 기억을 쓰지 않아요.</Text>}
       {owner && view && !view.slot && (
         <Callout tone="warn" action={prompt.kind === 'prompt' ? { label: '프롬프트 열기', onClick: () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null }) } : undefined}>
@@ -169,8 +169,8 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         help={`기본값은 ${inSettings('prompts')}에서 바꿀 수 있어요.`}
         action={
           setup.own && (
-            <Button variant="link" size="xs" onClick={() => void revert()}>
-              기본값으로 되돌리기
+            <Button variant="link" onClick={() => void revert()}>
+              {RESET}
             </Button>
           )
         }
@@ -182,7 +182,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         <ConfirmDialog
           title="원문에서 전부 다시 만들까요?"
           confirm="다시 만들기"
-          icon={RotateCcw}
+          icon={ACTS.regenerate.icon}
           onConfirm={() => {
             session.memory.rebuild(id, null);
             setRebuilding(false);
@@ -214,7 +214,7 @@ function FactRow({ chat, fact }: { chat: string; fact: Fact }) {
     const removed = await save.remove(() => removeFact(store, chat, fact));
     if (!removed) return;
     if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
-    toast.undoable(`'${name}'을(를) 삭제했어요`, () => void setFact(store, chat, removed.data, null).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
+    toast.undoable(`'${name}' 상태를 삭제했어요.`, () => void setFact(store, chat, removed.data, null).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
   }
 
   return (
@@ -223,7 +223,7 @@ function FactRow({ chat, fact }: { chat: string; fact: Fact }) {
       value={value}
       onChange={type}
       error={value.trim() ? undefined : '값을 입력해 주세요.'}
-      action={<IconButton icon={Trash2} label={`${name} 삭제`} size="sm" onClick={() => void remove()} />}
+      action={<IconButton icon={ACTS.remove.icon} label={`${name} ${ACTS.remove.label}`} size="sm" onClick={() => void remove()} />}
     />
   );
 }
@@ -235,8 +235,8 @@ function NewFact({ chat }: { chat: string }) {
   if (!draft) {
     return (
       <Row kind="actions">
-        <Button variant="secondary" size="sm" icon={Plus} onClick={() => setDraft({ about: '', field: '', value: '' })}>
-          상태 추가
+        <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => setDraft({ about: '', field: '', value: '' })}>
+          {addOf('상태')}
         </Button>
       </Row>
     );
@@ -283,8 +283,8 @@ function Threads({ chat, threads, adding }: { chat: string; threads: Thread[]; a
       ))}
       {shown.length === 0 && <Empty variant="section">미해결 사건이 없어요.</Empty>}
       {adding && <Row kind="actions">
-        <Button variant="secondary" size="sm" icon={Plus} onClick={() => setDrafts((current) => [...current, { id: crypto.randomUUID(), text: '', opened: null }])}>
-          미해결 사건 추가
+        <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => setDrafts((current) => [...current, { id: crypto.randomUUID(), text: '', opened: null }])}>
+          {addOf('미해결 사건')}
         </Button>
       </Row>}
     </Section>
@@ -308,7 +308,7 @@ function ThreadRow({ chat, thread, name, onDrop }: { chat: string; thread: Threa
     const removed = await save.remove(() => removeThread(store, chat, thread.id));
     if (!removed) return;
     if (!removed.ok) return removed.error === 'gone' ? onDrop() : toast.failed(removed, '삭제하지 못했어요.');
-    toast.undoable('미해결 사건을 삭제했어요', () => void setThread(store, chat, removed.data, false).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
+    toast.undoable('미해결 사건을 삭제했어요.', () => void setThread(store, chat, removed.data, false).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
   }
 
   return (
@@ -317,7 +317,7 @@ function ThreadRow({ chat, thread, name, onDrop }: { chat: string; thread: Threa
       lines={2}
       value={text}
       onChange={type}
-      action={<IconButton icon={Trash2} label={`${name} 삭제`} size="sm" onClick={() => void remove()} />}
+      action={<IconButton icon={ACTS.remove.icon} label={`${name} ${ACTS.remove.label}`} size="sm" onClick={() => void remove()} />}
     />
   );
 }

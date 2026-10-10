@@ -1,6 +1,7 @@
-import { Copy, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { MoreHorizontal, SquarePen } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
+import { ACTS } from '../../common/acts';
 import { aliased } from '../../common/alias';
 import { navigate } from '../../shell/router';
 import { enterShelf } from '../../shell/routes';
@@ -29,14 +30,14 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
     <Menu handle={handle} place="below-end" label={`${name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" {...opener} />}>
       {binned ? (
         <>
-          <MenuItem icon={RotateCcw} label="복원" onClick={() => actions.restore(binnedCharacter(shelf))} />
-          <MenuItem icon={Trash2} label="영구 삭제" tone="warn" onClick={onPurge} />
+          <MenuItem icon={ACTS.restore.icon} label={ACTS.restore.label} onClick={() => actions.restore(binnedCharacter(shelf))} />
+          <MenuItem icon={ACTS.remove.icon} label="영구 삭제" tone="warn" onClick={onPurge} />
         </>
       ) : (
         <>
-          <MenuItem icon={Pencil} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
-          <MenuItem icon={Copy} label="사본 만들기" onClick={() => void actions.copy(shelf)} />
-          <MenuItem icon={Trash2} label="삭제" tone="warn" onClick={() => actions.remove(shelf)} />
+          <MenuItem icon={SquarePen} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
+          <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void actions.copy(shelf)} />
+          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => actions.remove(shelf)} />
         </>
       )}
     </Menu>

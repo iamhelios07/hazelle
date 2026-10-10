@@ -1,7 +1,7 @@
-import { MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Mark } from '../../../model/library';
-import { IconButton, ListItem, Menu, MenuItem } from '../../ui';
+import { ACTS } from '../../common/acts';
+import { ListItem, MenuItem, MoreMenu } from '../../ui';
 import { timeLeft } from '../shelf';
 import type { Binned, CharacterActions } from '../useCharacterActions';
 
@@ -24,10 +24,10 @@ export function BinnedRow({ item, face, description, mark, busy, actions, onPurg
       aside={busy ?? timeLeft(mark)}
       trailing={
         busy === null && (
-          <Menu place="below-end" label={`${item.name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${item.name} 메뉴`} size="sm" {...opener} />}>
-            <MenuItem icon={RotateCcw} label="복원" onClick={() => actions.restore(item)} />
-            <MenuItem icon={Trash2} label="영구 삭제" tone="warn" onClick={onPurge} />
-          </Menu>
+          <MoreMenu label={`${item.name} 메뉴`}>
+            <MenuItem icon={ACTS.restore.icon} label={ACTS.restore.label} onClick={() => actions.restore(item)} />
+            <MenuItem icon={ACTS.remove.icon} label="영구 삭제" tone="warn" onClick={onPurge} />
+          </MoreMenu>
         )
       }
     />

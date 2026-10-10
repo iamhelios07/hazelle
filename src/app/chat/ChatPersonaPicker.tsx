@@ -77,14 +77,14 @@ export function PersonaDialog({ chat }: { chat: OpenChat }) {
           <Hint label="고정">이 캐릭터와 새로 시작하는 채팅에 이 페르소나를 사용해요.</Hint>
         </Row>
       )}
-      <Button variant="link" size="sm" onClick={() => navigate(using ? { kind: 'persona', id: using } : { kind: 'personas' })}>
+      <Button variant="link" onClick={() => navigate(using ? { kind: 'persona', id: using } : { kind: 'personas' })}>
         페르소나 관리
       </Button>
     </>
   );
   return (
     <Dialog title="이 채팅의 페르소나" size="wide" onClose={actions.closeDialog} toolbar={toolbar} footer={footer}>
-      {found.length === 0 && <Empty>{noResults(query.trim())}</Empty>}
+      {query.trim() && found.length === 0 && <Empty>{noResults(query.trim())}</Empty>}
       <CardGrid label="페르소나" variant="face" current={using ?? undefined} keys={found.map(({ persona: { id } }) => id)}>
         {(index) => {
           const { persona: { id, value }, note, faint } = found[index]!;

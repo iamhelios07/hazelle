@@ -114,7 +114,7 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
     expect(messages.some(({ content }) => content === 'We climb the stairs.')).toBe(false);
     // The chat header slides in only while the pointer is near the top.
     await page.mouse.move(720, 10);
-    await page.getByRole('button', { name: '더보기', exact: true }).click();
+    await page.getByRole('button', { name: '채팅 메뉴', exact: true }).click();
     await page.getByRole('menuitemradio', { name: /^HypaPlus 열기/ }).click();
     const frame = page.frameLocator('iframe[title="HypaPlus"]');
     await expect(frame.getByText(EVENT(1), { exact: true })).toBeVisible();

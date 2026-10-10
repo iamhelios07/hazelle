@@ -1,8 +1,9 @@
-import { FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
 import type { FolderTree } from '../../../model/library';
+import { ACTS, newOf } from '../../common/acts';
 import { BIN } from '../../common/words';
 import { useBin, useLibrary } from '../../session';
-import { IconButton, Menu, MenuItem, Row, Stack, Tab, Tabs } from '../../ui';
+import { IconButton, MenuItem, MoreMenu, Row, Stack, Tab, Tabs } from '../../ui';
 import { useFolderActions } from '../useFolderActions';
 
 // 'all', 'loose' (in no folder), 'deleted' (휴지통), or a folder's id.
@@ -43,11 +44,11 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
         </Tabs>
         {!binned && <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => onName({ id: null, name: '' })} />}
         {folder && (
-          <Menu place="below-end" label={`${folder.value.name} 폴더`} trigger={(opener) => <IconButton icon={MoreHorizontal} label="폴더 관리" size="sm" {...opener} />}>
-            <MenuItem icon={Pencil} label="이름 바꾸기" onClick={() => onName({ id: folder.id, name: folder.value.name })} />
-            {folder === top && <MenuItem icon={SubfolderIcon} label="하위 폴더 만들기" onClick={() => onName({ id: null, name: '', parent: folder })} />}
-            <MenuItem icon={Trash2} label="폴더 삭제" tone="warn" onClick={() => drop(folder)} />
-          </Menu>
+          <MoreMenu label={`${folder.value.name} 폴더 메뉴`}>
+            <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
+            {folder === top && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
+            <MenuItem icon={ACTS.remove.icon} label="폴더 삭제" tone="warn" onClick={() => drop(folder)} />
+          </MoreMenu>
         )}
       </Row>
       {top && top.children.length > 0 && (

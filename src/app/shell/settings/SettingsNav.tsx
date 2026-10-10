@@ -1,9 +1,9 @@
-import { ChevronRight, FileText, Languages, Layers, Lock, MessageSquare, Package, Plug, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
+import { FileText, Languages, Layers, Lock, MessageSquare, Package, Plug, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
 import { PAGES, SETTINGS } from '../../common/words';
 import { presetOf } from '../../common/reading';
 import { useDisplay } from '../../display';
 import { useAccount, useConnections, useModules, usePersonas, usePrompts, useSession } from '../../session';
-import { Icon, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
+import { LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
 import type { Route, SettingsPage } from '../routes';
 
@@ -75,9 +75,9 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
     <Screen top={<NavBar title={SETTINGS} close backLabel={`${SETTINGS} 닫기`} onBack={onClose} />}>
       {groups.map((group) => (
         <NavGroup key={group[0]!.page}>
-          <List label={group.map((place) => place.label).join(', ')}>
+          <List places label={group.map((place) => place.label).join(', ')}>
             {group.map((place) => (
-              <ListItem key={place.page} title={place.label} aside={holds[place.page]} trailing={<Icon icon={ChevronRight} />} onClick={() => navigate(place.route)} />
+              <ListItem key={place.page} title={place.label} aside={holds[place.page]} onClick={() => navigate(place.route)} />
             ))}
           </List>
         </NavGroup>

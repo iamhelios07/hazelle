@@ -3,7 +3,7 @@ import { useToast } from '../toast';
 import { Check, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ImportFailure } from '../../engine/import/types';
-import { live, matches } from '../../model/library';
+import { characterTexts, live } from '../../model/library';
 import { importCharacter } from '../../runtime/characters';
 import { importChat } from '../../runtime/chat-log';
 import type { ApiFailure } from '../../runtime/api';
@@ -15,12 +15,12 @@ import { ofSort } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
-import { SEARCH_FROM } from '../common/search';
+import { useSearch } from '../common/useSearch';
 import { NO_CHARACTER } from '../common/words';
 import { useFiles, useLibrary, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
-import { Avatar, Button, Callout, ConfirmDialog, Dialog, DropOverlay, Menu, MenuItem, Progress, Row, SearchField, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
+import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Menu, MenuItem, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
 import { characterOutcome, chatOutcome, moduleOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
 import { assetsMissed, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
@@ -318,7 +318,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
 
 function Summary({ result }: { result: ImportOutcome }) {
   return (
-    <Section title={result.title}>
+    <Section level={3} title={result.title}>
       <Text>{result.holds}</Text>
       {result.placed && (result.placed.failed ? <Callout tone="warn">{result.placed.text}</Callout> : <Text>{result.placed.text}</Text>)}
       {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
@@ -330,17 +330,17 @@ function Summary({ result }: { result: ImportOutcome }) {
 function CharacterChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'character' }>; onAnswer: () => void }) {
   const { characters } = useLibrary();
   const [picked, setPicked] = useState(() => characters.find(({ character }) => character.card.name === ask.name)?.id ?? ask.fallback);
-  const [query, setQuery] = useState('');
-  const found = characters.filter(({ character }) => matches(character, query));
+  const search = useSearch(characters, '캐릭터 검색', ({ character }) => characterTexts(character));
   const chosen = characters.find(({ id }) => id === picked)?.character;
   const name = chosen ? aliased(chosen.card.name, chosen.alias) : NO_CHARACTER;
   return (
-    <Section title={ask.name ?? ask.file}>
+    <Section level={3} title={ask.name ?? ask.file}>
       <Stack gap="related">
-        <Menu place="below-start" size="lg" label="캐릭터" trigger={(opener) => <Button variant="secondary" size="md" {...opener}>{name}</Button>}>
-          {characters.length >= SEARCH_FROM && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />}
-          {!query.trim() && <MenuItem label={NO_CHARACTER} checked={picked === null} onClick={() => setPicked(null)} />}
-          {found.map(({ id, character, face }) => (
+        <Menu place="below-start" size="lg" label="캐릭터" trigger={(opener) => <ChipButton variant="field" label={name} title="캐릭터" {...opener} />}>
+          {search.field}
+          {search.none && <Empty variant="menu">{search.none}</Empty>}
+          {!search.words && <MenuItem label={NO_CHARACTER} checked={picked === null} onClick={() => setPicked(null)} />}
+          {search.found.map(({ id, character, face }) => (
             <MenuItem key={id} label={aliased(character.card.name, character.alias)} avatar={<Avatar face={character.card.name} image={face} />} checked={picked === id} onClick={() => setPicked(id)} />
           ))}
         </Menu>
@@ -366,7 +366,7 @@ function FillChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'fill' }>; on
     ask.answer(fill);
   };
   return (
-    <Section title={ask.name} help="기존 캐릭터의 대화와 설정은 두고 이미지만 이 카드에서 가져와요.">
+    <Section level={3} title={ask.name} help="기존 캐릭터의 대화와 설정은 두고 이미지만 이 카드에서 가져와요.">
       <Stack gap="related">
         <Text>Risu에서 가져온 같은 이름의 캐릭터가 있어요.</Text>
         <Row kind="actions">
@@ -384,7 +384,7 @@ function FillChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'fill' }>; on
 
 function FilledSummary({ result }: { result: Filled }) {
   return (
-    <Section title={result.name}>
+    <Section level={3} title={result.name}>
       <Text>{`이미지 ${result.kept}개를 가져왔어요`}</Text>
       {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
     </Section>
@@ -393,7 +393,7 @@ function FilledSummary({ result }: { result: Filled }) {
 
 function Failed({ file, failure }: { file: string; failure: string }) {
   return (
-    <Section title={file}>
+    <Section level={3} title={file}>
       <Callout tone="warn">{failure}</Callout>
     </Section>
   );

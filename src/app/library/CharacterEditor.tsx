@@ -1,6 +1,6 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, ChevronRight, Copy, Eye, IdCard, Languages, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Square, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, Languages, MessageSquareQuote, Package, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -9,6 +9,7 @@ import { PICTURE_PERCENT, type CharacterShelf, type Pictures } from '../../model
 import { editCharacter, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
+import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
@@ -20,13 +21,14 @@ import { ScriptsEditor } from '../common/ScriptsEditor';
 import type { CharacterPart } from '../common/characterPart';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
+import { readTyped } from '../common/typedNumber';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useCharacter, useChildren, useModules, useSettings, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, Icon, IconButton, List, ListItem, Menu, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
@@ -35,8 +37,8 @@ const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이
 // undefined: left empty, which is the app's own height. null: not a height.
 const readHeight = (draft: string) => {
   if (draft.trim() === '') return undefined;
-  const value = Number(draft);
-  return Number.isInteger(value) && value >= PICTURE_PERCENT.min && value <= PICTURE_PERCENT.max ? value : null;
+  const typed = readTyped(draft, true);
+  return typed.ok && typed.value >= PICTURE_PERCENT.min && typed.value <= PICTURE_PERCENT.max ? typed.value : null;
 };
 const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
@@ -141,11 +143,11 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     <Row kind="toolbar">
       {translated &&
         (translation.running.size > 0 ? (
-          <Button variant="secondary" size="sm" icon={Square} onClick={translation.stop}>
-            멈추기
+          <Button variant="secondary" icon={Square} onClick={translation.stop}>
+            {STOP}
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" icon={Languages} disabled={!translation.translator.ok || translation.sources.length === 0} onClick={translation.start}>
+          <Button variant="ghost" icon={Languages} disabled={!translation.translator.ok || translation.sources.length === 0} onClick={translation.start}>
             {translation.missing.length > 0 ? '번역하기' : '다시 번역'}
           </Button>
         ))}
@@ -330,21 +332,24 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const saved = merged(status, pictureSave.status, noteSave.status);
   const subtitle = card.creator ? `제작자 ${card.creator}` : undefined;
   const copying = busy?.id === id ? busy.label : null;
-  const actions = (
-    <Menu place="below-end" label="캐릭터 메뉴" trigger={(opener) => <IconButton icon={MoreHorizontal} label="캐릭터 메뉴" size="sm" {...opener} />}>
-      <MenuItem icon={Copy} label="사본 만들기" disabled={busy !== null} onClick={() => void copy(shelf)} />
-      <MenuItem
-        icon={Trash2}
-        label="삭제"
-        tone="warn"
-        disabled={busy !== null}
-        onClick={() => {
-          remove(shelf);
-          navigate(HOME);
-        }}
-      />
-    </Menu>
-  );
+  const menu = {
+    label: '캐릭터 메뉴',
+    items: (
+      <>
+        <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={busy !== null} onClick={() => void copy(shelf)} />
+        <MenuItem
+          icon={ACTS.remove.icon}
+          label={ACTS.remove.label}
+          tone="warn"
+          disabled={busy !== null}
+          onClick={() => {
+            remove(shelf);
+            navigate(HOME);
+          }}
+        />
+      </>
+    ),
+  };
   const title = aliased(text.name, text.alias);
   const state = copying ?? (saved ? SAVE_STATUS[saved] : undefined);
   if (split) {
@@ -356,7 +361,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         ))}
       </NavGroup>
     ));
-    return frame({ head: { title, subtitle, status: state, actions }, side, body: pages[open], open });
+    return frame({ head: { title, subtitle, status: state, menu }, side, body: pages[open], open });
   }
   if (part) return frame({ head: { title, onBack: () => onPart(null), backLabel: LIST, status: state }, body: pages[part], open: part });
   const list = (
@@ -364,14 +369,14 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       {lead}
       {groups.map((group) => (
         <NavGroup key={group[0]}>
-          <List box label={group.map((each) => PARTS[each].label).join(', ')}>
+          <List box places label={group.map((each) => PARTS[each].label).join(', ')}>
             {group.map((each) => (
-              <ListItem key={each} title={PARTS[each].label} aside={holds[each]} trailing={<Icon icon={ChevronRight} />} onClick={() => onPart(each)} />
+              <ListItem key={each} title={PARTS[each].label} aside={holds[each]} onClick={() => onPart(each)} />
             ))}
           </List>
         </NavGroup>
       ))}
     </>
   );
-  return frame({ head: { title, subtitle, status: state, actions }, body: list, open: LIST });
+  return frame({ head: { title, subtitle, status: state, menu }, body: list, open: LIST });
 }
