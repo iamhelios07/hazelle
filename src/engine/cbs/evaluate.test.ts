@@ -52,6 +52,7 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => {
     clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
     language: null,
     assets: [],
+    inlays: [],
     modules: [],
     faces: { char: null, user: null },
     pickSeed: 'pick-1',
@@ -256,9 +257,11 @@ describe('evaluate', () => {
     expect(run('keep {{upper::one two {{bkspc}}}} {{#when::1}}a b{{bkspc}}{{/when}}')).toBe('keep ONE a');
   });
 
-  it('lists no display assets, drops inlays from the prompt and leaves them on screen as written', () => {
-    expect(run('{{chardisplayasset}}|{{inlay::x}}{{inlayed::y}}{{inlayeddata::z}}')).toBe('[]|');
-    expect(run('{{inlay::x}}', { stage: 'display' })).toBe('{{inlay::x}}');
+  it("lists no display assets, drops inlays from the prompt, and shows the chat's inlay by its exact id, a signature as nothing and a missing one as a mark", () => {
+    const inlays = [{ id: '0b6f0a52-3c1e-4a8e-9d55-2f1c7b9e6a10', name: 'pic', type: 'image/png' }, { id: '5d0c2e1a-7b3f-4c9d-8e21-6a4b3c2d1e0f', name: 'sig', type: 'signature' }];
+    expect(run('{{chardisplayasset}}|{{inlay::pic}}{{inlayed::pic}}{{inlayeddata::pic}}', { inlays })).toBe('[]|');
+    expect(run('{{inlay::pic}}|{{inlayeddata::pic}}', { stage: 'display', inlays })).toBe(`<img src="inlay:${inlays[0]!.id}">|<div class="risu-inlay-image"><img src="inlay:${inlays[0]!.id}"></div>\n`);
+    expect(run('[{{inlayeddata::sig}}]{{inlayed::pics}}', { stage: 'display', inlays })).toBe('[]<span data-inlay-missing></span>');
   });
 
   it("answers the metadata keys it knows, leaves Risu's own as written and names an unknown one as an error", () => {

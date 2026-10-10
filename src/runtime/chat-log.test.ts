@@ -69,7 +69,7 @@ describe('a chat not saved yet', () => {
 });
 
 describe('branchChat', () => {
-  it("carries what the bot's Lua wrote, the texts it staged and the tools' data, badges on the branch's messages", async () => {
+  it("carries what the bot's Lua wrote, the texts it staged, the tools' data, badges on the branch's messages, and the chat's inlays", async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
@@ -88,6 +88,9 @@ describe('branchChat', () => {
     const narration = folded()[1]!;
     await saveToolChat(store, module, source, [['index', { node: said }]], [{ message: said, version: shown(folded()[0]!).id, text: '요약됨' }, { message: narration.id, version: shown(narration).id, text: '마지막' }]);
 
+    const inlay = { name: 'risu-id', type: 'image/png', size: 2, file: { id: 'file', key: 'key' } };
+    await store.create('inlay', inlay, { parent: source });
+
     const item: ChatItem = { id: source, chat, messages: folded(), count: 2, title: '', preview: '', at: null, order: 0 };
     const branched = await branchChat(store, item, folded()[1]!.id);
     if (!branched.ok) throw new Error(branched.error);
@@ -96,6 +99,7 @@ describe('branchChat', () => {
     expect(held(copy)).toEqual(held(folded()));
     expect(toolChatData(store, module, branched.data.id, 'index')).toEqual({ node: said });
     expect(toolBadges(store, module, branched.data.id)).toEqual(Object.fromEntries(copy.map((message, index) => [message.id, { version: shown(message).id, text: ['요약됨', '마지막'][index]! }])));
+    expect(store.children('inlay', branched.data.id).map(({ value }) => value)).toEqual([inlay]);
   });
 
   it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {
@@ -204,7 +208,7 @@ describe('branchChat', () => {
 });
 
 describe('importChat', () => {
-  it('copies a chat file under new ids, folding as the source does, with its memory and illustrations remapped and what is not here left out and counted', async () => {
+  it('copies a chat file under new ids, folding as the source does, with its memory, illustrations and inlays and what is not here left out and counted', async () => {
     const { store, files } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
@@ -224,10 +228,11 @@ describe('importChat', () => {
     await store.create('memory', { records: [{ id: 'r', sources, print: 'p', when: null, where: null, who: [], what: 'w', lines: [], outcome: '', receipt: null, at: 0, state: [], opens: [], closes: [] }], state: [], threads: [], chapters: [] }, { id: memoryId(source), parent: source });
 
     const picture = new Uint8Array([1, 2, 3]);
-    const stored = await files.save([picture]);
+    const stored = await files.save([picture, new Uint8Array([4, 5])]);
     const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
     const sent = { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
     await store.create('illustration', { message: reply, version: reply, scene, receipt: null, model: { connection: 'c', model: 'm' }, sent, file: stored.ok ? stored.data[0]! : { id: '', key: '' }, type: 'image/png', size: 3, at: 4 }, { parent: source });
+    await store.create('inlay', { name: 'risu-id', type: 'image/png', size: 2, file: stored.ok ? stored.data[1]! : { id: '', key: '' } }, { parent: source });
 
     const written = await chatFile({ store, files }, source);
     if (!written.ok) throw new Error(written.error);
@@ -236,7 +241,7 @@ describe('importChat', () => {
     const imported = await importChat({ store, files }, read.file, null);
     if (!imported.ok) throw new Error(imported.error);
     const { id, dropped } = imported.data;
-    expect(dropped).toEqual({ prompt: 1, persona: 0, cast: 0, models: 0, pictures: 0 });
+    expect(dropped).toEqual({ prompt: 1, persona: 0, cast: 0, models: 0, pictures: 0, inlays: 0 });
     expect(store.get('summary', summaryId(id))).not.toBeNull();
     await server.hold(store, id);
     const copy = fold(store.children('entry', id));
@@ -251,11 +256,15 @@ describe('importChat', () => {
     expect(illustration?.value).toMatchObject({ message: replied.id, version: replied.versions.find(({ text }) => text === '답')!.id });
     const opened = await files.read(illustration!.value.file);
     expect(opened.ok && [...opened.data]).toEqual([1, 2, 3]);
+    const [inlay] = store.children('inlay', id);
+    expect(inlay?.value).toMatchObject({ name: 'risu-id', type: 'image/png', size: 2 });
+    const inlaid = await files.read(inlay!.value.file);
+    expect(inlaid.ok && [...inlaid.data]).toEqual([4, 5]);
 
     const refusing = { save: async (bytes: unknown[]) => ({ ok: true, data: bytes.map(() => null) }) } as unknown as Files;
     const refused = await importChat({ store, files: refusing }, read.file, null);
     if (!refused.ok) throw new Error(refused.error);
     await server.hold(store, refused.data.id);
-    expect([refused.data.dropped.pictures, store.children('illustration', refused.data.id).length]).toEqual([1, 0]);
+    expect([refused.data.dropped.pictures, refused.data.dropped.inlays, store.children('illustration', refused.data.id).length, store.children('inlay', refused.data.id).length]).toEqual([1, 1, 0, 0]);
   });
 });
