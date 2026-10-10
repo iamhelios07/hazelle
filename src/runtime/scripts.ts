@@ -676,7 +676,7 @@ export class Scripts {
 
   // One run at a time per chat, each reading the chat as the one before left it: a write returns before its chat's
   // projection is made again, so each waits for it, and a projection that fails is shown on the chat's scope
-  // (ObjectStore.evaluated). A question still open when the next comes is dismissed, so a card the user passed over
+  // (ChatProjections.evaluate). A question still open when the next comes is dismissed, so a card the user passed over
   // never holds up a send.
   private queued<T>(chat: string, task: () => Promise<T>): Promise<T> {
     this.dismiss(chat);

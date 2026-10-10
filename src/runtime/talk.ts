@@ -95,7 +95,7 @@ export class Talk {
   private closed = false;
   private readonly unsaved = new Map<string, { chat: string; reply: Written; call: string }>();
   private readonly changes = new ChangeSignal();
-  // By the id of the version each reply wrote.
+  // By call id.
   private readonly sentBy = new Map<string, { chat: string; sent: Sent }>();
   private readonly leave: () => void;
 
@@ -106,7 +106,7 @@ export class Talk {
     // ended: a reply as its stream ended, which the bot's Lua may rewrite before it is saved. saved: once it is.
     private readonly ended: (chat: string, reply: Written) => Promise<Written>,
     private readonly saved: (chat: string, reply: Written) => void,
-    // The calls this page reads (runtime/streams), shared with Translator and Streams.
+    // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {
     this.leave = store.subscribe((changes) => {

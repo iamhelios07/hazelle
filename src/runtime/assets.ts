@@ -13,7 +13,7 @@ export type AssetView = { url: PictureUrl; hold: () => () => void };
 const KINDS = new Set<string>(['asset', 'illustration'] satisfies PictureKind[]);
 
 // Mounted views pin their pictures. Only inactive URLs compete for the byte-bounded LRU; a large currently visible
-// picture must never disappear just because another picture was read. The session still owns final cleanup.
+// picture must never disappear just because another picture was read.
 export class AssetUrls {
   // Null while reading, and for a permanent failure. A transient failure is forgotten so the next draw retries it.
   private readonly urls = new Map<string, Cached>();

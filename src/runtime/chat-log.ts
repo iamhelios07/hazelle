@@ -148,7 +148,6 @@ export async function saveNewChats(
   }
 }
 
-// Each message copied to the chat id, with the memory that still applies and the illustrations of the versions copied.
 // messages, versions: each copy's id by the original's. after: the last copy's id.
 function copyWrites(id: string, source: Message[], memory: Memory | undefined, illustrations: Illustration[]): { writes: Write[]; messages: Map<string, string>; versions: Map<string, string>; after: string } {
   let after = '';
@@ -202,8 +201,8 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 // hold; the other versions; and a select when the one shown is not the last, since adding a version selects it.
 // versions: each version's id in the branch, by its id here.
 // A field added to versions or messages must be written here too, or a branch drops it, as must a kind a chat holds
-// (copyWrites, branchToolData). The calls the bot's Lua made
-// (Version.calls) are dropped on purpose: usage counts a call where it was made.
+// (copyWrites, branchToolData). The calls the bot's Lua made (Version.calls) are dropped on purpose: usage counts a
+// call where it was made.
 function copied(id: string, { role, at, versions, selected, after }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;

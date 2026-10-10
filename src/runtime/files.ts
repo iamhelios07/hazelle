@@ -6,7 +6,7 @@ import type { ObjectStore } from './store';
 type Api = typeof realApi;
 type Missing = { missing: Set<string>; maxBytes: number };
 
-// A PUT is three or four D1 round trips, so a window this wide keeps a move at a few pictures a second on a far link.
+// runtime/api's SLOWEST_UPLOAD assumes this many uploads sharing one uplink.
 const UPLOADS = 12;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 

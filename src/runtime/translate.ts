@@ -127,7 +127,7 @@ export class Translator {
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
     private readonly costs: Costs,
-    // The calls this page reads (runtime/streams), shared with Talk and Streams.
+    // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {}
 

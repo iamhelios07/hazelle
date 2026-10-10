@@ -2,7 +2,8 @@ import type { BackupWarning, AccountState, RestoreAction, RestorePhase } from '.
 import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 import { page } from './pages';
 
-// Only the account the Worker names passes; any other is answered not-admin.
+// Only the operator's account (the installation's first signup, server/accounts) passes; any other is answered
+// not-admin.
 
 // The caps every account has unless given its own; null is no cap. fileBytes: every account's pictures together.
 // backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says needs the

@@ -278,7 +278,7 @@ export class Rememberer {
 
   constructor(
     private readonly session: Pick<Session, 'store' | 'read' | 'credentials' | 'costs' | 'scripts'>,
-    // The calls this page reads (runtime/streams), shared with Talk, Translator and Streams.
+    // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {
     // Another device's reply arrives here as entries too; only the device that saved it summarizes new messages, so two
