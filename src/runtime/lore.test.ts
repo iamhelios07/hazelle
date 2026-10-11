@@ -4,12 +4,13 @@ import type { Character } from '../model/library';
 import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from './lore';
 import type { PackOwner } from '../model/library';
 import type { ObjectStore } from './store';
-import { testCard, testServer } from './testing';
+import { testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 
 const server = testServer();
 
 async function owned(store: ObjectStore): Promise<PackOwner> {
-  const character: Character = { card: testCard('루나'), folder: null, loreFolders: [{ id: 'sea', name: '바다' }] };
+  const character: Character = { card: blankCard('루나'), folder: null, loreFolders: [{ id: 'sea', name: '바다' }] };
   const created = await store.create('character', character);
   if (!created.ok) throw new Error(created.error);
   return { kind: 'character', id: created.data.id };

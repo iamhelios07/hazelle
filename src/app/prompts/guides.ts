@@ -1,6 +1,7 @@
 import { previousMessages } from '../../engine/cbs/history';
 import { unescapeCbs } from '../../engine/cbs/escape';
 import { evaluate, Runaway, type CbsContext } from '../../engine/cbs/evaluate';
+import { blankCard } from '../../engine/import/card';
 
 export type GuideId = 'basics' | 'when' | 'vars' | 'lists' | 'func' | 'random' | 'literal';
 // inMessage: the example runs as a chat message's own text, the only place setvar and addvar write.
@@ -13,28 +14,7 @@ const messages: CbsContext['messages'] = [{ id: 'm1', message: 'm1', seed: 'm1',
 // gives the result written beside it; guides.test.ts runs every one.
 const SAMPLE: CbsContext = {
   stage: 'prompt',
-  card: {
-    name: '미라',
-    nickname: null,
-    description: '',
-    personality: '',
-    scenario: '',
-    greetings: [],
-    exampleDialogue: '',
-    systemPrompt: '',
-    postHistoryInstructions: '',
-    creatorNotes: '',
-    creator: '',
-    version: '',
-    tags: [],
-    variables: [],
-    toggles: '',
-    utility: false,
-    bias: [],
-    regex: [],
-    triggers: [],
-    loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
-  },
+  card: blankCard('미라'),
   persona: { name: '나', description: '' },
   prompt: null,
   lore: [],

@@ -4,7 +4,6 @@ import type { Binding } from './script-binding';
 import type { ToolUnit } from '../model/tool';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { RELAY_HEADER } from '../contracts/http';
-import type { Card } from '../engine/import/types';
 import type { HttpRequest } from '../connectors/types';
 import { Lua } from '../engine/lua/run';
 export { BATCH_LIMITS } from '../server/objects';
@@ -22,12 +21,6 @@ import { ObjectStore } from './store';
 // The bot scripts run in the test's own thread: node has no Worker to load them into. Made before withSession stubs
 // window, which the VM's loader would read as a browser.
 const lua = Lua.create();
-
-export const testCard = (name: string): Card => ({
-  name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '',
-  creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [],
-  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
-});
 
 type App = Awaited<ReturnType<typeof testApp>>;
 // The relay's answer to the upstream request it carries. null is a connection that dropped.

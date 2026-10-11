@@ -8,7 +8,8 @@ import { appendUserMessage, editMessage, startChat } from '../chat-log';
 import { setModuleAlways, setModuleDeleted } from '../modules';
 import { ToolLate, ToolStuck } from '../script-binding';
 import type { Session } from '../session';
-import { answerable, testCard, testServer } from '../testing';
+import { answerable, testServer } from '../testing';
+import { blankCard } from '../../engine/import/card';
 import { projectGreetings } from '../greetings';
 import { inProcessTools } from '../testing/tool-transport';
 import { ToolHost } from './host';
@@ -35,7 +36,7 @@ async function fixture(session: Session, uses?: string, greeting?: string) {
   await setModuleAlways(session.store, added.data.id, true);
   const chat = crypto.randomUUID();
   await server.hold(session.store, chat);
-  const card = greeting === undefined ? null : await session.store.create('character', { card: { ...testCard('Mira'), greetings: [greeting] }, folder: null, loreFolders: [] });
+  const card = greeting === undefined ? null : await session.store.create('character', { card: { ...blankCard('Mira'), greetings: [greeting] }, folder: null, loreFolders: [] });
   if (card && !card.ok) throw new Error(card.error);
   await startChat(session.store, chat, { title: null, character: card?.data.id ?? null, models: {} }, card && projectGreetings([greeting!], [crypto.randomUUID()], 0));
   await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });

@@ -4,7 +4,8 @@ import { startChat } from './chat-log';
 import { projectGreetings } from './greetings';
 import { editModule, importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleAt, setModuleDeleted, setPromptModule } from './modules';
 import { addPrompt, chatPrompt, ofSort } from './prompts';
-import { answerable, saying, stubRelay, testCard, testServer } from './testing';
+import { answerable, saying, stubRelay, testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 import { evaluateChat, packsOf, togglesOf } from './chat-context';
 import { takeTurn } from './turn';
 
@@ -17,7 +18,7 @@ describe('modules', () => {
     server.withSession(async (session) => {
       const { store, files } = session;
       await answerable(session);
-      const card = { ...testCard('루나'), greetings: ['the lamp'], regex: [{ id: 'regex-0', name: 'own', find: 'lamp', replace: 'LAMP', stage: 'display' as const, flags: null }] };
+      const card = { ...blankCard('루나'), greetings: ['the lamp'], regex: [{ id: 'regex-0', name: 'own', find: 'lamp', replace: 'LAMP', stage: 'display' as const, flags: null }] };
       const character = await store.create('character', { card, folder: null, loreFolders: [] });
       if (!character.ok) throw new Error(character.error);
       const pack = {
@@ -66,7 +67,7 @@ describe('modules', () => {
       return added.data.id;
     };
     const [always, both, own, worn] = [await module('항상'), await module('둘 다'), await module('캐릭터'), await module('페르소나')];
-    const character = await store.create('character', { card: testCard('루나'), folder: null, loreFolders: [], modules: [own, both] });
+    const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [], modules: [own, both] });
     const prompt = await addPrompt(store, '짝', 'conversation');
     if (!character.ok || !prompt.ok || !ofSort(prompt.data, 'conversation')) throw new Error('fixture');
     await setModuleAlways(store, always, true);

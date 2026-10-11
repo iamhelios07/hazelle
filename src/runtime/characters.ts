@@ -1,4 +1,4 @@
-import { imageType } from '../engine/import/card';
+import { blankCard, imageType } from '../engine/import/card';
 import type { Card, Imported, Pack, Picture } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { IllustrateSwitches } from '../model/illustration';
@@ -139,6 +139,9 @@ export async function copyCharacter(store: ObjectStore, id: string, name: string
   };
   return addCharacter(store, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, owned, progress);
 }
+
+export const createCharacter = (store: ObjectStore, name: string, id: string) =>
+  addCharacter(store, { card: blankCard(name), folder: null, loreFolders: [] }, { avatar: null, assets: [], lore: [], likeness: null }, () => {}, { id });
 
 export const setDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'character', id, at);
 

@@ -4,7 +4,8 @@ import { fold, shown } from '../model/chat';
 import { setIllustrate } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import type { Session } from './session';
-import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
+import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 import { placeMark } from '../model/illustration';
 import { takeTurn } from './turn';
 import { removeIllustration, restoreIllustration } from './illustrate';
@@ -126,7 +127,7 @@ describe('Illustrator', () => {
       await answerable(session);
       const merging = { id: 'merge', name: 'merge', find: 'dark\\.\\n.*', replace: 'dark.', stage: 'display' as const, flags: null };
       const shownOn = async (regex: (typeof merging)[]) => {
-        const made = await session.store.create('character', { card: { ...testCard('Ari'), regex }, folder: null, loreFolders: [] });
+        const made = await session.store.create('character', { card: { ...blankCard('Ari'), regex }, folder: null, loreFolders: [] });
         if (!made.ok) throw new Error(made.error);
         const chat = crypto.randomUUID();
         await server.hold(session.store, chat);
@@ -194,7 +195,7 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
 
   async function drawing(session: Session, profiles: string) {
     const chat = await painted(session);
-    const made = await session.store.create('character', { card: { ...testCard('Ari'), description: 'Ari is a maid.' }, folder: null, loreFolders: [] });
+    const made = await session.store.create('character', { card: { ...blankCard('Ari'), description: 'Ari is a maid.' }, folder: null, loreFolders: [] });
     if (!made.ok) throw new Error(made.error);
     const bytes = prompted('1girl, {artist:pen}, silver hair, maid');
     const file = await session.files.save([bytes]);
@@ -229,7 +230,7 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
   it("builds a 등장인물's profiles from its own card beside the character's", () =>
     server.withSession(async (session) => {
       const { chat, draw, profileCalls } = await drawing(session, JSON.stringify({ characters: [{ ...looks.characters[0], source: 'text' }] }));
-      const bea = await session.store.create('character', { card: { ...testCard('Bea'), description: 'Bea is a knight.' }, folder: null, loreFolders: [] });
+      const bea = await session.store.create('character', { card: { ...blankCard('Bea'), description: 'Bea is a knight.' }, folder: null, loreFolders: [] });
       if (!bea.ok) throw new Error(bea.error);
       await session.store.update('chat', chat, (current) => ({ ...current, cast: [bea.data.id] }));
       await draw();

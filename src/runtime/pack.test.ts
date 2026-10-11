@@ -3,7 +3,8 @@ import type { RegexScript } from '../engine/import/types';
 import { addLua, editRegex, moveScript, removeScript, restoreScript, setScriptOff } from './pack';
 import type { PackOwner } from '../model/library';
 import type { ObjectStore } from './store';
-import { testCard, testServer } from './testing';
+import { testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 
 const server = testServer();
 
@@ -11,7 +12,7 @@ const script = (id: string, stage: RegexScript['stage']): RegexScript => ({ id, 
 const REGEX = [script('a', 'display'), script('b', 'output'), script('c', 'display')];
 
 async function character(store: ObjectStore): Promise<PackOwner> {
-  const created = await store.create('character', { card: { ...testCard('루나'), regex: REGEX }, folder: null, loreFolders: [] });
+  const created = await store.create('character', { card: { ...blankCard('루나'), regex: REGEX }, folder: null, loreFolders: [] });
   if (!created.ok) throw new Error(created.error);
   return { kind: 'character', id: created.data.id };
 }

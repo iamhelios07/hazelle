@@ -2,8 +2,9 @@ import { useState } from 'react';
 import type { ChatSummary } from '../../model/chat';
 import type { Stored } from '../../model/kinds';
 import type { CharacterShelf, Removable } from '../../model/library';
-import { copyCharacter, setDeleted } from '../../runtime/characters';
+import { copyCharacter, createCharacter, setDeleted } from '../../runtime/characters';
 import { markDeleted, purgeNow } from '../../runtime/removal';
+import { newOf } from '../common/acts';
 import { BIN_KEEPS, moduleName, promptName } from '../common/words';
 import { useStore } from '../session';
 import { navigate } from '../shell/router';
@@ -28,6 +29,16 @@ export const binnedModule = ({ id, value }: Stored<'module'>): Binned => one('mo
 export const binnedPrompt = ({ id, value }: Stored<'prompt'>): Binned => one('prompt', id, promptName(value.name));
 export const binnedPersona = ({ id, value }: Stored<'persona'>): Binned => one('persona', id, value.name);
 export const binnedProfile = ({ id, value }: Stored<'profile'>): Binned => one('profile', id, value.name);
+
+export function useNewCharacter() {
+  const store = useStore();
+  const toast = useToast();
+  return () => {
+    const id = crypto.randomUUID();
+    void createCharacter(store, newOf('캐릭터'), id).then((saved) => saved.ok || toast.failed(saved, '캐릭터를 만들지 못했어요.'));
+    navigate({ kind: 'edit', character: id });
+  };
+}
 
 export function useCharacterActions() {
   const store = useStore();

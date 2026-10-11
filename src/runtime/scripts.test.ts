@@ -18,7 +18,8 @@ import { EvaluationFailed, EvaluationStuck } from './evaluation';
 import { projectGreetings } from './greetings';
 
 import { openSession, type Session } from './session';
-import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
+import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 import { evaluateChat } from './chat-context';
 import { triggersOf } from './scripts';
 import type { TurnContext } from './turn-context';
@@ -29,7 +30,7 @@ const server = testServer();
 async function chatWith(session: Session, script: string | Trigger[], toggles = '') {
   await answerable(session);
   const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', id: 'trigger-0', name: 'main', code: script }] : script;
-  const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers, toggles };
+  const card = { ...blankCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers, toggles };
   const character = await session.store.create('character', { card, folder: null, loreFolders: [] });
   if (!character.ok) throw new Error(character.error);
   const chat = crypto.randomUUID();

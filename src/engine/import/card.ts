@@ -1,5 +1,5 @@
 import { add, convert, convertModule, counted, type Converted, type Tally } from './convert';
-import { UNSUPPORTED_KINDS, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
+import { UNSUPPORTED_KINDS, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
 import { readPng } from './png';
 import { readRisum } from './risum';
 import { openZip, type Zip } from './zip';
@@ -9,6 +9,12 @@ const utf8 = new TextDecoder();
 // The same one-liner as vault/aead.ts, which the engine may not import.
 const base64 = (text: string) => Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
 const fail = (kind: ImportFailure['kind'], detail?: string): ImportResult => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
+
+export const blankCard = (name: string): Card => ({
+  name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '',
+  creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [],
+  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
+});
 
 // Dispatch goes by extension only, as in Risu; nothing is sniffed.
 export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>): ImportResult {

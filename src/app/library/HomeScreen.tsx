@@ -1,14 +1,16 @@
-import { MessageSquarePlus, PackageOpen, Plug } from 'lucide-react';
+import { MessageSquarePlus, PackageOpen, Plug, UserRoundPlus } from 'lucide-react';
 import { ACTS, importOf, newOf } from '../common/acts';
 import { useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
 import { useImport } from './ImportFlow';
+import { useNewCharacter } from './useCharacterActions';
 
 export function Welcome() {
   const connections = useConnections();
   const chats = useChats();
   const { pick, move } = useImport();
+  const create = useNewCharacter();
   return (
     <Stack gap="section">
       <Intro title={chats.length ? '어디서 이어 갈까요?' : '아직 비어 있어요'} />
@@ -23,6 +25,7 @@ export function Welcome() {
           description="PNG · charx · JSON 파일을 끌어다 놓거나 눌러서 선택"
           onClick={pick}
         />
+        <ActionCard icon={UserRoundPlus} title={newOf('캐릭터')} description="이름과 설명부터 직접 써요" onClick={create} />
         <ActionCard icon={PackageOpen} title="Risu에서 이사" description="Risu 로컬 백업에서 캐릭터와 채팅을 가져와요" onClick={move} />
         {connections.length === 0 ? (
           <ActionCard icon={Plug} title={newOf('연결')} description="제공자를 선택하고 API 키를 입력해요" onClick={() => navigate({ kind: 'add-connection' })} />

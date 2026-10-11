@@ -7,13 +7,14 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addCharacter, copyCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addCharacter, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
 import { thumbnail } from './picture';
 import type { ObjectStore, Write } from './store';
-import { BATCH_LIMITS, testCard, testServer } from './testing';
+import { BATCH_LIMITS, testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 
 const server = testServer();
 vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
@@ -21,7 +22,7 @@ vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 // The bytes of a picture as far as the import reads one: a PNG's signature.
 const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 const picture = () => ({ bytes: randomBytes(64), type: 'image/png' });
-const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: testCard(name), folder: null, loreFolders: [], ...over });
+const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: blankCard(name), folder: null, loreFolders: [], ...over });
 const none = { avatar: null, assets: [], lore: [], likeness: null };
 
 async function savedChat(store: ObjectStore, character: string | null = null) {
@@ -92,7 +93,7 @@ describe('importCharacter', () => {
 
   it('owns thumbnail failures and upload refusals in faceless while an absent source picture is not a failure', async () => {
     const { store, files } = await server.account();
-    const card = { card: testCard('루나'), lore: [], loreFolders: [], assets: [] };
+    const card = { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] };
     const missing = await importCharacter(store, files, card, null, () => {});
     expect(missing).toMatchObject({ ok: true, data: { faceless: false } });
 
@@ -106,10 +107,20 @@ describe('importCharacter', () => {
   });
 });
 
+describe('createCharacter', () => {
+  it('shows the blank character under its id before the write is answered, so its page opens at once', async () => {
+    const { store } = await server.account();
+    const id = crypto.randomUUID();
+    const saving = createCharacter(store, '새 캐릭터', id);
+    expect(store.get('character', id)?.value).toEqual(bare('새 캐릭터'));
+    expect(await saving).toEqual({ ok: true, data: id });
+  });
+});
+
 describe('setAvatar', () => {
   it('rewrites a copy’s avatar in place while the original keeps the file they shared, and gives one to a character without', async () => {
     const { store, files } = await server.account();
-    const card = { card: testCard('루나'), lore: [], loreFolders: [], assets: [] };
+    const card = { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] };
     const first = picture();
     const imported = await importCharacter(store, files, card, first, () => {});
     const original = imported.ok ? imported.data.id : '';
@@ -136,7 +147,7 @@ describe('setAvatar', () => {
 
   it('answers a refused upload as picture-refused and leaves the avatar as it was', async () => {
     const { store, files } = await server.account();
-    const imported = await importCharacter(store, files, { card: testCard('루나'), lore: [], loreFolders: [], assets: [] }, picture(), () => {});
+    const imported = await importCharacter(store, files, { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] }, picture(), () => {});
     const id = imported.ok ? imported.data.id : '';
     const before = store.children('avatar', id);
     const refused = new Files(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'files-full' } : api<T>(...args), store);
@@ -186,7 +197,7 @@ describe('purgeExpired', () => {
   it('removes a character deleted a week ago with everything it owns, and keeps one deleted since', async () => {
     const { store, files } = await server.account();
     const now = Date.now();
-    const saved = await importCharacter(store, files, { card: testCard('old'), lore: [{ name: 'lore', folder: null } as LoreEntry], loreFolders: [], assets: [{ name: 'smile', read: async () => png() }] }, picture(), () => {});
+    const saved = await importCharacter(store, files, { card: blankCard('old'), lore: [{ name: 'lore', folder: null } as LoreEntry], loreFolders: [], assets: [{ name: 'smile', read: async () => png() }] }, picture(), () => {});
     const expired = saved.ok ? saved.data.id : '';
     await setDeleted(store, expired, now - KEEP_DELETED);
     await addCharacter(store, bare('recent', { deleted: now - 1000 }), none, () => {});
@@ -287,7 +298,7 @@ describe('setToggle', () => {
 describe('setTextTranslation', () => {
   it('keeps one per text and language, and drops those of texts the card no longer holds', async () => {
     const { store } = await server.account();
-    const added = await addCharacter(store, { ...bare('루나'), card: { ...testCard('루나'), description: 'Old', greetings: ['Hello'] } }, none, () => {});
+    const added = await addCharacter(store, { ...bare('루나'), card: { ...blankCard('루나'), description: 'Old', greetings: ['Hello'] } }, none, () => {});
     const id = added.ok ? added.data : '';
     const made = (text: string) => ({ text, receipt: null, at: 1 });
     await setTextTranslation(store, id, 'Old', 'Korean', made('옛'));

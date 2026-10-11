@@ -1,13 +1,14 @@
-import { LayoutGrid, MessageSquarePlus, PackageOpen } from 'lucide-react';
+import { LayoutGrid, MessageSquarePlus, PackageOpen, UserRoundPlus } from 'lucide-react';
 import { useMemo } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import { characterTexts, type FolderTree, type Shelf } from '../../../model/library';
-import { ACTS, importOf } from '../../common/acts';
+import { ACTS, importOf, newOf } from '../../common/acts';
 import { useSearch } from '../../common/useSearch';
 import { ago } from '../../common/time';
 import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../library/ImportFlow';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
+import { useNewCharacter } from '../../library/useCharacterActions';
 import { useLibrary } from '../../session';
 import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, Viewport } from '../../ui';
 import { navigate } from '../router';
@@ -26,6 +27,7 @@ type Props = {
 export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
   const { characters, none, folders, byFolder, loose } = useLibrary();
   const { pick, move } = useImport();
+  const create = useNewCharacter();
   const empty = characters.length === 0 && none.chats.length === 0;
   const search = useSearch(characters, '캐릭터 검색', ({ character }) => characterTexts(character), { query: [query, onQuery] });
   const { words } = search;
@@ -69,6 +71,7 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
             <Button variant="secondary" size="sm" icon={ACTS.import.icon} onClick={pick}>
               {importOf('봇')}
             </Button>
+            <IconButton icon={UserRoundPlus} label={newOf('캐릭터')} size="sm" onClick={create} />
             <IconButton icon={PackageOpen} label="Risu에서 이사" size="sm" onClick={move} />
             <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery' })} />
             <IconButton icon={MessageSquarePlus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: null })} />

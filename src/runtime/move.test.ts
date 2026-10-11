@@ -12,7 +12,8 @@ import { MEMORY_DEFAULTS } from './memory-read';
 import { broughtFromRisu, fillInlays, fillPictures, importRisuChats, moveFromRisu, risuMatch, type MoveStep } from './move';
 import { setModuleAlways } from './modules';
 import { addPersona, setCurrentPersona } from './personas';
-import { testCard, testServer } from './testing';
+import { testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 import { summaryId, summaryStale } from './summary';
 
 const server = testServer();
@@ -21,7 +22,7 @@ const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomByte
 
 const luna: RisuCharacter = {
   id: 'risu-luna',
-  card: { ...testCard('루나'), greetings: ['', '첫 인사', '둘째 인사'] },
+  card: { ...blankCard('루나'), greetings: ['', '첫 인사', '둘째 인사'] },
   lore: [],
   loreFolders: [],
   assets: [],

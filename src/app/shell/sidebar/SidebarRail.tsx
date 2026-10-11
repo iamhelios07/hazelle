@@ -1,9 +1,10 @@
-import { MessageSquarePlus, PackageOpen, Settings } from 'lucide-react';
+import { MessageSquarePlus, PackageOpen, Settings, UserRoundPlus } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
-import { ACTS, importOf } from '../../common/acts';
+import { ACTS, importOf, newOf } from '../../common/acts';
 import { useImport } from '../../library/ImportFlow';
 import { ShelfFace, shelfName } from '../../library/shelf';
+import { useNewCharacter } from '../../library/useCharacterActions';
 import { NO_CHARACTER, SETTINGS } from '../../common/words';
 import { FaceButton, IconButton, Menu, MenuItem, Rail, Viewport } from '../../ui';
 import { navigate } from '../router';
@@ -22,6 +23,7 @@ type Props = {
 // On wide screens these places live only here; the list page shows them on phones.
 export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: Props) {
   const { pick, move } = useImport();
+  const create = useNewCharacter();
   return (
     <Rail
       home={{ label: '캐릭터 둘러보기', current: home, onClick: () => navigate(HOME) }}
@@ -29,6 +31,7 @@ export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: P
       actions={
         <Menu label="추가" trigger={(opener) => <IconButton icon={ACTS.create.icon} label="추가" {...opener} />}>
           <MenuItem icon={ACTS.import.icon} label={importOf('봇')} onClick={pick} />
+          <MenuItem icon={UserRoundPlus} label={newOf('캐릭터')} onClick={create} />
           <MenuItem icon={PackageOpen} label="Risu에서 이사" onClick={move} />
           <MenuItem icon={MessageSquarePlus} label={`${NO_CHARACTER} 새 채팅`} onClick={() => navigate({ kind: 'new-chat', character: null })} />
         </Menu>

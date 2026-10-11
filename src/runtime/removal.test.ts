@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { Lore } from '../model/library';
 import { addCharacter } from './characters';
 import { planRemoval } from './removal';
-import { testCard, testServer } from './testing';
+import { testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 
 const server = testServer();
 
 describe('planRemoval', () => {
   it('takes what a character owns first (its 삽화 profiles too), its chats after their entries, and the character last', async () => {
     const { store } = await server.account();
-    const character = (name: string) => ({ card: testCard(name), folder: null, loreFolders: [] });
+    const character = (name: string) => ({ card: blankCard(name), folder: null, loreFolders: [] });
     const avatar = { type: 'image/png', size: 8, thumb: 'data:thumb', file: { id: 'f'.repeat(64), key: 'k' } };
     const added = await addCharacter(store, character('루나'), { avatar, assets: [], lore: [{ name: '등대' } as Lore, { name: '항구' } as Lore], likeness: { portraits: [], at: 1, receipt: null } }, () => {});
     const other = await addCharacter(store, character('카엘'), { avatar: null, assets: [], lore: [], likeness: null }, () => {});

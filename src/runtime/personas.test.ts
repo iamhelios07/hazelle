@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { setChatPersona, startChat } from './chat-log';
 import { addFirstPersona, addPersona, chatPersona, pinPersona, recordChatPersonas, removePersona, restorePersona, setCurrentPersona } from './personas';
-import { testCard, testServer } from './testing';
+import { testServer } from './testing';
+import { blankCard } from '../engine/import/card';
 
 const server = testServer();
 
@@ -34,7 +35,7 @@ describe('personas', () => {
     const [first, second] = await Promise.all([addPersona(store, { name: '진', description: '', picture: null }), addPersona(store, { name: '린', description: '', picture: null })]);
     const [jin, rin] = [first, second].map((added) => (added.ok ? added.data.id : ''));
     await setCurrentPersona(store, jin!);
-    const character = await store.create('character', { card: testCard('루나'), folder: null, loreFolders: [] });
+    const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [] });
     const luna = character.ok ? character.data.id : '';
     const created = await store.create('chat', { title: null, character: luna, models: {} });
     const chat = created.ok ? created.data.id : '';
@@ -56,7 +57,7 @@ describe('personas', () => {
     const [first, second] = await Promise.all([addPersona(store, { name: '진', description: '', picture: null }), addPersona(store, { name: '린', description: '', picture: null })]);
     const [jin, rin] = [first, second].map((added) => (added.ok ? added.data.id : ''));
     await setCurrentPersona(store, jin!);
-    const character = await store.create('character', { card: testCard('루나'), folder: null, loreFolders: [] });
+    const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [] });
     const luna = character.ok ? character.data.id : '';
     await pinPersona(store, luna, rin!);
     const [plain, pinned] = [crypto.randomUUID(), crypto.randomUUID()];
@@ -74,7 +75,7 @@ describe('personas', () => {
     const [first, second] = await Promise.all([addPersona(store, { name: '진', description: '', picture: null }), addPersona(store, { name: '린', description: '', picture: null })]);
     const [jin, rin] = [first, second].map((added) => (added.ok ? added.data.id : ''));
     await setCurrentPersona(store, jin!);
-    const character = await store.create('character', { card: testCard('루나'), folder: null, loreFolders: [] });
+    const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [] });
     const luna = character.ok ? character.data.id : '';
     await pinPersona(store, luna, rin!);
     const make = async (chat: Parameters<typeof store.create<'chat'>>[1]) => { const made = await store.create('chat', chat); return made.ok ? made.data.id : ''; };
