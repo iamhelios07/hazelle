@@ -27,6 +27,16 @@ describe('the migration runner', () => {
     expect(db.prepare('SELECT signup_cap, account_bytes_cap, account_file_bytes_cap FROM service').get()).toEqual({ signup_cap: 1, account_bytes_cap: 300000000, account_file_bytes_cap: 3000000000 });
   });
 
+  it('moves stored prices to the models.dev list and asks for the list again', () => {
+    const db = new DatabaseSync(':memory:');
+    migrate(db, dir({ '0001_baseline.sql': readFileSync('migrations/0001_baseline.sql', 'utf8') }));
+    db.exec(`INSERT INTO prices VALUES ('google', 'gemini-2.5-flash', 0.3, 2.5, NULL, NULL, '[]'); UPDATE price_fetch SET fetched_at = 5, tried_at = 5`);
+    expect(migrate(db, 'migrations').applied).toContain('0002_models_dev.sql');
+    expect(tables(db)).not.toContain('prices');
+    expect(db.prepare('SELECT COUNT(*) AS n FROM models_dev').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT fetched_at, tried_at FROM models_dev_fetch').get()).toEqual({ fetched_at: null, tried_at: null });
+  });
+
   it('upgrades a populated database with the files it lacks, each whole or not at all', () => {
     const db = new DatabaseSync(':memory:');
     const first = dir({ '0001_a.sql': 'CREATE TABLE a (x);' });

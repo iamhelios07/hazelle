@@ -176,6 +176,16 @@
      "context": 0,
      "output": 0
     }
+   },
+   "priced-only": {
+    "id": "priced-only",
+    "cost": {
+     "input": 1,
+     "output": 2
+    }
+   },
+   "says-nothing": {
+    "id": "says-nothing"
    }
   }
  },
@@ -270,7 +280,9 @@
     "last_updated": "2026-04-24",
     "modalities": {
      "input": [
-      "text"
+      "text",
+      "pdf",
+      "smell"
      ],
      "output": [
       "text"

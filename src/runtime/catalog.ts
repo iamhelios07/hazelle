@@ -1,5 +1,5 @@
-import { PRICE_LISTS, type PriceList } from '../connectors/price-list';
-import { joinPrices } from '../connectors/pricing';
+import { MODELS_DEV_LISTS, type ModelsDevList } from '../connectors/models-dev';
+import { joinModelsDev } from '../connectors/pricing';
 import { parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
 import type { Account, Connection, Model } from '../connectors/types';
 import { onTurn } from '../model/turns';
@@ -48,16 +48,17 @@ export class Catalogs {
     if (!resolved.codec) return { ok: true, models: resolved.models };
     // A provider that lists no models (Voyage AI): its type holds the list, and nothing is fetched.
     if (resolved.type?.models) return { ok: true, models: resolved.type.models };
-    // Prices that do not load leave the models unpriced, and their costs 알 수 없음; the list itself still loads.
-    const list = resolved.type && PRICE_LISTS[resolved.type.id]?.list;
-    const prices = list ? api<PriceList>('GET', `prices?provider=${encodeURIComponent(list)}`) : null;
+    // A models.dev list that does not load leaves the models unpriced, their costs 알 수 없음, and what they take and give
+    // only as the provider's list says; the list itself still loads.
+    const list = resolved.type && MODELS_DEV_LISTS[resolved.type.id]?.list;
+    const listed = list ? api<ModelsDevList>('GET', `models-dev?provider=${encodeURIComponent(list)}`) : null;
     const credential = await this.credentials.get(resolved, (await this.serving(connection)).secret);
     if (!credential.ok) return credential;
     const response = await relayJson(withCredential(resolved, resolved.codec.listModels(resolved.endpoint), credential.credential));
     if (!response.ok) return response;
     const models = parseCatalog(resolved, response.data);
     if (!models) return { ok: false, failure: { kind: 'not-a-catalog' } };
-    const priced = await prices;
-    return { ok: true, models: joinPrices(models, priced?.ok ? priced.data : null) };
+    const loaded = await listed;
+    return { ok: true, models: joinModelsDev(models, loaded?.ok ? loaded.data : null) };
   }
 }

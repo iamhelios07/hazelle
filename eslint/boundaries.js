@@ -4,7 +4,7 @@ import path from 'node:path';
 // without its extension, relative to the repo root (the folder above this one), and a test file belongs where the module
 // it tests does. An area imports itself, the areas in `imports`, with `import type` those in `types`, and from its test
 // files those in `tests`. A module in no area fails lint until this table places it.
-const RUNTIME_IMPORTS = ['toolApi', 'changeSignal', 'contracts', 'model', 'engine', 'connectors', 'priceLists', 'vault'];
+const RUNTIME_IMPORTS = ['toolApi', 'changeSignal', 'contracts', 'model', 'engine', 'connectors', 'modelsDev', 'vault'];
 const BELOW_APP = ['runtime', ...RUNTIME_IMPORTS];
 const FEATURES = ['account', 'admin', 'library', 'chat', 'connections', 'models', 'prompts', 'personas', 'modules', 'settings'];
 const FEATURE = {
@@ -18,10 +18,10 @@ const AREAS = {
   contracts: { paths: ['src/contracts'], why: 'wire values shared by the server and client import no other layer.' },
   connectors: {
     paths: ['src/connectors'],
-    imports: ['priceLists', 'destination'],
+    imports: ['modelsDev', 'destination'],
     why: 'connectors are the provider contract the engine and the model build on, so they import no other layer, and touch no DOM, network or storage so their golden tests run in node.',
   },
-  priceLists: { paths: ['src/connectors/price-list'], why: 'which models.dev price lists a connection type reads, and their shape, is data and types only, shared by the connectors and the server.' },
+  modelsDev: { paths: ['src/connectors/models-dev'], why: 'which models.dev list a connection type reads, the words it uses for inputs and outputs, and its shape, is data and types only, shared by the connectors and the server.' },
   destination: { paths: ['src/connectors/destination'], why: 'how an address is matched against the operator\'s local providers is shared by 직접 연결 and the server\'s outbound policy, so it imports nothing.' },
   engine: {
     paths: ['src/engine'],
@@ -37,8 +37,8 @@ const AREAS = {
   vault: { paths: ['src/vault'], why: 'the vault is crypto and device storage only; it never reaches the network.' },
   server: {
     paths: ['src/server'],
-    imports: ['contracts', 'priceLists', 'destination'],
-    why: 'the server knows nothing about the client or providers, but their wire contracts, which price lists to keep (connectors/price-list) and how a local provider\'s address is matched (connectors/destination).',
+    imports: ['contracts', 'modelsDev', 'destination'],
+    why: 'the server knows nothing about the client or providers, but their wire contracts, which models.dev lists to keep (connectors/models-dev) and how a local provider\'s address is matched (connectors/destination).',
   },
   runtime: {
     paths: ['src/runtime'],

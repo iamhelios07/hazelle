@@ -128,7 +128,7 @@ describe('the server process', () => {
     expect([unknown.status, unknown.headers.get('content-security-policy')]).toEqual([404, null]);
     const page = await fetch(`http://127.0.0.1:${port}/models/c1/vendor/model-4.5`, { headers: { accept: 'text/html' } });
     expect([page.status, page.headers.get('content-security-policy'), await page.text()]).toEqual([200, CSP, 'page']);
-    expect(server.log()).toContain('"migrationsApplied":["0001_baseline.sql"]');
+    expect(server.log()).toContain(`"migrationsApplied":${JSON.stringify(readdirSync('migrations').filter((name) => name.endsWith('.sql')).sort())}`);
 
     const second = start(data, await freePort());
     expect(await second.exited).toBe(1);

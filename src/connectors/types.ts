@@ -1,4 +1,4 @@
-import type { Rates } from './price-list';
+import type { Rates } from './models-dev';
 import type { Accepts, Carries, ModelSettings, Takes } from './settings';
 
 export type Protocol = 'chat-completions' | 'anthropic-messages' | 'gemini' | 'responses';
@@ -38,7 +38,7 @@ export type HttpRequest = { url: string; method: 'GET' | 'POST'; headers: Record
 
 export type Modality = 'text' | 'image' | 'audio' | 'video' | 'file' | 'embedding';
 
-// null means the catalog does not say. It is shown as unknown, never as "no".
+// null means neither the catalog nor models.dev says. It is shown as unknown, never as "no".
 export type Model = {
   id: string;
   name: string;

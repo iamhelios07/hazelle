@@ -28,7 +28,7 @@ import { upstage } from './upstage';
 import { vercel } from './vercel';
 import { voyage } from './voyage';
 import { xai } from './xai';
-import { PRICE_LISTS } from './price-list';
+import { MODELS_DEV_LISTS } from './models-dev';
 import { priceCost } from './pricing';
 import { carriesPictures, ConnectorError, seesPictures, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
 
@@ -98,7 +98,7 @@ export function parseCatalog({ type, codec }: Route, payload: unknown): Model[] 
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
 
-export const costUnit = (type: ConnectionType | null): Cost['unit'] => (type && PRICE_LISTS[type.id]?.credit ? 'credit' : 'usd');
+export const costUnit = (type: ConnectionType | null): Cost['unit'] => (type && MODELS_DEV_LISTS[type.id]?.credit ? 'credit' : 'usd');
 
 // The type answers whether it serves its format's embeddings; a generic connection serves its codec's.
 export const embedsOf = ({ type, codec }: Route) => (type?.embeds === null ? null : codec.embeds);
