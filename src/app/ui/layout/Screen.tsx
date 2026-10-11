@@ -26,7 +26,7 @@ export function Screen({ top, align = 'start', width = 'narrow', actions, sticky
     </>
   );
   return (
-    <Root className={[styles.screen, pane && styles.pane, fill && styles.fill, width !== 'narrow' && styles[width]].filter(Boolean).join(' ')}>
+    <Root className={[styles.screen, pane && styles.pane, fill && styles.fill, align === 'center' && styles.centered, width !== 'narrow' && styles[width]].filter(Boolean).join(' ')}>
       {top && <header className={styles.top}>{top}</header>}
       {onSubmit ? (
         <form className={content} onSubmit={onSubmit} noValidate>

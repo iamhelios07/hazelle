@@ -132,7 +132,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   if (!list) return <ScreenLoad>{screen(route)}</ScreenLoad>;
   const detail = route.kind === list.kind ? null : screen(route);
   const empty = list.kind === 'models' ? <ModelsLanding /> : <Empty variant="pane">{EMPTY[list.kind]}</Empty>;
-  if (split) return <ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={<ScreenLoad>{screen(list)}</ScreenLoad>} detail={<ScreenLoad>{detail ?? empty}</ScreenLoad>} />;
+  // One boundary for the pair, so a first visit shows one loader, and one inside for the detail alone.
+  if (split) return <ScreenLoad><ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={screen(list)} detail={<ScreenLoad>{detail ?? empty}</ScreenLoad>} /></ScreenLoad>;
   return <ScreenLoad>{detail ?? screen(list)}</ScreenLoad>;
 }
 

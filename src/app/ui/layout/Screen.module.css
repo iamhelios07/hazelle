@@ -70,11 +70,13 @@
   }
 
   .screen.wide,
-  .screen.form {
+  .screen.form,
+  .screen.centered {
     padding-top: var(--space-32);
   }
 
-  .screen.fill {
+  .screen.fill,
+  .screen.centered {
     min-height: 100dvh;
   }
 
