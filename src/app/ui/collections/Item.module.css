@@ -134,18 +134,15 @@
 
 /* Hover comes first so the current fill stays under the pointer. */
 .pressable:hover:not(:disabled) {
-  background: var(--color-item-hover);
+  background: var(--color-surface-hover);
 }
 
 .item[aria-current],
 .item[aria-pressed='true'] {
-  background: var(--color-item-current);
+  background: var(--color-surface-raised);
 }
 
 .side {
-  --color-item-hover: var(--color-surface);
-  --color-item-current: var(--color-surface-hover);
-
   color: var(--color-text-muted);
 }
 
@@ -163,9 +160,6 @@
 }
 
 .tab {
-  --color-item-hover: var(--color-surface);
-  --color-item-current: var(--color-surface-raised);
-
   color: var(--color-text-muted);
 }
 

@@ -1,11 +1,11 @@
 .box {
-  border: var(--border-thin) solid var(--color-row-line);
+  border: var(--border-thin) solid var(--color-divider);
   border-radius: var(--radius-lg);
-  background: var(--color-box);
+  background: var(--color-surface);
 }
 
 .ruled + .ruled {
-  border-top: var(--border-thin) solid var(--color-row-line);
+  border-top: var(--border-thin) solid var(--color-divider);
 }
 
 /* On an input or a textarea only: every other element matches :read-only. */

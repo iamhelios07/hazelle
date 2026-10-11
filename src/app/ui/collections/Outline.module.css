@@ -221,11 +221,11 @@
 }
 
 .row:hover {
-  --row-bg: var(--color-item-hover);
+  --row-bg: var(--color-surface-hover);
 }
 
 .row[aria-current='true'] {
-  --row-bg: var(--color-item-current);
+  --row-bg: var(--color-surface-raised);
 }
 
 .button {
@@ -406,6 +406,6 @@
 
 .append:hover,
 .append[aria-expanded='true'] {
-  background: var(--color-item-hover);
+  background: var(--color-surface-hover);
   color: var(--color-text);
 }

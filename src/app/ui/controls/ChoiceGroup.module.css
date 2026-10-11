@@ -80,11 +80,11 @@
 }
 
 .list .choice:hover {
-  background: var(--color-item-hover);
+  background: var(--color-surface-hover);
 }
 
 .list .choice[aria-pressed='true'] {
-  background: var(--color-item-current);
+  background: var(--color-surface-raised);
   color: var(--color-text);
 }
 
