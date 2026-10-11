@@ -34,7 +34,6 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
   const row = ({ toggle, value, changed }: ToggleRow) => (
     <SettingRow
       key={toggle.key}
-      place="panel"
       label={toggle.label}
       changed={changed}
       sub={changed ? defaultOf(toggle) : undefined}

@@ -22,19 +22,16 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
     >
       <Stack gap="related">
         <SettingRow
-          place="panel"
           label="자동 삽화"
           help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 이미지 연결의 사용량이 들어요."
           control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => actions.setIllustrate({ auto })} />}
         />
         <SettingRow
-          place="panel"
           label="무료가 아니어도 만들기"
           help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 묻지 않고 만들어요. 이때는 비용이 들어요."
           control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => actions.setIllustrate({ spend })} />}
         />
         <SettingRow
-          place="panel"
           label="이미지 모델"
           sub={routes.length ? undefined : '이미지를 만들 모델이 없어요'}
           control={
@@ -48,7 +45,6 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
           }
         />
         <SettingRow
-          place="panel"
           label="삽화 프롬프트"
           control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} onPick={(prompt) => actions.setIllustrate({ prompt })} chat={chat} />}
         />

@@ -13,17 +13,16 @@ const readNumber = (text: string) => {
   const typed = readTyped(text, false);
   return typed.ok ? typed.value : null;
 };
-// place: panel in the composer's popover.
-type SettingProps = { module: string; field: ToolField; value: Settings[string] | undefined; place?: 'group' | 'panel' };
+type SettingProps = { module: string; field: ToolField; value: Settings[string] | undefined };
 
-export function ToolSetting({ module, field, value: stored, place }: SettingProps) {
+export function ToolSetting({ module, field, value: stored }: SettingProps) {
   const session = useSession();
   const save = useAutosave<{ value: Settings[string] }>(`tool-setting:${module}:${field.key}`, ({ value }) => setToolSettings(session, module, { [field.key]: value! }));
   const [typed, setTyped] = useState<string>();
   const value = save.unsaved.value ?? stored;
   const changedType = value !== undefined && !fieldValue(field, value);
   const note = save.status ? SAVE_STATUS[save.status] : undefined;
-  const row = (control: ReactNode, error: string | undefined, wide?: boolean) => <SettingRow place={place} label={field.label} wide={wide} error={error} note={error ? undefined : note} control={control} />;
+  const row = (control: ReactNode, error: string | undefined, wide?: boolean) => <SettingRow label={field.label} wide={wide} error={error} note={error ? undefined : note} control={control} />;
   if (field.type === 'number') {
     const text = typedText<Settings[string] | undefined>(typed, readNumber, value, (current) => current === undefined ? '' : String(current));
     const invalid = (typed !== undefined || value !== undefined) && readNumber(text) === null;

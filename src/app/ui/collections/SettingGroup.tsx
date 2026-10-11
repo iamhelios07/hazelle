@@ -1,11 +1,14 @@
-import { useId, type ReactNode } from 'react';
+import { createContext, useContext, useId, type ReactNode } from 'react';
 import { Hint } from '../overlays/Hint';
 import styles from './SettingGroup.module.css';
+
+// A row in a group is one of its ruled rows; a row outside one stands bare among fields with no inset of its own.
+const Grouped = createContext(false);
 
 export function SettingGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className={styles.group} role="group" aria-label={label}>
-      {children}
+      <Grouped value>{children}</Grouped>
     </div>
   );
 }
@@ -14,7 +17,6 @@ type RowProps = {
   label: string;
   // Shown in the label's place; label stays the row's name.
   sentence?: ReactNode;
-  place?: 'group' | 'panel';
   changed?: boolean;
   // What the reader who does not know it needs, behind an ⓘ. A label it only restates is left out.
   help?: string;
@@ -27,9 +29,10 @@ type RowProps = {
   note?: string;
 };
 
-export function SettingRow({ label, sentence, place = 'group', changed = false, help, sub, control, wide = false, error, note }: RowProps) {
+export function SettingRow({ label, sentence, changed = false, help, sub, control, wide = false, error, note }: RowProps) {
   const id = useId();
-  const className = [styles.row, place === 'panel' ? styles.panel : styles.ruled, wide && styles.wide].filter(Boolean).join(' ');
+  const grouped = useContext(Grouped);
+  const className = [styles.row, grouped ? styles.ruled : styles.panel, wide && styles.wide].filter(Boolean).join(' ');
   return (
     <div className={className} role="group" aria-labelledby={sentence ? undefined : id} aria-label={sentence ? label : undefined}>
       <div className={styles.words}>

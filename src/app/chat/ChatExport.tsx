@@ -100,11 +100,11 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
         <ChoiceGroup layout="segmented" label="형식" options={[...FORMS]} value={form} onChange={setForm} />
         {form === 'log' && (
           <>
-            <SettingRow place="panel" label="처음" control={<NumberInput label="처음" unit="번째" value={range.from} invalid={!typed('from')} onChange={(text) => typeRange('from', text)} />} />
-            <SettingRow place="panel" label="끝" note={`메시지 ${messages.length}개`} control={<NumberInput label="끝" unit="번째" value={range.to} invalid={!typed('to')} onChange={(text) => typeRange('to', text)} />} />
-            {translated && <SettingRow place="panel" label="메시지" control={<ChoiceGroup layout="segmented" label="메시지" options={TEXTS} value={choices.text} onChange={(text) => change({ text })} />} />}
-            <SettingRow place="panel" label="이미지 포함" control={<Switch label="이미지 포함" checked={choices.pictures} onChange={(pictures) => change({ pictures })} />} />
-            <SettingRow place="panel" label="내 이름 가리기" control={<Switch label="내 이름 가리기" checked={choices.hideMe} onChange={(hideMe) => change({ hideMe })} />} />
+            <SettingRow label="처음" control={<NumberInput label="처음" unit="번째" value={range.from} invalid={!typed('from')} onChange={(text) => typeRange('from', text)} />} />
+            <SettingRow label="끝" note={`메시지 ${messages.length}개`} control={<NumberInput label="끝" unit="번째" value={range.to} invalid={!typed('to')} onChange={(text) => typeRange('to', text)} />} />
+            {translated && <SettingRow label="메시지" control={<ChoiceGroup layout="segmented" label="메시지" options={TEXTS} value={choices.text} onChange={(text) => change({ text })} />} />}
+            <SettingRow label="이미지 포함" control={<Switch label="이미지 포함" checked={choices.pictures} onChange={(pictures) => change({ pictures })} />} />
+            <SettingRow label="내 이름 가리기" control={<Switch label="내 이름 가리기" checked={choices.hideMe} onChange={(hideMe) => change({ hideMe })} />} />
             {waiting ? (
               <Text variant="note">{waiting}</Text>
             ) : prepared ? (

@@ -11,7 +11,6 @@ export function PerCharacter({ card, own, onChange }: { card: OpenChat['card']; 
     <>
       {card && (
         <SettingRow
-          place="panel"
           label="캐릭터별 설정"
           help={`켜면 ${card.name}의 채팅에만 이 설정을 적용해요.`}
           control={<Switch label="캐릭터별 설정" checked={own} onChange={onChange} />}

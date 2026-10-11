@@ -35,12 +35,12 @@ export function DisplayScreen({ back }: { back: Back | null }) {
       </SettingGroup>
       <Section title="텍스트">
         <SettingGroup label="텍스트">
-          <ReadingRows place="group" />
+          <ReadingRows  />
         </SettingGroup>
       </Section>
       <Section title="스크롤할 때">
         <SettingGroup label="스크롤할 때">
-          <ReplyRow place="group" />
+          <ReplyRow  />
           <SettingRow
             label="헤더 숨기기"
             help="아래로 스크롤하면 숨기고, 위로 스크롤하면 다시 보여요."
