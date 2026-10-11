@@ -4,17 +4,20 @@ import type { Stored } from '../../model/kinds';
 import { binsChat, isBinned, live } from '../../model/library';
 import type { SideAt } from '../chat/ChatScreen';
 import { ACTS } from '../common/acts';
+import { personaFaces } from '../common/alias';
 import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
 import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
 import { NO_CHARACTER } from '../common/words';
 import { useImport } from '../library/ImportFlow';
-import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
+import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useModules, usePersonas, useSession, useSettings, useStored } from '../session';
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
+
+type ListKind = NonNullable<ReturnType<typeof listOf>>['kind'];
 
 const ToolPageScreen = lazy(() => import('../modules/ToolPageScreen').then(({ ToolPageScreen }) => ({ default: ToolPageScreen })));
 const AdminScreen = lazy(() => import('../admin/AdminScreen').then(({ AdminScreen }) => ({ default: AdminScreen })));
@@ -131,22 +134,42 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const list = listOf(route);
   if (!list) return <ScreenLoad>{screen(route)}</ScreenLoad>;
   const detail = route.kind === list.kind ? null : screen(route);
-  const empty = list.kind === 'models' ? <ModelsLanding /> : <Empty variant="pane">{EMPTY[list.kind]}</Empty>;
+  const empty = <Landing kind={list.kind} />;
   // One boundary for the pair, so a first visit shows one loader, and one inside for the detail alone.
   if (split) return <ScreenLoad><ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={screen(list)} detail={<ScreenLoad>{detail ?? empty}</ScreenLoad>} /></ScreenLoad>;
   return <ScreenLoad>{detail ?? screen(list)}</ScreenLoad>;
 }
 
-// Beside its list, 모델 opens on the 대화 모델: the pane stays empty only while none is set. Replaced before paint, so the
-// empty pane never shows and 뒤로 does not land on it again. Its own component, so only this route reads the settings.
-function ModelsLanding() {
-  const main = useSettings().models.main;
+// Beside its list, a page opens on what it is about: 모델 on the 대화 모델, API 연결 on its connection (else the first),
+// 페르소나 on the current persona, 모듈 on the first. The pane stays empty only while there is none. Replaced before paint, so the empty pane never
+// shows and 뒤로 does not land on it again.
+function Landing({ kind }: { kind: ListKind }) {
+  const { models: { main }, persona } = useSettings();
   const connections = useConnections();
-  const landing = main && findStarred(main, connections) ? main : null;
+  const personas = usePersonas();
+  const modules = useModules();
   useLayoutEffect(() => {
-    if (landing) navigate({ kind: 'model', connection: landing.connection, model: landing.model }, { replace: true });
-  }, [landing]);
-  return <Empty variant="pane">{EMPTY.models}</Empty>;
+    const used = main && findStarred(main, connections) ? main : null;
+    const landing = landingOf(kind, { main: used, connection: used?.connection ?? connections[0]?.id, persona: personas.some(({ id }) => id === persona) ? persona : personaFaces(personas)[0]?.persona.id, module: modules[0]?.id });
+    if (landing) navigate(landing, { replace: true });
+  }, [kind, main, persona, connections, personas, modules]);
+  return <Empty variant="pane">{EMPTY[kind]}</Empty>;
+}
+
+type Firsts = { main: { connection: string; model: string } | null; connection?: string; persona?: string; module?: string };
+function landingOf(kind: ListKind, first: Firsts): Route | null {
+  switch (kind) {
+    case 'models':
+      return first.main && { kind: 'model', connection: first.main.connection, model: first.main.model };
+    case 'connections':
+      return first.connection ? { kind: 'connection', id: first.connection } : null;
+    case 'personas':
+      return first.persona ? { kind: 'persona', id: first.persona } : null;
+    case 'modules':
+      return first.module ? { kind: 'module', id: first.module } : null;
+    case 'add-connection':
+      return null;
+  }
 }
 
 function HomePage() {
