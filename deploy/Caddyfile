@@ -2,6 +2,7 @@
 # proxy in Full (strict), which trusts it. Its ACME account and certificate live in the caddy volume; a lost volume
 # issues again and counts against Let's Encrypt's weekly limit.
 hazelle.app {
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy app:8080 {
 		# Replies stream as they are written; buffering would hold them until the end.
 		flush_interval -1

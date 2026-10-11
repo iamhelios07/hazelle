@@ -1,7 +1,7 @@
 # infra
 
 Terraform for the hosted machine on Vultr: one instance (`vhp-4c-8gb-amd` in `icn`, Ubuntu 24.04), a reserved IPv4
-address, a firewall group (22 from the owner's address, 80 and 443 as `edge` says) and the owner's SSH
+address, a firewall group (22 from the owner's address, 80, 443 and 443/udp as `edge` says) and the owner's SSH
 key. `/data` lives on the instance's own disk. On first boot `cloud-init.yaml.tftpl` installs Docker from Docker's
 repository, writes `/etc/hazelle/` (the env file, the rclone config for R2, both compose files, the Caddyfile, the
 copier script) and runs `hazelle-compose up -d`.

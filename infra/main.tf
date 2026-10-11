@@ -18,13 +18,14 @@ resource "vultr_firewall_rule" "ssh" {
 }
 
 resource "vultr_firewall_rule" "web" {
-  for_each          = { for pair in setproduct(var.edge == "direct" ? ["0.0.0.0/0"] : var.cloudflare_ipv4, ["80", "443"]) : "${pair[0]} ${pair[1]}" => pair }
+  # 443/udp: HTTP/3, which Caddy announces in alt-svc.
+  for_each          = { for pair in setproduct(var.edge == "direct" ? ["0.0.0.0/0"] : var.cloudflare_ipv4, ["80", "443", "443/udp"]) : "${pair[0]} ${pair[1]}" => pair }
   firewall_group_id = vultr_firewall_group.hazelle.id
-  protocol          = "tcp"
+  protocol          = endswith(each.value[1], "/udp") ? "udp" : "tcp"
   ip_type           = "v4"
   subnet            = split("/", each.value[0])[0]
   subnet_size       = tonumber(split("/", each.value[0])[1])
-  port              = each.value[1]
+  port              = split("/", each.value[1])[0]
   notes             = var.edge
 }
 
