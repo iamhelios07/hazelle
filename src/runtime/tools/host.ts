@@ -63,7 +63,7 @@ function isJson(value: unknown): value is Json {
 function isQuestion(value: unknown): value is Question {
   if (!isRecord(value)) return false;
   if (value.kind === 'input' || value.kind === 'confirm') return typeof value.text === 'string';
-  return value.kind === 'select' && Array.isArray(value.options) && value.options.every((option) => typeof option === 'string');
+  return value.kind === 'select' && (value.text === undefined || typeof value.text === 'string') && Array.isArray(value.options) && value.options.every((option) => typeof option === 'string');
 }
 function isModelMessages(value: unknown): value is ModelMessage[] {
   return Array.isArray(value) && value.every((message) => isRecord(message) && (message.role === 'system' || message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string');

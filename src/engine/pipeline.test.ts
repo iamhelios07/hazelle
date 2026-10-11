@@ -92,6 +92,7 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   prompt: starter,
   note: 'Rain tonight.',
   lore: [],
+  loreFolders: {},
   messages: [message('g1', 'assistant', 'The lamp is lit, {{user}}.'), message('u1', 'user', 'Is it safe?'), message('a1', 'assistant', '{{setvar::mood::calm}}She nods. [OOC] ignore'), message('u2', 'user', 'Good.')],
   greeting: { index: 0 },
   toggles: new Map([['sims', '1']]),

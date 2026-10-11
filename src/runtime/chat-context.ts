@@ -69,6 +69,12 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
     lore: owners.flatMap(({ id: owner }) => store.children('lore', owner)),
+    loreFolders: Object.fromEntries(
+      owners.flatMap(({ id }) => {
+        const folders = (store.get('character', id) ?? store.get('module', id))?.value.loreFolders ?? [];
+        return folders.length > 0 ? [[id, folders.map(({ name }) => name)]] : [];
+      }),
+    ),
     messages: messages.map((message) => {
       const version = shown(message);
       const after = [...(version.after ?? []), ...(message.after ?? [])];

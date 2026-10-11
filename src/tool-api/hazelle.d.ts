@@ -11,7 +11,7 @@ declare namespace Hazelle {
   type ModelAnswer = { ok: true; text: string } | { ok: false; reason: ModelRefusal };
   // model: the embedding model that made the vectors; vectors from another model cannot be compared with them.
   type EmbedAnswer = { ok: true; model: string; vectors: number[][] } | { ok: false; reason: ModelRefusal | 'too-large' };
-  type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; options: string[] };
+  type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; text?: string; options: string[] };
   type Settings = Record<string, string | number | boolean>;
 
   interface ChatState {                         // this tool's own per-chat variables, replayed with the story

@@ -1,5 +1,6 @@
 import { CONNECTION_TYPES } from '../connectors/registry';
 import { isRecord } from '../connectors/values';
+import { reparsed, type BlockEffect } from '../engine/import/blocks';
 import { stampIds } from '../engine/import/convert';
 import { without } from '../model/fields';
 import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
@@ -20,7 +21,7 @@ export function upgradeValue(kind: string, value: unknown): Record<string, unkno
   if (!isRecord(value)) return null;
   if (kind === 'connection') return upgradeConnection(value);
   if (kind === 'character') return upgradeCharacter(value);
-  if (kind === 'module') return scriptIds(value);
+  if (kind === 'module') return upgradeModule(value);
   if (kind === 'memory') return upgradeMemory(value);
   return null;
 }
@@ -46,7 +47,13 @@ function upgradeConnection(value: Record<string, unknown>) {
 // gives.
 function upgradeCharacter(value: Record<string, unknown>) {
   let upgraded: Record<string, unknown> | null = null;
-  for (const step of [dropTranslate, translationsByText, cardScriptIds, statusIds, dropKeepStatus]) upgraded = step(upgraded ?? value) ?? upgraded;
+  for (const step of [dropTranslate, translationsByText, cardScriptIds, statusIds, dropKeepStatus, cardEffects]) upgraded = step(upgraded ?? value) ?? upgraded;
+  return upgraded;
+}
+
+function upgradeModule(value: Record<string, unknown>) {
+  let upgraded: Record<string, unknown> | null = null;
+  for (const step of [scriptIds, effectsRead]) upgraded = step(upgraded ?? value) ?? upgraded;
   return upgraded;
 }
 
@@ -74,6 +81,25 @@ function scriptIds(pack: Record<string, unknown>) {
 
 function cardScriptIds(value: Record<string, unknown>) {
   const card = isRecord(value.card) ? scriptIds(value.card) : null;
+  return card && { ...value, card };
+}
+
+// A block effect this app did not run was stored opaque with its source, which is read again once the app runs it.
+function effectsRead(pack: Record<string, unknown>) {
+  if (!Array.isArray(pack.triggers)) return null;
+  let changed = false;
+  const triggers = pack.triggers.map((trigger: unknown) => {
+    if (!isRecord(trigger) || trigger.kind !== 'blocks' || !Array.isArray(trigger.effects)) return trigger;
+    const effects = reparsed(trigger.effects as BlockEffect[]);
+    if (!effects) return trigger;
+    changed = true;
+    return { ...trigger, effects };
+  });
+  return changed ? { ...pack, triggers } : null;
+}
+
+function cardEffects(value: Record<string, unknown>) {
+  const card = isRecord(value.card) ? effectsRead(value.card) : null;
   return card && { ...value, card };
 }
 

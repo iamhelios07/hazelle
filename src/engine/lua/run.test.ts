@@ -25,6 +25,7 @@ const SNAPSHOT: Snapshot = {
     prompt: null,
     note: null,
     lore: [{ id: 'l1', parent: null, value: { name: 'Gate', keys: ['gate', 'door'], secondaryKeys: [], content: 'hp {{getvar::hp}}', enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 7, priority: null, position: null } }],
+    loreFolders: {},
     messages: [],
     variables: [],
     greeting: null,
@@ -315,8 +316,78 @@ describe('block triggers', () => {
   });
 
   it('name an effect this app lacks and go on', async () => {
-    const outcome = await lua.run(String(owner++), [blocks('start', [{ type: 'v2RunLLM', indent: 0 }, { type: 'setvar', operator: '=', var: 'after', value: '1' }])], SNAPSHOT, { kind: 'start' }, host());
-    expect(outcome).toMatchObject({ missing: ['v2RunLLM'], writes: [['after', '1']] });
+    const outcome = await lua.run(String(owner++), [blocks('start', [{ type: 'v2ImgGen', indent: 0 }, { type: 'setvar', operator: '=', var: 'after', value: '1' }])], SNAPSHOT, { kind: 'start' }, host());
+    expect(outcome).toMatchObject({ missing: ['v2ImgGen'], writes: [['after', '1']] });
+  });
+
+  it('gather the chat in a loop and the lorebook by Risu’s index, its folders first, for the model they name', async () => {
+    const entry = (id: string, content: string) => ({ id, parent: OWNER.id, value: { ...SNAPSHOT.scope.lore[0]!.value, name: id, content } });
+    const scope = { ...SNAPSHOT.scope, greeting: { index: 0 }, messages: [{ id: 'g', message: 'g', seed: 'g', role: 'assistant' as const, text: 'welcome', time: null }], lore: [entry('a', 'A {{getvar::hp}}'), entry('b', 'B')], loreFolders: { [OWNER.id]: ['folder'] } };
+    const model = vi.fn<Host['model']>(async () => ({ success: true, result: 'answer' }));
+    const outcome = await lua.run(String(owner++), [blocks('start', [
+      { type: 'v2GetMessageCount', outputVar: 'count', indent: 0 },
+      { type: 'v2SetVar', operator: '=', var: 'i', value: '0', valueType: 'value', indent: 0 },
+      { type: 'v2GetFirstMessage', outputVar: 'all', indent: 0 },
+      { type: 'v2LoopNTimes', value: 'count', valueType: 'var', indent: 0 },
+      { type: 'v2GetMessageAtIndex', index: 'i', indexType: 'var', outputVar: 'read', indent: 1 },
+      { type: 'v2ConcatString', source1: 'all', source1Type: 'var', source2: 'read', source2Type: 'var', outputVar: 'all', indent: 1 },
+      { type: 'v2SetVar', operator: '+=', var: 'i', value: '1', valueType: 'value', indent: 1 },
+      { type: 'v2EndIndent', indent: 1, endOfLoop: true },
+      { type: 'v2Calculate', expression: '{{getvar::i}}-1', expressionType: 'value', outputVar: 'at', indent: 0 },
+      { type: 'v2GetLorebookByIndex', index: 'at', indexType: 'var', outputVar: 'book', indent: 0 },
+      { type: 'v2RunLLM', value: '{{getvar::all}}|{{getvar::book}}', valueType: 'value', outputVar: 'out', model: 'submodel', indent: 0 },
+      { type: 'v2Impersonate', role: 'char', value: 'out', valueType: 'var', indent: 0 },
+      { type: 'v2StopPromptSending', indent: 0 },
+    ])], { ...SNAPSHOT, scope }, { kind: 'start' }, host({ model }));
+    expect(outcome).toMatchObject({ errors: [], missing: [], stop: true, added: [{ role: 'char', text: 'answer' }] });
+    expect(model).toHaveBeenCalledWith('aux', [{ role: 'user', content: 'welcomehellohi there|A 10' }], OWNER);
+  });
+
+  it('edit texts, arrays and dictionaries in variables, and ask with the question they show', async () => {
+    const ask = vi.fn<Host['ask']>(async () => '1');
+    const outcome = await lua.run(String(owner++), [blocks('start', [
+      { type: 'v2GetLastCharMessage', outputVar: 'last', indent: 0 },
+      { type: 'v2ReplaceString', source: 'last', sourceType: 'var', regex: 'there', regexType: 'value', result: '{{user}}', resultType: 'value', replacement: '', replacementType: 'value', flags: '', flagsType: 'value', outputVar: 'last', indent: 0 },
+      { type: 'v2ModifyChat', index: '1', indexType: 'value', value: 'last', valueType: 'var', indent: 0 },
+      { type: 'v2SplitString', source: 'a,b', sourceType: 'value', delimiter: ',', delimiterType: 'value', outputVar: 'list', indent: 0 },
+      { type: 'v2PushArrayVar', var: 'list', value: 'c', valueType: 'value', indent: 0 },
+      { type: 'v2PopArrayVar', var: 'list', outputVar: 'popped', indent: 0 },
+      { type: 'v2JoinArrayVar', var: 'list', varType: 'var', delimiter: '+', delimiterType: 'value', outputVar: 'joined', indent: 0 },
+      { type: 'v2SetDictVar', var: 'dict', varType: 'var', key: 'k', keyType: 'value', value: 'v', valueType: 'value', indent: 0 },
+      { type: 'v2GetDictVar', var: 'dict', varType: 'var', key: 'k', keyType: 'value', outputVar: 'got', indent: 0 },
+      { type: 'v2RegexTest', value: 'joined', valueType: 'var', regex: '^a\\+', regexType: 'value', flags: '', flagsType: 'value', outputVar: 'matched', indent: 0 },
+      { type: 'v2GetAlertSelect', display: '고르기', displayType: 'value', value: '하나|둘', valueType: 'value', outputVar: 'picked', indent: 0 },
+    ])], SNAPSHOT, { kind: 'start' }, host({ ask }));
+    expect(outcome).toMatchObject({ errors: [], missing: [], edits: [{ index: 1, text: 'hi Jin' }] });
+    expect(Object.fromEntries(outcome.writes)).toMatchObject({ list: '["a","b"]', popped: 'c', joined: 'a+b', dict: '{"k":"v"}', got: 'v', matched: '1', picked: '1' });
+    expect(ask).toHaveBeenCalledWith({ kind: 'select', text: '고르기', options: ['하나', '둘'] }, OWNER);
+  });
+
+  it('hide a chat variable behind a local one, break loops, skip a loop of no turns and run other triggers by name', async () => {
+    const module = { kind: 'module', id: 'module' } as const;
+    const helper = { ...blocks('manual', [{ type: 'v2SetVar', operator: '=', var: 'helped', value: '1', valueType: 'value', indent: 0 }]), name: 'helper', owner: module };
+    const main = blocks('manual', [
+      { type: 'v2DeclareLocalVar', var: 'hp', value: 'local', valueType: 'value', indent: 0 },
+      { type: 'v2SetVar', operator: '=', var: 'seen', value: 'hp', valueType: 'var', indent: 0 },
+      { type: 'v2Loop', indent: 0 },
+      { type: 'v2SetVar', operator: '+=', var: 'n', value: '1', valueType: 'value', indent: 1 },
+      { type: 'v2IfAdvanced', condition: '>=', source: 'n', sourceType: 'var', target: '3', targetType: 'value', indent: 1 },
+      { type: 'v2BreakLoop', indent: 2 },
+      { type: 'v2EndIndent', indent: 2 },
+      { type: 'v2EndIndent', indent: 1, endOfLoop: true },
+      { type: 'v2LoopNTimes', value: '0', valueType: 'value', indent: 0 },
+      { type: 'v2SetVar', operator: '=', var: 'never', value: '1', valueType: 'value', indent: 1 },
+      { type: 'v2EndIndent', indent: 1, endOfLoop: true },
+      { type: 'v2RunTrigger', target: 'helper', indent: 0 },
+      { type: 'v2ShowAlert', value: 'back', valueType: 'value', indent: 0 },
+    ]);
+    const say = vi.fn();
+    const outcome = await lua.run(String(owner++), [main, helper], SNAPSHOT, { kind: 'call', name: 'blocks', id: '' }, host({ say }));
+    expect(outcome).toMatchObject({ errors: [], writes: [['seen', 'local'], ['n', '3'], ['helped', '1']] });
+    expect(say).toHaveBeenCalledWith('normal', 'back', OWNER);
+    const itself = blocks('manual', [{ type: 'v2RunTrigger', target: 'blocks', indent: 0 }]);
+    const looped = await lua.run(String(owner++), [itself], SNAPSHOT, { kind: 'call', name: 'blocks', id: '' }, host());
+    expect(looped.errors[0]).toMatchObject({ message: 'triggers ran each other more than 10 deep' });
   });
 });
 

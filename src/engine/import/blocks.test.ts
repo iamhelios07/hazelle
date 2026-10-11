@@ -12,7 +12,7 @@ it('normalizes V1/V2 aliases to one operation model and retains unsupported sour
   const second = first.map((value, index) => ({ ...value, type: types[index], valueType: 'value', indexType: 'value', startType: 'value', endType: 'value', indent: 0 }));
   expect(blockEffects(second)).toEqual(blockEffects(first));
   expect(blockEffects(first)[0]).toEqual({ kind: 'set', name: '{{name}}', operator: 'add', value: { kind: 'text', text: '{{getvar::hp}}' } });
-  const unsupported = { type: 'v2RunLLM', indent: 2, future: ['raw'] };
-  expect(blockEffects([unsupported])).toEqual([{ kind: 'opaque', type: 'v2RunLLM', raw: unsupported }]);
+  const unsupported = { type: 'v2ImgGen', indent: 2, future: ['raw'] };
+  expect(blockEffects([unsupported])).toEqual([{ kind: 'opaque', type: 'v2ImgGen', raw: unsupported }]);
   expect(blockConditions([{ type: 'var', var: 'hp', operator: 'unknown', value: '{{setvar::hp::0}}' }])).toEqual([{ kind: 'probe', source: { kind: 'variable', name: 'hp' } }]);
 });

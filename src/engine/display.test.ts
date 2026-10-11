@@ -42,6 +42,7 @@ const scope: ChatScope = {
   prompt: null,
   note: null,
   lore: [],
+  loreFolders: {},
   messages: [message('a1', 'assistant', 'BOX'), message('a2', 'assistant', 'The lamp. [HP 7]')],
   greeting: null,
   toggles: new Map(),

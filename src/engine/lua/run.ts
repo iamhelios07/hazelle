@@ -1,5 +1,6 @@
 import { LuaFactory, type LuaEngine } from 'wasmoon';
 import { runBlocks, type Blocks } from './blocks';
+import { ranked } from './similar';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
 import { add, cbs, read, text, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
@@ -21,6 +22,7 @@ const IDLE_ENGINES = 8;
 const KEY = 'lua';
 
 const DEAF = Symbol('no listener');
+const TRIGGER_DEPTH = 10;
 
 const UNSUPPORTED = [
   'setChatRole', 'insertChat', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
@@ -68,39 +70,49 @@ export class Lua {
       const errors: ScriptError[] = [];
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
-      for (const script of triggers) {
-        if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu') continue;
-        run.owner = script.owner;
-        if (script.kind === 'blocks') {
-          if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
-          handled = true;
-          await runBlocks(script, run as Acting).catch((error: unknown) => errors.push({ from: script.owner, script: script.name || script.on, ...failure(run, error) }));
-          continue;
-        }
-        const engine = await this.engine(workset, script);
-        await this.exclusive(engine, async () => {
-          if (engine.failed !== null) return void errors.push({ from: script.owner, script: script.name, message: engine.failed });
-          engine.run = run;
-          try {
-            if (event.kind === 'edit') {
-              const edited = await this.listeners(engine, event.stage, value, event.meta);
-              if (edited === DEAF) return;
-              value = edited ?? value;
-              handled = true;
-              return;
-            }
-            const name = event.kind === 'call' ? event.name : event.kind === 'button' ? 'onButtonClick' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`;
-            if (event.kind === 'call' && !engine.own.has(name)) return;
-            if (typeof engine.lua.global.get(name) !== 'function') return;
+      // depth: how many run trigger effects led here; Risu stops at ten, and a deeper one here is the bot's error.
+      const fire = async (event: Event, depth: number) => {
+        for (const script of triggers) {
+          if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu') continue;
+          run.owner = script.owner;
+          if (script.kind === 'blocks') {
+            if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
             handled = true;
-            if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
-          } catch (error) {
-            errors.push({ from: script.owner, script: script.name, ...failure(run, error) });
-          } finally {
-            engine.run = null;
+            // The triggers it runs speak for their own packs, and the rest of this one for its own.
+            const call = async (name: string) => {
+              if (depth >= TRIGGER_DEPTH) throw new Error(`triggers ran each other more than ${TRIGGER_DEPTH} deep`);
+              await fire({ kind: 'call', name, id: run.triggerId }, depth + 1);
+              run.owner = script.owner;
+            };
+            await runBlocks(script, run as Acting, call).catch((error: unknown) => errors.push({ from: script.owner, script: script.name || script.on, ...failure(run, error) }));
+            continue;
           }
-        });
-      }
+          const engine = await this.engine(workset, script);
+          await this.exclusive(engine, async () => {
+            if (engine.failed !== null) return void errors.push({ from: script.owner, script: script.name, message: engine.failed });
+            engine.run = run;
+            try {
+              if (event.kind === 'edit') {
+                const edited = await this.listeners(engine, event.stage, value, event.meta);
+                if (edited === DEAF) return;
+                value = edited ?? value;
+                handled = true;
+                return;
+              }
+              const name = event.kind === 'call' ? event.name : event.kind === 'button' ? 'onButtonClick' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`;
+              if (event.kind === 'call' && !engine.own.has(name)) return;
+              if (typeof engine.lua.global.get(name) !== 'function') return;
+              handled = true;
+              if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
+            } catch (error) {
+              errors.push({ from: script.owner, script: script.name, ...failure(run, error) });
+            } finally {
+              engine.run = null;
+            }
+          });
+        }
+      };
+      await fire(event, 0);
       const kept = run.messages.filter((message) => message.origin !== null);
       const origins = new Set(kept.map((message) => message.origin));
       return {
@@ -372,36 +384,13 @@ export class Lua {
     act('sleep', (_run, time: number) => new Promise((resolve) => setTimeout(() => resolve(true), time)));
     act('LLMMain', model('main'));
     act('axLLMMain', model('aux'));
-    // Risu's: the values, most alike to source first, the source embedded as a search and the values as what is searched,
-    // as Risu's own memory embeds them. nil when a call is refused or fails, as Risu answers a script it does not let call.
-    act('similarity', async (run, source: unknown, values: unknown) => {
-      const documents = Object.values((values ?? {}) as Record<string, unknown>).map(text);
-      const query = await run.host.embed([text(source)], 'query', run.owner);
-      if (!query.ok) return undefined;
-      const stored = await run.host.embed(documents, 'document', run.owner);
-      if (!stored.ok) return undefined;
-      const scores = stored.vectors.map((vector) => cosine(query.vectors[0]!, vector));
-      return documents.map((value, index) => ({ value, score: scores[index]! })).sort((a, b) => b.score - a.score).map(({ value }) => value);
-    });
+    // nil when a call is refused or fails, as Risu answers a script it does not let call.
+    act('similarity', (run, source: unknown, values: unknown) => ranked(run, text(source), Object.values((values ?? {}) as Record<string, unknown>).map(text)));
 
     set('hash', async (_run, value: unknown) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text(value))))].map((byte) => byte.toString(16).padStart(2, '0')).join(''));
     engine.lua.global.set('logMain', () => {});
     for (const name of UNSUPPORTED) set(name, (run) => void run.missing.add(name));
   }
-}
-
-// Risu ranks by the dot product, which equals this for the normalized vectors most models answer; for the others
-// (Perplexity's) the dot product ranks by length too.
-function cosine(a: number[], b: number[]): number {
-  let dot = 0;
-  let left = 0;
-  let right = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i]! * (b[i] ?? 0);
-    left += a[i]! * a[i]!;
-  }
-  for (const value of b) right += value * value;
-  return left && right ? dot / Math.sqrt(left * right) : 0;
 }
 
 // Closed once what it is running has ended.

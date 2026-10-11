@@ -12,7 +12,7 @@ export function asking(question: ScriptQuestion['question'], owner: PackOwner['k
     case 'confirm':
       return { text: question.text, answer: { kind: 'choices', choices: [{ label: '예', value: 'yes', primary: true }, { label: '아니요', value: null }] } };
     case 'select':
-      return { answer: { kind: 'choices', choices: question.options.map((label, index) => ({ label, value: String(index) })) } };
+      return { text: question.text, answer: { kind: 'choices', choices: question.options.map((label, index) => ({ label, value: String(index) })) } };
     case 'model':
       return {
         text: MODEL_CONSENT[owner],

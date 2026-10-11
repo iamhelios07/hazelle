@@ -56,6 +56,16 @@ describe('upgradeValue', () => {
     expect(upgradeValue('character', { folder: null, keepStatus: true })).toEqual({ folder: null });
   });
 
+  it("reads a character's and a module's opaque block effects again once this app runs them, and leaves loops opaque", () => {
+    const concat = { type: 'v2ConcatString', source1: 'a', source1Type: 'value', source2: 'b', source2Type: 'value', outputVar: 'ab', indent: 0 };
+    const loop = { type: 'v2LoopNTimes', value: '2', valueType: 'value', indent: 0 };
+    const trigger = { id: 'trigger-0', kind: 'blocks', name: 'go', on: 'manual', conditions: [], effects: [{ kind: 'opaque', type: 'v2ConcatString', raw: concat }, { kind: 'opaque', type: 'v2LoopNTimes', raw: loop }] };
+    const effects = [{ kind: 'call', type: 'v2ConcatString', inputs: [{ kind: 'text', text: 'a' }, { kind: 'text', text: 'b' }], name: '', output: 'ab', option: '' }, trigger.effects[1]];
+    expect(upgradeValue('character', { card: { regex: [], triggers: [trigger] } })).toEqual({ card: { regex: [], triggers: [{ ...trigger, effects }] } });
+    expect(upgradeValue('module', { regex: [], triggers: [trigger] })).toEqual({ regex: [], triggers: [{ ...trigger, effects }] });
+    expect(upgradeValue('module', { regex: [], triggers: [{ ...trigger, effects: [trigger.effects[1]] }] })).toBeNull();
+  });
+
   it('leaves a current character or module alone, so the write-back touches only old ones', () => {
     expect(upgradeValue('character', { folder: null, card: { regex: [], triggers: [] } })).toBeNull();
     expect(upgradeValue('character', { card: { regex: [{ id: 'x' }], triggers: [{ id: 'y' }] }, statusScripts: ['x'] })).toBeNull();
