@@ -393,6 +393,38 @@ describe('chat requests', () => {
     expect(JSON.parse(chatRequest(anthropic, off).body!)).toMatchObject({ stream: false });
   });
 
+  const seeing = model({ input: ['text', 'image'], maxOutput: 64000 });
+  const shown = [{ role: 'user' as const, content: '이 사람은?', cache: true as const, pictures: [{ type: 'image/png', data: 'AAAA' }] }, { role: 'user' as const, content: '안녕' }];
+
+  it('sends chat completions pictures as data URLs ahead of the text, which keeps the cache mark', () => {
+    const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
+    const image = { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } };
+    expect(JSON.parse(chatRequest(generic, { model: seeing, messages: shown, settings: {} }).body!).messages).toEqual([
+      { role: 'user', content: [image, { type: 'text', text: '이 사람은?' }] },
+      { role: 'user', content: '안녕' },
+    ]);
+    expect(JSON.parse(chatRequest(connection('openrouter'), { model: seeing, messages: shown, settings: { cache: '5m' } }).body!).messages[0]).toEqual({
+      role: 'user',
+      content: [image, { type: 'text', text: '이 사람은?', cache_control: { type: 'ephemeral' } }],
+    });
+  });
+
+  it('sends Anthropic pictures as base64 image blocks ahead of the text, which keeps the cache mark', () => {
+    expect(JSON.parse(chatRequest(connection('anthropic'), { model: seeing, messages: shown, settings: { cache: '5m' } }).body!).messages).toEqual([
+      { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }, { type: 'text', text: '이 사람은?', cache_control: { type: 'ephemeral' } }] },
+      { role: 'user', content: '안녕' },
+    ]);
+  });
+
+  it('refuses pictures before sending to a model not known to see them, and still forecasts the cache', () => {
+    const anthropic = connection('anthropic');
+    for (const input of [null, ['text' as const]]) {
+      const request = { model: model({ input, maxOutput: 64000 }), messages: shown, settings: { cache: '5m' as const } };
+      expect(() => chatRequest(anthropic, request)).toThrow(new ConnectorError('no-picture-input'));
+      expect(cacheView(anthropic, request).cache).toBe('5m');
+    }
+  });
+
   it('reads a request for the cache in the order its wire sends it, with the points it keeps', () => {
     const sent = [{ role: 'user' as const, content: '안녕', cache: true as const }, { role: 'system' as const, content: '짧게 답해.', cache: true as const }];
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
@@ -455,6 +487,13 @@ describe('copilot', () => {
       const route = resolveModel(resolved, find(id!));
       expect(chatRequest(route, { model: find(id!), messages, settings: {} }).url).toBe(`https://api.githubcopilot.com/${path}`);
     }
+  });
+
+  it('flags a request that carries pictures as a vision request, and only that one', () => {
+    const claude = resolveModel(resolved, find('claude-opus-4.6'));
+    const shown = [{ role: 'user' as const, content: '이 사람은?', pictures: [{ type: 'image/png', data: 'AAAA' }] }];
+    const request = withCredential(claude, chatRequest(claude, { model: find('claude-opus-4.6'), messages: shown, settings: {} }), 'tid');
+    expect(request.headers).toEqual({ ...identity, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'copilot-vision-request': 'true' });
   });
 
   it('refuses a model it has no codec for, including a protocol a newer version stored', () => {

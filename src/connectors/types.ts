@@ -75,6 +75,7 @@ export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: stri
 export type InputPicture = { type: string; data: string };
 // A model whose catalog does not say takes no picture: an unknown is never sent one.
 export const seesPictures = (model: Pick<Model, 'input'>) => model.input?.includes('image') === true;
+export const carriesPictures = (message: ChatMessage) => (message.pictures?.length ?? 0) > 0;
 export type ChatRequest = { model: Model; messages: ChatMessage[]; settings: ModelSettings };
 
 // A missing count stays null. Filling it with 0 would read as a measured zero and shrink totals.
@@ -184,6 +185,8 @@ type TypeHooks = {
   // The output limit in a field of the provider's own, sent in place of the codec's (OpenAI's reasoning models refuse
   // max_tokens).
   outputLimit?: (tokens: number) => Record<string, unknown>;
+  // Laid over the headers of a chat request that carries pictures, and only of one: Copilot's vision flag.
+  pictureHeaders?: Record<string, string>;
   // How its endpoint takes a cache point, per model, where the format has no mark of its own (chat completions).
   cachePoints?: (model: Model) => CacheWay;
   cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
