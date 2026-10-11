@@ -13,15 +13,16 @@
 }
 
 .titles {
-  flex-grow: 1;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-/* Hangul may break between any two letters; in a narrow panel the actions wrap under the title instead. */
+/* A long title wraps at its spaces and keeps the actions beside it; anywhere breaks only a name with no spaces. */
 .title {
   word-break: keep-all;
+  overflow-wrap: anywhere;
   font-family: var(--font-serif);
   font-size: var(--text-xl);
   font-weight: var(--weight-bold);
