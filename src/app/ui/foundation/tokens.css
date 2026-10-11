@@ -21,7 +21,7 @@
   --palette-ink-700: #2a2731;
   --palette-ink-600: #34303d;
   --palette-ink-500: #4a4555;
-  --palette-lilac-400: #8c8599;
+  --palette-lilac-400: #958ea2;
   --palette-lilac-300: #a8a1b4;
   --palette-cream-100: #f1ece4;
   --palette-gold-400: #e6b35c;
@@ -66,7 +66,7 @@
   --palette-paper-400: #d9d2c7;
   --palette-paper-500: #bab1a4;
   --palette-lilac-550: #766e7f;
-  --palette-lilac-650: #6b6474;
+  --palette-lilac-650: #68616f;
   --palette-lilac-700: #5f5869;
   --palette-lilac-800: #3f3a46;
   --palette-gold-650: #8d6828;
@@ -204,9 +204,9 @@
   --brand-mark: 26px;
   --hero-mark: 96px;
 
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-md: 14px;
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-md: 15px;
   --text-lg: 16px;
   --text-xl: 20px;
   --text-display: 30px;
