@@ -15,7 +15,7 @@ import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
 import { autoContinue, takeTurn } from './turn';
-import { statusBoxes, statusPlaces } from './chat-context';
+import { chatScripts, statusBoxes, statusPlaces } from './chat-context';
 import { wouldSend } from './turn-context';
 
 const server = testServer();
@@ -268,9 +268,14 @@ describe('상태', () => {
     ]);
   });
 
-  it('marks nothing with a status script that is gone or turned off', () => {
+  it("places a module's status script after the character's, and marks nothing with one that is gone or turned off", () => {
     const script = (id: string, off?: true) => ({ id, name: '', find: 'x', replace: '', stage: 'display' as const, flags: null, ...(off && { off }) });
-    expect(statusPlaces({ regex: [script('a'), script('b', true), script('c')] }, ['c', 'b', 'gone'])).toEqual([{ id: 'c', place: 2 }]);
+    const pack = (regex: ReturnType<typeof script>[]) => ({ regex, triggers: [], toggles: '' });
+    const scripts = chatScripts([
+      { id: 'own', pack: pack([script('a'), script('b', true), script('c')]), module: null },
+      { id: 'bell', pack: pack([script('a')]), module: { namespace: null } },
+    ]);
+    expect(statusPlaces(scripts, ['c', 'b', 'gone', 'bell:a'])).toEqual([{ id: 'c', place: 2 }, { id: 'bell:a', place: 3 }]);
   });
 });
 

@@ -136,21 +136,27 @@ export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) 
 export const evaluateChat = async (reader: { store: Reader['store'] & Pick<ObjectStore, 'evaluation'> }, id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, signal?: AbortSignal): Promise<Display> =>
   (await reader.store.evaluation.display({ asker: 'headless', chat: id }, { ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat), signal)).display;
 
-// 상태창 지정's scripts at their places among a chat's scripts, which the engine knows them by. The character's pack
-// comes first (packsOf), so a place in card.regex is the same place there. An id that names no script marks nothing,
-// nor does one turned off, which never draws; its mark is kept for when it is turned on.
+// A chat's regex scripts in the order the engine numbers them (render.ts), each with its 상태창 지정 mark: the
+// character's own script by its id, a module's as `<module id>:<script id>`, since imports number every pack's
+// scripts alike (regex-0…).
+export const statusMark = (module: string | null, script: string) => (module === null ? script : `${module}:${script}`);
+export const chatScripts = (packs: ReturnType<typeof packsOf>) =>
+  packs.flatMap(({ id, pack, module }) => pack.regex.map((script, index) => ({ script, index, module: module && id, mark: statusMark(module && id, script.id) })));
+
+// 상태창 지정's scripts at their places among a chat's scripts. A mark that names no script marks nothing, nor does
+// one turned off, which never draws; it is kept for when the script or its module is on again.
 export type StatusScript = { id: string; place: number };
-export const statusPlaces = (card: Pick<Card, 'regex'>, ids: readonly string[]): StatusScript[] =>
-  ids.flatMap((id) => {
-    const place = card.regex.findIndex((script) => script.id === id);
-    return place === -1 || card.regex[place]!.off ? [] : [{ id, place }];
+export const statusPlaces = (scripts: ReturnType<typeof chatScripts>, marks: readonly string[]): StatusScript[] =>
+  marks.flatMap((id) => {
+    const place = scripts.findIndex(({ mark }) => mark === id);
+    return place === -1 || scripts[place]!.script.off ? [] : [{ id, place }];
   });
 
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
 // 봇 스타일 is off; the chat draws the latest box itself.
 export function pinned({ store }: Reader, chat: Chat): ReadonlySet<number> {
   const character = chat.character === null ? null : store.get('character', chat.character)?.value;
-  return new Set(!character || character.decor === false ? [] : statusPlaces(character.card, character.statusScripts ?? []).map(({ place }) => place));
+  return new Set(!character || character.decor === false ? [] : statusPlaces(chatScripts(packsOf(store, chat)), character.statusScripts ?? []).map(({ place }) => place));
 }
 
 // A reply still being written is passed over, since half a box would show; so is a box its script left empty, as bots
