@@ -10,6 +10,7 @@ import { Costs } from './cost';
 import { Credentials } from './credential';
 import { Files } from './files';
 import { Illustrator } from './illustrate';
+import { Likenesses } from './likeness';
 import { deviceCache } from './device-cache';
 import { Drafts } from './drafts';
 import type { DeviceCache } from './object-cache';
@@ -41,6 +42,7 @@ export type Session = {
   translator: Translator;
   memory: Rememberer;
   illustrator: Illustrator;
+  likenesses: Likenesses;
   drafts: Drafts;
   streams: Streams;
   scripts: Scripts;
@@ -92,7 +94,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
   const read = new ReadModels(store, display);
-  const illustrator = new Illustrator({ store, credentials, files });
+  const likenesses = new Likenesses({ store, credentials, files });
+  const illustrator = new Illustrator({ store, credentials, files, likenesses });
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
   const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, { lua: machine, tools });
   const memory = new Rememberer({ store, read, credentials, costs, scripts }, reading);
@@ -152,6 +155,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     translator.close();
     memory.close();
     illustrator.close();
+    likenesses.close();
     drafts.close();
     costs.close();
     usage.close();
@@ -160,6 +164,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { tools, username, store, files, assets, talk, costs, usage, translator, memory, illustrator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools, username, store, files, assets, talk, costs, usage, translator, memory, illustrator, likenesses, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

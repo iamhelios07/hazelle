@@ -1,0 +1,53 @@
+import { describe, expect, it } from 'vitest';
+import { artistOf, likenessRequest, parseLikeness, sample, sourcesOf, TEXT_MOST, type LikenessInput } from './likeness';
+
+const answer = { characters: [{ name: ' Ari ', aliases: ['아리', ' '], look: 'girl, silver hair', outfits: [{ name: 'usual', tags: 'white dress' }], source: 'text' }] };
+const reading = { sources: ['text' as const], artist: 'artist:a', most: 2 };
+
+describe('parseLikeness', () => {
+  it('reads the portraits, bare or fenced, each with the pack’s artist', () => {
+    const portraits = [{ name: 'Ari', aliases: ['아리'], look: 'girl, silver hair', outfits: [{ name: 'usual', tags: 'white dress' }], artist: 'artist:a', source: 'text' }];
+    expect(parseLikeness(JSON.stringify(answer), reading)).toEqual({ ok: true, portraits });
+    expect(parseLikeness('```json\n' + JSON.stringify(answer) + '\n```', reading)).toEqual({ ok: true, portraits });
+    expect(parseLikeness('{"characters": []}', reading)).toEqual({ ok: true, portraits: [] });
+  });
+
+  it('fails a missing field, more characters than asked for, or a source the build did not have, and fills nothing in', () => {
+    const [ari] = answer.characters;
+    expect(parseLikeness(JSON.stringify({ characters: [{ ...ari, outfits: undefined }] }), reading)).toEqual({ ok: false, reason: 'fields' });
+    expect(parseLikeness(JSON.stringify({ characters: [ari, ari, ari] }), reading)).toEqual({ ok: false, reason: 'fields' });
+    expect(parseLikeness(JSON.stringify({ characters: [{ ...ari, source: 'vision' }] }), reading)).toEqual({ ok: false, reason: 'fields' });
+    expect(parseLikeness('Here they are.', reading)).toEqual({ ok: false, reason: 'unreadable' });
+  });
+});
+
+it('samples the first picture of each name stem, up to the count', () => {
+  const names = ['Aya_smile.png', 'aya angry', 'Mina-1', 'Mina-2', '1', '2', 'Sora'];
+  expect(sample(names.map((name) => ({ name })), 4).map(({ name }) => name)).toEqual(['Aya_smile.png', 'Mina-1', '1', '2']);
+});
+
+it('sends the text within its bound, names only the sources it has, and attaches the pictures to the material', () => {
+  const input: LikenessInput = {
+    name: 'Ari',
+    texts: [{ label: 'Description', text: 'Silver hair.' }, { label: 'Scenario', text: '  ' }],
+    lore: [{ name: 'huge', keys: [], content: 'x'.repeat(TEXT_MOST) }, { name: 'Mina', keys: ['mina'], content: 'Red eyes.' }],
+    prompts: [],
+    pictures: [{ type: 'image/webp', data: 'AAAA' }],
+    avatar: true,
+    most: 8,
+  };
+  const [system, user] = likenessRequest(input);
+  expect(sourcesOf(input)).toEqual(['vision', 'text']);
+  expect(system!.content).toContain('one of "vision" (the pictures themselves), "text" (the description and lorebook)');
+  expect(user).toMatchObject({ role: 'user', pictures: input.pictures });
+  expect(user!.content).toContain('## Mina\nRed eyes.');
+  expect(user!.content).not.toContain('xxx');
+  expect(user!.content).not.toContain('Scenario');
+  expect(sourcesOf({ ...input, texts: [], lore: [], pictures: [] })).toEqual([]);
+});
+
+it('takes the artist tags most pictures share, the earlier on a tie', () => {
+  expect(artistOf([[], ['artist:a'], ['artist:b', 'artist:c'], ['artist:b', 'artist:c']])).toBe('artist:b, artist:c');
+  expect(artistOf([['artist:a'], ['artist:b']])).toBe('artist:a');
+  expect(artistOf([[]])).toBe('');
+});

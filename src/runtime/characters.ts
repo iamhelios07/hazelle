@@ -4,6 +4,7 @@ import type { Translation, TranslateSwitches } from '../model/chat';
 import type { IllustrateSwitches } from '../model/illustration';
 import type { Stored, Values } from '../model/kinds';
 import { holds, nest, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
+import { likenessId, type Likeness } from '../model/likeness';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
@@ -15,7 +16,7 @@ import type { ObjectStore, Write } from './store';
 
 export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 
-type Owned = { avatar: Avatar | null; assets: Asset[]; lore: Lore[] };
+type Owned = { avatar: Avatar | null; assets: Asset[]; lore: Lore[]; likeness: Likeness | null };
 
 // Files are read and sent this many at a time, so a bot of thousands never holds them all at once.
 const FILE_WINDOW = 32;
@@ -26,13 +27,14 @@ const FILE_WINDOW = 32;
 // chats, or roots pushed past the request's byte limit, leave some roots without their character when cut there. id,
 // chats: a move's character id, which its staged entries name, and its chat roots. unheld: a move holds those chats
 // itself and summarizes them together once the character is published (runtime/move).
-export async function addCharacter(store: ObjectStore, character: Character, { avatar, assets, lore }: Owned, progress: Progress, { id = crypto.randomUUID(), chats = [] }: { id?: string; chats?: Write[] } = {}): Promise<ApiResult<string>> {
+export async function addCharacter(store: ObjectStore, character: Character, { avatar, assets, lore, likeness }: Owned, progress: Progress, { id = crypto.randomUUID(), chats = [] }: { id?: string; chats?: Write[] } = {}): Promise<ApiResult<string>> {
   const owned = <K extends 'avatar' | 'asset' | 'lore'>(kind: K, value: Values[K]): Write => ({ type: 'create', kind, id: crypto.randomUUID(), parent: id, value });
   const writes: Write[] = [
     { type: 'create', kind: 'character', id, parent: null, value: character },
     ...(avatar ? [owned('avatar', avatar)] : []),
     ...assets.map((asset) => owned('asset', asset)),
     ...lore.map((entry) => owned('lore', entry)),
+    ...(likeness ? [{ type: 'create' as const, kind: 'likeness' as const, id: likenessId(id), parent: id, value: likeness }] : []),
     ...chats,
   ];
   let done = 0;
@@ -118,12 +120,12 @@ export async function importCharacter(
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const entries = lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id }));
   const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...(brought && { risu: brought.risu, ...(brought.modules.length > 0 && { modules: brought.modules }) }) };
-  const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries }, progress, brought && { id: brought.id, chats: brought.chats });
+  const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries, likeness: null }, progress, brought && { id: brought.id, chats: brought.chats });
   return added.ok ? { ok: true, data: { id: added.data, skipped, faceless: picture !== null && avatar === null } } : added;
 }
 
 // 사본 만들기: chats stay with the original, and so does the alias, which tells the two apart. The copy names the same
-// stored files.
+// stored files, so it keeps the 삽화 profiles made from them, tag edits included, without another call.
 export async function copyCharacter(store: ObjectStore, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
   const failed = await store.pull();
   if (failed) return failed;
@@ -133,6 +135,7 @@ export async function copyCharacter(store: ObjectStore, id: string, name: string
     avatar: store.children('avatar', id)[0]?.value ?? null,
     assets: store.children('asset', id).map((asset) => asset.value),
     lore: store.children('lore', id).map((entry) => entry.value),
+    likeness: store.get('likeness', likenessId(id))?.value ?? null,
   };
   return addCharacter(store, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, owned, progress);
 }
