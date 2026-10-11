@@ -207,7 +207,12 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
     const draw = async () => {
       const count = session.store.children('illustration', chat).length;
       session.illustrator.draw(chat, reply.id, shown(reply).id);
-      await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(count + 1), { timeout: 5000 });
+      // The picture shows before its write is answered, and a draw asked while the last is still saving is dropped:
+      // wait for the run to end too.
+      await vi.waitFor(() => {
+        expect(session.store.children('illustration', chat)).toHaveLength(count + 1);
+        expect(session.illustrator.snapshot().has(reply.id)).toBe(false);
+      }, { timeout: 5000 });
     };
     return { owner: made.data.id, chat, log, draw, profileCalls: () => log.filter(({ sent }) => sent.body?.includes(PROFILES)) };
   }
