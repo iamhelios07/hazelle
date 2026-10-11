@@ -254,6 +254,20 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       expect(sent.characters.map(({ prompt }: { prompt: string }) => prompt)).toEqual(['girl, profile silver hair, maid uniform, smile', 'boy, black hair, travel cloak, wave']);
     }));
 
+  it('saves no profile for a blank persona, so the description written later is read on the next draw', () =>
+    server.withSession(async (session) => {
+      const { chat, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
+      const blank = await addPersona(session.store, { name: 'Jin', description: '', picture: null });
+      if (!blank.ok) throw new Error(blank.error);
+      await session.store.update('chat', chat, (current) => ({ ...current, persona: blank.data.id }));
+      await draw();
+      expect(session.store.get('likeness', likenessId(blank.data.id))).toBeNull();
+      expect(profileCalls().filter(({ sent }) => sent.body?.includes('Jin'))).toEqual([]);
+      await session.store.update('persona', blank.data.id, (current) => ({ ...current, description: 'Jin is a traveler.' }));
+      await draw();
+      expect(profileCalls().some(({ sent }) => sent.body?.includes('Jin is a traveler.'))).toBe(true);
+    }));
+
   it("asks the connection's model list when the starred model's inputs are unknown, and keeps what it says", () =>
     server.withSession(async (session) => {
       const { draw } = await drawing(session, JSON.stringify(looks));

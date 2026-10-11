@@ -177,7 +177,8 @@ export class Likenesses {
   }
 
   // Sources (design §6.6): the pictures' NovelAI metadata, the pictures themselves for a model that sees them, and the
-  // owner's text with its lorebook. An owner with none of them is written with no portraits and no call.
+  // owner's text with its lorebook. An owner with none of them gets no call and nothing saved, so a description
+  // written later (an account's first persona starts blank) is read on the next draw.
   private async build(owner: string, chat: Chat, prompt: IllustratePrompt, signal: AbortSignal): Promise<LikenessFailure | Stopped | null> {
     const { store, files, credentials } = this.deps;
     const material = this.material(owner);
@@ -188,7 +189,7 @@ export class Likenesses {
       return saved.ok ? null : { kind: 'unsaved' as const, failure: saved };
     };
     const empty = { portraits: [], at: Date.now(), receipt: null };
-    if (!material.files.length && !material.held.length && !texts.some(({ text }) => text.trim()) && !lore.some(({ content }) => content.trim())) return save(empty);
+    if (!material.files.length && !material.held.length && !texts.some(({ text }) => text.trim()) && !lore.some(({ content }) => content.trim())) return null;
     const writer = illustrateWriter(store, chat, prompt);
     if ('kind' in writer) return writer;
 
