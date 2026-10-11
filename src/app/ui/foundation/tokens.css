@@ -265,6 +265,9 @@
   --viewport-card-estimate: 280px;
   --viewport-story-estimate: 320px;
   --icon-stroke: 1.8;
+  /* The scrollbar's room, and the clear space round its thumb inside it. */
+  --scrollbar-size: 10px;
+  --scrollbar-inset: 3px;
   --dot: 6px;
   --bar-height: 4px;
   --gauge-height: 8px;

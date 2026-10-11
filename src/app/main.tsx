@@ -4,6 +4,7 @@ import { AccountFlow } from './account/AccountFlow';
 import { legalPage } from './common/LegalPage';
 import { ScreenLoad } from './common/ScreenLoad';
 import { applyStoredTheme } from './display';
+import { markScrollbars } from './ui';
 import './ui/foundation/global.css';
 
 const Workspace = lazy(() => import('./shell/Workspace').then(({ Workspace }) => ({ default: Workspace })));
@@ -12,6 +13,7 @@ const root = document.getElementById('root');
 if (!root) throw new Error('index.html has no #root element');
 
 applyStoredTheme();
+markScrollbars();
 
 createRoot(root).render(
   <StrictMode>

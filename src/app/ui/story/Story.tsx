@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import { useEffect, useLayoutEffect, useReducer, useRef, type ReactNode } from 'react';
 import { useRowState } from '../collections/row-memory';
+import { scrollbarKind } from '../foundation/scrollbar';
 import { useVeil, type Veil } from '../foundation/veil';
 import { inlaid } from './inlay';
 import { useMath } from './math';
@@ -287,7 +288,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
 
   return (
     <div className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
-      <div ref={host} data-buttons={buttons}>
+      <div ref={host} data-buttons={buttons} data-scrollbars={scrollbarKind()}>
         {cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}
         {inlay && <div slot="inlay">{inlay.node}</div>}
       </div>

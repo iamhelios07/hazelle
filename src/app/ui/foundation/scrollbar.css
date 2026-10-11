@@ -1,0 +1,45 @@
+/* Every classic scrollbar (scrollbar.ts), the page's own, its boxes' and those inside a bot's story: a round thumb on no
+   track, without arrows. Chromium stops drawing these pseudo-elements on an element given scrollbar-width or
+   scrollbar-color, so those are set only where the pseudo-elements do not exist (Firefox), and nowhere else in the
+   kit but to hide a bar. */
+:root[data-scrollbars='classic']::-webkit-scrollbar,
+:root[data-scrollbars='classic'] ::-webkit-scrollbar,
+:host([data-scrollbars='classic']) ::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+:root[data-scrollbars='classic']::-webkit-scrollbar-track,
+:root[data-scrollbars='classic'] ::-webkit-scrollbar-track,
+:host([data-scrollbars='classic']) ::-webkit-scrollbar-track,
+:root[data-scrollbars='classic'] ::-webkit-scrollbar-corner,
+:host([data-scrollbars='classic']) ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+:root[data-scrollbars='classic']::-webkit-scrollbar-thumb,
+:root[data-scrollbars='classic'] ::-webkit-scrollbar-thumb,
+:host([data-scrollbars='classic']) ::-webkit-scrollbar-thumb {
+  border: var(--scrollbar-inset) solid transparent;
+  border-radius: var(--radius-full);
+  background: var(--color-border) padding-box;
+}
+
+:root[data-scrollbars='classic']::-webkit-scrollbar-thumb:hover,
+:root[data-scrollbars='classic'] ::-webkit-scrollbar-thumb:hover,
+:host([data-scrollbars='classic']) ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-border-strong);
+}
+
+:root[data-scrollbars='classic']::-webkit-scrollbar-button,
+:root[data-scrollbars='classic'] ::-webkit-scrollbar-button,
+:host([data-scrollbars='classic']) ::-webkit-scrollbar-button {
+  display: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+}

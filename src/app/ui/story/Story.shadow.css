@@ -1,6 +1,8 @@
 /* Inside a message's shadow root, before the bot's CSS. The story's type and colors sit on the host, so the prose
    and a bot's boxes inherit them unless the bot sets its own; the marks are the prose's only. */
 
+@import '../foundation/scrollbar.css';
+
 /* Risu's page sizes every box by its border (Tailwind's base styles), and bots are written for that: a box of width
    100% with padding fits there. The page's own rule stops at the shadow root. */
 *,

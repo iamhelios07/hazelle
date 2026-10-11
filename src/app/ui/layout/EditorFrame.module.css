@@ -28,14 +28,12 @@
   padding: var(--space-12) var(--space-8) var(--space-32);
   overflow-y: auto;
   border-right: var(--border-thin) solid var(--color-divider);
-  scrollbar-width: thin;
 }
 
 .main {
   flex-grow: 1;
   min-width: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .page {

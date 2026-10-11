@@ -27,7 +27,6 @@
 .body {
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .wide {
