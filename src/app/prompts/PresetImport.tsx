@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { PresetFailure, PresetUnsupported, PresetUnsupportedKind } from '../../engine/import/preset';
-import type { ConversationPrompt } from '../../model/prompt';
+import { isToggle, type ConversationPrompt } from '../../model/prompt';
 import { importPrompt, ofSort } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import { describeFailure } from '../common/failure';
@@ -115,7 +115,8 @@ function Summary({ result }: { result: Result }) {
       </Section>
     );
   }
-  const { blocks, toggles, authorNote, name } = result.prompt;
+  const { blocks, authorNote, name } = result.prompt;
+  const toggles = result.prompt.toggles.filter(isToggle);
   const texts = blocks.filter((block) => block.kind === 'text').length;
   const came = [
     { tone: 'done' as const, title: `블록 ${blocks.length}개 · 직접 입력 ${texts}개, 자동 입력 ${blocks.length - texts}개` },

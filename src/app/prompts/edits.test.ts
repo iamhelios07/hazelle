@@ -11,4 +11,9 @@ describe('conditionSnippet', () => {
     expect(choice.text).toBe('{{#when::tone::tis::0}}hello{{/when}}{{#when::tone::tis::1}}풍부일 때 내용{{/when}}');
     expect(choice.text.slice(...choice.select)).toBe('풍부일 때 내용');
   });
+
+  it('puts in a text toggle’s value after the selected text, since no condition holds for a typed value', () => {
+    const text = conditionSnippet({ key: 'name', label: '이름', kind: 'text', default: '' }, '이름: ');
+    expect(text).toEqual({ text: '이름: {{getglobalvar::toggle_name}}', select: [33, 33] });
+  });
 });

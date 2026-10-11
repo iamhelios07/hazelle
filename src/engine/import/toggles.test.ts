@@ -2,13 +2,36 @@ import { describe, expect, it } from 'vitest';
 import { readToggles } from './toggles';
 
 describe('readToggles', () => {
-  it('reads checks and choices that start at their first value, and counts every other line it cannot read', () => {
-    expect(readToggles('sims=시뮬레이터 모드\n\nmood=분위기=select=밝게, 어둡게\n=그룹=group\nnote=메모=text\n')).toEqual({
-      toggles: [
+  it('reads every kind of line in order, a lowercase groupend as the group’s end, and counts the lines it cannot read', () => {
+    const text = [
+      'sims=시뮬레이터 모드',
+      '',
+      '=분위기=group',
+      'mood=분위기=select=밝게, 어둡게',
+      'note=메모=text',
+      'story=줄거리=textarea',
+      '=끝=groupend',
+      '==divider',
+      '=설정=caption',
+      '==groupEnd',
+      '모드 고르기',
+      '==caption',
+      '=그룹=grounpEnd',
+      'odd=이상한=other',
+    ].join('\n');
+    expect(readToggles(text)).toEqual({
+      lines: [
         { key: 'sims', label: '시뮬레이터 모드', kind: 'check', default: '0' },
+        { kind: 'group', label: '분위기' },
         { key: 'mood', label: '분위기', kind: 'choice', options: ['밝게', '어둡게'], default: '0' },
+        { key: 'note', label: '메모', kind: 'text', default: '' },
+        { key: 'story', label: '줄거리', kind: 'text', lines: true, default: '' },
+        { kind: 'groupEnd' },
+        { kind: 'divider', label: '' },
+        { kind: 'caption', label: '설정' },
+        { kind: 'groupEnd' },
       ],
-      unread: 2,
+      unread: 4,
     });
   });
 });

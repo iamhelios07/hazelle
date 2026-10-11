@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Button, Dialog, TextField } from '../ui';
 
-type Props = { title: string; value: string; hint?: string; onSave: (name: string) => void; onClose: () => void };
+type Props = { title: string; field?: string; value: string; hint?: string; onSave: (name: string) => void; onClose: () => void };
 
-export function NameDialog({ title, value, hint, onSave, onClose }: Props) {
+export function NameDialog({ title, field = '이름', value, hint, onSave, onClose }: Props) {
   const [name, setName] = useState(value);
   return (
     <Dialog
@@ -17,7 +17,7 @@ export function NameDialog({ title, value, hint, onSave, onClose }: Props) {
         </Button>
       }
     >
-      <TextField label="이름" value={name} onChange={setName} hint={hint} />
+      <TextField label={field} value={name} onChange={setName} hint={hint} />
     </Dialog>
   );
 }

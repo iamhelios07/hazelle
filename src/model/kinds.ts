@@ -109,7 +109,11 @@ const ENTRIES = {
 } satisfies Record<Entry['type'], Check>;
 
 const picture = shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) });
-const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(shape({ key: str, label: str, kind: str })) });
+const toggle = shape({ key: str, label: str, kind: str });
+const mark = shape({ label: str });
+// A layout line has no key (model/prompt ToggleMark).
+const toggleLine: Check = (value) => isRecord(value) && (value.kind === 'groupEnd' || (value.kind === 'divider' || value.kind === 'caption' || value.kind === 'group' ? mark : toggle)(value));
+const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(toggleLine) });
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
 const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate', model: (value) => value === undefined || isRecord(value) });
 

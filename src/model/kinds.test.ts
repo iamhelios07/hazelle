@@ -33,3 +33,11 @@ it('accepts tool files and per-key data without changing existing module shapes'
   expect(isValue('toolchat', { module: 'm', key: null, value: { message: { version: 'v', text: '요약됨' } } })).toBe(true);
   expect(isValue('toolchat', { key: 'index', value: 1 })).toBe(false);
 });
+
+it('accepts a prompt whose toggles hold layout lines, and refuses a toggle without its key or a mark without its label', () => {
+  const lines = [{ kind: 'group', label: '모드' }, { key: 'sims', label: '시뮬레이터', kind: 'check', default: '0' }, { kind: 'groupEnd' }, { kind: 'divider', label: '' }, { kind: 'caption', label: '설명' }];
+  const prompt = { name: 'p', blocks: [], authorNote: '', models: {}, toggles: lines };
+  expect(isValue('prompt', prompt)).toBe(true);
+  expect(isValue('prompt', { ...prompt, toggles: [{ label: '시뮬레이터', kind: 'check', default: '0' }] })).toBe(false);
+  expect(isValue('prompt', { ...prompt, toggles: [{ kind: 'divider' }] })).toBe(false);
+});

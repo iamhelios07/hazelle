@@ -20,7 +20,7 @@ export function Divider(props: Props) {
             {action.label}
           </Button>
         )}
-        <span className={styles.rule} />
+        {(label || icon || action) && <span className={styles.rule} />}
       </div>
     );
   }
