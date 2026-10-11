@@ -17,7 +17,7 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
       size="form"
       place="above-start"
       label="번역"
-      trigger={(opener) => <ToolButton icon={Languages} label="번역" detail={on ? `${on} 켜짐` : undefined} mark={on ? { kind: 'dot' } : undefined} {...opener} />}
+      trigger={(opener) => <ToolButton icon={Languages} label="번역" phone="icon" detail={on ? `${on} 켜짐` : undefined} mark={on ? { kind: 'dot' } : undefined} {...opener} />}
     >
       <Stack gap="related">
         <SettingRow

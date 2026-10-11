@@ -18,7 +18,7 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
       size="form"
       place="above-start"
       label="삽화"
-      trigger={(opener) => <ToolButton icon={ImageIcon} label="삽화" detail={illustrate.auto ? '자동 삽화 켜짐' : undefined} mark={illustrate.auto ? { kind: 'dot' } : undefined} {...opener} />}
+      trigger={(opener) => <ToolButton icon={ImageIcon} label="삽화" phone="icon" detail={illustrate.auto ? '자동 삽화 켜짐' : undefined} mark={illustrate.auto ? { kind: 'dot' } : undefined} {...opener} />}
     >
       <Stack gap="related">
         <SettingRow

@@ -19,7 +19,7 @@ function ComposerTool({ tool, onOpen }: { tool: ToolComposer; onOpen: () => void
       size="form"
       place="above-start"
       label={tool.name}
-      trigger={(opener) => <ToolButton icon={Package} label={tool.label} detail={on ? '켜짐' : undefined} mark={on ? { kind: 'dot' } : undefined} {...opener} />}
+      trigger={(opener) => <ToolButton icon={Package} label={tool.label} phone="icon" detail={on ? '켜짐' : undefined} mark={on ? { kind: 'dot' } : undefined} {...opener} />}
     >
       <Stack gap="related">
         {tool.fields.map((field) => <ToolSetting key={field.key} module={tool.module} field={field} value={settings[field.key]} place="panel" />)}
