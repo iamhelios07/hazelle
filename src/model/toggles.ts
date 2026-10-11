@@ -1,10 +1,10 @@
-import type { Toggle, ToggleValues } from './prompt';
+import { isToggle, type Toggle, type ToggleLine, type ToggleValues } from './prompt';
 
-// A key declared twice is one toggle, since conditions read one value per key; the first declaration is kept, so the
-// prompt's over a pack's.
-export function chatToggles(prompt: readonly Toggle[], packs: readonly Toggle[]): Toggle[] {
+// Only toggles are declared; a layout line has no key to read. A key declared twice is one toggle, since conditions
+// read one value per key; the first declaration is kept, so the prompt's over a pack's.
+export function chatToggles(lines: readonly ToggleLine[]): Toggle[] {
   const keys = new Set<string>();
-  return [...prompt, ...packs].filter(({ key }) => !keys.has(key) && keys.add(key));
+  return lines.filter(isToggle).filter(({ key }) => !keys.has(key) && keys.add(key));
 }
 
 // null for a key nothing declares.

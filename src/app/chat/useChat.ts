@@ -98,7 +98,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const route = chatModel(store, chat, 'main');
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
-  const toggles = toggleRows(togglesOf(store, chat, prompt), prompt.kind === 'prompt' ? prompt.prompt.value.toggles.length : 0);
+  const toggles = toggleRows(togglesOf(store, chat, prompt));
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
   const scripted = triggersOf(packsOf(store, chat)).length > 0;
@@ -379,8 +379,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   // A value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat.
+  const writeToggle = (key: string, value: string) => setToggle(store, chat.character, key, value);
+
   function flip(key: string, value: string) {
-    void setToggle(store, chat.character, key, value).then((saved) => saved.ok || toast.failed(saved));
+    void writeToggle(key, value).then((saved) => saved.ok || toast.failed(saved));
   }
 
   function reset() {
@@ -410,6 +412,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     note: chat.note,
     cast: chat.cast ?? [],
     toggles,
+    toggleOwner: chat.character,
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
@@ -499,6 +502,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       pinPersona: (persona: string | null) => pinPersona(store, chat.character!, persona),
       setCast: changeCast,
       flip,
+      writeToggle,
       resetToggles: reset,
       rename,
       drop,

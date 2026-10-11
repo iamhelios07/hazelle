@@ -74,7 +74,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
                 <MenuItem
                   key={toggle.key}
                   label={toggle.label}
-                  sub={`${toggle.key} · ${toggle.kind === 'check' ? '켬 · 끔' : toggle.options.join(' · ')}`}
+                  sub={`${toggle.key} · ${toggle.kind === 'check' ? '켬 · 끔' : toggle.kind === 'choice' ? toggle.options.join(' · ') : '입력한 값'}`}
                   onClick={() => onCondition(toggle)}
                 />
               ))}

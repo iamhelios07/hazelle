@@ -71,7 +71,7 @@ export type ConversationPrompt = {
   task?: never;
   name: string;
   blocks: Block[];
-  toggles: Toggle[];
+  toggles: ToggleLine[];
   authorNote: string;
   models: Assignment;
   origin?: { id: string; name: string };
@@ -87,7 +87,7 @@ export type TranslatePrompt = {
   name: string;
   model?: ModelRef;
   blocks: Block[];
-  toggles: Toggle[];
+  toggles: ToggleLine[];
   origin?: { id: string; name: string };
 };
 
@@ -97,7 +97,7 @@ export type MemoryPrompt = {
   name: string;
   model?: ModelRef;
   blocks: Block[];
-  toggles: Toggle[];
+  toggles: ToggleLine[];
   origin?: { id: string; name: string };
 };
 
@@ -118,7 +118,7 @@ export type IllustratePrompt = {
   tags?: PictureTags;
   picture?: PictureSettings;
   blocks: Block[];
-  toggles: Toggle[];
+  toggles: ToggleLine[];
   origin?: { id: string; name: string };
 };
 

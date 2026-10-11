@@ -1,4 +1,5 @@
-import { SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
+import { TOGGLE_GLOBAL } from '../../engine/cbs/tags';
+import { isToggle, SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle, type ToggleLine } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockSource } from './blocks';
 import { renameToggle, toggleUses } from './rekey';
@@ -82,24 +83,34 @@ export const countUses = (draft: Draft, key: string) =>
 
 // Changing a key rewrites its conditions; changing only the label never touches them.
 export function rekey(draft: Draft, from: string, to: string): PromptPatch {
-  return { ...rewrite(draft, (text) => renameToggle(text, from, to)), toggles: draft.toggles.map((toggle) => (toggle.key === from ? { ...toggle, key: to } : toggle)) };
+  return { ...rewrite(draft, (text) => renameToggle(text, from, to)), toggles: draft.toggles.map((line) => (isToggle(line) && line.key === from ? { ...line, key: to } : line)) };
 }
 
-export const keyInUse = (toggles: readonly Toggle[], key: string) => toggles.some((toggle) => toggle.key === key);
+export const keyInUse = (lines: readonly ToggleLine[], key: string) => lines.some((line) => isToggle(line) && line.key === key);
 
 // A key stands inside {{#when::toggle::KEY}}, so it holds none of CBS's own marks.
-export function keyProblem(key: string, toggles: readonly Toggle[], own: string | null): string | null {
+export function keyProblem(key: string, lines: readonly ToggleLine[], own: string | null): string | null {
   if (!key) return '키를 적어 주세요.';
   if (/[\s:{}]/.test(key)) return '공백과 :, {, }는 쓸 수 없어요.';
-  if (key !== own && keyInUse(toggles, key)) return '다른 토글이 쓰고 있는 키예요.';
+  if (key !== own && keyInUse(lines, key)) return '다른 토글이 쓰고 있는 키예요.';
   return null;
 }
+
+export const LINE_WORDS = { check: '켜고 끄기', choice: '선택', text: '텍스트', divider: '구분선', caption: '설명', group: '그룹 시작', groupEnd: '그룹 끝' } as const;
+
+export const lineTitle = (line: ToggleLine) =>
+  isToggle(line) ? `'${line.label}' 토글` : line.kind === 'groupEnd' || !line.label ? LINE_WORDS[line.kind] : `'${line.label}' ${LINE_WORDS[line.kind]}`;
 
 // Selected text becomes the first branch, not replaced by it.
 // select: the placeholder to type over next, the first branch's or, after a selection, the second's.
 export type Snippet = { text: string; select: [number, number] };
 
 export function conditionSnippet(toggle: Toggle, selected: string): Snippet {
+  // A condition is true only for '1' or 'true' (cbs/tags truthy), so a typed value is put in as it is instead.
+  if (toggle.kind === 'text') {
+    const text = `${selected}{{getglobalvar::${TOGGLE_GLOBAL}${toggle.key}}}`;
+    return { text, select: [text.length, text.length] };
+  }
   const branches =
     toggle.kind === 'check'
       ? [

@@ -76,7 +76,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
 | foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |
 | foundation | `Brand` | `Brand.module.css` | The wordmark |
-| foundation | `Divider` | `Divider.module.css` | Lines between groups: the story's labeled line, with an icon and an action where a branch split, and the menu, tools and rail lines |
+| foundation | `Divider` | `Divider.module.css` | Lines between groups: a labeled line, the story's (with an icon and an action where a branch split) or a toggle list's, one plain rule when it has no label; and the menu, tools and rail lines |
 | foundation | `Icon` | `Icon.module.css` | Icon sizes and stroke |
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |

@@ -9,7 +9,7 @@ import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
-import type { Toggle } from '../model/prompt';
+import type { Toggle, ToggleLine } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route } from './assignment';
@@ -93,12 +93,24 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
   };
 }
 
-export type ChatToggleSet = { declared: Toggle[]; value: (key: string) => string | null };
+// Each source's lines apart, in the order they are declared, so one source's layout lines never lay out another's
+// toggles.
+export type ToggleSource = { from: 'prompt' | 'card' | 'module'; name: string; lines: ToggleLine[] };
+export type ChatToggleSet = { declared: Toggle[]; sources: ToggleSource[]; value: (key: string) => string | null };
 
 export function togglesOf(store: Reader['store'], chat: Chat, prompt: PromptChoice): ChatToggleSet {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
-  const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], packsOf(store, chat).flatMap(({ pack }) => readToggles(pack.toggles).toggles));
-  return { declared, value: toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
+  const sources: ToggleSource[] = [
+    ...(prompt.kind === 'prompt' ? [{ from: 'prompt' as const, name: prompt.prompt.value.name, lines: prompt.prompt.value.toggles }] : []),
+    // packsOf holds only a character or module that is there.
+    ...packsOf(store, chat).map(({ id, pack, module }) => ({
+      from: module ? ('module' as const) : ('card' as const),
+      name: module ? store.get('module', id)!.value.name : character!.card.name,
+      lines: readToggles(pack.toggles).lines,
+    })),
+  ];
+  const declared = chatToggles(sources.flatMap(({ lines }) => lines));
+  return { declared, sources, value:toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
 }
 
 // null while its 묶음 is missing, which a turn stops on.

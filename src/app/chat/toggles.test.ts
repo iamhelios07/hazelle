@@ -1,45 +1,61 @@
 import { describe, expect, it } from 'vitest';
 import { readToggles } from '../../engine/import/toggles';
-import type { Toggle, ToggleValues } from '../../model/prompt';
+import type { ToggleLine, ToggleValues } from '../../model/prompt';
 import { chatToggles, toggleValue } from '../../model/toggles';
-import { shownRows, splitByCard, toggleRows } from './toggles';
+import type { ToggleSource } from '../../runtime/chat-context';
+import { shownRows, toggleRows, type ToggleItem } from './toggles';
 
-const PROMPT: Toggle[] = [
+const PROMPT: ToggleLine[] = [
   { key: 'sims', label: '시뮬레이터 모드', kind: 'check', default: '0' },
   { key: 'length', label: '대사 길이', kind: 'choice', options: ['짧게', '보통', '길게'], default: '1' },
 ];
-const CARD = readToggles('sims=겹침\nstorm=폭풍 이벤트\nweather=날씨 묘사').toggles;
-const set = (card: Toggle[], values: ToggleValues) => {
-  const declared = chatToggles(PROMPT, card);
-  return { declared, value: toggleValue(declared, values) };
+const set = (sources: ToggleSource[], values: ToggleValues) => {
+  const declared = chatToggles(sources.flatMap(({ lines }) => lines));
+  return { declared, sources, value: toggleValue(declared, values) };
 };
+const source = (from: ToggleSource['from'], name: string, text: string): ToggleSource => ({ from, name, lines: readToggles(text).lines });
+const shape = (item: ToggleItem): unknown => ('toggle' in item ? item.toggle.key : item.kind === 'group' ? [item.label, item.items.map(shape)] : `${item.kind}:${item.label}`);
 
 describe('toggle panel rows', () => {
-  it('lists the prompt’s toggles, then the card’s it does not declare, counts those off their default, and keeps the ones changed at opening first', () => {
-    const rows = toggleRows(set(CARD, { length: '2', weather: '0', storm: '1' }), PROMPT.length);
-    expect(rows.prompt.map(({ toggle, value, changed }) => [toggle.key, value, changed])).toEqual([
+  it('counts the toggles off their default, and keeps the ones changed at opening first while filtering', () => {
+    const rows = toggleRows(set([{ from: 'prompt', name: 'P', lines: PROMPT }, source('card', 'Ari', 'sims=겹침\nstorm=폭풍 이벤트\nweather=날씨 묘사')], { length: '2', weather: '0', storm: '1' }));
+    const [prompt, card] = rows.sections;
+    expect(prompt!.rows.map(({ toggle, value, changed }) => [toggle.key, value, changed])).toEqual([
       ['sims', '0', false],
       ['length', '2', true],
     ]);
-    expect(rows.card.map(({ toggle, changed }) => [toggle.key, changed])).toEqual([
+    expect(card!.rows.map(({ toggle, changed }) => [toggle.key, changed])).toEqual([
       ['storm', true],
       ['weather', false],
     ]);
     expect(rows.changed).toBe(2);
-    expect(toggleRows(set([], { sims: '1' }), PROMPT.length).changed).toBe(1);
 
-    const every = new Set(rows.card);
-    expect(shownRows(rows.card, every, false, new Set(['weather'])).map(({ toggle }) => toggle.key)).toEqual(['weather', 'storm']);
-    expect(shownRows(rows.card, every, true, new Set()).map(({ toggle }) => toggle.key)).toEqual(['storm']);
-    expect(shownRows(rows.card, new Set([rows.card[1]!]), false, new Set()).map(({ toggle }) => toggle.key)).toEqual(['weather']);
+    const every = new Set(card!.rows);
+    expect(shownRows(card!.rows, every, false, new Set(['weather'])).map(({ toggle }) => toggle.key)).toEqual(['weather', 'storm']);
+    expect(shownRows(card!.rows, every, true, new Set()).map(({ toggle }) => toggle.key)).toEqual(['storm']);
   });
 
-  it('sets a module’s toggles apart from the card’s, and a key both declare with the card’s', () => {
-    const text = 'storm=폭풍 이벤트';
-    const rows = toggleRows(set([...readToggles(text).toggles, ...readToggles('storm=모듈의 폭풍\nfog=안개').toggles], {}), PROMPT.length);
-    const split = splitByCard(rows.card, text);
-    expect(split.card.map(({ toggle }) => toggle.label)).toEqual(['폭풍 이벤트']);
-    expect(split.modules.map(({ toggle }) => toggle.key)).toEqual(['fog']);
-    expect(splitByCard(rows.card, '').card).toEqual([]);
+  it('lays each source out apart by its own lines, a key both declare under the first, and leaves out what holds no toggle', () => {
+    const rows = toggleRows(
+      set(
+        [
+          source('card', 'Ari', '=날씨=group\nstorm=폭풍 이벤트\nfog=안개=text\n=끝=groupEnd\n=빈 그룹=group\n==groupEnd\n=분위기=divider\n=분위기=divider\nmood=분위기=select=밝게,어둡게'),
+          source('module', 'A', '=모듈 A=divider\n=설명=caption\nstorm=모듈의 폭풍\nbell=종'),
+          source('module', 'B', 'ring=Ring\n=텍스트=group\nnote=메모=textarea'),
+          source('module', 'C', '=혼자=divider\nstorm=또 폭풍'),
+        ],
+        { note: '적어 둔 말' },
+      ),
+    );
+    expect(rows.sections.map(({ from, name, items }) => [from, name, items.map(shape)])).toEqual([
+      ['card', 'Ari', [['날씨', ['storm', 'fog']], 'divider:분위기', 'mood']],
+      ['module', 'A', ['divider:모듈 A', 'caption:설명', 'bell']],
+      ['module', 'B', ['ring', ['텍스트', ['note']]]],
+    ]);
+    expect(rows.sections[2]!.rows.map(({ toggle, value }) => [toggle.key, value])).toEqual([
+      ['ring', '0'],
+      ['note', '적어 둔 말'],
+    ]);
+    expect(rows.changed).toBe(1);
   });
 });

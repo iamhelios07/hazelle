@@ -1,7 +1,7 @@
 import { Cpu, ImageIcon, SlidersHorizontal } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
-import { slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
+import { isToggle, slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
@@ -15,17 +15,18 @@ import { useOwnUndo, useToast } from '../toast';
 import { Button, Callout, Divider, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
-import { conditionSnippet, countUses, draftOf, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
+import { conditionSnippet, countUses, draftOf, lineTitle, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
 import {
   addBlock,
-  addToggle,
+  addLine,
   doing,
-  editToggle,
+  editLine,
   moveBlock,
+  moveLine,
   NO_HISTORY,
   redoing,
   removeBlock,
-  removeToggle,
+  removeLine,
   renameKey,
   setCache,
   setCount,
@@ -201,13 +202,12 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     select.current = [start + from, start + to];
     typeInto(area, [start, end], text);
   };
-  const dropToggle = (key: string) => {
-    const at = latest.current.toggles.findIndex((toggle) => toggle.key === key);
+  const dropLine = (at: number) => {
     const gone = latest.current.toggles[at];
     if (!gone) return;
-    const step = perform(removeToggle(gone, at));
+    const step = perform(removeLine(gone, at));
     if (!step) return;
-    undoable(`'${gone.label}' 토글을 삭제했어요.`, () => undo(step));
+    undoable(`${lineTitle(gone)}을 삭제했어요.`, () => undo(step));
   };
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);
@@ -283,7 +283,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           onClick={() => pick(MODEL)}
         />
         {sort === 'illustrate' && <NavRow icon={ImageIcon} label="이미지" meta={draft.tags || Object.values(draft.picture ?? {}).some((value) => value !== undefined) ? '직접 지정' : '기본값'} current={split && open === PICTURE} onClick={() => pick(PICTURE)} />}
-        <NavRow icon={SlidersHorizontal} label="토글" meta={`${draft.toggles.length}개`} current={split && open === TOGGLES} onClick={() => pick(TOGGLES)} />
+        <NavRow icon={SlidersHorizontal} label="토글" meta={`${draft.toggles.filter(isToggle).length}개`} current={split && open === TOGGLES} onClick={() => pick(TOGGLES)} />
       </Stack>
       <Section
         title="보내는 순서"
@@ -335,12 +335,13 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       <PicturePane tags={draft.tags} picture={draft.picture} onTags={(tags) => update(() => ({ tags }))} onPicture={(picture) => update(() => ({ picture }))} />
     ) : open === TOGGLES ? (
       <TogglePane
-        toggles={draft.toggles}
+        lines={draft.toggles}
         uses={(key) => countUses(latest.current, key)}
-        onAdd={(toggle) => perform(addToggle(toggle, latest.current.toggles.length))}
-        onEdit={(before, after, what) => before[what] !== after[what] && perform(editToggle(before, after, what))}
+        onAdd={(line) => perform(addLine(line, latest.current.toggles.length))}
+        onEdit={(before, after, at, what) => JSON.stringify(before) !== JSON.stringify(after) && perform(editLine(before, after, at, what))}
+        onMove={(line, from, to) => perform(moveLine(line, from, to))}
         onRekey={changeKey}
-        onRemove={dropToggle}
+        onRemove={dropLine}
         adding={addingToggle}
         onAdding={setAddingToggle}
       />
@@ -352,7 +353,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           sort={sort}
           index={index}
           count={draft.blocks.length}
-          toggles={draft.toggles}
+          toggles={draft.toggles.filter(isToggle)}
           authorNote={draft.authorNote}
           onChange={change}
           onRole={(target, role) => role !== target.role && perform(setRole(target, role))}

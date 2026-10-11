@@ -1,32 +1,30 @@
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { ToggleChoice } from '../common/ToggleChoice';
+import { useAutosave } from '../common/useAutosave';
 import { useSearch } from '../common/useSearch';
 import { PAGES, RESET } from '../common/words';
-import { Button, Empty, Row, Section, SettingRow, SidePanel, Stack, Switch, Tab, Tabs, Text } from '../ui';
-import { shownRows, splitByCard, type ToggleRow } from './toggles';
+import { Button, Disclosure, Divider, Empty, Row, Section, SettingRow, SidePanel, Stack, Switch, Tab, Tabs, Text, TextField } from '../ui';
+import { shownRows, type ToggleItem, type ToggleNote, type ToggleRow, type ToggleSection } from './toggles';
 import type { OpenChat } from './useChat';
 
-const defaultOf = (toggle: Toggle) => `기본값: ${toggle.kind === 'check' ? (toggle.default === '1' ? '켬' : '끔') : (toggle.options[Number(toggle.default)] ?? toggle.default)}`;
+const defaultOf = (toggle: Toggle) =>
+  `기본값: ${toggle.kind === 'check' ? (toggle.default === '1' ? '켬' : '끔') : toggle.kind === 'choice' ? (toggle.options[Number(toggle.default)] ?? toggle.default) : toggle.default || '비어 있음'}`;
+
+const FROM: Record<ToggleSection['from'], string> = { prompt: '프롬프트', card: '캐릭터', module: PAGES.modules };
 
 export function ChatToggles({ chat }: { chat: OpenChat }) {
-  const { prompt, card, toggles, actions } = chat;
+  const { prompt, card, toggles, toggleOwner, actions } = chat;
   const [filter, setFilter] = useState<'all' | 'changed'>('all');
-  const changedKeys = () => new Set([...toggles.prompt, ...toggles.card].filter((row) => row.changed).map((row) => row.toggle.key));
+  const all = toggles.sections.flatMap((section) => section.rows);
+  const changedKeys = () => new Set(all.filter((row) => row.changed).map((row) => row.toggle.key));
   const [first, setFirst] = useState(changedKeys);
-  const all = [...toggles.prompt, ...toggles.card];
   const search = useSearch(all, '토글 검색', (row) => [row.toggle.label]);
   const found = new Set(search.found);
-  const packs = splitByCard(toggles.card, card?.toggles ?? '');
-
-  const groups = [
-    { title: prompt.kind === 'prompt' ? `프롬프트 · ${prompt.prompt.value.name}` : '프롬프트', rows: toggles.prompt },
-    { title: `캐릭터 · ${card?.name ?? ''}`, rows: packs.card },
-    { title: PAGES.modules, rows: packs.modules },
-  ]
-    .filter((group) => group.rows.length > 0)
-    .map((group) => ({ ...group, shown: shownRows(group.rows, found, filter === 'changed', first) }));
-  const visible = groups.filter((group) => group.shown.length > 0);
+  const laying = filter === 'all' && !search.words;
+  const visible = toggles.sections
+    .map((section) => ({ ...section, shown: shownRows(section.rows, found, filter === 'changed', first) }))
+    .filter((section) => section.shown.length > 0);
 
   function show(next: typeof filter) {
     setFilter(next);
@@ -40,15 +38,36 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       label={toggle.label}
       changed={changed}
       sub={changed ? defaultOf(toggle) : undefined}
+      wide={toggle.kind === 'text'}
       control={
         toggle.kind === 'check' ? (
           <Switch label={toggle.label} checked={value === '1'} onChange={(on) => actions.flip(toggle.key, on ? '1' : '0')} />
-        ) : (
+        ) : toggle.kind === 'choice' ? (
           <ToggleChoice label={toggle.label} options={toggle.options} value={value} onChange={(next) => actions.flip(toggle.key, next)} />
+        ) : (
+          <TextToggle toggle={toggle} value={value} owner={toggleOwner} write={actions.writeToggle} />
         )
       }
     />
   );
+  const note = (line: ToggleNote, index: number) =>
+    line.kind === 'divider' ? (
+      <Divider key={`divider${index}`} label={line.label} />
+    ) : (
+      <Text key={`caption${index}`} variant="note">
+        {line.label}
+      </Text>
+    );
+  const item = (line: ToggleItem, index: number) =>
+    'toggle' in line ? (
+      row(line)
+    ) : line.kind === 'group' ? (
+      <Disclosure key={`group${index}`} label={line.label}>
+        {line.items.map((inner, at) => ('toggle' in inner ? row(inner) : note(inner, at)))}
+      </Disclosure>
+    ) : (
+      note(line, index)
+    );
 
   return (
     <SidePanel
@@ -69,7 +88,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
             ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.`
             : '여기서 바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
         </Text>
-        {prompt.kind === 'prompt' && toggles.prompt.length > 0 && (
+        {prompt.kind === 'prompt' && toggles.sections[0]?.from === 'prompt' && (
           <Row kind="actions">
             <Button variant="link" size="xs" onClick={() => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles' })}>
               프롬프트 토글의 기본값 바꾸기
@@ -86,9 +105,9 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
           </Tabs>
         </Row>
       )}
-      {visible.map((group) => (
-        <Section key={group.title} level={3} title={group.title} note={String(group.rows.length)}>
-          {group.shown.map(row)}
+      {visible.map((section, index) => (
+        <Section key={index} level={3} title={`${FROM[section.from]} · ${section.name}`} note={String(section.rows.length)}>
+          {laying ? section.items.map(item) : section.shown.map(row)}
         </Section>
       ))}
       {all.length === 0 ? (
@@ -97,5 +116,20 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
         visible.length === 0 && <Empty variant="section">{search.none ?? '변경한 토글이 없어요.'}</Empty>
       )}
     </SidePanel>
+  );
+}
+
+// Typed values are saved after a pause in typing (common/useAutosave), not per key press; the box shows what is
+// still on its way over what is stored.
+function TextToggle({ toggle, value, owner, write }: { toggle: Extract<Toggle, { kind: 'text' }>; value: string; owner: string | null; write: OpenChat['actions']['writeToggle'] }) {
+  const autosave = useAutosave<{ value: string }>(`toggle:${owner ?? ''}:${toggle.key}`, (patch) => write(toggle.key, patch.value!));
+  return (
+    <TextField
+      label={toggle.label}
+      showLabel={false}
+      value={'value' in autosave.unsaved ? autosave.unsaved.value! : value}
+      lines={toggle.lines ? 3 : undefined}
+      onChange={(next) => autosave.change({ value: next })}
+    />
   );
 }

@@ -1,7 +1,7 @@
-import type { Block, ChatRange, ChatSlot, RecentSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
+import { isToggle, type Block, type ChatRange, type ChatSlot, type RecentSlot, type Role, type TextBlock, type Toggle, type ToggleLine, type WrappedSlot } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockTitle, MARKS, SLOT } from './blocks';
-import { keyInUse, moved, placedOnce, rekey, withMark, type Draft } from './edits';
+import { keyInUse, lineTitle, moved, placedOnce, rekey, withMark, type Draft } from './edits';
 
 // A toast's 되돌리기 undoes a step out of turn, so what a step puts back may no longer fit: the slot it held is taken, or
 // its key is another toggle's.
@@ -51,23 +51,32 @@ function presence<T extends object>(item: T, at: number, same: (a: T, b: T) => b
       return 'refused' in fit ? fit : [...items.slice(0, at), fit, ...items.slice(at)];
     },
     take: (items: readonly T[]) => {
-      kept = items.find((each) => same(each, kept)) ?? kept;
-      return items.filter((each) => !same(each, kept));
+      const index = placeOf(items, kept, at, same);
+      if (index === -1) return [...items];
+      kept = items[index]!;
+      return items.filter((_, place) => place !== index);
     },
   };
 }
 
+// at while the item still stands there, else the first like it.
+const placeOf = <T>(items: readonly T[], item: T, at: number, same: (a: T, b: T) => boolean) =>
+  at < items.length && same(items[at]!, item) ? at : items.findIndex((each) => same(each, item));
+
 const sameBlock = (a: Block, b: Block) => a.id === b.id;
-const sameToggle = (a: Toggle, b: Toggle) => a.key === b.key;
+// A layout line has no key, so it is known by what it says; two alike are interchangeable.
+const sameLine = (a: ToggleLine, b: ToggleLine) =>
+  isToggle(a) || isToggle(b) ? isToggle(a) && isToggle(b) && a.key === b.key : a.kind === b.kind && ('label' in a ? a.label : '') === ('label' in b ? b.label : '');
+const lineAt = (lines: readonly ToggleLine[], line: ToggleLine, at: number) => placeOf(lines, line, at, sameLine);
 // A text comes back without a mark another text has taken since: its words matter more than the mark.
 const joiningBlock = (blocks: readonly Block[], block: Block): Block | Refused => {
   if (block.kind === 'slot') return placedOnce(blocks, block.slot) ? { refused: `'${SLOT[block.slot].name}' 블록은 하나만 둘 수 있어요.` } : block;
   return block.mark && blocks.some((each) => each.kind === 'text' && each.mark === block.mark) ? { ...block, mark: null } : block;
 };
 const keyTaken = (key: string): Refused => ({ refused: `'${key}' 키를 다른 토글이 쓰고 있어요.` });
-const joiningToggle = (toggles: readonly Toggle[], toggle: Toggle): Toggle | Refused => (keyInUse(toggles, toggle.key) ? keyTaken(toggle.key) : toggle);
+const joiningLine = (lines: readonly ToggleLine[], line: ToggleLine): ToggleLine | Refused => (isToggle(line) && keyInUse(lines, line.key) ? keyTaken(line.key) : line);
 const blocksOr = (blocks: Block[] | Refused): PromptPatch | Refused => ('refused' in blocks ? blocks : { blocks });
-const togglesOr = (toggles: Toggle[] | Refused): PromptPatch | Refused => ('refused' in toggles ? toggles : { toggles });
+const togglesOr = (toggles: ToggleLine[] | Refused): PromptPatch | Refused => ('refused' in toggles ? toggles : { toggles });
 const titled = (block: Block, what: string) => `'${blockTitle(block).title}' ${what}`;
 const onBlock = (id: string, change: (block: Block) => Block) => (draft: Draft): PromptPatch => ({
   blocks: draft.blocks.map((each) => (each.id === id ? change(each) : each)),
@@ -152,20 +161,32 @@ export function setMark(block: TextBlock, mark: TextBlock['mark'], taken: string
   return { label: titled(block, mark ? `${MARKS[mark].label} 표시` : '표시 빼기'), block: block.id, undo, redo: (draft) => ({ blocks: withMark(draft.blocks, block.id, mark).blocks }) };
 }
 
-export function addToggle(toggle: Toggle, at: number): Step {
-  const { put, take } = presence(toggle, at, sameToggle, joiningToggle);
-  return { label: `'${toggle.label}' 토글 만들기`, block: null, undo: (draft) => ({ toggles: take(draft.toggles) }), redo: (draft) => togglesOr(put(draft.toggles)) };
+export function addLine(line: ToggleLine, at: number): Step {
+  const { put, take } = presence(line, at, sameLine, joiningLine);
+  return { label: `${lineTitle(line)} ${isToggle(line) ? '만들기' : '추가'}`, block: null, undo: (draft) => ({ toggles: take(draft.toggles) }), redo: (draft) => togglesOr(put(draft.toggles)) };
 }
 
-export function removeToggle(toggle: Toggle, at: number): Step {
-  const { put, take } = presence(toggle, at, sameToggle, joiningToggle);
-  return { label: `'${toggle.label}' 토글 삭제`, block: null, undo: (draft) => togglesOr(put(draft.toggles)), redo: (draft) => ({ toggles: take(draft.toggles) }) };
+export function removeLine(line: ToggleLine, at: number): Step {
+  const { put, take } = presence(line, at, sameLine, joiningLine);
+  return { label: `${lineTitle(line)} 삭제`, block: null, undo: (draft) => togglesOr(put(draft.toggles)), redo: (draft) => ({ toggles: take(draft.toggles) }) };
 }
 
-// The whole toggle swaps, since nothing is typed into one in place.
-export function editToggle(before: Toggle, after: Toggle, what: 'label' | 'default'): Step {
-  const to = (toggle: Toggle) => (draft: Draft): PromptPatch => ({ toggles: draft.toggles.map((each) => (each.key === before.key ? toggle : each)) });
-  return { label: what === 'label' ? `'${before.label}' 토글 이름 바꾸기` : `'${before.label}' 기본값 바꾸기`, block: null, undo: to(before), redo: to(after) };
+// The whole line swaps, since nothing is typed into one in place.
+export function editLine(before: ToggleLine, after: ToggleLine, at: number, what: 'label' | 'default'): Step {
+  const swap = (from: ToggleLine, to: ToggleLine) => (draft: Draft): PromptPatch => {
+    const now = lineAt(draft.toggles, from, at);
+    return now === -1 ? {} : { toggles: draft.toggles.map((each, index) => (index === now ? to : each)) };
+  };
+  const words = what === 'default' ? '기본값 바꾸기' : before.kind === 'caption' ? '내용 바꾸기' : '이름 바꾸기';
+  return { label: `${lineTitle(before)} ${words}`, block: null, undo: swap(after, before), redo: swap(before, after) };
+}
+
+export function moveLine(line: ToggleLine, from: number, to: number): Step {
+  const place = (was: number, index: number) => (draft: Draft): PromptPatch => {
+    const now = lineAt(draft.toggles, line, was);
+    return now === -1 ? {} : { toggles: moved(draft.toggles, now, index) };
+  };
+  return { label: `${lineTitle(line)} 옮기기`, block: null, undo: place(to, from), redo: place(from, to) };
 }
 
 export function renameKey(toggle: Toggle, to: string): Step {
