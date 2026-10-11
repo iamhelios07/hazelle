@@ -94,7 +94,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
   const read = new ReadModels(store, display);
-  const likenesses = new Likenesses({ store, credentials, files });
+  const likenesses = new Likenesses({ store, credentials, files, catalogs });
   const illustrator = new Illustrator({ store, credentials, files, likenesses });
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
   const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, { lua: machine, tools });

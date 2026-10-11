@@ -1,5 +1,5 @@
 import { ChangeSignal } from '../change-signal';
-import { seesPictures, type InputPicture } from '../connectors/types';
+import { seesPictures, type InputPicture, type Model } from '../connectors/types';
 import { artistTags, picturePrompt } from '../engine/import/picture-prompt';
 import { artistOf, likenessRequest, parseLikeness, sample, SAMPLE_MOST, SHOWN_MOST, sourcesOf, type LikenessInvalid } from '../engine/likeness';
 import type { Chat, Receipt } from '../model/chat';
@@ -11,6 +11,7 @@ import type { ApiFailure, ApiResult } from './api';
 import type { RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
 import { packsOf } from './chat-context';
+import { refreshStarred } from './connections';
 import { gather, generate } from './generate';
 import { illustrateWriter } from './illustrate';
 import { shownPicture } from './picture';
@@ -40,7 +41,7 @@ export type LikenessRun = { stage: 'building' } | { stage: 'failed'; failure: Li
 export type LikenessRuns = ReadonlyMap<string, LikenessRun>;
 
 type Stopped = { kind: 'stopped' };
-type Deps = Pick<Session, 'store' | 'credentials' | 'files'>;
+type Deps = Pick<Session, 'store' | 'credentials' | 'files' | 'catalogs'>;
 type Picture = Pick<Asset, 'name' | 'type' | 'file'> & { avatar: boolean };
 
 // A file gone or not opening is left out; any other failure ends the build.
@@ -103,7 +104,9 @@ export class Likenesses {
   // whose model writes them.
   async portraits(chat: Chat, prompt: IllustratePrompt, signal: AbortSignal): Promise<Portrait[]> {
     const { store } = this.deps;
-    const owners = packsOf(store, chat).map(({ id }) => id);
+    // A 등장인물 is drawn from its own card's portraits, after the packs, as its lorebook and pictures are read.
+    const cast = (chat.cast ?? []).filter((member) => live(store.get('character', member)));
+    const owners = [...new Set([...packsOf(store, chat).map(({ id }) => id), ...cast])];
     await Promise.all(owners.filter((owner) => !store.get('likeness', likenessId(owner))).map((owner) => this.start(owner, chat, prompt, signal)));
     return owners.flatMap((owner) => store.get('likeness', likenessId(owner))?.value.portraits ?? []);
   }
@@ -172,7 +175,7 @@ export class Likenesses {
     if (failed && !failed.ok) return failed.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unread', failure: failed };
     const held = read.flatMap(({ picture, read }) => (read.ok ? [{ ...picture, bytes: read.data }] : []));
     const prompts = held.flatMap(({ bytes }) => picturePrompt(bytes) ?? []);
-    const shown = seesPictures(writer.route.model) ? await shownPictures(held.slice(0, SHOWN_MOST)) : [];
+    const shown = (await seesNow(this.deps, writer.route)) ? await shownPictures(held.slice(0, SHOWN_MOST)) : [];
     const input = { name: card?.name ?? module!.value.name, texts, lore, prompts, pictures: shown.map(({ shown }) => shown), avatar: shown[0]?.avatar === true, most: PORTRAITS_MOST };
     const sources = sourcesOf(input);
     if (!sources.length) return save(empty);
@@ -186,6 +189,16 @@ export class Likenesses {
     const parsed = parseLikeness(text.value(), { sources, artist: artistOf(prompts.map(({ prompt }) => artistTags(prompt))), most: PORTRAITS_MOST });
     return parsed.ok ? save({ portraits: parsed.portraits, at: Date.now(), receipt }) : { kind: 'invalid', receipt, reason: parsed.reason };
   }
+}
+
+// A model starred before its catalog's inputs were filled from models.dev keeps an unknown input in its starred copy,
+// which only opening its model list refreshes; asked here, so a profile is not built blind for that.
+async function seesNow({ store, catalogs }: Deps, { connection, model }: { connection: Stored<'connection'>; model: Model }): Promise<boolean> {
+  if (model.input !== null) return seesPictures(model);
+  const listed = await catalogs.load(connection.value);
+  if (!listed.ok) return false;
+  await refreshStarred(store, connection.id, listed.models);
+  return seesPictures(listed.models.find(({ id }) => id === model.id) ?? model);
 }
 
 // A picture the browser cannot draw is left out.

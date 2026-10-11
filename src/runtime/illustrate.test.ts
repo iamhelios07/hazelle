@@ -225,6 +225,27 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       expect(profileCalls()).toHaveLength(1);
     }));
 
+  it("builds a 등장인물's profiles from its own card beside the character's", () =>
+    server.withSession(async (session) => {
+      const { chat, draw, profileCalls } = await drawing(session, JSON.stringify({ characters: [{ ...looks.characters[0], source: 'text' }] }));
+      const bea = await session.store.create('character', { card: { ...testCard('Bea'), description: 'Bea is a knight.' }, folder: null, loreFolders: [] });
+      if (!bea.ok) throw new Error(bea.error);
+      await session.store.update('chat', chat, (current) => ({ ...current, cast: [bea.data.id] }));
+      await draw();
+      expect(profileCalls().some(({ sent }) => sent.body?.includes('Bea is a knight.'))).toBe(true);
+      expect(session.store.get('likeness', likenessId(bea.data.id))).toMatchObject({ parent: bea.data.id });
+    }));
+
+  it("asks the connection's model list when the starred model's inputs are unknown, and keeps what it says", () =>
+    server.withSession(async (session) => {
+      const { draw } = await drawing(session, JSON.stringify(looks));
+      const listed = { data: [{ id: 'm', name: 'M', architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] } }] };
+      stubRelay((sent) => (sent.url.endsWith('/models') ? Response.json(listed, { headers: { 'x-relay': 'upstream' } }) : answering(JSON.stringify(looks))(sent)));
+      await draw();
+      const connection = session.store.list('connection').find(({ value }) => value.type === 'openrouter')!;
+      expect(connection.value.starred[0]!.input).toEqual(['text', 'image']);
+    }));
+
   it('draws without the profiles when their build fails, writes none, keeps the failure, and tries again on the next draw', () =>
     server.withSession(async (session) => {
       const { owner, log, draw, profileCalls } = await drawing(session, 'Ari has silver hair.');
