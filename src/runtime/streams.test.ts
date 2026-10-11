@@ -46,7 +46,7 @@ describe('a detached call', () => {
     const turn = takeTurn(first, chat, { kind: 'send', text: 'Hi' });
     await writer.write(delta('Hello, '));
     await vi.waitFor(() => expect(first.talk.snapshot(chat)?.text).toBe('Hello, '));
-    await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ pending }) => pending)).toEqual([undefined]));
     const [marker] = first.store.list('stream');
     first.close();
     expect(await turn).toBeNull();
@@ -98,7 +98,7 @@ describe('a detached call', () => {
     await setTranslate(first.store, null, { replies: true });
     const turn = takeTurn(first, chat, { kind: 'send', text: 'Hi' });
     await writer.write(delta('Hello, '));
-    await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ pending }) => pending)).toEqual([undefined]));
     first.close();
     expect(await turn).toBeNull();
 
@@ -132,7 +132,7 @@ describe('a detached call', () => {
     expect(await takeTurn(first, chat, { kind: 'send', text: 'Hi' })).toBeNull();
     const reply = shown(messages(first, chat)[1]!);
     first.translator.translate(chat, reply, translationInput(first, chat, opened, messages(first, chat), { kind: 'message', index: 1 }));
-    await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ pending }) => pending)).toEqual([undefined]));
 
     const second = await open();
     await server.hold(second.store, chat);
@@ -158,7 +158,7 @@ describe('a detached call', () => {
     const { chat, writer } = await streaming(first);
     const turn = takeTurn(first, chat, { kind: 'send', text: 'Hi' });
     await writer.write(delta('Hello, '));
-    await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ pending }) => pending)).toEqual([undefined]));
     first.close();
     expect(await turn).toBeNull();
 

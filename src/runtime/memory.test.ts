@@ -384,7 +384,7 @@ describe('chapters', () => {
     const writer = provider.writable.getWriter();
     const log = stubRelay(inTurn([saying('Luna smiles.'), new Response(provider.readable, { headers: { 'x-relay': 'upstream' } })]));
     expect(await takeTurn(first, chat, { kind: 'answer' })).toBeNull();
-    await vi.waitFor(() => expect(first.store.list('stream').map(({ value }) => value.for)).toEqual([expect.objectContaining({ kind: 'memory', chapter: ['r0', 'r1', 'r2'] })]));
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ value, pending }) => [value.for, pending])).toEqual([[expect.objectContaining({ kind: 'memory', chapter: ['r0', 'r1', 'r2'] }), undefined]]));
     await vi.waitFor(() => expect(log).toHaveLength(2));
     const result = first.store.list('stream')[0]!.value.result;
     first.close();
