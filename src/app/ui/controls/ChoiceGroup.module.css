@@ -15,6 +15,7 @@
   color: var(--color-text-muted);
   transition:
     border-color var(--duration-fast),
+    background-color var(--duration-fast),
     color var(--duration-fast);
 }
 
@@ -32,10 +33,11 @@
   color: var(--color-text);
 }
 
+/* Gold marks the main act and the current thing; one choice picked among several stays neutral. */
 .choice[aria-pressed='true'] {
-  border-color: var(--color-accent);
-  background: var(--color-accent-bg);
-  color: var(--color-accent);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
 }
 
 .segmented {
@@ -55,7 +57,7 @@
 }
 
 .segmented .choice[aria-pressed='true'] {
-  border-color: var(--color-accent-border);
+  border-color: transparent;
 }
 
 .list {

@@ -164,7 +164,7 @@
 
 .tab {
   --color-item-hover: var(--color-surface);
-  --color-item-current: var(--color-accent-bg);
+  --color-item-current: var(--color-surface-raised);
 
   color: var(--color-text-muted);
 }
@@ -174,8 +174,8 @@
 }
 
 .tab[aria-pressed='true'] {
-  border-color: var(--color-accent-border);
-  color: var(--color-accent);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
 }
 
 .tab[aria-pressed='true'] .meta {
