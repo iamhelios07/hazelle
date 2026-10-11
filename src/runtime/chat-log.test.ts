@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
+import { calls, fold, foldTree, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatFile, readChatFile } from './chat-file';
 import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, removeMessage, selectVersion, setCast, setChatNote, setChatPrompt, startChat, withOwn } from './chat-log';
@@ -78,8 +78,8 @@ describe('branchChat', () => {
     const said = crypto.randomUUID();
     await appendUserMessage(store, source, { id: said, text: '안녕', before: [['order', 'input']] });
     const folded = () => fold(store.children('entry', source));
-    await appendScripted(store, source, { edits: [{ message: folded()[0]!, text: '안녕!', wrote: [['typed', '1']] }], removed: [], added: [{ role: 'assistant', text: 'narration' }], vars: { version: said, set: [['hp', '9']] } });
-    await appendScripted(store, source, { edits: [], removed: [], added: [], vars: { version: said, set: [['door', 'open']], stays: true } });
+    await appendScripted(store, source, { edits: [{ message: folded()[0]!, text: '안녕!', wrote: [['typed', '1']] }], removed: [], added: { follows: said, messages: [{ role: 'assistant', text: 'narration' }] }, vars: { version: said, set: [['hp', '9']] } });
+    await appendScripted(store, source, { edits: [], removed: [], added: null, vars: { version: said, set: [['door', 'open']], stays: true } });
     const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after, message.after]);
     expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']], [['door', 'open']]], ['narration', true, undefined, undefined, undefined]]);
 
@@ -266,5 +266,33 @@ describe('importChat', () => {
     if (!refused.ok) throw new Error(refused.error);
     await server.hold(store, refused.data.id);
     expect([refused.data.dropped.pictures, refused.data.dropped.inlays, store.children('illustration', refused.data.id).length, store.children('inlay', refused.data.id).length]).toEqual([1, 1, 0, 0]);
+  });
+
+  it("carries every version's own continuation, not only the one shown", async () => {
+    const { store, files } = await server.account();
+    const source = crypto.randomUUID();
+    await server.hold(store, source);
+    const receipt: Receipt = { id: 'call', connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 100, totalMs: 900, cache: null };
+    await startChat(store, source, { title: null, character: null, models: {} }, null);
+    const [said, reply] = [crypto.randomUUID(), crypto.randomUUID()];
+    await appendUserMessage(store, source, { id: said, text: '하나', follows: null });
+    await appendReply(store, source, { id: reply, message: null, replaces: null, follows: said, at: 1, text: '둘', receipt });
+    await appendUserMessage(store, source, { id: crypto.randomUUID(), text: '셋', follows: reply });
+    await appendReply(store, source, { id: crypto.randomUUID(), message: reply, replaces: null, at: 2, text: '둘 다시', receipt });
+
+    const written = await chatFile({ store, files }, source);
+    if (!written.ok) throw new Error(written.error);
+    const read = readChatFile(JSON.parse(written.data));
+    if (!read.ok) throw new Error(read.error);
+    const imported = await importChat({ store, files }, read.file, null);
+    if (!imported.ok) throw new Error(imported.error);
+    await server.hold(store, imported.data.id);
+    const texts = (folded: Message[]) => folded.map((message) => shown(message).text);
+    const entries = store.children('entry', imported.data.id);
+    expect(texts(fold(entries))).toEqual(['하나', '둘 다시']);
+    expect(texts(foldTree(entries).map(({ message }) => message))).toEqual(['하나', '둘 다시', '셋']);
+    const copied = fold(entries)[1]!;
+    await selectVersion(store, imported.data.id, copied.id, copied.versions[0]!.id);
+    expect(texts(fold(store.children('entry', imported.data.id)))).toEqual(['하나', '둘', '셋']);
   });
 });

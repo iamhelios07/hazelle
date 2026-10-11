@@ -195,7 +195,7 @@ export class Scripts {
       const start = await this.dispatch(chat, { lua: scripts, event: { kind: 'start' } }, turn.scope, null);
       if (start.outcome.stop) {
         const last = turn.scope.messages.at(-1);
-        const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: start.outcome.writes } }));
+        const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: null, vars: { version: last.id, set: start.outcome.writes } }));
         if (saved && !saved.ok) this.note(chat, { kind: 'unsaved', failure: saved });
         return halted;
       }
@@ -486,7 +486,8 @@ export class Scripts {
       return message && (!stale || shown(message).id === reply) ? [{ message, wrote, text }] : [];
     });
     const removed = outcome.removed.flatMap((index) => at(index)?.id ?? []);
-    const added = (stale ? [] : outcome.added).map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
+    const adding = (stale ? [] : outcome.added).map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
+    const added = adding.length ? { follows: latest ? shown(latest).id : null, messages: adding } : null;
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
     if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved }, from);
     if (outcome.tool && from?.kind === 'module' && (outcome.tool.data.length || outcome.tool.badges.length)) {
@@ -499,7 +500,7 @@ export class Scripts {
       if (!kept.ok) this.note(chat, { kind: 'unsaved', failure: kept }, from);
     }
     if (outcome.reload) this.session.display.stale(chat);
-    return { outcome, changed: edits.length + removed.length + added.length > 0 };
+    return { outcome, changed: edits.length + removed.length + adding.length > 0 };
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.

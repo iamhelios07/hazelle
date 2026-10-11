@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, ChatFold, chatTitle, connectionUsage, fold, modelUsage, previewLine, recentIn, recentModels, shown, usageCalls, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, ChatFold, chatTitle, connectionUsage, fold, foldTree, modelUsage, previewLine, recentIn, recentModels, shown, usageCalls, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -121,6 +121,21 @@ describe('fold', () => {
     expect(shown(fold(entries)[0]!).translation?.text).toBe('안녕하세요');
     entries.push(version('b2', 'b1', 'Hi', 'b1'), entry('t3', { type: 'translation', version: 'b1', ...made('늦은 번역') }));
     expect(shown(fold(entries)[0]!).translation).toBeUndefined();
+  });
+
+  it('gives each version its own continuation, and reads a message saved before follows as continuing every version saved before it', () => {
+    const ids = (entries: Stored<'entry'>[]) => fold(entries).map(({ id }) => id);
+    const swiped = [bot('c1', '하나'), version('c1v2', 'c1', '둘'), user('c2', '셋')];
+    expect(ids([...swiped, entry('cs', { type: 'select', message: 'c1', version: 'c1', at: 0 })])).toEqual(['c1', 'c2']);
+
+    const entries = [user('u1', '하나'), bot('b1', '둘'), user('u2', '셋'), bot('b2', '넷'), version('b1v2', 'b1', '둘 다시')];
+    expect(ids(entries)).toEqual(['u1', 'b1']);
+    entries.push(entry('u3', { type: 'message', role: 'user', at: rev, text: '다섯', receipt: null, follows: 'b1v2' }));
+    expect(ids(entries)).toEqual(['u1', 'b1', 'u3']);
+    expect(ids([...entries, entry('d1', { type: 'delete', message: 'b1', at: 0 })])).toEqual(['u1', 'u3']);
+    entries.push(entry('s1', { type: 'select', message: 'b1', version: 'b1', at: 0 }));
+    expect(ids(entries)).toEqual(['u1', 'b1', 'u2', 'b2']);
+    expect(foldTree(entries).map(({ message, follows }) => [message.id, follows])).toEqual([['u1', null], ['b1', 'u1'], ['u2', 'b1'], ['b2', 'u2'], ['u3', 'b1v2']]);
   });
 
   it('hides a deleted message until it is restored', () => {

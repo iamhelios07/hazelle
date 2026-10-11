@@ -1,4 +1,4 @@
-import { fold, usageCalls, type UsageCall } from '../model/chat';
+import { foldTree, usageCalls, type UsageCall } from '../model/chat';
 import { isValue, type Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { ApiResult } from './api';
@@ -60,7 +60,7 @@ export class Usage {
         if (signal.aborted) return { ok: false, error: 'stopped' };
         // Never stamp a scan with a head acquired after it: an edit during that scan must be read again.
         if (head !== this.store.entryHead(id)) continue;
-        this.chats.set(id, { head, calls: [...usageCalls(fold(entries))] });
+        this.chats.set(id, { head, calls: [...usageCalls(foldTree(entries).map(({ message }) => message))] });
       }
       const current = this.store.list('chat').filter(live);
       if (current.length !== chats.length || current.some(({ id }) => !ids.has(id) || this.chats.get(id)?.head !== this.store.entryHead(id))) continue;

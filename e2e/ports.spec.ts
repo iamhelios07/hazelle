@@ -29,7 +29,7 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
     await page.getByLabel('메시지', { exact: true }).fill(text);
     await page.getByRole('button', { name: '보내기', exact: true }).click();
     await expect(page.getByRole('article').last()).toContainText(REPLY);
-    await expect(page.getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
+    await expect(page.getByRole('article').last().getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
   };
 
   await test.step('connect the fake provider and pick its embedding model', async () => {

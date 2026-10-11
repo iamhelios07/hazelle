@@ -101,8 +101,11 @@ export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: bo
 // never part of text, so it is neither drawn in the story nor sent again; 응답 정보 is its one reader.
 // greeting: the original card index, not a version's position or a text match. Edits and branches keep it.
 export type Entry =
-  // A new message with its first version, which has the entry's id.
-  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true; before?: Writes; reasoning?: string; greeting?: number }
+  // A new message with its first version, which has the entry's id. follows: the version of the message it continues,
+  // by any id that version stood under, so each version of a message has its own continuation (ChatFold); null for
+  // the first message of its line. Absent on a message saved before 2026-10-11, which continues the message before it in
+  // rev order, through every version of that message saved before it.
+  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; follows?: string | null; seed?: string; translation?: Translation; staged?: true; before?: Writes; reasoning?: string; greeting?: number }
   // replaces: the version this one takes the place of, for an edit, a retried failure or a continued cut
   // (이어 쓰기), so the count of versions does not grow; null for a new version, which goes last. An edit keeps
   // the receipt of the reply it changes.
@@ -146,8 +149,12 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
   ...(entry.greeting !== undefined && { greeting: entry.greeting }),
 });
 
+type Order = { rev: number; pending?: number };
+
 // Entries naming a message or version that is not there yet are skipped, even if it appears later in the replay.
-function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set<string> } {
+// places: every id a version stood under, by its slot. founded: by message, the order of the entry that made each slot,
+// never of an edit or retry that replaced it.
+function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set<string>; places: Map<string, number>; founded: Map<string, Order[]> } {
   const messages = new Map<string, Message>();
   const deleted = new Set<string>();
   // By a version's own id only: a translation of a replaced version is not its replacement's.
@@ -163,16 +170,18 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
     for (const each of ids.get(version)!) edits.set(each, version);
   };
   const costs = new Map<string, Cost | null>();
+  const founded = new Map<string, Order[]>();
   const locate = (message: Message, id: string) => {
     const version = own.get(id);
     return version && home.get(version) === message ? places.get(id)! : -1;
   };
 
-  for (const { id, value: entry } of [...entries].sort(entryOrder)) {
+  for (const { id, value: entry, rev, pending } of [...entries].sort(entryOrder)) {
     if (entry.type === 'message') {
       const version = versionOf(id, entry, false, entry.staged === true);
       own.set(id, version);
       places.set(id, 0);
+      founded.set(id, [{ rev, pending }]);
       stand(id, version);
       const message: Message = { id, role: entry.role, at: entry.at, versions: [version], selected: 0 };
       messages.set(id, message);
@@ -214,8 +223,10 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
       own.set(id, version);
       home.set(version, message);
       stand(id, version, edited && ids.get(edited));
-      if (slot === -1) message.versions.push(version);
-      else message.versions[slot] = version;
+      if (slot === -1) {
+        message.versions.push(version);
+        founded.get(message.id)!.push({ rev, pending });
+      } else message.versions[slot] = version;
       message.selected = slot === -1 ? message.versions.length - 1 : slot;
       places.set(id, message.selected);
     } else if (entry.type === 'select') {
@@ -233,7 +244,7 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
     const own = receipt.cost === 'pending' && receipt.replyId && costs.has(receipt.replyId) ? { ...receipt, cost: costs.get(receipt.replyId)! } : receipt;
     return earlier === receipt.continues ? own : { ...own, continues: earlier };
   };
-  return { deleted, messages: [...messages.values()]
+  return { deleted, places, founded, messages: [...messages.values()]
     .map((message) => ({
       ...message,
       versions: message.versions.map((version) => {
@@ -247,7 +258,9 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
 }
 
 type EntryIndex = { group: string | null; reference?: string; cost?: string; rev: number; pending?: number; at: number };
-type FoldedMessage = { entries: Set<string>; costs: Set<string>; message: Message | null; deleted: boolean };
+type FoldedMessage = { entries: Set<string>; costs: Set<string>; message: Message | null; deleted: boolean; places: Map<string, number>; founded: Order[]; follows: string | null | undefined };
+// slot: the one of from's versions it continues; null for a message saved before follows (Entry).
+type Edge = { group: FoldedMessage; slot: number | null };
 export const entryOrder = (a: { rev: number; pending?: number }, b: { rev: number; pending?: number }) => (a.pending ?? 0) - (b.pending ?? 0) || a.rev - b.rev;
 
 // Only indexes and the projection live here. Values, including pending writes, are always read from the store.
@@ -292,7 +305,7 @@ export class ChatFold {
       if (cost) { this.add(this.costs, cost, id); costs.add(cost); }
       if (group !== null) {
         let held = this.groups.get(group);
-        if (!held) this.groups.set(group, (held = { entries: new Set(), costs: new Set(), message: null, deleted: false }));
+        if (!held) this.groups.set(group, (held = { entries: new Set(), costs: new Set(), message: null, deleted: false, places: new Map(), founded: [], follows: undefined }));
         held.entries.add(id);
         touched.add(group);
       }
@@ -319,12 +332,14 @@ export class ChatFold {
       const folded = replay(entries);
       group.message = folded.messages[0] ?? null;
       group.deleted = folded.deleted.has(id);
+      group.places = folded.places;
+      group.founded = folded.founded.get(id) ?? [];
+      const head = entries.find((entry) => entry.id === id)?.value;
+      group.follows = head?.type === 'message' ? head.follows : undefined;
       if (!group.entries.size) this.groups.delete(id);
     }
-    const ordered = [...this.groups.values()].filter((group) => group.message !== null)
-      .sort((a, b) => entryOrder(this.entries.get(a.message!.id)!, this.entries.get(b.message!.id)!));
     const messages: Message[] = [];
-    for (const group of ordered) {
+    for (const { group } of this.walk(false)) {
       const message = group.message!;
       if (!group.deleted) messages.push(message);
       else if (messages.length && message.after) {
@@ -336,6 +351,71 @@ export class ChatFold {
     for (const entry of this.entries.values()) if (!latest || entry.rev >= latest.rev) latest = entry;
     this.result = { messages, at: latest?.at ?? null };
     return this.result;
+  }
+
+  // Every message a version switch can show, not only those shown, each with the version it continues: the nearest
+  // one shown above it, past deleted messages. A deleted message is passed through its selected version only, as the
+  // story shows it.
+  tree(): { message: Message; follows: string | null }[] {
+    this.snapshot();
+    const out: { message: Message; follows: string | null }[] = [];
+    const held = new Map<string, number>();
+    for (const { group, follows } of this.walk(true)) {
+      const message = group.message!;
+      if (!group.deleted) {
+        for (const { id } of message.versions) held.set(id, out.length);
+        out.push({ message, follows });
+        continue;
+      }
+      const at = follows === null ? undefined : held.get(follows);
+      if (at === undefined || !message.after) continue;
+      const kept = out[at]!;
+      out[at] = { ...kept, message: { ...kept.message, after: [...(kept.message.after ?? []), ...message.after] } };
+    }
+    return out;
+  }
+
+  // The story in the order it reads: from each first message, down the version each message shows (every: down all
+  // of them), a message's continuations in rev order one after another, so two saved after the same version both show.
+  // Iterative, since a chat may run to thousands of messages.
+  private walk(every: boolean): { group: FoldedMessage; follows: string | null }[] {
+    const ordered = [...this.groups.values()].filter((group) => group.message !== null)
+      .sort((a, b) => entryOrder(this.entries.get(a.message!.id)!, this.entries.get(b.message!.id)!));
+    // A message continues only one saved before it, so a follows naming a later or unknown version starts a line of its
+    // own and no line loops.
+    const owner = new Map<string, FoldedMessage>();
+    const edges = new Map<FoldedMessage, Edge[]>();
+    const roots: FoldedMessage[] = [];
+    let previous: FoldedMessage | undefined;
+    for (const group of ordered) {
+      const parent = group.follows === undefined ? previous : group.follows === null ? undefined : owner.get(group.follows);
+      if (!parent) roots.push(group);
+      else {
+        const edge = { group, slot: group.follows ? parent.places.get(group.follows)! : null };
+        const held = edges.get(parent);
+        if (held) held.push(edge);
+        else edges.set(parent, [edge]);
+      }
+      for (const id of group.places.keys()) owner.set(id, group);
+      previous = group;
+    }
+    const out: { group: FoldedMessage; follows: string | null }[] = [];
+    const stack: { group: FoldedMessage; follows: string | null }[] = roots.map((group) => ({ group, follows: null })).reverse();
+    while (stack.length) {
+      const next = stack.pop()!;
+      out.push(next);
+      const { group } = next;
+      const { versions, selected } = group.message!;
+      const kids = (edges.get(group) ?? []).flatMap(({ group: kid, slot }) => {
+        const order = this.entries.get(kid.message!.id)!;
+        const before = (index: number) => entryOrder(group.founded[index]!, order) < 0;
+        const continued = slot ?? (before(selected) ? selected : group.founded.findLastIndex((_, index) => before(index)));
+        if (continued !== selected && (!every || group.deleted)) return [];
+        return [{ group: kid, follows: group.deleted ? next.follows : versions[continued]!.id }];
+      });
+      stack.push(...kids.reverse());
+    }
+    return out;
   }
 
   private add(index: Map<string, Set<string>>, key: string, id: string) {
@@ -351,12 +431,16 @@ export class ChatFold {
   }
 }
 
-export function fold(entries: Stored<'entry'>[]): Message[] {
+function folded(entries: Stored<'entry'>[]): ChatFold {
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const projection = new ChatFold((id) => byId.get(id) ?? null);
   for (const id of byId.keys()) projection.changed(id);
-  return projection.snapshot().messages;
+  return projection;
 }
+
+export const fold = (entries: Stored<'entry'>[]): Message[] => folded(entries).snapshot().messages;
+
+export const foldTree = (entries: Stored<'entry'>[]) => folded(entries).tree();
 
 export const shown = (message: Message): Version => message.versions[message.selected]!;
 

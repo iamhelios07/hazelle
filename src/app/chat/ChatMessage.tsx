@@ -39,8 +39,7 @@ type Props = {
   translating: Translating;
   awaited: boolean;
   flipped: boolean;
-  isLast: boolean;
-  beforeLastReply: boolean;
+  replyNext: boolean;
   // Who replies: the chat's character, or with none, the model named on each reply.
   character: { name: string; image: string | null } | null;
   // Who the user plays: the chat's persona, which {{user}} names in the prompt, so the row shows the same name the
@@ -72,7 +71,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -130,7 +129,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
               취소
             </Button>
-            {beforeLastReply && (
+            {replyNext && (
               <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.saveEdit(message, true)}>
                 저장하고 다시 생성
               </Button>
@@ -218,7 +217,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         : { label: flipped ? '원문' : '번역', action: flipped ? '번역 보기' : '원문 보기', onClick: flip };
 
   const count = message.versions.length;
-  const nextLabel = message.selected === count - 1 && !opening ? '다시 생성' : '다음';
+  // No call writes a greeting: its versions go round.
+  const greeting = opening || version.greeting !== undefined;
+  const nextLabel = message.selected === count - 1 && !greeting ? '다시 생성' : '다음';
   const [back, forward] = SHORTCUTS.swipe.keys;
   const after = (
     <>
@@ -237,7 +238,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           }
         />
       )}
-      {!mine && isLast && count > 1 && editing === null && (
+      {!mine && count > 1 && editing === null && (
         <Switcher
           label={`${message.selected + 1} / ${count}`}
           prevDisabled={busy}
@@ -282,7 +283,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     </>
   ) : (
     <>
-      {!mine && isLast && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
+      {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="xs" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}
       {!mine && !empty && !failed && (

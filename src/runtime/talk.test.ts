@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
-import { appendUserMessage, editMessage, startChat } from './chat-log';
+import { appendUserMessage, editMessage, selectVersion, startChat } from './chat-log';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { withTurn } from './talk';
 import { takeTurn } from './turn';
@@ -22,6 +22,14 @@ describe('withTurn', () => {
     expect(withTurn([stored], turn, 'c')[0]!.unstored).toBeUndefined();
   });
 
+  it('shows a new version of an earlier reply without what continues the others, and one in its place with it', () => {
+    const message = (id: string, role: 'user' | 'assistant') => ({ id, role, at: 0, versions: [{ id, seed: id, text: id, receipt: null, edited: false, at: 0 }], selected: 0 });
+    const story = [message('u1', 'user'), message('b1', 'assistant'), message('u2', 'user')];
+    const turn = { chat: 'c', said: null, reply: { id: 'r', message: 'b1', replaces: null, continues: null }, text: '', reasoning: '' };
+    expect(withTurn(story, turn, 'c').map(({ id }) => id)).toEqual(['u1', 'b1']);
+    expect(withTurn(story, { ...turn, reply: { ...turn.reply, replaces: 'b1' } }, 'c').map(({ id }) => id)).toEqual(['u1', 'b1', 'u2']);
+  });
+
   it('marks a reply asked for whole, so the chat shows it when it lands', () => {
     const turn = { chat: 'c', said: null, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
     expect(withTurn([], { ...turn, whole: true }, 'c')[0]).toMatchObject({ live: 'r', whole: true });
@@ -30,6 +38,25 @@ describe('withTurn', () => {
 });
 
 describe('Talk', () => {
+  it('makes an earlier reply again with nothing after it, and sends after the version shown', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      stubRelay(inTurn([saying('B1'), saying('B2'), saying('B1 다시'), saying('B3')]));
+      const story = () => fold(session.store.children('entry', chat)).map((message) => shown(message).text);
+      expect(await takeTurn(session, chat, { kind: 'send', text: 'A1' })).toBeNull();
+      expect(await takeTurn(session, chat, { kind: 'send', text: 'A2' })).toBeNull();
+      const reply = fold(session.store.children('entry', chat))[1]!;
+      expect(await takeTurn(session, chat, { kind: 'regenerate', message: reply.id })).toBeNull();
+      expect(story()).toEqual(['A1', 'B1 다시']);
+      expect(await takeTurn(session, chat, { kind: 'send', text: 'A3' })).toBeNull();
+      expect(story()).toEqual(['A1', 'B1 다시', 'A3', 'B3']);
+      await selectVersion(session.store, chat, reply.id, reply.id);
+      expect(story()).toEqual(['A1', 'B1', 'A2', 'B2']);
+    }));
+
   it('keeps two replies whose saves failed and retries the reply each failure names', () =>
     server.withSession(async (session) => {
       await answerable(session);

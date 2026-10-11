@@ -22,7 +22,8 @@ import { callOf, endCall, newCall } from './streams';
 export type Turn = {
   chat: string;
   said: Said | null;
-  reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes };
+  // follows: what a new message continues (model/chat Entry).
+  reply: { id: string; message: string | null; replaces: string | null; follows?: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes };
   text: string;
   reasoning: string;
   // whole: asked for in one piece (ModelSettings streaming), so it is shown when it lands, not paced as bursts are.
@@ -79,7 +80,8 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   const slot = reply.replaces === null ? -1 : message.versions.findIndex((existing) => existing.id === reply.replaces);
   const versions = slot === -1 ? [...message.versions, version] : message.versions.with(slot, version);
   out[index] = { ...message, versions, selected: slot === -1 ? versions.length - 1 : slot, ...live };
-  return out;
+  // A new version continues nothing yet; one in another's place keeps what continues it.
+  return slot === -1 ? out.slice(0, index + 1) : out;
 }
 
 type Held = { turn: Turn; abort: AbortController; calling: string | null };
@@ -227,7 +229,7 @@ export class Talk {
     // A message sent translated or changed by the bot shows as it is saved from the moment it is made so.
     this.change(held, { ...held.turn, reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
     const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
-    const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, continues: reply.continues, ...(reply.before && { before: reply.before }) } });
+    const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), continues: reply.continues, ...(reply.before && { before: reply.before }) } });
     this.reading.add(call.id);
     held.calling = call.id;
     const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held) });
@@ -253,7 +255,7 @@ export class Talk {
     const chat = stream.parent!;
     if (this.closed || purpose.kind !== 'reply' || this.turns.has(chat)) return;
     const lease = this.store.retainChat(chat);
-    const reply = { id: stream.value.result, message: purpose.message, replaces: purpose.replaces, continues: purpose.continues, ...(purpose.before && { before: purpose.before }) };
+    const reply = { id: stream.value.result, message: purpose.message, replaces: purpose.replaces, ...(purpose.follows !== undefined && { follows: purpose.follows }), continues: purpose.continues, ...(purpose.before && { before: purpose.before }) };
     const held = this.seat(chat, null, reply);
     this.reading.add(stream.id);
     held.calling = stream.id;
@@ -284,7 +286,7 @@ export class Talk {
 
   private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply, at: number): Written {
     const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
-    return { id: reply.id, message: reply.message, replaces: reply.replaces, at, text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
+    return { id: reply.id, message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), at, text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   }
 }
 

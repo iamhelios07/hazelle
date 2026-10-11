@@ -84,7 +84,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
     await page.getByLabel('메시지', { exact: true }).fill('Keep this note for the journey.');
     await page.getByRole('button', { name: '보내기', exact: true }).click();
     await expect(page.getByRole('article').last()).toContainText('The gate opens.');
-    await expect(page.getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
+    await expect(page.getByRole('article').last().getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
     const frame = await openNotepad(page);
     await frame.getByLabel('메모 내용', { exact: true }).fill(NOTE);
     await expect(frame.getByText('저장했어요', { exact: true })).toBeVisible();
@@ -129,7 +129,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
   await test.step('regeneration rolls back the outgoing summary before building its request', async () => {
     const count = main().length;
     await page.getByRole('article').last().hover();
-    await page.getByRole('button', { name: '다시 생성', exact: true }).click();
+    await page.getByRole('article').last().getByRole('button', { name: '다시 생성', exact: true }).click();
     await expect(page.getByRole('article').last()).toContainText(summary(3));
     expect(main()).toHaveLength(count + 1);
     expect(aux()).toHaveLength(3);
@@ -158,7 +158,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     await page.getByLabel('메시지', { exact: true }).fill(text);
     await page.getByRole('button', { name: '보내기', exact: true }).click();
     await expect(page.getByRole('article').last()).toContainText('The keeper nods.');
-    await expect(page.getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
+    await expect(page.getByRole('article').last().getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
   };
 
   await test.step('pick the embedding model and import the recall tool', async () => {

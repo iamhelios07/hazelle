@@ -1,6 +1,6 @@
 import type { Assembled, PromptInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
-import type { Chat, Message } from '../model/chat';
+import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import { chatModel, type RouteFailure } from './assignment';
 import type { CacheSend } from './cache';
@@ -70,7 +70,9 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
   // it continues nor the calls its receipt carries are dropped.
   const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt, seed: version.seed, ...(version.reasoning && { reasoning: version.reasoning }) } : null;
   if (target.kind === 'continue' && !continues) return null;
-  const said: Said | null = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
+  const end = messages.at(-1);
+  const follows = end ? shown(end).id : null;
+  const said: Said | null = target.kind === 'send' ? { id: ids.said, text: target.text, follows } : null;
   const now = Date.now();
   const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
   // 반전 모드 sends the messages before the target as the reader reads them. A continuation's prompt ends with the
@@ -87,7 +89,7 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
     budget: budgetOf(route.model, sentSettings(session.store, route)),
     memory: memoryFill(session.store, chat, stored.value, history),
     said,
-    reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues },
+    reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, ...(message === null && { follows: said ? said.id : follows }), continues },
   };
 }
 

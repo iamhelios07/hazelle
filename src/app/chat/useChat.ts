@@ -168,7 +168,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [branching, setBranching] = useState(false);
   const { found, search, actions: searchActions } = useChatSearch(messages, texts, translating, flipped, seekTo);
   const { actions: statusActions, ...status } = useChatStatus(chat, shelf?.character ?? null, view, messages);
-  const { editing, actions: editActions } = useMessageEdit(id, last, (message) => ask({ kind: 'regenerate', message: message.id }));
+  const { editing, actions: editActions } = useMessageEdit(id, messages, (message) => ask({ kind: 'regenerate', message: message.id }));
   // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
@@ -275,9 +275,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     const count = message.versions.length;
     const next = message.selected + step;
     if (message === opening) setGreeting((next + count) % count);
-    else if (next >= count) {
-      if (message === last) ask({ kind: 'regenerate', message: message.id });
-    }
+    else if (next >= count && shown(message).greeting === undefined) ask({ kind: 'regenerate', message: message.id });
     else select(message, (next + count) % count);
   }
 

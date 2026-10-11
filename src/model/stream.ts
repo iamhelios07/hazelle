@@ -12,9 +12,10 @@ export type Stream = {
   at: number;
   result: string;
   for:
-    | { kind: 'reply'; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes }
+    // follows: as a message's (model/chat Entry), absent on a call begun before it.
+    | { kind: 'reply'; message: string | null; replaces: string | null; follows?: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes }
     | { kind: 'translation'; version: string }
-    | { kind: 'input'; typed: string; language: string }
+    | { kind: 'input'; typed: string; language: string; follows?: string | null }
     // chapter: the records a chapter call summarizes again; absent for a records call.
     | { kind: 'memory'; sources: Source[]; print: string; chapter?: string[] };
 };

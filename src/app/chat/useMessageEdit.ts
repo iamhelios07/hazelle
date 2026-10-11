@@ -5,7 +5,7 @@ import type { Shown } from '../../runtime/talk';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 
-export function useMessageEdit(id: string | null, last: Shown | undefined, regenerate: (message: Shown) => void) {
+export function useMessageEdit(id: string | null, messages: Shown[], regenerate: (message: Shown) => void) {
   const session = useSession();
   const toast = useToast();
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
@@ -14,7 +14,8 @@ export function useMessageEdit(id: string | null, last: Shown | undefined, regen
     if (!id || !editing) return;
     void editShown(session, id, message, editing.text, editing.translation).then((saved) => saved.ok || toast.failed(saved));
     setEditing(null);
-    if (andReply && last && last.role === 'assistant') regenerate(last);
+    const next = messages[messages.findIndex(({ id: each }) => each === message.id) + 1];
+    if (andReply && next?.role === 'assistant') regenerate(next);
   }
 
   function remove(message: Shown) {

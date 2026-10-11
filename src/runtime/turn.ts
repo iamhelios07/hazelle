@@ -119,8 +119,9 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
   const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
   const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
   if (start) {
-    const said = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
-    return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async (signal) => {
+    const greeting = start.greetings ? start.greetings.choices[start.greetings.selected]!.id : null;
+    const said = target.kind === 'send' ? { id: ids.said, text: target.text, follows: greeting } : null;
+    return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, follows: said ? said.id : greeting, continues: null } }, async (signal) => {
       const unstarted = await startChat(session.store, chat, start.chat, start.greetings);
       if (unstarted) return { kind: 'unstarted', failure: unstarted };
       start.started();
@@ -197,7 +198,8 @@ export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, st
     const made = await resumeTranslation(session.store, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
     if (!made.ok && made.failure.kind === 'stopped') return;
     const id = stream.value.result;
-    const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed, sentIn: purpose.language } } : { id, text: purpose.typed };
+    const follows = purpose.follows !== undefined && { follows: purpose.follows };
+    const said = made.ok ? { id, text: made.translation.text, ...follows, translation: { ...made.translation, text: purpose.typed, sentIn: purpose.language } } : { id, text: purpose.typed, ...follows };
     const saved = await appendUserMessage(session.store, stream.parent!, said);
     if (!saved.ok && saved.error === 'stopped') return;
     if (saved.ok || session.store.children('entry', stream.parent!).some((entry) => entry.id === id)) endCall(session.store, stream.id);
@@ -213,7 +215,7 @@ async function sendTranslated(session: Session, chat: string, turn: TurnContext,
   const messages = session.read.chat(chat).snapshot()!.messages;
   const input = translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text });
   const { language } = input;
-  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language } };
+  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language, ...(typed.follows !== undefined && { follows: typed.follows }) } };
   session.streams.reading.add(target.id);
   const made = await translate(session, input, target, signal, () => {}).finally(() =>
     session.streams.reading.delete(target.id),
@@ -225,6 +227,6 @@ async function sendTranslated(session: Session, chat: string, turn: TurnContext,
   return {
     ...turn,
     scope: { ...turn.scope, messages: turn.scope.messages.with(-1, { ...last, text: sent }) },
-    said: { id: typed.id, text: sent, translation: { ...made.translation, text: typed.text, sentIn: language } },
+    said: { id: typed.id, text: sent, ...(typed.follows !== undefined && { follows: typed.follows }), translation: { ...made.translation, text: typed.text, sentIn: language } },
   };
 }
