@@ -3,8 +3,9 @@ import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
 import { parseScene, pictureRequest, type SceneInvalid } from '../engine/illustrate';
+import type { ModelSettings } from '../connectors/settings';
 import type { RanAway } from '../engine/pipeline';
-import { fold, type Receipt } from '../model/chat';
+import { fold, type Chat, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
 import { paragraphsOf, type Illustration, type Scene } from '../model/illustration';
 import type { Stored } from '../model/kinds';
@@ -71,7 +72,15 @@ export type Drawing = { chat: string; version: string } & ({ stage: 'scene' } | 
 export type Illustrating = ReadonlyMap<string, Drawing>;
 
 type Stopped = { kind: 'stopped' };
-type Deps = Pick<Session, 'store' | 'credentials' | 'files'>;
+type Deps = Pick<Session, 'store' | 'credentials' | 'files' | 'likenesses'>;
+
+// The 삽화 prompt's own model, else the chat's 보조, with its 설정 묶음: what writes a scene and a pack's profiles.
+export function illustrateWriter(store: Deps['store'], chat: Chat, prompt: IllustratePrompt): { route: Route; settings: ModelSettings } | RouteFailure | { kind: 'profile-missing'; own: boolean } {
+  const route = taskModel(store, chat, prompt.model);
+  if ('kind' in route) return route;
+  const profile = modelProfile(store, route.model);
+  return profile.kind === 'missing' ? { kind: 'profile-missing', own: profile.own } : { route, settings: profile.profile.value.settings };
+}
 
 function imageRoute(store: Deps['store'], ref: ModelRef | undefined): ImageRoute | { kind: 'no-image-model' } | { kind: 'image-model-gone' } {
   const routes = drawingModels(store.list('connection'));
@@ -158,6 +167,8 @@ export class Illustrator {
     // A given scene draws with the tags and settings of the prompt chosen now, as a written one does.
     const prompt = illustrationPrompt(store, switches.prompt);
     if (prompt.kind === 'missing') return { kind: 'prompt-missing', own: prompt.own };
+    // Built beside the scene call; a pack whose build fails is drawn without its portraits.
+    const portraits = this.deps.likenesses.portraits(stored.value, prompt.prompt.value, signal);
     let scene = given;
     let receipt: Receipt | null = null;
     if (!scene) {
@@ -170,7 +181,7 @@ export class Illustrator {
       onScene(scene);
     }
     const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-    const request = pictureRequest(scene, prompt.prompt.value, route.model, seed);
+    const request = pictureRequest(scene, prompt.prompt.value, route.model, seed, await portraits);
     const drawn = await this.picture(route, request, spend || switches.spend, signal);
     if ('kind' in drawn) return drawn;
     const saved = await files.save([drawn.bytes], { signal });
@@ -186,10 +197,9 @@ export class Illustrator {
   // device would draw the picture again and pay for it twice.
   private async scene(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scene: Scene; receipt: Receipt } | IllustrateFailure | Stopped> {
     const { store, credentials } = this.deps;
-    const route = taskModel(store, value, prompt.model);
-    if ('kind' in route) return route;
-    const profile = modelProfile(store, route.model);
-    if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
+    const writer = illustrateWriter(store, value, prompt);
+    if ('kind' in writer) return writer;
+    const { route, settings } = writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
     const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
@@ -199,7 +209,7 @@ export class Illustrator {
     if ('kind' in assembled) return assembled;
     const text = gather();
     const call = await pageCall(null);
-    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings: profile.profile.value.settings, messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
+    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(route), answer));
     if (answer.state !== 'done') return { kind: 'failed', receipt };

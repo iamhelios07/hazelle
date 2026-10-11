@@ -8,6 +8,8 @@ import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './t
 import { placeMark } from '../model/illustration';
 import { takeTurn } from './turn';
 import { removeIllustration, restoreIllustration } from './illustrate';
+import { likenessId } from '../model/likeness';
+import { editPortrait } from './likeness';
 
 const { PAINTER } = vi.hoisted(() => {
   const PAINTER: ConnectionType = {
@@ -164,5 +166,86 @@ describe('Illustrator', () => {
       if (!removed.ok) throw new Error(removed.error);
       await restoreIllustration(session.store, removed.data);
       expect(session.store.children('illustration', chat).map(({ id, value }) => [id, value.file])).toEqual([[made.data.id, file]]);
+    }));
+});
+
+// A PNG holding NovelAI's prompt in its Comment chunk, as the bot's own pictures carry it.
+function prompted(prompt: string) {
+  const text = new TextEncoder().encode(`Comment\0${JSON.stringify({ prompt })}`);
+  const chunk = (type: string, data: Uint8Array) => {
+    const out = new Uint8Array(12 + data.length);
+    new DataView(out.buffer).setUint32(0, data.length);
+    out.set(new TextEncoder().encode(type), 4);
+    out.set(data, 8);
+    return out;
+  };
+  return new Uint8Array([...PNG.slice(0, 8), ...chunk('tEXt', text), ...chunk('IEND', new Uint8Array())]);
+}
+
+// Each runs a turn and two draws, past the default 5 s on a loaded machine.
+describe('Illustrator with profiles', { timeout: 15_000 }, () => {
+  const PROFILES = 'You write character profiles';
+  const looks = { characters: [{ name: 'Ari', aliases: ['아리'], look: 'girl, profile silver hair', outfits: [{ name: 'usual', tags: 'maid uniform' }], source: 'metadata' }] };
+  const bare = { ...scene, characters: [{ ...scene.characters[0]!, outfit: '' }] };
+  // By what each request asks, since the profiles' call and the scene's run side by side.
+  const answering = (profiles: string) => (sent: { url: string; body: string | null }) =>
+    sent.body?.includes(PROFILES) ? saying(profiles) : sent.body?.includes('You direct the illustrations') ? saying(JSON.stringify(bare)) : sent.url.endsWith('/free') ? free(true) : sent.url.endsWith('/generate') ? picture() : saying(REPLY);
+
+  async function drawing(session: Session, profiles: string) {
+    const chat = await painted(session);
+    const made = await session.store.create('character', { card: { ...testCard('Ari'), description: 'Ari is a maid.' }, folder: null, loreFolders: [] });
+    if (!made.ok) throw new Error(made.error);
+    const bytes = prompted('1girl, {artist:pen}, silver hair, maid');
+    const file = await session.files.save([bytes]);
+    await session.store.create('asset', { name: 'Ari_smile.png', type: 'image/png', size: bytes.length, file: file.ok ? file.data[0]! : { id: '', key: '' } }, { parent: made.data.id });
+    await session.store.update('chat', chat, (current) => ({ ...current, character: made.data.id }));
+    const log = stubRelay(answering(profiles));
+    await takeTurn(session, chat, { kind: 'answer' });
+    const reply = fold(session.store.children('entry', chat))[1]!;
+    const draw = async () => {
+      const count = session.store.children('illustration', chat).length;
+      session.illustrator.draw(chat, reply.id, shown(reply).id);
+      await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(count + 1), { timeout: 5000 });
+    };
+    return { owner: made.data.id, chat, log, draw, profileCalls: () => log.filter(({ sent }) => sent.body?.includes(PROFILES)) };
+  }
+
+  it("builds the character's profiles beside its first draw, from its text and its pictures' metadata, draws the figure from them, and never builds again", () =>
+    server.withSession(async (session) => {
+      const { owner, chat, log, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
+      await draw();
+      const stored = session.store.get('likeness', likenessId(owner));
+      expect(stored).toMatchObject({ parent: owner, value: { portraits: [{ name: 'Ari', look: 'girl, profile silver hair', artist: '{artist:pen}', source: 'metadata' }], receipt: { state: 'done' } } });
+      expect(profileCalls()[0]!.sent.body).toContain('Ari is a maid.');
+      expect(profileCalls()[0]!.sent.body).toContain('1girl, {artist:pen}, silver hair, maid');
+      const sent = JSON.parse(log.find(({ sent }) => sent.url.endsWith('/generate'))!.sent.body!);
+      expect(sent).toMatchObject({ prompt: expect.stringMatching(/^\{artist:pen\}, 1girl, indoors/), characters: [{ prompt: 'girl, profile silver hair, maid uniform, smile' }] });
+      expect(session.store.children('illustration', chat)[0]!.value.sent.characters[0]!.prompt).toBe('girl, profile silver hair, maid uniform, smile');
+      await draw();
+      expect(profileCalls()).toHaveLength(1);
+    }));
+
+  it('draws without the profiles when their build fails, writes none, keeps the failure, and tries again on the next draw', () =>
+    server.withSession(async (session) => {
+      const { owner, log, draw, profileCalls } = await drawing(session, 'Ari has silver hair.');
+      await draw();
+      expect(session.store.get('likeness', likenessId(owner))).toBeNull();
+      expect(session.likenesses.snapshot().get(owner)).toMatchObject({ stage: 'failed', failure: { kind: 'invalid', reason: 'unreadable' } });
+      expect(JSON.parse(log.find(({ sent }) => sent.url.endsWith('/generate'))!.sent.body!).characters[0].prompt).toBe('girl, silver hair, smile');
+      await draw();
+      expect(profileCalls()).toHaveLength(2);
+    }));
+
+  it('다시 만들기 replaces the profiles, and a tag edit changes only its own field', () =>
+    server.withSession(async (session) => {
+      const { owner, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
+      await draw();
+      expect((await editPortrait(session.store, owner, 'Ari', { outfit: 'usual', tags: 'swimsuit' })).ok).toBe(true);
+      expect(session.store.get('likeness', likenessId(owner))!.value.portraits[0]).toMatchObject({ look: 'girl, profile silver hair', outfits: [{ name: 'usual', tags: 'swimsuit' }] });
+      expect(await editPortrait(session.store, owner, 'Nobody', { look: 'boy' })).toMatchObject({ ok: false, error: 'gone' });
+      session.likenesses.rebuild(owner);
+      await vi.waitFor(() => expect(session.likenesses.snapshot().size).toBe(0));
+      expect(profileCalls()).toHaveLength(2);
+      expect(session.store.get('likeness', likenessId(owner))!.value.portraits[0]!.outfits[0]!.tags).toBe('maid uniform');
     }));
 });

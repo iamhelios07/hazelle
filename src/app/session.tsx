@@ -9,6 +9,7 @@ import type { AccountFacts, Standing } from '../runtime/account';
 import type { Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
 import type { Illustrating, Illustrator } from '../runtime/illustrate';
+import type { Likenesses, LikenessRuns } from '../runtime/likeness';
 import type { Remembering } from '../runtime/memory';
 import { modulesOf } from '../runtime/modules';
 import type { Session } from '../runtime/session';
@@ -63,6 +64,7 @@ export function useStanding(): Standing {
 export const useTalk = (): Talk => useSession().talk;
 export const useTranslator = (): Translator => useSession().translator;
 export const useIllustrator = (): Illustrator => useSession().illustrator;
+export const useLikenesses = (): Likenesses => useSession().likenesses;
 
 // The function is a new one when a picture has loaded, so what shows pictures renders again.
 export function useAssetUrl(): PictureUrl {
@@ -215,6 +217,13 @@ export function useChatMemory(id: string | null): Memory | null {
 export function useIllustrating(): Illustrating {
   const illustrator = useIllustrator();
   return useSyncExternalStore(illustrator.subscribe, illustrator.snapshot);
+}
+
+// 삽화 profiles by pack: one being made, or the failure of the last try. The profiles themselves:
+// useStored('likeness', likenessId(owner)).
+export function useLikenessRuns(): LikenessRuns {
+  const likenesses = useLikenesses();
+  return useSyncExternalStore(likenesses.subscribe, likenesses.snapshot);
 }
 
 export function useScripts(): ScriptsState {

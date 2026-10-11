@@ -1,6 +1,7 @@
 import type { Model, PictureRequest } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Figure, Scene, Shape } from '../model/illustration';
+import type { Portrait } from '../model/likeness';
 import type { IllustratePrompt, PictureTags } from '../model/prompt';
 
 // The scene format below, the parser and the request builder are one contract: a field the prompt asks for is read
@@ -87,15 +88,30 @@ export const PICTURE_DEFAULTS: PictureTags = {
 
 const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 
-// Artist tags lead the base caption (design §6.6). random: the seed of a prompt that fixes none.
-export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Model, random: number): PictureRequest {
+// Exact after these, never fuzzy: a figure the scene names otherwise is drawn from its own tags.
+const nameKey = (name: string) => name.trim().normalize('NFC').toLowerCase();
+
+// Artist tags lead the base caption (design §6.6): the 삽화 prompt's, else the first drawn portrait's. random: the seed
+// of a prompt that fixes none. portraits: the chat's packs' in pack order (runtime/likeness), the character's own first;
+// the scene format does not name them, since each account keeps its own copy of the 삽화 prompt. A figure whose name
+// is a portrait's name or alias takes the portrait's look in place of its own, and its first outfit when the scene
+// gives none.
+export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Model, random: number, portraits: readonly Portrait[]): PictureRequest {
   const { artist, quality, negative } = prompt.tags ?? PICTURE_DEFAULTS;
   const { steps = null, scale = null, rescale = null, sampler = null, seed = random } = prompt.picture ?? {};
+  const byName = new Map<string, Portrait>();
+  for (const portrait of portraits) for (const name of [portrait.name, ...portrait.aliases]) if (nameKey(name) && !byName.has(nameKey(name))) byName.set(nameKey(name), portrait);
+  const matched = scene.characters.map(({ name }) => byName.get(nameKey(name)) ?? null);
+  const drawn = portraits.find((portrait) => matched.includes(portrait) && portrait.artist.trim());
   return {
     model,
-    prompt: tags(artist, scene.setting, scene.framing, quality),
+    prompt: tags(artist.trim() ? artist : (drawn?.artist ?? ''), scene.setting, scene.framing, quality),
     negative: negative.trim(),
-    characters: scene.characters.map(({ look, outfit, action, x, y }) => ({ prompt: tags(look, outfit, action), negative: '', center: { x, y } })),
+    characters: scene.characters.map(({ look, outfit, action, x, y }, index) => {
+      const portrait = matched[index];
+      const drawnAs = portrait ? tags(portrait.look, outfit.trim() ? outfit : (portrait.outfits[0]?.tags ?? ''), action) : tags(look, outfit, action);
+      return { prompt: drawnAs, negative: '', center: { x, y } };
+    }),
     ...SIZES[scene.shape],
     seed,
     steps,

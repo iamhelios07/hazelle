@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Model } from '../connectors/types';
+import type { Portrait } from '../model/likeness';
 import { illustratorPrompt, parseScene, pictureRequest, PICTURE_DEFAULTS, sceneText } from './illustrate';
 
 const answer = {
@@ -39,7 +40,7 @@ it('builds the picture request: characters at their centers, the shape as its si
   const model = { id: 'nai-diffusion-5' } as Model;
   const parsed = parseScene(JSON.stringify(answer), 3);
   if (!parsed.ok) throw new Error(parsed.reason);
-  expect(pictureRequest(parsed.scene, illustratorPrompt(), model, 42)).toEqual({
+  expect(pictureRequest(parsed.scene, illustratorPrompt(), model, 42, [])).toEqual({
     model,
     prompt: `2girls, indoors, cafe, night, wide shot, ${PICTURE_DEFAULTS.quality}`,
     negative: PICTURE_DEFAULTS.negative,
@@ -55,7 +56,7 @@ it('builds the picture request: characters at their centers, the shape as its si
     rescale: null,
     sampler: null,
   });
-  expect(pictureRequest({ ...parsed.scene, shape: 'portrait' }, illustratorPrompt(), model, 1)).toMatchObject({ width: 832, height: 1216 });
+  expect(pictureRequest({ ...parsed.scene, shape: 'portrait' }, illustratorPrompt(), model, 1, [])).toMatchObject({ width: 832, height: 1216 });
 });
 
 it("puts a prompt's own tags and settings into the picture: artist first, an emptied field sends none, a fixed seed", () => {
@@ -63,12 +64,37 @@ it("puts a prompt's own tags and settings into the picture: artist first, an emp
   const parsed = parseScene(JSON.stringify(answer), 3);
   if (!parsed.ok) throw new Error(parsed.reason);
   const prompt = { ...illustratorPrompt(), tags: { artist: 'artist:somebody', quality: '', negative: ' bad hands ' }, picture: { steps: 23, sampler: 'k_euler', seed: 7 } };
-  expect(pictureRequest(parsed.scene, prompt, model, 42)).toMatchObject({
+  expect(pictureRequest(parsed.scene, prompt, model, 42, [])).toMatchObject({
     prompt: 'artist:somebody, 2girls, indoors, cafe, night, wide shot',
     negative: 'bad hands',
     seed: 7,
     steps: 23,
     scale: null,
     sampler: 'k_euler',
+  });
+});
+
+describe('pictureRequest with portraits', () => {
+  const model = { id: 'nai-diffusion-5' } as Model;
+  const scene = (characters: { name: string; outfit: string }[]) => ({ paragraph: 0, shape: 'square' as const, setting: 'indoors', framing: '', characters: characters.map((each) => ({ ...each, look: 'girl, from scene', action: 'smile', x: 0.5, y: 0.5 })) });
+  const portrait = (name: string, more: Partial<Portrait> = {}): Portrait => ({ name, aliases: [], look: `girl, ${name} look`, outfits: [{ name: 'usual', tags: `${name} uniform` }, { name: 'night', tags: 'pajamas' }], artist: '', source: 'text', ...more });
+  const prompts = (characters: { name: string; outfit: string }[], portraits: Portrait[], artist = '') =>
+    pictureRequest(scene(characters), { ...illustratorPrompt(), tags: { ...PICTURE_DEFAULTS, artist } }, model, 1, portraits);
+
+  it("draws a figure named by a portrait's name or alias, after trim, NFC and case, with the portrait's look in place of the scene's", () => {
+    const request = prompts([{ name: ' café ', outfit: 'apron' }, { name: 'ARI', outfit: 'coat' }], [portrait('Ari'), portrait('Mina', { aliases: ['Cafe\u0301'] })]);
+    expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Mina look, apron, smile', 'girl, Ari look, coat, smile']);
+  });
+
+  it("dresses a matched figure in the portrait's first outfit when the scene gives none, and leaves an unmatched figure as written", () => {
+    const request = prompts([{ name: 'Ari', outfit: ' ' }, { name: 'Stranger', outfit: '' }], [portrait('Ari')]);
+    expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, Ari uniform, smile', 'girl, from scene, smile']);
+  });
+
+  it("leads with the prompt's artist tags, else the first drawn portrait's in pack order", () => {
+    const portraits = [portrait('Ari', { artist: 'artist:own' }), portrait('Mina', { artist: 'artist:module' }), portrait('Undrawn', { artist: 'artist:never' })];
+    expect(prompts([{ name: 'Mina', outfit: '' }, { name: 'Ari', outfit: '' }], portraits).prompt).toMatch(/^artist:own, indoors/);
+    expect(prompts([{ name: 'Mina', outfit: '' }], portraits).prompt).toMatch(/^artist:module, indoors/);
+    expect(prompts([{ name: 'Ari', outfit: '' }], portraits, 'artist:chosen').prompt).toMatch(/^artist:chosen, indoors/);
   });
 });
