@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, textTranslation, type Character, type Lore } from '../model/library';
 import { memoryId } from '../model/memory';
+import { likenessId } from '../model/likeness';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
@@ -21,7 +22,7 @@ vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 const picture = () => ({ bytes: randomBytes(64), type: 'image/png' });
 const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: testCard(name), folder: null, loreFolders: [], ...over });
-const none = { avatar: null, assets: [], lore: [] };
+const none = { avatar: null, assets: [], lore: [], likeness: null };
 
 async function savedChat(store: ObjectStore, character: string | null = null) {
   const id = crypto.randomUUID();
@@ -159,7 +160,7 @@ describe('addCharacter', () => {
 });
 
 describe('copyCharacter', () => {
-  it('copies the card under its new name with the lorebook and the picture, and remembers the origin', async () => {
+  it('copies the card under its new name with the lorebook, the picture and the 삽화 profiles, and remembers the origin', async () => {
     const { store, files } = await server.account();
     const luna: Character = { card: { name: '루나' } as Card, folder: 'f', loreFolders: [{ id: 'town', name: '마을' }] };
     const entry = { name: '등대', content: '폭풍 치는 밤의 등대', folder: 'town' } as Lore;
@@ -167,7 +168,8 @@ describe('copyCharacter', () => {
     const imported = saved.ok ? saved.data.id : '';
     const [avatar] = store.children('avatar', imported).map(({ value }) => value);
     const assets = store.children('asset', imported).map(({ value }) => value);
-    const original = await addCharacter(store, luna, { avatar: avatar!, assets, lore: [entry] }, () => {});
+    const likeness = { portraits: [{ name: '루나', aliases: [], look: 'girl', outfits: [], artist: '', source: 'text' as const }], at: 1, receipt: null };
+    const original = await addCharacter(store, luna, { avatar: avatar!, assets, lore: [entry], likeness }, () => {});
     const id = original.ok ? original.data : '';
 
     const copied = await copyCharacter(store, id, '루나 (사본)', () => {});
@@ -176,6 +178,7 @@ describe('copyCharacter', () => {
     expect(store.children('lore', copy).map((lore) => lore.value)).toEqual([entry]);
     expect(store.children('avatar', copy).map(({ value }) => value)).toEqual([avatar]);
     expect(store.children('asset', copy).map(({ value }) => value)).toEqual(assets);
+    expect(store.get('likeness', likenessId(copy))).toMatchObject({ parent: copy, value: likeness });
   });
 });
 
