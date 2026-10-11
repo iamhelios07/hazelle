@@ -91,19 +91,13 @@
   background: var(--color-sidebar);
 }
 
-.home {
+.mark {
   display: flex;
   align-items: center;
   justify-content: center;
   width: var(--control-lg);
   height: var(--control-lg);
   flex-shrink: 0;
-  border-radius: var(--radius-md);
-}
-
-.home:hover,
-.home[aria-current] {
-  background: var(--color-surface-hover);
 }
 
 /* As wide as the rail and reaching past the first and last face, so a face's focus ring fits inside the scroller. */

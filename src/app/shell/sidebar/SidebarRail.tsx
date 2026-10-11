@@ -1,4 +1,4 @@
-import { MessageSquarePlus, PackageOpen, Settings, UserRoundPlus } from 'lucide-react';
+import { LayoutGrid, MessageSquarePlus, PackageOpen, Settings, UserRoundPlus } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { ACTS, importOf, newOf } from '../../common/acts';
@@ -26,10 +26,10 @@ export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: P
   const create = useNewCharacter();
   return (
     <Rail
-      home={{ label: '캐릭터 둘러보기', current: home, onClick: () => navigate(HOME) }}
       fold={fold}
       actions={
         <>
+          <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" framed current={home} onClick={() => navigate(HOME)} />
           <Menu label="추가" trigger={(opener) => <IconButton icon={ACTS.create.icon} label="추가" framed {...opener} />}>
             <MenuItem icon={ACTS.import.icon} label={importOf('봇')} onClick={pick} />
             <MenuItem icon={UserRoundPlus} label={newOf('캐릭터')} onClick={create} />

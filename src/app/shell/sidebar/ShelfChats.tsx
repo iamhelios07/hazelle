@@ -34,7 +34,8 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
       page={page}
       actions={
         <>
-          <NavRow icon={ChevronLeft} label="모든 캐릭터" onClick={onUp} />
+          {/* Wide screens go back by the rail's 캐릭터 둘러보기. */}
+          {page && <NavRow icon={ChevronLeft} label="모든 캐릭터" onClick={onUp} />}
           <SideTitle
             avatar={<ShelfFace shelf={shelf} />}
             name={shelfName(shelf)}

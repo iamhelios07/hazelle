@@ -47,20 +47,20 @@ export function LayerSidebar({ title, onClose, children, footer }: { title: stri
 }
 
 type RailProps = {
-  home: { label: string; current: boolean; onClick: () => void };
   // Only while there is a panel beside the rail to fold.
   fold?: { open: boolean; onToggle: () => void };
   actions: ReactNode;
   children: ReactNode;
 };
 
-// Every button sits above the faces, the fold last so the others stay put when it comes and goes.
-export function Rail({ home, fold, actions, children }: RailProps) {
+// Every button sits above the faces, the fold last so the others stay put when it comes and goes. The mark is only the
+// brand; the way home is a framed button among the actions (user ruling, 2026-10-12).
+export function Rail({ fold, actions, children }: RailProps) {
   return (
     <aside className={styles.rail} aria-label="캐릭터 바로가기">
-      <button type="button" className={styles.home} aria-label={home.label} title={home.label} aria-current={home.current || undefined} onClick={home.onClick}>
+      <div className={styles.mark}>
         <Brand variant="mark" />
-      </button>
+      </div>
       {actions}
       {fold && <IconButton icon={PanelLeft} label={fold.open ? '사이드바 접기' : '사이드바 펼치기'} framed onClick={fold.onToggle} />}
       <Divider variant="rail" />

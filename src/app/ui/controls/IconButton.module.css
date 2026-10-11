@@ -31,7 +31,8 @@
 }
 
 .button:hover:not(:disabled),
-.button[aria-expanded='true'] {
+.button[aria-expanded='true'],
+.button[aria-current] {
   background: var(--color-surface-hover);
   color: var(--color-text);
 }

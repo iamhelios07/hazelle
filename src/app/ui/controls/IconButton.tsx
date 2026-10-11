@@ -9,6 +9,8 @@ type Props = {
   title?: string;
   onClick: () => void;
   pressed?: boolean;
+  // A place's button, lit while that place is open.
+  current?: boolean;
   // A button that opens a menu takes popup, expanded and ref from Menu; one that shows and hides a panel takes
   // expanded alone.
   popup?: 'menu' | 'dialog';
@@ -23,7 +25,7 @@ type Props = {
 };
 
 // label is required: an icon-only button has no other accessible name.
-export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, ref, size = 'md', disabled = false, dot = false, framed = false }: Props) {
+export function IconButton({ icon, label, title = label, onClick, pressed, current, popup, expanded, ref, size = 'md', disabled = false, dot = false, framed = false }: Props) {
   return (
     <button
       ref={ref}
@@ -32,6 +34,7 @@ export function IconButton({ icon, label, title = label, onClick, pressed, popup
       aria-label={label}
       title={title}
       aria-pressed={pressed}
+      aria-current={current ? 'page' : undefined}
       aria-haspopup={popup}
       aria-expanded={expanded}
       disabled={disabled}
