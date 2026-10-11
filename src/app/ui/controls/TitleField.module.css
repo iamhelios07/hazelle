@@ -8,8 +8,9 @@
   background: transparent;
   color: var(--color-text);
   height: var(--control-md);
+  font-family: var(--font-serif);
   font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   transition: border-color var(--duration-fast);
 }
 

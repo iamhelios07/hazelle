@@ -22,8 +22,9 @@
 /* Hangul may break between any two letters; in a narrow panel the actions wrap under the title instead. */
 .title {
   word-break: keep-all;
+  font-family: var(--font-serif);
   font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
 }
 
 .subtitle {
