@@ -18,7 +18,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
     <Screen
       width="form"
       top={<NavBar title={PAGES.display} {...backBar(back)} />}
-      besideOnly
+      preview
       aside={
         <Section title="미리보기">
           <ReadingPreview label="미리보기" reading={reading} rows={SAMPLE} />

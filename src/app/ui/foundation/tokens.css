@@ -287,7 +287,7 @@
   --pane-max-width: 560px;
   --form-max-width: 688px;
   --screen-aside-width: 400px;
-  --screen-split-max-width: calc(var(--form-max-width) + var(--screen-aside-width) + var(--space-32) * 2);
+  --screen-split-max-width: calc(var(--form-max-width) + var(--screen-aside-width) + var(--space-32) * 2 + var(--space-24) * 2);
   /* How far a screen's boxes (SettingGroup, List) hang past its reading line; 0 outside a Screen (Screen.module.css). */
   --box-hang: 0px;
   /* 캐릭터 둘러보기: the narrowest face card, the space between cards, and the widest the grid grows. */

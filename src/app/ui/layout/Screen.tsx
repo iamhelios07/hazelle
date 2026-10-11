@@ -12,13 +12,13 @@ type Props = {
   fill?: boolean;
   // A column beside the body once the screen is wide enough for both; above the body when it is not.
   aside?: ReactNode;
-  // The aside only stands beside the body; stacked, it is left out.
-  besideOnly?: boolean;
+  // The aside previews the body: it stands only beside it, left out when stacked, and stays in view as the body scrolls.
+  preview?: boolean;
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   children: ReactNode;
 };
 
-export function Screen({ top, align = 'start', width = 'narrow', actions, stickyActions = false, fill = false, aside, besideOnly = false, onSubmit, children }: Props) {
+export function Screen({ top, align = 'start', width = 'narrow', actions, stickyActions = false, fill = false, aside, preview = false, onSubmit, children }: Props) {
   const pane = usePane();
   // A page has one main landmark; beside a list, a screen is one section of it.
   const Root = pane ? 'section' : 'main';
@@ -27,7 +27,7 @@ export function Screen({ top, align = 'start', width = 'narrow', actions, sticky
     <>
       {aside ? (
         <div className={styles.columns}>
-          <div className={besideOnly ? `${styles.aside} ${styles.besideOnly}` : styles.aside}>{aside}</div>
+          <div className={preview ? `${styles.aside} ${styles.preview}` : styles.aside}>{aside}</div>
           <div className={styles.body}>{children}</div>
         </div>
       ) : (

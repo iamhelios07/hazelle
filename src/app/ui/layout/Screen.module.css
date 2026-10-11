@@ -78,14 +78,17 @@
   gap: var(--space-24);
 }
 
-.besideOnly {
+.preview {
   display: none;
 }
 
 /* The body's narrowest useful width beside the aside. */
 @container (min-width: 880px) {
-  .besideOnly {
+  /* Only a preview: a taller aside would keep its end out of reach, and a scroll of its own would clip its menus. */
+  .preview {
     display: flex;
+    position: sticky;
+    top: var(--space-32);
   }
 
   .columns {
