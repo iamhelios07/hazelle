@@ -39,13 +39,6 @@ write_files:
   - path: /etc/hazelle/deploy/rclone-backup.sh
     encoding: b64
     content: ${base64encode(copier)}
-  - path: /etc/hazelle/origin.pem
-    encoding: b64
-    content: ${base64encode(origin_cert)}
-  - path: /etc/hazelle/origin.key
-    permissions: "0600"
-    encoding: b64
-    content: ${base64encode(origin_key)}
 runcmd:
   # 1000 is the node user of node:24-alpine, which the app and the copier run as.
   - [mkdir, -p, /data]

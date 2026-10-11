@@ -36,15 +36,6 @@ variable "image_digest" {
   }
 }
 
-# Paths on the owner's machine to the Cloudflare Origin CA certificate and its key.
-variable "origin_cert_file" {
-  type = string
-}
-
-variable "origin_key_file" {
-  type = string
-}
-
 variable "r2_account_id" {
   type      = string
   sensitive = true
@@ -71,8 +62,19 @@ variable "alert_webhook" {
   default   = ""
 }
 
-# Cloudflare's published IPv4 ranges (https://www.cloudflare.com/ips-v4), read 2026-10-05. Only Cloudflare's proxy
-# may reach 80 and 443; the reserved IP is IPv4 and the instance has no IPv6, so no IPv6 ranges are needed.
+# Who may reach 80 and 443. direct: anyone, the DNS record unproxied. cloudflare: only Cloudflare's proxy, the record
+# proxied; the way back if the machine is attacked (README "Edge").
+variable "edge" {
+  type    = string
+  default = "direct"
+  validation {
+    condition     = contains(["direct", "cloudflare"], var.edge)
+    error_message = "edge is direct or cloudflare."
+  }
+}
+
+# Cloudflare's published IPv4 ranges (https://www.cloudflare.com/ips-v4), read 2026-10-05, for edge = cloudflare. The
+# reserved IP is IPv4 and the instance has no IPv6, so no IPv6 ranges are needed.
 variable "cloudflare_ipv4" {
   type = list(string)
   default = [

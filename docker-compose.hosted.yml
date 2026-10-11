@@ -24,10 +24,6 @@ services:
       - 443:443
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      # The Cloudflare Origin CA pair the owner places on the machine; nothing here issues or fetches a certificate.
-      # A missing file stops the start instead of becoming an empty directory.
-      - { type: bind, source: /etc/hazelle/origin.pem, target: /etc/caddy/origin.pem, read_only: true, bind: { create_host_path: false } }
-      - { type: bind, source: /etc/hazelle/origin.key, target: /etc/caddy/origin.key, read_only: true, bind: { create_host_path: false } }
       - caddy:/data
     logging:
       driver: json-file

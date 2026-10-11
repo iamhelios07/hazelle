@@ -1,7 +1,7 @@
-# Cloudflare's proxy in Full (strict) mode is the only client: it terminates the public TLS and checks this origin
-# against the Origin CA certificate mounted below. With an explicit certificate Caddy runs no ACME for the name.
+# Caddy's own Let's Encrypt certificate serves either edge (infra/ variable edge): visitors directly, or Cloudflare's
+# proxy in Full (strict), which trusts it. Its ACME account and certificate live in the caddy volume; a lost volume
+# issues again and counts against Let's Encrypt's weekly limit.
 hazelle.app {
-	tls /etc/caddy/origin.pem /etc/caddy/origin.key
 	reverse_proxy app:8080 {
 		# Replies stream as they are written; buffering would hold them until the end.
 		flush_interval -1

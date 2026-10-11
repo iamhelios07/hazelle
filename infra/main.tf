@@ -18,14 +18,14 @@ resource "vultr_firewall_rule" "ssh" {
 }
 
 resource "vultr_firewall_rule" "web" {
-  for_each          = { for pair in setproduct(var.cloudflare_ipv4, ["80", "443"]) : "${pair[0]} ${pair[1]}" => pair }
+  for_each          = { for pair in setproduct(var.edge == "direct" ? ["0.0.0.0/0"] : var.cloudflare_ipv4, ["80", "443"]) : "${pair[0]} ${pair[1]}" => pair }
   firewall_group_id = vultr_firewall_group.hazelle.id
   protocol          = "tcp"
   ip_type           = "v4"
   subnet            = split("/", each.value[0])[0]
   subnet_size       = tonumber(split("/", each.value[0])[1])
   port              = each.value[1]
-  notes             = "cloudflare"
+  notes             = var.edge
 }
 
 # The address hazelle.app points at; it outlives a rebuilt instance.
@@ -70,8 +70,6 @@ resource "vultr_instance" "hazelle" {
     compose_hosted = file("${path.module}/../docker-compose.hosted.yml")
     caddyfile      = file("${path.module}/../deploy/Caddyfile")
     copier         = file("${path.module}/../deploy/rclone-backup.sh")
-    origin_cert    = file(var.origin_cert_file)
-    origin_key     = file(var.origin_key_file)
   })
   lifecycle {
     # scripts/destroy.sh is the only path that lifts this, after it verified the newest off-site generation.
