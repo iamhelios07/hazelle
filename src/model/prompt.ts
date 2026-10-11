@@ -47,8 +47,19 @@ export type PlainSlot = Named & { kind: 'slot'; slot: Exclude<SlotKind, Wrapped 
 export type Block = TextBlock | WrappedSlot | ChatSlot | PlainSlot;
 
 // key is what conditions name ({{#when::toggle::key}}, toggle_key); label is what screens show. Values are
-// strings because CBS reads them: a check is '1' or '0', a choice is its option's index.
-export type Toggle = { key: string; label: string } & ({ kind: 'check'; default: '0' | '1' } | { kind: 'choice'; options: string[]; default: string });
+// strings because CBS reads them: a check is '1' or '0', a choice is its option's index, a text what was typed
+// (lines: a box of several lines).
+export type Toggle = { key: string; label: string } & (
+  | { kind: 'check'; default: '0' | '1' }
+  | { kind: 'choice'; options: string[]; default: string }
+  | { kind: 'text'; lines?: true; default: string }
+);
+
+// A line of a toggle list that holds no value and only lays the list out: a group runs to its groupEnd, as in Risu.
+// It has no key, so it never reaches what reads values (chatToggles, toggleValue).
+export type ToggleMark = { kind: 'divider'; label: string } | { kind: 'caption'; label: string } | { kind: 'group'; label: string } | { kind: 'groupEnd' };
+export type ToggleLine = Toggle | ToggleMark;
+export const isToggle = (line: ToggleLine): line is Toggle => 'key' in line;
 
 // A character's or 캐릭터 없이's toggle values by key, over the declared defaults.
 export type ToggleValues = Record<string, string>;

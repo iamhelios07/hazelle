@@ -25,12 +25,20 @@ import type { TranslateInput } from './translate';
 type Reader = { store: Pick<ObjectStore, 'get' | 'children' | 'scopeState'> };
 
 // Order (design §6.5): its character's own, then the modules on in every chat, then its prompt's, then the
-// character's, each once where it first appears. A module that is gone or deleted is off.
+// character's, then its persona's, each once where it first appears. A module that is gone or deleted is off.
 // module: null for the character's own pack.
-export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character' | 'prompt'>): { id: string; pack: Pack; module: { namespace: string | null } | null }[] {
+export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character' | 'prompt' | 'persona'>): { id: string; pack: Pack; module: { namespace: string | null } | null }[] {
   const character = chat.character === null ? null : store.get('character', chat.character);
   const prompt = chatPrompt(store, chat);
-  const modules = [...new Set([...(store.get('settings', SETTINGS_ID)?.value.modules ?? []), ...(prompt.kind === 'prompt' ? (prompt.prompt.value.modules ?? []) : []), ...(character?.value.modules ?? [])])];
+  const persona = chatPersona(store, chat);
+  const modules = [
+    ...new Set([
+      ...(store.get('settings', SETTINGS_ID)?.value.modules ?? []),
+      ...(prompt.kind === 'prompt' ? (prompt.prompt.value.modules ?? []) : []),
+      ...(character?.value.modules ?? []),
+      ...(persona.kind === 'persona' ? (persona.persona.value.modules ?? []) : []),
+    ]),
+  ];
   return [
     ...(character ? [{ id: character.id, pack: character.value.card, module: null }] : []),
     ...modules.flatMap((id) => {

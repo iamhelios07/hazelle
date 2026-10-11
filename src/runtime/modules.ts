@@ -56,11 +56,16 @@ export function setPromptModule(store: ObjectStore, prompt: StoredPrompt<'conver
   return store.update('prompt', prompt.id, (current) => (current.task === undefined ? { ...current, modules: switched(current.modules, id, on) } : current));
 }
 
-export type ModulePlace = { kind: 'always' } | { kind: 'character'; id: string } | { kind: 'prompt'; prompt: StoredPrompt<'conversation'> };
+export function setPersonaModule(store: ObjectStore, persona: string, id: string, on: boolean): Promise<ApiResult<Stored<'persona'>>> {
+  return store.update('persona', persona, (current) => ({ ...current, modules: switched(current.modules, id, on) }));
+}
+
+export type ModulePlace = { kind: 'always' } | { kind: 'character'; id: string } | { kind: 'prompt'; prompt: StoredPrompt<'conversation'> } | { kind: 'persona'; id: string };
 
 export function setModuleAt(store: ObjectStore, place: ModulePlace, id: string, on: boolean): Promise<ApiResult<unknown>> {
   if (place.kind === 'always') return setModuleAlways(store, id, on);
   if (place.kind === 'character') return setCharacterModule(store, place.id, id, on);
+  if (place.kind === 'persona') return setPersonaModule(store, place.id, id, on);
   return setPromptModule(store, place.prompt, id, on);
 }
 

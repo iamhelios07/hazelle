@@ -19,12 +19,12 @@ export type PersonaSource = 'chat' | 'character' | 'current';
 // another persona, and a turn stops on it.
 export type PersonaChoice = { kind: 'persona'; persona: Stored<'persona'>; from: PersonaSource } | { kind: 'missing'; from: PersonaSource };
 
-function followed(store: Pick<ObjectStore, 'get'>, chat: Chat): [PersonaSource, string | undefined] {
+function followed(store: Pick<ObjectStore, 'get'>, chat: Pick<Chat, 'character' | 'persona'>): [PersonaSource, string | undefined] {
   const pinned = chat.character === null ? undefined : store.get('character', chat.character)?.value.persona;
   return chat.persona !== undefined ? ['chat', chat.persona] : pinned !== undefined ? ['character', pinned] : ['current', store.get('settings', SETTINGS_ID)?.value.persona];
 }
 
-export function chatPersona(store: Pick<ObjectStore, 'get'>, chat: Chat): PersonaChoice {
+export function chatPersona(store: Pick<ObjectStore, 'get'>, chat: Pick<Chat, 'character' | 'persona'>): PersonaChoice {
   const [from, id] = followed(store, chat);
   const persona = id === undefined ? null : live(store.get('persona', id));
   return persona ? { kind: 'persona', persona, from } : { kind: 'missing', from };

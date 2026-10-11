@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fold } from '../model/chat';
 import { startChat } from './chat-log';
 import { projectGreetings } from './greetings';
-import { editModule, importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleDeleted, setPromptModule } from './modules';
+import { editModule, importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleAt, setModuleDeleted, setPromptModule } from './modules';
 import { addPrompt, chatPrompt, ofSort } from './prompts';
 import { answerable, saying, stubRelay, testCard, testServer } from './testing';
 import { evaluateChat, packsOf, togglesOf } from './chat-context';
@@ -58,21 +58,25 @@ describe('modules', () => {
       expect((await shown()).texts[0]).toBe('the STAR');
     }));
 
-  it("orders a chat's packs as its character's own, then 항상, then its prompt's, then its character's, each once", async () => {
+  it("orders a chat's packs as its character's own, then 항상, then its prompt's, then its character's, then its persona's, each once", async () => {
     const { store, files } = await server.account();
     const module = async (name: string) => {
       const added = await importModule(store, files, { name, description: '', namespace: null, risu: null, pack: { regex: [], triggers: [], toggles: '' }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
       if (!added.ok) throw new Error(added.error);
       return added.data.id;
     };
-    const [always, both, own] = [await module('항상'), await module('둘 다'), await module('캐릭터')];
+    const [always, both, own, worn] = [await module('항상'), await module('둘 다'), await module('캐릭터'), await module('페르소나')];
     const character = await store.create('character', { card: testCard('루나'), folder: null, loreFolders: [], modules: [own, both] });
     const prompt = await addPrompt(store, '짝', 'conversation');
     if (!character.ok || !prompt.ok || !ofSort(prompt.data, 'conversation')) throw new Error('fixture');
     await setModuleAlways(store, always, true);
     await setPromptModule(store, prompt.data, both, true);
     await setPromptModule(store, prompt.data, always, true);
-    expect(packsOf(store, { character: character.data.id, prompt: prompt.data.id }).map(({ id }) => id)).toEqual([character.data.id, always, both, own]);
+    const persona = await store.create('persona', { name: '나', description: '', picture: null });
+    if (!persona.ok) throw new Error(persona.error);
+    await setModuleAt(store, { kind: 'persona', id: persona.data.id }, worn, true);
+    await setModuleAt(store, { kind: 'persona', id: persona.data.id }, own, true);
+    expect(packsOf(store, { character: character.data.id, prompt: prompt.data.id, persona: persona.data.id }).map(({ id }) => id)).toEqual([character.data.id, always, both, own, worn]);
   });
 
   it('renames a module and rewrites its description, keeping its pack', async () => {

@@ -60,7 +60,7 @@ export const KINDS = {
   lore: { parent: ['character', 'module'] },
   avatar: { parent: 'character', file: true },
   asset: { parent: ['character', 'module'], file: true },
-  likeness: { parent: ['character', 'module'] },
+  likeness: { parent: ['character', 'module', 'persona'] },
   chat: { parent: null, owner: { field: 'character', kind: 'character' } },
   entry: { parent: 'chat', appendOnly: true },
   summary: { parent: 'chat' },
