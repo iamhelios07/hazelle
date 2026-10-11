@@ -106,9 +106,13 @@
   background: var(--color-surface-hover);
 }
 
+/* As wide as the rail and reaching past the first and last face, so a face's focus ring fits inside the scroller. */
 .railList {
   flex-grow: 1;
+  align-self: stretch;
   min-height: 0;
+  margin: calc(-1 * (var(--focus-ring-width) + var(--focus-ring-offset))) 0;
+  padding: calc(var(--focus-ring-width) + var(--focus-ring-offset)) 0;
   display: flex;
   flex-direction: column;
   align-items: center;

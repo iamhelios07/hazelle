@@ -43,9 +43,9 @@
 }
 
 .rail {
-  --viewport-estimate: var(--control-md);
+  --viewport-estimate: var(--control-lg);
   --viewport-gap: var(--space-4);
-  width: var(--control-md);
+  width: var(--control-lg);
 }
 
 .grid {
