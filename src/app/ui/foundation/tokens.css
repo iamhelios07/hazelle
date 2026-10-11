@@ -112,8 +112,8 @@
   --color-warn: var(--palette-coral-400);
   --color-success: var(--palette-mint-400);
   --color-focus: var(--color-accent);
-  --color-sidebar: var(--palette-ink-850);
-  --color-divider: var(--palette-ink-780);
+  --color-sidebar: var(--palette-ink-800);
+  --color-divider: var(--palette-ink-700);
   /* The lines of a list of rows: between the rows and round the box that holds them. A pane's edge is --color-divider. */
   --color-row-line: var(--color-surface-raised);
   --color-scrim: var(--palette-scrim);

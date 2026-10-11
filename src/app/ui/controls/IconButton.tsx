@@ -18,15 +18,17 @@ type Props = {
   disabled?: boolean;
   // Something behind it needs a look, such as a failure inside the menu it opens; the words are inside.
   dot?: boolean;
+  // A border round it, for a button that stands alone in a column of pictures, such as the rail's.
+  framed?: boolean;
 };
 
 // label is required: an icon-only button has no other accessible name.
-export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, ref, size = 'md', disabled = false, dot = false }: Props) {
+export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, ref, size = 'md', disabled = false, dot = false, framed = false }: Props) {
   return (
     <button
       ref={ref}
       type="button"
-      className={size === 'md' ? styles.button : `${styles.button} ${styles[size]}`}
+      className={[styles.button, size !== 'md' && styles[size], framed && styles.framed].filter(Boolean).join(' ')}
       aria-label={label}
       title={title}
       aria-pressed={pressed}

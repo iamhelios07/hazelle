@@ -29,14 +29,14 @@ export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: P
       home={{ label: '캐릭터 둘러보기', current: home, onClick: () => navigate(HOME) }}
       fold={fold}
       actions={
-        <Menu label="추가" trigger={(opener) => <IconButton icon={ACTS.create.icon} label="추가" {...opener} />}>
+        <Menu label="추가" trigger={(opener) => <IconButton icon={ACTS.create.icon} label="추가" framed {...opener} />}>
           <MenuItem icon={ACTS.import.icon} label={importOf('봇')} onClick={pick} />
           <MenuItem icon={UserRoundPlus} label={newOf('캐릭터')} onClick={create} />
           <MenuItem icon={PackageOpen} label="Risu에서 이사" onClick={move} />
           <MenuItem icon={MessageSquarePlus} label={`${NO_CHARACTER} 새 채팅`} onClick={() => navigate({ kind: 'new-chat', character: null })} />
         </Menu>
       }
-      footer={<IconButton icon={Settings} label={SETTINGS} onClick={() => navigate(settingsEntry(true))} />}
+      footer={<IconButton icon={Settings} label={SETTINGS} framed onClick={() => navigate(settingsEntry(true))} />}
     >
       <Viewport keys={shelves.map((shelf) => shelf.id ?? 'none')} variant="rail" current={current && (current.id ?? 'none')}>{(index) => {
         const shelf = shelves[index]!;

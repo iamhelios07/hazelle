@@ -64,7 +64,7 @@ export function Rail({ home, fold, actions, children, footer }: RailProps) {
       {actions}
       <Divider variant="rail" />
       <div className={styles.railList}>{children}</div>
-      {fold && <IconButton icon={PanelLeft} label={fold.open ? '사이드바 접기' : '사이드바 펼치기'} onClick={fold.onToggle} />}
+      {fold && <IconButton icon={PanelLeft} label={fold.open ? '사이드바 접기' : '사이드바 펼치기'} framed onClick={fold.onToggle} />}
       {footer}
     </aside>
   );
