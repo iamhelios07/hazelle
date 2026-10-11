@@ -20,7 +20,7 @@ import type { FrontendOptions } from './frontend-worker';
 import { fail, type Services } from './http';
 import { tokenBucket } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
-import { refreshPrices } from './prices';
+import { refreshModelsDev } from './models-dev';
 import { reconcile } from './reconcile';
 import { streamRegistry } from './stream-registry';
 import { streamStore } from './db/streams-db';
@@ -119,7 +119,7 @@ await once(frontend, 'message');
 log('listening', { port, dataDir, migrationsApplied: applied });
 
 const hourly = () => {
-  ctx.waitUntil(refreshPrices(db, outbound));
+  ctx.waitUntil(refreshModelsDev(db, outbound));
   ctx.waitUntil(forgetOldRecords(db));
   ctx.waitUntil(reconcile(dataDir, db).then(({ removed }) => removed.length && log('reconciled', { removed })));
 };

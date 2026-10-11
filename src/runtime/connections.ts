@@ -63,14 +63,20 @@ const sameValue = (a: unknown, b: unknown) => {
 };
 
 // A loaded model list makes each starred snapshot what the list says of the model now, keeping the user's own fields
-// (profile). A model the list no longer has keeps its snapshot, and one it leaves unpriced keeps the price it had: a
-// price list that did not load reads the same.
+// (profile). A model the list no longer has keeps its snapshot, and one it leaves unpriced, or whose inputs or outputs it
+// leaves unknown, keeps what it had: a models.dev list that did not load reads the same.
 export async function refreshStarred(store: ObjectStore, id: string, models: Model[]): Promise<void> {
   const loaded = new Map(models.map((model) => [model.id, model]));
   const fresh = (model: Starred): Starred => {
     const listed = loaded.get(model.id);
     if (!listed) return model;
-    return { ...listed, ...(listed.price === undefined && model.price !== undefined && { price: model.price }), ...(model.profile !== undefined && { profile: model.profile }) };
+    return {
+      ...listed,
+      input: listed.input ?? model.input,
+      output: listed.output ?? model.output,
+      ...(listed.price === undefined && model.price !== undefined && { price: model.price }),
+      ...(model.profile !== undefined && { profile: model.profile }),
+    };
   };
   if (store.get('connection', id)?.value.starred.every((model) => sameValue(fresh(model), model)) !== false) return;
   await store.update('connection', id, (current) => ({ ...current, starred: current.starred.map(fresh) }));

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bareModel } from './chat-completions';
-import { joinPrices, priceCost, statedPrice } from './pricing';
+import type { ListedModel } from './models-dev';
+import { joinModelsDev, priceCost, statedPrice } from './pricing';
 import type { Price, Usage } from './types';
 
 const usage = (input: number, output: number, cached: number | null = null, written: number | null = null): Usage => ({
@@ -27,12 +28,24 @@ describe('priceCost', () => {
   });
 });
 
-describe('joinPrices', () => {
+describe('joinModelsDev', () => {
+  const listed = (price: Price | null): ListedModel => ({ price, input: ['text', 'image'], output: ['text'] });
+
   it('keeps a price the model list states, matches exactly and then ignoring case, and never by likeness', () => {
     const stated = { ...bareModel('deepseek-ai/DeepSeek-V4'), price: statedPrice(1, 2, null, null) };
-    const list = { fetchedAt: 7, models: { 'deepseek-ai/DeepSeek-V4': { ...opus, input: 9 }, 'moonshotai/kimi-k3': opus, 'gpt-5.4': opus } };
-    const joined = joinPrices([stated, bareModel('moonshotai/Kimi-K3'), bareModel('gpt-5.4-mini')], list);
+    const list = { fetchedAt: 7, models: { 'deepseek-ai/DeepSeek-V4': listed({ ...opus, input: 9 }), 'moonshotai/kimi-k3': listed(opus), 'gpt-5.4': listed(opus) } };
+    const joined = joinModelsDev([stated, bareModel('moonshotai/Kimi-K3'), bareModel('gpt-5.4-mini')], list);
     expect(joined.map((model) => model.price)).toEqual([{ input: 1, output: 2, cacheRead: null, cacheWrite: null, tiers: [], asOf: null }, { ...opus, asOf: 7 }, undefined]);
-    expect(joinPrices([bareModel('gpt-5.4')], { fetchedAt: null, models: {} })[0]!.price).toBeUndefined();
+    expect(joinModelsDev([bareModel('gpt-5.4')], { fetchedAt: null, models: {} })[0]!.price).toBeUndefined();
+  });
+
+  it('fills inputs and outputs the model list leaves unknown, keeps those it states, and leaves a model models.dev does not know unknown', () => {
+    const list = { fetchedAt: 7, models: { 'gemini-2.5-flash': listed(null), 'gpt-5.4': listed(opus) } };
+    const joined = joinModelsDev([bareModel('gemini-2.5-flash'), { ...bareModel('gpt-5.4'), input: ['text'] }, bareModel('gemini-9')], list);
+    expect(joined.map(({ input, output, price }) => ({ input, output, price }))).toEqual([
+      { input: ['text', 'image'], output: ['text'], price: undefined },
+      { input: ['text'], output: ['text'], price: { ...opus, asOf: 7 } },
+      { input: null, output: null, price: undefined },
+    ]);
   });
 });

@@ -1,10 +1,10 @@
 // Prices come from models.dev's database, never from a table typed in here or a pricing page read (user, 2026-10-04).
 // The server reads this module too (eslint/boundaries.js), so it stays data and types only.
 
-// models.dev's provider id for each connection type it prices; a type left out costs 알 수 없음 unless its provider
-// reports the cost or its model list states prices. credit: the provider bills in AI credits of $0.01 (Copilot), so a
-// cost worked out from the list is shown in credits.
-export const PRICE_LISTS: Readonly<Partial<Record<string, { list: string; credit?: true }>>> = {
+// models.dev's provider id for each connection type it lists; a type left out costs 알 수 없음 unless its provider
+// reports the cost or its model list states prices, and its models take and give only what their list says. credit:
+// the provider bills in AI credits of $0.01 (Copilot), so a cost worked out from the list is shown in credits.
+export const MODELS_DEV_LISTS: Readonly<Partial<Record<string, { list: string; credit?: true }>>> = {
   openrouter: { list: 'openrouter' },
   vercel: { list: 'vercel' },
   ollama: { list: 'ollama-cloud' },
@@ -27,11 +27,18 @@ export const PRICE_LISTS: Readonly<Partial<Record<string, { list: string; credit
   copilot: { list: 'github-copilot', credit: true },
 };
 
+// models.dev's words for what a model takes and gives, as the app's Modality names them; any other word is dropped.
+export const MODELS_DEV_MODALITIES = { text: 'text', image: 'image', audio: 'audio', video: 'video', pdf: 'file' } as const;
+export type ListedModality = (typeof MODELS_DEV_MODALITIES)[keyof typeof MODELS_DEV_MODALITIES];
+
 // A tier's rates replace the base ones once the request's input tokens exceed above. Tiers ascend by above.
 export type PriceTier = { above: number; input: number; output: number; cacheRead: number | null; cacheWrite: number | null };
 
 // USD per million tokens. A null cache rate is one the list does not state.
 export type Rates = { input: number; output: number; cacheRead: number | null; cacheWrite: number | null; tiers: PriceTier[] };
 
-// GET /api/prices?provider=<list>. fetchedAt is null, and models empty, until the server's first fetch has landed.
-export type PriceList = { fetchedAt: number | null; models: Record<string, Rates> };
+// price: null where models.dev cannot price the model whole. input, output: null where it does not say.
+export type ListedModel = { price: Rates | null; input: ListedModality[] | null; output: ListedModality[] | null };
+
+// GET /api/models-dev?provider=<list>. fetchedAt is null, and models empty, until the server's first fetch has landed.
+export type ModelsDevList = { fetchedAt: number | null; models: Record<string, ListedModel> };

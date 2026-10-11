@@ -1,4 +1,4 @@
-import type { PriceList } from './price-list';
+import type { ModelsDevList } from './models-dev';
 import type { Cost, Model, Price, Usage } from './types';
 
 // A price the provider's own model list states, in USD per million tokens; none without both its input and output rate.
@@ -6,16 +6,18 @@ export function statedPrice(input: number | null, output: number | null, cacheRe
   return input === null || output === null ? undefined : { input, output, cacheRead, cacheWrite, tiers: [], asOf: null };
 }
 
-// A price the model list states is the provider's own and is kept. Ids match exactly, then ignoring case, never by
-// likeness: a model models.dev names otherwise stays unpriced.
-export function joinPrices(models: Model[], list: PriceList | null): Model[] {
+// What the model list states is the provider's own and is kept: its price, and its inputs and outputs where it does not
+// leave them null. Ids match exactly, then ignoring case, never by likeness: a model models.dev names otherwise stays
+// unpriced, and what it takes and gives unknown.
+export function joinModelsDev(models: Model[], list: ModelsDevList | null): Model[] {
   const asOf = list?.fetchedAt;
   if (!list || !asOf) return models;
   const exact = new Map(Object.entries(list.models));
-  const folded = new Map([...exact].map(([id, rates]) => [id.toLowerCase(), rates]));
+  const folded = new Map([...exact].map(([id, listed]) => [id.toLowerCase(), listed]));
   return models.map((model) => {
-    const rates = model.price ? null : (exact.get(model.id) ?? folded.get(model.id.toLowerCase()));
-    return rates ? { ...model, price: { ...rates, asOf } } : model;
+    const listed = exact.get(model.id) ?? folded.get(model.id.toLowerCase());
+    if (!listed) return model;
+    return { ...model, input: model.input ?? listed.input, output: model.output ?? listed.output, ...(!model.price && listed.price && { price: { ...listed.price, asOf } }) };
   });
 }
 

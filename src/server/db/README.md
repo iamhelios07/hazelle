@@ -5,7 +5,7 @@ Everything the server keeps lives under one directory (`HAZELLE_DATA`, `/data` i
 ```
 lock.sqlite                      the process's exclusive lock (node.ts): a second process on the directory exits
 service.sqlite                   accounts, sessions, vaults, service, installation, reports, admin_log, restores,
-                                 account_files, file_blocks, notices, prices, price_fetch, snapshots, migrations
+                                 account_files, file_blocks, notices, models_dev, models_dev_fetch, snapshots, migrations
 accounts/<incarnation>.sqlite    one account's objects (head, objects, kv), WAL mode
 files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written
 streams.sqlite                   reply stream pages and their alarms (the alarm row is a stream's reservation); meta(version), a newer one is refused

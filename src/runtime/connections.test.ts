@@ -52,15 +52,15 @@ describe('setStarred', () => {
 });
 
 describe('refreshStarred', () => {
-  it('takes what the list says of each starred model now, keeping its 설정 묶음, a price the list leaves out, and a model it no longer lists', () =>
+  it('takes what the list says of each starred model now, keeping its 설정 묶음, a price and inputs the list leaves out, and a model it no longer lists', () =>
     server.withSession(async ({ store }) => {
       const base: Model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
       const price = { input: 1, output: 2, cacheRead: null, cacheWrite: null, tiers: [], asOf: null };
-      const saved = await store.create('connection', { ...openRouter, starred: [{ ...base, price, profile: 'p' }, { ...base, id: 'gone' }] });
+      const saved = await store.create('connection', { ...openRouter, starred: [{ ...base, input: ['text', 'image'], price, profile: 'p' }, { ...base, id: 'gone' }] });
       const id = saved.ok ? saved.data.id : '';
       const listed = { ...base, name: 'M 2', protocol: 'anthropic-messages' as const, later: 'a field a later version adds' };
       await refreshStarred(store, id, [listed]);
-      expect(store.get('connection', id)?.value.starred).toEqual([{ ...listed, price, profile: 'p' }, { ...base, id: 'gone' }]);
+      expect(store.get('connection', id)?.value.starred).toEqual([{ ...listed, input: ['text', 'image'], price, profile: 'p' }, { ...base, id: 'gone' }]);
       const rev = store.get('connection', id)!.rev;
       await refreshStarred(store, id, [{ ...listed }]);
       expect(store.get('connection', id)!.rev).toBe(rev);
