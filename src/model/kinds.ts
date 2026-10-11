@@ -2,6 +2,7 @@ import type { Connection } from '../connectors/types';
 import type { Chat, Entry, Summary } from './chat';
 import type { Asset, Avatar, Character, Folder, Lore, Module } from './library';
 import type { Illustration } from './illustration';
+import type { Likeness } from './likeness';
 import type { Memory, Vectors } from './memory';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
@@ -20,6 +21,7 @@ export type Values = {
   lore: Lore;
   avatar: Avatar;
   asset: Asset;
+  likeness: Likeness;
   // A chat's own picture, brought from Risu's inlay store: an asset of the chat, never of its card.
   inlay: Asset;
   chat: Chat;
@@ -58,6 +60,7 @@ export const KINDS = {
   lore: { parent: ['character', 'module'] },
   avatar: { parent: 'character', file: true },
   asset: { parent: ['character', 'module'], file: true },
+  likeness: { parent: ['character', 'module'] },
   chat: { parent: null, owner: { field: 'character', kind: 'character' } },
   entry: { parent: 'chat', appendOnly: true },
   summary: { parent: 'chat' },
@@ -146,6 +149,7 @@ const SHAPES = {
   }),
   avatar: shape({ type: str, size: num, thumb: str, file: shape({ id: str, key: str }) }),
   asset: picture,
+  likeness: shape({ portraits: listOf(shape({ ...all(str, 'name', 'look', 'artist', 'source'), aliases: listOf(str), outfits: listOf(shape(all(str, 'name', 'tags'))) })), at: num, receipt: orNull(isRecord) }),
   inlay: picture,
   chat: shape({ title: orNull(str), character: orNull(str), models: isRecord }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),

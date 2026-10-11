@@ -68,7 +68,13 @@ export type Starred = Model & { profile?: string };
 
 // cache: the prompt up to and including this message is a cache point. Only a request whose model settings turn
 // caching on sends it, and a codec never puts the field itself on the wire.
-export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true };
+// pictures: shown to the model with a user message's text, each codec in its own wire shape. Sent only to a model that
+// sees pictures (seesPictures); a request carrying them to any other is refused before sending.
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true; pictures?: InputPicture[] };
+// type: the media type; data: the bytes as base64.
+export type InputPicture = { type: string; data: string };
+// A model whose catalog does not say takes no picture: an unknown is never sent one.
+export const seesPictures = (model: Pick<Model, 'input'>) => model.input?.includes('image') === true;
 export type ChatRequest = { model: Model; messages: ChatMessage[]; settings: ModelSettings };
 
 // A missing count stays null. Filling it with 0 would read as a measured zero and shrink totals.
