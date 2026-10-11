@@ -80,6 +80,12 @@
   justify-content: flex-start;
 }
 
+/* A field's own width (an input's size) would push past a narrow row, as in a side panel. */
+.wide .control > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .wide .error,
 .wide .note {
   justify-self: start;
