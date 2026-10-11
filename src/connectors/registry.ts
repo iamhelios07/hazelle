@@ -30,7 +30,7 @@ import { voyage } from './voyage';
 import { xai } from './xai';
 import { PRICE_LISTS } from './price-list';
 import { priceCost } from './pricing';
-import { ConnectorError, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
+import { carriesPictures, ConnectorError, seesPictures, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
 
 // Adding a provider means adding its connection type here. Nothing else names one. The order is the screen's, 주요 too.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [
@@ -164,8 +164,16 @@ function sending(route: Route, { model, messages, settings: stored }: ChatReques
   return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
 }
 
+// Refused here, not in sending, which cacheView shares: a forecast never refuses.
 export function chatRequest(route: Route, request: ChatRequest): HttpRequest {
   const sent = sending(route, request);
+  const pictures = sent.messages.some(carriesPictures);
+  if (pictures && !seesPictures(sent.model)) throw new ConnectorError('no-picture-input');
+  const built = codecRequest(route, sent);
+  return pictures && route.type?.pictureHeaders ? { ...built, headers: { ...built.headers, ...route.type.pictureHeaders } } : built;
+}
+
+function codecRequest(route: Route, sent: ChatRequest): HttpRequest {
   const { reasoning, maxOutput } = sent.settings;
   const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
   const mark = cacheWay(route, sent.model)?.mark ?? null;
@@ -193,7 +201,12 @@ const MAX_POINTS = 4;
 function cachePoints(messages: ChatMessage[], caching: boolean): ChatMessage[] {
   const points = messages.flatMap((message, index) => (message.cache ? [index] : []));
   const kept = new Set(caching ? [...points.slice(0, MAX_POINTS - 1), ...points.slice(-1)] : []);
-  return messages.map((message, index) => (!message.cache || kept.has(index) ? message : { role: message.role, content: message.content }));
+  return messages.map((message, index) => {
+    if (!message.cache || kept.has(index)) return message;
+    const dropped = { ...message };
+    delete dropped.cache;
+    return dropped;
+  });
 }
 
 export function withCredential({ type, codec }: Route, request: HttpRequest, credential: string): HttpRequest {

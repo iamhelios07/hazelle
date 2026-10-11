@@ -1,6 +1,6 @@
 import { streamError } from './errors';
 import type { Cache, Reasoning } from './settings';
-import { ConnectorError, type ChatMessage, type Codec, type Modality } from './types';
+import { carriesPictures, ConnectorError, type ChatMessage, type Codec, type InputPicture, type Modality } from './types';
 import { count, isRecord, modelEntries, nameOf } from './values';
 
 const VERSION = { 'anthropic-version': '2023-06-01' };
@@ -30,9 +30,16 @@ function reasoningFields(reasoning: Reasoning | undefined) {
 export const ephemeral = (cache: Cache) => ({ type: 'ephemeral', ...(cache === '1h' ? { ttl: '1h' } : {}) });
 const cacheControl = (cache: Cache) => ({ cache_control: ephemeral(cache) });
 
-// Never the cache mark itself; a cache point is a text block that carries it. OpenRouter reads the same shape in chat completions.
-export const wireMessage = (message: ChatMessage, cache: Cache | undefined) =>
-  message.cache && cache ? { role: message.role, content: [{ type: 'text', text: message.content, ...cacheControl(cache) }] } : { role: message.role, content: message.content };
+const imageBlock = ({ type, data }: InputPicture) => ({ type: 'image', source: { type: 'base64', media_type: type, data } });
+
+// Never the cache mark itself; a cache point is the text block that carries it, after the pictures. OpenRouter reads the
+// same text block in chat completions, with its own picture part.
+export function wireMessage(message: ChatMessage, cache: Cache | undefined, picture: (picture: InputPicture) => object) {
+  const marked = message.cache && cache;
+  if (!marked && !carriesPictures(message)) return { role: message.role, content: message.content };
+  const text = { type: 'text', text: message.content, ...(marked ? cacheControl(cache) : {}) };
+  return { role: message.role, content: [...(message.pictures ?? []).map(picture), text] };
+}
 
 // Every system message goes up into system, joined by a blank line. It stays one string unless a cache point falls in
 // it; then it splits after each point into blocks, the blank line opening the next, so the text read is the same.
@@ -121,7 +128,7 @@ export const anthropicMessages: Codec = {
           messages.filter((message) => message.role === 'system'),
           settings.cache,
         ),
-        messages: messages.filter((message) => message.role !== 'system').map((message) => wireMessage(message, settings.cache)),
+        messages: messages.filter((message) => message.role !== 'system').map((message) => wireMessage(message, settings.cache, imageBlock)),
         ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
         ...(settings.topP === undefined ? {} : { top_p: settings.topP }),
         ...(settings.topK === undefined ? {} : { top_k: settings.topK }),

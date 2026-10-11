@@ -1,7 +1,7 @@
-import { chatCompletions, openAiEmbeds, promptCacheKey } from './chat-completions';
+import { chatCompletions, dataUrl, openAiEmbeds, promptCacheKey } from './chat-completions';
 import { streamError } from './errors';
 import type { Reasoning } from './settings';
-import type { Codec, Phase, StreamFacts } from './types';
+import { carriesPictures, type ChatMessage, type Codec, type Phase, type StreamFacts } from './types';
 import { count, isRecord, list } from './values';
 
 // OpenAI's Responses API. 'none' turns reasoning off on the models that allow it.
@@ -18,6 +18,12 @@ function ended(response: Record<string, unknown>, facts: StreamFacts) {
   if (typeof reason === 'string') facts.finishReason = reason;
   if (isRecord(response.usage)) Object.assign(facts.rawUsage, response.usage);
 }
+
+const inputItem = (message: ChatMessage) => {
+  const { role, content, pictures = [] } = message;
+  if (!carriesPictures(message)) return { role, content };
+  return { role, content: [...pictures.map((picture) => ({ type: 'input_image', image_url: dataUrl(picture) })), { type: 'input_text', text: content }] };
+};
 
 function texts(parts: unknown, type: string): string[] {
   return list(parts).flatMap((part) => (isRecord(part) && part.type === type && typeof part.text === 'string' ? [part.text] : []));
@@ -58,7 +64,7 @@ export const responses: Codec = {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       model: model.id,
-      input: messages.map(({ role, content }) => ({ role, content })),
+      input: messages.map(inputItem),
       ...(settings.maxOutput === undefined ? {} : { max_output_tokens: settings.maxOutput }),
       ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
       ...(settings.topP === undefined ? {} : { top_p: settings.topP }),

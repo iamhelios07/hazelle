@@ -48,11 +48,20 @@ describe('responses request', () => {
   });
 
   it('keys the cache by the prefix up to the first point, so a new turn keeps the key, and sends none without caching', () => {
-    const key = (sent: ChatMessage[], cache?: '5m') => JSON.parse(chatRequest(route, { model, messages: sent, settings: { cache } }).body!).prompt_cache_key as unknown;
+    const key = (sent: ChatMessage[], cache?: '5m') => JSON.parse(chatRequest(route, { model: { ...model, input: ['text', 'image'] }, messages: sent, settings: { cache } }).body!).prompt_cache_key as unknown;
     const first = key(messages, '5m');
     expect(key([...messages, { role: 'assistant', content: '안녕!' }, { role: 'user', content: '뭐 해?', cache: true }], '5m')).toBe(first);
     expect(key([{ ...messages[0]!, content: '길게 답해.' }, messages[1]!], '5m')).not.toBe(first);
     expect(key(messages)).toBeUndefined();
+    const asked: ChatMessage = { role: 'user', content: '이 사람은?', cache: true };
+    expect(key([{ ...asked, pictures: [{ type: 'image/png', data: 'AAAA' }] }], '5m')).not.toBe(key([asked], '5m'));
+  });
+
+  it('sends pictures as data URL input images ahead of the input text', () => {
+    const shown: ChatMessage[] = [{ role: 'user', content: '이 사람은?', pictures: [{ type: 'image/png', data: 'AAAA' }] }];
+    expect(JSON.parse(chatRequest(route, { model: { ...model, input: ['text', 'image'] }, messages: shown, settings: {} }).body!).input).toEqual([
+      { role: 'user', content: [{ type: 'input_image', image_url: 'data:image/png;base64,AAAA' }, { type: 'input_text', text: '이 사람은?' }] },
+    ]);
   });
 
   it('asks for the whole reply when streaming is off', () => {

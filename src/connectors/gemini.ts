@@ -26,13 +26,17 @@ function thinkingConfig(reasoning: Reasoning | undefined, model: Model) {
   }
 }
 
+type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+
+const parts = ({ content, pictures = [] }: ChatMessage): Part[] => [...pictures.map(({ type, data }) => ({ inlineData: { mimeType: type, data } })), { text: content }];
+
 function contents(messages: ChatMessage[]) {
-  const turns: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
+  const turns: { role: 'user' | 'model'; parts: Part[] }[] = [];
   for (const message of messages) {
     const role = message.role === 'assistant' ? 'model' : 'user';
     const last = turns.at(-1);
-    if (last?.role === role) last.parts.push({ text: message.content });
-    else turns.push({ role, parts: [{ text: message.content }] });
+    if (last?.role === role) last.parts.push(...parts(message));
+    else turns.push({ role, parts: parts(message) });
   }
   return turns;
 }

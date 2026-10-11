@@ -52,6 +52,13 @@ describe('Gemini', () => {
     expect(JSON.parse(plain.body!)).toEqual({ contents: [{ role: 'user', parts: [{ text: '안녕' }] }] });
   });
 
+  it('sends pictures as inline data ahead of their message’s text, in the run of its role', () => {
+    const messages = [{ role: 'user' as const, content: '안녕' }, { role: 'user' as const, content: '이 사람은?', pictures: [{ type: 'image/png', data: 'AAAA' }] }];
+    expect(JSON.parse(chatRequest(google, { model: { ...flash!, input: ['text', 'image'] }, messages, settings: {} }).body!).contents).toEqual([
+      { role: 'user', parts: [{ text: '안녕' }, { inlineData: { mimeType: 'image/png', data: 'AAAA' } }, { text: '이 사람은?' }] },
+    ]);
+  });
+
   it('reads thoughts apart from the text, and usage with thoughts in the output', async () => {
     const { outcome, text, reasoning } = await decode(sse(...recorded.stream));
     expect({ text, reasoning }).toEqual({ text: '안녕하세요!', reasoning: '짧게 답하자.' });

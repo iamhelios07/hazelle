@@ -1,7 +1,7 @@
 import { streamError } from './errors';
 import type { Cache, NumberSetting, Reasoning, Setting } from './settings';
 import { ephemeral, wireMessage } from './anthropic-messages';
-import type { CacheMark, ChatMessage, Codec, Embeds, Model, Usage } from './types';
+import { carriesPictures, type CacheMark, type ChatMessage, type Codec, type Embeds, type InputPicture, type Model, type Usage } from './types';
 import { count, isRecord, list, modelEntries, vector } from './values';
 
 // OpenRouter's and Vercel's catalogs name the same fields in supported_parameters. max_tokens rather than
@@ -41,23 +41,28 @@ export function listedSettings(names: unknown[]): Setting[] {
 }
 
 // One key per model and cached prefix, so requests that share it meet the same cache. The prefix runs to the first
-// point, the one that changes least: the last point moves with every turn.
+// point, the one that changes least: the last point moves with every turn. Pictures are part of the prefix but join
+// the hash only where a message carries them, so a text-only prefix keeps the key it always had.
 export function promptCacheKey(model: Model, messages: ChatMessage[]): { prompt_cache_key?: string } {
   const first = messages.findIndex((message) => message.cache);
   if (first === -1) return {};
+  const prefix = messages.slice(0, first + 1).map((message) => [message.role, message.content, ...(carriesPictures(message) ? [message.pictures] : [])]);
   let hash = 2166136261;
-  for (const character of JSON.stringify([model.id, messages.slice(0, first + 1).map(({ role, content }) => [role, content])])) {
+  for (const character of JSON.stringify([model.id, prefix])) {
     hash ^= character.codePointAt(0)!;
     hash = Math.imul(hash, 16777619);
   }
   return { prompt_cache_key: `hazelle-${(hash >>> 0).toString(16)}` };
 }
 
-const plain = ({ role, content }: ChatMessage) => ({ role, content });
+export const dataUrl = ({ type, data }: InputPicture) => `data:${type};base64,${data}`;
+const imagePart = (picture: InputPicture) => ({ type: 'image_url', image_url: { url: dataUrl(picture) } });
+
+const plain = (message: ChatMessage) => wireMessage(message, undefined, imagePart);
 
 function wireMessages(messages: ChatMessage[], cache: Cache | undefined, mark: CacheMark | null) {
   if (!cache || !mark || mark.kind === 'key') return messages.map(plain);
-  if (mark.kind === 'part') return messages.map((message) => wireMessage(message, cache));
+  if (mark.kind === 'part') return messages.map((message) => wireMessage(message, cache, imagePart));
   return messages.map((message) => (message.cache ? { ...plain(message), [mark.field]: ephemeral(cache) } : plain(message)));
 }
 

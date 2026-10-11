@@ -136,6 +136,10 @@ export const copilot: ConnectionType = {
     ...USER_AGENT,
   }),
 
+  // VS Code's Copilot Chat sends it only on a request that carries pictures (microsoft/vscode,
+  // extensions/copilot/src/extension/prompt/node/chatMLFetcher.ts).
+  pictureHeaders: { 'copilot-vision-request': 'true' },
+
   pool: true,
   meters: [{
     request: (secret) => github('https://api.github.com/copilot_internal/user', secret),
