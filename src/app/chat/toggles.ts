@@ -2,6 +2,9 @@ import { isToggle, type Toggle, type ToggleMark } from '../../model/prompt';
 import type { ChatToggleSet, ToggleSource } from '../../runtime/chat-context';
 
 export type ToggleRow = { toggle: Toggle; value: string; changed: boolean };
+
+// A text toggle's typed value waits under this key (common/useAutosave) before it is stored.
+export const toggleSaveKey = (owner: string | null, key: string) => `toggle:${owner ?? ''}:${key}`;
 export type ToggleNote = Extract<ToggleMark, { kind: 'divider' | 'caption' }>;
 export type ToggleItem = ToggleRow | ToggleNote | { kind: 'group'; label: string; items: (ToggleRow | ToggleNote)[] };
 export type ToggleSection = Pick<ToggleSource, 'from' | 'name'> & { rows: ToggleRow[]; items: ToggleItem[] };

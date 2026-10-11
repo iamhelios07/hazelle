@@ -40,14 +40,14 @@ import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
 import { BIN_KEEPS } from '../common/words';
-import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useIllustrating, useSession, useTranslating, useTurn } from '../session';
+import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useIllustrating, useSaves, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { pickStarted } from './infoReply';
-import { toggleRows } from './toggles';
+import { toggleRows, toggleSaveKey } from './toggles';
 import { useFollow } from './useFollow';
 import { useChatSearch } from './useChatSearch';
 import { useChatStatus } from './useChatStatus';
@@ -82,6 +82,7 @@ export type ChatActions = OpenChat['actions'];
 export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null, reply: Reading['reply']) {
   const session = useSession();
   const { store, talk, translator, illustrator, drafts } = session;
+  const saves = useSaves();
   const turn = useTurn(chatId);
   const translating = useTranslating();
   const toast = useToast();
@@ -385,7 +386,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void writeToggle(key, value).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  function reset() {
+  async function reset() {
+    // A typed value still waiting would land over the reset.
+    await Promise.all(toggles.sections.flatMap(({ rows }) => rows.flatMap(({ toggle }) => (toggle.kind === 'text' ? [saves.flush(toggleSaveKey(chat.character, toggle.key))] : []))));
     void resetToggles(store, chat.character).then((saved) => saved.ok || toast.failed(saved));
     toast.show(`토글 ${toggles.changed}개를 기본값으로 되돌렸어요.`);
   }

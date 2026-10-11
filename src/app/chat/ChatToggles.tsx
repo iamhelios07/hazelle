@@ -5,7 +5,7 @@ import { useAutosave } from '../common/useAutosave';
 import { useSearch } from '../common/useSearch';
 import { PAGES, RESET } from '../common/words';
 import { Button, Disclosure, Divider, Empty, Row, Section, SettingRow, SidePanel, Stack, Switch, Tab, Tabs, Text, TextField } from '../ui';
-import { shownRows, type ToggleItem, type ToggleNote, type ToggleRow, type ToggleSection } from './toggles';
+import { shownRows, toggleSaveKey, type ToggleItem, type ToggleNote, type ToggleRow, type ToggleSection } from './toggles';
 import type { OpenChat } from './useChat';
 
 const defaultOf = (toggle: Toggle) =>
@@ -122,7 +122,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
 // Typed values are saved after a pause in typing (common/useAutosave), not per key press; the box shows what is
 // still on its way over what is stored.
 function TextToggle({ toggle, value, owner, write }: { toggle: Extract<Toggle, { kind: 'text' }>; value: string; owner: string | null; write: OpenChat['actions']['writeToggle'] }) {
-  const autosave = useAutosave<{ value: string }>(`toggle:${owner ?? ''}:${toggle.key}`, (patch) => write(toggle.key, patch.value!));
+  const autosave = useAutosave<{ value: string }>(toggleSaveKey(owner, toggle.key), (patch) => write(toggle.key, patch.value!));
   return (
     <TextField
       label={toggle.label}
