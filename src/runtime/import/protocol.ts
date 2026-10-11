@@ -6,7 +6,7 @@ export type AssetRead = { name: string; handle: number };
 export type CardData = Omit<Imported, 'avatar' | 'assets'> & { avatar: number | null; assets: AssetRead[] };
 export type ModuleData = Omit<ImportedModule, 'assets'> & { assets: AssetRead[] };
 export type CharacterData = Omit<RisuCharacter, 'avatar' | 'assets' | 'chats'> & { avatar: number; assets: AssetRead[]; chatCount: number };
-export type PersonaData = Omit<RisuPersona, 'picture'> & { picture: number };
+export type PersonaData = Omit<RisuPersona, 'picture' | 'module'> & { picture: number; module: ModuleData | null };
 // A file of chats, which a JSON card file may be instead: this app's own, or Risu's.
 export type ChatsRead = { ok: true; chat: ChatFile } | { ok: true; risuChats: RisuChat[]; missed: MoveUnsupported[] };
 

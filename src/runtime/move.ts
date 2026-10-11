@@ -40,8 +40,8 @@ const companionsOf = (names: string[], ids: ReadonlyMap<string, string>, namespa
 // By namespace, the deleted ones too, as modulesFromRisu.
 const namespacesFromRisu = (store: ObjectStore): Map<string, string> => new Map(store.list('module').flatMap(({ id, value }) => (value.risu === undefined || value.namespace === null ? [] : [[value.namespace, id]])));
 
-// Personas first, so the chats bound to one use it, and modules before the prompts and characters they are on for. The
-// first failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is
+// Personas first, so the chats bound to one use it, each after its own module, and modules before the prompts and
+// characters they are on for. The first failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is
 // sound because each one lands whole: its chats' entries are written first, and their roots go with the character in its
 // own batch (runtime/characters addCharacter), so a cut leaves only entries no chat names; a chat's inlays come after
 // its character, so a cut there leaves them to 메시지 이미지 채우기 (fillInlays). So is a module: its
@@ -58,12 +58,23 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   // A kind's line counts what landed: 0 as its first begins, total once its last did, so it ends whole, not at total - 1.
   const landed = (kind: MoveStep['kind'], done: number, total: number) => progress({ kind, done, total });
   const personaIds = new Map<string, string>();
+  const movedModules: MovedModule[] = [];
   for (const [done, { key }] of personas.entries()) {
     landed('personas', done, personas.length);
     const persona = await backup.persona(key);
     const picture = await persona.picture();
     const thumb = picture && (await thumbnail(picture).catch(() => null));
-    const saved = await addPersona(store, { name: persona.name, description: persona.description, picture: thumb, ...(persona.alias && { alias: persona.alias }) });
+    const modules: string[] = [];
+    // Brought without its Risu id: Risu gives every persona's module the same one ('$embedded'), which modulesFromRisu
+    // would read as one module moved already. Its pictures are read before the backup is asked for anything else, which
+    // lets go of them (runtime/import reader).
+    if (persona.module) {
+      const imported = await importModule(store, files, persona.module, () => {});
+      if (!imported.ok) return imported;
+      movedModules.push({ name: persona.module.name, unsupported: persona.module.unsupported, skipped: imported.data.skipped });
+      modules.push(imported.data.id);
+    }
+    const saved = await addPersona(store, { name: persona.name, description: persona.description, picture: thumb, ...(persona.alias && { alias: persona.alias }), ...(modules.length > 0 && { modules }) });
     if (!saved.ok) return saved;
     if (persona.id !== null) personaIds.set(persona.id, saved.data.id);
   }
@@ -79,7 +90,6 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   const uploading: Progress = (step) => {
     if (step.kind === 'assets') progress({ kind: 'pictures', done: picturesDone + step.done, total: pictureTotal });
   };
-  const movedModules: MovedModule[] = [];
   for (const [done, { key }] of dueModules.entries()) {
     landed('modules', done, dueModules.length);
     const module = await backup.module(key);

@@ -25,8 +25,8 @@ export class ImportWorker {
       catalog: result.catalog,
       character: (key) => this.character(key),
       persona: async (key) => {
-        const { picture, ...persona } = await this.ask({ kind: 'persona', key });
-        return { ...persona, picture: () => this.ask({ kind: 'picture', handle: picture }) };
+        const { picture, module, ...persona } = await this.ask({ kind: 'persona', key });
+        return { ...persona, picture: () => this.ask({ kind: 'picture', handle: picture }), module: module && this.module(module) };
       },
       preset: (key) => this.ask({ kind: 'preset', key }),
       module: async (key) => this.module(await this.ask({ kind: 'module', key })),

@@ -9,7 +9,7 @@ import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { ALWAYS, BIN_KEEPS, moduleName, promptName } from '../common/words';
-import { useChildren, useLibrary, usePrompts, useSettings, useStore, useStored } from '../session';
+import { useChildren, useLibrary, usePersonas, usePrompts, useSettings, useStore, useStored } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -19,6 +19,7 @@ import { useHolds } from './ModulesScreen';
 const ALWAYS_ON = `${ALWAYS} 켜기`;
 const USED_BY = '쓰는 캐릭터';
 const PROMPTS_USING = '쓰는 프롬프트';
+const PERSONAS_USING = '쓰는 페르소나';
 
 export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back: Back }) {
   const store = useStore();
@@ -28,6 +29,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   const always = useSettings().modules?.includes(id) ?? false;
   const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
   const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
+  const personas = usePersonas().filter(({ value }) => value.modules?.includes(id));
   const holds = useHolds(stored);
   // A module of scripts alone describes no one, so it offers no 삽화 profiles.
   const describes = useChildren('lore', id).length + useChildren('asset', id).length > 0 || useStored('likeness', likenessId(id)) !== null;
@@ -91,9 +93,20 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
           <Empty variant="section">{always ? '따로 켠 캐릭터가 없어요.' : '켠 캐릭터가 없어요.'}</Empty>
         )}
       </Section>
+      <Section title={PERSONAS_USING}>
+        {personas.length > 0 ? (
+          <List label={PERSONAS_USING}>
+            {personas.map(({ id: persona, value: { name, alias, picture } }) => (
+              <ListItem key={persona} leading={<Avatar face={name} image={picture} tone="you" />} title={aliased(name, alias)} onClick={() => navigate({ kind: 'persona', id: persona })} />
+            ))}
+          </List>
+        ) : (
+          <Empty variant="section">{always ? '따로 켠 페르소나가 없어요.' : '켠 페르소나가 없어요.'}</Empty>
+        )}
+      </Section>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />
-      {describes && <PortraitsEditor owner={{ kind: 'module', id }} />}
+      {describes && <PortraitsEditor owner={id} />}
     </Screen>
   );
 }

@@ -3,7 +3,7 @@ import { ACTS, importOf } from '../common/acts';
 import { counted, packHolds } from '../common/pack';
 import { useSearch } from '../common/useSearch';
 import { ALWAYS, moduleName, PAGES } from '../common/words';
-import { useChildren, useLibrary, useModules, usePrompts, useSettings, useTool } from '../session';
+import { useChildren, useLibrary, useModules, usePersonas, usePrompts, useSettings, useTool } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Empty, List, ListItem, NavBar, Row, Screen } from '../ui';
@@ -19,8 +19,9 @@ export function ModulesScreen({ back, onImport }: { back: Back | null; onImport:
   const modules = useModules();
   const prompts = usePrompts().flatMap(({ value }) => (value.task === undefined ? [value.modules ?? []] : []));
   const characters = useLibrary().characters.map(({ character }) => character.modules ?? []);
+  const personas = usePersonas().map(({ value }) => value.modules ?? []);
   const always = useSettings().modules ?? [];
-  const where = (id: string) => counted([['프롬프트', holding(prompts, id)], ['캐릭터', holding(characters, id)]]).join(' · ') || undefined;
+  const where = (id: string) => counted([['프롬프트', holding(prompts, id)], ['캐릭터', holding(characters, id)], ['페르소나', holding(personas, id)]]).join(' · ') || undefined;
   const search = useSearch(modules, '모듈 검색', ({ value }) => [moduleName(value.name)]);
   const importing = (
     <Button variant="secondary" icon={ACTS.import.icon} onClick={onImport}>

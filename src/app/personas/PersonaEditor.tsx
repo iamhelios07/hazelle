@@ -8,6 +8,8 @@ import { useLibrary, useSettings, useStore } from '../session';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
+import { ModuleSwitches } from '../common/ModuleSwitches';
+import { PortraitsEditor } from '../common/PortraitsEditor';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, CHANGE_IMAGE, UNREADABLE_IMAGE } from '../common/words';
@@ -73,6 +75,8 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 입력해 주세요.'} />
       <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요." />
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} />
+      <ModuleSwitches owner={{ kind: 'persona', id }} own={stored.value.modules ?? []} />
+      <PortraitsEditor owner={id} />
     </>
   );
   const menu = settings.persona === id ? undefined : { of: '페르소나', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} /> };

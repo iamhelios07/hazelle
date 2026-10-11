@@ -113,7 +113,7 @@ const db = {
   ],
   enabledModules: ['m1'],
   personas: [
-    { id: 'p1', name: 'old', personaPrompt: 'stale', icon: '' },
+    { id: 'p1', name: 'old', personaPrompt: 'stale', icon: '', embeddedModule: { id: '$embedded', name: 'Ann', description: '', lorebook: [{ key: 'cape', secondkey: '', insertorder: 10, comment: 'Cape', content: 'A red cape.', mode: 'normal', alwaysActive: true, selective: false }], mcp: { url: 'https://mcp.example' }, cjs: 'run()' } },
     { id: 'p2', name: 'Bob', personaPrompt: 'b', icon: 'assets/bob.png', note: ' the rich one ' },
   ],
   selectedPersona: 0,
@@ -339,13 +339,15 @@ describe('readBackup', () => {
     ]);
   });
 
-  it('takes the selected persona and the active preset from their live values, without keys', async () => {
+  it('takes the selected persona and the active preset from their live values, without keys, and a persona\'s own module with its MCP and cjs counted unread', async () => {
     const backup = await read();
     const personas = await Promise.all(backup.catalog.personas.map(({ key }) => backup.persona(key)));
     expect(personas.map(({ id, name, alias, description }) => ({ id, name, alias, description }))).toEqual([
       { id: 'p1', name: 'Ann', alias: '', description: 'live' },
       { id: 'p2', name: 'Bob', alias: 'the rich one', description: 'b' },
     ]);
+    expect(personas[0]!.module).toMatchObject({ name: 'Ann', lore: [{ content: 'A red cape.' }], unsupported: [{ kind: 'mcp', count: 1 }, { kind: 'cjs', count: 1 }] });
+    expect(personas[1]!.module).toBeNull();
     expect(await personas[0]!.picture()).toEqual({ bytes: PNG, type: 'image/png' });
     expect(await personas[1]!.picture()).toBeNull();
     const [main, legacy] = await Promise.all(backup.catalog.presets.map(({ key }) => backup.preset(key)));

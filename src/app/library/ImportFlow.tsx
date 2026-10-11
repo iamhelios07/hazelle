@@ -77,7 +77,7 @@ function describeImportFailure({ kind, detail, line }: ImportFailure): string {
 }
 
 // Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,
-// a conversation prompt's editor, or 설정 › 모듈 for 항상. A file of chats that names no character goes to the character found here too.
+// a conversation prompt's editor, a persona's page, or 설정 › 모듈 for 항상. A file of chats that names no character goes to the character found here too.
 function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
   switch (route.kind) {
     case 'shelf':
@@ -93,6 +93,8 @@ function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
       const prompt = live(store.get('prompt', route.id));
       return prompt && ofSort(prompt, 'conversation') ? { kind: 'prompt', prompt } : null;
     }
+    case 'persona':
+      return live(store.get('persona', route.id)) ? { kind: 'persona', id: route.id } : null;
     case 'modules':
     case 'module':
     case 'tool-page':

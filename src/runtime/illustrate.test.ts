@@ -10,6 +10,7 @@ import { takeTurn } from './turn';
 import { removeIllustration, restoreIllustration } from './illustrate';
 import { likenessId } from '../model/likeness';
 import { editPortrait } from './likeness';
+import { addPersona } from './personas';
 
 const { PAINTER } = vi.hoisted(() => {
   const PAINTER: ConnectionType = {
@@ -234,6 +235,23 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       await draw();
       expect(profileCalls().some(({ sent }) => sent.body?.includes('Bea is a knight.'))).toBe(true);
       expect(session.store.get('likeness', likenessId(bea.data.id))).toMatchObject({ parent: bea.data.id });
+    }));
+
+  it("builds the chat's persona's profile from its description, and draws the user's figure from it", () =>
+    server.withSession(async (session) => {
+      const { chat, draw } = await drawing(session, JSON.stringify(looks));
+      const jin = await addPersona(session.store, { name: 'Jin', description: 'Jin is a traveler.', picture: null });
+      if (!jin.ok) throw new Error(jin.error);
+      await session.store.update('chat', chat, (current) => ({ ...current, persona: jin.data.id }));
+      const own = { characters: [{ name: 'Jin', aliases: [], look: 'boy, black hair', outfits: [{ name: 'usual', tags: 'travel cloak' }], source: 'text' }] };
+      const both = { ...bare, characters: [...bare.characters, { name: 'jin', look: 'boy', outfit: '', action: 'wave', x: 0.2, y: 0.5 }] };
+      const log = stubRelay((sent) =>
+        sent.body?.includes('You direct the illustrations') ? saying(JSON.stringify(both)) : sent.body?.includes('The user’s character: Jin') ? saying(JSON.stringify(own)) : answering(JSON.stringify(looks))(sent),
+      );
+      await draw();
+      expect(session.store.get('likeness', likenessId(jin.data.id))).toMatchObject({ parent: jin.data.id, value: { portraits: [{ name: 'Jin', look: 'boy, black hair' }] } });
+      const sent = JSON.parse(log.find(({ sent }) => sent.url.endsWith('/generate'))!.sent.body!);
+      expect(sent.characters.map(({ prompt }: { prompt: string }) => prompt)).toEqual(['girl, profile silver hair, maid uniform, smile', 'boy, black hair, travel cloak, wave']);
     }));
 
   it("asks the connection's model list when the starred model's inputs are unknown, and keeps what it says", () =>

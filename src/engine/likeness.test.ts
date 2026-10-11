@@ -29,6 +29,7 @@ it('samples the first picture of each name stem, up to the count', () => {
 it('sends the text within its bound, names only the sources it has, and attaches the pictures to the material', () => {
   const input: LikenessInput = {
     name: 'Ari',
+    user: false,
     texts: [{ label: 'Description', text: 'Silver hair.' }, { label: 'Scenario', text: '  ' }],
     lore: [{ name: 'huge', keys: [], content: 'x'.repeat(TEXT_MOST) }, { name: 'Mina', keys: ['mina'], content: 'Red eyes.' }],
     prompts: [],
@@ -44,6 +45,15 @@ it('sends the text within its bound, names only the sources it has, and attaches
   expect(user!.content).not.toContain('xxx');
   expect(user!.content).not.toContain('Scenario');
   expect(sourcesOf({ ...input, texts: [], lore: [], pictures: [] })).toEqual([]);
+});
+
+it('asks a persona’s profile for the user’s character itself, where a bot’s leaves them out', () => {
+  const input: LikenessInput = { name: 'Jin', user: true, texts: [{ label: 'Description', text: 'Black hair.' }], lore: [], prompts: [], pictures: [], avatar: false, most: 8 };
+  const [system, user] = likenessRequest(input);
+  expect(system!.content).toContain('The material is the user’s own character in the roleplay: list them first');
+  expect(system!.content).not.toContain('Leave out the user’s character');
+  expect(user!.content).toMatch(/^The user’s character: Jin/);
+  expect(likenessRequest({ ...input, user: false })[0]!.content).toContain('Leave out the user’s character');
 });
 
 it('takes the artist tags most pictures share, the earlier on a tie', () => {
