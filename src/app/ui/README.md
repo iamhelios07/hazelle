@@ -88,7 +88,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
-| layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide. Its title, section titles and the words in its boxes share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
+| layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide. `aside` adds a column beside the body once the screen is wide enough, stacked above it when not. Its title, section titles and the words in its boxes share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |

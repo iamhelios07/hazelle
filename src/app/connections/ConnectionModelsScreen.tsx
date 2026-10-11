@@ -135,9 +135,13 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           menu={{ of: '연결', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
         />
       }
+      aside={
+        <>
+          <ConnectionSent connection={id} />
+          {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} /> : <ConnectionMeters connection={connection} />}
+        </>
+      }
     >
-      <ConnectionSent connection={id} />
-      {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} /> : <ConnectionMeters connection={connection} />}
       <Row kind="toolbar">
         {search.field}
         <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />

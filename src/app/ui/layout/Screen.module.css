@@ -63,6 +63,41 @@
   max-width: var(--form-max-width);
 }
 
+.split {
+  max-width: var(--screen-split-max-width);
+}
+
+.split .content {
+  container-type: inline-size;
+}
+
+.columns,
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+/* The body's narrowest useful width beside the aside. */
+@container (min-width: 880px) {
+  .columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--screen-aside-width);
+    column-gap: calc(var(--space-32) + 2 * var(--box-hang));
+    align-items: start;
+  }
+
+  .aside {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .columns > .body {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
 @media (min-width: 600px) {
   .screen {
     min-height: auto;
@@ -71,6 +106,7 @@
 
   .screen.wide,
   .screen.form,
+  .screen.split,
   .screen.centered {
     padding-top: var(--space-32);
   }
@@ -100,6 +136,45 @@
   max-width: var(--form-max-width);
 }
 
+.split {
+  max-width: var(--screen-split-max-width);
+}
+
+.split .content {
+  container-type: inline-size;
+}
+
+.columns,
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+/* The body's narrowest useful width beside the aside. */
+@container (min-width: 880px) {
+  .columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--screen-aside-width);
+    column-gap: calc(var(--space-32) + 2 * var(--box-hang));
+    align-items: start;
+  }
+
+  .aside {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .columns > .body {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
 .screen.pane.wide {
   max-width: var(--gallery-max-width);
+}
+
+.screen.pane.split {
+  max-width: var(--screen-split-max-width);
 }
