@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { CARD } from './helpers';
+import { CARD, pickBot } from './helpers';
 
 // The screenshot account on the local dev server (playwright.shots.config.ts), kept across runs so a screenshot
 // script signs in instead of signing up. On a .data/ with no account the first run makes it, with the test card; as the
@@ -41,7 +41,7 @@ export async function enterShots(page: Page) {
   await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: '봇 가져오기', exact: true }).click();
+  await pickBot(page);
   await page.getByRole('button', { name: '확인했어요', exact: true }).click();
   await (await chooser).setFiles(CARD);
   await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();

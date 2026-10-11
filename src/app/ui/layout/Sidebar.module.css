@@ -89,6 +89,21 @@
   background: var(--color-sidebar);
 }
 
+.home {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+}
+
+.home:hover,
+.home[aria-current] {
+  background: var(--color-surface-hover);
+}
+
 .railList {
   flex-grow: 1;
   min-height: 0;

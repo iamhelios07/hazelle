@@ -16,9 +16,12 @@ type Props = {
 export function Sidebar({ page = false, actions, children, footer }: Props) {
   return (
     <aside className={page ? `${styles.sidebar} ${styles.page}` : styles.sidebar} aria-label="캐릭터 목록">
-      <div className={styles.head}>
-        <Brand />
-      </div>
+      {/* Beside the rail, whose mark is the brand, the panel starts with its own rows. */}
+      {page && (
+        <div className={styles.head}>
+          <Brand />
+        </div>
+      )}
       <div className={styles.actions}>{actions}</div>
       <div className={styles.list}>{children}</div>
       {footer && <div className={styles.footer}>{footer}</div>}
@@ -43,13 +46,25 @@ export function LayerSidebar({ title, onClose, children, footer }: { title: stri
   );
 }
 
-export function Rail({ open, onToggle, actions, children, footer }: { open: boolean; onToggle: () => void; actions: ReactNode; children: ReactNode; footer: ReactNode }) {
+type RailProps = {
+  home: { label: string; current: boolean; onClick: () => void };
+  // Only while there is a panel beside the rail to fold.
+  fold?: { open: boolean; onToggle: () => void };
+  actions: ReactNode;
+  children: ReactNode;
+  footer: ReactNode;
+};
+
+export function Rail({ home, fold, actions, children, footer }: RailProps) {
   return (
     <aside className={styles.rail} aria-label="캐릭터 바로가기">
-      <IconButton icon={PanelLeft} label={open ? '사이드바 접기' : '사이드바 펼치기'} onClick={onToggle} />
+      <button type="button" className={styles.home} aria-label={home.label} title={home.label} aria-current={home.current || undefined} onClick={home.onClick}>
+        <Brand variant="mark" />
+      </button>
       {actions}
       <Divider variant="rail" />
       <div className={styles.railList}>{children}</div>
+      {fold && <IconButton icon={PanelLeft} label={fold.open ? '사이드바 접기' : '사이드바 펼치기'} onClick={fold.onToggle} />}
       {footer}
     </aside>
   );

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { embedded, enter, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, importFile, saving, type FakeChatRequest } from './helpers';
+import { embedded, enter, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, importFile, pickBot, saving, type FakeChatRequest } from './helpers';
 
 const NOTE = 'The brass key is under the lantern.';
 const summary = (index: number) => `TOOL_SUMMARY_${index}: the gate is open.`;
@@ -78,7 +78,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
 
   await test.step('write in the chat panel and reopen the persisted note after reload', async () => {
     await page.goto('/');
-    const report = await importFile(page, '봇 가져오기', CARD);
+    const report = await importFile(page, pickBot, CARD);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     // A saved chat owns the page context; the first send happens before memory is imported.
     await page.getByLabel('메시지', { exact: true }).fill('Keep this note for the journey.');
@@ -193,7 +193,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
 
   await test.step('allow the memory claim when the chat opens, then the first model call when a chunk closes', async () => {
     await page.goto('/');
-    const report = await importFile(page, '봇 가져오기', RECALL_CARD);
+    const report = await importFile(page, pickBot, RECALL_CARD);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     await send('We climb the stairs.');
     await expect(page.getByText('이 모듈이 장기 기억을 대신 맡으려고 해요', { exact: true })).toBeVisible();

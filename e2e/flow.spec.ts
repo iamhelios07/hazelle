@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
 import { featherless } from '../src/connectors/featherless';
 import { CSP } from '../src/server/static';
-import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED } from './helpers';
+import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED, pickBot } from './helpers';
 
 const PASSWORD = 'e2e-password';
 const NICKNAME = 'rich-steve';
@@ -57,7 +57,7 @@ test('a new account imports a card, chats through the fake provider and finds th
 
   await test.step('import the card and see its report', async () => {
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: '봇 가져오기', exact: true }).click();
+    await pickBot(page);
     await page.getByRole('button', { name: '확인했어요', exact: true }).click();
     await (await chooser).setFiles(CARD);
     const report = page.getByRole('dialog', { name: '가져왔어요', exact: true });
@@ -144,7 +144,7 @@ test('a new account imports a card, chats through the fake provider and finds th
   await test.step('a bot’s HTML is drawn in its message with its CSS and pictures, and nothing in it runs, posts, loads from outside or covers the app', async () => {
     await page.goto('/');
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
+    await pickBot(page);
     await (await chooser).setFiles(HOSTILE);
     await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
     const greeting = messages.first();
@@ -173,7 +173,7 @@ test('a new account imports a card, chats through the fake provider and finds th
   await test.step('a bot’s Lua runs in its worker under the CSP: a button is answered, the bot speaks, the display follows its state, and a reply is edited once saved', async () => {
     await page.goto('/');
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
+    await pickBot(page);
     await (await chooser).setFiles(SCRIPTED);
     await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
     const greeting = messages.first();
@@ -191,7 +191,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     const chat = page.url();
     await page.goto('/');
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
+    await pickBot(page);
     await (await chooser).setFiles(MODULE);
     await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '모듈 보기', exact: true }).click();
     // The switch shows on at once and the write lands behind it; a full navigation before it lands would lose it.

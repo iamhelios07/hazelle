@@ -8,11 +8,11 @@ type Props = {
   time: string;
   typing: boolean;
   preview: string;
-  current: boolean;
+  current?: boolean;
   onClick: () => void;
 };
 
-export function ItemRow({ avatar, title, time, typing, preview, current, onClick }: Props) {
+export function ItemRow({ avatar, title, time, typing, preview, current = false, onClick }: Props) {
   return (
     <Item
       density="regular"

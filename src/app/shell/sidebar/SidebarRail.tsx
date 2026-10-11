@@ -1,11 +1,11 @@
-import { LayoutGrid, MessageSquarePlus, PackageOpen, Settings } from 'lucide-react';
+import { MessageSquarePlus, PackageOpen, Settings } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { ACTS, importOf } from '../../common/acts';
 import { useImport } from '../../library/ImportFlow';
 import { ShelfFace, shelfName } from '../../library/shelf';
-import { SETTINGS } from '../../common/words';
-import { FaceButton, IconButton, Rail, Viewport } from '../../ui';
+import { NO_CHARACTER, SETTINGS } from '../../common/words';
+import { FaceButton, IconButton, Menu, MenuItem, Rail, Viewport } from '../../ui';
 import { navigate } from '../router';
 import { HOME } from '../routes';
 import { settingsEntry } from '../settings/SettingsNav';
@@ -13,26 +13,25 @@ import { settingsEntry } from '../settings/SettingsNav';
 type Props = {
   shelves: Shelf<ChatSummary>[];
   current: Shelf<ChatSummary> | undefined;
+  home: boolean;
   typing: (shelf: Shelf<ChatSummary>) => boolean;
   onEnter: (shelf: Shelf<ChatSummary>) => void;
-  open: boolean;
-  onToggle: () => void;
+  fold: { open: boolean; onToggle: () => void } | undefined;
 };
 
-// On wide screens these places live only here; the panel beside the rail shows them on phones.
-export function SidebarRail({ shelves, current, typing, onEnter, open, onToggle }: Props) {
+// On wide screens these places live only here; the list page shows them on phones.
+export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: Props) {
   const { pick, move } = useImport();
   return (
     <Rail
-      open={open}
-      onToggle={onToggle}
+      home={{ label: '캐릭터 둘러보기', current: home, onClick: () => navigate(HOME) }}
+      fold={fold}
       actions={
-        <>
-          <IconButton icon={ACTS.import.icon} label={importOf('봇')} onClick={pick} />
-          <IconButton icon={PackageOpen} label="Risu에서 이사" onClick={move} />
-          <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" onClick={() => navigate(HOME)} />
-          <IconButton icon={MessageSquarePlus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: null })} />
-        </>
+        <Menu label="추가" trigger={(opener) => <IconButton icon={ACTS.create.icon} label="추가" {...opener} />}>
+          <MenuItem icon={ACTS.import.icon} label={importOf('봇')} onClick={pick} />
+          <MenuItem icon={PackageOpen} label="Risu에서 이사" onClick={move} />
+          <MenuItem icon={MessageSquarePlus} label={`${NO_CHARACTER} 새 채팅`} onClick={() => navigate({ kind: 'new-chat', character: null })} />
+        </Menu>
       }
       footer={<IconButton icon={Settings} label={SETTINGS} onClick={() => navigate(settingsEntry(true))} />}
     >

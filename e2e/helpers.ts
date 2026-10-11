@@ -214,9 +214,17 @@ export async function enter(page: Page): Promise<boolean> {
   return true;
 }
 
-export async function importFile(page: Page, button: string, file: string | typeof CARD) {
+// 봇 가져오기 sits in the rail's + menu on wide screens.
+export async function pickBot(page: Page) {
+  await page.getByRole('button', { name: '추가', exact: true }).click();
+  await page.getByRole('menuitem', { name: '봇 가져오기', exact: true }).click();
+}
+
+// button: a button's name, or what opens the file picker, such as pickBot.
+export async function importFile(page: Page, button: string | ((page: Page) => Promise<void>), file: string | typeof CARD) {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: button, exact: true }).first().click();
+  if (typeof button === 'string') await page.getByRole('button', { name: button, exact: true }).first().click();
+  else await button(page);
   const notice = page.getByRole('button', { name: '확인했어요', exact: true });
   if (await notice.isVisible()) await notice.click();
   await (await chooser).setFiles(file);

@@ -13,9 +13,8 @@ import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, V
 import { navigate } from '../router';
 import { SidebarFooter } from './SidebarFooter';
 
+// The phone's home page; wide screens leave every character to 캐릭터 둘러보기 and the rail.
 type Props = {
-  page: boolean;
-  current: Shelf<ChatSummary> | undefined;
   typing: (shelf: Shelf<ChatSummary>) => boolean;
   onEnter: (shelf: Shelf<ChatSummary>) => void;
   query: string;
@@ -24,7 +23,7 @@ type Props = {
   onToggleFolder: (id: string) => void;
 };
 
-export function CharacterTree({ page, current, typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
+export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
   const { characters, none, folders, byFolder, loose } = useLibrary();
   const { pick, move } = useImport();
   const empty = characters.length === 0 && none.chats.length === 0;
@@ -42,7 +41,6 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
         time={latest?.at ? ago(latest.at) : ''}
         typing={typing(shelf)}
         preview={latest ? latest.preview || latest.title : shelf.character ? NO_CHATS : '모델과 대화해요'}
-        current={shelf === current}
         onClick={() => onEnter(shelf)}
       />
     );
@@ -64,23 +62,23 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
 
   return (
     <Sidebar
-      page={page}
+      page
       actions={
         <>
-          {page && <Row kind="toolbar">
+          <Row kind="toolbar">
             <Button variant="secondary" size="sm" icon={ACTS.import.icon} onClick={pick}>
               {importOf('봇')}
             </Button>
             <IconButton icon={PackageOpen} label="Risu에서 이사" size="sm" onClick={move} />
             <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery' })} />
             <IconButton icon={MessageSquarePlus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: null })} />
-          </Row>}
+          </Row>
           {search.field}
         </>
       }
-      footer={page && <SidebarFooter />}
+      footer={<SidebarFooter />}
     >
-      {empty && (page ? <Welcome /> : <Empty variant="side">캐릭터가 없어요.</Empty>)}
+      {empty && <Welcome />}
       {!empty && search.none && <Empty variant="side">{search.none}</Empty>}
       {!empty && <Viewport keys={items.map(({ key }) => key)}>{(index) => {
         const item = items[index]!;
