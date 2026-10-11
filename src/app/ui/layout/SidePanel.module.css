@@ -44,12 +44,6 @@
   border-bottom: var(--border-thin) solid var(--color-divider);
 }
 
-.screen {
-  height: auto;
-  min-height: var(--header-height);
-  padding-block: var(--space-8);
-}
-
 .titles {
   flex-grow: 1;
   min-width: 0;

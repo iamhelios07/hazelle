@@ -14,6 +14,11 @@
   transition: border-color var(--duration-fast);
 }
 
+.compact {
+  height: var(--control-xs);
+  text-overflow: ellipsis;
+}
+
 .field:hover {
   border-color: var(--color-border);
 }

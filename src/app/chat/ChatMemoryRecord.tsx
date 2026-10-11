@@ -8,7 +8,7 @@ import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { CHAPTER } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, List, ListItem, NavBar, PhraseField, Row, Section, SettingGroup, SettingRow, SidePanel, Stack, Switch, Text, TextField, useWide } from '../ui';
+import { Button, Callout, List, ListItem, PhraseField, Row, Section, SettingGroup, SettingRow, SidePanel, Stack, Switch, Text, TextField, useWide } from '../ui';
 import { recordScene, recordTitle, spanOf, statusWord } from './memory';
 import type { ChatActions } from './useChat';
 
@@ -78,7 +78,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
   return (
     <SidePanel
       title="장기 기억"
-      top={<NavBar title={noun} subtitle={span.words} backLabel={holder ? CHAPTER : '장기 기억'} onBack={back} status={save.status ? SAVE_STATUS[save.status] : undefined} />}
+      nav={{ title: noun, subtitle: span.words, backLabel: holder ? CHAPTER : '장기 기억', onBack: back, status: save.status ? SAVE_STATUS[save.status] : undefined }}
       page={item.id}
       onClose={actions.closePanel}
     >

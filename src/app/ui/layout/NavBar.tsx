@@ -16,9 +16,12 @@ export type NavBarProps = {
   actions?: ReactNode;
   // MenuItems for the thing the screen shows, under a ⋯ after the actions.
   menu?: { of: string; items: ReactNode };
+  // In a side panel the bar fills a head of fixed height, whose bottom line meets the chat header's (user,
+  // 2026-10-12): the title and the subtitle keep one line each and cut off at their ends.
+  line?: boolean;
 } & Back;
 
-export function NavBar({ title, rename, subtitle, status, backLabel, onBack, named = false, close = false, actions, menu }: NavBarProps) {
+export function NavBar({ title, rename, subtitle, status, backLabel, onBack, named = false, close = false, actions, menu, line = false }: NavBarProps) {
   const pane = usePane();
   const inPane = named && pane === 'detail';
   const back =
@@ -35,14 +38,14 @@ export function NavBar({ title, rename, subtitle, status, backLabel, onBack, nam
       )
     ));
   return (
-    <div className={styles.bar}>
+    <div className={line ? `${styles.bar} ${styles.line}` : styles.bar}>
       {back}
       {/* Beside a list the page's body carries its title, under the named back. */}
       {inPane ? (
         <span className={styles.titles} />
       ) : (
         <div className={styles.titles}>
-          <h1 className={styles.title}>{rename ? <TitleField label={rename.label} value={title} placeholder={rename.placeholder} onChange={rename.onChange} /> : title}</h1>
+          <h1 className={styles.title}>{rename ? <TitleField label={rename.label} value={title} placeholder={rename.placeholder} onChange={rename.onChange} compact={line} /> : title}</h1>
           {subtitle && <div className={styles.subtitle}>{subtitle}</div>}
         </div>
       )}

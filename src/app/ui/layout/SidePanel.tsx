@@ -3,15 +3,16 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { usePanelCovers } from '../foundation/media';
 import { useLayer } from '../overlays/layers';
+import { NavBar, type NavBarProps } from './NavBar';
 import styles from './SidePanel.module.css';
 
 // page: the body scrolls back to its top when this changes, as EditorFrame's page does. expandable: beside the page it
 // can widen over the whole page, which stays under it as it was. fill: one child takes the whole body and scrolls itself.
-type Props = { title: string; subtitle?: string; top?: ReactNode; page?: string; actions?: ReactNode; footer?: ReactNode; expandable?: boolean; fill?: boolean; onClose: () => void; children: ReactNode };
+type Props = { title: string; subtitle?: string; nav?: NavBarProps; page?: string; actions?: ReactNode; footer?: ReactNode; expandable?: boolean; fill?: boolean; onClose: () => void; children: ReactNode };
 
 // Where the page is too narrow for it, it covers the page, and there Esc or a press on the page closes it (user,
 // 2026-10-02). Beside the page it stays: the page is read with it open, and Esc is the page's own (응답 멈추기).
-export function SidePanel({ title, subtitle, top, page, actions, footer, expandable = false, fill = false, onClose, children }: Props) {
+export function SidePanel({ title, subtitle, nav, page, actions, footer, expandable = false, fill = false, onClose, children }: Props) {
   const covers = usePanelCovers();
   const [expanded, setExpanded] = useState(false);
   const widens = expandable && !covers;
@@ -37,8 +38,10 @@ export function SidePanel({ title, subtitle, top, page, actions, footer, expanda
   }, [page]);
   return (
     <aside ref={panel} className={widens && expanded ? `${styles.panel} ${styles.expanded}` : styles.panel} aria-label={title}>
-      <div className={top ? `${styles.head} ${styles.screen}` : styles.head}>
-        {top ?? (
+      <div className={styles.head}>
+        {nav ? (
+          <NavBar {...nav} line />
+        ) : (
           <div className={styles.titles}>
             <h2 className={styles.title}>{title}</h2>
             {subtitle && <p className={styles.subtitle}>{subtitle}</p>}

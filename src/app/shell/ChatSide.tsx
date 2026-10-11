@@ -5,13 +5,13 @@ import { CharacterEditor } from '../library/CharacterEditor';
 import { PromptEditor } from '../prompts/PromptEditor';
 import { PromptList } from '../prompts/PromptList';
 import { useCharacter, useStored } from '../session';
-import { NavBar, SidePanel, type NavBarProps } from '../ui';
+import { SidePanel, type NavBarProps } from '../ui';
 
 type Props<K extends SideAt['open']['kind']> = Omit<SideAt, 'open'> & { open: Extract<SideAt['open'], { kind: K }> };
 const panel =
   (title: string, onClose: () => void) =>
   ({ head, body, open: page }: { head: NavBarProps; body: ReactNode; open?: string }) => (
-    <SidePanel title={title} top={<NavBar {...head} />} page={page} expandable onClose={onClose}>
+    <SidePanel title={title} nav={head} page={page} expandable onClose={onClose}>
       {body}
     </SidePanel>
   );
