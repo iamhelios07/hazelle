@@ -153,6 +153,9 @@ export function convertModule(raw: Json, tally: Tally): Omit<ImportedModule, 'as
   const pack = packOf({ regex: raw.regex, trigger: raw.trigger, background: raw.backgroundEmbedding, toggles: raw.customModuleToggle }, tally);
   const { lore, loreFolders } = nativeLorebook(list(raw.lorebook));
   countTags([...pack.regex.flatMap((script) => [script.find, script.replace]), pack.background ?? '', ...lore.map((entry) => entry.content)], tally);
+  // Neither runs here (design §6.10: a module reaches no network; Risu itself never reads cjs), so neither is kept.
+  if (isRecord(raw.mcp)) add(tally, 'mcp');
+  if (text(raw.cjs).trim()) add(tally, 'cjs');
   return {
     name: text(raw.name),
     description: text(raw.description),

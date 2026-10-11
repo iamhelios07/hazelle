@@ -310,7 +310,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
-    illustration: <PortraitsEditor owner={{ kind: 'character', id }} />,
+    illustration: <PortraitsEditor owner={id} />,
     display: (
       <Section title={PARTS.display.label}>
         <SettingGroup label={PARTS.display.label}>

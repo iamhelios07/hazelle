@@ -15,7 +15,7 @@ export type ImportOutcome = { file: string; title: string; holds: string; placed
 // at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
 export type Placement = { at: ModulePlace['kind'] | null; failure: string | null };
 
-const PLACES: Record<ModulePlace['kind'], string> = { character: '이 캐릭터에', prompt: '이 프롬프트에', always: ALWAYS };
+const PLACES: Record<ModulePlace['kind'], string> = { character: '이 캐릭터에', prompt: '이 프롬프트에', persona: '이 페르소나에', always: ALWAYS };
 
 export function characterOutcome(file: string, imported: Imported, { id, skipped, faceless }: ImportedCharacter): ImportOutcome {
   const { card, lore, assets, report } = imported;

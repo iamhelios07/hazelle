@@ -60,8 +60,8 @@ export class ImportReader {
       }
       case 'persona': {
         this.clear();
-        const { picture, ...persona } = await this.backup!.persona(request.key);
-        return { ...persona, picture: this.picture(picture) };
+        const { picture, module, ...persona } = await this.backup!.persona(request.key);
+        return { ...persona, picture: this.picture(picture), module: module && this.module(module) };
       }
       case 'preset':
         this.clear();

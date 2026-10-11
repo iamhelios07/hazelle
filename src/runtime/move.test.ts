@@ -81,7 +81,7 @@ function source({ characters, personas = [], presets = [], modules = [], alwaysM
 describe('moveFromRisu', () => {
   it('brings a character whole, its chat on the greeting Risu showed with its messages staged and its persona, and a second run skips it', async () => {
     const { store, files } = await server.account();
-    const backup = source({ characters: [luna, { ...luna, id: 'unselected' }], personas: [{ id: 'risu-jin', name: '진', alias: '부자', description: '여행자', picture: async () => null }] });
+    const backup = source({ characters: [luna, { ...luna, id: 'unselected' }], personas: [{ id: 'risu-jin', name: '진', alias: '부자', description: '여행자', picture: async () => null, module: null }] });
     const pick = { ...backup.catalog, characters: [backup.catalog.characters[0]!] };
     const moved = await moveFromRisu(store, files, backup, pick, null, () => {});
     expect(moved).toMatchObject({ ok: true, data: { personas: 1, prompts: 0, modules: [], characters: [{ risu: 'risu-luna', name: '루나', chats: 1 }] } });
@@ -215,6 +215,19 @@ describe('moveFromRisu', () => {
     expect(store.list('module')).toHaveLength(1);
     expect(store.list('settings')[0]!.value.modules).toEqual([]);
     expect(store.list('character').find(({ value }) => value.risu === 'risu-sol')!.value.modules).toEqual([module!.id]);
+  });
+
+  it('brings each persona\'s own module as a module of its own, on for that persona alone, though Risu gives them one id', async () => {
+    const { store, files } = await server.account();
+    const embedded = (name: string): ImportedModule => ({ ...bell, name, risu: '$embedded', unsupported: [{ kind: 'mcp', count: 1 }] });
+    const persona = (name: string): RisuPersona => ({ id: name, name, alias: '', description: '', picture: async () => null, module: embedded(name) });
+    const backup = source({ characters: [], personas: [persona('진'), persona('솔')] });
+    const moved = await moveFromRisu(store, files, backup, backup.catalog, null, () => {});
+    expect(moved).toMatchObject({ ok: true, data: { personas: 2, modules: [{ name: '진', unsupported: [{ kind: 'mcp', count: 1 }] }, { name: '솔' }] } });
+    const modules = new Map(store.list('module').map(({ id, value }) => [value.name, { id, value }]));
+    expect(modules.size).toBe(2);
+    expect(modules.get('진')!.value).not.toHaveProperty('risu');
+    for (const name of ['진', '솔']) expect(store.list('persona').find(({ value }) => value.name === name)!.value.modules).toEqual([modules.get(name)!.id]);
   });
 
   it('turns a preset\'s modules on for its prompt, named by Risu id or namespace, each once, and drops a name the backup lacks', async () => {
