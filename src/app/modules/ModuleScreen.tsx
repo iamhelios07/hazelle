@@ -1,13 +1,15 @@
 import { ToolSection } from './ToolSection';
 import type { Stored } from '../../model/kinds';
+import { likenessId } from '../../model/likeness';
 import { editModule, setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { LoreEditor } from '../common/LoreEditor';
 import { ScriptsEditor } from '../common/ScriptsEditor';
+import { PortraitsEditor } from '../common/PortraitsEditor';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { ALWAYS, BIN_KEEPS, moduleName, promptName } from '../common/words';
-import { useLibrary, usePrompts, useSettings, useStore } from '../session';
+import { useChildren, useLibrary, usePrompts, useSettings, useStore, useStored } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -27,6 +29,8 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
   const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
   const holds = useHolds(stored);
+  // A module of scripts alone describes no one, so it offers no 삽화 profiles.
+  const describes = useChildren('lore', id).length + useChildren('asset', id).length > 0 || useStored('likeness', likenessId(id)) !== null;
   const autosave = useAutosave<{ name: string; description: string }>(`module:${id}`, (patch) => editModule(store, id, patch));
   const name = autosave.unsaved.name ?? value.name;
   const description = autosave.unsaved.description ?? value.description;
@@ -89,6 +93,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
       </Section>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />
+      {describes && <PortraitsEditor owner={{ kind: 'module', id }} />}
     </Screen>
   );
 }

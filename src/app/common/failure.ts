@@ -2,6 +2,7 @@ import type { RelayError, ServerError } from '../../contracts/http';
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
 import type { IllustrateFailure } from '../../runtime/illustrate';
+import type { LikenessFailure } from '../../runtime/likeness';
 import type { MemoryFailure } from '../../runtime/memory';
 import type { AddFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
@@ -337,5 +338,19 @@ export function describeIllustrateFailure(failure: IllustrateFailure): string {
       return '내용이 없는 메시지예요.';
     case 'unsaved':
       return `삽화를 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+  }
+}
+
+// The profiles are written by the 삽화 prompt's scene model, so its failures read as the scene's.
+export function describeLikenessFailure(failure: LikenessFailure): string {
+  switch (failure.kind) {
+    case 'unread':
+      return `이미지를 읽지 못했어요. ${describeFailure(failure.failure)}`;
+    case 'unsaved':
+      return `프로필을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+    case 'gone':
+      return '삭제됐어요.';
+    default:
+      return describeIllustrateFailure(failure);
   }
 }

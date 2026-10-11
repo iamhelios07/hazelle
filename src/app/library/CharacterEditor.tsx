@@ -1,11 +1,12 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, ImageUp, Languages, MessageSquareQuote, Package, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
 import { PICTURE_PERCENT, type CharacterShelf, type Pictures } from '../../model/library';
+import { likenessId } from '../../model/likeness';
 import { editCharacter, setAvatar, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
@@ -18,13 +19,14 @@ import { LoreEditor } from '../common/LoreEditor';
 import { scriptHolds } from '../common/pack';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { ScriptsEditor } from '../common/ScriptsEditor';
+import { PortraitsEditor } from '../common/PortraitsEditor';
 import type { CharacterPart } from '../common/characterPart';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { readOptional } from '../common/typedNumber';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BOT_MODELS, BOT_MODELS_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
-import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore } from '../session';
+import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { useToast } from '../toast';
@@ -52,12 +54,13 @@ const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
   lore: { label: '로어북', icon: BookOpen },
   modules: { label: PAGES.modules, icon: Package },
   scripts: { label: SCRIPTS.part, icon: Braces },
+  illustration: { label: '삽화', icon: Palette },
   display: { label: '표시', icon: Eye },
 };
 const GROUPS: CharacterPart[][] = [
   ['profile', 'character', 'greetings'],
   ['instructions', 'lore', 'modules', 'scripts'],
-  ['display'],
+  ['illustration', 'display'],
 ];
 const LIST = '캐릭터 항목';
 type Reading = 'source' | 'translated';
@@ -87,6 +90,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const wide = useWide();
   const original = useCharacter(origin?.id ?? null);
   const lore = useChildren('lore', id);
+  const likeness = useStored('likeness', likenessId(id));
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const ownModules = character.modules ?? [];
@@ -306,6 +310,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
+    illustration: <PortraitsEditor owner={{ kind: 'character', id }} />,
     display: (
       <Section title={PARTS.display.label}>
         <SettingGroup label={PARTS.display.label}>
@@ -340,6 +345,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     lore: `${lore.length}개`,
     modules: `${modules.filter((module) => always.includes(module.id) || ownModules.includes(module.id)).length}개 켜짐`,
     scripts: scriptHolds(card) || undefined,
+    illustration: likeness ? `${likeness.value.portraits.length}명` : undefined,
   };
   // A part with nothing to show is left out: 모듈 lists the account's modules, and there may be none.
   const groups = GROUPS.map((group) => group.filter((each) => each !== 'modules' || modules.length > 0));
