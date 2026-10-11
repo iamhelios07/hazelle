@@ -11,6 +11,7 @@ describe('renameToggle', () => {
       '{{#when::sims::tis::1}}x{{/when}}',
       '{{#if {{getglobalvar::toggle_sims}}}}x{{/if}}',
       '{{#when::toggle::sims}}{{#when::toggle::sims}}nested{{/when}}{{/when}}',
+      '{#if {{getglobalvar::toggle_sims}}\n{{#when::toggle::sims}}x{{/when}}#}',
     ].join('\n');
     expect(renameToggle(text, 'sims', 'simulator')).toBe(text.replaceAll('sims', 'simulator'));
   });

@@ -15,6 +15,8 @@ export function toggleUses(text: string): ToggleUse[] {
       if (node.kind === 'tag') {
         global(node, uses);
         visit(node.parts);
+      } else if (node.kind === 'legacy') {
+        visit(node.parts);
       } else {
         const written = source(node.head);
         const head = blockHead(written.content)!;
@@ -44,7 +46,7 @@ type Written = { content: string; start: number };
 const sourceLength = (node: Node): number =>
   typeof node === 'string'
     ? node.length
-    : node.kind === 'tag'
+    : node.kind !== 'block'
       ? '{{}}'.length + node.parts.reduce((sum: number, part) => sum + sourceLength(part), 0)
       : sourceLength(node.head) + node.raw.length + sourceLength(node.close);
 

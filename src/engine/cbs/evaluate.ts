@@ -5,7 +5,7 @@ import { seeded } from '../random';
 import type { Stage } from '../render';
 import { escapeCbs } from './escape';
 import type { PreviousMessages } from './history';
-import { parse, type Block, type Node, type Tag } from './parse';
+import { parse, type Block, type Legacy, type Node, type Tag } from './parse';
 import { bool, handlerFor, items, normalize, readToggle, readVar, Return, truthy, type Env, type Erase } from './tags';
 
 export type CbsContext = {
@@ -105,7 +105,7 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
   const { spent } = frame.run;
   let out = '';
   for (const node of nodes) {
-    const piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame) : evaluateBlock(node, frame);
+    const piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame) : node.kind === 'block' ? evaluateBlock(node, frame) : legacy(node, frame);
     if (typeof node !== 'string') spent.tags++;
     if (typeof piece === 'string') spent.chars += piece.length;
     if (spent.tags > MOST_TAGS || spent.chars > MOST_CHARS) throw new Runaway();
@@ -215,6 +215,28 @@ function when(block: Block, rest: string, frame: Frame): string {
   const split = block.body.findIndex(isElse);
   const branch = holds ? (split === -1 ? block.body : block.body.slice(0, split)) : split === -1 ? [] : block.body.slice(split + 1);
   return evaluateNodes(modes.includes('keep') ? branch : blankEnds(branch), frame);
+}
+
+// The condition is the first line, read as Risu does: the word after `if`, false when it is '', '0' or '-1', so '2' and
+// 'true' hold, unlike #if. Only a body that holds is evaluated, as in #when. Anything else stays as written.
+function legacy(node: Legacy, frame: Frame): string {
+  const split = node.parts.findIndex((part) => typeof part === 'string' && part.includes('\n'));
+  const asLegacy = () => `{#${evaluateNodes(node.parts, frame)}#}`;
+  if (split === -1) return asLegacy();
+  const line = node.parts[split] as string;
+  const newline = line.indexOf('\n');
+  const statement = evaluateNodes([...node.parts.slice(0, split), line.slice(0, newline)], frame).split(' ', 2);
+  if (statement[0] !== 'if') return asLegacy();
+  if (['', '0', '-1'].includes(statement[1]!)) return '';
+  const body = [line.slice(newline + 1), ...node.parts.slice(split + 1)];
+  return evaluateNodes(
+    trimEnds(
+      body,
+      (text) => text.trimStart(),
+      (text) => text.trimEnd(),
+    ),
+    frame,
+  );
 }
 
 // Anywhere on the block's own level; Risu wants it alone on a line in a body of several lines.

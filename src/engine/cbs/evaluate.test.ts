@@ -111,6 +111,13 @@ describe('evaluate', () => {
     expect(variables.size).toBe(0);
   });
 
+  it("reads Risu's legacy {#if …#} by its own falsy values, evaluates a false body not at all, and leaves other {# as written", () => {
+    const variables = new Map([['n', '3']]);
+    const legacy = '{#if {{greater::{{getvar::n}}::0}}\n{#if 2\n  in  \n#}\n#}|{#if -1\n{{setvar::x::1}}#}|{#if 0\nno#}|{#if {{user}}#}|{{getvar::n}}#}';
+    expect(run(legacy, { ...inMessage, variables })).toBe('in|||{#if jin#}|3#}');
+    expect(variables.has('x')).toBe(false);
+  });
+
   it('repeats #each per item of a JSON or § array, each item rolling its own random tags', () => {
     expect(run('{{#each ["a","b"] as x}}[{{slot::x}}]{{/each}} {{#each 1§2 y}}{{slot::y}}{{/each}}')).toBe('[a][b] 12');
     expect(run('[{{#each {{getvar::none}} as x}}{{slot::x}}{{/each}}]')).toBe('[]');
