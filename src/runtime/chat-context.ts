@@ -3,7 +3,7 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Display } from '../engine/display';
 import { readToggles } from '../engine/import/toggles';
-import type { Card, Pack } from '../engine/import/types';
+import type { Pack } from '../engine/import/types';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
