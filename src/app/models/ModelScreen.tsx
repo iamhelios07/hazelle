@@ -46,18 +46,23 @@ function ImageModelScreen({ connection, model, back }: Props) {
     navigate(prompt.kind === 'prompt' ? { kind: 'prompt', id: prompt.prompt.id, pane: null } : { kind: 'prompts' });
   };
   return (
-    <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}>
-      <SettingGroup label="이미지 설정">
-        <SettingRow
-          label="이미지 설정"
-          help="태그, 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
-          control={
-            <Button variant="secondary" size="sm" onClick={openPrompt}>
-              삽화 프롬프트 열기
-            </Button>
-          }
-        />
-      </SettingGroup>
+    <Screen
+      width="form"
+      top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}
+      aside={
+        <SettingGroup label="이미지 설정">
+          <SettingRow
+            label="이미지 설정"
+            help="태그, 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
+            control={
+              <Button variant="secondary" size="sm" onClick={openPrompt}>
+                삽화 프롬프트 열기
+              </Button>
+            }
+          />
+        </SettingGroup>
+      }
+    >
       <Section title="모델">
         <Facts
           items={[
@@ -122,37 +127,41 @@ function ChatModelScreen({ connection, model, back }: Props) {
   const sent = current && (schema ? changeWords(fit(schema, current.value.settings).changes) : NOT_CALLABLE);
 
   return (
-    <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}>
-      <SettingGroup label="쓰는 설정">
-        <SettingRow
-          label="쓰는 설정"
-          help="같은 설정을 쓰는 모델은 함께 바뀌어요."
-          sub={current ? (words?.length ? words.join(' · ') : '정한 값 없음') : undefined}
-          error={current ? undefined : '쓰던 설정이 삭제돼서 이 모델을 사용할 수 없어요.'}
-          note={sent || undefined}
-          control={
-            <>
-              <Menu
-                place="below-end"
-                label="쓸 설정 선택"
-                trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title="쓸 설정" {...opener} />}
-              >
-                {sorted.map((profile) => (
-                  <MenuItem key={profile.id} label={profile.value.name} tag={profile.id === settings.profile ? '기본' : undefined} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
-                ))}
-                <Divider variant="menu" />
-                <MenuItem label="이 모델 전용 설정 만들기" onClick={own} />
-              </Menu>
-              {current && (
-                <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'profile', id: current.id })}>
-                  열기
-                </Button>
-              )}
-            </>
-          }
-        />
-      </SettingGroup>
-
+    <Screen
+      width="form"
+      top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}
+      aside={
+        <SettingGroup label="쓰는 설정">
+          <SettingRow
+            label="쓰는 설정"
+            help="같은 설정을 쓰는 모델은 함께 바뀌어요."
+            sub={current ? (words?.length ? words.join(' · ') : '정한 값 없음') : undefined}
+            error={current ? undefined : '쓰던 설정이 삭제돼서 이 모델을 사용할 수 없어요.'}
+            note={sent || undefined}
+            control={
+              <>
+                <Menu
+                  place="below-end"
+                  label="쓸 설정 선택"
+                  trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title="쓸 설정" {...opener} />}
+                >
+                  {sorted.map((profile) => (
+                    <MenuItem key={profile.id} label={profile.value.name} tag={profile.id === settings.profile ? '기본' : undefined} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
+                  ))}
+                  <Divider variant="menu" />
+                  <MenuItem label="이 모델 전용 설정 만들기" onClick={own} />
+                </Menu>
+                {current && (
+                  <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'profile', id: current.id })}>
+                    열기
+                  </Button>
+                )}
+              </>
+            }
+          />
+        </SettingGroup>
+      }
+    >
       <Section title="모델">
         <Facts
           items={[

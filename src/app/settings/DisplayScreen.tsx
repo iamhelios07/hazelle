@@ -4,13 +4,27 @@ import { PAGES } from '../common/words';
 import { useDisplay } from '../display';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { ChoiceGroup, List, ListItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, THEME } from '../ui';
+import { ChoiceGroup, List, ListItem, NavBar, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Switch, THEME, type PreviewRow } from '../ui';
+
+const SAMPLE: PreviewRow[] = [
+  { name: '캐릭터', mine: false, html: '<p><em>창밖으로 늦은 오후의 햇살이 기울어 든다. 그녀는 찻잔을 내려놓고 고개를 들었다.</em></p><p>"오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아."</p>' },
+  { name: '나', mine: true, html: '<p>"이번엔 끝까지 읽었어. 결말이 좀 의외던데."</p>' },
+];
 
 export function DisplayScreen({ back }: { back: Back | null }) {
   const { reading, display, presets, changeDisplay, pick } = useDisplay();
   const current = presetOf(presets, reading, display);
   return (
-    <Screen width="form" top={<NavBar title={PAGES.display} {...backBar(back)} />}>
+    <Screen
+      width="form"
+      top={<NavBar title={PAGES.display} {...backBar(back)} />}
+      besideOnly
+      aside={
+        <Section title="미리보기">
+          <ReadingPreview label="미리보기" reading={reading} rows={SAMPLE} />
+        </Section>
+      }
+    >
       <SettingGroup label={PAGES.display}>
         <SettingRow label="테마" control={<ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
         <SettingRow

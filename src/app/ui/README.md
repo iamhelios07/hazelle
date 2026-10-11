@@ -88,7 +88,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
-| layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide. `aside` adds a column beside the body once the screen is wide enough, stacked above it when not. Its title, section titles and the words in its boxes share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
+| layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide. `aside` adds a column beside the body once the screen is wide enough, stacked above it when not, or left out with `besideOnly`. Its title, section titles and the words in its boxes share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
@@ -159,6 +159,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `SidePeek` (`SidePeeks`) | `SidePeek.module.css` | A tab at the story's right edge, clear of its scrollbar, whose drawer (a card the size of its content at the story's middle) slides over the story once the pointer rests on the tab, or held open (a key, a tap) with its own close, such as 상태; `SidePeeks` holds it in ChatFrame's `peek` slot |
 | story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text: its script's name and actions among several |
 | story | `MarginPicture` | `MarginPicture.module.css` | A message's 삽화 on the stage right of the story, level with the paragraph its anchor marks, following the reader to the message's end; a picture narrower than the text grows leftward over it to the text's width while pointed at |
+| story | `ReadingPreview` (`PreviewRow`) | `ReadingPreview.module.css` | Sample messages drawn as the chat draws them under given reading settings, inert; the reading width does not show |
 | story | `LogExport` (`LogRow`, `snapshotPage`) | `LogExport.module.css` | A chat drawn once out of sight and handed back as HTML whose look rides in style attributes only (`snapshot.ts`), for a page pasted on another site: the shadow roots read through, every picture whole, and the bot rules a style attribute cannot carry counted; `snapshotPage` wraps it as a file |
 
 ## Enforced by `npm run check`

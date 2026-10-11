@@ -1,0 +1,9 @@
+.preview {
+  display: flex;
+  flex-direction: column;
+  margin-inline: calc(var(--box-hang) * -1);
+  padding: var(--space-16);
+  border: var(--border-thin) solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+}
