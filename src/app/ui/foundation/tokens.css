@@ -261,6 +261,7 @@
   --icon-xs: 16px;
   --icon-sm: 18px;
   --icon-md: 22px;
+  --icon-lg: 24px;
   --row-min-height: 64px;
   --viewport-card-estimate: 280px;
   --viewport-story-estimate: 320px;
@@ -278,7 +279,7 @@
   --toast-words-most: 50vh;
   --screen-offset-top: 10vh;
   --sidebar-width: 272px;
-  --rail-width: 64px;
+  --rail-width: 72px;
   --panel-width: 360px;
   --tool-frame-min-height: 16rem;
   --list-pane-width: 400px;
@@ -300,6 +301,8 @@
   --control-tool: 32px;
   --avatar-sm: 22px;
   --avatar-md: 32px;
+  /* The rail's faces, the only ones between a row's and a card's. */
+  --avatar-rail: 40px;
   --avatar-lg: 72px;
   --menu-width: 300px;
   --chat-title-max-width: 320px;

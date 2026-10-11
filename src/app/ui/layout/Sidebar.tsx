@@ -52,20 +52,19 @@ type RailProps = {
   fold?: { open: boolean; onToggle: () => void };
   actions: ReactNode;
   children: ReactNode;
-  footer: ReactNode;
 };
 
-export function Rail({ home, fold, actions, children, footer }: RailProps) {
+// Every button sits above the faces, the fold last so the others stay put when it comes and goes.
+export function Rail({ home, fold, actions, children }: RailProps) {
   return (
     <aside className={styles.rail} aria-label="캐릭터 바로가기">
       <button type="button" className={styles.home} aria-label={home.label} title={home.label} aria-current={home.current || undefined} onClick={home.onClick}>
         <Brand variant="mark" />
       </button>
       {actions}
+      {fold && <IconButton icon={PanelLeft} label={fold.open ? '사이드바 접기' : '사이드바 펼치기'} framed onClick={fold.onToggle} />}
       <Divider variant="rail" />
       <div className={styles.railList}>{children}</div>
-      {fold && <IconButton icon={PanelLeft} label={fold.open ? '사이드바 접기' : '사이드바 펼치기'} framed onClick={fold.onToggle} />}
-      {footer}
     </aside>
   );
 }

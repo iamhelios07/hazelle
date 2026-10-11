@@ -7,7 +7,7 @@ type Props = {
   face: string | LucideIcon;
   // A character's picture. face stands in while there is none.
   image?: string | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'rail' | 'lg';
   tone?: 'plain' | 'you';
 };
 

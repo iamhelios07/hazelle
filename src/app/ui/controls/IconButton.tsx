@@ -18,7 +18,7 @@ type Props = {
   disabled?: boolean;
   // Something behind it needs a look, such as a failure inside the menu it opens; the words are inside.
   dot?: boolean;
-  // A border round it, for a button that stands alone in a column of pictures, such as the rail's.
+  // The rail's buttons: a border round it to stand alone among pictures, and the rail's larger size.
   framed?: boolean;
 };
 
@@ -42,7 +42,7 @@ export function IconButton({ icon, label, title = label, onClick, pressed, popup
           {icon}
         </span>
       ) : (
-        <Icon icon={icon} size={size} />
+        <Icon icon={icon} size={framed ? 'lg' : size} />
       )}
       {dot && <span className={styles.dot} aria-hidden />}
     </button>
