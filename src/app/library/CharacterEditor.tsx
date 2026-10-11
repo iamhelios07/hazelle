@@ -297,6 +297,11 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           onChange={(value) => change('postHistoryInstructions', value)}
           help="대화 기록 바로 뒤에 붙어요."
         />
+        <SettingRow
+          label="유틸리티 봇"
+          help="프롬프트는 쓰지 않고 이 캐릭터의 지시문, 설명, 로어북, 대화만 보내요. 번역기처럼 역할극이 아닌 봇에 맞아요."
+          control={<Switch label="유틸리티 봇" checked={text.utility} onChange={(on) => change('utility', on)} />}
+        />
         <TextField
           label={TRANSLATOR_NOTE}
           lines={6}

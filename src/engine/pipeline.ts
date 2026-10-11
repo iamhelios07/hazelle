@@ -261,8 +261,21 @@ export const assemble = (input: PromptInput): Assembled | TooLong | RanAway => s
 
 const toolFrom = (tools: PromptInput['tools']): From => ({ kind: 'tool', name: tools.filter(({ text }) => text.trim()).map(({ name }) => name).join(' · ') });
 
+// Risu's 유틸리티 봇: a card made for a task, not a role, keeps the prompt out. The two empty texts still take the card's own
+// system prompt and post-history instructions (ownText), which Risu drops; the card's intent wins.
+const UTILITY: Block[] = [
+  { id: 'utility:main', name: null, kind: 'text', role: 'system', text: '', mark: 'main' },
+  { id: 'utility:description', name: null, kind: 'slot', slot: 'description', role: 'system', wrapper: null },
+  { id: 'utility:lorebook', name: null, kind: 'slot', slot: 'lorebook' },
+  { id: 'utility:memory', name: null, kind: 'slot', slot: 'memory', role: 'system', wrapper: null },
+  { id: 'utility:chat', name: null, kind: 'slot', slot: 'chat', range: { from: 0, to: null } },
+  { id: 'utility:globalNote', name: null, kind: 'text', role: 'system', text: '', mark: 'globalNote' },
+  { id: 'utility:postEverything', name: null, kind: 'slot', slot: 'postEverything' },
+];
+
 function conversation({ scope, seed, countTokens, budget, continuing, memory, tools }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
+  const blocks = scope.card?.utility ? UTILITY : prompt.blocks;
   const chat = renderChat('prompt', scope);
   if (chat.stopped) throw chat.stopped;
   const tokens = remembered(countTokens);
@@ -273,15 +286,15 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   const recalled = built && standing(built.memory, read!, memoryBudget(built.budget, budget), tokens);
   const told = memory?.kind === 'tool' ? memory : null;
 
-  const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: told?.text ?? recalled?.text ?? '', tools });
+  const { parts: template, memory: slot } = templateOf(blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: told?.text ?? recalled?.text ?? '', tools });
   // Retrieval rides only where memory does, before the latest user message so it follows the last cache point.
   const found = built && slot ? retrieval(built.memory, built.found, recalled!, read!, retrievalRoom(memoryBudget(built.budget, budget)), tokens) : null;
   // A tool's text stands for its messages only where it reaches the request: without it there, none leave.
   const covered = told ? (slot && told.text.trim() ? told.through + 1 : 0) : (recalled?.covered ?? 0);
-  const hasToolSlot = prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'tool');
+  const hasToolSlot = blocks.some((block) => block.kind === 'slot' && block.slot === 'tool');
   const toolText = joined(tools.map(({ text }) => text));
   const out = (...parts: Sent[]) => template.push(...filled(parts));
-  if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
+  if (!blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
   if (!hasToolSlot && toolText.trim()) out({ message: { role: 'system', content: toolText }, from: toolFrom(tools) });
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
 
@@ -622,12 +635,9 @@ function describe(card: Card | null): string[] {
   ];
 }
 
-export type Unused = { kind: 'bias' | 'utility'; count: number };
+export type Unused = { kind: 'bias'; count: number };
 
 export function unused(card: Card): Unused[] {
-  const found: Unused[] = [
-    { kind: 'bias', count: card.bias.length },
-    { kind: 'utility', count: card.utility ? 1 : 0 },
-  ];
+  const found: Unused[] = [{ kind: 'bias', count: card.bias.length }];
   return found.filter((item) => item.count > 0);
 }

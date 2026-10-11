@@ -155,6 +155,20 @@ describe('assemble', () => {
     expect(renderChat('display', scope({ card: card({ regex }), messages })).texts[2]).toBe('She nods slowly. [OOC] ignore');
   });
 
+  it("sends a 유틸리티 봇 its own texts, description, lorebook and chat, and none of the prompt's", () => {
+    const own = card({ utility: true, systemPrompt: 'Translate what {{user}} writes.{{original}}', postHistoryInstructions: 'Answer in Korean.' });
+    expect(build({ card: own, lore: [lore('lighthouse', 'The lighthouse is old.')] })).toEqual([
+      { role: 'system', content: 'Translate what jin writes.' },
+      { role: 'system', content: 'Luna keeps the lighthouse.' },
+      { role: 'system', content: 'The lighthouse is old.', cache: true },
+      { role: 'assistant', content: 'The lamp is lit, jin.' },
+      { role: 'user', content: 'Is it safe?' },
+      { role: 'assistant', content: 'She nods. [OOC] ignore' },
+      { role: 'user', content: 'Good.', cache: true },
+      { role: 'system', content: 'Answer in Korean.' },
+    ]);
+  });
+
   it("puts each 등장인물 under its name after the chat's character, its text and its own lorebook entries read as its own {{char}}", () => {
     const mira = card({ name: 'Mira', description: '{{char}} likes apples.', personality: 'shy' });
     const entries = [lore('orchard', '{{char}} tends the orchard.', {}, 'mira'), lore('gate', '{{char}} guards the gate.', {}, 'module')];
@@ -471,10 +485,7 @@ describe('renderChat', () => {
 
 describe('unused', () => {
   it('counts what chats do not use yet', () => {
-    expect(unused(card({ bias: [['a', 1]], utility: true }))).toEqual([
-      { kind: 'bias', count: 1 },
-      { kind: 'utility', count: 1 },
-    ]);
+    expect(unused(card({ bias: [['a', 1]], utility: true }))).toEqual([{ kind: 'bias', count: 1 }]);
   });
 });
 
