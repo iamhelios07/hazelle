@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -221,6 +222,44 @@ describe('the account registry', () => {
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
     expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
+  });
+
+  it('installs the armed target after SIGKILL during decompression leaves the live file and a real unfinished stage', async () => {
+    await signup();
+    await write(put(A, 'old'));
+    now = 2_000_000;
+    const target = await baseline();
+    await write(put(A, 'new', 1));
+    raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7 WHERE incarnation = ?").run(INC);
+    raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 2500000, 't2', ?, 'armed', 1, 1)").run(INC, target);
+    stores.close();
+    await db.snapshot(join(dir, 'service.sqlite'));
+    const killed = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
+      import fs from 'node:fs';
+      import { syncBuiltinESMExports } from 'node:module';
+      const create = fs.createWriteStream;
+      fs.createWriteStream = (...args) => {
+        const stream = create(...args);
+        if (String(args[0]).includes('.install-')) stream.once('open', () => process.kill(process.pid, 'SIGKILL'));
+        return stream;
+      };
+      syncBuiltinESMExports();
+      const { accountRegistry } = await import('./src/server/db/account-db.ts');
+      const { openDatabase, serviceDb } = await import('./src/server/db/service-db.ts');
+      const { serviceReads } = await import('./src/server/account-store.ts');
+      const [dir, incarnation] = process.argv.slice(1);
+      const service = serviceDb(openDatabase(dir + '/service.sqlite'));
+      await accountRegistry(dir, service, serviceReads(service), Date.now).getByName(incarnation).marked(incarnation, 7);
+    `, dir, INC], { env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' }, stdio: 'ignore', timeout: 10_000 });
+    expect({ signal: killed.signal, error: killed.error, status: killed.status }).toEqual({ signal: 'SIGKILL', error: undefined, status: null });
+    const [stage] = readdirSync(join(dir, 'accounts')).filter((name) => name.includes('.install-'));
+    expect(stage).toBeDefined();
+    expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'new' }]);
+    expect(stores.inspect(INC).exec('PRAGMA quick_check')).toEqual([{ quick_check: 'ok' }]);
+    stores = accountRegistry(dir, db, serviceReads(db), () => now);
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
+    expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
+    expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${stage}`);
   });
 
   it('takes a baseline before an operation’s checkpoint and after its end, read from the service, and refuses one between', async () => {

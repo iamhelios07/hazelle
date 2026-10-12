@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { accountPath, snapshotPath } from '../db/account-db';
+import type { Db, Statement } from '../db/service-db';
 import { sessionCookie, signupBody, testApp } from '../testing';
 import { listGenerations, readManifest } from './generation';
 import { DAY_MS, dayStart, expireSnapshots } from './snapshots';
@@ -108,6 +109,33 @@ describe('the daily job', () => {
 });
 
 describe('retention', () => {
+  it('reclaims a snapshot file whose expiry committed before the process stopped without deleting the live floor', async () => {
+    const incarnation = await signedUp('jin');
+    const now = Date.now();
+    t.clock.now = () => now - 10 * DAY_MS;
+    const old = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    await written(incarnation, 'floor');
+    t.clock.now = () => now - 9 * DAY_MS;
+    const floor = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    const stopping = (real: Statement): Statement => ({
+      ...real,
+      bind: (...values) => stopping(real.bind(...values)),
+      run: async () => {
+        await real.run();
+        throw new Error('stopped after expiry commit');
+      },
+    });
+    const db: Db = { ...t.env.db, prepare: (sql) => sql.startsWith('DELETE FROM snapshots') ? stopping(t.env.db.prepare(sql)) : t.env.db.prepare(sql) };
+    await expect(expireSnapshots({ ...t.env, db }, t.dir, now)).rejects.toThrow('stopped after expiry commit');
+    expect(await t.env.db.prepare('SELECT id FROM snapshots WHERE id = ?').bind(old).first()).toBeNull();
+    expect(existsSync(snapshotPath(t.dir, incarnation, old))).toBe(true);
+    t.restartProcess();
+    expect(await expireSnapshots(t.env, t.dir, now)).toBe(0);
+    expect((await t.reconcile(now + 61 * 60_000)).removed).toContain(`snapshots/${incarnation}/${old}.sqlite.gz`);
+    expect(existsSync(snapshotPath(t.dir, incarnation, floor))).toBe(true);
+    expect(await t.stores.snapshotAt(incarnation, now - DAY_MS)).toEqual({ id: floor, takenAt: now - 9 * DAY_MS });
+  });
+
   it('lets a snapshot go at 7 days unless an operation pins it (open, or ended under 7 days ago however it ended) or it is a live account’s floor; a deleted account keeps none past 7 days', async () => {
     const live = await signedUp('jin');
     const gone = 'f'.repeat(32);

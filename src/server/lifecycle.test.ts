@@ -40,7 +40,7 @@ class Crash extends Error {}
 // one that waits pauses the runner there. Once a hook has thrown, the runner is dead: every later call throws before it
 // does anything, since the code swallows the failure of a restart by design. arms: the target of every arm call that
 // reached the store. checkpoints: rows each checkpoint write changed.
-function watched(hook: (what: string) => void | Promise<void>) {
+function watched(hook: (what: string) => void | Promise<void>, reads = false) {
   const arms: string[] = [];
   let checkpoints = 0;
   let dead: unknown = null;
@@ -61,7 +61,7 @@ function watched(hook: (what: string) => void | Promise<void>) {
       alive();
       const value = await done();
       if (/checkpoint = \?/.test(sql)) checkpoints += (value as Result).meta.changes;
-      if (writes) await boundary(`db ${sql.trim().slice(0, 40)}`);
+      if (writes || reads) await boundary(`db ${sql.trim().slice(0, 40)}`);
       return value;
     };
     return {
@@ -137,7 +137,7 @@ const crashing = (n: number) => {
     if (++count === n) throw new Crash(what);
   });
 };
-function pausing(at: (what: string, count: number) => boolean) {
+function pausing(at: (what: string, count: number) => boolean, reads = false) {
   let count = 0;
   let reach = () => {};
   let release = () => {};
@@ -147,7 +147,7 @@ function pausing(at: (what: string, count: number) => boolean) {
     if (!at(what, ++count)) return;
     reach();
     await released;
-  });
+  }, reads);
   return { ...watching, reached, release };
 }
 
@@ -216,6 +216,166 @@ async function expectRestored(seed: Awaited<ReturnType<typeof seeded>>, id: numb
 }
 
 describe('a restore', () => {
+  it('recovers the begun operation and its account hold after the begin batch commits without returning', async () => {
+    const seed = await seeded();
+    await expect(beginRestore(crashing(1).env, seed.id, seed.report, { at: seed.at })).rejects.toThrow(Crash);
+    t.restartProcess();
+    const row = (await account(seed.id))!;
+    expect(row).toMatchObject({ state: 'restoring', operation: expect.any(Number) });
+    expect(await operation(row.operation!)).toMatchObject({ phase: 'begun', verified: 0 });
+    expect(await logged('restore-begun', row.operation!)).toBe(1);
+    await expectRestored(seed, (await runRestore(t.env, row.operation!))!.id, []);
+  });
+
+  it('lets only one simultaneous begin acquire the account and write its operation and log', async () => {
+    const seed = await seeded();
+    const answers = await Promise.all([beginRestore(t.env, seed.id, seed.report, { at: seed.at }), beginRestore(t.env, seed.id, seed.report, { at: seed.at })]);
+    expect(answers.filter((answer) => 'begun' in answer)).toHaveLength(1);
+    expect(answers.filter((answer) => 'refused' in answer)).toEqual([{ refused: 'account-busy' }]);
+    expect(await t.env.db.prepare('SELECT COUNT(*) AS n FROM restores').first('n')).toBe(1);
+    expect(await logged('restore-begun')).toBe(1);
+    expect(await account(seed.id)).toMatchObject({ state: 'restoring', operation: (answers.find((answer) => 'begun' in answer) as { begun: number }).begun });
+  });
+
+  it('follows cancellation after reading a checkpointed operation without arming or changing its timeline', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await expect(runRestore(pausedAt('checkpointed').env, id)).rejects.toThrow(Crash);
+    const late = pausing((what) => what.startsWith('db SELECT id, incarnation, at,'), true);
+    const running = runRestore(late.env, id);
+    await late.reached;
+    try {
+      expect(await cancelRestore(t.env, id)).toMatchObject({ phase: 'cancelled', verified: true });
+    } finally {
+      late.release();
+    }
+    expect(await running).toEqual({ id, phase: 'cancelled', verified: true, error: null });
+    expect(late.arms).toEqual([]);
+    expect(await account(seed.id)).toMatchObject({ timeline: seed.timeline, state: 'active', operation: null });
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
+  });
+
+  it('writes one cancellation log when two cancels compete for the terminal phase', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await expect(runRestore(pausedAt('targeted').env, id)).rejects.toThrow(Crash);
+    const answers = await Promise.all([cancelRestore(t.env, id), cancelRestore(t.env, id)]);
+    for (const answer of answers) expect(answer).toMatchObject({ phase: 'cancelled', verified: true, error: null });
+    expect(await logged('restore-cancelled', id)).toBe(1);
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
+    expect(mark(seed.incarnation, id)).toEqual([]);
+  });
+
+  it('finalizes cancellation after unmark committed but verification did not', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await expect(runRestore(pausedAt('targeted').env, id)).rejects.toThrow(Crash);
+    const cut = watched((what) => {
+      if (what === 'store unmark') throw new Crash(what);
+    });
+    await expect(cancelRestore(cut.env, id)).rejects.toThrow(Crash);
+    expect(await operation(id)).toMatchObject({ phase: 'cancelled', verified: 0 });
+    expect(mark(seed.incarnation, id)).toEqual([]);
+    t.restartProcess();
+    expect(await runRestore(t.env, id)).toEqual({ id, phase: 'cancelled', verified: true, error: null });
+    expect(await logged('restore-cancelled', id)).toBe(1);
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
+  });
+
+  it('finalizes a too-early failure after its release batch commits without returning', async () => {
+    const seed = await seeded();
+    const id = await begin(seed, { at: seed.at - HOUR_MS });
+    const cut = watched(async (what) => {
+      if (what === 'db batch' && (await operation(id))?.phase === 'failed') throw new Crash(what);
+    });
+    await expect(runRestore(cut.env, id)).rejects.toThrow(Crash);
+    expect(await operation(id)).toMatchObject({ phase: 'failed', verified: 0, error: 'too-early' });
+    t.restartProcess();
+    expect(await runRestore(t.env, id)).toEqual({ id, phase: 'failed', verified: true, error: 'too-early' });
+    expect(await logged('restore-failed', id)).toBe(1);
+    expect(await account(seed.id)).toMatchObject({ state: 'active', timeline: seed.timeline, operation: null });
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
+  });
+
+  it.each([
+    ['absent mark without an install', { marked: false, installedFrom: null, installedOp: null }],
+    ['matching target installed by another operation', { marked: false, installedFrom: 'target', installedOp: -1 }],
+    ['matching operation installed from another target', { marked: false, installedFrom: 'other', installedOp: 'operation' }],
+    ['matching install with the operation mark still present', { marked: true, installedFrom: 'target', installedOp: 'operation' }],
+  ] as const)('does not accept %s as proof of rewind', async (_, proof) => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await expect(runRestore(pausedAt('armed').env, id)).rejects.toThrow(Crash);
+    const { target } = (await operation(id))!;
+    let observed = false;
+    const env: Services = {
+      ...t.env,
+      stores: {
+        ...t.stores,
+        getByName: (name) => new Proxy(t.stores.getByName(name), {
+          get: (stub, method) => {
+            if (method === 'marked') return async () => ({ ...proof, installedFrom: proof.installedFrom === 'target' ? target : proof.installedFrom, installedOp: proof.installedOp === 'operation' ? id : proof.installedOp });
+            if (method === 'arm') return async () => {
+              observed = true;
+              expect(await operation(id)).toMatchObject({ phase: 'armed', verified: 0 });
+              throw new Crash('arm');
+            };
+            return Reflect.get(stub, method);
+          },
+        }),
+      },
+    };
+    await expect(runRestore(env, id)).rejects.toThrow(Crash);
+    expect(observed).toBe(true);
+    expect(await logged('restore-done', id)).toBe(0);
+    t.restartProcess();
+    await expectRestored(seed, (await runRestore(t.env, id))!.id, []);
+  });
+
+  it('stops after three unreached rewind restarts and resumes the armed target once restarts reach the store', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await expect(runRestore(pausedAt('armed').env, id)).rejects.toThrow(Crash);
+    const probe = counting();
+    let restarts = 0;
+    const env: Services = {
+      ...probe.env,
+      stores: {
+        ...probe.env.stores,
+        getByName: (name) => new Proxy(probe.env.stores.getByName(name), {
+          get: (stub, method) => method === 'restart' ? async () => { restarts++; throw new Error('unreached'); } : Reflect.get(stub, method),
+        }),
+      },
+    };
+    expect(await runRestore(env, id)).toEqual({ id, phase: 'armed', verified: false, error: 'not-rewound' });
+    expect(restarts).toBe(3);
+    expect(probe.arms).toHaveLength(3);
+    expect(await account(seed.id)).toMatchObject({ state: 'restoring', operation: id });
+    await expectRestored(seed, (await runRestore(t.env, id))!.id, probe.arms);
+  });
+
+  it('clears a committed not-verified error when finalization resumes after its restart reaches the store', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await expect(runRestore(pausedAt('done').env, id)).rejects.toThrow(Crash);
+    const cut = watched((what) => {
+      if (what.startsWith('db UPDATE restores SET error')) throw new Crash(what);
+    });
+    const env: Services = {
+      ...cut.env,
+      stores: {
+        ...cut.env.stores,
+        getByName: (name) => new Proxy(cut.env.stores.getByName(name), {
+          get: (stub, method) => method === 'restart' ? async () => { throw new Error('unreached'); } : Reflect.get(stub, method),
+        }),
+      },
+    };
+    await expect(runRestore(env, id)).rejects.toThrow(Crash);
+    expect(await operation(id)).toMatchObject({ phase: 'done', verified: 0, error: 'not-verified' });
+    t.restartProcess();
+    await expectRestored(seed, (await runRestore(t.env, id))!.id, []);
+  });
+
   it('runs in the operator request, is listed with its undo, and its undo gives back the state it replaced', async () => {
     const seed = await seeded();
     const restored = await t.post(`admin/accounts/${seed.id}/restores`, { report: seed.report, at: seed.at }, operator.cookie);
@@ -465,12 +625,28 @@ describe('a deletion', () => {
     for (let n = 1; n <= total; n++) {
       const held = await holding();
       await expect(leave(crashing(n).env, held.id, held.incarnation, true)).rejects.toThrow(Crash);
+      t.restartProcess();
       expect(await leave(t.env, held.id, held.incarnation, true)).toBe('left');
       await t.reconcile(Date.now() + 2 * HOUR_MS);
       await gone(held);
       expect(await t.env.db.prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'delete-account' AND target = ?").bind(held.id).first('n')).toBe(1);
     }
   }, 60_000);
+
+  it('lets only one deletion intent write its log while a competing deletion finishes the account', async () => {
+    const held = await holding();
+    const first = pausing((what) => what === 'db batch');
+    const leaving = leave(first.env, held.id, held.incarnation, true);
+    await first.reached;
+    try {
+      expect(await leave(t.env, held.id, held.incarnation, true)).toBe('left');
+    } finally {
+      first.release();
+    }
+    expect(await leaving).toBe('left');
+    await gone(held);
+    expect(await t.env.db.prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'delete-account' AND target = ?").bind(held.id).first('n')).toBe(1);
+  });
 
   // The pictures' removal waits until released, as one still running after the answer.
   function heldDeletes() {
@@ -579,6 +755,35 @@ describe('an operation id', () => {
 });
 
 describe('an account id used again', () => {
+  it('leaves a replacement incarnation and its restore untouched when an old runner resumes its operation read', async () => {
+    const old = await seeded();
+    const id = await begin(old);
+    const late = pausing((what) => what.startsWith('db SELECT id, incarnation, at,'), true);
+    const running = runRestore(late.env, id);
+    await late.reached;
+    let replacement!: NonNullable<Awaited<ReturnType<typeof account>>>;
+    let current!: number;
+    try {
+      await cancelRestore(t.env, id);
+      expect(await leave(t.env, old.id, old.incarnation, false)).toBe('left');
+      const cookie = sessionCookie(await t.post('signup', { ...signupBody(), accountId: old.id }));
+      replacement = (await account(old.id))!;
+      expect(replacement.incarnation).not.toBe(old.incarnation);
+      await t.batch([{ id: B, kind: 'chat', parent: null, body: 'replacement', baseRev: null }], cookie);
+      const begun = await beginRestore(t.env, old.id, await reported(old.id, cookie), { at: old.at });
+      current = (begun as { begun: number }).begun;
+      await expect(runRestore(pausedAt('fenced').env, current)).rejects.toThrow(Crash);
+      await t.stores.getByName(replacement.incarnation).mark(replacement.incarnation, current);
+    } finally {
+      late.release();
+    }
+    expect(await running).toBeNull();
+    expect(await account(old.id)).toEqual({ ...replacement, state: 'restoring', operation: current });
+    expect(await operation(current)).toMatchObject({ phase: 'fenced', verified: 0, error: null });
+    expect(t.stores.inspect(replacement.incarnation).exec('SELECT body FROM objects')).toEqual([{ body: 'replacement' }]);
+    expect(mark(replacement.incarnation, current)).toEqual([{ value: 'marked' }]);
+  });
+
   it('gets a new incarnation that sees nothing of the old one: no objects, pictures, usage or held files', async () => {
     const seed = await seeded();
     const bytes = new Uint8Array([7]);

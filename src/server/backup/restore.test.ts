@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import type { RestorePhase } from '../../contracts/admin';
 import { serviceReads } from '../account-store';
 import { accountRegistry } from '../db/account-db';
 import { openDatabase, serviceDb, type Db, type Statement } from '../db/service-db';
 import { diskBucket } from '../files/disk-bucket';
 import { sha256Hex, type Services } from '../http';
-import { beginRestore, runRestore } from '../lifecycle';
+import { beginRestore, cancelRestore, runRestore } from '../lifecycle';
 import { tokenBucket } from '../limits';
 import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
@@ -26,6 +26,9 @@ let t: Awaited<ReturnType<typeof testApp>>;
 const scratch: string[] = [];
 beforeAll(async () => {
   t = await testApp();
+});
+beforeEach(async () => {
+  await t.reset();
   await t.env.db.prepare('UPDATE service SET signup_cap = 100').run();
 });
 afterAll(() => {
@@ -44,6 +47,11 @@ class Stop extends Error {}
 function stoppingAt(phase: RestorePhase): Services {
   const db: Db = {
     ...t.env.db,
+    batch: async (statements) => {
+      const result = await t.env.db.batch(statements);
+      if (await t.env.db.prepare('SELECT id FROM restores WHERE phase = ?').bind(phase).first()) throw new Stop();
+      return result as never;
+    },
     prepare: (sql) => {
       const real = t.env.db.prepare(sql);
       if (!sql.startsWith('UPDATE restores SET phase = ?')) return real;
@@ -85,12 +93,40 @@ async function leftAt(username: string, phase: RestorePhase) {
   const report = (await t.env.db.prepare('SELECT MAX(id) AS id FROM reports WHERE account_id = ?').bind(user.id).first<number>('id'))!;
   const begun = await beginRestore(t.env, user.id, report, { at: now - (11 * HOUR_MS) / 12 });
   const operation = (begun as { begun: number }).begun;
-  await expect(runRestore(stoppingAt(phase), operation)).rejects.toThrow(Stop);
+  if (phase !== 'begun') await expect(runRestore(stoppingAt(phase), operation)).rejects.toThrow(Stop);
   return { ...user, report, operation };
 }
 
 const bytesOf = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
 const idOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+it.each(['begun', 'fenced', 'checkpointed', 'done', 'cancelled', 'failed'] as const)('finishes a generation’s unverified %s operation through the live lifecycle', async (phase) => {
+  const user = await leftAt(`at-${phase}`, phase === 'cancelled' ? 'targeted' : phase === 'failed' ? 'checkpointed' : phase);
+  if (phase === 'cancelled') await expect(cancelRestore(stoppingAt(phase), user.operation)).rejects.toThrow(Stop);
+  if (phase === 'failed') {
+    await t.env.db.prepare('UPDATE restores SET at = 1 WHERE id = ?').bind(user.operation).run();
+    await expect(runRestore(stoppingAt(phase), user.operation)).rejects.toThrow(Stop);
+  }
+  expect(await t.env.db.prepare('SELECT phase, verified FROM restores WHERE id = ?').bind(user.operation).first()).toEqual({ phase, verified: 0 });
+  expect((await t.env.backups.fresh(t.env)).generation).toEqual({ outcome: 'ok', error: null });
+  const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
+  const destination = emptyDir();
+  const ended = ['begun', 'fenced', 'checkpointed'].includes(phase) ? 'cancelled' : phase;
+  expect(await restoreGeneration(generation, destination, 'migrations')).toMatchObject({ operations: [{ id: user.operation, phase: ended }], deleted: 0 });
+  const raw = openDatabase(join(destination, 'service.sqlite'));
+  const db = serviceDb(raw);
+  const stores = accountRegistry(destination, db, serviceReads(db), Date.now);
+  try {
+    expect(await db.prepare('SELECT phase, verified, error FROM restores WHERE id = ?').bind(user.operation).first()).toEqual({ phase: ended, verified: 1, error: phase === 'failed' ? 'too-early' : null });
+    expect(await stores.getByName(user.incarnation).status(user.incarnation)).toMatchObject({ state: 'active', operation: null });
+    expect(stores.inspect(user.incarnation).exec('SELECT body FROM objects')).toEqual([{ body: phase === 'done' ? 'old' : 'new' }]);
+    expect(stores.inspect(user.incarnation).exec('SELECT value FROM kv WHERE key = ?', `restore:${user.operation}`)).toEqual([]);
+    expect(await db.prepare('SELECT timeline FROM accounts WHERE id = ?').bind(user.id).first('timeline')).not.toBe(user.timeline);
+  } finally {
+    stores.close();
+    raw.close();
+  }
+}, 30_000);
 
 it('restores a generation into an empty directory: logins, counts, pictures and blocks, every operation ended by its phase, old timelines refused', async () => {
   const operator = await signedUp('operator');
