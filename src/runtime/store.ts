@@ -958,8 +958,14 @@ export class ObjectStore {
     const ids = [...new Set(steps.map((step) => step.id))];
     const earlier = ids.flatMap((id) => this.claims.get(id) ?? []);
     let release = () => {};
-    const claim = new Promise<void>((resolve) => { release = resolve; });
+    const completed = new Promise<void>((resolve) => { release = resolve; });
+    // A commit stopped while it waits ends only its own turn: its claim settles once the writes ahead of it have too,
+    // for a later writer already waiting and for one that arrives after the stop.
+    const claim = earlier.length ? Promise.all([...earlier, completed]).then(() => {}) : completed;
     for (const id of ids) this.claims.set(id, claim);
+    void claim.then(() => {
+      for (const id of ids) if (this.claims.get(id) === claim) this.claims.delete(id);
+    });
     const shown = new Map<string, Overlay>();
     try {
       // Shown before the wait for an earlier write to the same object, applied to what reads show: the real resolve,
@@ -984,7 +990,6 @@ export class ObjectStore {
     } finally {
       this.unsent.delete(unsent);
       release();
-      for (const id of ids) if (this.claims.get(id) === claim) this.claims.delete(id);
       // A write that failed for good shows the confirmed copy again; its caller still gets the failure.
       if (shown.size) {
         for (const id of [...shown.keys()]) this.unshow(id, shown);

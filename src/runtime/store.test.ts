@@ -452,6 +452,33 @@ describe('writes shown before their answer', () => {
     expect(store.list('connection')).toEqual([]);
   });
 
+  it.each([true, false])('keeps later writes behind an in-flight write when an intervening queued write is cancelled (already queued: %s)', async (alreadyQueued) => {
+    const { store, hold, answer, held } = await gated();
+    const created = await store.create('connection', connection('a'));
+    if (!created.ok) throw new Error(created.error);
+    const id = created.data.id;
+    hold();
+    const first = store.update('connection', id, renamed('b'));
+    await vi.waitFor(() => expect(held()).toBe(1));
+    const stop = new AbortController();
+    const cancelled = store.batch([{ type: 'restore', kind: 'connection', id, parent: null, value: connection('cancelled') }], undefined, { signal: stop.signal });
+    const seen: string[] = [];
+    const later = () => store.update('connection', id, (value) => { seen.push(value.label); return renamed('c')(value); });
+    const queued = alreadyQueued ? later() : null;
+    stop.abort();
+    expect(await cancelled).toEqual({ ok: false, error: 'stopped' });
+    const last = queued ?? later();
+    try {
+      // Only the preview runs before the earlier request answers; resolving against confirmed data would send early.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(seen).toEqual([alreadyQueued ? 'cancelled' : 'a']);
+      expect(held()).toBe(1);
+    } finally { answer(true); }
+    expect((await first).ok).toBe(true);
+    expect(await last).toMatchObject({ ok: true, data: { value: { label: 'abc' } } });
+    expect(store.unsentWrites()).toBe(0);
+  });
+
   it('counts a write as unsent from the moment it shows until its answer, landed or failed', async () => {
     const { store, hold, answer, held } = await gated();
     hold();
