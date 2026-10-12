@@ -36,7 +36,7 @@ export async function stopContainer(name: string) {
 // server sees committed rows without taking its write lock.
 export async function query<T>(name: string, sql: string): Promise<T[]> {
   const script = `const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync('/data/service.sqlite', { readOnly: true }); process.stdout.write(JSON.stringify(db.prepare(${JSON.stringify(sql)}).all()));`;
-  return JSON.parse(await docker('exec', name, 'node', '-e', script)) as T[];
+  return JSON.parse(await docker('exec', '-e', 'NODE_OPTIONS=--max-old-space-size=4096', name, 'node', '-e', script)) as T[];
 }
 
 export async function logs(name: string): Promise<string> {

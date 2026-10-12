@@ -1,6 +1,6 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { accountPath } from '../db/account-db';
 import { sessionCookie, signupBody, testApp } from '../testing';
 import { COPIED, generationsDir, listGenerations, readManifest } from './generation';
@@ -103,4 +103,33 @@ it('names, for a fresh ask, a baseline of every account written since today’s,
   t.restartProcess();
   expect(await t.env.backups.fresh(t.env)).toEqual({ snapshots: { outcome: 'failed', error: 'baseline-failed' }, generation: { outcome: 'failed', error: 'baseline-failed' } });
   expect(await listGenerations(t.dir)).toHaveLength(2);
+});
+
+it('records each step at its own start and end, including the baseline time before generation', async () => {
+  sessionCookie(await t.post('signup', signupBody('operator')));
+  const started = Date.now();
+  let now = started;
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const take = t.env.stores.snapshot;
+  const baseline = vi.spyOn(t.env.stores, 'snapshot').mockImplementation(async (...args) => {
+    const result = await take(...args);
+    now += 5000;
+    return result;
+  });
+  const copy = t.env.db.snapshot;
+  const generation = vi.spyOn(t.env.db, 'snapshot').mockImplementation(async (path) => {
+    await copy(path);
+    now += 700;
+  });
+  try {
+    expect((await t.env.backups.daily(t.env, started)).generation.outcome).toBe('ok');
+    expect((await t.env.db.prepare('SELECT kind, started_at, ended_at FROM backup_runs ORDER BY id').all()).results).toEqual([
+      { kind: 'daily', started_at: started, ended_at: started + 5000 },
+      { kind: 'generation', started_at: started + 5000, ended_at: started + 5700 },
+    ]);
+  } finally {
+    generation.mockRestore();
+    baseline.mockRestore();
+    clock.mockRestore();
+  }
 });

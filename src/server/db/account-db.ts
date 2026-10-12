@@ -187,23 +187,29 @@ export class AccountDb implements StoreDb {
     return this.exec<{ size: number }>('SELECT page_count * page_size AS size FROM pragma_page_count(), pragma_page_size()')[0]!.size;
   }
 
-  readonly snapshots = {
-    // The catalog row is written only after the artifact is durable, so a row never names bytes that are not there;
-    // a crash before it leaves a .tmp-* file the reconciliation removes.
-    take: async (kind: 'baseline' | 'checkpoint', operation: number | null): Promise<string> => {
-      const takenAt = this.clock();
-      const id = `${takenAt}-${random()}`;
-      const dir = snapshotDir(this.dataDir, this.incarnation);
-      makeDirs(dir);
-      const plain = join(dir, `.tmp-${id}.sqlite`);
-      const gz = join(dir, `.tmp-${id}.sqlite.gz`);
-      const rev = this.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev;
+  // Capture runs on the account queue: eligibility, takenAt and rev must describe the same file, before any
+  // later checkpoint or replacement. Publishing the private copy needs no live handle or account queue.
+  async captureSnapshot(kind: 'baseline' | 'checkpoint', operation: number | null): Promise<() => Promise<string>> {
+    const takenAt = this.clock();
+    const id = `${takenAt}-${random()}`;
+    const dir = snapshotDir(this.dataDir, this.incarnation);
+    makeDirs(dir);
+    const plain = join(dir, `.tmp-${id}.sqlite`);
+    const gz = join(dir, `.tmp-${id}.sqlite.gz`);
+    const rev = this.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev;
+    try {
+      await backup(this.db(), plain);
+    } catch (error) {
+      rmSync(plain, { force: true });
+      throw error;
+    }
+    return async () => {
       try {
-        // The registry keeps this account's writers queued until the copy and its catalog row are both complete.
-        await backup(this.db(), plain);
         const { bytes, expanded, sha256 } = await archiveSnapshot(plain, gz);
         renameSync(gz, snapshotPath(this.dataDir, this.incarnation, id));
         fsyncPath(dir);
+        // The row follows the durable artifact. A crash before publication leaves a .tmp-* or uncatalogued gzip
+        // for reconciliation; the capture's time and revision never advance to publication time.
         await this.service
           .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
           .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256)
@@ -213,7 +219,12 @@ export class AccountDb implements StoreDb {
         rmSync(gz, { force: true });
       }
       return id;
-    },
+    };
+  }
+
+  readonly snapshots = {
+    // A checkpoint stays on the queue through publication: a rewind must have its durable undo before advancing.
+    take: async (kind: 'baseline' | 'checkpoint', operation: number | null): Promise<string> => (await this.captureSnapshot(kind, operation))(),
     forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at))?.id ?? null,
     verify: (id: string) => verifySnapshot(this.dataDir, this.service, this.incarnation, id),
   };
@@ -236,7 +247,7 @@ export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.
   getByName(incarnation: string): StoreStub;
   prepare(incarnation: string, timeline: string): Promise<void>;
-  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles. refused: the
+  // A session the snapshot had to open is closed after capture, so archiving holds no otherwise idle handles. refused: the
   // account takes no baseline now (TAKES_BASELINE). unchanged: its file still holds the revision its current baseline
   // (CURRENT_BASELINE) recorded, so that baseline is its state and no copy is taken.
   snapshot(incarnation: string, kind: 'baseline'): Promise<{ taken: string } | { refused: true } | { unchanged: true }>;
@@ -331,25 +342,27 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
   return {
     getByName,
     prepare: async (incarnation, timeline) => prepareAccountFile(dataDir, incarnation, timeline),
-    snapshot: (incarnation, kind) => {
+    snapshot: async (incarnation, kind) => {
       const held = entry(incarnation);
-      return enqueue(held, async () => {
+      const captured = await enqueue(held, async () => {
         // Read here, not from the session's lifecycle: that is cached, and says restoring until the store next
-        // reloads after an operation is done. The checkpoint goes through this queue, so none comes in between.
+        // reloads after an operation is done. The checkpoint uses this queue too, so none comes between this check and the copy.
         const row = await service
           .prepare(`SELECT ${TAKES_BASELINE('a')} AS free, (${CURRENT_BASELINE('rev', 'a', '?2')}) AS rev FROM accounts a WHERE incarnation = ?1`)
           .bind(incarnation, clock())
           .first<{ free: number; rev: number | null }>();
-        if (!row?.free) return { refused: true };
+        if (!row?.free) return { refused: true as const };
         const opened = !held.session;
         const { db } = await session(incarnation, held);
         try {
-          if (db.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev === row.rev) return { unchanged: true };
-          return { taken: await db.snapshots.take(kind, null) };
+          if (db.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev === row.rev) return { unchanged: true as const };
+          return await db.captureSnapshot(kind, null);
         } finally {
           if (opened) closeSession(held);
         }
       });
+      // The caller still waits for publication, so fresh() and the capture gate never name an unfinished baseline.
+      return typeof captured === 'function' ? { taken: await captured() } : captured;
     },
     snapshotAt: (incarnation, at) => snapshotFor(dataDir, service, incarnation, at),
     evictIdle: (now = clock()) => {

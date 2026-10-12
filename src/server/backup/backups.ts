@@ -67,10 +67,9 @@ export function backups(dataDir: string, hour: number, webhook: string | null, f
     }
   };
 
-  // detail and the outcome go on the run's row when it ends; a throw is a failed run.
-  const recorded = async (env: Services, kind: string, now: number, work: () => Promise<{ error: string | null; detail: object; generation?: string; gateMs?: number }>): Promise<Outcome> => {
-    const begun = Date.now();
-    const id = (await env.db.prepare("INSERT INTO backup_runs (kind, started_at, outcome) VALUES (?, ?, 'running') RETURNING id").bind(kind, now).first<number>('id'))!;
+  const recorded = async (env: Services, kind: string, clock: () => number, work: () => Promise<{ error: string | null; detail: object; generation?: string; gateMs?: number }>): Promise<Outcome> => {
+    const begun = clock();
+    const id = (await env.db.prepare("INSERT INTO backup_runs (kind, started_at, outcome) VALUES (?, ?, 'running') RETURNING id").bind(kind, begun).first<number>('id'))!;
     let ended: Awaited<ReturnType<typeof work>>;
     try {
       ended = await work();
@@ -80,7 +79,7 @@ export function backups(dataDir: string, hour: number, webhook: string | null, f
     const outcome = ended.error === null ? ('ok' as const) : ('failed' as const);
     await env.db
       .prepare('UPDATE backup_runs SET ended_at = ?, outcome = ?, error = ?, detail = ?, generation = ?, gate_ms = ? WHERE id = ?')
-      .bind(now + Date.now() - begun, outcome, ended.error, JSON.stringify(ended.detail), ended.generation ?? null, ended.gateMs ?? null, id)
+      .bind(clock(), outcome, ended.error, JSON.stringify(ended.detail), ended.generation ?? null, ended.gateMs ?? null, id)
       .run();
     return { outcome, error: ended.error };
   };
@@ -88,14 +87,15 @@ export function backups(dataDir: string, hour: number, webhook: string | null, f
   const job = (env: Services, now: number, fresh: boolean) => {
     running ??= (async () => {
       const started = Date.now();
-      const snapshots = await recorded(env, 'daily', now, async () => {
+      const clock = () => now + Date.now() - started;
+      const snapshots = await recorded(env, 'daily', clock, async () => {
         const { taken, skipped, unchanged, failed } = await takeBaselines(env, await staleBaselines(env, now, fresh ? now + 1 : dayStart(now)));
         const expired = await expireSnapshots(env, dataDir, now);
         return { error: failed.length ? 'baseline-failed' : null, detail: { taken, skipped, unchanged, failed: failed.length, expired } };
       });
-      const generation = await recorded(env, 'generation', now, async () => {
+      const generation = await recorded(env, 'generation', clock, async () => {
         if (fresh && snapshots.outcome === 'failed') return { error: 'baseline-failed', detail: {} };
-        const { id, gateMs, manifest } = await captureGeneration(env, dataDir, now, () => now + Date.now() - started, exclusive);
+        const { id, gateMs, manifest } = await captureGeneration(env, dataDir, now, clock, exclusive);
         const expired = await expireGenerations(dataDir, now);
         return { error: null, generation: id, gateMs, detail: { accounts: manifest.accounts.length, pictures: manifest.pictures.length, expired } };
       });

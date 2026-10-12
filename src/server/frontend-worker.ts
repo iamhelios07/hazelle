@@ -18,14 +18,19 @@ async function cover(id: string): Promise<ShareCover | null> {
   }
 }
 const files = getRequestListener(clientFiles(clientDir, cover).fetch);
-const agent = new Agent({ keepAlive: true });
+// A finite socket timeout lets Node honor the API's shorter keep-alive hint; zero keeps idle sockets until
+// the server closes them and races reuse. The agent destroys timed-out free sockets, not active requests.
+const agent = new Agent({ keepAlive: true, timeout: 5000 });
 let draining = false;
 
 const server = createServer((incoming, outgoing) => {
   const path = incoming.url?.split('?')[0] ?? '/';
   if (path !== '/api' && !path.startsWith('/api/')) return void files(incoming, outgoing);
 
+  const startedAt = Date.now();
   const started = performance.now();
+  let connectedMs: number | null = null;
+  let sentMs: number | null = null;
   // The visitor is the last X-Forwarded-For entry when a proxy is in front (Caddy, the hosted machine's only way in,
   // writes it), else the connection's peer. Written over whatever the request says, so no one names their own key.
   const forwarded = incoming.headers['x-forwarded-for'];
@@ -39,7 +44,20 @@ const server = createServer((incoming, outgoing) => {
     response.on('error', () => outgoing.destroy());
     response.pipe(outgoing);
   });
-  upstream.on('error', () => {
+  upstream.on('socket', (socket) => {
+    const connected = () => { connectedMs = performance.now() - started; };
+    if (socket.connecting) socket.once('connect', connected);
+    else connected();
+  });
+  upstream.on('finish', () => { sentMs = performance.now() - started; });
+  upstream.on('error', (error: NodeJS.ErrnoException) => {
+    // No URL, headers or body: any of them can carry credentials. System error fields identify the transport failure.
+    console.error(JSON.stringify({
+      at: new Date().toISOString(), event: 'proxy failed', startedAt, method: incoming.method,
+      code: error.code ?? null, syscall: error.syscall ?? null, causeCode: (error.cause as NodeJS.ErrnoException | undefined)?.code ?? null,
+      ms: performance.now() - started, connectedMs, sentMs, reusedSocket: upstream.reusedSocket,
+      clientAborted: incoming.aborted, clientClosed: outgoing.destroyed, headersSent: outgoing.headersSent, draining,
+    }));
     if (outgoing.headersSent) return outgoing.destroy();
     outgoing.writeHead(502, { 'content-type': 'application/json' });
     outgoing.end('{"error":"offline"}');

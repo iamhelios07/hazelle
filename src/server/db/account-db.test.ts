@@ -3,13 +3,15 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { gunzipSync } from 'node:zlib';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serviceReads, type Write } from '../account-store';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
 import { accountPath, accountRegistry, snapshotPath, type Stores } from './account-db';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
+import * as snapshots from './snapshot';
 
 const INC = 'a'.repeat(32);
 const A = '11111111-1111-4111-8111-111111111111';
@@ -106,6 +108,61 @@ describe('the account registry', () => {
     now = 3_000_000;
     await write(put(A, 'new', 1));
     expect(await store().status(INC)).toMatchObject({ state: 'active' });
+  });
+
+  it('releases the baseline queue after capture while publication preserves the captured revision and pre-checkpoint time', async () => {
+    await signup();
+    await write(put(A, 'captured'));
+    let archiveStarted = () => {};
+    let release = () => {};
+    const archiving = new Promise<void>((resolve) => { archiveStarted = resolve; });
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    const archive = snapshots.archiveSnapshot;
+    const paused = vi.spyOn(snapshots, 'archiveSnapshot').mockImplementationOnce(async (plain, gzip) => {
+      archiveStarted();
+      await released;
+      return archive(plain, gzip);
+    });
+    now = 2_000_000;
+    const taking = baseline();
+    try {
+      await archiving;
+      expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 0 });
+      now = 3_000_000;
+      let written: unknown;
+      const writing = write(put(A, 'after capture', 1)).then((answer) => { written = answer; });
+      await expect.poll(() => written, { timeout: 1000 }).toMatchObject({ revs: [2] });
+      await writing;
+      expect(await bodies()).toEqual(['after capture']);
+      raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7").run();
+      raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (7, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
+      await store().restart(INC).catch(() => {});
+      const checkpoint = await store().checkpoint(INC, 7);
+      expect(checkpoint).toEqual({ checkpoint: expect.any(String) });
+      // The lifecycle records checkpoint_at only after checkpoint() returns its durable undo.
+      raw.prepare("UPDATE restores SET checkpoint_at = ?, ended_at = ?, phase = 'done' WHERE id = 7").run(now, now + 1);
+      raw.prepare("UPDATE accounts SET state = 'active', operation = NULL").run();
+      now = 4_000_000;
+    } finally {
+      release();
+      await taking;
+      paused.mockRestore();
+    }
+    const id = await taking;
+    expect(raw.prepare('SELECT taken_at, rev FROM snapshots WHERE id = ?').get(id)).toEqual({ taken_at: 2_000_000, rev: 1 });
+    const plain = join(dir, 'captured.sqlite');
+    writeFileSync(plain, gunzipSync(readFileSync(snapshotPath(dir, INC, id))));
+    const copy = new DatabaseSync(plain);
+    try {
+      expect(copy.prepare('SELECT rev FROM head').get()).toEqual({ rev: 1 });
+      expect(copy.prepare('SELECT body FROM objects').all()).toEqual([{ body: 'captured' }]);
+    } finally {
+      copy.close();
+    }
+    expect(await stores.snapshotAt(INC, 2_500_000)).toEqual({ id, takenAt: 2_000_000 });
+    expect(await stores.snapshotAt(INC, now)).toBeNull();
+    expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
+    expect(readdirSync(join(dir, 'snapshots', INC)).some((name) => name.startsWith('.tmp-'))).toBe(false);
   });
 
   it('installs the armed target when the store next starts: the file is the snapshot, marked with its id, and the mark is gone', async () => {

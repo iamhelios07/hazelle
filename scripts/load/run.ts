@@ -182,10 +182,8 @@ try {
     const timings = Object.fromEntries(await Promise.all(Object.entries(probes).map(async ([key, each]) => [key, await each.stop()] as const))) as Record<keyof typeof probes, Timing[]>;
     const daily = runs.find((run) => run.kind === 'daily')!;
     const generation = runs.find((run) => run.kind === 'generation')!;
-    // A generation row is stamped with the job's start; its ended_at is that start plus its own duration
-    // (backups.ts recorded()), so it began when the baseline step ended.
-    const generationStart = daily.ended_at!;
-    const generationEnd = generationStart + (generation.ended_at! - generation.started_at);
+    const generationStart = generation.started_at;
+    const generationEnd = generation.ended_at!;
     const windows = {
       before: [begun, daily.started_at],
       baselines: [daily.started_at, generationStart],
@@ -204,6 +202,7 @@ try {
       snapshots: snapshotTotals[0],
       diskAddedBytes: (await diskBytes(dataDir)) - disk,
       latency: Object.fromEntries(Object.entries(windows).map(([window, [from, to]]) => [window, Object.fromEntries(Object.entries(timings).map(([key, list]) => [key, summarize(within(list, from, to))]))])),
+      failures: Object.fromEntries(Object.entries(timings).map(([key, list]) => [key, list.filter(({ ok }) => !ok)])),
       slowest: Object.fromEntries(Object.entries(timings).map(([key, list]) => [key, [...list].sort((a, b) => b.ms - a.ms).slice(0, 3)])),
       peaks: { before: peaks(watcher!.samples, begun, daily.started_at), during: peaks(watcher!.samples, daily.started_at, generationEnd) },
       windows,
@@ -307,7 +306,7 @@ try {
   results.serverLog = {
     eventLoopDelayed: logLines.filter((line) => line.includes('event loop delayed')).map((line) => ({ at: stamp(line), ...(JSON.parse(line) as object) })),
     slowRequests: logLines.filter((line) => line.includes('slow request')),
-    failures: logLines.filter((line) => /request failed|background failed|close failed/.test(line)),
+    failures: logLines.filter((line) => /proxy failed|request failed|background failed|close failed/.test(line)),
     backups: logLines.filter((line) => line.includes('"backup ')),
   };
   results.peaks = peaks(samples);

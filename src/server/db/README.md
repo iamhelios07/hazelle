@@ -25,7 +25,7 @@ account's deletion and relies on it.
 
 A file is durable before any row says so. A picture: write `.tmp-<random>`, fsync it, rename, fsync the directory, then the service
 commit that sets `stored = 1`. A snapshot: SQLite's asynchronous online backup makes a temp copy while the account queue holds its
-writers; an archive worker compacts that private copy, runs `quick_check`, gzips it and fsyncs the gzip. The owner then renames it,
+writers, then releases the baseline queue (and any handle opened just for it). Checkpoints keep the queue until publication. The capture fixes `taken_at` and `rev`; an archive worker compacts that private copy, runs `quick_check`, gzips it and fsyncs the gzip. The owner then renames it,
 fsyncs the directory and writes the `snapshots` row. An account file at signup: schema and `head` written, checkpointed, fsynced, directory fsynced, then
 the account's row. A directory made on the way is synced into its parent too (`makeDirs`, `durable.ts`). Deletion is the reverse: the service commit first, then the files. A crash between the two leaves a file with no row,
 which the hourly reconciliation (`reconcile.ts`) removes once it is an hour old (a picture prefix in R2 is queued in

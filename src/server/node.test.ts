@@ -1,7 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } from 'node:fs';
-import { request } from 'node:http';
+import { createServer as httpServer, request } from 'node:http';
+import { once } from 'node:events';
+import { Worker } from 'node:worker_threads';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -72,6 +74,79 @@ function start(dataDir: string, port: number, extra: Record<string, string> = {}
 }
 
 describe('the server process', () => {
+  it('logs a proxy transport failure and its timing without credentials or request content', async () => {
+    let received = 0;
+    const api = httpServer((incoming) => {
+      received++;
+      incoming.socket.destroy();
+    }).listen(0, '127.0.0.1');
+    await once(api, 'listening');
+    const port = await freePort();
+    const frontend = new Worker(join(process.cwd(), dirname(bundle), 'frontend-worker.js'), {
+      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client },
+      stderr: true,
+    });
+    let log = '';
+    frontend.stderr.on('data', (chunk: Buffer) => { log += chunk.toString(); });
+    try {
+      await once(frontend, 'message');
+      const response = await fetch(`http://127.0.0.1:${port}/api/objects/batch?secret-query`, {
+        method: 'POST', headers: { authorization: 'Bearer secret-token', cookie: 'secret-cookie' }, body: 'secret-body',
+        signal: AbortSignal.timeout(5000),
+      });
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({ error: 'offline' });
+      await expect.poll(() => log).toContain('proxy failed');
+      const failure = JSON.parse(log.trim()) as Record<string, unknown>;
+      expect(failure).toMatchObject({ event: 'proxy failed', method: 'POST', code: 'ECONNRESET', reusedSocket: false, clientAborted: false, headersSent: false });
+      expect(failure.startedAt).toEqual(expect.any(Number));
+      expect(failure.ms).toEqual(expect.any(Number));
+      expect(failure.connectedMs).toEqual(expect.any(Number));
+      expect(log).not.toContain('secret-');
+      expect(received).toBe(1);
+    } finally {
+      await frontend.terminate();
+      await new Promise<void>((resolve) => api.close(() => resolve()));
+    }
+  }, 15_000);
+
+  it('retires idle proxy sockets before the API deadline without timing out an active response', async () => {
+    let connections = 0;
+    let closed = 0;
+    const api = httpServer({ keepAliveTimeout: 2000, keepAliveTimeoutBuffer: 1000 }, (incoming, outgoing) => {
+      if (incoming.url === '/api/slow') setTimeout(() => outgoing.end('done'), 1200);
+      else outgoing.end('done');
+    });
+    api.on('connection', (socket) => {
+      connections++;
+      socket.on('close', () => { closed++; });
+    });
+    api.listen(0, '127.0.0.1');
+    await once(api, 'listening');
+    const port = await freePort();
+    const frontend = new Worker(join(process.cwd(), dirname(bundle), 'frontend-worker.js'), {
+      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client },
+    });
+    const get = async (path: string) => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/${path}`, { signal: AbortSignal.timeout(5000) });
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('done');
+    };
+    try {
+      await once(frontend, 'message');
+      await get('fast');
+      await get('slow');
+      expect(connections).toBe(1);
+      // The hint is two seconds; Node's one-second client buffer retires it before the API's three-second close.
+      await expect.poll(() => closed, { timeout: 1800, interval: 20 }).toBe(1);
+      await get('fast');
+      expect(connections).toBe(2);
+    } finally {
+      await frontend.terminate();
+      await new Promise<void>((resolve) => api.close(() => resolve()));
+    }
+  }, 15_000);
+
   it('serves the page while an API write waits on a database lock', async () => {
     const data = join(dir, 'data-blocked-api');
     const port = await freePort();
