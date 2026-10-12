@@ -17,6 +17,7 @@ variable (`variables.tf`), passed as `-var` or `TF_VAR_*`, or in a `*.tfvars` fi
 | `owner_cidr` | the owner's IPv4 address as `a.b.c.d/32`; the only source allowed on port 22 |
 | `image_digest` | `sha256:…` of the release to start with (the release's `image-digest.txt`) |
 | `r2_account_id`, `r2_access_key_id`, `r2_secret_access_key`, `r2_bucket` | the off-site backup bucket and a key that may read, write and delete in it |
+| `r2_files_bucket`, `r2_files_access_key_id`, `r2_files_secret_access_key` | optional: the app's own picture bucket and a key that may read, write and delete in it alone (see Pictures in R2); empty keeps pictures on `/data` |
 | `alert_webhook` | optional Discord/Slack webhook for backup and disk alerts |
 | `edge` | `direct` (default): 80 and 443 open to anyone, the DNS record unproxied; `cloudflare`: only Cloudflare's ranges, the record proxied (see Edge) |
 | `cloudflare_ipv4` | for `edge = cloudflare`; defaults to Cloudflare's published list; update it when https://www.cloudflare.com/ips-v4 changes |
@@ -48,6 +49,47 @@ listing never lags behind by the 7 days the machine keeps a generation.
 lifts it only after it has restored the newest off-site generation into a scratch directory, and only in a copy of this
 directory (`.destroy.*` beside it, removed on exit) that plans and applies against this directory's state; nothing in
 `infra/` changes. A `.destroy.*` left behind by a crash lifts nothing here; delete it.
+
+## Pictures in R2
+
+With `HAZELLE_FILES_BUCKET=r2` and the four `HAZELLE_FILES_R2_*` values in `/etc/hazelle/env`, the app keeps pictures
+in an R2 bucket instead of `/data/files` (`src/server/files/`); reads still go through the app. Unset or blank, it
+keeps them on disk; a wrong or incomplete setting stops the app at start. The bucket is the pictures' durable home: a
+backup generation names its pictures there instead of copying them into `backup/files`, a deleted account's pictures
+stay in it for the 7-day backup retention before the hourly sweep removes them, and a restore checks each named picture
+there by size. It must be a bucket of its own: the copier prunes everything under the backup remote.
+
+Moving the hosted machine, as root on it, after an image with the R2 store is deployed and running on disk (switching
+in the same step as a deploy would make that deploy's rollback restore a disk generation while pictures sit in R2):
+
+1. In Cloudflare: create a bucket (e.g. `hazelle-files`), no public access, and an R2 API token with Object Read & Write
+   on that bucket only. Note its access key id and secret.
+2. Add the remote the move script uses, `[files]` in `/etc/hazelle/rclone/rclone.conf`, written like the `[r2]` section
+   above it but with the new key.
+3. Copy `scripts/move-pictures-to-r2.sh` to the machine and run `move-pictures-to-r2.sh copy hazelle-files` while the
+   app runs (the bulk; repeatable).
+4. `hazelle-compose stop app`, then `copy` again (what arrived meanwhile), then `move-pictures-to-r2.sh verify
+   hazelle-files`: it compares every `account_files` row with `stored = 1` against the bucket's listing, by size, and
+   names any that is missing. Go on only when it prints `ok`.
+5. Append to `/etc/hazelle/env`:
+   ```
+   HAZELLE_FILES_BUCKET=r2
+   HAZELLE_FILES_R2_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+   HAZELLE_FILES_R2_BUCKET=hazelle-files
+   HAZELLE_FILES_R2_ACCESS_KEY_ID=<key id>
+   HAZELLE_FILES_R2_SECRET_ACCESS_KEY=<secret>
+   ```
+   then `hazelle-compose up -d`. The `listening` log line says `"files":"r2"`; open a chat with pictures to see them.
+6. Only then `mv /data/files /data/files.moved`, and `rm -rf /data/files.moved` once the app has run on R2 for a day.
+   The space comes back as the old generations expire: their pool, `backup/files`, holds hard links to the same
+   pictures, and the daily job drops every pooled picture no disk generation names, within the 7-day retention (the
+   copier does the same on the remote).
+
+Back to disk, while the R2 bucket still holds everything: `hazelle-compose stop app`; `hazelle-compose run --rm
+--no-deps -T --entrypoint rclone backup copy files:hazelle-files/files /data/files`; blank `HAZELLE_FILES_BUCKET` in
+`/etc/hazelle/env`; `hazelle-compose up -d`. A generation captured on R2 restores only with the R2 setting, so keep
+the bucket until the last one has expired, 7 days after the switch back; the deferred removals queued meanwhile are
+then the operator's (`picture_removals`).
 
 ## Edge
 
