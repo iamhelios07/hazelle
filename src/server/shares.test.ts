@@ -99,6 +99,17 @@ describe('a share link', () => {
     expect([opened.status, [...new Uint8Array(await opened.arrayBuffer())]]).toEqual([200, [1, 1, 1]]);
   });
 
+  it("reads as held, cover and files too, while its sharer is suspended, and comes back when the suspension lifts", async () => {
+    const { operator, sharer, picture, id } = await published();
+    await t.put(`shares/${id}/cover`, { cover: { name: 'Sora', creator: 'jin', line: '연을 만들어요' } }, sharer.cookie);
+    const suspended = (on: boolean) => t.put(`admin/accounts/${sharer.id}/suspended`, on ? { suspended: true, reason: '확인 중이에요.' } : { suspended: false }, operator.cookie);
+    expect((await suspended(true)).status).toBe(204);
+    const cover = async () => ((await (await t.get(`shares/${id}/cover`)).json()) as { cover: unknown }).cover;
+    expect([await state(id), await cover(), (await t.get(`shares/${id}/files/${picture}`)).status]).toEqual(['held', null, 403]);
+    expect((await suspended(false)).status).toBe(204);
+    expect([await state(id), await cover(), (await t.get(`shares/${id}/files/${picture}`)).status]).toEqual(['live', { name: 'Sora', creator: 'jin', line: '연을 만들어요' }, 200]);
+  });
+
   it('limits each visitor of the anonymous routes on its own', async () => {
     const { id, operator } = await published();
     await t.post(`admin/shares/${id}/release`, undefined, operator.cookie);

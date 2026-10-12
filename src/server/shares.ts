@@ -20,7 +20,10 @@ const MAX_OPEN_REPORTS = 50;
 // Every anonymous answer is read fresh: a hold or a block must stop the next read, not the next expiry.
 const FRESH = { 'cache-control': 'no-store' };
 // A share's state, over a shares row named s.
-const LIVE = 's.cut_at IS NULL AND s.removed_at IS NULL AND s.held_at IS NULL';
+// A suspended sharer's links read as held while the suspension lasts, stored state untouched, so lifting it brings
+// them back.
+const HELD = '(s.held_at IS NOT NULL OR EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = s.incarnation AND accounts.suspended_at IS NOT NULL))';
+const LIVE = `s.cut_at IS NULL AND s.removed_at IS NULL AND NOT ${HELD}`;
 
 type Visits = keyof Services['limits']['visitors'];
 // The anonymous routes count per visitor, as the public listener saw them (VISITOR_HEADER). A request that did not
@@ -161,7 +164,7 @@ shares.get('/:id', visits('reads'), async (c) => {
   if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
   const row = await c.env.db
     .prepare(
-      `SELECT s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open, s.received, v.version, v.manifest
+      `SELECT ${HELD} AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open, s.received, v.version, v.manifest
        FROM shares s JOIN share_versions v ON v.share = s.id WHERE s.id = ? ORDER BY v.version DESC LIMIT 1`,
     )
     .bind(id)
@@ -229,7 +232,7 @@ export async function serveShareFile(c: Context<AppEnv>, operator: boolean) {
   c.header('cache-control', FRESH['cache-control']);
   const row = await c.env.db
     .prepare(
-      `SELECT s.incarnation, s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open,
+      `SELECT s.incarnation, ${HELD} AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open,
          EXISTS (SELECT 1 FROM share_files WHERE share = s.id AND file = ?2) OR EXISTS (SELECT 1 FROM share_versions WHERE share = s.id AND manifest = ?2) AS named,
          EXISTS (SELECT 1 FROM file_blocks WHERE id = ?2) AS blocked,
          EXISTS (SELECT 1 FROM account_files WHERE incarnation = s.incarnation AND id = ?2 AND stored = 1) AS stored
