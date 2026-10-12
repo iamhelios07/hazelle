@@ -137,6 +137,7 @@ export const SHARE = {
   coverHelp: '링크를 붙여 넣은 곳에 이름, 제작자, 소개 첫 줄이 글로 보여요. 이미지는 보이지 않아요.',
   heldNote: '신고가 들어와 운영자가 확인하는 동안 멈춘 링크예요.',
   removedNote: '운영자가 내린 링크예요.',
+  goneNote: '끊겼거나 운영자가 내린 링크예요.',
   download: '파일로 받기',
   bring: '헤이젤로 가져오기',
   report: '신고',

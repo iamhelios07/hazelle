@@ -28,7 +28,7 @@ export function ShareArrival({ id }: { id: string }) {
       const state = await readShareState(id);
       if (!state.ok) return setFailure(describeFailure(state));
       if (state.data.state === 'held') return setFailure(SHARE.heldNote);
-      if (state.data.state === 'gone') return setFailure('끊겼거나 운영자가 내린 링크예요.');
+      if (state.data.state === 'gone') return setFailure(SHARE.goneNote);
       const source = { id, operator: false };
       const opened = await openVersion(source, state.data.manifest, key);
       if (!opened.ok) return setFailure(opened.error === 'unreadable' ? '링크를 열 수 없어요.' : describeFailure(opened));
