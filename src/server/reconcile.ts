@@ -5,7 +5,7 @@ import type { Db } from './db/service-db';
 import { filePrefix, type Bucket } from './files/bucket';
 
 // The hourly sweep of what a crash or a late request left behind: the picture store, the account databases and the
-// snapshots.
+// snapshots; and the trim of the R2 store's copy on disk (files/cached-r2-bucket.ts).
 
 // Younger than this, an entry may belong to a signup, an upload or a snapshot still being written.
 const SETTLE_MS = 60 * 60 * 1000;
@@ -56,6 +56,7 @@ export async function reconcile(dataDir: string, db: Db, files: Bucket, now = Da
     if (files.kind === 'disk') removed.push(`files/${incarnation}`);
   }
   if (files.kind === 'disk') removed.push(...(await files.sweep(settled)));
+  else removed.push(...(await files.trim(now)));
   const { results: due } = await db.prepare('SELECT incarnation FROM picture_removals WHERE due_at <= ?').bind(now).all<{ incarnation: string }>();
   for (const { incarnation } of due) {
     await files.deletePrefix(filePrefix(incarnation));
