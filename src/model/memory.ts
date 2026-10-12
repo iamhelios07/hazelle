@@ -59,7 +59,7 @@ export type Memory = { records: MemoryRecord[]; chapters: Chapter[]; state: Fact
 
 export const emptyMemory = (): Memory => ({ records: [], chapters: [], state: [], threads: [] });
 
-const inverted = (group: string) => [...group].map((digit) => (15 - parseInt(digit, 16)).toString(16)).join('');
+export const inverted = (group: string) => [...group].map((digit) => (15 - parseInt(digit, 16)).toString(16)).join('');
 
 // The chat's id with its first group's hex digits inverted: a UUID no device makes at random, the same on every
 // device, so two devices creating a chat's memory at once meet in a version conflict instead of making two.

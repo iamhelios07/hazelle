@@ -160,7 +160,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
   // Chat-owned panels and editors take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | Side | null>(null);
+  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'cache' } | Side | null>(null);
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -490,6 +490,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       pickInfo: setInfoPick,
       flipToggles: () => setPanel((current) => (current?.kind === 'toggles' ? null : { kind: 'toggles' })),
       memory: (record: string | null) => setPanel({ kind: 'memory', record }),
+      cache: () => setPanel((current) => (current?.kind === 'cache' ? null : { kind: 'cache' })),
       tool: (module: string) => setPanel((current) => current?.kind === 'tool' && current.module === module ? null : { kind: 'tool', module }),
       toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scripts.menu(chat, module, item)),
       toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),

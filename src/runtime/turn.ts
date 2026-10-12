@@ -1,5 +1,6 @@
 import { scopeOf, translationInput } from './chat-context';
-import { gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
+import { cacheSend, gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
+import { forecast, prior } from './cache';
 import type { RanAway, TooLong } from '../engine/pipeline';
 import { fold, shown, type Chat } from '../model/chat';
 import { live } from '../model/library';
@@ -182,7 +183,9 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const sent = requested.messages === prompt.messages ? prompt : await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, budget }, signal));
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
-  return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }) };
+  const send = cacheSend({ turn, prompt: sent }, session.credentials.pool.peek(route.connection.value)?.id ?? null);
+  const against = send && forecast(prior(session.store, chat, session.read.chat(chat).snapshot()!.messages, Date.now()), send)?.against;
+  return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }) };
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or

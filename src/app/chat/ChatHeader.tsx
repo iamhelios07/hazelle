@@ -56,6 +56,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <MenuItem label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />
         {item && <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => actions.openDialog('rename')} />}
         {item && <MenuItem label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        {item && <MenuItem label="캐시" onClick={actions.cache} />}
         {tools.length > 0 && <>
           <Divider variant="menu" />
           {tools.map((tool) => <MenuItem key={`${tool.module}:${tool.kind === 'page' ? 'page' : `menu:${tool.item}`}`} label={tool.label} sub={tool.name} checked={tool.kind === 'page' ? panel?.kind === 'tool' && panel.module === tool.module : undefined} onClick={() => tool.kind === 'page' ? actions.tool(tool.module) : actions.toolMenu(tool.module, tool.item)} />)}

@@ -1,4 +1,5 @@
 import type { Connection } from '../connectors/types';
+import type { CachePrint } from './cache';
 import type { Chat, Entry, Summary } from './chat';
 import type { Asset, Avatar, Character, Folder, Lore, Module } from './library';
 import type { Illustration } from './illustration';
@@ -30,6 +31,7 @@ export type Values = {
   stream: Stream;
   memory: Memory;
   vectors: Vectors;
+  cacheprint: CachePrint;
   illustration: Illustration;
   connection: Connection;
   settings: Settings;
@@ -67,6 +69,7 @@ export const KINDS = {
   stream: { parent: 'chat' },
   memory: { parent: 'chat' },
   vectors: { parent: 'chat' },
+  cacheprint: { parent: 'chat' },
   illustration: { parent: 'chat', file: true },
   inlay: { parent: 'chat', file: true },
   connection: { parent: null },
@@ -160,6 +163,7 @@ const SHAPES = {
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   stream: shape({ key: isRecord, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) }),
   vectors: shape({ model: str, items: isRecord }),
+  cacheprint: shape({ ...all(str, 'call', 'connection', 'model'), account: orNull(str), messages: listOf(shape({ role: str, hash: str, tokens: num, from: isRecord })) }),
   memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), chapters: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, records: listOf(shape({ id: str, at: num })) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
   illustration: shape({
     ...all(str, 'message', 'version', 'type'),

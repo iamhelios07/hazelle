@@ -7,6 +7,7 @@ import type { Back } from '../shell/routes';
 import { useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
 import { ChatFrame, Pill, SidePeeks } from '../ui';
+import { ChatCachePanel } from './ChatCachePanel';
 import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
@@ -62,6 +63,8 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
           ) : panel?.kind === 'memory' ? (
             // The panel opens only from a saved chat.
             id && <ChatMemory id={id} record={panel.record} chat={chat} />
+          ) : panel?.kind === 'cache' ? (
+            <ChatCachePanel chat={chat} />
           ) : panel?.kind === 'tool' ? (
             id && <ChatToolPanel key={panel.module} chat={id} module={panel.module} onClose={actions.closePanel} />
           ) : (

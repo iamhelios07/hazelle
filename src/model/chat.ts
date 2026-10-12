@@ -1,6 +1,7 @@
 import type { Assignment, ModelRef } from '../connectors/assignment';
 import type { Cache } from '../connectors/settings';
 import type { Cost, Usage } from '../connectors/types';
+import type { CacheForecast } from './cache';
 import type { Kind, Stored } from './kinds';
 import type { Mark } from './library';
 import type { MemorySettings } from './memory';
@@ -56,6 +57,9 @@ export type Receipt = {
   // How long the call's cache points keep what they cache, measured from its start; null when it sent none, or its
   // request was not this page's.
   cache: Cache | null;
+  // What the send expected to read from the cache, against the chat's last call (runtime/cache); absent where that
+  // call's request was not known, as on a receipt older than it.
+  forecast?: CacheForecast;
   // 이어 쓰기: the receipt of the reply this one continued, as it read then, so every call and its cost stays
   // visible after the continued version replaces the cut one. It nests when a continuation is continued again.
   continues?: Receipt;
