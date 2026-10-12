@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, foldTree, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatFile, readChatFile } from './chat-file';
-import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, removeMessage, selectVersion, setCast, setChatNote, setChatPrompt, startChat, withOwn } from './chat-log';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, nameBookmark, removeMessage, selectVersion, setBookmark, setCast, setChatNote, setChatPrompt, startChat, withOwn } from './chat-log';
 import { setChatModel, withMainModel } from './assignment';
 import type { Files } from './files';
 import { summaryId } from './summary';
@@ -51,6 +51,64 @@ describe('setCast', () => {
     expect(store.get('chat', id)!.value.cast).toEqual(['a', 'b', 'c', 'd', 'e']);
     await setCast(store, id, []);
     expect('cast' in store.get('chat', id)!.value).toBe(false);
+  });
+});
+
+describe('bookmarks', () => {
+  const said = async () => {
+    const { store, files } = await server.account();
+    const id = crypto.randomUUID();
+    await server.hold(store, id);
+    await startChat(store, id, { title: '등대', character: null, models: {} }, null);
+    const messages = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    for (const [index, message] of messages.entries()) await appendUserMessage(store, id, { id: message, text: `말 ${index}`, follows: messages[index - 1] ?? null });
+    return { store, files, id, messages };
+  };
+
+  it('marks a message once, keeps its name when marked again, and leaves no list once the last is unmarked', async () => {
+    const { store, id, messages: [first, second] } = await said();
+    const marks = () => store.get('chat', id)!.value.bookmarks;
+    await setBookmark(store, id, first!, true);
+    await setBookmark(store, id, second!, true);
+    await nameBookmark(store, id, first!, ' 시작 ');
+    await setBookmark(store, id, first!, true);
+    expect(marks()).toEqual([{ message: first, name: '시작' }, { message: second }]);
+    await nameBookmark(store, id, first!, ' ');
+    expect(marks()).toEqual([{ message: first }, { message: second }]);
+    await setBookmark(store, id, first!, false);
+    await setBookmark(store, id, second!, false);
+    expect('bookmarks' in store.get('chat', id)!.value).toBe(false);
+    expect(await nameBookmark(store, id, first!, '없음')).toMatchObject({ ok: false, error: 'gone' });
+  });
+
+  it("goes with a chat file and a branch under the copies' ids, only for the messages they copy", async () => {
+    const { store, files, id, messages: [first, second, third] } = await said();
+    await setBookmark(store, id, first!, true);
+    await nameBookmark(store, id, first!, '시작');
+    await setBookmark(store, id, second!, true);
+    await setBookmark(store, id, third!, true);
+    await removeMessage(store, id, second!);
+    const shownTexts = (chat: string) => {
+      const bookmarks = store.get('chat', chat)!.value.bookmarks!;
+      const messages = fold(store.children('entry', chat));
+      return bookmarks.map(({ message, name }) => [shown(messages.find((each) => each.id === message)!).text, name]);
+    };
+
+    const written = await chatFile({ store, files }, id);
+    if (!written.ok) throw new Error(written.error);
+    const read = readChatFile(JSON.parse(written.data));
+    if (!read.ok) throw new Error(read.error);
+    const imported = await importChat({ store, files }, read.file, null);
+    if (!imported.ok) throw new Error(imported.error);
+    await server.hold(store, imported.data.id);
+    expect(shownTexts(imported.data.id)).toEqual([['말 0', '시작'], ['말 2', undefined]]);
+
+    const messages = fold(store.children('entry', id));
+    const item: ChatItem = { id, chat: store.get('chat', id)!.value, messages, count: messages.length, title: '등대', preview: '', at: null, order: 0 };
+    const branched = await branchChat(store, item, first!);
+    if (!branched.ok) throw new Error(branched.error);
+    await server.hold(store, branched.data.id);
+    expect(shownTexts(branched.data.id)).toEqual([['말 0', '시작']]);
   });
 });
 

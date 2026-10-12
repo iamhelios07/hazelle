@@ -71,12 +71,13 @@ const mira = {
       bindedPersona: 'p1',
       lastDate: 500,
       scriptstate: { $mood: 'calm', $count: 3, plain: 'x' },
-      bookmarks: ['c1'],
+      bookmarks: ['c1', 'c2', 'gone'],
+      bookmarkNames: { c1: ' 시작 ' },
       modules: ['m1', 'm2'],
       localLore: [],
       message: [
-        { role: 'user', data: 'hey', time: 1000 },
-        { role: 'char', data: '<Thoughts>\nhmm\n</Thoughts>\n\nlook {{inlay::abc}}', disabled: true },
+        { role: 'user', data: 'hey', time: 1000, chatId: 'c1' },
+        { role: 'char', data: '<Thoughts>\nhmm\n</Thoughts>\n\nlook {{inlay::abc}}', disabled: true, chatId: 'c2' },
       ],
     },
     { name: 'Cold', note: 'n', localLore: [], scriptstate: {}, message: [{ role: 'char', data: COLD + CHAT_KEY, time: 900 }] },
@@ -281,14 +282,14 @@ describe('readBackup', () => {
         ],
         inlays: ['abc'],
         messages: [
-          { role: 'user', text: 'hey', at: 1000 },
-          { role: 'assistant', text: 'look {{inlay::abc}}', at: 1000, reasoning: 'hmm' },
+          { role: 'user', text: 'hey', at: 1000, bookmark: { name: '시작' } },
+          { role: 'assistant', text: 'look {{inlay::abc}}', at: 1000, reasoning: 'hmm', bookmark: {} },
         ],
       },
       { title: 'Cold', note: 'n', persona: null, greeting: 0, variables: [['x', '{"a":1}']], inlays: [], messages: [{ role: 'user', text: 'old', at: 10 }] },
     ]);
     expect(card.missed).toEqual(
-      (['chat-lore', 'memory', 'chat-folder', 'bookmark', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
+      (['chat-lore', 'memory', 'chat-folder', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
     );
   });
 
