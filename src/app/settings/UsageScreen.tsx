@@ -11,7 +11,8 @@ import { Bars, Button, Callout, Empty, Facts, NavBar, Screen, Section, Shares, T
 
 const WINDOWS: [ReportWindow, string][] = [['today', '오늘'], ['week', '이번 주'], ['month', '이번 달'], ['all', '전체']];
 const CHATS_SHOWN = 10;
-// A chat already read since the last change takes no time, so the count moves by steps rather than one render a chat.
+// A chat already read since the last change takes no time, so the count moves by steps rather than one render a chat,
+// and a read of fewer chats is too short to count.
 const PROGRESS_STEP = 50;
 
 const day = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
@@ -41,7 +42,7 @@ export function UsageScreen({ back }: { back: Back | null }) {
     setHeld(null);
     setFailed(false);
     setProgress(null);
-    void usageIndex.read((read) => read, abort.signal, (read, of) => read % PROGRESS_STEP === 0 && setProgress({ read, of })).then((result) => {
+    void usageIndex.read((read) => read, abort.signal, (read, of) => of > PROGRESS_STEP && read % PROGRESS_STEP === 0 && setProgress({ read, of })).then((result) => {
       if (abort.signal.aborted) return;
       if (result.ok) setHeld(result.data);
       else setFailed(true);
@@ -95,7 +96,7 @@ export function UsageScreen({ back }: { back: Back | null }) {
           </Section>
           {chats.length > 0 && (
             <Section title="채팅" action={chats.length > CHATS_SHOWN ? <Button variant="secondary" size="sm" onClick={() => setAllChats((open) => !open)}>{allChats ? '접기' : `모두 보기 (${count(chats.length)})`}</Button> : undefined}>
-              <Shares items={shares(allChats ? chats : chats.slice(0, CHATS_SHOWN), ({ key }) => titles.get(key) ?? '제목 없는 채팅')} />
+              <Shares items={shares(allChats ? chats : chats.slice(0, CHATS_SHOWN), ({ key }) => titles.get(key) ?? '새 채팅')} />
             </Section>
           )}
         </>
