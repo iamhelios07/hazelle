@@ -1,12 +1,12 @@
 import { ChatToolPanel } from './ChatToolPanel';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import type { ChatItem, ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
-import { ChatFrame, Pill, SidePeeks } from '../ui';
+import { ChatFrame, Pill, SidePeeks, usePanelsBeside } from '../ui';
 import { ChatBookmarks } from './ChatBookmarks';
 import { ChatCachePanel } from './ChatCachePanel';
 import { ChatComposer } from './ChatComposer';
@@ -33,9 +33,11 @@ type Props = {
   shelf: CharacterShelf<ChatSummary> | null;
   back: Back | null;
   side: (at: SideAt) => ReactNode;
+  // Told while two panels stand beside the story, so the shell can make room.
+  onPaired: (paired: boolean) => void;
 };
 
-export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
+export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Props) {
   const { reading, display } = useDisplay();
   const chat = useChat(chatId, item, shelf, reading.reply);
   const { id, busy, panel, scroll, prompt, actions } = chat;
@@ -50,6 +52,11 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
   useShortcut('find', () => actions.openSearch());
   const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
   const cache = chat.cacheShown && <ChatCachePanel chat={chat} />;
+  const paired = usePanelsBeside() && !!panel && chat.cacheShown;
+  useEffect(() => {
+    onPaired(paired);
+    return () => onPaired(false);
+  }, [paired, onPaired]);
   return (
     <>
       <ChatFrame

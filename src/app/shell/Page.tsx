@@ -64,7 +64,7 @@ const EMPTY = {
 
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
-export function Page({ route, closeSettings }: { route: Route; closeSettings: () => void }) {
+export function Page({ route, closeSettings, onPaired }: { route: Route; closeSettings: () => void; onPaired: (paired: boolean) => void }) {
   const wide = useWide();
   const split = useSplit();
   const back = (at: Below) => backTo(up(at), wide);
@@ -82,7 +82,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <CharacterPage at={at} wide={wide} />;
       case 'new-chat':
       case 'chat':
-        return <ChatPage at={at} wide={wide} />;
+        return <ChatPage at={at} wide={wide} onPaired={onPaired} />;
       case 'settings':
         return <SettingsList onClose={closeSettings} />;
       case 'connections':
@@ -194,7 +194,7 @@ function CharacterPage({ at, wide }: { at: At<'shelf' | 'edit'>; wide: boolean }
   return <CharacterEditScreen key={shelf.id} shelf={shelf} back={wide ? null : backTo(up(at), wide)} />;
 }
 
-function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) {
+function ChatPage({ at, wide, onPaired }: { at: At<'new-chat' | 'chat'>; wide: boolean; onPaired: (paired: boolean) => void }) {
   const stored = useStored('chat', at.kind === 'chat' ? at.id : null);
   const summary = useChatSummary(at.kind === 'chat' ? at.id : null);
   const chatModel = useChatModel(at.kind === 'chat' ? at.id : null);
@@ -214,7 +214,7 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
   const back = backTo(up(at, summary?.chat.character), wide);
   if (at.kind === 'new-chat') {
     if (at.character !== null && !shelf) return missing(at, absentItem('character', characterStored), wide);
-    return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={wide ? null : back} side={side} />;
+    return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={wide ? null : back} side={side} onPaired={onPaired} />;
   }
   if (!summary) {
     return missing(at, stored && binsChat(stored.value, () => shelf !== null) ? 'deleted-chat' : 'chat', wide);
@@ -232,7 +232,7 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
     </Screen>
   );
   if (character !== null && !shelf) return missing(at, 'orphaned-chat', wide);
-  return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={wide ? null : back} side={side} />;
+  return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={wide ? null : back} side={side} onPaired={onPaired} />;
 }
 
 function ItemPage<K extends 'prompt' | 'persona' | 'module' | 'profile'>({ at, back, children }: { at: { kind: K; id: string }; back: Back; children: (stored: Stored<K>) => ReactNode }) {

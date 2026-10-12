@@ -65,7 +65,7 @@ function page(initial: Stored<Kind>[]) {
   return {
     items, models, read, list, retain, release, commits,
     announce: (kind: Kind, id: string) => { for (const listener of listeners) listener([{ kind, id, parent: null }]); },
-    render: (route: Route) => act(async () => root.render(<SessionProvider session={session} account={account}><Profiler id="page" onRender={commits}><Page route={route} closeSettings={closeSettings} /></Profiler></SessionProvider>)),
+    render: (route: Route) => act(async () => root.render(<SessionProvider session={session} account={account}><Profiler id="page" onRender={commits}><Page route={route} closeSettings={closeSettings} onPaired={() => {}} /></Profiler></SessionProvider>)),
     close: async () => { await act(() => root.unmount()); read.close(); },
   };
 }

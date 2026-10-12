@@ -15,6 +15,16 @@ export function Layout() {
   const route = useRoute();
   const wide = useWide();
   const [collapsed, setCollapsed] = usePersisted(COLLAPSED, (stored) => stored === '1', false, (folded) => (folded ? '1' : '0'));
+  // Two panels beside a chat fold the list for their room without touching the stored choice; opening it then keeps it
+  // open until the pair closes.
+  const [paired, setPaired] = useState(false);
+  const [keptOpen, setKeptOpen] = useState(false);
+  if (!paired && keptOpen) setKeptOpen(false);
+  const folded = collapsed || (paired && !keptOpen);
+  const fold = (to: boolean) => {
+    if (paired) setKeptOpen(!to);
+    setCollapsed(to);
+  };
   const settings = settingsPage(route);
   // Where 설정's × goes: the last place outside it, or home after a reload inside it.
   const [outside, setOutside] = useState<Route>(HOME);
@@ -28,18 +38,18 @@ export function Layout() {
   useShortcut('personas', () => navigate({ kind: 'personas' }), fallback);
   useShortcut('prompts', () => navigate({ kind: 'prompts' }), fallback);
   useShortcut('shortcutList', () => setListing((open) => !open), fallback);
-  useShortcut('sidebar', () => (wide && settings === null ? setCollapsed(!collapsed) : false), fallback);
+  useShortcut('sidebar', () => (wide && settings === null ? fold(!folded) : false), fallback);
   useShortcut('pictures', () => changeDisplay({ hidePictures: !display.hidePictures }), fallback);
 
   const page = (
     <>
-      <Page route={route} closeSettings={closeSettings} />
+      <Page route={route} closeSettings={closeSettings} onPaired={setPaired} />
       {listing && <ShortcutList onClose={() => setListing(false)} />}
     </>
   );
 
   if (settings !== null) return wide ? <Shell align="start" side={<SettingsSidebar current={settings} onClose={closeSettings} />}>{page}</Shell> : page;
-  const sidebar = (asPage: boolean) => <LibrarySidebar page={asPage} collapsed={collapsed} onCollapse={setCollapsed} />;
+  const sidebar = (asPage: boolean) => <LibrarySidebar page={asPage} collapsed={folded} onCollapse={fold} />;
   if (!wide) return sidebarPage(route) ? sidebar(true) : page;
   return <Shell side={sidebar(false)}>{page}</Shell>;
 }
