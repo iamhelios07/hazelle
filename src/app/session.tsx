@@ -14,7 +14,7 @@ import type { Remembering } from '../runtime/memory';
 import { modulesOf } from '../runtime/modules';
 import type { Session } from '../runtime/session';
 import type { ChatScopeRead, Opening } from '../runtime/read-model';
-import type { ScriptsState } from '../runtime/scripts';
+import type { ScriptsState } from '../runtime/script-interactions';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';

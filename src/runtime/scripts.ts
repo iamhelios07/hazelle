@@ -1,28 +1,25 @@
-import { noOutcome, ToolLate, ToolStopped, ToolStuck, type Binding, type LuaRunner } from './script-binding';
+import { ScriptInteractions } from './script-interactions';
+import { ScriptSchedule } from './script-schedule';
+import { noOutcome, ToolLate, ToolStopped, type Binding, type LuaRunner } from './script-binding';
 import { live, type PackOwner } from '../model/library';
-import { toolId, type ToolUnit } from '../model/tool';
+import type { ToolUnit } from '../model/tool';
 import type { MemoryFill, PromptInput } from '../engine/pipeline';
-import { saveToolChat, toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
-import { ChangeSignal } from '../change-signal';
-import { Runaway } from '../engine/cbs/evaluate';
+import { saveToolChat, toolsOf } from './tools/store';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage, EmbedPurpose } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, Question, ScriptUnit, ToolEvent } from '../engine/script-api';
+import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, ScriptUnit, ToolEvent } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
 import { chatModel, embedModel } from './assignment';
 import { countTexts, embedTexts } from './embed';
-import { setModels, setTakesMemory } from './pack';
 import { memoryOwner } from './memory-read';
 import { appendScripted, appendUserMessage, keepCall, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { evaluationFailure, EvaluationStuck } from './evaluation';
 import { gather, generate } from './generate';
 import type { ScriptOutcome } from './lua/event';
-import { LuaStuck } from './lua/client';
 import { modelProfile } from './profiles';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
@@ -31,31 +28,6 @@ import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
 import { packsOf, scopeOf } from './chat-context';
 import type { Blocked, TurnContext } from './turn-context';
-
-// said: the script's own words (alertNormal, alertError, showAlert, a tool's say). The others are the app's about it.
-// no-model: a script called a model of a role the chat has none for. flood: it called models faster than the server
-// lets a chat's scripts (server/streams). late: a tool missed the prompt deadline and the turn went without its slot.
-// stuck: disabled once a tool stalled too often, until reload. memory-held: a tool the user let take the memory slot
-// cannot, since another tool before it in the chat holds it.
-// unsaved: what a run did to the chat could not be saved. runaway: the script's commands were stopped for making too
-// much text.
-type Note =
-  | { kind: 'said'; tone: 'normal' | 'error'; text: string }
-  | { kind: 'failed'; message: string }
-  | { kind: 'missing'; names: string[] }
-  | { kind: 'stuck'; disabled?: true }
-  | { kind: 'no-model'; role: Role }
-  | { kind: 'late' }
-  | { kind: 'memory-held'; by: string }
-  | { kind: 'stale-reply' }
-  | { kind: 'flood' }
-  | { kind: 'unsaved'; failure: ApiFailure }
-  | { kind: 'runaway' };
-export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
-// Consent is saved on the spender, not the chat's character: 'yes' allows it and 'no' refuses it.
-// A dismissal leaves it to be asked again. memory: a tool's claim on the memory slot, saved on its module.
-export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'memory' } };
-export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
 export type Halted = { kind: 'halted' };
 // turn: as it goes on. Its said is null once the user's message was saved here; a failure after that is kept
@@ -94,17 +66,9 @@ type Answered = { tool: string; memory: { text: string; through: string | null }
 
 // The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
-  private state: ScriptsState = { notes: [], questions: [] };
-  private readonly changes = new ChangeSignal();
-  private readonly answers = new Map<number, (answer: string | null) => void>();
-  private readonly queues = new Map<string, Promise<unknown>>();
-  // What each chat was already told of its bot's errors, so a script failing on every message says so once.
-  private readonly told = new Map<string, Set<string>>();
+  private readonly interactions: ScriptInteractions;
+  private readonly schedule: ScriptSchedule;
   private readonly closing = new AbortController();
-  private ids = 0;
-  private readonly consents = new Map<string, Promise<boolean>>();
-  private readonly lanes = new Map<string, Promise<void>>();
-  private readonly notices = new ToolRate(TOOL_NOTICES_PER_MINUTE);
   private readonly unsubscribe: () => void;
   private readonly lastPrompt = new Map<string, Map<string, Answered>>();
 
@@ -112,6 +76,8 @@ export class Scripts {
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; display: Pick<ScriptDisplay, 'stale'> },
     private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> },
   ) {
+    this.interactions = new ScriptInteractions(session.store, this.closing.signal);
+    this.schedule = new ScriptSchedule(session.store, this.interactions, this.closing.signal);
     this.unsubscribe = session.store.subscribe(() => {
       for (const [chat, last] of this.lastPrompt) {
         const stored = live(session.store.get('chat', chat));
@@ -123,24 +89,25 @@ export class Scripts {
     });
   }
 
-  readonly subscribe = this.changes.subscribe;
+  readonly subscribe = (listener: () => void) => this.interactions.subscribe(listener);
 
-  readonly snapshot = () => this.state;
+  readonly snapshot = () => this.interactions.snapshot();
 
-  seen(note: number) {
-    this.set({ ...this.state, notes: this.state.notes.filter(({ id }) => id !== note) });
+  seen(note: number) { this.interactions.seen(note); }
+
+  answer(question: number, answer: string | null) { this.interactions.answer(question, answer); }
+
+  report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown, from: PackOwner | null = null) {
+    this.interactions.report(chat, result, from);
   }
 
-  // null: dismissed, which answers nothing.
-  answer(question: number, answer: string | null) {
-    this.answers.get(question)?.(answer);
-  }
+  claims(chat: string) { this.interactions.claims(chat); }
 
   close() {
     this.closing.abort();
     this.unsubscribe();
     this.lastPrompt.clear();
-    for (const { id } of this.state.questions) this.answer(id, null);
+    this.interactions.close();
   }
 
   // The bot's scripts on the way to a reply: onInput and editInput for a message being sent, which is then saved here so
@@ -159,7 +126,7 @@ export class Scripts {
     // runs go on to where the user's message is saved, since they may already have written to the chat for it, and
     // no further; without triggers a turn stopped this early hands the text back instead.
     const stopped = new Promise<Halted>((resolve) => signal.addEventListener('abort', () => resolve(halted), { once: true }));
-    const started = this.queued(chat, async (): Promise<Started> => {
+    const started = this.schedule.queued(chat, async (): Promise<Started> => {
       let turn = first;
       const regather = async (answer: boolean) => {
         const next = await again(answer);
@@ -196,7 +163,7 @@ export class Scripts {
       if (start.outcome.stop) {
         const last = turn.scope.messages.at(-1);
         const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: null, vars: { version: last.id, set: start.outcome.writes } }));
-        if (saved && !saved.ok) this.note(chat, { kind: 'unsaved', failure: saved });
+        if (saved && !saved.ok) this.interactions.note(chat, { kind: 'unsaved', failure: saved });
         return halted;
       }
       if (start.changed) {
@@ -207,7 +174,7 @@ export class Scripts {
       return { turn: { ...turn, said: null, scope: { ...turn.scope, pending: before }, reply: { ...turn.reply, ...(before.length > 0 && { before }) } } };
     });
     // A message that could not be saved after the turn was stopped has nobody left to hear of it but the chat.
-    void started.then((result) => signal.aborted && 'kind' in result && result.kind === 'unsent' && this.note(chat, { kind: 'unsaved', failure: result.failure }));
+    void started.then((result) => signal.aborted && 'kind' in result && result.kind === 'unsent' && this.interactions.note(chat, { kind: 'unsaved', failure: result.failure }));
     return Promise.race([started, stopped]);
   }
 
@@ -215,7 +182,7 @@ export class Scripts {
   async requesting(chat: string, turn: TurnContext, messages: ChatMessage[]): Promise<{ messages: ChatMessage[]; writes: Writes }> {
     const scripts = scriptsOf(packsOf(this.session.store, turn.chat));
     if (scripts.length === 0) return { messages, writes: [] };
-    return this.queued(chat, async () => {
+    return this.schedule.queued(chat, async () => {
       const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editRequest', value: messages, meta: {} } }, turn.scope, null);
       if (!outcome.handled) return { messages, writes: outcome.writes };
       const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
@@ -230,7 +197,7 @@ export class Scripts {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? scriptsOf(packsOf(this.session.store, stored.value)) : [];
     if (!stored || scripts.length === 0 || reply.receipt.state === 'failed') return reply;
-    return this.queued(chat, async () => {
+    return this.schedule.queued(chat, async () => {
       const messages = this.session.read.chat(chat).snapshot()?.messages ?? [];
       const at = reply.message === null ? -1 : messages.findIndex((message) => message.id === reply.message);
       const scope = { ...scopeOf(this.session, chat, stored.value, at === -1 ? messages : messages.slice(0, at)), pending: reply.before ?? [] };
@@ -268,7 +235,7 @@ export class Scripts {
     if (units.length === 0) return { turn: first, tools: [] };
     const owner = memoryOwner(this.session.store, first.chat);
     const holder = owner?.kind === 'tool' ? owner.unit : null;
-    return this.queued(chat, async () => {
+    return this.schedule.queued(chat, async () => {
       const tools: PromptInput['tools'] = [];
       const writes: Writes = [];
       let turn = first;
@@ -277,7 +244,7 @@ export class Scripts {
         if (signal.aborted || this.closing.signal.aborted) break;
         const from = { kind: 'module', id: unit.module } as const;
         const holds = unit.module === holder?.module;
-        if (!holds && holder && unit.tool.manifest.uses.includes('memory') && this.session.store.get('module', unit.module)?.value.takesMemory) this.tell(chat, 'memory-held', { kind: 'memory-held', by: holder.tool.manifest.displayName }, from);
+        if (!holds && holder && unit.tool.manifest.uses.includes('memory') && this.session.store.get('module', unit.module)?.value.takesMemory) this.interactions.tell(chat, 'memory-held', { kind: 'memory-held', by: holder.tool.manifest.displayName }, from);
         const key = `${unit.module}:${unit.tool.file.id}`;
         const last = this.lastPrompt.get(chat) ?? new Map<string, Answered>();
         this.lastPrompt.set(chat, last);
@@ -320,32 +287,15 @@ export class Scripts {
   private memoryOf(chat: string, unit: ToolUnit, scope: ChatScope, memory: NonNullable<Answered['memory']>, tell = false): MemoryFill {
     const at = memory.through === null ? -1 : scope.messages.findIndex((message) => message.message === memory.through);
     const through = at === scope.messages.length - 1 ? -1 : at;
-    if (tell && memory.through !== null && through === -1) this.tell(chat, 'memory-through', { kind: 'failed', message: 'memory.through names no message before the last' }, { kind: 'module', id: unit.module });
+    if (tell && memory.through !== null && through === -1) this.interactions.tell(chat, 'memory-through', { kind: 'failed', message: 'memory.through names no message before the last' }, { kind: 'module', id: unit.module });
     return { kind: 'tool', name: unit.tool.manifest.displayName, text: memory.text, through };
-  }
-
-  // The memory claims of the chat's tools that the user has not answered, each asked once per module (design §6.10).
-  claims(chat: string) {
-    const { store } = this.session;
-    const stored = live(store.get('chat', chat));
-    if (!stored || this.closing.signal.aborted) return;
-    for (const { module, tool } of toolsOf(store, stored.value)) {
-      const key = `memory:${module}`;
-      if (!tool.manifest.uses.includes('memory') || store.get('module', module)?.value.takesMemory !== undefined || this.consents.has(key)) continue;
-      const deciding = this.ask(chat, { kind: 'memory' }, { kind: 'module', id: module }).then(async (answer) => {
-        if (answer === null) return false;
-        const saved = await setTakesMemory(store, module, answer === 'yes');
-        return saved.ok && answer === 'yes';
-      }).finally(() => this.consents.delete(key));
-      this.consents.set(key, deciding);
-    }
   }
 
   // A //@menu item: its writes stay with the last message, whichever version it shows.
   menu(chat: string, module: string, item: string): Promise<void> {
     const unit = this.unit(chat, module);
     if (!unit?.tool.manifest.menu.some((each) => each.id === item)) return Promise.resolve();
-    return this.lane(chat, unit, async () => {
+    return this.schedule.lane(chat, unit, async () => {
       const scope = this.scope(chat);
       await this.dispatch(chat, { tool: unit, event: { kind: 'menu', item } }, scope, onLast(scope), this.closing.signal);
     });
@@ -355,7 +305,7 @@ export class Scripts {
   action(chat: string, module: string, item: string, message: string): Promise<void> {
     const unit = this.unit(chat, module);
     if (!unit?.tool.manifest.actions?.some((each) => each.id === item)) return Promise.resolve();
-    return this.lane(chat, unit, async () => {
+    return this.schedule.lane(chat, unit, async () => {
       const scope = this.scope(chat);
       const at = atOf(scope, message);
       if (at) await this.dispatch(chat, { tool: unit, event: { kind: 'action', item, message: at } }, scope, { version: at.version, stays: true }, this.closing.signal);
@@ -383,7 +333,7 @@ export class Scripts {
     const stored = live(this.session.store.get('chat', chat));
     if (!stored || this.closing.signal.aborted) return;
     for (const unit of toolsOf(this.session.store, stored.value)) {
-      void this.lane(chat, unit, async () => {
+      void this.schedule.lane(chat, unit, async () => {
         const scope = this.scope(chat);
         await this.dispatch(chat, { tool: unit, event }, scope, onLast(scope), this.closing.signal);
       });
@@ -407,7 +357,7 @@ export class Scripts {
   }
 
   pageWrite(chat: string, module: string, outcome: ScriptOutcome): Promise<void> {
-    return this.queued(chat, async () => {
+    return this.schedule.queued(chat, async () => {
       const context = this.pageContext(chat, module);
       if (!context) return;
       await this.event(chat, context.scope, outcome, onLast(context.scope), { kind: 'module', id: module });
@@ -422,28 +372,7 @@ export class Scripts {
     const scope = this.scope(chat);
     const at = atOf(scope, reply.message ?? reply.id);
     // The saved reply's snapshot and anchor travel with this job, even if another version is shown before it runs.
-    if (at) for (const unit of units) void this.lane(chat, unit, () => this.dispatch(chat, { tool: unit, event: { kind: 'reply', reply: { ...at, version: reply.id } } }, scope, { version: reply.id }, this.closing.signal));
-  }
-
-  // One chain per chat and tool, off the send queue: a tool hears reply, change, branch, menu and action in the order
-  // they came, and a send never waits for them. Each job runs with the chat held, only while the same tool is on in it,
-  // and dismisses the chat's open question first, as a send does.
-  private lane(chat: string, unit: ToolUnit, job: () => Promise<unknown>): Promise<void> {
-    const { store } = this.session;
-    const key = `${chat}:${unit.module}`;
-    const lease = store.retainChat(chat);
-    const next = (this.lanes.get(key) ?? Promise.resolve()).then(async () => {
-      if (await lease.ready || this.closing.signal.aborted) return;
-      const stored = live(store.get('chat', chat));
-      if (!stored || !toolsOf(store, stored.value).some((current) => current.module === unit.module && current.tool.file.id === unit.tool.file.id)) return;
-      this.dismiss(chat);
-      await job();
-    }).catch((error: unknown) => this.report(chat, error, { kind: 'module', id: unit.module })).finally(() => {
-      lease.release();
-      if (this.lanes.get(key) === next) this.lanes.delete(key);
-    });
-    this.lanes.set(key, next);
-    return next;
+    if (at) for (const unit of units) void this.schedule.lane(chat, unit, () => this.dispatch(chat, { tool: unit, event: { kind: 'reply', reply: { ...at, version: reply.id } } }, scope, { version: reply.id }, this.closing.signal));
   }
 
   // A press on a bot's button, whose writes stay with the last message whichever version it shows. false: no script
@@ -458,7 +387,7 @@ export class Scripts {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? triggersOf(packsOf(this.session.store, stored.value)) : [];
     if (!stored || scripts.length === 0) return Promise.resolve(null);
-    return this.queued(chat, async () => {
+    return this.schedule.queued(chat, async () => {
       const scope = scopeOf(this.session, chat, stored.value, this.session.read.chat(chat).snapshot()?.messages ?? []);
       const { outcome } = await this.dispatch(chat, { lua: scripts, event }, scope, anchor(scope));
       return outcome.handled;
@@ -479,7 +408,7 @@ export class Scripts {
     const stale = reply !== undefined && (!latest || shown(latest).id !== reply);
     // A reply handler may always keep state/storage and edit its own shown reply. Adds and other edits
     // land only while that reply is still the latest shown version; a delayed job cannot rewrite a newer story.
-    if (stale && (outcome.added.length || outcome.edits.some(({ index }) => scope.messages[index + greeting]?.id !== reply))) this.tell(chat, 'stale-reply', { kind: 'stale-reply' }, from);
+    if (stale && (outcome.added.length || outcome.edits.some(({ index }) => scope.messages[index + greeting]?.id !== reply))) this.interactions.tell(chat, 'stale-reply', { kind: 'stale-reply' }, from);
     const at = (index: number) => messages.get(scope.messages[index + greeting]?.id ?? '');
     const edits = outcome.edits.flatMap(({ index, text, wrote }) => {
       const message = at(index);
@@ -489,7 +418,7 @@ export class Scripts {
     const adding = (stale ? [] : outcome.added).map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
     const added = adding.length ? { follows: latest ? shown(latest).id : null, messages: adding } : null;
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
-    if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved }, from);
+    if (!saved.ok) this.interactions.note(chat, { kind: 'unsaved', failure: saved }, from);
     if (outcome.tool && from?.kind === 'module' && (outcome.tool.data.length || outcome.tool.badges.length)) {
       // A badge stands on the version shown when it lands. A delayed reply job's badges, as its edits, mark only its reply.
       const badges = outcome.tool.badges.flatMap(({ index, text }) => {
@@ -497,7 +426,7 @@ export class Scripts {
         return message && (!stale || shown(message).id === reply) ? [{ message: message.id, version: shown(message).id, text }] : [];
       });
       const kept = await saveToolChat(this.session.store, from.id, chat, outcome.tool.data, badges);
-      if (!kept.ok) this.note(chat, { kind: 'unsaved', failure: kept }, from);
+      if (!kept.ok) this.interactions.note(chat, { kind: 'unsaved', failure: kept }, from);
     }
     if (outcome.reload) this.session.display.stale(chat);
     return { outcome, changed: edits.length + removed.length + adding.length > 0 };
@@ -529,27 +458,12 @@ export class Scripts {
     }
   }
 
-  report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown, from: PackOwner | null = null) {
-    if (result instanceof ToolStopped) return;
-    if (result instanceof ToolLate) return this.tell(chat, 'late', { kind: 'late' }, from);
-    if (result instanceof ToolStuck) return result.disabled ? this.tell(chat, 'disabled', { kind: 'stuck', disabled: true }, from) : this.note(chat, { kind: 'stuck' }, from);
-    if (result instanceof LuaStuck || result instanceof EvaluationStuck) return this.note(chat, { kind: 'stuck' }, from);
-    if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' }, from);
-    if (result instanceof Error) return this.tell(chat, `failed:${result.message}`, { kind: 'failed', message: result.message }, from);
-    const { errors, missing } = result as Pick<Outcome, 'errors' | 'missing'>;
-    for (const error of errors) {
-      if ('runaway' in error) this.tell(chat, 'runaway', { kind: 'runaway' }, error.from);
-      else this.tell(chat, `failed:${error.message}`, { kind: 'failed', message: `${error.script}: ${error.message}` }, error.from);
-    }
-    if (missing.length > 0) this.tell(chat, `missing:${missing.join()}`, { kind: 'missing', names: missing }, from);
-  }
-
   // deadline: the run answers the prompt event, whose deadline would dismiss a card before anyone read it.
   private host(chat: string, scope: ChatScope, signal?: AbortSignal, deadline = false): Host {
     const either = (callSignal?: AbortSignal) => (callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal);
     return {
-      say: (tone, text, from) => { if (!signal?.aborted) this.note(chat, { kind: 'said', tone, text }, from); },
-      ask: (question, from, callSignal) => this.ask(chat, question, from, either(callSignal)),
+      say: (tone, text, from) => { if (!signal?.aborted) this.interactions.note(chat, { kind: 'said', tone, text }, from); },
+      ask: (question, from, callSignal) => this.interactions.ask(chat, question, from, either(callSignal)),
       model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, deadline, either(callSignal)),
       embed: (texts, as, from, callSignal) => this.embed(chat, texts, as, from, deadline, either(callSignal)),
       tokens: async (text) => (await countTexts(this.session.store)([text]))[0]!,
@@ -559,47 +473,10 @@ export class Scripts {
         if (!('kind' in lore)) return lore;
         if (lore.kind === 'tokenizer') throw new Error('tokenizer');
         // The script reads none, and the person is told why.
-        this.tell(chat, 'runaway', { kind: 'runaway' });
+        this.interactions.tell(chat, 'runaway', { kind: 'runaway' });
         return [];
       },
     };
-  }
-
-  private ask(chat: string, question: ScriptQuestion['question'], from: PackOwner, signal?: AbortSignal): Promise<string | null> {
-    if (this.closing.signal.aborted || signal?.aborted) return Promise.resolve(null);
-    return new Promise((resolve) => {
-      const id = ++this.ids;
-      const abort = () => this.answer(id, null);
-      signal?.addEventListener('abort', abort, { once: true });
-      this.answers.set(id, (answer) => {
-        signal?.removeEventListener('abort', abort);
-        this.answers.delete(id);
-        this.set({ ...this.state, questions: this.state.questions.filter((each) => each.id !== id) });
-        resolve(answer);
-      });
-      this.set({ ...this.state, questions: [...this.state.questions, { id, chat, question, from }] });
-    });
-  }
-
-  // Whether spender may call models, embeddings included (design §6.8, §6.10): asked once per spender and kept on it.
-  // Under a deadline an unanswered one is no, without a card; the next run with time to wait asks.
-  private async allowed(chat: string, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<boolean> {
-    const { store } = this.session;
-    const spender = live(store.get(from.kind, from.id));
-    if (!spender) return false;
-    if (spender.value.botModels !== undefined) return spender.value.botModels;
-    if (deadline) return false;
-    const key = `${from.kind}:${from.id}`;
-    let deciding = this.consents.get(key);
-    if (!deciding) {
-      deciding = this.ask(chat, { kind: 'model' }, from, signal).then(async (answer) => {
-        if (answer === null) return false;
-        const saved = await setModels(store, from, answer === 'yes');
-        return saved.ok && answer === 'yes';
-      }).finally(() => this.consents.delete(key));
-      this.consents.set(key, deciding);
-    }
-    return deciding;
   }
 
   // A script's own model call (design §6.8, §6.10): only for a spender the user allowed, to the chat's model of the
@@ -611,13 +488,13 @@ export class Scripts {
     if (signal?.aborted || this.closing.signal.aborted) return refused('failed', 'stopped');
     const stored = live(store.get('chat', chat));
     if (!stored || !live(store.get(from.kind, from.id))) return refused('failed', 'the chat or spender is gone');
-    if (!(await this.allowed(chat, from, deadline, signal))) return refused('not-allowed', 'the user has not allowed this script to call models');
+    if (!(await this.interactions.allowed(chat, from, deadline, signal))) return refused('not-allowed', 'the user has not allowed this script to call models');
     if (signal?.aborted || !live(store.get(from.kind, from.id))) return refused('failed', 'stopped');
 
     const route = chatModel(store, stored.value, role);
     const profile = 'kind' in route ? null : modelProfile(store, route.model);
     if ('kind' in route || profile?.kind !== 'profile') {
-      this.tell(chat, `no-model:${role}`, { kind: 'no-model', role }, from);
+      this.interactions.tell(chat, `no-model:${role}`, { kind: 'no-model', role }, from);
       return refused('no-model', 'no model is set');
     }
     const text = gather();
@@ -634,7 +511,7 @@ export class Scripts {
       onText: text.add,
     }).finally(() => endCall(store, call.id));
     if (answer.error?.kind === 'app' && answer.error.code === 'too-many-bot-calls') {
-      this.tell(chat, 'flood', { kind: 'flood' }, from);
+      this.interactions.tell(chat, 'flood', { kind: 'flood' }, from);
       return refused('flood', 'too many model calls in a minute');
     }
     await keepCall(this.session, chat, receiptOf(callOf(route), answer));
@@ -645,51 +522,16 @@ export class Scripts {
   private async embed(chat: string, texts: string[], as: EmbedPurpose | null, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<EmbedResult> {
     const { store, credentials } = this.session;
     if (signal?.aborted || this.closing.signal.aborted || !live(store.get('chat', chat)) || !live(store.get(from.kind, from.id))) return { ok: false, reason: 'failed' };
-    if (!(await this.allowed(chat, from, deadline, signal))) return { ok: false, reason: 'not-allowed' };
+    if (!(await this.interactions.allowed(chat, from, deadline, signal))) return { ok: false, reason: 'not-allowed' };
     if (signal?.aborted || !live(store.get(from.kind, from.id))) return { ok: false, reason: 'failed' };
     const route = embedModel(store);
     if ('kind' in route) {
-      this.tell(chat, 'no-model:embed', { kind: 'no-model', role: 'embed' }, from);
+      this.interactions.tell(chat, 'no-model:embed', { kind: 'no-model', role: 'embed' }, from);
       return { ok: false, reason: 'no-model' };
     }
     const { answer, receipt } = await embedTexts({ credentials, count: countTexts(store) }, route, texts, as, chat, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
     if (receipt) await keepCall(this.session, chat, receipt);
-    if (!answer.ok && answer.reason === 'flood') this.tell(chat, 'flood', { kind: 'flood' }, from);
+    if (!answer.ok && answer.reason === 'flood') this.interactions.tell(chat, 'flood', { kind: 'flood' }, from);
     return answer;
-  }
-
-  // One run at a time per chat, each reading the chat as the one before left it: a write returns before its chat's
-  // projection is made again, so each waits for it, and a projection that fails is shown on the chat's scope
-  // (ChatProjections.evaluate). A question still open when the next comes is dismissed, so a card the user passed over
-  // never holds up a send.
-  private queued<T>(chat: string, task: () => Promise<T>): Promise<T> {
-    this.dismiss(chat);
-    const next = (this.queues.get(chat) ?? Promise.resolve()).then(() => this.session.store.projections.evaluate(chat).catch(evaluationFailure)).then(task);
-    this.queues.set(chat, next.catch(() => {}));
-    return next;
-  }
-
-  // A memory claim holds up no run, so it stays until the user answers it.
-  private dismiss(chat: string) {
-    for (const { id, chat: asked, question } of this.state.questions) if (asked === chat && question.kind !== 'memory') this.answer(id, null);
-  }
-
-  private tell(chat: string, key: string, note: Note, from: PackOwner | null = null) {
-    key = `${from?.kind}:${from?.id}:${key}`;
-    const told = this.told.get(chat) ?? new Set();
-    this.told.set(chat, told);
-    if (told.has(key)) return;
-    told.add(key);
-    this.note(chat, note, from);
-  }
-
-  private note(chat: string, note: Note, from: PackOwner | null = null) {
-    if ((note.kind === 'said' || note.kind === 'failed') && from?.kind === 'module' && this.session.store.get('tool', toolId(from.id)) && !this.notices.take(`${chat}:${from.id}`)) return;
-    this.set({ ...this.state, notes: [...this.state.notes, { id: ++this.ids, chat, from, ...note }] });
-  }
-
-  private set(state: ScriptsState) {
-    this.state = state;
-    this.changes.notify();
   }
 }

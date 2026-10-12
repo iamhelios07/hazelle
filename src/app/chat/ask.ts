@@ -1,5 +1,5 @@
 import type { PackOwner } from '../../model/library';
-import type { ScriptQuestion } from '../../runtime/scripts';
+import type { ScriptQuestion } from '../../runtime/script-interactions';
 import { BOT_MODELS_HELP, MEMORY_CLAIM, MEMORY_CLAIM_HELP, MODEL_CONSENT, MODULE_MODELS_HELP } from '../common/words';
 import type { AskAnswer } from '../ui';
 

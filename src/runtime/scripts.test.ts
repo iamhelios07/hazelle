@@ -419,6 +419,52 @@ describe('tool events through Scripts', () => {
     }, binding);
   });
 
+  it('keeps a queued reply snapshot and anchor when another version is shown before the job starts', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const heard: { version: string; snapshot: string }[] = [];
+    let variable = '';
+    let menuStarted = false;
+    const binding: Binding<ToolUnit> = { run: async (_chat, _units, scope, event) => {
+      if (event.kind === 'menu') { menuStarted = true; await held; }
+      if (event.kind !== 'reply') return noOutcome();
+      heard.push({ version: event.reply.version, snapshot: scope.messages.at(-1)!.id });
+      if (heard.length !== 1) return noOutcome();
+      return {
+        ...noOutcome(), writes: [[variable, '"original"']],
+        edits: [{ index: event.reply.index, text: 'old edit', wrote: [] }],
+        added: [{ role: 'char', text: 'old addition' }],
+        tool: { data: [['heard', event.reply.version]], badges: [{ index: event.reply.index, text: 'old badge' }] },
+      };
+    }, close: () => { release(); } };
+    await server.withSession(async (session) => {
+      const f = await toolChat(session);
+      variable = f.variable;
+      const menu = session.scripts.menu(f.chat, f.module, 'now');
+      await expect.poll(() => menuStarted).toBe(true);
+      stubRelay(inTurn([saying('original'), saying('replacement')]));
+      await takeTurn(session, f.chat, { kind: 'send', text: 'hello' });
+      await expect.poll(() => f.messages().length).toBe(2);
+      const original = shown(f.messages()[1]!).id;
+      await takeTurn(session, f.chat, { kind: 'regenerate', message: f.messages()[1]!.id });
+      await expect.poll(() => f.messages()[1]!.versions.length).toBe(2);
+      const replacement = shown(f.messages()[1]!).id;
+      expect(heard).toEqual([]);
+      release();
+      await menu;
+      // A later lane job is a barrier for both reply applications, not just their bindings.
+      await session.scripts.menu(f.chat, f.module, 'now');
+      expect(heard).toEqual([{ version: original, snapshot: original }, { version: replacement, snapshot: replacement }]);
+      expect(f.messages()).toHaveLength(2);
+      expect(shown(f.messages()[1]!)).toMatchObject({ id: replacement, text: 'replacement' });
+      expect(shown(f.messages()[1]!).after ?? []).toEqual([]);
+      expect(toolBadges(session.store, f.module, f.chat)).toEqual({});
+      expect(toolChatData(session.store, f.module, f.chat, 'heard')).toBe(original);
+      await selectVersion(session.store, f.chat, f.messages()[1]!.id, original);
+      expect(shown(f.messages()[1]!)).toMatchObject({ text: 'original', after: [[variable, '"original"']] });
+    }, binding);
+  });
+
   it.each([false, true])('guards delayed reply edits and adds when the story advances: %s', async (advance) => {
     let finish!: (outcome: ScriptOutcome) => void;
     const binding: Binding<ToolUnit> = { run: async (_chat, _units, _scope, event) => event.kind === 'reply' ? new Promise((resolve) => { finish = resolve; }) : noOutcome(), close: () => {} };
@@ -625,6 +671,38 @@ describe('tool events through Scripts', () => {
         expect(session.store.children('entry', fixture.chat).filter(({ value }) => value.type === 'vars')).toEqual([]);
       } finally { vi.useRealTimers(); for (const resolve of finish) resolve(noOutcome()); }
     }, { run, close: () => {} });
+  });
+
+  it('dismisses an aborted prompt question, drops its late result, and lets the next prompt run', async () => {
+    let finish!: (outcome: ScriptOutcome) => void;
+    let answer: string | null | undefined;
+    let prompts = 0;
+    const binding: Binding<ToolUnit> = { run: async (_chat, unit, _scope, event, host) => {
+      if (event.kind !== 'prompt') return noOutcome();
+      if (prompts++ > 0) return { ...noOutcome(), value: 'next' };
+      const late = new Promise<ScriptOutcome>((resolve) => { finish = resolve; });
+      answer = await host.ask({ kind: 'input', text: 'Continue?' }, { kind: 'module', id: unit.module });
+      return late;
+    }, close: () => {} };
+    await server.withSession(async (session) => {
+      const f = await toolChat(session);
+      await appendUserMessage(session.store, f.chat, { id: crypto.randomUUID(), text: 'hello' });
+      await session.store.projections.evaluate(f.chat);
+      const turn = gatherTurn(session, f.chat, { kind: 'answer' });
+      if (!turn || 'kind' in turn) throw new Error('fixture');
+      const stop = new AbortController();
+      const pending = session.scripts.prompting(f.chat, turn, async () => turn, stop.signal);
+      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(1);
+      stop.abort();
+      expect(await pending).toMatchObject({ tools: [], turn: { reply: { before: [] } } });
+      expect(answer).toBeNull();
+      expect(session.scripts.snapshot()).toEqual({ notes: [], questions: [] });
+      finish({ ...noOutcome(), value: 'late', writes: [[f.variable, '"late"']], added: [{ role: 'char', text: 'late' }] });
+      expect(await session.scripts.prompting(f.chat, turn, async () => turn, new AbortController().signal)).toMatchObject({ tools: [{ text: 'next' }] });
+      expect(cachedTools(session, f.chat)).toMatchObject([{ text: 'next' }]);
+      expect(f.messages()).toHaveLength(1);
+      expect(session.store.children('entry', f.chat).filter(({ value }) => value.type === 'vars')).toEqual([]);
+    }, binding);
   });
 
   it('asks module Lua on its own behalf even with no character, and remembers it in another chat', () => server.withSession(async (session) => {
