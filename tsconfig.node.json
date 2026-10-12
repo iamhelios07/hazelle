@@ -5,5 +5,5 @@
     "lib": ["ES2023"],
     "types": ["node"]
   },
-  "include": ["scripts/sandbox.test.ts", "vite.config.ts", "vitest.config.ts", "playwright.config.ts", "playwright.shots.config.ts", "e2e"]
+  "include": ["scripts/sandbox.test.ts", "scripts/load", "vite.config.ts", "vitest.config.ts", "playwright.config.ts", "playwright.shots.config.ts", "e2e"]
 }
