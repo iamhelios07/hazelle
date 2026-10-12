@@ -43,3 +43,23 @@ describe('Anthropic’s Message Batches', () => {
     expect(batches.cancel(endpoint, 'msgbatch_1')).toMatchObject({ url: 'https://api.anthropic.com/v1/messages/batches/msgbatch_1/cancel', method: 'POST' });
   });
 });
+
+describe('Gemini’s batch mode', () => {
+  const batches = lane('google');
+  const { endpoint } = route('google');
+
+  it('submits the whole reply’s request inline, and reads its answer from the operation once done', () => {
+    const sent = batches.submit(endpoint, model, whole('google'), 'call-1');
+    expect(sent.url).toBe('https://generativelanguage.googleapis.com/v1beta/models/m:batchGenerateContent');
+    expect(JSON.parse(sent.body!)).toEqual({ batch: { display_name: 'call-1', input_config: { requests: { requests: [{ request: { contents: [{ role: 'user', parts: [{ text: '안녕' }] }] }, metadata: { key: 'call-1' } }] } } } });
+    expect(batches.submitted({ name: 'batches/123', metadata: { state: 'BATCH_STATE_PENDING' } })).toBe('batches/123');
+    expect(batches.check(endpoint, 'batches/123').url).toBe('https://generativelanguage.googleapis.com/v1beta/batches/123');
+    expect(batches.ended({ name: 'batches/123', metadata: { state: 'BATCH_STATE_RUNNING' } })).toBe(false);
+    const response = { candidates: [{ content: { parts: [{ text: '반가워요' }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 3 } };
+    const done = { name: 'batches/123', done: true, metadata: { state: 'BATCH_STATE_SUCCEEDED' }, response: { inlinedResponses: { inlinedResponses: [{ response, metadata: { key: 'call-1' } }] } } };
+    expect(batches.ended(done)).toBe(true);
+    expect(batches.answer(JSON.stringify(done), 'call-1')).toEqual({ kind: 'reply', payload: response });
+    expect(batches.answer(JSON.stringify({ name: 'batches/123', done: true, metadata: { state: 'JOB_STATE_CANCELLED' } }), 'call-1')).toEqual({ kind: 'canceled' });
+    expect(batches.cancel(endpoint, 'batches/123')).toMatchObject({ url: 'https://generativelanguage.googleapis.com/v1beta/batches/123:cancel', method: 'POST' });
+  });
+});
