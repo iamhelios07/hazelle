@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem, type ChatSummary, type TranslateSwitches } from '../../model/chat';
 import type { IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
-import { textTranslation, type CharacterShelf } from '../../model/library';
+import type { CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel, withMainModel } from '../../runtime/assignment';
 import { illustrateSwitches, resetToggles, setIllustrate, setOwnIllustrate, setOwnTranslate, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
@@ -20,12 +20,10 @@ import {
   setChatNote,
   setChatPersona,
   setChatPrompt,
-  startChat,
   withCast,
   withOwn,
   type Own,
 } from '../../runtime/chat-log';
-import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
 import { chatPersona, pinPersona, setCurrentPersona } from '../../runtime/personas';
@@ -35,7 +33,7 @@ import type { Shown } from '../../runtime/talk';
 import { translatorOf } from '../../runtime/translate';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf, translationInput } from '../../runtime/chat-context';
-import { takeTurn, type Starting, type TurnFailure } from '../../runtime/turn';
+import { takeTurn, type TurnFailure } from '../../runtime/turn';
 import { describeIllustrateFailure, describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
@@ -55,6 +53,7 @@ import { useFollow } from './useFollow';
 import { useChatSearch } from './useChatSearch';
 import { useChatStatus } from './useChatStatus';
 import { useMessageEdit } from './useMessageEdit';
+import { useNewChat } from './useNewChat';
 
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
 
@@ -105,22 +104,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
   const scripted = triggersOf(packsOf(store, chat)).length > 0;
-  const [openedAt] = useState(() => Date.now());
-  const greetings = card?.greetings ?? [];
-  const [picked, setGreeting] = useState<number | null>(null);
-  // The ids the greetings are saved under, so their random tags roll the same before and after the first send, and the
-  // greeting keeps its place in the story rather than being drawn again. A greeting added since gets its own.
-  const [madeIds, setOpeningIds] = useState(() => greetings.map(() => crypto.randomUUID()));
-  const openingIds = madeIds.length < greetings.length ? [...madeIds, ...greetings.slice(madeIds.length).map(() => crypto.randomUUID())] : madeIds;
-  if (openingIds !== madeIds) setOpeningIds(openingIds);
   const translate = translateSwitches(store, chat.character);
-  const choices = useMemo(() => item === null && card
-    ? projectGreetings(greetings, openingIds, picked, (text) => textTranslation(shelf!.character, text, translate.replyLanguage))
-    : null, [item === null, card, shelf?.character.translations, translate.replyLanguage, openingIds, picked]);
-  const unstarted: Shown | null = useMemo(() => {
-    const preview = greetingPreview(choices, openedAt);
-    return preview && { ...preview, live: null };
-  }, [choices, openedAt]);
+  const { unstarted, pickGreeting, starting } = useNewChat(chatId, item === null, chat, shelf, translate.replyLanguage);
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
   const { messages, display: view, placed, pending: displayPending, error: displayError, retry: retryDisplay, retryRegex, stuck } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
@@ -225,23 +210,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setPinned(null);
   }
 
-  // The new chat's one save, which its first send and a press on its greeting share until it lands; a failed one is
-  // begun afresh by the next.
-  const start = useRef<Starting | null>(null);
-  function starting(): Starting {
-    if (start.current) return start.current;
-    const greetings = startingGreetings(choices);
-    const saved = startChat(store, chatId, chat, greetings).then((unstarted) => {
-      if (unstarted) start.current = null;
-      else {
-        drafts.move(draft.key, chatId);
-        navigate({ kind: 'chat', id: chatId }, { replace: true });
-      }
-      return unstarted;
-    });
-    return (start.current = { greeting: greetings && greetings.choices[greetings.selected]!.id, saved });
-  }
-
   async function send() {
     if (!draft.text.trim() || busy) return;
     if (blocked(session, chat)) return setStopped(true);
@@ -286,14 +254,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (busy) return;
     const count = message.versions.length;
     const next = message.selected + step;
-    if (message === opening) setGreeting((next + count) % count);
+    if (message === opening) pickGreeting((next + count) % count);
     else if (next >= count && shown(message).greeting === undefined) ask({ kind: 'regenerate', message: message.id });
     else select(message, (next + count) % count);
   }
 
   function pick(message: Shown, index: number) {
     if (busy) return;
-    if (message === opening) setGreeting(index);
+    if (message === opening) pickGreeting(index);
     else select(message, index);
   }
 

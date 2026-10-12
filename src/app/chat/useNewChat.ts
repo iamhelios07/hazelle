@@ -1,0 +1,50 @@
+import { useMemo, useRef, useState } from 'react';
+import type { Chat, ChatSummary } from '../../model/chat';
+import { textTranslation, type CharacterShelf } from '../../model/library';
+import { startChat } from '../../runtime/chat-log';
+import { draftKey } from '../../runtime/drafts';
+import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
+import type { Shown } from '../../runtime/talk';
+import type { Starting } from '../../runtime/turn';
+import { useSession } from '../session';
+import { navigate } from '../shell/router';
+
+// A new chat's greeting, shown until its first save, and that save. fresh: the chat is not saved yet.
+export function useNewChat(chatId: string, fresh: boolean, chat: Chat, shelf: CharacterShelf<ChatSummary> | null, replyLanguage: string) {
+  const { store, drafts } = useSession();
+  const card = shelf?.character.card ?? null;
+  const [openedAt] = useState(() => Date.now());
+  const greetings = card?.greetings ?? [];
+  const [picked, pickGreeting] = useState<number | null>(null);
+  // The ids the greetings are saved under, so their random tags roll the same before and after the first send, and the
+  // greeting keeps its place in the story rather than being drawn again. A greeting added since gets its own.
+  const [madeIds, setOpeningIds] = useState(() => greetings.map(() => crypto.randomUUID()));
+  const openingIds = madeIds.length < greetings.length ? [...madeIds, ...greetings.slice(madeIds.length).map(() => crypto.randomUUID())] : madeIds;
+  if (openingIds !== madeIds) setOpeningIds(openingIds);
+  const choices = useMemo(() => fresh && card
+    ? projectGreetings(greetings, openingIds, picked, (text) => textTranslation(shelf!.character, text, replyLanguage))
+    : null, [fresh, card, shelf?.character.translations, replyLanguage, openingIds, picked]);
+  const unstarted: Shown | null = useMemo(() => {
+    const preview = greetingPreview(choices, openedAt);
+    return preview && { ...preview, live: null };
+  }, [choices, openedAt]);
+
+  // The one save, which the first send and a press on the greeting share until it lands; a failed one is begun afresh
+  // by the next.
+  const start = useRef<Starting | null>(null);
+  function starting(): Starting {
+    if (start.current) return start.current;
+    const greetings = startingGreetings(choices);
+    const saved = startChat(store, chatId, chat, greetings).then((unstarted) => {
+      if (unstarted) start.current = null;
+      else {
+        drafts.move(draftKey(null, chat.character), chatId);
+        navigate({ kind: 'chat', id: chatId }, { replace: true });
+      }
+      return unstarted;
+    });
+    return (start.current = { greeting: greetings && greetings.choices[greetings.selected]!.id, saved });
+  }
+
+  return { unstarted, pickGreeting, starting };
+}
