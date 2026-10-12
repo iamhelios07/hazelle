@@ -5,8 +5,10 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { serviceReads, type Write } from '../account-store';
+import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
 import { accountPath, accountRegistry, snapshotPath, type Stores } from './account-db';
+import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
 
 const INC = 'a'.repeat(32);
@@ -23,7 +25,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-accounts-'));
   raw = new DatabaseSync(':memory:');
   raw.exec('PRAGMA foreign_keys = ON');
-  raw.exec(readFileSync('migrations/0001_baseline.sql', 'utf8'));
+  migrate(raw, 'migrations');
   db = serviceDb(raw);
   now = 1_000_000;
   stores = accountRegistry(dir, db, serviceReads(db), () => now);
@@ -192,9 +194,9 @@ describe('the account registry', () => {
     expect(more).toEqual([]);
     expect(orphan).toMatch(/^[^.].*\.sqlite\.gz$/);
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 0 });
-    expect((await reconcile(dir, db, Date.now())).removed).toEqual([]);
+    expect((await reconcile(dir, db, diskBucket(dir), Date.now())).removed).toEqual([]);
     const id = await baseline();
-    expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toEqual([`snapshots/${INC}/${orphan}`]);
+    expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toEqual([`snapshots/${INC}/${orphan}`]);
     expect(existsSync(snapshotPath(dir, INC, id))).toBe(true);
   });
 
@@ -221,7 +223,7 @@ describe('the account registry', () => {
     rmSync(snapshotPath(dir, INC, target));
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
-    expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
+    expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
   });
 
   it('installs the armed target after SIGKILL during decompression leaves the live file and a real unfinished stage', async () => {
@@ -259,7 +261,7 @@ describe('the account registry', () => {
     stores = accountRegistry(dir, db, serviceReads(db), () => now);
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
-    expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${stage}`);
+    expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toContain(`accounts/${stage}`);
   });
 
   it('takes a baseline before an operation’s checkpoint and after its end, read from the service, and refuses one between', async () => {

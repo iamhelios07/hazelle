@@ -6,7 +6,7 @@ import { expireSnapshots } from './backup/snapshots';
 import { snapshotPath, type Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
-import type { Bucket } from './files/disk-bucket';
+import type { Bucket } from './files/bucket';
 import { hex, type Services } from './http';
 import { beginRestore, cancelRestore, leaveAccount, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';

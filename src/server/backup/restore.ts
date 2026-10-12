@@ -1,6 +1,7 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { copyFile, mkdir, readdir } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import type { ExecutionContext } from 'hono';
@@ -10,7 +11,7 @@ import { accountPath, accountRegistry, installSnapshot, snapshotPath } from '../
 import { digest, fsyncPath, makeDirs } from '../db/durable';
 import { migrate } from '../db/migrate';
 import { openDatabase, serviceDb } from '../db/service-db';
-import { diskBucket } from '../files/disk-bucket';
+import { fileKey, type Bucket, type R2Bucket } from '../files/bucket';
 import type { Services } from '../http';
 import { cancelRestore, leaveAccount, runRestore } from '../lifecycle';
 import { tokenBucket, visitorLimits } from '../limits';
@@ -20,12 +21,15 @@ import { backups } from './backups';
 import { POOL, readManifest, type Manifest } from './generation';
 
 // The disaster restore (docs/research/docker-port-plan.md §10.2): one generation directory, beside the pool it was
-// copied with (<generation>/../files), into an empty data directory. Every hash is checked before anything is
-// written. The service goes in before the pictures, since the hourly reconciliation removes a picture directory no
-// account names; the server must not start until this has finished. Pending operations are then resolved through the
-// live server's own lifecycle code, and every account gets a fresh timeline, so a device holding an older one re-pulls.
+// copied with (<generation>/../files), into an empty data directory and the picture store the environment names. Every
+// hash is checked before anything is written; a generation whose pictures are in R2 is checked there by size only,
+// before anything but the service file is written. The service goes in before the pictures, since the hourly
+// reconciliation removes a picture prefix no account names; the server must not start until this has finished. Pending
+// operations are then resolved through the live server's own lifecycle code, and every account gets a fresh timeline,
+// so a device holding an older one re-pulls.
 
 const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
+const HEADS = 16;
 
 async function gunzipTo(source: string, target: string) {
   makeDirs(dirname(target));
@@ -39,29 +43,59 @@ async function copyInto(source: string, target: string) {
   fsyncPath(target);
 }
 
-async function verify(generation: string, manifest: Manifest) {
+async function verify(generation: string, manifest: Manifest, files: Bucket) {
+  if (manifest.bucket === 'r2' && files.kind !== 'r2') throw new Error('restore: the generation’s pictures are in an R2 bucket; set HAZELLE_FILES_BUCKET=r2 and its HAZELLE_FILES_R2_* to that bucket');
   const check = async (path: string, expected: string) => {
     const actual = await digest(path).then(({ sha256 }) => sha256, () => 'missing');
     if (actual !== expected) throw new Error(`restore: ${path} is ${actual === 'missing' ? 'missing' : 'corrupt'}`);
   };
   await check(join(generation, manifest.service.path), manifest.service.sha256);
   for (const snapshot of manifest.snapshots) await check(join(generation, snapshot.path), snapshot.sha256);
-  for (const picture of manifest.pictures) await check(join(generation, '..', POOL, picture), picture);
+  if (manifest.bucket === 'disk') for (const picture of manifest.pictures) await check(join(generation, '..', POOL, picture), picture);
+}
+
+// Every stored picture the service names is in the store at the size its row records, or the restore fails naming each
+// one that is not. Sizes only: reading every object back to hash it is not done.
+async function inStore(files: R2Bucket, service: string) {
+  const db = new DatabaseSync(service, { readOnly: true });
+  let stored: { incarnation: string; id: string; size: number }[];
+  try {
+    stored = db.prepare('SELECT incarnation, id, size FROM account_files WHERE stored = 1 ORDER BY incarnation, id').all() as typeof stored;
+  } finally {
+    db.close();
+  }
+  const wrong: string[] = [];
+  for (let start = 0; start < stored.length; start += HEADS) {
+    await Promise.all(
+      stored.slice(start, start + HEADS).map(async ({ incarnation, id, size }) => {
+        const found = await files.head(fileKey(incarnation, id));
+        if (found !== size) wrong.push(`${fileKey(incarnation, id)}: ${found === null ? 'missing' : `${found} bytes, not ${size}`}`);
+      }),
+    );
+  }
+  if (wrong.length) throw new Error(`restore: ${wrong.length} of ${stored.length} pictures are not in the R2 bucket as the generation names them:\n${wrong.sort().join('\n')}`);
 }
 
 export type Restored = { accounts: number; pictures: number; operations: { id: number; phase: RestorePhase }[]; deleted: number };
 
-export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string): Promise<Restored> {
+export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string, files: Bucket): Promise<Restored> {
   const manifest = await readManifest(generation);
   // No `copied` needed: that marker is for freshness and the copier; a generation with its manifest and verified
   // hashes is a whole restore source wherever it lies.
   if (manifest === null) throw new Error(`restore: ${generation} has no manifest; it is not a complete generation`);
-  if (manifest.version !== 1) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
+  if (manifest.version !== 2) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
   await mkdir(dataDir, { recursive: true });
   if ((await readdir(dataDir)).length) throw new Error(`restore: ${dataDir} is not empty`);
-  await verify(generation, manifest);
+  await verify(generation, manifest, files);
 
   await gunzipTo(join(generation, manifest.service.path), join(dataDir, 'service.sqlite'));
+  // verify refused an r2 generation into any other bucket. A failure leaves the directory empty, as it found it.
+  if (manifest.bucket === 'r2' && files.kind === 'r2') {
+    await inStore(files, join(dataDir, 'service.sqlite')).catch(async (error: unknown) => {
+      for (const suffix of ['', '-wal', '-shm']) await rm(join(dataDir, `service.sqlite${suffix}`), { force: true });
+      throw error;
+    });
+  }
   const raw = openDatabase(join(dataDir, 'service.sqlite'));
   migrate(raw, migrationsDir);
   const db = serviceDb(raw);
@@ -78,8 +112,8 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   // Past its install already: the live file was the target when the generation was taken.
   for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id);
   const { results: pictures } = await db.prepare('SELECT incarnation, id FROM account_files WHERE stored = 1').all<{ incarnation: string; id: string }>();
-  for (const { incarnation, id } of pictures) await copyInto(join(generation, '..', POOL, id), join(dataDir, 'files', incarnation, id));
-  for (const dir of ['', 'accounts', 'snapshots', 'files']) {
+  if (manifest.bucket === 'disk') for (const { incarnation, id } of pictures) await files.put(fileKey(incarnation, id), await readFile(join(generation, '..', POOL, id)));
+  for (const dir of ['', 'accounts', 'snapshots']) {
     try {
       fsyncPath(join(dataDir, dir));
     } catch {
@@ -90,7 +124,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   const outbound = () => Promise.reject(new Error('A restore calls no provider.'));
   const env: Services = {
     db,
-    files: diskBucket(dataDir),
+    files,
     stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
     streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,

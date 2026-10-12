@@ -3,6 +3,7 @@ import { FILE_ID, MAX_FILE_IDS } from '../contracts/files';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import { CAP } from './caps';
 import type { Db, SqlValue, Statement } from './db/service-db';
+import { fileKey } from './files/bucket';
 import { fail, hex, readObject, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
 
@@ -45,7 +46,7 @@ const uploads = uploadSlots(8, 30_000);
 // one account's pictures races no one else. Nothing removes a file while its account lives: an import asks /missing
 // before the objects naming the file are written (runtime/files), and a restore may bring back an object naming it.
 // An upload whose account was deleted meanwhile names the old incarnation: its statements match no row, and the bytes
-// it leaves under the old directory are the hourly reconciliation's (reconcile.ts).
+// it leaves under the old prefix are the hourly reconciliation's (reconcile.ts).
 export const files = new Hono<AppEnv>();
 
 files.use(requireSession);
@@ -184,5 +185,3 @@ export function blockFiles(db: Db, at: number, ids: string, ...values: SqlValue[
     db.prepare(`INSERT INTO file_blocks (id, blocked_at) SELECT DISTINCT id, ?1 FROM (${ids}) WHERE true ON CONFLICT DO NOTHING`).bind(at, ...values),
   ];
 }
-
-export const fileKey = (incarnation: string, id: string) => `files/${incarnation}/${id}`;

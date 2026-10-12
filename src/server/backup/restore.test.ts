@@ -8,6 +8,8 @@ import { serviceReads } from '../account-store';
 import { accountRegistry } from '../db/account-db';
 import { openDatabase, serviceDb, type Db, type Statement } from '../db/service-db';
 import { diskBucket } from '../files/disk-bucket';
+import { fakeS3 } from '../files/fake-s3';
+import { r2Bucket } from '../files/r2-bucket';
 import { sha256Hex, type Services } from '../http';
 import { beginRestore, cancelRestore, runRestore } from '../lifecycle';
 import { tokenBucket, visitorLimits } from '../limits';
@@ -16,7 +18,7 @@ import { streamStore } from '../db/streams-db';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
 import app from '../worker';
 import { backups } from './backups';
-import { generationsDir, listGenerations, MANIFEST, readManifest } from './generation';
+import { generationsDir, listGenerations, MANIFEST, POOL, readManifest } from './generation';
 import { restoreGeneration } from './restore';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -112,7 +114,7 @@ it.each(['begun', 'fenced', 'checkpointed', 'done', 'cancelled', 'failed'] as co
   const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
   const destination = emptyDir();
   const ended = ['begun', 'fenced', 'checkpointed'].includes(phase) ? 'cancelled' : phase;
-  expect(await restoreGeneration(generation, destination, 'migrations')).toMatchObject({ operations: [{ id: user.operation, phase: ended }], deleted: 0 });
+  expect(await restoreGeneration(generation, destination, 'migrations', diskBucket(destination))).toMatchObject({ operations: [{ id: user.operation, phase: ended }], deleted: 0 });
   const raw = openDatabase(join(destination, 'service.sqlite'));
   const db = serviceDb(raw);
   const stores = accountRegistry(destination, db, serviceReads(db), Date.now);
@@ -147,7 +149,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   expect((await readManifest(generation))!.operations.map(({ phase }) => phase)).toEqual(['targeted', 'armed', 'rewound']);
 
   const dir = emptyDir();
-  expect(await restoreGeneration(generation, dir, 'migrations')).toEqual({
+  expect(await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).toEqual({
     accounts: 4,
     pictures: 2,
     deleted: 1,
@@ -211,12 +213,53 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   }
 
   // Refused before anything is written: a directory that is not empty, a corrupt artifact, a generation with no manifest.
-  await expect(restoreGeneration(generation, dir, 'migrations')).rejects.toThrow(/not empty/);
+  await expect(restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).rejects.toThrow(/not empty/);
   const manifest = (await readManifest(generation))!;
   writeFileSync(join(generation, manifest.snapshots[0]!.path), 'torn');
   const clean = emptyDir();
-  await expect(restoreGeneration(generation, clean, 'migrations')).rejects.toThrow(/corrupt/);
+  await expect(restoreGeneration(generation, clean, 'migrations', diskBucket(clean))).rejects.toThrow(/corrupt/);
   expect(readdirSync(clean)).toEqual([]);
   rmSync(join(generation, MANIFEST));
-  await expect(restoreGeneration(generation, clean, 'migrations')).rejects.toThrow(/no manifest/);
+  await expect(restoreGeneration(generation, clean, 'migrations', diskBucket(clean))).rejects.toThrow(/no manifest/);
 }, 60_000);
+
+it('with the R2 bucket names pictures without pooling them, and restores only where every one is there at its size', async () => {
+  const s3 = await fakeS3();
+  const disk = t.env.files;
+  t.env.files = r2Bucket(s3.config);
+  try {
+    const operator = await signedUp('operator');
+    const kept = bytesOf('a kept picture');
+    expect((await t.put(`files/${idOf(kept)}`, kept, operator.cookie)).status).toBe(204);
+    const leaver = await signedUp('leaver');
+    expect((await t.put(`files/${idOf(bytesOf('leaving'))}`, bytesOf('leaving'), leaver.cookie)).status).toBe(204);
+    await t.lifecycle(leaver.id, "state = 'leaving'");
+    expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
+    const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
+    expect(await readManifest(generation)).toMatchObject({ version: 2, bucket: 'r2', pictures: [idOf(bytesOf('leaving')), idOf(kept)].sort() });
+    expect(readdirSync(join(generationsDir(t.dir), POOL))).toEqual([]);
+
+    await expect(restoreGeneration(generation, emptyDir(), 'migrations', diskBucket(emptyDir()))).rejects.toThrow(/HAZELLE_FILES_BUCKET=r2/);
+    const keptKey = `files/${operator.incarnation}/${idOf(kept)}`;
+    const held = s3.objects.get(keptKey)!;
+    s3.objects.delete(keptKey);
+    const refused = emptyDir();
+    await expect(restoreGeneration(generation, refused, 'migrations', r2Bucket(s3.config))).rejects.toThrow(`restore: 1 of 2 pictures are not in the R2 bucket as the generation names them:\n${keptKey}: missing`);
+    expect(readdirSync(refused)).toEqual([]);
+
+    s3.objects.set(keptKey, held);
+    const dir = emptyDir();
+    expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: 1, pictures: 1, deleted: 1 });
+    expect(existsSync(join(dir, 'files'))).toBe(false);
+    const raw = openDatabase(join(dir, 'service.sqlite'));
+    try {
+      expect(raw.prepare('SELECT incarnation FROM picture_removals').all()).toEqual([{ incarnation: leaver.incarnation }]);
+    } finally {
+      raw.close();
+    }
+    expect([...s3.objects.keys()].sort()).toEqual([keptKey, `files/${leaver.incarnation}/${idOf(bytesOf('leaving'))}`].sort());
+  } finally {
+    t.env.files = disk;
+    await s3.close();
+  }
+}, 30_000);

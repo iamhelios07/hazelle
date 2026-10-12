@@ -1,9 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
+import { migrate } from './db/migrate';
 import { serviceDb } from './db/service-db';
+import { diskBucket } from './files/disk-bucket';
 import { reconcile } from './reconcile';
 
 const NOW = 1_800_000_000_000;
@@ -20,7 +22,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 function setup() {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-'));
   const raw = new DatabaseSync(':memory:');
-  raw.exec(readFileSync('migrations/0001_baseline.sql', 'utf8'));
+  migrate(raw, 'migrations');
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('u', 'jin', 'h', 1, ?, 't')").run(LIVE);
   raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES ('kept', ?, 'k', 1, 0, 1, 1, 's')").run(LIVE);
   return serviceDb(raw);
@@ -37,7 +39,7 @@ function place(entries: [string, number][]) {
 
 describe('reconcile', () => {
   it('answers nothing on a fresh install', async () => {
-    expect(await reconcile(join(tmpdir(), 'hazelle-none'), setup(), NOW)).toEqual({ removed: [] });
+    expect(await reconcile(join(tmpdir(), 'hazelle-none'), setup(), diskBucket(join(tmpdir(), 'hazelle-none')), NOW)).toEqual({ removed: [] });
   });
 
   it("removes an orphan's pictures at any age and an old orphan's database, keeps a fresh orphan's database and a live account even when old", async () => {
@@ -60,7 +62,7 @@ describe('reconcile', () => {
       [`accounts/${LIVE}.install-x.sqlite`, OLD],
       [`accounts/${NEW}.install-y.sqlite`, FRESH],
     ]);
-    const { removed } = await reconcile(dir, db, NOW);
+    const { removed } = await reconcile(dir, db, diskBucket(dir), NOW);
     expect(removed.sort()).toEqual(
       [`files/${LIVE}/.tmp-1`, `files/${GONE}`, `files/${NEW}`, `accounts/${GONE}.sqlite`, `accounts/${GONE}.sqlite-wal`, `accounts/${LIVE}.install-x.sqlite`].sort(),
     );
@@ -76,7 +78,7 @@ describe('reconcile', () => {
       [`snapshots/${GONE}/stray.sqlite.gz`, OLD],
       [`snapshots/${GONE}/`, OLD],
     ]);
-    const { removed } = await reconcile(dir, db, NOW);
+    const { removed } = await reconcile(dir, db, diskBucket(dir), NOW);
     expect(removed.sort()).toEqual([`snapshots/${GONE}`, `snapshots/${GONE}/stray.sqlite.gz`, `snapshots/${LIVE}/stray.sqlite.gz`].sort());
   });
 });

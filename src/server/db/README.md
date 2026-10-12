@@ -5,14 +5,16 @@ Everything the server keeps lives under one directory (`HAZELLE_DATA`, `/data` i
 ```
 lock.sqlite                      the process's exclusive lock (node.ts): a second process on the directory exits
 service.sqlite                   accounts, sessions, vaults, service, installation, reports, admin_log, restores,
-                                 account_files, file_blocks, notices, models_dev, models_dev_fetch, snapshots, migrations
+                                 account_files, file_blocks, picture_removals, notices, models_dev, models_dev_fetch,
+                                 snapshots, migrations
 accounts/<incarnation>.sqlite    one account's objects (head, objects, kv), WAL mode
-files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written
+files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written. With HAZELLE_FILES_BUCKET=r2 the same keys
+                                 live in an R2 bucket instead (src/server/files/, infra/README.md "Pictures in R2")
 streams.sqlite                   reply stream pages and their alarms (the alarm row is a stream's reservation); meta(version), a newer one is refused
 snapshots/<incarnation>/<id>.sqlite.gz   point-in-time copies of an account file (baselines and operation checkpoints)
 backup/<capturedAt>-<hex>/       one backup generation: service.sqlite.gz, snapshots/<incarnation>/<id>.sqlite.gz, manifest.json,
                                  and copied once the copier has sent it off-site
-backup/files/<sha256>            the pictures every generation names, each once
+backup/files/<sha256>            the pictures every disk generation names, each once
 ```
 
 Every SQLite file opens with `journal_mode=WAL`, `synchronous=FULL`, `busy_timeout=5000`, `foreign_keys=ON` (`openDatabase`). FULL
@@ -50,12 +52,15 @@ and the install check the snapshot's size and SHA-256 against its row, and a mis
 Backup generations (`src/server/backup/generation.ts`), captured by the daily job after the baselines: while a gate keeps signup,
 deletion and every rewind step out (ordinary writes go on), every active account with no current baseline gets one, as does one
 restoring before its checkpoint whose current baseline is from before today unless its file is unchanged since, `Db.snapshot` makes an online copy of the service, and what that copy names is hard-linked (copied across filesystems) into
-the generation: each account's newest baseline, every pinned snapshot, every picture whose `account_files` row says `stored = 1`
-into the pool. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The archive worker then compacts, checks and gzips the service copy, and `manifest.json` is written last (temp,
+the generation: each account's newest baseline, every pinned snapshot and, with the disk bucket, every picture whose
+`account_files` row says `stored = 1` into the pool. With the R2 bucket the manifest names those pictures where they are and
+nothing is pooled; a deleted account's pictures stay there until `picture_removals.due_at`, 7 days after its deletion was queued,
+when the hourly sweep removes them, so every kept generation still finds its pictures. The manifest (version 2) says which by
+`bucket`; a version 1 manifest is a disk one. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The archive worker then compacts, checks and gzips the service copy, and `manifest.json` is written last (temp,
 fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256) and a database's size gzipped and gunzipped, each account's stored picture bytes, the migrations applied,
 the account schema version, and every operation not done or not yet seen ending. A directory without a manifest is cut off and goes
 after a day; a generation goes at 7 days, and sooner once copied off-site unless it is one of the two newest or the newest of its UTC
-day (every deploy captures one); then every pooled picture no remaining manifest names. The remote (`deploy/rclone-backup.sh`) drops its own generations by the same rule, read from its listing alone.
+day (every deploy captures one); then every pooled picture no remaining disk generation names. The remote (`deploy/rclone-backup.sh`) drops its own generations by the same rule, read from its listing alone.
 
 The copier's contract: after a successful `rclone copy` of `backup/<id>/` (and the pool), it writes `backup/<id>/copied` holding one
 line, the UTC ISO-8601 time of the copy. A generation is complete when it has both `manifest.json` and `copied`; backup freshness is
@@ -68,7 +73,9 @@ Discord/Slack-style `{ content, text }` POST, as it does for a failed run of the
 (`alerts_sent`, written only after the POST succeeded). Every run of the job and every generation is a `backup_runs` row.
 
 Disaster restore (`scripts/restore.sh <generation> <empty data dir>`, `src/server/backup/restore.ts`, bundled as
-`dist/server/restore-cli.js`): verifies every hash first, writes the service (migrated to this build) before the pictures, drops
+`dist/server/restore-cli.js`, into the picture store `HAZELLE_FILES_BUCKET` names): verifies every hash first (an R2
+generation's pictures by a HEAD of each, size only, and only into an R2 store; a pooled generation's are put into whichever
+store is set), writes the service (migrated to this build) before the pictures, drops
 catalog rows for snapshots the generation lacks, restores each account from its newest baseline (a fenced one from its checkpoint,
 one past `rewound` by installing its target), then ends every pending operation through `lifecycle.ts` (before `armed` cancelled,
 from `armed` on finished, unverified ones finalized), finishes pending deletions, and gives every account a fresh timeline. The

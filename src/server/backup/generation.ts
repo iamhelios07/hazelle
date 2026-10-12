@@ -7,14 +7,17 @@ import type { AccountState, RestorePhase } from '../../contracts/admin';
 import { ACCOUNT_SCHEMA_VERSION, RETENTION_MS, snapshotPath } from '../db/account-db';
 import { fsyncPath, makeDirs } from '../db/durable';
 import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
+import { fileKey, type Bucket, type DiskBucket } from '../files/bucket';
 import type { Services } from '../http';
 import { DAY_MS, dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
 // Backup generations (docs/research/docker-port-plan.md §10.2): backup/<id>/ holds the service snapshot, the
-// snapshots its manifest names and, written last, manifest.json; pictures go once each into the shared pool
-// backup/files/<sha256>. Every file a manifest names is a hard link (a copy across filesystems) taken while the gate
-// held, so nothing deleted later in the live layout takes it from the generation. The copier writes backup/<id>/copied
-// after it copied the directory; a generation is complete with both (src/server/db/README.md).
+// snapshots its manifest names and, written last, manifest.json; with the disk bucket, pictures go once each into the
+// shared pool backup/files/<sha256>. Every file a manifest names is a hard link (a copy across filesystems) taken while
+// the gate held, so nothing deleted later in the live layout takes it from the generation. With the R2 bucket the
+// manifest names pictures where they are, and a deleted account's stay there until no generation can name them
+// (reconcile.ts removePictures). The copier writes backup/<id>/copied after it copied the directory; a generation is
+// complete with both (src/server/db/README.md).
 
 export const MANIFEST = 'manifest.json';
 export const COPIED = 'copied';
@@ -27,15 +30,17 @@ export type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
 // leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
 // into every account that holds one. snapshots: those baselines, and every snapshot an operation pins. operations:
-// those not done, and any not yet seen ending. pictures: ids, which are their SHA-256, in the pool. pictures and
-// migrations are the last two keys written: deploy/rclone-backup.sh matches that tail.
+// those not done, and any not yet seen ending. bucket: where pictures are, the pool for disk, the R2 store for r2.
+// pictures: ids, which are their SHA-256. pictures and migrations are the last two keys written, and bucket comes before
+// them: deploy/rclone-backup.sh matches that tail and keeps only a disk generation's pictures in its pool.
 export type Manifest = {
-  version: 1;
+  version: 2;
   id: string;
   capturedAt: number;
   service: Artifact;
   migrations: string[];
   accountSchema: number;
+  bucket: Bucket['kind'];
   accounts: { incarnation: string; state: AccountState; baseline: string | null; pictureBytes: number }[];
   snapshots: (Artifact & { id: string; incarnation: string })[];
   operations: { id: number; incarnation: string; phase: RestorePhase; verified: boolean; checkpoint: string | null; target: string | null }[];
@@ -63,7 +68,7 @@ async function place(source: string, target: string) {
   }
 }
 
-type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema'>;
+type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'bucket'>;
 
 // What the service snapshot names, read from the snapshot itself so the manifest and the service agree.
 function readNamed(path: string, now: number): { named: Named; sources: Map<string, string[]> } {
@@ -138,9 +143,12 @@ export async function captureGeneration(
       await place(snapshotPath(dataDir, snapshot.incarnation, snapshot.id), target);
       dirs.add(dirname(target));
     }
-    for (const [picture, holders] of sources) {
-      await placePicture(dataDir, join(pool, picture), picture, holders);
-      await pass();
+    const files = env.files;
+    if (files.kind === 'disk') {
+      for (const [picture, holders] of sources) {
+        await placePicture(files, join(pool, picture), picture, holders);
+        await pass();
+      }
     }
     for (const dir of dirs) fsyncPath(dir);
     return named;
@@ -149,11 +157,12 @@ export async function captureGeneration(
   const artifact = await archiveSnapshot(plain, compressed);
   await rm(plain);
   const manifest: Manifest = {
-    version: 1,
+    version: 2,
     id,
     capturedAt: now,
     service: { path: 'service.sqlite.gz', ...artifact },
     accountSchema: ACCOUNT_SCHEMA_VERSION,
+    bucket: env.files.kind,
     ...named,
   };
   const temp = join(root, `.tmp-${MANIFEST}`);
@@ -170,10 +179,10 @@ export async function captureGeneration(
 }
 
 // Any account holding the picture is its source: the id is its content.
-async function placePicture(dataDir: string, target: string, picture: string, holders: string[]) {
+async function placePicture(files: DiskBucket, target: string, picture: string, holders: string[]) {
   for (const incarnation of holders) {
     try {
-      await place(join(dataDir, 'files', incarnation, picture), target);
+      await place(files.path(fileKey(incarnation, picture)), target);
       return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -182,9 +191,11 @@ async function placePicture(dataDir: string, target: string, picture: string, ho
   throw new Error(`generation: picture ${picture} is stored but on no disk`);
 }
 
+// Version 1 was written before the R2 bucket, so its pictures are in the pool. Any other version is answered as read.
 export async function readManifest(root: string): Promise<Manifest | null> {
   try {
-    return JSON.parse(await readFile(join(root, MANIFEST), 'utf8')) as Manifest;
+    const manifest = JSON.parse(await readFile(join(root, MANIFEST), 'utf8')) as Manifest | (Omit<Manifest, 'version' | 'bucket'> & { version: 1 });
+    return manifest.version === 1 ? { ...manifest, version: 2, bucket: 'disk' } : manifest;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
@@ -208,8 +219,9 @@ export async function listGenerations(dataDir: string): Promise<{ id: string; ca
 // A generation goes at RETENTION_MS, one without a manifest (cut off before it was written) after a day, and a whole one
 // that is neither among the two newest nor the newest of its UTC day once it has been copied off-site: every deploy
 // captures one, and of those only the latest two are kept for a rollback (ruled 2026-10-12). Then every picture in the
-// pool that no remaining manifest names. Runs inside the daily job, so no capture is writing. deploy/rclone-backup.sh
-// prune applies the same rule to the remote: change both together.
+// pool that no remaining disk generation names: an r2 one names pictures in the store, so the pool of the generations
+// before a switch to R2 empties as they expire. Runs inside the daily job, so no capture is writing.
+// deploy/rclone-backup.sh prune applies the same rule to the remote: change both together.
 export async function expireGenerations(dataDir: string, now: number): Promise<{ removed: number; pictures: number }> {
   let removed = 0;
   let whole = 0;
@@ -229,7 +241,7 @@ export async function expireGenerations(dataDir: string, now: number): Promise<{
     if (!keep) {
       await rm(root, { recursive: true, force: true });
       removed++;
-    } else if (manifest) for (const picture of manifest.pictures) kept.add(picture);
+    } else if (manifest?.bucket === 'disk') for (const picture of manifest.pictures) kept.add(picture);
     await pass();
   }
   let pictures = 0;

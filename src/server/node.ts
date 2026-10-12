@@ -15,7 +15,7 @@ import { listGenerations } from './backup/generation';
 import { accountRegistry } from './db/account-db';
 import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
-import { diskBucket } from './files/disk-bucket';
+import { chooseBucket } from './files/choose';
 import type { FrontendOptions } from './frontend-worker';
 import { fail, type Services } from './http';
 import { tokenBucket, visitorLimits } from './limits';
@@ -48,6 +48,13 @@ const alertWebhook = process.env.HAZELLE_ALERT_WEBHOOK || null;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
 const clientDir = process.env.HAZELLE_CLIENT ?? 'dist/client';
+let files: Services['files'];
+try {
+  files = chooseBucket(process.env, dataDir);
+} catch (error) {
+  console.error(`hazelle: ${(error as Error).message}`);
+  process.exit(1);
+}
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
@@ -74,7 +81,7 @@ const local = localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? '');
 const outbound = pinnedOutbound(local);
 const services: Services = {
   db,
-  files: diskBucket(dataDir),
+  files,
   stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
   streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), outbound),
   outbound,
@@ -116,12 +123,12 @@ frontend.on('error', (error) => { log('frontend failed', { error: String(error) 
 frontend.on('exit', (code) => { if (!draining) { log('frontend stopped', { code }); process.exit(1); } });
 const frontendClosed = new Promise<void>((resolve) => frontend.on('message', (message: string) => { if (message === 'closed') resolve(); }));
 await once(frontend, 'message');
-log('listening', { port, dataDir, migrationsApplied: applied });
+log('listening', { port, dataDir, files: files.kind, migrationsApplied: applied });
 
 const hourly = () => {
   ctx.waitUntil(refreshModelsDev(db, outbound));
   ctx.waitUntil(forgetOldRecords(db));
-  ctx.waitUntil(reconcile(dataDir, db).then(({ removed }) => removed.length && log('reconciled', { removed })));
+  ctx.waitUntil(reconcile(dataDir, db, files).then(({ removed }) => removed.length && log('reconciled', { removed })));
 };
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();

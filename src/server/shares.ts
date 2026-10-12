@@ -5,7 +5,7 @@ import { MAX_REPORT_LENGTH } from '../contracts/admin';
 import { FILE_ID } from '../contracts/files';
 import { VISITOR_HEADER } from '../contracts/http';
 import { COVER_LENGTH, MAX_SHARE_FILES, MAX_SHARE_LINK, SHARE_CONSENT, SHARE_ID, type ShareCover, type ShareState } from '../contracts/shares';
-import { fileKey } from './files';
+import { fileKey } from './files/bucket';
 import { fail, isRecord, readObject, type AppEnv, type Services } from './http';
 import { canWrite, currentAccount, requireSession } from './session';
 

@@ -100,7 +100,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env, ctx),
     settle,
     timeline,
-    reconcile: (now = Date.now()) => reconcile(dir, env.db, now),
+    reconcile: (now = Date.now()) => reconcile(dir, env.db, env.files, now),
     // The account's row changed in the service, then its store restarted, as every lifecycle change is made
     // (server/lifecycle).
     lifecycle: async (accountId: string, set: string) => {
