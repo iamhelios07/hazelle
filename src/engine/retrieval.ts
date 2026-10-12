@@ -10,11 +10,12 @@ export const retrievalRoom = (budget: number) => Math.floor(budget * RETRIEVAL_S
 
 // Measured 2026-10-10 on voyage-4 (docs/research/memory-eval-2026-10.md): a record is near enough when its similarity
 // beats the median of the chat's records by GAP, read only once LEAST records have vectors, since the median of fewer
-// says nothing. At 0.1 about half the asked-for records ride and one plain send in five retrieves; 0.075 trades one
-// send in three for a few more hits. The most that ride at once is MOST.
+// says nothing. The user ruled for more hits over fewer stray records (2026-10-12): 0.075 lets 16 of 35 asked-for
+// records ride where 0.1 let 13, and one plain send in four retrieves; at 0.05 more than half do. The most that ride at
+// once is MOST.
 const MOST = 3;
 const LEAST = 4;
-const GAP = 0.1;
+const GAP = 0.075;
 
 const unit = (values: ArrayLike<number>) => {
   const length = Math.hypot(...Array.from(values));

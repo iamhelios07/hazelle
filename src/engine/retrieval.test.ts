@@ -27,6 +27,7 @@ describe('vectors', () => {
     expect(nearest(ranked(0.9, 0.55, 0.3, 0.2))).toEqual(['r0', 'r1']);
     expect(nearest(ranked(0.9, 0.86, 0.65, 0.5, 0.1, 0.1, 0.1))).toEqual(['r0', 'r1', 'r2']);
     expect(nearest(ranked(0.5, 0.45, 0.44, 0.43))).toEqual([]);
+    expect(nearest(ranked(0.58, 0.5, 0.5, 0.5, 0.5))).toEqual(['r0']);
   });
 });
 
