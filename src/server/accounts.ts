@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
+import type { RestoreAction } from '../contracts/admin';
 import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
 import { VISIBLE } from './admin';
 import { fail, ID, readObject, type Account, type AppEnv } from './http';
-import { leaveAccount, refuseLeft, store } from './lifecycle';
-import { currentAccount, dropSessionCookie, endSession, requireOwnSession, setSessionCookie, startSession } from './session';
+import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
+import { canWrite, currentAccount, dropSessionCookie, endSession, requireOwnSession, requireSession, setSessionCookie, startSession } from './session';
 import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
@@ -108,6 +109,27 @@ accounts.delete('/account', requireOwnSession, async (c) => {
   if (left !== 'left') return refuseLeft(c, left);
   dropSessionCookie(c);
   return c.body(null, 204);
+});
+
+// The account rewinds itself (lifecycle.ts). No proof is asked again, unlike 탈퇴: an undo gives the state back for
+// RETENTION_MS. A suspended account adds nothing, so it begins none; one it began before may still be finished.
+accounts.post('/account/restores', requireSession, canWrite, async (c) => {
+  const from = restoreFrom(await readObject(c));
+  if (!from) return fail(c, 400, 'bad-input');
+  return answerBegin(c, c.get('account').id, null, from);
+});
+
+accounts.get('/account/points', requireSession, async (c) => c.json({ points: (await restorePoints(c.env.db, c.get('account').id))! }));
+
+accounts.get('/account/restores', requireSession, async (c) => c.json({ restores: await restoresOf(c.env.db, c.get('account').id) }));
+
+// Only the account's own restores, whoever began them: one the operator began is the account's too.
+accounts.post('/account/restores/:id/:action{resume|finalize|cancel}', requireSession, async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isSafeInteger(id) || id < 1) return fail(c, 400, 'bad-input');
+  const own = await c.env.db.prepare('SELECT 1 FROM restores WHERE id = ? AND incarnation = ?').bind(id, c.get('account').incarnation).first();
+  if (!own) return fail(c, 404, 'not-found');
+  return answerAction(c, id, c.req.param('action') as RestoreAction);
 });
 
 // The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:

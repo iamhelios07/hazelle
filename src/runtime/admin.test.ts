@@ -1,7 +1,8 @@
 import { expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { loadSession, markNoticesSeen, readNotices, sendReport } from './account';
-import { beginRestore, continueRestore, readAccounts, readAdminAccount, readServiceUsage, readLog, readReports, readRestores, readService, readSnapshotTime, removeAccount, resolveReport, sendNotice, setService, suspend, type Restore } from './admin';
+import { readAccounts, readAdminAccount, readServiceUsage, readLog, readReports, readService, removeAccount, resolveReport, sendNotice, setService, suspend } from './admin';
+import { beginRestore, continueRestore, readPoints, readRestores, type Restore } from './restores';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -58,8 +59,7 @@ it('restores an account to a time on its report: its open device drops to the ob
   const report = reports.ok ? reports.data.rows[0]!.id : 0;
   const at = now - 2_700_000;
 
-  expect(await readSnapshotTime(accountId, at)).toEqual({ ok: true, data: now - 3_600_000 });
-  expect(await readSnapshotTime(accountId, now - 4_000_000)).toEqual({ ok: true, data: null });
+  expect(await readPoints(accountId)).toEqual({ ok: true, data: [{ at: now - 3_600_000, takenAt: now - 3_600_000, kind: 'baseline' }] });
   const rewound = vi.fn();
   store.subscribeRewound(rewound);
   const run = await beginRestore(accountId, { report, at });
@@ -135,7 +135,7 @@ it('asks a restore and an undo on a report, reads the restores with their action
   expect(await beginRestore('a', { report: 3, at: restore.at! })).toEqual({ ok: true, data: { id: 7, phase: 'done', verified: true, error: null } });
   expect(await readRestores('a')).toEqual({ ok: true, data: [stuck, restore] });
   expect(await beginRestore('a', { report: 4, undoes: 7 })).toMatchObject({ ok: true, data: { phase: 'armed', error: 'rewind-pending' } });
-  expect(await continueRestore(8, 'resume')).toMatchObject({ ok: true, data: { phase: 'done', verified: false } });
+  expect(await continueRestore('a', 8, 'resume')).toMatchObject({ ok: true, data: { phase: 'done', verified: false } });
   expect(await beginRestore('a', { report: 3, at: 1 })).toEqual({ ok: false, error: 'bad-time', retryAfter: undefined });
   expect(sent.map(({ url, method, body }) => [method, url, body])).toEqual([
     ['POST', '/api/admin/accounts/a/restores', { report: 3, at: restore.at }],

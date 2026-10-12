@@ -1,9 +1,9 @@
 import type { Context, ExecutionContext } from 'hono';
-import type { RestoreAction, RestoreError, RestorePhase } from '../contracts/admin';
+import { SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase, type SnapshotKind } from '../contracts/admin';
 import type { Life, Unavailable } from './account-store';
-import { RETENTION_MS } from './db/account-db';
+import { landing, RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
-import { fail, refused, type Services } from './http';
+import { fail, refused, type AppEnv, type Services } from './http';
 import { removePictures } from './reconcile';
 
 // An account's lifecycle lives on its service row, where a rewind of its store cannot touch it, and its store loads that
@@ -127,11 +127,16 @@ type Operation = {
 
 const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
-// The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the report, ?3 the time asked
-// for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a refused one read the same text.
+// The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the report (null: the account
+// asks itself), ?3 the time asked for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a
+// refused one read the same text.
 const FREE = "accounts.state = 'active' AND NOT EXISTS (SELECT 1 FROM restores WHERE incarnation = accounts.incarnation AND verified = 0)";
-// A share report names the share's reporter, not an account asking about its own data.
-const REPORTED = 'EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND share IS NULL AND resolved_at IS NULL AND created_at >= accounts.created_at)';
+// A share report names the share's reporter, not an account asking about its own data. Only the account's own route
+// passes no report (accounts.ts); the operator's always names one.
+const REPORTED = '(?2 IS NULL OR EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND share IS NULL AND resolved_at IS NULL AND created_at >= accounts.created_at))';
+// Counted by the checkpoints taken (SELF_RESTORES_PER_DAY): a restore stopped before one cost no disk.
+const WITHIN_LIMIT = `(?2 IS NOT NULL OR (SELECT COUNT(*) FROM restores WHERE incarnation = accounts.incarnation AND report_id IS NULL
+   AND checkpoint IS NOT NULL AND created_at > ?5 - ${DAY_MS}) < ${SELF_RESTORES_PER_DAY})`;
 const TIMELY = `?3 BETWEEN ?5 - ${OLDEST_MS} AND ?5 - ${NEWEST_MS}`;
 // An undo rewinds the account's latest finished restore to its checkpoint while the checkpoint is pinned
 // (backup/snapshots.ts): for RETENTION_MS after the restore ended.
@@ -139,11 +144,11 @@ export const undoable = (operation: string, now: string) =>
   `${operation} = (SELECT id FROM restores WHERE incarnation = accounts.incarnation AND phase = 'done' AND verified = 1 ORDER BY id DESC LIMIT 1)
    AND (SELECT ended_at FROM restores WHERE id = ${operation}) > ${now} - ${RETENTION_MS}`;
 
-export type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'bad-time' | 'cannot-undo' };
+export type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'too-many-restores' | 'bad-time' | 'cannot-undo' };
 
 // The operation's row and the account's hold on it commit together or not at all: the hold is gated on the insert.
 // An undo's target, the undone restore's checkpoint, is recorded with the row, so it is pinned from the begin on.
-export async function beginRestore(env: Services, accountId: string, report: number, from: { at: number } | { undoes: number }): Promise<Begun> {
+export async function beginRestore(env: Services, accountId: string, report: number | null, from: { at: number } | { undoes: number }): Promise<Begun> {
   const db = env.db;
   const at = 'at' in from ? from.at : null;
   const undoes = 'undoes' in from ? from.undoes : null;
@@ -153,7 +158,7 @@ export async function beginRestore(env: Services, accountId: string, report: num
       .prepare(
         `INSERT INTO restores (incarnation, report_id, at, undoes, target, timeline, phase, created_at, updated_at)
          SELECT incarnation, ?2, ?3, ?4, (SELECT checkpoint FROM restores WHERE id = ?4), lower(hex(randomblob(16))), 'begun', ?5, ?5 FROM accounts
-         WHERE id = ?1 AND ${FREE} AND ${REPORTED} AND (${TIMELY} OR ${undoable('?4', '?5')}) RETURNING id`,
+         WHERE id = ?1 AND ${FREE} AND ${REPORTED} AND ${WITHIN_LIMIT} AND (${TIMELY} OR ${undoable('?4', '?5')}) RETURNING id`,
       )
       .bind(accountId, report, at, undoes, now),
     db
@@ -173,12 +178,13 @@ export async function beginRestore(env: Services, accountId: string, report: num
   const id = inserted!.results[0]?.id;
   if (id !== undefined) return { begun: id };
   const why = await db
-    .prepare(`SELECT ${FREE} AS free, ${REPORTED} AS reported FROM accounts WHERE id = ?1`)
-    .bind(accountId, report)
-    .first<{ free: number; reported: number }>();
+    .prepare(`SELECT ${FREE} AS free, ${REPORTED} AS reported, ${WITHIN_LIMIT} AS within FROM accounts WHERE id = ?1`)
+    .bind(accountId, report, null, null, now)
+    .first<{ free: number; reported: number; within: number }>();
   if (!why) return { refused: 'not-found' };
   if (!why.free) return { refused: 'account-busy' };
   if (!why.reported) return { refused: 'bad-report' };
+  if (!why.within) return { refused: 'too-many-restores' };
   return { refused: at === null ? 'cannot-undo' : 'bad-time' };
 }
 
@@ -345,4 +351,69 @@ function run({ id, phase, verified, error }: Pick<Operation, 'id' | 'phase' | 'v
 export function restoreActions(phase: RestorePhase, verified: boolean): RestoreAction[] {
   if (phase === 'done' || phase === 'cancelled' || phase === 'failed') return verified ? [] : ['finalize'];
   return BEFORE_ARMED.includes(phase) ? ['resume', 'cancel'] : ['resume'];
+}
+
+// The operator's routes (admin.ts) and the account's own (accounts.ts) answer restores alike; each checks who may act.
+
+// A new restore asks for a time or an undo, never both; null for neither.
+export function restoreFrom(body: Record<string, unknown> | null): { at: number } | { undoes: number } | null {
+  const at = body?.at;
+  const undoes = body?.undoes;
+  const whole = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value);
+  if (at === undefined) return whole(undoes) && undoes > 0 ? { undoes } : null;
+  return undoes === undefined && whole(at) && at >= 0 ? { at } : null;
+}
+
+const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 400, 'too-many-restores': 429, 'bad-time': 400, 'cannot-undo': 400 } as const;
+
+// The operation runs in this request.
+export async function answerBegin(c: Context<AppEnv>, accountId: string, report: number | null, from: { at: number } | { undoes: number }) {
+  const begun = await beginRestore(c.env, accountId, report, from);
+  if ('refused' in begun) return fail(c, REFUSAL_STATUS[begun.refused], begun.refused);
+  return c.json(await runRestore(c.env, begun.begun));
+}
+
+// What a restore can land on now, newest first, each with the time to ask for: every snapshot taken inside the request
+// window, which a restore asked at its own time lands on (snapshotFor), and the older one a restore at the window's
+// oldest edge lands on, for an account unchanged since. That edge is asked a little inside the window, so the point
+// stays askable while the person decides.
+const EDGE_MS = 15 * MINUTE_MS;
+export async function restorePoints(db: Db, accountId: string, now = Date.now()) {
+  const incarnation = await db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(accountId).first<string>('incarnation');
+  if (incarnation === null) return null;
+  const { results } = await db
+    .prepare('SELECT taken_at AS takenAt, kind FROM snapshots WHERE incarnation = ? AND taken_at BETWEEN ? AND ? GROUP BY taken_at ORDER BY taken_at DESC')
+    .bind(incarnation, now - OLDEST_MS, now - NEWEST_MS)
+    .all<{ takenAt: number; kind: SnapshotKind }>();
+  const points = results.map(({ takenAt, kind }) => ({ at: takenAt, takenAt, kind }));
+  const edge = now - OLDEST_MS + EDGE_MS;
+  const older = await landing(db, incarnation, edge);
+  if (older && older.takenAt < now - OLDEST_MS) points.push({ at: edge, takenAt: older.takenAt, kind: older.kind });
+  return points;
+}
+
+// Newest first. targetAt: when the snapshot it rewinds to was taken, null until it is chosen.
+export async function restoresOf(db: Db, accountId: string) {
+  const { results } = await db
+    .prepare(
+      `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
+         (SELECT taken_at FROM snapshots WHERE id = r.target) AS targetAt, r.ended_at, ${undoable('r.id', '?2')} AS canUndo
+       FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
+    )
+    .bind(accountId, Date.now())
+    .all<{ phase: RestorePhase; verified: number; canUndo: number; ended_at: number | null }>();
+  return results.map(({ ended_at, canUndo, ...row }) => ({
+    ...row,
+    verified: Boolean(row.verified),
+    canUndo: Boolean(canUndo),
+    undoExpiresAt: canUndo ? ended_at! + RETENTION_MS : null,
+    actions: restoreActions(row.phase, Boolean(row.verified)),
+  }));
+}
+
+// Resume and finalize both run the operation on from its phase: they are retries of it.
+export async function answerAction(c: Context<AppEnv>, id: number, action: RestoreAction) {
+  const ran = action === 'cancel' ? await cancelRestore(c.env, id) : await runRestore(c.env, id);
+  if (ran === 'too-late') return fail(c, 409, 'cannot-cancel');
+  return ran ? c.json(ran) : fail(c, 404, 'not-found');
 }

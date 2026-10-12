@@ -1,8 +1,11 @@
+import { History } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { SELF_RESTORES_PER_DAY } from '../../contracts/admin';
 import { exportBackup, readBackup, restoreBackup, type Backup, type BackupStep } from '../../runtime/backup';
 import { ACTS, importOf } from '../common/acts';
 import { downloadOutput } from '../common/download';
 import { describeFailure } from '../common/failure';
+import { RestoresDialog } from '../common/RestoresDialog';
 import { STOP } from '../common/words';
 import { useToast } from '../toast';
 import { useSaves, useSession } from '../session';
@@ -38,6 +41,7 @@ export function BackupSection() {
   const saves = useSaves();
   const toast = useToast();
   const [active, setActive] = useState<{ direction: Direction; steps: Steps } | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const running = useRef<{ abort: AbortController; release: () => void } | null>(null);
   useEffect(() => () => running.current?.abort.abort(), []);
   const stop = () => running.current?.abort.abort();
@@ -123,7 +127,17 @@ export function BackupSection() {
             </FileButton>
           }
         />
+        <SettingRow
+          label="이전 시점으로 복원"
+          help={`10분 전부터 6일 전 사이의 기록으로 돌아가요. 하루 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`}
+          control={
+            <Button variant="secondary" size="sm" icon={History} onClick={() => setRestoring(true)}>
+              복원
+            </Button>
+          }
+        />
       </SettingGroup>
+      {restoring && <RestoresDialog operated={null} onClose={() => setRestoring(false)} />}
       {active && (
         <Dialog title={TITLE[active.direction]} onClose={stop} actions={<Button variant="secondary" onClick={stop}>{STOP}</Button>}>
           <Progress hero steps={stages(active.direction, active.steps)} />

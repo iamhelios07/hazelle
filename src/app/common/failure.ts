@@ -37,11 +37,12 @@ type OnFallback =
   | 'too-many-attempts'
   | 'too-many-bot-calls'
   | 'wrong-login'
-  // Operator-only refusals, worded by the restores dialog.
+  // Restore refusals, worded by the restores dialog.
   | 'bad-report'
   | 'bad-time'
   | 'cannot-cancel'
-  | 'cannot-undo';
+  | 'cannot-undo'
+  | 'too-many-restores';
 
 const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in OnFallback]?: never } & Partial<Record<string, string>> = {
   'bad-username': '아이디는 2~32자의 문자, 숫자, _ . - 로만 만들 수 있어요.',

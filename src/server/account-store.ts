@@ -1,4 +1,4 @@
-import type { AccountState } from '../contracts/admin';
+import type { AccountState, SnapshotKind } from '../contracts/admin';
 import type { Db } from './db/service-db';
 // The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
 
@@ -27,7 +27,7 @@ export type StoreDb = {
   size(): number;
   snapshots: {
     // Answers the snapshot's id once its file is durable and catalogued.
-    take(kind: 'baseline' | 'checkpoint', operation: number | null): Promise<string>;
+    take(kind: SnapshotKind, operation: number | null): Promise<string>;
     // The snapshot a rewind to the time lands on (db/account-db.ts snapshotFor); null when there is none.
     forTime(at: number): Promise<string | null>;
     // Throws when the snapshot's file is gone or no longer what its catalog row recorded.

@@ -8,7 +8,7 @@ import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
 import type { Bucket } from './files/bucket';
 import { hex, type Services } from './http';
-import { beginRestore, cancelRestore, leaveAccount, runRestore } from './lifecycle';
+import { beginRestore, cancelRestore, leaveAccount, restorePoints, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -374,6 +374,44 @@ describe('a restore', () => {
     expect(await operation(id)).toMatchObject({ phase: 'done', verified: 0, error: 'not-verified' });
     t.restartProcess();
     await expectRestored(seed, (await runRestore(t.env, id))!.id, []);
+  });
+
+  it('lists what a restore can land on: each snapshot in the window at its own time, and an older one at the window edge', async () => {
+    const user = await signedUp();
+    const now = Date.now();
+    const write = (...writes: Write[]) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, writes, null);
+    t.clock.now = () => now - 8 * 24 * HOUR_MS;
+    await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
+    await t.stores.snapshot(user.incarnation, 'baseline');
+    t.clock.now = () => now - HOUR_MS;
+    await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 });
+    await t.stores.snapshot(user.incarnation, 'baseline');
+    t.clock.now = () => Date.now();
+    const points = (await restorePoints(t.env.db, user.id, now))!;
+    expect(points).toEqual([
+      { at: now - HOUR_MS, takenAt: now - HOUR_MS, kind: 'baseline' },
+      { at: expect.any(Number), takenAt: now - 8 * 24 * HOUR_MS, kind: 'baseline' },
+    ]);
+    for (const point of points) expect((await t.stores.snapshotAt(user.incarnation, point.at))?.takenAt).toBe(point.takenAt);
+  });
+
+  it('lets an account rewind itself and undo it, three times a day, and touch only its own restores', async () => {
+    const seed = await seeded();
+    const other = await seeded();
+    const begin = (body: object) => t.post('account/restores', body, seed.cookie);
+    const { id } = (await (await begin({ at: seed.at })).json()) as { id: number };
+    expect(await contents(seed.cookie)).toEqual(AT_TARGET);
+    expect(((await (await t.get('account/restores', seed.cookie)).json()) as { restores: unknown[] }).restores).toMatchObject([{ id, reportId: null, phase: 'done', canUndo: true }]);
+    expect(((await (await t.get('account/restores', other.cookie)).json()) as { restores: unknown[] }).restores).toEqual([]);
+    expect((await t.post(`account/restores/${id}/finalize`, {}, other.cookie)).status).toBe(404);
+
+    expect(await (await begin({ undoes: id })).json()).toMatchObject({ phase: 'done', verified: true, error: null });
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
+    expect((await begin({ at: seed.at })).status).toBe(200);
+    const fourth = await begin({ at: seed.at });
+    expect([fourth.status, await fourth.json()]).toEqual([429, { error: 'too-many-restores' }]);
+    // The operator is not held to it.
+    expect((await t.post(`admin/accounts/${seed.id}/restores`, { report: seed.report, at: seed.at }, operator.cookie)).status).toBe(200);
   });
 
   it('runs in the operator request, is listed with its undo, and its undo gives back the state it replaced', async () => {

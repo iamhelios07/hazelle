@@ -1,3 +1,4 @@
+import type { SnapshotKind } from '../../contracts/admin';
 import { randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -113,18 +114,22 @@ function corruptOr(error: unknown): unknown {
 // needs (backup/snapshots.ts).
 // A catalogued snapshot whose file is gone or altered is a storage failure, not "too early".
 export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null> {
-  const row = await service
+  const row = await landing(service, incarnation, at);
+  if (row === null) return null;
+  await verifySnapshot(dataDir, service, incarnation, row.id);
+  return { id: row.id, takenAt: row.takenAt };
+}
+
+// snapshotFor's choice, unverified: for listing what a restore can land on (server/lifecycle restorePoints).
+export const landing = (service: Db, incarnation: string, at: number) =>
+  service
     .prepare(
-      `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2
+      `SELECT id, taken_at AS takenAt, kind FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2
          AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND ended_at <= ?2), -1)
        ORDER BY taken_at DESC LIMIT 1`,
     )
     .bind(incarnation, at)
-    .first<{ id: string; takenAt: number }>();
-  if (row === null) return null;
-  await verifySnapshot(dataDir, service, incarnation, row.id);
-  return row;
-}
+    .first<{ id: string; takenAt: number; kind: SnapshotKind }>();
 
 // The one check that a snapshot can be installed: its row is there and its file has the size and SHA-256 the row
 // recorded. The preview, the choice of a target and the install all pass through it, so a snapshot the install would
@@ -189,7 +194,7 @@ export class AccountDb implements StoreDb {
 
   // Capture runs on the account queue: eligibility, takenAt and rev must describe the same file, before any
   // later checkpoint or replacement. Publishing the private copy needs no live handle or account queue.
-  async captureSnapshot(kind: 'baseline' | 'checkpoint', operation: number | null): Promise<() => Promise<string>> {
+  async captureSnapshot(kind: SnapshotKind, operation: number | null): Promise<() => Promise<string>> {
     const takenAt = this.clock();
     const id = `${takenAt}-${random()}`;
     const dir = snapshotDir(this.dataDir, this.incarnation);
@@ -224,7 +229,7 @@ export class AccountDb implements StoreDb {
 
   readonly snapshots = {
     // A checkpoint stays on the queue through publication: a rewind must have its durable undo before advancing.
-    take: async (kind: 'baseline' | 'checkpoint', operation: number | null): Promise<string> => (await this.captureSnapshot(kind, operation))(),
+    take: async (kind: SnapshotKind, operation: number | null): Promise<string> => (await this.captureSnapshot(kind, operation))(),
     forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at))?.id ?? null,
     verify: (id: string) => verifySnapshot(this.dataDir, this.service, this.incarnation, id),
   };
