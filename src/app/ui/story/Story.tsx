@@ -63,7 +63,6 @@ const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*\)/gi;
 const ANY_URL = /url\([^)]*\)/gi;
 // data: pictures, and blob: ones, which only the app itself can make: the chat puts its bots' pictures there.
 const OWN_SOURCE = /^(?:data|blob):/;
-const IMPORT = /@import[^;]*;?/gi;
 const XLINK = 'http://www.w3.org/1999/xlink';
 // Named in Story.shadow.css. One registry entry, which every mounted story adds its own ranges to.
 const FOUND_TERM = 'found-term';
@@ -88,10 +87,11 @@ function termRanges(shadow: ShadowRoot, term: string): Range[] {
 }
 
 // For a stylesheet and a style attribute alike. Risu prefixes every class with x-risu- in the HTML and in the CSS, so
-// a bot may write either, and both lose it. Only the app's own URLs load: the CSP refuses the others anyway, and a
-// constructed stylesheet refuses @import.
+// a bot may write either, and both lose it. Only the app's own URLs load: the CSP refuses the others anyway.
 // While 이미지 가리기 is on, the app's own URLs go too: a bot draws its pictures as backgrounds as well.
-const cleanCss = (css: string, veiled: boolean) => css.replaceAll('.x-risu-', '.').replace(IMPORT, '').replace(veiled ? ANY_URL : OUTSIDE_URL, 'none');
+// @import is left to the constructed stylesheet, which drops it. A pattern cut it at the first ;, which a font URL
+// holds inside its quotes (wght@600;700), and the rest of the URL swallowed the bot's next rule.
+export const cleanCss = (css: string, veiled: boolean) => css.replaceAll('.x-risu-', '.').replace(veiled ? ANY_URL : OUTSIDE_URL, 'none');
 
 let base: CSSStyleSheet | null = null;
 // The sheets a story's root holds besides the app's own.
