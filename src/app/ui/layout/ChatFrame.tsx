@@ -58,12 +58,12 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   const pairs = usePanelsBeside();
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
+  const columnRef = useRef<HTMLElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   // The story ends above the composer as it is whole, never folded or midway: space that moved with the fold would
-  // move the story's end, and the view with it. What stands stuck above the composer follows it as it is, folded too.
-  // Only a transition is skipped, so a spinner in the composer does not stop the measuring.
+  // move the story's end, and the view with it. Only a transition is skipped, so a spinner in the composer does not
+  // stop the measuring.
   const [space, setSpace] = useState(0);
-  const [height, setHeight] = useState(0);
   const [scrollbar, setScrollbar] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState({ stage: 0, lead: 0, text: 0 });
@@ -72,9 +72,12 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   useLayoutEffect(() => {
     const element = footerRef.current!;
     const measure = () => {
+      // What stands stuck above the composer follows it frame by frame through the fold, whose height runs on no one
+      // curve. Written past React, so a fold renders nothing; a resize observer runs before paint, so it never trails.
+      columnRef.current!.style.setProperty('--footer-height', `${element.offsetHeight}px`);
+      if (element.matches(`.${styles.compact}:not(:focus-within)`)) return;
       if (element.getAnimations({ subtree: true }).some((animation) => animation instanceof CSSTransition)) return;
-      setHeight(element.offsetHeight);
-      if (!element.matches(`.${styles.compact}:not(:focus-within)`)) setSpace(element.offsetHeight);
+      setSpace(element.offsetHeight);
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -123,12 +126,12 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   return (
     <div className={styles.frame}>
       <main
+        ref={columnRef}
         className={`${styles.column} ${scope.className} ${staged ? styles.staged : ''}`}
         style={
           {
             ...scope.style,
             '--footer-space': `${space}px`,
-            '--footer-height': `${height}px`,
             '--story-scrollbar': `${scrollbar}px`,
             '--story-margin': `${room.stage}px`,
             '--story-stage-lead': `${room.lead}px`,

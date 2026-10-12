@@ -115,7 +115,6 @@
     /* Sticky makes the foot a stacking context: without a layer, a menu opened from it falls under the next message,
        and without the menu's layer while open, under the next message's foot. */
     z-index: var(--layer-raised);
-    transition: bottom var(--duration-slow) var(--ease-enter);
   }
 
   .foot:has([aria-expanded='true']) {
