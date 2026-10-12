@@ -98,7 +98,7 @@ describe('the server process', () => {
       expect(await response.json()).toEqual({ error: 'offline' });
       await expect.poll(() => log).toContain('proxy failed');
       const failure = JSON.parse(log.trim()) as Record<string, unknown>;
-      expect(failure).toMatchObject({ event: 'proxy failed', method: 'POST', code: 'ECONNRESET', reusedSocket: false, clientAborted: false, headersSent: false });
+      expect(failure).toMatchObject({ event: 'proxy failed', method: 'POST', code: 'ECONNRESET', reusedSocket: false, headersSent: false });
       expect(failure.startedAt).toEqual(expect.any(Number));
       expect(failure.ms).toEqual(expect.any(Number));
       expect(failure.connectedMs).toEqual(expect.any(Number));

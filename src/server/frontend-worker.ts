@@ -51,12 +51,14 @@ const server = createServer((incoming, outgoing) => {
   });
   upstream.on('finish', () => { sentMs = performance.now() - started; });
   upstream.on('error', (error: NodeJS.ErrnoException) => {
+    // The visitor left first and this proxy ended the upstream itself (below): nothing failed and no one is answered.
+    if (incoming.aborted || outgoing.destroyed) return;
     // No URL, headers or body: any of them can carry credentials. System error fields identify the transport failure.
     console.error(JSON.stringify({
       at: new Date().toISOString(), event: 'proxy failed', startedAt, method: incoming.method,
       code: error.code ?? null, syscall: error.syscall ?? null, causeCode: (error.cause as NodeJS.ErrnoException | undefined)?.code ?? null,
       ms: performance.now() - started, connectedMs, sentMs, reusedSocket: upstream.reusedSocket,
-      clientAborted: incoming.aborted, clientClosed: outgoing.destroyed, headersSent: outgoing.headersSent, draining,
+      headersSent: outgoing.headersSent, draining,
     }));
     if (outgoing.headersSent) return outgoing.destroy();
     outgoing.writeHead(502, { 'content-type': 'application/json' });
