@@ -21,7 +21,7 @@ export type CallTarget = { id: string; chat: string | null; result: string; for:
 export async function newCall(store: ObjectStore, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
   const key = await streamKey();
   const at = Date.now();
-  const started = chat === null ? undefined : () => void store.create('stream', { key: key.private, call: callOf(route), at, result, for: purpose }, { id, parent: chat });
+  const started = chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), at, result, for: purpose }, { id, parent: chat });
   return { id, key: key.private, public: key.public, started };
 }
 
@@ -32,9 +32,11 @@ export async function pageCall(bot: string | null): Promise<StreamCall> {
   return { id: crypto.randomUUID(), key: key.private, public: key.public, ...(bot !== null && { bot }) };
 }
 
+// A batch's marker names no server object to drop.
 export function endCall(store: ObjectStore, id: string) {
-  dropStream(id);
-  if (store.get('stream', id)) void store.remove(id);
+  const marker = store.get('stream', id);
+  if (!marker || !('batch' in marker.value)) dropStream(id);
+  if (marker) void store.remove(id);
 }
 
 // Picks up the calls this page is not reading (reading, which Talk, Translator and Rememberer keep): when the session

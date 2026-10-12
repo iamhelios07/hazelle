@@ -204,7 +204,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     <SettingRow
       key="discount"
       label={DISCOUNT}
-      help="요금이 절반이 되는 대신 응답이 느려질 수 있어요"
+      help="요금이 절반이 되는 대신 응답이 느려질 수 있어요. 연결에 따라 답을 한 번에 받기도 하고, 그때는 번역 같은 보조 작업에 할인이 적용되지 않아요"
       changed={shown.discount !== undefined}
       note={noteFor('discount')}
       control={<Switch label={DISCOUNT} checked={shown.discount === true} onChange={(on) => set({ discount: on ? true : undefined })} />}

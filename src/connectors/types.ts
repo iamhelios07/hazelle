@@ -191,7 +191,8 @@ type TypeHooks = {
   // How its endpoint takes a cache point, per model, where the format has no mark of its own (chat completions).
   cachePoints?: (model: Model) => CacheWay;
   cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
-  // 할인 받기: the lane a 설정 묶음's discount switch takes; without one the switch is not offered.
+  // 할인 받기: the lane a 설정 묶음's discount switch takes; without one the switch is not offered. No pool type has one,
+  // so a batch waited for after a reload is asked about with the connection's one account.
   discount?: Discount;
   // Asked with the stored credential, all at once. They are also the check that a pasted key works, where the model
   // list is public (OpenRouter's is): a key every one of them refuses is not saved.
@@ -212,9 +213,28 @@ type TypeHooks = {
 // Half price for a slower answer (design §6.7). rates: what each of the model's Price rates is multiplied by once the
 // lane served the call, never because it was asked for. accepted: whether the model takes the lane; null where its
 // catalog does not say. tier: the same call at a slower service tier, asked for with fields laid over the body; the
-// reply's reported tier (StreamFacts tier) equal to served is what says the lane served it.
-export type Discount = { rates: DiscountRates; accepted: Accepts } & { lane: 'tier'; fields: Record<string, unknown>; served: string };
+// reply's reported tier (StreamFacts tier) equal to served is what says the lane served it. batch: the whole reply
+// submitted as a batch of one and waited for; an answer read from the batch is one the lane served.
+export type Discount = { rates: DiscountRates; accepted: Accepts } & ({ lane: 'tier'; fields: Record<string, unknown>; served: string } | { lane: 'batch'; batches: Batches });
 export type DiscountRates = Record<'input' | 'output' | 'cacheRead' | 'cacheWrite', number>;
+
+// Every request is built without the credential, which is added last (registry withCredential), as for a chat. key: the
+// request's own name in the batch, which its answer is found by. submit takes the codec's request for the whole reply
+// (asked for unstreamed). submitted and ended answer null for a payload that is not this lane's batch; answer, for a
+// results body that holds no answer for key.
+export type Batches = {
+  submit(endpoint: Endpoint, model: Model, request: HttpRequest, key: string): HttpRequest;
+  submitted(payload: unknown): string | null;
+  check(endpoint: Endpoint, batch: string): HttpRequest;
+  ended(payload: unknown): boolean | null;
+  results(endpoint: Endpoint, batch: string): HttpRequest;
+  answer(body: string, key: string): BatchAnswer | null;
+  cancel(endpoint: Endpoint, batch: string): HttpRequest;
+};
+
+// reply: the codec's whole reply (Codec whole). canceled: stopped before the model answered it; expired: the provider's
+// window ran out first. Neither is billed.
+export type BatchAnswer = { kind: 'reply'; payload: unknown } | { kind: 'failed'; detail: string } | { kind: 'canceled' } | { kind: 'expired' };
 
 // center: where a character stands, 0–1 from the top left. A model that places no one gets the characters' prompts
 // joined into the main one by its connector. steps, scale (prompt guidance), rescale (guidance rescale) and sampler (an

@@ -98,10 +98,11 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
 // A generation call through server/stream-box (tech-spec §6, Detached replies), which goes on when this
 // page stops reading. With a request it starts the call; without one it reads the call already started, from the
 // start. key: the call's private key; public: its public half, to start.
-// started: told once the server holds the call, before any of it is read. bot: the chat whose bot's script makes the
+// started: told once the server holds the call, before any of it is read, or once a discount lane's batch does (its
+// id, runtime/generate). bot: the chat whose bot's script makes the
 // call, which the server limits per chat. took: how long the call ran, as the server measured it, once its end has
 // been read.
-export type StreamCall = { id: string; key: JsonWebKey; public?: string; started?: () => void; bot?: string; took?: number };
+export type StreamCall = { id: string; key: JsonWebKey; public?: string; started?: (batch?: string) => void; bot?: string; took?: number };
 
 // A read ends only at the call's own end: the end the server read, a call the server lost, or one it no longer holds
 // (stream-gone); or once the session is gone (no-session), when no read can reach it. This page's other failures to

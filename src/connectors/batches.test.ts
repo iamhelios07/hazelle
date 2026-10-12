@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+import { batchLane, chatRequest, CONNECTION_TYPES, resolveConnection, type Route } from './registry';
+import type { Batches, Connection, Model } from './types';
+
+const route = (type: string) => resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] } as Connection) as Route;
+const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: 1000, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+const messages = [{ role: 'user' as const, content: '안녕' }];
+const lane = (type: string): Batches => batchLane(route(type), { model, messages, settings: { discount: true } })!;
+const whole = (type: string) => chatRequest(route(type), { model, messages, settings: { streaming: false } });
+
+it('has no pool type with a discount lane, whose batch is asked about with the connection’s one account', () => {
+  expect(CONNECTION_TYPES.filter((type) => type.pool && type.discount)).toEqual([]);
+});
+
+it('takes a batch lane only where the 설정 묶음 asks for the discount', () => {
+  expect(batchLane(route('anthropic'), { model, messages, settings: {} })).toBeNull();
+  expect(batchLane(route('openai'), { model, messages, settings: { discount: true } })).toBeNull();
+});
+
+describe('Anthropic’s Message Batches', () => {
+  const batches = lane('anthropic');
+  const { endpoint } = route('anthropic');
+
+  it('submits the whole reply’s request as a batch of one, keyed by the call', () => {
+    const sent = batches.submit(endpoint, model, whole('anthropic'), 'call-1');
+    expect(sent).toMatchObject({ url: 'https://api.anthropic.com/v1/messages/batches', method: 'POST', headers: { 'anthropic-version': '2023-06-01' } });
+    expect(JSON.parse(sent.body!)).toEqual({ requests: [{ custom_id: 'call-1', params: { model: 'm', max_tokens: 1000, messages } }] });
+    expect(batches.submitted({ id: 'msgbatch_1', type: 'message_batch', processing_status: 'in_progress' })).toBe('msgbatch_1');
+  });
+
+  it('waits until the batch ended, then finds the call’s line among the results', () => {
+    expect(batches.ended({ id: 'msgbatch_1', type: 'message_batch', processing_status: 'in_progress' })).toBe(false);
+    expect(batches.ended({ id: 'msgbatch_1', type: 'message_batch', processing_status: 'ended' })).toBe(true);
+    expect(batches.ended({ type: 'error' })).toBeNull();
+    const message = { id: 'msg_1', type: 'message', role: 'assistant', content: [{ type: 'text', text: '반가워요' }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 3 } };
+    const lines = [
+      { custom_id: 'other', result: { type: 'expired' } },
+      { custom_id: 'call-1', result: { type: 'succeeded', message } },
+    ].map((line) => JSON.stringify(line)).join('\n');
+    expect(batches.answer(lines, 'call-1')).toEqual({ kind: 'reply', payload: message });
+    expect(batches.answer(JSON.stringify({ custom_id: 'call-1', result: { type: 'errored', error: { type: 'error', error: { type: 'invalid_request_error', message: 'max_tokens: too large' } } } }), 'call-1')).toEqual({ kind: 'failed', detail: 'max_tokens: too large' });
+    expect(batches.answer(lines, 'missing')).toBeNull();
+    expect(batches.cancel(endpoint, 'msgbatch_1')).toMatchObject({ url: 'https://api.anthropic.com/v1/messages/batches/msgbatch_1/cancel', method: 'POST' });
+  });
+});

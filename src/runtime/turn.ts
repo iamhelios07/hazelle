@@ -188,14 +188,14 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or
 // as typed when the translation failed, so what the user wrote is never lost; its reply waits for 응답 받기, since
 // another device may be reading the same call.
-export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, stream: Stored<'stream'>, signal: AbortSignal) {
+export async function resumeSend(session: Pick<Session, 'store' | 'credentials' | 'streams'>, stream: Stored<'stream'>, signal: AbortSignal) {
   const purpose = stream.value.for;
   if (purpose.kind !== 'input') return;
   const lease = session.store.retainChat(stream.parent!);
   try {
     if (await lease.ready) return;
     session.streams.reading.add(stream.id);
-    const made = await resumeTranslation(session.store, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
+    const made = await resumeTranslation(session, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
     if (!made.ok && made.failure.kind === 'stopped') return;
     const id = stream.value.result;
     const follows = purpose.follows !== undefined && { follows: purpose.follows };

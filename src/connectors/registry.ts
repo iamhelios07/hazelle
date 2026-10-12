@@ -30,7 +30,7 @@ import { voyage } from './voyage';
 import { xai } from './xai';
 import { MODELS_DEV_LISTS } from './models-dev';
 import { priceCost } from './pricing';
-import { carriesPictures, ConnectorError, seesPictures, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
+import { carriesPictures, ConnectorError, seesPictures, type Batches, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
 
 // Adding a provider means adding its connection type here. Nothing else names one. The order is the screen's, 주요 too.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [
@@ -163,6 +163,13 @@ function sending(route: Route, { model, messages, settings: stored }: ChatReques
   const { settings } = fit(settingsSchema(carries(route, model), model), stored);
   const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
   return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
+}
+
+// The batch lane a request is answered through: the type's, where its settings ask for the discount and the model is not
+// known to refuse it.
+export function batchLane(route: Route, request: ChatRequest): Batches | null {
+  const lane = route.type?.discount;
+  return lane?.lane === 'batch' && sending(route, request).settings.discount ? lane.batches : null;
 }
 
 // Refused here, not in sending, which cacheView shares: a forecast never refuses.

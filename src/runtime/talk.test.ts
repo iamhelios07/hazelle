@@ -30,10 +30,11 @@ describe('withTurn', () => {
     expect(withTurn(story, { ...turn, reply: { ...turn.reply, replaces: 'b1' } }, 'c').map(({ id }) => id)).toEqual(['u1', 'b1', 'u2']);
   });
 
-  it('marks a reply asked for whole, so the chat shows it when it lands', () => {
+  it('marks a reply asked for whole, or waiting on a batch, so the chat shows it when it lands', () => {
     const turn = { chat: 'c', said: null, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
     expect(withTurn([], { ...turn, whole: true }, 'c')[0]).toMatchObject({ live: 'r', whole: true });
     expect(withTurn([], turn, 'c')[0]!.whole).toBeUndefined();
+    expect(withTurn([], { ...turn, whole: true, batch: true }, 'c')[0]).toMatchObject({ live: 'r', whole: true, batch: true });
   });
 });
 

@@ -3,7 +3,7 @@ import type { Cache, Reasoning } from './settings';
 import { carriesPictures, ConnectorError, type ChatMessage, type Codec, type InputPicture, type Modality } from './types';
 import { count, isRecord, modelEntries, nameOf } from './values';
 
-const VERSION = { 'anthropic-version': '2023-06-01' };
+export const VERSION = { 'anthropic-version': '2023-06-01' };
 
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 

@@ -72,9 +72,9 @@ export async function translate(
 
 // A translation the server was already making when this page came (tech-spec §6, Detached replies). Only a saved
 // chat's translations are picked up, so no language is needed: a greeting's translation is never one of them.
-export async function resumeTranslation(store: ObjectStore, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
+export async function resumeTranslation(deps: Deps, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
   const text = gather(onText);
-  const answer = await resume(store, stream, signal, text.add);
+  const answer = await resume(deps, stream, signal, text.add);
   return translated(stream.value.call, answer, text.value(), null);
 }
 
@@ -148,7 +148,7 @@ export class Translator {
   resume(stream: Stored<'stream'>, version: string) {
     const chat = stream.parent!;
     if (this.closed || this.aborts.has(version)) return;
-    this.run(chat, version, { id: stream.id, result: stream.value.result }, (signal, onText) => resumeTranslation(this.store, stream, signal, onText), (made) =>
+    this.run(chat, version, { id: stream.id, result: stream.value.result }, (signal, onText) => resumeTranslation({ store: this.store, credentials: this.credentials }, stream, signal, onText), (made) =>
       appendTranslation(this.store, chat, version, made.translation, stream.value.result),
     );
   }

@@ -104,8 +104,9 @@ export const ARCA_LOG = '아카라이브용 HTML';
 // Not 기본값, which reads as the default 설정 named 기본.
 export const UNSET = '모델 원래 값';
 
-// A 설정 묶음's discount lane (design §6.7).
+// A 설정 묶음's discount lane (design §6.7), and a reply waiting on its batch.
 export const DISCOUNT = '할인 받기';
+export const DISCOUNT_WAITING = '할인 받는 중이에요. 답이 다 만들어지면 한 번에 보여요.';
 
 // A value nobody reported, said as such rather than as a made-up figure.
 export const UNKNOWN = '알 수 없음';

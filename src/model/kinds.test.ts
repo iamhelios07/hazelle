@@ -41,3 +41,10 @@ it('accepts a prompt whose toggles hold layout lines, and refuses a toggle witho
   expect(isValue('prompt', { ...prompt, toggles: [{ label: '시뮬레이터', kind: 'check', default: '0' }] })).toBe(false);
   expect(isValue('prompt', { ...prompt, toggles: [{ kind: 'divider' }] })).toBe(false);
 });
+
+it('accepts a call’s marker held by the server (its key) or by a provider’s batch, and refuses one held by neither', () => {
+  const marker = { call: { connection: 'c', source: 'Anthropic', model: 'm', modelName: 'M' }, at: 1, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } };
+  expect(isValue('stream', { ...marker, key: { kty: 'EC' } })).toBe(true);
+  expect(isValue('stream', { ...marker, batch: 'msgbatch_1' })).toBe(true);
+  expect(isValue('stream', marker)).toBe(false);
+});

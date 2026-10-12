@@ -13,6 +13,7 @@ import { ACTS } from '../common/acts';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
+import { DISCOUNT_WAITING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPicture, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotOf } from './ChatPicture';
@@ -142,7 +143,14 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       />
     );
   } else if (live && empty) {
-    body = <Waiting />;
+    body = message.batch ? (
+      <>
+        <Waiting />
+        <Text variant="note">{DISCOUNT_WAITING}</Text>
+      </>
+    ) : (
+      <Waiting />
+    );
   } else if (failed) {
     body = (
       <>

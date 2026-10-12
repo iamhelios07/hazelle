@@ -510,7 +510,7 @@ export class Rememberer {
   // take the print of that text and never read as stale.
   private async resumed(chat: string, stream: Stored<'stream'>, { sources, print, chapter }: Extract<Stream['for'], { kind: 'memory' }>) {
     const text = gather();
-    const answer = await this.reads(stream.id, (signal) => resume(this.session.store, stream, signal, text.add));
+    const answer = await this.reads(stream.id, (signal) => resume(this.session, stream, signal, text.add));
     const sent = await chatSent(this.session, chat, 'memory', null);
     if (sent && 'kind' in sent) return this.change(chat, { failed: sent });
     const places = placesOf(sent?.read.shown ?? []);

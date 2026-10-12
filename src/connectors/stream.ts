@@ -25,8 +25,9 @@ export type Outcome = {
 export type InlineThoughts = { keep?: boolean; takeBack?: (chars: number) => void };
 
 // The reply in the format the provider answered with: an event stream, or one JSON document when it was asked for
-// whole (ModelSettings streaming). Both read into the same facts and end through the same rules.
-export async function decodeStream({ type, codec }: Route, model: Model, response: Response, signal: AbortSignal, onText: (phase: Phase, text: string) => void, inline: InlineThoughts = {}): Promise<Outcome> {
+// whole (ModelSettings streaming). Both read into the same facts and end through the same rules. batched: the reply is
+// the answer read from a discount lane's batch (Batches answer).
+export async function decodeStream({ type, codec }: Route, model: Model, response: Response, signal: AbortSignal, onText: (phase: Phase, text: string) => void, inline: InlineThoughts = {}, batched = false): Promise<Outcome> {
   const facts: StreamFacts = { rawUsage: {}, finishReason: null, id: null, tier: null };
   const scanner = inline.keep ? null : thoughts(onText, inline.takeBack ?? (() => {}));
   const append = (phase: Phase, text: string) => text && (scanner ? scanner.push(phase, text) : onText(phase, text));
@@ -35,9 +36,9 @@ export async function decodeStream({ type, codec }: Route, model: Model, respons
   const finish = (state: Outcome['state'], cut: Outcome['cut'], error: Outcome['error']): Outcome => {
     scanner?.end(state === 'done');
     const usage = Object.keys(facts.rawUsage).length ? codec.usage(facts.rawUsage) : null;
-    // Priced by the tier the reply reports, never by the switch: a reply the lane did not serve costs the standard rate.
+    // Priced by what the provider reports, never by the switch: a reply the lane did not serve costs the standard rate.
     const lane = type?.discount;
-    const served = lane?.lane === 'tier' && facts.tier === lane.served ? lane : null;
+    const served = lane && (lane.lane === 'batch' ? batched : facts.tier === lane.served) ? lane : null;
     const price = model.price && (served ? discounted(model.price, served.rates) : model.price);
     return {
       state,
