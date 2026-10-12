@@ -10,8 +10,9 @@
 set -u
 LOCAL=/data/backup
 REMOTE=${HAZELLE_BACKUP_REMOTE:?set HAZELLE_BACKUP_REMOTE to an rclone remote and path, e.g. r2:hazelle-backup}
-# Equals the app's retention (src/server/backup/snapshots.ts). The machine drops most of a day's generations sooner, but
-# only once they are copied here, so the pool prune below still finds every generation's pictures locally or here.
+# Equals the app's retention (src/server/backup/snapshots.ts). Both sides drop most of a day's generations sooner (prune
+# below), the machine only once they are copied here, so the pool prune still finds every kept generation's pictures
+# locally or here.
 BACKUP_RETENTION_MS=$((7 * 24 * 60 * 60 * 1000))
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
@@ -61,15 +62,32 @@ prune_pool() {
   log "pruned $(wc -l <"$work/unnamed") pictures"
 }
 
-# Generations past the retention go, then the pool.
+# A generation goes at the retention, and one with a manifest sooner unless it is one of the two newest with a manifest
+# or the newest with a manifest of its UTC day; then the pool. Read from the remote listing alone, so a machine that lost
+# its generations never empties the remote. The same rule as expireGenerations (src/server/backup/generation.ts) for a
+# copied generation: change both together. One without a manifest is a copy cut off, which the next pass completes.
 prune() {
   now_ms=$(($(date +%s) * 1000))
   dirs=$(rclone lsf --dirs-only "$REMOTE") || return 1
-  for entry in $dirs; do
-    id=${entry%/}
+  manifests=$(rclone lsf -R --files-only --include '/*/manifest.json' "$REMOTE") || return 1
+  whole=0
+  days=' '
+  for id in $(printf '%s\n' $dirs | sed 's|/$||' | sort -t- -k1,1nr); do
     at=${id%%-*}
     case $at in '' | *[!0-9]*) continue ;; esac
     if [ $((now_ms - at)) -ge "$BACKUP_RETENTION_MS" ]; then
+      drop=1
+    elif printf '%s\n' $manifests | grep -qx "$id/manifest.json"; then
+      day=$((at - at % 86400000))
+      drop=1
+      if [ "$whole" -lt 2 ]; then drop=0; fi
+      case $days in *" $day "*) ;; *) drop=0 ;; esac
+      whole=$((whole + 1))
+      days="$days$day "
+    else
+      drop=0
+    fi
+    if [ "$drop" = 1 ]; then
       rclone purge "$REMOTE/$id" || return 1
       log "pruned $id"
     fi

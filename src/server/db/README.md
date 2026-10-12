@@ -55,7 +55,7 @@ into the pool. Across filesystems the copy goes to a `.tmp-*` name, is synced an
 fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256) and a database's size gzipped and gunzipped, each account's stored picture bytes, the migrations applied,
 the account schema version, and every operation not done or not yet seen ending. A directory without a manifest is cut off and goes
 after a day; a generation goes at 7 days, and sooner once copied off-site unless it is one of the two newest or the newest of its UTC
-day (every deploy captures one); then every pooled picture no remaining manifest names. The remote keeps every generation 7 days.
+day (every deploy captures one); then every pooled picture no remaining manifest names. The remote (`deploy/rclone-backup.sh`) drops its own generations by the same rule, read from its listing alone.
 
 The copier's contract: after a successful `rclone copy` of `backup/<id>/` (and the pool), it writes `backup/<id>/copied` holding one
 line, the UTC ISO-8601 time of the copy. A generation is complete when it has both `manifest.json` and `copied`; backup freshness is

@@ -208,7 +208,8 @@ export async function listGenerations(dataDir: string): Promise<{ id: string; ca
 // A generation goes at RETENTION_MS, one without a manifest (cut off before it was written) after a day, and a whole one
 // that is neither among the two newest nor the newest of its UTC day once it has been copied off-site: every deploy
 // captures one, and of those only the latest two are kept for a rollback (ruled 2026-10-12). Then every picture in the
-// pool that no remaining manifest names. Runs inside the daily job, so no capture is writing.
+// pool that no remaining manifest names. Runs inside the daily job, so no capture is writing. deploy/rclone-backup.sh
+// prune applies the same rule to the remote: change both together.
 export async function expireGenerations(dataDir: string, now: number): Promise<{ removed: number; pictures: number }> {
   let removed = 0;
   let whole = 0;
