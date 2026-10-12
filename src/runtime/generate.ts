@@ -104,7 +104,7 @@ export async function generate({ credentials, connection, model, settings, messa
     onText(phase, text);
   };
   if (batches) {
-    const asking: Asking = { route, model, batches, ask: (each) => withCredential(route, each, credential.credential), signal, onText: timed, inline };
+    const asking: Asking = { route, model, batches, ask: (each) => withCredential(route, each, credential.credential), signal, onText, inline };
     // Not stopped midway: a batch the provider made with no marker naming it would answer, and be billed, unread.
     const submitted = await relayJson(asking.ask(batches.submit(route.endpoint, model, request, call.id)));
     if (!submitted.ok) return failed(submitted.failure);

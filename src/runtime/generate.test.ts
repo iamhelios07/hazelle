@@ -171,7 +171,7 @@ describe('a reply through a discount lane’s batch', () => {
   it('submits, waits through the relay, and prices the whole answer at the lane’s discount', async () => {
     const log = provider(['in_progress', 'ended']);
     const { reply, marked, waited } = await ask(true);
-    expect(reply).toMatchObject({ state: 'done', error: null, discount: 'batch', cost: { amount: (2 + 10) / 2 } });
+    expect(reply).toMatchObject({ state: 'done', error: null, discount: 'batch', cost: { amount: (2 + 10) / 2 }, firstTextMs: null });
     expect(marked).toEqual(['b1']);
     expect(waited).toBe(true);
     expect(log.map(({ sent }) => sent.url)).toEqual([BATCHES, `${BATCHES}/b1`, `${BATCHES}/b1`, `${BATCHES}/b1/results`]);
