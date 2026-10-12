@@ -152,7 +152,7 @@ describe('fold', () => {
     ]);
   });
 
-  it.fails('starts a separate line when follows names a future version of an earlier message', () => {
+  it('starts a separate line when follows names a future version of an earlier message', () => {
     const entries = [
       user('u1', 'first'),
       entry('early', { type: 'message', role: 'user', at: 0, text: 'future', receipt: null, follows: 'v2' }),

@@ -405,10 +405,13 @@ export class ChatFold {
     const roots: FoldedMessage[] = [];
     let previous: FoldedMessage | undefined;
     for (const group of ordered) {
-      const parent = group.follows === undefined ? previous : group.follows === null ? undefined : owner.get(group.follows);
+      const named = group.follows ? owner.get(group.follows) : undefined;
+      const slot = named && named.places.get(group.follows!)!;
+      const saved = named && entryOrder(named.founded[slot!]!, this.entries.get(group.message!.id)!) < 0;
+      const parent = group.follows === undefined ? previous : saved ? named : undefined;
       if (!parent) roots.push(group);
       else {
-        const edge = { group, slot: group.follows ? parent.places.get(group.follows)! : null };
+        const edge = { group, slot: group.follows ? slot! : null };
         const held = edges.get(parent);
         if (held) held.push(edge);
         else edges.set(parent, [edge]);
