@@ -10,8 +10,7 @@ import { illustrateSwitches, translateSwitches } from './characters';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { Halted } from './scripts';
-import { appendUserMessage, startChat, type Written } from './chat-log';
-import type { Greetings } from './greetings';
+import { appendUserMessage, type Written } from './chat-log';
 import type { Ask, TalkFailure } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
 import { endCall, type CallTarget } from './streams';
@@ -116,17 +115,20 @@ function illustrateReceived(session: Pick<Session, 'store' | 'illustrator'>, cha
   if (version?.text.trim()) session.illustrator.draw(chat, message!.id, version.id, { auto: true });
 }
 
-// start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.
-export function takeTurn(session: Session, chat: string, target: Target, start: { chat: Chat; greetings: Greetings | null; started: () => void } | null = null): Promise<TurnFailure | null> {
+// A new chat's save, which the turn is shown in while it runs, and the greeting it saved selected, which the turn
+// follows. The turn never saves the chat itself: a press on the greeting may have started the same save, and a second
+// create would be refused.
+export type Starting = { greeting: string | null; saved: Promise<ApiFailure | null> };
+
+export function takeTurn(session: Session, chat: string, target: Target, start: Starting | null = null): Promise<TurnFailure | null> {
   const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
   const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
   if (start) {
-    const greeting = start.greetings ? start.greetings.choices[start.greetings.selected]!.id : null;
+    const { greeting } = start;
     const said = target.kind === 'send' ? { id: ids.said, text: target.text, follows: greeting } : null;
     return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, follows: said ? said.id : greeting, continues: null } }, async (signal) => {
-      const unstarted = await startChat(session.store, chat, start.chat, start.greetings);
+      const unstarted = await start.saved;
       if (unstarted) return { kind: 'unstarted', failure: unstarted };
-      start.started();
       // The chat was just saved and a new chat's target names no message, so it is there.
       const turn = (await gatheredTurn(session, chat, target, ids))!;
       return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);

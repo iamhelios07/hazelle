@@ -114,16 +114,12 @@ describe('a new chat', () => {
       const chat = crypto.randomUUID();
       await server.hold(session.store, chat);
       let preview: string | undefined;
-      const turn = takeTurn(
-        session,
-        chat,
-        { kind: 'send', text: '안녕' },
-        {
-          chat: { title: null, character: character.ok ? character.data.id : null, models: {} },
-          greetings: projectGreetings(luna.greetings, [crypto.randomUUID(), crypto.randomUUID()], 0),
-          started: () => (preview = session.read.chat(chat).snapshot()?.preview),
-        },
-      );
+      const greetings = projectGreetings(luna.greetings, [crypto.randomUUID(), crypto.randomUUID()], 0)!;
+      const saving = startChat(store, chat, { title: null, character: character.ok ? character.data.id : null, models: {} }, greetings).then((unstarted) => {
+        preview = session.read.chat(chat).snapshot()?.preview;
+        return unstarted;
+      });
+      const turn = takeTurn(session, chat, { kind: 'send', text: '안녕' }, { greeting: greetings.choices[0]!.id, saved: saving });
       expect(session.talk.snapshot(chat)).toMatchObject({ chat, said: { text: '안녕' } });
       expect(store.get('chat', chat)).toBeNull();
       expect(await turn).toBeNull();
@@ -147,6 +143,21 @@ describe('a new chat', () => {
         { role: 'assistant', content: '어서 와, jin.' },
         { role: 'user', content: '안녕' },
       ]);
+    }));
+
+  it('waits on the save a press on its greeting began and saves it once, then sends', () =>
+    server.withSession(async (session) => {
+      const { store } = session;
+      await answerable(session);
+      const character = await store.create('character', { card: luna, folder: null, loreFolders: [] });
+      stubRelay(() => saying('왔구나.'));
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      const greetings = projectGreetings(luna.greetings, [crypto.randomUUID(), crypto.randomUUID()], 0)!;
+      const saved = startChat(store, chat, { title: null, character: character.ok ? character.data.id : null, models: {} }, greetings);
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' }, { greeting: greetings.choices[0]!.id, saved })).toBeNull();
+      expect(await saved).toBeNull();
+      expect(store.children('entry', chat).map(({ value }) => value.type).sort()).toEqual(['message', 'message', 'message', 'select', 'version']);
     }));
 
   it('takes no turn in a deleted chat', () =>

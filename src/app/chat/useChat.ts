@@ -35,7 +35,7 @@ import type { Shown } from '../../runtime/talk';
 import { translatorOf } from '../../runtime/translate';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf, translationInput } from '../../runtime/chat-context';
-import { takeTurn, type TurnFailure } from '../../runtime/turn';
+import { takeTurn, type Starting, type TurnFailure } from '../../runtime/turn';
 import { describeIllustrateFailure, describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
@@ -225,15 +225,21 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setPinned(null);
   }
 
-  function starting() {
-    return {
-      chat,
-      greetings: startingGreetings(choices),
-      started: () => {
+  // The new chat's one save, which its first send and a press on its greeting share until it lands; a failed one is
+  // begun afresh by the next.
+  const start = useRef<Starting | null>(null);
+  function starting(): Starting {
+    if (start.current) return start.current;
+    const greetings = startingGreetings(choices);
+    const saved = startChat(store, chatId, chat, greetings).then((unstarted) => {
+      if (unstarted) start.current = null;
+      else {
         drafts.move(draft.key, chatId);
         navigate({ kind: 'chat', id: chatId }, { replace: true });
-      },
-    };
+      }
+      return unstarted;
+    });
+    return (start.current = { greeting: greetings && greetings.choices[greetings.selected]!.id, saved });
   }
 
   async function send() {
@@ -251,22 +257,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     report(failure);
   }
 
-  // The save a press started for a new chat, which every press made before the chat is here waits for: a second
-  // save would be refused.
-  const saving = useRef<Promise<ApiFailure | null> | null>(null);
   async function press(button: BotButton | null) {
     const unanswered = () => toast.show('동작이 연결되지 않은 버튼이에요.');
     if (!scripted) return unanswered();
     if (button === null) return;
     // A script runs over a saved chat only, so a press on a new chat's greeting saves it first.
     if (id === null) {
-      const start = starting();
-      saving.current ??= startChat(store, chatId, start.chat, start.greetings).then((unstarted) => {
-        if (unstarted) saving.current = null;
-        else start.started();
-        return unstarted;
-      });
-      const unstarted = await saving.current;
+      const unstarted = await starting().saved;
       if (unstarted) return toast.failed(unstarted);
     }
     if (!(await session.scripts.press(chatId, button))) unanswered();
