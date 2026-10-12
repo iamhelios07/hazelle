@@ -1,7 +1,8 @@
 import { scopeOf, translationInput } from './chat-context';
 import { cacheSend, gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
 import { forecast, prior } from './cache';
-import type { RanAway, TooLong } from '../engine/pipeline';
+import type { RanAway } from '../engine/pipeline';
+import type { TooLong } from '../engine/prompt-budget';
 import { fold, shown, type Chat } from '../model/chat';
 import { live } from '../model/library';
 import type { Stored } from '../model/kinds';

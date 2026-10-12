@@ -1,5 +1,5 @@
 import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, MessageSquare, MessagesSquare, NotebookPen, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
-import { autoCachePoints } from '../../engine/pipeline';
+import { autoCachePoints } from '../../engine/cache-points';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
 import { count } from '../common/typedNumber';

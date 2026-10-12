@@ -1,0 +1,34 @@
+import type { ChatMessage } from '../connectors/types';
+import type { From } from './pipeline';
+
+export type Sent = { message: ChatMessage; from: From };
+export type CachePart = { cache: true };
+
+// Before the chat and at its end, never at the request's end: a block after the chat changes every turn. A @@depth
+// entry sits among the chat's messages, so it opens the chat as a message does. Before 장기 기억 too when it comes
+// before the chat (design §6.2, Cache): memory changes only at a boundary, so the fixed part before it is never written again.
+export function autoCachePoints(roles: readonly ('chat' | 'depth' | 'memory' | null)[]): number[] {
+  const first = roles.findIndex((role) => role === 'chat' || role === 'depth');
+  const last = roles.lastIndexOf('chat');
+  const memory = roles.indexOf('memory');
+  const anchor = memory > 0 && (first === -1 || memory < first) ? [memory - 1] : [];
+  return [...new Set([...anchor, ...(first > 0 ? [first - 1] : []), ...(last === -1 ? [] : [last])])];
+}
+
+export function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
+  const sent: Sent[] = [];
+  const point = (index: number) => {
+    const part = sent[index]!;
+    sent[index] = { ...part, message: { ...part.message, cache: true } };
+  };
+  for (const part of parts) {
+    if (!('cache' in part)) sent.push(part);
+    else if (sent.length) point(sent.length - 1);
+  }
+  // Retrieval sits among the chat's messages and changes with them, so it counts as the chat's: first in a short chat, it
+  // must not take the point meant for the memory block's end.
+  const role = ({ from }: Sent) => (from.kind === 'depth' ? 'depth' : from.kind === 'retrieval' ? 'chat' : from.kind === 'block' && (from.slot === 'chat' || from.slot === 'memory') ? from.slot : null);
+  for (const index of autoCachePoints(sent.map(role))) point(index);
+  return sent;
+}
+

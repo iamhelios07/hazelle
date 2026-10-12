@@ -1,3 +1,4 @@
+import { rewritten } from './prompt-budget';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '../connectors/types';
@@ -5,7 +6,7 @@ import type { Memory, MemoryRecord } from '../model/memory';
 import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, rewritten, unused, type Assembled, type From, type PromptInput } from './pipeline';
+import { assemble, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, speakersOf, type ChatRead } from './memory';
 import { RETRIEVED_HEADING } from './retrieval';
 import { renderChat } from './render';
@@ -293,6 +294,46 @@ describe('assemble', () => {
     expect(moved.texts).toEqual(['long unused tail', 'x']);
     expect(moved.result.dropped).toBe(1);
     expect(moved.result.messages.map(({ content }) => content)).toEqual(['x']);
+  });
+
+  it('keeps final contents, depth placement, provenance and costs aligned across overlapping, empty and clamped ranges after each cut', () => {
+    const messages = [5, 50, 1, 40, 2].map((length, index) => message(`m${index}`, 'user', String(index).repeat(length)));
+    const blocks: Prompt['blocks'] = [
+      { id: 'top', name: null, kind: 'text', role: 'system', mark: null, text: 'T' },
+      { id: 'first', name: null, kind: 'slot', slot: 'chat', range: { from: 0, to: 1 } },
+      { id: 'gap', name: null, kind: 'text', role: 'system', mark: null, text: 'G', cache: true },
+      { id: 'past', name: null, kind: 'slot', slot: 'chat', range: { from: 1, to: -1 } },
+      { id: 'tail', name: null, kind: 'slot', slot: 'chat', range: { from: -2, to: null } },
+      { id: 'empty', name: null, kind: 'slot', slot: 'chat', range: { from: 2, to: 1 } },
+      { id: 'after', name: null, kind: 'text', role: 'system', mark: null, text: 'E' },
+    ];
+    const base = input({ messages, greeting: null, prompt: { ...starter, blocks }, lore: [lore('far', '@@depth 9\nfar'), lore('near', '@@depth 2\nnear'), lore('end', '@@depth 1\nend')] });
+    const cuts = [
+      { budgets: [null, 155], dropped: 0, tokens: 155, first: ['far', '00000'], past: ['1'.repeat(50), '2', 'near', '3'.repeat(40)], tail: ['near', '3'.repeat(40), 'end', '44'] },
+      { budgets: [154, 150], dropped: 1, tokens: 150, first: ['far', '1'.repeat(50)], past: ['2', 'near', '3'.repeat(40)], tail: ['near', '3'.repeat(40), 'end', '44'] },
+      { budgets: [149, 100], dropped: 2, tokens: 100, first: ['far', '2'], past: ['near', '3'.repeat(40)], tail: ['near', '3'.repeat(40), 'end', '44'] },
+      { budgets: [99, 27], dropped: 4, tokens: 27, first: ['end', 'near', 'far', '44'], past: [], tail: ['end', 'near', 'far', '44'] },
+    ];
+    const expectedPart = (content: string, block: string): { message: ChatMessage; from: From } => {
+      const depth = new Map([['far', 9], ['near', 2], ['end', 1]]).get(content);
+      return {
+        message: { role: depth === undefined ? 'user' : 'system', content },
+        from: depth === undefined ? { kind: 'block', id: block, name: null, slot: 'chat' } : { kind: 'depth', id: content, name: content, depth },
+      };
+    };
+    const fixed = (id: string, content: string, cache = false) => ({ message: { role: 'system' as const, content, ...(cache && { cache: true }) }, from: { kind: 'block' as const, id, name: null, slot: null } });
+    for (const cut of cuts) {
+      const expected = [fixed('top', 'T', true), ...cut.first.map((text) => expectedPart(text, 'first')), fixed('gap', 'G', true), ...cut.past.map((text) => expectedPart(text, 'past')), ...cut.tail.map((text) => expectedPart(text, 'tail')), fixed('after', 'E')];
+      expected.at(-2)!.message.cache = true;
+      for (const budget of cut.budgets) {
+        const result = assembledOf(assemble({ ...base, budget }));
+        expect(result.dropped).toBe(cut.dropped);
+        expect(result.messages).toEqual(expected.map(({ message }) => message));
+        expect(result.parts).toEqual(expected.map(({ message, from }) => ({ from, tokens: message.content.length })));
+        expect(result.parts.reduce((sum, { tokens }) => sum + tokens, 0)).toBe(cut.tokens);
+      }
+    }
+    expect(assemble({ ...base, budget: 26 })).toEqual({ kind: 'too-long', tokens: 27, budget: 26 });
   });
 
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {

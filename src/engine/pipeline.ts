@@ -1,6 +1,8 @@
+import { cachePoints, type CachePart, type Sent } from './cache-points';
+import { fitChat, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
-import type { Block, ChatRange, ConversationPrompt, IllustratePrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
+import type { Block, ConversationPrompt, IllustratePrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -30,9 +32,6 @@ export type PromptInput = {
 // What fills the memory slot: the built-in memory, or the text the tool holding the slot gave (design §6.10). through:
 // the place in scope.messages of the last message the text stands for, −1 for none.
 export type MemoryFill = ({ kind: 'built-in' } & MemoryInput) | { kind: 'tool'; name: string; text: string; through: number };
-
-// Even the last message alone leaves the prompt over its budget.
-export type TooLong = { kind: 'too-long'; tokens: number; budget: number };
 
 // The CBS of some text the request is built from ran away (cbs/evaluate Runaway), and none of the request is sent.
 export type RanAway = { kind: 'runaway' };
@@ -67,8 +66,6 @@ export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: 
 const CONTINUE = 'Your previous reply was cut off. Continue it exactly from where it stopped. Do not repeat anything already written.';
 
 type Lore = { id: string; role: Role; body: string };
-type Sent = { message: ChatMessage; from: From };
-type Part = Sent | ChatPart | CachePart;
 
 type Laid = {
   card: Card | null;
@@ -307,16 +304,6 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   const lastUser = messages.findLastIndex(({ role }) => role === 'user');
   const retrieved = found && lastUser !== -1 ? found : null;
   if (retrieved) atDepth.push({ depth: messages.length - lastUser, sent: { message: { role: 'user', content: retrieved.text }, from: { kind: 'retrieval' } } });
-  const fill = (kept: ChatMessage[]) => {
-    // An entry at @@depth N goes before the message N from the end, wherever that message is.
-    const before = new Map<number, Sent[]>();
-    for (const { depth, sent } of atDepth) {
-      const at = Math.max(kept.length - depth, 0);
-      add(before, at, sent);
-    }
-    return template.flatMap((part) => ('range' in part ? range(kept, before, part) : [part]));
-  };
-  const size = budgetSize(template, messages, atDepth, tokens);
   const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
@@ -329,41 +316,8 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   };
 
   // The rest of the template stays whole.
-  const dropped = dropOldest(budget, messages.length, size);
-  return typeof dropped === 'number' ? assembled(fill(messages.slice(dropped)), dropped) : dropped;
-}
-
-// The budget drops the oldest chat messages first and never the last one; what does not fit even then is not sent.
-// size: the request's tokens with the oldest of its count chat messages dropped. Gives how many to drop.
-// size may only be called with non-decreasing dropped; budgetSize advances its windows in place.
-function dropOldest(budget: number | null, count: number, size: (dropped: number) => number): number | TooLong {
-  if (budget === null) return 0;
-  let dropped = 0;
-  while (size(dropped) > budget && dropped < count - 1) dropped++;
-  const tokens = size(dropped);
-  return tokens > budget ? { kind: 'too-long', tokens, budget } : dropped;
-}
-
-// A message the script left as built keeps its part, any other is the script's and counted here. The budget holds
-// for this request as it does in assemble, over the chat messages left as built.
-export function rewritten(prompt: Assembled, messages: ChatMessage[], countTokens: (text: string) => number, budget: number | null): Assembled | TooLong {
-  let next = 0;
-  const sent = messages.map((message) => {
-    let at = next;
-    while (at < prompt.messages.length && (prompt.messages[at]!.role !== message.role || prompt.messages[at]!.content !== message.content)) at++;
-    if (at === prompt.messages.length) return { message, from: { kind: 'script' } satisfies From, tokens: countTokens(message.content) };
-    next = at + 1;
-    return { message, ...prompt.parts[at]! };
-  });
-  const chat = sent.flatMap(({ from }, at) => (from.kind === 'block' && from.slot === 'chat' ? [at] : []));
-  const total = sent.reduce((sum, { tokens }) => sum + tokens, 0);
-  const before = [0];
-  for (const at of chat) before.push(before.at(-1)! + sent[at]!.tokens);
-  const dropped = dropOldest(budget, chat.length, (from) => total - before[from]!);
-  if (typeof dropped !== 'number') return dropped;
-  const gone = new Set(chat.slice(0, dropped));
-  const kept = sent.filter((_, at) => !gone.has(at));
-  return { ...prompt, messages: kept.map(({ message }) => message), parts: kept.map(({ from, tokens }) => ({ from, tokens })), dropped: prompt.dropped + dropped };
+  const fitted = fitChat(template, messages, atDepth, tokens, budget);
+  return 'kind' in fitted ? fitted : assembled(fitted.parts, fitted.dropped);
 }
 
 // How much of each message before the source 앞 메시지 holds, from its end.
@@ -474,39 +428,8 @@ function memoryTask({ scope, prompt, memory, before, budget, span: { from, to },
   return { messages: [...messages, { role: 'user', content: format }], span };
 }
 
-type ChatPart = { range: ChatRange; from: From };
-type CachePart = { cache: true };
-
-// Before the chat and at its end, never at the request's end: a block after the chat changes every turn. A @@depth
-// entry sits among the chat's messages, so it opens the chat as a message does. Before 장기 기억 too when it comes
-// before the chat (design §6.2, Cache): memory changes only at a boundary, so the fixed part before it is never written again.
-export function autoCachePoints(roles: readonly ('chat' | 'depth' | 'memory' | null)[]): number[] {
-  const first = roles.findIndex((role) => role === 'chat' || role === 'depth');
-  const last = roles.lastIndexOf('chat');
-  const memory = roles.indexOf('memory');
-  const anchor = memory > 0 && (first === -1 || memory < first) ? [memory - 1] : [];
-  return [...new Set([...anchor, ...(first > 0 ? [first - 1] : []), ...(last === -1 ? [] : [last])])];
-}
-
 function taskMessages(parts: Part[]): ChatMessage[] {
   return cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
-}
-
-function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
-  const sent: Sent[] = [];
-  const point = (index: number) => {
-    const part = sent[index]!;
-    sent[index] = { ...part, message: { ...part.message, cache: true } };
-  };
-  for (const part of parts) {
-    if (!('cache' in part)) sent.push(part);
-    else if (sent.length) point(sent.length - 1);
-  }
-  // Retrieval sits among the chat's messages and changes with them, so it counts as the chat's: first in a short chat, it
-  // must not take the point meant for the memory block's end.
-  const role = ({ from }: Sent) => (from.kind === 'depth' ? 'depth' : from.kind === 'retrieval' ? 'chat' : from.kind === 'block' && (from.slot === 'chat' || from.slot === 'memory') ? from.slot : null);
-  for (const index of autoCachePoints(sent.map(role))) point(index);
-  return sent;
 }
 
 function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
@@ -516,57 +439,6 @@ function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
 }
 
 const blockFrom = (block: Block): From => ({ kind: 'block', id: block.id, name: block.name, slot: block.kind === 'slot' ? block.slot : null });
-
-function range(kept: ChatMessage[], before: Map<number, Sent[]>, { range: { from, to }, from: slot }: ChatPart): Sent[] {
-  const [start, end] = rangeBounds(kept.length, { from, to });
-  const out: Sent[] = [];
-  for (let index = start; index < end; index++) out.push(...(before.get(index) ?? []), { message: kept[index]!, from: slot });
-  return out;
-}
-
-function rangeBounds(length: number, { from, to }: ChatRange): [number, number] {
-  const at = (n: number) => (n < 0 ? Math.max(length + n, 0) : Math.min(n, length));
-  return [at(from), to === null ? length : at(to)];
-}
-
-function budgetSize(template: Part[], messages: ChatMessage[], depths: { depth: number; sent: Sent }[], tokens: (text: string) => number): (dropped: number) => number {
-  const ranges = template.filter((part): part is ChatPart => 'range' in part).map(({ range }) => ({ range, start: 0, end: 0, tokens: 0 }));
-  const fixed = template.reduce((sum, part) => sum + ('message' in part ? tokens(part.message.content) : 0), 0);
-  const ordered = [...depths].sort((a, b) => a.depth - b.depth);
-  const depthPrefix = [0];
-  for (const { sent } of ordered) depthPrefix.push(depthPrefix.at(-1)! + tokens(sent.message.content));
-  const throughDepth = (depth: number) => {
-    let low = 0;
-    let high = ordered.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (ordered[middle]!.depth <= depth) low = middle + 1;
-      else high = middle;
-    }
-    return depthPrefix[low]!;
-  };
-  return (dropped) => {
-    const length = messages.length - dropped;
-    let size = fixed;
-    for (const held of ranges) {
-      const [start, end] = rangeBounds(length, held.range);
-      const absoluteStart = dropped + start;
-      const absoluteEnd = dropped + Math.max(start, end);
-      // dropOldest advances cuts in order: both absolute bounds only advance. Each text enters/leaves a slot
-      // at most once; nothing outside the tried ranges is tokenized, including when no trimming is needed.
-      // Costs themselves need not be monotone: overlapping signed ranges can gain messages as cuts advance.
-      for (let at = held.start; at < Math.min(absoluteStart, held.end); at++) held.tokens -= tokens(messages[at]!.content);
-      for (let at = Math.max(held.end, absoluteStart); at < absoluteEnd; at++) held.tokens += tokens(messages[at]!.content);
-      held.start = absoluteStart;
-      held.end = absoluteEnd;
-      if (end <= start) continue;
-      size += held.tokens;
-      // Depths beyond the remaining history clamp to its first message, not outside the slot.
-      size += (start === 0 ? depthPrefix.at(-1)! : throughDepth(length - start)) - throughDepth(length - end);
-    }
-    return size;
-  };
-}
 
 function remembered(measure: (text: string) => number): (text: string) => number {
   const held = new Map<string, number>();

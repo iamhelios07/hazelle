@@ -1,6 +1,7 @@
+import { rewritten } from '../engine/prompt-budget';
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { speakersOf, standing, type Standing } from '../engine/memory';
-import { activeLore, assemble, assembleIllustration, assembleMemory, assembleTranslation, rewritten, type Assembled, type IllustrationInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
+import { activeLore, assemble, assembleIllustration, assembleMemory, assembleTranslation, type Assembled, type IllustrationInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
 import type { RegexScript } from '../engine/import/types';
 import { trySample } from '../engine/regex/scripts';
 import { renderChat, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
