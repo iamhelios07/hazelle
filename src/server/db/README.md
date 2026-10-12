@@ -26,7 +26,8 @@ commit that sets `stored = 1`. A snapshot: SQLite's asynchronous online backup m
 writers; an archive worker compacts that private copy, runs `quick_check`, gzips it and fsyncs the gzip. The owner then renames it,
 fsyncs the directory and writes the `snapshots` row. An account file at signup: schema and `head` written, checkpointed, fsynced, directory fsynced, then
 the account's row. A directory made on the way is synced into its parent too (`makeDirs`, `durable.ts`). Deletion is the reverse: the service commit first, then the files. A crash between the two leaves a file with no row,
-which the hourly reconciliation (`reconcile.ts`) removes once it is an hour old; it never leaves a row with no file.
+which the hourly reconciliation (`reconcile.ts`) removes once it is an hour old (a picture prefix in R2 is queued in
+`picture_removals` and goes 7 days later); it never leaves a row with no file.
 
 Installing a snapshot over a live account file (an armed restore, `account-db.ts`): check the snapshot's size and SHA-256 against its
 row, decompress beside the live file, `quick_check`, write `head.installed_from` and `head.installed_op` (the operation installing it, so

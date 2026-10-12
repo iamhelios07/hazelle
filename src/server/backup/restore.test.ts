@@ -263,3 +263,22 @@ it('with the R2 bucket names pictures without pooling them, and restores only wh
     await s3.close();
   }
 }, 30_000);
+
+it('restores a disk generation into the R2 bucket by putting its pooled pictures there', async () => {
+  const s3 = await fakeS3();
+  try {
+    const operator = await signedUp('operator');
+    const kept = bytesOf('a pooled picture');
+    expect((await t.put(`files/${idOf(kept)}`, kept, operator.cookie)).status).toBe(204);
+    expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
+    const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
+    expect((await readManifest(generation))!.bucket).toBe('disk');
+    const dir = emptyDir();
+    expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: 1, pictures: 1 });
+    expect([...s3.objects.keys()]).toEqual([`files/${operator.incarnation}/${idOf(kept)}`]);
+    expect(s3.objects.get(`files/${operator.incarnation}/${idOf(kept)}`)).toEqual(kept);
+    expect(existsSync(join(dir, 'files'))).toBe(false);
+  } finally {
+    await s3.close();
+  }
+}, 30_000);
