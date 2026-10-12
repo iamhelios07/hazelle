@@ -1,3 +1,4 @@
+import type { Retry } from '../contracts/streams';
 import type { Upstream } from './relay';
 import { StreamBox } from './stream-box';
 import type { StreamStore } from './db/streams-db';
@@ -6,7 +7,7 @@ import type { StreamStore } from './db/streams-db';
 // name with no box is read from its stored pages; after a restart that is every name, and its reply ends as lost.
 export type Streams = {
   // signal: the request's; its abort stops counting that request's reader, and the call runs on.
-  start(name: string, body: { id: string; key: unknown; request: unknown }, signal: AbortSignal): Promise<Response>;
+  start(name: string, body: { id: string; key: unknown; request: unknown; retry?: Retry }, signal: AbortSignal): Promise<Response>;
   read(name: string, from: number, signal: AbortSignal): Promise<Response>;
   stop(name: string): void;
   // The call ends, its readers end, then its rows go.

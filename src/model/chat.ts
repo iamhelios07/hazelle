@@ -46,6 +46,9 @@ export type Receipt = {
   // The id of the connection's account that served it; absent on a receipt older than accounts, and on a call picked
   // up after a reload.
   account?: string;
+  // How many times it was sent, where a try failed before any of it came and was sent again (retry on failure); absent
+  // for one try, and where it is not known.
+  tries?: number;
   // The connection's and the model's names when the reply was made; either may be renamed or deleted later.
   source: string;
   model: string;

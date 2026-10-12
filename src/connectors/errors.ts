@@ -29,3 +29,14 @@ export function providerMessage(text: string): string {
   }
   return text.trim().slice(0, 300);
 }
+
+// OpenAI's shape names its refusal ({error: {code}}), which a connector may tell apart (Discount busy).
+export function providerCode(text: string): string | null {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return isRecord(body) && isRecord(body.error) && typeof body.error.code === 'string' ? body.error.code : null;
+}

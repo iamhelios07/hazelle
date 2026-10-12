@@ -32,6 +32,7 @@ const outcomeFacts = (receipt: Receipt) => [
   { label: '첫 토큰까지', value: seconds(receipt.firstTextMs) },
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
   ...(receipt.discount ? [{ label: DISCOUNT, value: '받음' }] : []),
+  ...(receipt.tries ? [{ label: '보낸 횟수', value: `${receipt.tries}번` }] : []),
 ];
 const callFacts = (receipt: Receipt) => [
   { label: '입력', value: tokens(receipt.usage?.inputTokens ?? null) },

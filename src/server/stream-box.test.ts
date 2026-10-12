@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import type { Retry } from '../contracts/streams';
 import type { Upstream } from './relay';
 import { StreamBox } from './stream-box';
 import { streamStore } from './db/streams-db';
@@ -29,11 +30,11 @@ function endless() {
   return { counted, upstream };
 }
 
-async function start(box: StreamBox) {
+async function start(box: StreamBox, retry?: Retry) {
   const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
   const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
   const request = { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' };
-  return box.start({ id: crypto.randomUUID(), key, request }, staying);
+  return box.start({ id: crypto.randomUUID(), key, request, ...(retry && { retry }) }, staying);
 }
 
 // A page's frames and the one that closed it are read before the first put has to answer.
@@ -246,4 +247,65 @@ it('leaves no ping timer behind a reader whose client left, and the box still go
   while (await first());
   expect(idle).toBe(1);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+// A provider answering each try with the next answer, keeping what each try sent and when. null: its address is not reached.
+function tried(...answers: (Response | null)[]) {
+  const sent: { at: number; url: string; headers: [string, string][]; body: string | null }[] = [];
+  const upstream: Upstream = async (url, init) => {
+    sent.push({ at: Date.now(), url: url.href, headers: [...init.headers], body: init.body });
+    const answer = answers.shift()!;
+    if (!answer) throw new Error('connect ECONNREFUSED');
+    return answer;
+  };
+  return { sent, upstream };
+}
+const refusal = (status: number, headers: Record<string, string> = {}) => new Response('{"error":{"message":"busy"}}', { status, headers });
+const RETRY: Retry = { times: 2, statuses: [429, 529] };
+// The frame types a reader keeps: a page read from storage may repeat frames before the seq asked for.
+function sequence({ seen }: { seen: [number, number][] }) {
+  let next = 0;
+  return seen.filter(([, seq]) => seq >= next && (next = seq + 1)).map(([type]) => type);
+}
+
+it('sends a try refused for a moment again, the same request after the wait asked for, and passes on only the last', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  const { sent, upstream } = tried(refusal(529), refusal(429, { 'retry-after': '7' }), new Response('data: {}\n\n'));
+  const box = new StreamBox(storage(), upstream, () => {});
+  const reading = frames((await start(box, RETRY)).body!);
+  for (let tick = 0; tick < 40 && box.running; tick++) await vi.advanceTimersByTimeAsync(500);
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(sequence(await reading)).toEqual([0, 5, 5, 1, 2, 3]);
+  expect(sent.map(({ at }) => at - sent[0]!.at)).toEqual([0, 2000, 9000]);
+  expect(new Set(sent.map((each) => JSON.stringify({ ...each, at: 0 }))).size).toBe(1);
+});
+
+it('sends a try whose address was not reached again, and no more than its times', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  const { sent, upstream } = tried(null, refusal(429), refusal(429));
+  const box = new StreamBox(storage(), upstream, () => {});
+  const reading = frames((await start(box, RETRY)).body!);
+  for (let tick = 0; tick < 40 && box.running; tick++) await vi.advanceTimersByTimeAsync(500);
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(sequence(await reading)).toEqual([0, 5, 5, 1, 2, 3]);
+  expect(sent).toHaveLength(3);
+});
+
+it('passes on at once an answer its statuses do not name, a reply past its head, and every answer of a call without retry', async () => {
+  for (const [answer, retry] of [[refusal(400), RETRY], [refusal(429), undefined], [new Response(new ReadableStream({ pull: (body) => body.error(new Error('reset')) })), RETRY]] as const) {
+    const { sent, upstream } = tried(answer);
+    const { seen } = await frames((await start(new StreamBox(storage(), upstream, () => {}), retry)).body!);
+    expect(seen.map(([type]) => type)).not.toContain(5);
+    expect(sent).toHaveLength(1);
+  }
+});
+
+it('ends a call stopped while a try waits to be sent again, with no head and nothing more sent', async () => {
+  const { sent, upstream } = tried(refusal(429, { 'retry-after': '30' }), refusal(429));
+  const box = new StreamBox(storage(), upstream, () => {});
+  const next = framer((await start(box, RETRY)).body!);
+  expect([await next(), await next()]).toEqual([[0, 0], [5, 1]]);
+  box.stop();
+  expect([await next(), await next()]).toEqual([[3, 2], null]);
+  expect(sent).toHaveLength(1);
 });

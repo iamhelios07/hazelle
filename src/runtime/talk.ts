@@ -13,7 +13,7 @@ import { cacheKept, wireOf, writePrint } from './cache';
 import { appendReply, appendUserMessage, savedElsewhere, type Said, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { CANCEL, generate, resume, type Reply } from './generate';
+import { generate, resume, type Reply } from './generate';
 import { stopStream } from './relay';
 import type { ObjectStore } from './store';
 import type { ChatLease } from './chat-scope';
@@ -30,13 +30,16 @@ export type Turn = {
   reasoning: string;
   // whole: asked for in one piece (ModelSettings streaming), so it is shown when it lands, not paced as bursts are.
   whole?: true;
-  // batch: waiting for a discount lane's batch (design §6.7), which answers whole.
+  // batch: waiting for a discount lane's batch (design §6.7), which answers whole. retrying: a try failed before any of it
+  // came and is sent again (retry on failure). stopping: 멈추기 canceled the batch, which is asked about until it ends.
   batch?: true;
+  retrying?: true;
+  stopping?: true;
 };
 
 // unstored: the user's message shown before the store has it. Nothing may be saved against it yet: fold skips, for
 // good, an entry that names a message saved after it.
-export type Shown = Message & { live: string | null; whole?: true; batch?: true; unstored?: true };
+export type Shown = Message & { live: string | null; whole?: true; batch?: true; retrying?: true; stopping?: true; unstored?: true };
 
 // The prompt, which the reply's id seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model.
 // said: the user's message as it is saved, which a message sent translated saves translated; null when prepare saved it
@@ -73,7 +76,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
     out.push(message);
   }
   const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
-  const live = { live: reply.id, ...(turn.whole && { whole: true as const }), ...(turn.batch && { batch: true as const }) };
+  const live = { live: reply.id, ...(turn.whole && { whole: true as const }), ...(turn.batch && { batch: true as const }), ...(turn.retrying && { retrying: true as const }), ...(turn.stopping && { stopping: true as const }) };
   if (reply.message === null) {
     if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: now, versions: [version], selected: 0, ...live });
     return out;
@@ -88,7 +91,8 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   return slot === -1 ? out.slice(0, index + 1) : out;
 }
 
-type Held = { turn: Turn; abort: AbortController; calling: string | null };
+// abort: stops the turn's reading. cancel: 멈추기, which cancels a batch, still read until it ends (GenerateInput batching).
+type Held = { turn: Turn; abort: AbortController; cancel: AbortController; calling: string | null };
 
 // A reply blocks only its own chat: chats, in one tab or several, reply at once (user, 2026-10-04). A reply outlives
 // the screen that asked for it: leaving a chat does not stop it. The server makes the call (runtime/streams), so
@@ -133,13 +137,37 @@ export class Talk {
     return this.sentBy.get(call)?.sent ?? null;
   }
 
-  // 멈추기: the call ends on the server too, or a batch at the provider (CANCEL), and the text so far is saved as cut.
-  // Reading stops first, so the server's end is never read as the stream's own.
+  // 멈추기: the call ends on the server too, and the text so far is saved as cut; a batch is canceled at the provider and
+  // waited for until it ends. Reading stops first, so the server's end is never read as the stream's own.
   stop(chat: string) {
     const held = this.turns.get(chat);
-    if (!held) return;
-    held.abort.abort(CANCEL);
-    if (held.calling && !held.turn.batch) stopStream(held.calling);
+    if (held) this.halt(held);
+  }
+
+  private halt(held: Held) {
+    held.cancel.abort();
+    if (held.turn.batch) return this.change(held, { ...held.turn, stopping: true });
+    held.abort.abort();
+    if (held.calling) stopStream(held.calling);
+  }
+
+  // A restore ends the timeline a turn was begun on, and none of the turn's writes can land after it (store pinned), so it
+  // ends the turn as 멈추기 does, a batch's wait too: a call left running would be billed and never read, and every
+  // write of the chat would fail until it ended.
+  private pinned<T>(held: Held, run: () => Promise<T>) {
+    return this.store.pinned(async (pin) => {
+      const ended = this.store.timelineEnd(pin);
+      const end = () => {
+        this.halt(held);
+        held.abort.abort();
+      };
+      ended.addEventListener('abort', end, { once: true });
+      try {
+        return await run();
+      } finally {
+        ended.removeEventListener('abort', end);
+      }
+    });
   }
 
   close() {
@@ -183,7 +211,7 @@ export class Talk {
 
   private seat(chat: string, said: Turn['said'], reply: Turn['reply']): Held {
     const turn = { chat, said, reply, text: reply.continues?.text ?? '', reasoning: reply.continues?.reasoning ?? '' };
-    const held: Held = { turn, abort: new AbortController(), calling: null };
+    const held: Held = { turn, abort: new AbortController(), cancel: new AbortController(), calling: null };
     this.turns.set(chat, held);
     this.writingChats = new Set(this.turns.keys());
     this.changes.notify();
@@ -213,7 +241,7 @@ export class Talk {
     const held = this.seat(chat, said, asked);
     try {
       // A turn is one workflow: begun on one timeline, none of its writes lands on the next (store pinned).
-      const ran = await this.store.pinned(() => this.turnOn(held, said, asked, lease, prepare));
+      const ran = await this.pinned(held, () => this.turnOn(held, said, asked, lease, prepare));
       return ran !== null && 'ok' in ran ? { kind: 'unsent', failure: ran } : ran;
     } finally {
       this.unseat(held);
@@ -234,13 +262,15 @@ export class Talk {
     this.change(held, { ...held.turn, reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
     const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
     const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), continues: reply.continues, ...(reply.before && { before: reply.before }) } });
+    call.retrying = this.retrying(held);
     this.reading.add(call.id);
     held.calling = call.id;
-    const batching = { waiting: () => this.change(held, { ...held.turn, whole: true, batch: true }) };
+    const batching = { waiting: () => this.change(held, { ...held.turn, whole: true, batch: true }), cancel: held.cancel.signal };
     const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held), batching });
     const sent = await sending;
     if (sent && !sent.ok) {
-      abort.abort(CANCEL);
+      held.cancel.abort();
+      abort.abort();
       endCall(this.store, call.id);
       await replying;
       return { kind: 'unsent', failure: sent };
@@ -271,9 +301,9 @@ export class Talk {
     this.reading.add(stream.id);
     held.calling = stream.id;
     try {
-      await this.store.pinned(async () => {
+      await this.pinned(held, async () => {
         if (await lease.ready) return;
-        const answer = await resume({ store: this.store, credentials: this.credentials }, stream, held.abort.signal, this.writer(held), this.inline(held));
+        const answer = await resume({ store: this.store, credentials: this.credentials }, stream, held.abort.signal, this.writer(held), this.inline(held), { retrying: this.retrying(held), cancel: held.cancel.signal });
         // Not Date.now(): the call may have ended long before this page read it, and the cache timer counts back from at.
         const at = stream.value.at + answer.totalMs;
         if (!this.closed) await this.save(chat, await this.ended(chat, this.written(held, reply, stream.value.call, answer, at)), stream.id);
@@ -282,6 +312,10 @@ export class Talk {
       this.unseat(held);
       lease.release();
     }
+  }
+
+  private retrying(held: Held) {
+    return () => this.change(held, { ...held.turn, retrying: true });
   }
 
   private writer(held: Held) {
@@ -306,6 +340,7 @@ export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
     id: answer.call,
     ...call,
     ...(answer.account !== null && { account: answer.account }),
+    ...(answer.tries !== null && answer.tries > 1 && { tries: answer.tries }),
     state: answer.state,
     cut: answer.cut,
     error: answer.error && receiptError(answer.error),

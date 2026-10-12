@@ -57,3 +57,10 @@ it('accepts a call’s marker held by the server (its key) or by a provider’s 
   expect(isValue('stream', { ...marker, batch: 'msgbatch_1' })).toBe(true);
   expect(isValue('stream', marker)).toBe(false);
 });
+
+it('reads a connection’s retry count as absent or a number, and refuses any other', () => {
+  const connection = { type: 'openai', label: 'OpenAI', baseUrl: null, protocol: null, accounts: [{ id: 'a', secret: 's' }], turns: null, starred: [] };
+  expect(isValue('connection', connection)).toBe(true);
+  expect(isValue('connection', { ...connection, retries: 0 })).toBe(true);
+  expect(isValue('connection', { ...connection, retries: '2' })).toBe(false);
+});

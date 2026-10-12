@@ -740,7 +740,7 @@ export class ObjectStore {
   // A workflow of several requests on one timeline: a backup's two scans, its restore, the Risu move, a removal, a chat
   // turn (runtime/talk). run's scans take the pin, and every write made while it runs fails with timeline-changed once
   // the pin's epoch has ended, so no part of a workflow begun on one timeline lands on the next. A write of the new
-  // epoch fails too until the workflow has ended.
+  // epoch fails too until the workflow has ended, so a workflow that can run long ends itself on timelineEnd.
   async pinned<T>(run: (pin: Pin) => Promise<T>, signal?: AbortSignal): Promise<T | ApiFailure> {
     const pin = await this.pin(signal);
     if (!pin.ok) return pin;
@@ -750,6 +750,11 @@ export class ObjectStore {
     } finally {
       this.workflows.delete(pin.data);
     }
+  }
+
+  // Aborts once pin's epoch has ended.
+  timelineEnd(pin: Pin): AbortSignal {
+    return pin.epoch === this.epoch ? this.ended.signal : AbortSignal.abort();
   }
 
   // One pull at a time: a caller arriving during a pull waits for that pull instead of starting another.

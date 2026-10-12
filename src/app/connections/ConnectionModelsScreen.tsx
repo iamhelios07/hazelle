@@ -1,19 +1,21 @@
 import { Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { modelSettings, resolveConnection } from '../../connectors/registry';
+import { RETRY_MOST } from '../../contracts/streams';
+import { modelSettings, resolveConnection, RETRIES } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
-import { refreshStarred, removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
+import { refreshStarred, removeConnection, restoreConnection, setRetries, setStarred } from '../../runtime/connections';
 import { modelProfile } from '../../runtime/profiles';
 import { ACTS } from '../common/acts';
 import { describeCatalogFailure } from '../common/failure';
 import { useSearch } from '../common/useSearch';
+import { RETRY_COUNT } from '../common/words';
 import { useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, MenuItem, NavBar, Row, Screen, Stack } from '../ui';
+import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, MenuItem, NavBar, Row, Screen, SettingRow, Stack, Stepper } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
@@ -138,6 +140,21 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       aside={
         <>
           <ConnectionSent connection={id} />
+          <SettingRow
+            label={RETRY_COUNT}
+            help="응답이 오기 전에 실패하면 이 횟수만큼 다시 보내요. 키나 요청이 잘못됐을 때는 바로 알려요."
+            control={
+              <Stepper
+                label={RETRY_COUNT}
+                less="한 번 덜 보내기"
+                more="한 번 더 보내기"
+                value={connection.retries ?? RETRIES}
+                min={0}
+                max={RETRY_MOST}
+                onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
+              />
+            }
+          />
           {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} /> : <ConnectionMeters connection={connection} />}
         </>
       }

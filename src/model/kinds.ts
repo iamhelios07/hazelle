@@ -184,6 +184,7 @@ const SHAPES = {
     accounts: listOf(shape({ id: str, secret: str })),
     turns: orNull(shape({ day: num, groups: listOf(shape({ id: str, name: str, accounts: listOf(str) })), anchor: shape({ group: str, cycle: num }) })),
     starred: listOf(shape({ id: str, name: str })),
+    retries: (value) => value === undefined || num(value),
   }),
   settings: shape({ models: isRecord }),
   prompt: (value) => prompt(value) && (conversation(value) || task(value)),
