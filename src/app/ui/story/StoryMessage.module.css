@@ -109,11 +109,17 @@
 @supports (container-type: scroll-state) {
   .foot {
     position: sticky;
-    bottom: calc(var(--footer-space) + var(--space-8));
+    bottom: calc(var(--footer-height) + var(--space-8));
     container-type: scroll-state;
     pointer-events: none;
-    /* Sticky makes the foot a stacking context: without a layer, a menu opened from it falls under the next message. */
+    /* Sticky makes the foot a stacking context: without a layer, a menu opened from it falls under the next message,
+       and without the menu's layer while open, under the next message's foot. */
     z-index: var(--layer-raised);
+    transition: bottom var(--duration-slow) var(--ease-enter);
+  }
+
+  .foot:has([aria-expanded='true']) {
+    z-index: var(--layer-menu);
   }
 
   .after,
@@ -124,7 +130,7 @@
   /* On a phone the story's width puts the tools under the centred 맨 아래로 pill, so they stand above it. */
   @media (max-width: 599px) {
     .foot {
-      bottom: calc(var(--footer-space) + var(--space-12) + var(--control-chip) + var(--space-8));
+      bottom: calc(var(--footer-height) + var(--space-12) + var(--control-chip) + var(--space-8));
     }
   }
 
