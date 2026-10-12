@@ -1,6 +1,8 @@
 # The hosted machine (infra/): docker-compose.yml plus Caddy in front, /data on the instance disk, no local models.
 #   hazelle-compose up -d   (installed by infra/cloud-init.yaml.tftpl)
-# /etc/hazelle/env holds HAZELLE_IMAGE (written by scripts/deploy.sh), HAZELLE_BACKUP_REMOTE and HAZELLE_ALERT_WEBHOOK.
+# /etc/hazelle/env holds HAZELLE_IMAGE (written by scripts/deploy.sh), HAZELLE_BACKUP_REMOTE, HAZELLE_ALERT_WEBHOOK and,
+# for pictures in R2 (infra/README.md "Pictures in R2"), HAZELLE_FILES_BUCKET=r2 with the HAZELLE_FILES_R2_* values;
+# left out, pictures stay on /data.
 services:
   app:
     ports: !reset []
@@ -9,6 +11,11 @@ services:
     environment:
       # No local model servers here: every plain-http or private destination is refused.
       HAZELLE_LOCAL_PROVIDERS: !reset null
+      HAZELLE_FILES_BUCKET: ${HAZELLE_FILES_BUCKET:-}
+      HAZELLE_FILES_R2_ENDPOINT: ${HAZELLE_FILES_R2_ENDPOINT:-}
+      HAZELLE_FILES_R2_BUCKET: ${HAZELLE_FILES_R2_BUCKET:-}
+      HAZELLE_FILES_R2_ACCESS_KEY_ID: ${HAZELLE_FILES_R2_ACCESS_KEY_ID:-}
+      HAZELLE_FILES_R2_SECRET_ACCESS_KEY: ${HAZELLE_FILES_R2_SECRET_ACCESS_KEY:-}
     extra_hosts: !reset []
 
   backup:

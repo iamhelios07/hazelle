@@ -10,8 +10,9 @@
 set -u
 LOCAL=/data/backup
 REMOTE=${HAZELLE_BACKUP_REMOTE:?set HAZELLE_BACKUP_REMOTE to an rclone remote and path, e.g. r2:hazelle-backup}
-# Equals the app's retention (src/server/backup/snapshots.ts). The machine drops most of a day's generations sooner, but
-# only once they are copied here, so the pool prune below still finds every generation's pictures locally or here.
+# Equals the app's retention (src/server/backup/snapshots.ts). Both sides drop most of a day's generations sooner (prune
+# below), the machine only once they are copied here, so the pool prune still finds every kept generation's pictures
+# locally or here.
 BACKUP_RETENTION_MS=$((7 * 24 * 60 * 60 * 1000))
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
@@ -30,12 +31,15 @@ copy_generation() {
     date -u +%Y-%m-%dT%H:%M:%SZ >"$LOCAL/$1/copied"
 }
 
-# Prints the picture ids of manifest $1, which must be generation $2's and whole. The pattern follows the key order
-# captureGeneration writes (src/server/backup/generation.ts: one line, "pictures" once, "migrations" last), so no
-# cut-off prefix of a manifest matches it; a change of that order fails every prune here until this follows it.
+# Prints the pooled picture ids of manifest $1, which must be generation $2's and whole. The pattern follows the key
+# order captureGeneration writes (src/server/backup/generation.ts: one line, "bucket" before "pictures", "pictures"
+# once, "migrations" last), so no cut-off prefix of a manifest matches it; a change of that order fails every prune
+# here until this follows it. A version 2 manifest whose bucket is r2 names pictures in the app's R2 store, not in the
+# pool: it prints none, so the pool of the generations before a switch to R2 empties as they go.
 pictures() {
-  grep -Eq "^\{\"version\":1,\"id\":\"$2\",.*\"pictures\":\[(\"[0-9a-f]{64}\"(,\"[0-9a-f]{64}\")*)?\],\"migrations\":\[[^]]*\]\}\$" "$1" &&
-    sed -e 's/.*"pictures":\[\([^]]*\)\],"migrations".*/\1,/' -e 's/"//g' -e 's/,/\n/g' "$1"
+  grep -Eq "^\{\"version\":[12],\"id\":\"$2\",.*\"pictures\":\[(\"[0-9a-f]{64}\"(,\"[0-9a-f]{64}\")*)?\],\"migrations\":\[[^]]*\]\}\$" "$1" || return 1
+  if grep -q '^{"version":2,.*,"bucket":"r2","accounts":' "$1"; then return 0; fi
+  sed -e 's/.*"pictures":\[\([^]]*\)\],"migrations".*/\1,/' -e 's/"//g' -e 's/,/\n/g' "$1"
 }
 
 # Every pooled picture that no remote manifest and no local generation names. Each step is checked: a failed listing,
@@ -61,15 +65,32 @@ prune_pool() {
   log "pruned $(wc -l <"$work/unnamed") pictures"
 }
 
-# Generations past the retention go, then the pool.
+# A generation goes at the retention, and one with a manifest sooner unless it is one of the two newest with a manifest
+# or the newest with a manifest of its UTC day; then the pool. Read from the remote listing alone, so a machine that lost
+# its generations never empties the remote. The same rule as expireGenerations (src/server/backup/generation.ts) for a
+# copied generation: change both together. One without a manifest is a copy cut off, which the next pass completes.
 prune() {
   now_ms=$(($(date +%s) * 1000))
   dirs=$(rclone lsf --dirs-only "$REMOTE") || return 1
-  for entry in $dirs; do
-    id=${entry%/}
+  manifests=$(rclone lsf -R --files-only --include '/*/manifest.json' "$REMOTE") || return 1
+  whole=0
+  days=' '
+  for id in $(printf '%s\n' $dirs | sed 's|/$||' | sort -t- -k1,1nr); do
     at=${id%%-*}
     case $at in '' | *[!0-9]*) continue ;; esac
     if [ $((now_ms - at)) -ge "$BACKUP_RETENTION_MS" ]; then
+      drop=1
+    elif printf '%s\n' $manifests | grep -qx "$id/manifest.json"; then
+      day=$((at - at % 86400000))
+      drop=1
+      if [ "$whole" -lt 2 ]; then drop=0; fi
+      case $days in *" $day "*) ;; *) drop=0 ;; esac
+      whole=$((whole + 1))
+      days="$days$day "
+    else
+      drop=0
+    fi
+    if [ "$drop" = 1 ]; then
       rclone purge "$REMOTE/$id" || return 1
       log "pruned $id"
     fi

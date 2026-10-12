@@ -55,6 +55,25 @@ variable "r2_bucket" {
   type = string
 }
 
+# The app's picture store (README "Pictures in R2"): a bucket of its own, not the backup bucket, whose copier prunes
+# everything under its remote. Empty keeps pictures on /data. The key may read, write and delete in that bucket only.
+variable "r2_files_bucket" {
+  type    = string
+  default = ""
+}
+
+variable "r2_files_access_key_id" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "r2_files_secret_access_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 # A Discord- or Slack-compatible webhook for backup and disk alerts; empty sends none.
 variable "alert_webhook" {
   type      = string

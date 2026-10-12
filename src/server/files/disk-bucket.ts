@@ -1,23 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { open, readdir, rename, rm } from 'node:fs/promises';
+import { open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { makeDirs } from '../db/durable';
+import { checkedKey, checkedPrefix, isPrefix, type DiskBucket } from './bucket';
 
-// Pictures on disk, one directory per account incarnation. reconcile.ts reads the same layout and removes the
-// .tmp-* names put leaves behind a crash.
+// Pictures on disk, one directory per account incarnation, .tmp-* while a put runs.
 
-export type Bucket = {
-  put(key: string, body: ArrayBuffer | Uint8Array): Promise<void>;
-  get(key: string): Promise<ReadableStream<Uint8Array> | null>;
-  delete(key: string): Promise<void>;
-  list(prefix: string): Promise<string[]>;
-  deletePrefix(prefix: string): Promise<void>;
-};
-
-// The path-traversal guard: keys come from validated route params, so a miss is a programming error.
-const KEY = /^files\/[0-9a-f]{32}\/[0-9a-f]{64}$/;
-const PREFIX = /^files\/[0-9a-f]{32}\/$/;
 const ID = /^[0-9a-f]{64}$/;
 
 async function syncDir(dir: string): Promise<void> {
@@ -29,18 +18,33 @@ async function syncDir(dir: string): Promise<void> {
   }
 }
 
-export function diskBucket(dataDir: string): Bucket {
-  const path = (key: string) => {
-    if (!KEY.test(key)) throw new Error(`Not a file key: ${key}`);
-    return join(dataDir, key);
-  };
-  const directory = (prefix: string) => {
-    if (!PREFIX.test(prefix)) throw new Error(`Not a file prefix: ${prefix}`);
-    return join(dataDir, prefix);
-  };
+// ENOENT answers nothing: an account's deletion removes its directory while a listing walks it.
+async function entries(dir: string): Promise<string[]> {
+  try {
+    return await readdir(dir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+async function mtime(path: string): Promise<number> {
+  try {
+    return (await stat(path)).mtimeMs;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return Infinity;
+    throw error;
+  }
+}
+
+export function diskBucket(dataDir: string): DiskBucket {
+  const path = (key: string) => join(dataDir, checkedKey(key));
+  const directory = (prefix: string) => join(dataDir, checkedPrefix(prefix));
+  const prefixes = async () => (await entries(join(dataDir, 'files'))).map((name) => `files/${name}/`).filter(isPrefix).sort();
   return {
-    // A picture is durable before its row says stored: the bytes reach the disk, then the name, then the routes write
-    // the row.
+    kind: 'disk',
+    path,
+    // The bytes reach the disk, then the name.
     put: async (key, body) => {
       const target = path(key);
       const dir = dirname(target);
@@ -69,17 +73,21 @@ export function diskBucket(dataDir: string): Bucket {
     delete: async (key) => {
       await rm(path(key), { force: true });
     },
-    list: async (prefix) => {
-      const dir = directory(prefix);
-      try {
-        return (await readdir(dir)).filter((name) => ID.test(name)).sort().map((name) => `${prefix}${name}`);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-        throw error;
-      }
-    },
+    list: async (prefix) => (await entries(directory(prefix))).filter((name) => ID.test(name)).sort().map((name) => `${prefix}${name}`),
     deletePrefix: async (prefix) => {
       await rm(directory(prefix), { recursive: true, force: true });
+    },
+    prefixes,
+    sweep: async (settled) => {
+      const removed: string[] = [];
+      for (const prefix of await prefixes()) {
+        for (const name of await entries(directory(prefix))) {
+          if (!name.startsWith('.tmp-') || (await mtime(join(directory(prefix), name))) >= settled) continue;
+          await rm(join(directory(prefix), name), { force: true });
+          removed.push(`${prefix}${name}`);
+        }
+      }
+      return removed;
     },
   };
 }

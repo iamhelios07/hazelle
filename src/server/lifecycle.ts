@@ -4,6 +4,7 @@ import type { Life, Unavailable } from './account-store';
 import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
 import { fail, refused, type Services } from './http';
+import { removePictures } from './reconcile';
 
 // An account's lifecycle lives on its service row, where a rewind of its store cannot touch it, and its store loads that
 // row when it starts (account-store.ts). Every change is: write the service, restart the store, read back what it
@@ -106,7 +107,7 @@ async function leave(
   // The pictures follow the row: whatever a cut-off removal or an upload still in flight leaves under the incarnation
   // is the hourly reconciliation's (reconcile.ts), and no later run of this has to find it.
   await db.prepare("DELETE FROM accounts WHERE id = ? AND incarnation = ? AND state = 'leaving'").bind(accountId, incarnation).run();
-  ctx.waitUntil(env.files.deletePrefix(`files/${incarnation}/`));
+  ctx.waitUntil(removePictures(env.files, db, incarnation, Date.now()));
   return 'left';
 }
 

@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RETENTION_MS } from './db/account-db';
 import type { SqlValue, Statement } from './db/service-db';
 import { fileBlocks, uploadSlots } from './files';
-import type { Bucket } from './files/disk-bucket';
+import type { Bucket } from './files/bucket';
+import { fakeS3 } from './files/fake-s3';
+import { r2Bucket } from './files/r2-bucket';
 import { hex, type AppEnv } from './http';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
 
@@ -342,5 +345,33 @@ describe('files', () => {
 
     expect((await t.reconcile()).removed).toEqual([`files/${old.incarnation}`]);
     expect(await stored(old.incarnation, id)).toBeUndefined();
+  });
+
+  it('in R2 keeps a deleted account’s pictures, and an orphan prefix, until the backup retention has passed since it was found', async () => {
+    const s3 = await fakeS3();
+    const disk = t.env.files;
+    t.env.files = r2Bucket(s3.config);
+    try {
+      await signup(signupBody('operator'));
+      const gone = await signup();
+      const bytes = new Uint8Array([2, 7]);
+      const id = await idOf(bytes);
+      expect((await put(id, bytes, gone.cookie)).status).toBe(204);
+      const deleted = Date.now();
+      expect((await t.delete('account', { method: 'password', proof: proof('password') }, gone.cookie)).status).toBe(204);
+      await t.settle();
+      expect((await t.reconcile(deleted)).removed).toEqual([]);
+      const orphan = `files/${'f'.repeat(32)}/${id}`;
+      await t.env.files.put(orphan, bytes);
+      expect((await t.reconcile(deleted + RETENTION_MS - 60_000)).removed).toEqual([]);
+      expect([...s3.objects.keys()].sort()).toEqual([`files/${gone.incarnation}/${id}`, orphan].sort());
+      expect((await t.reconcile(deleted + RETENTION_MS + 60_000)).removed).toEqual([`files/${gone.incarnation}`]);
+      expect([...s3.objects.keys()]).toEqual([orphan]);
+      expect((await t.reconcile(deleted + 2 * RETENTION_MS)).removed).toEqual([`files/${'f'.repeat(32)}`]);
+      expect(s3.objects.size).toBe(0);
+    } finally {
+      t.env.files = disk;
+      await s3.close();
+    }
   });
 });

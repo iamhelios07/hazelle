@@ -57,6 +57,11 @@ resource "vultr_instance" "hazelle" {
       "HAZELLE_IMAGE=ghcr.io/jiniill/hazelle@${var.image_digest}",
       "HAZELLE_BACKUP_REMOTE=r2:${var.r2_bucket}",
       "HAZELLE_ALERT_WEBHOOK=${var.alert_webhook}",
+      "HAZELLE_FILES_BUCKET=${var.r2_files_bucket == "" ? "" : "r2"}",
+      "HAZELLE_FILES_R2_ENDPOINT=https://${var.r2_account_id}.r2.cloudflarestorage.com",
+      "HAZELLE_FILES_R2_BUCKET=${var.r2_files_bucket}",
+      "HAZELLE_FILES_R2_ACCESS_KEY_ID=${var.r2_files_access_key_id}",
+      "HAZELLE_FILES_R2_SECRET_ACCESS_KEY=${var.r2_files_secret_access_key}",
     ])
     rclone_conf = join("\n", [
       "[r2]",

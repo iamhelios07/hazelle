@@ -29,12 +29,15 @@
 #   sed -i "s|^HAZELLE_IMAGE=.*|HAZELLE_IMAGE=$previous|" /etc/hazelle/env
 #   fetch() { hazelle-compose run --rm --no-deps -v /var/tmp/hazelle-restore:/restore --entrypoint /bin/sh backup -c "$1" "$generation"; }
 #   fetch 'rclone copy "$HAZELLE_BACKUP_REMOTE/$0" "/restore/$0"'
-#   fetch 'sed -n "s/.*\"pictures\":\[\([^]]*\)\].*/\1/p" "/restore/$0/manifest.json" | tr -d "\"" | tr , "\n" >/tmp/pictures &&
-#     rclone copy "$HAZELLE_BACKUP_REMOTE/files" /restore/files --files-from-raw /tmp/pictures'
+#   fetch 'grep -q "\"bucket\":\"r2\"" "/restore/$0/manifest.json" ||
+#     { sed -n "s/.*\"pictures\":\[\([^]]*\)\].*/\1/p" "/restore/$0/manifest.json" | tr -d "\"" | tr , "\n" >/tmp/pictures &&
+#       rclone copy "$HAZELLE_BACKUP_REMOTE/files" /restore/files --files-from-raw /tmp/pictures; }'
 #   hazelle-compose run --rm --no-deps -v /var/tmp/hazelle-restore:/restore:ro --entrypoint /app/scripts/restore.sh app \
 #     "/restore/$generation" /data
 #   hazelle-compose up -d && rm -rf /var/tmp/hazelle-restore
-# The previous digest is selected before the restore so that its own restore.sh reads the generation. Writes after the
+# A generation whose manifest says "bucket":"r2" has no pool to fetch: its pictures stay in the app's R2 bucket, which
+# the restore checks there (HAZELLE_FILES_* reach it from /etc/hazelle/env). The previous digest is selected before the
+# restore so that its own restore.sh reads the generation. Writes after the
 # pre-upgrade generation's snapshots are lost; $failed keeps them until it is removed by hand.
 set -euo pipefail
 cd "$(dirname "$0")/.."
