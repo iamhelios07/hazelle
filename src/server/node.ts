@@ -18,7 +18,7 @@ import { openDatabase, serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
 import type { FrontendOptions } from './frontend-worker';
 import { fail, type Services } from './http';
-import { tokenBucket } from './limits';
+import { tokenBucket, visitorLimits } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshModelsDev } from './models-dev';
 import { reconcile } from './reconcile';
@@ -69,7 +69,7 @@ try {
 const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
 const db = serviceDb(raw);
-const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20) };
+const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits() };
 const local = localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? '');
 const outbound = pinnedOutbound(local);
 const services: Services = {
@@ -135,6 +135,7 @@ const timers = [
     services.stores.evictIdle();
     limits.calls.evict();
     limits.botCalls.evict();
+    for (const limit of Object.values(limits.visitors)) limit.evict();
   }, 10 * MINUTE_MS),
   setTimeout(hourly, MINUTE_MS),
   setInterval(() => ctx.waitUntil(services.streams.expire(Date.now())), MINUTE_MS),

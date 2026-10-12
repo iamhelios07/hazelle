@@ -1,0 +1,236 @@
+import { randomBytes } from 'node:crypto';
+import { Hono, type Context } from 'hono';
+import { createMiddleware } from 'hono/factory';
+import { MAX_REPORT_LENGTH } from '../contracts/admin';
+import { FILE_ID } from '../contracts/files';
+import { VISITOR_HEADER } from '../contracts/http';
+import { COVER_LENGTH, MAX_SHARE_FILES, MAX_SHARE_LINK, SHARE_CONSENT, SHARE_ID, type ShareCover, type ShareState } from '../contracts/shares';
+import { fileKey } from './files';
+import { fail, isRecord, readObject, type AppEnv, type Services } from './http';
+import { canWrite, currentAccount, requireSession } from './session';
+
+// A share is sealed content an account publishes under one link (migrations/0003_shares.sql). The server holds the
+// sealed manifests and the plain list of the files each version names, never the key, which lives only in the link's
+// fragment: it learns what a share holds only when a report hands it the link.
+
+// A publish names up to MAX_SHARE_FILES content ids of 64 characters each.
+export const PUBLISH_BYTES = 1_000_000;
+// What one link's reports may hold unresolved; reports are plaintext rows no byte cap counts.
+const MAX_OPEN_REPORTS = 50;
+// Every anonymous answer is read fresh: a hold or a block must stop the next read, not the next expiry.
+const FRESH = { 'cache-control': 'no-store' };
+// A share's state, over a shares row named s.
+const LIVE = 's.cut_at IS NULL AND s.removed_at IS NULL AND s.held_at IS NULL';
+
+type Visits = keyof Services['limits']['visitors'];
+// The anonymous routes count per visitor, as the public listener saw them (VISITOR_HEADER). A request that did not
+// come through it, as in tests, counts as one visitor.
+const visits = (kind: Visits) =>
+  createMiddleware<AppEnv>(async (c, next) => (c.env.limits.visitors[kind].limit(c.req.header(VISITOR_HEADER) ?? 'direct').success ? next() : fail(c, 429, 'too-many-visits')));
+
+const newShareId = () => randomBytes(12).toString('base64url');
+
+function readCover(value: unknown): ShareCover | null | undefined {
+  if (value === null) return null;
+  if (!isRecord(value)) return undefined;
+  const cover: Record<string, string> = {};
+  for (const [field, most] of Object.entries(COVER_LENGTH)) {
+    const text = value[field];
+    if (typeof text !== 'string' || text.trim().length > most) return undefined;
+    cover[field] = text.trim();
+  }
+  return cover.name ? (cover as ShareCover) : undefined;
+}
+
+// What a publish names: the sealed manifest and the version's pictures, all already stored among the sharer's files.
+async function readVersion(c: Context<AppEnv>) {
+  const body = await readObject(c);
+  const manifest = body?.manifest;
+  const files = body?.files;
+  const cover = readCover(body?.cover);
+  if (typeof manifest !== 'string' || !FILE_ID.test(manifest) || !Array.isArray(files) || files.length > MAX_SHARE_FILES || cover === undefined) return null;
+  if (!files.every((file): file is string => typeof file === 'string' && FILE_ID.test(file))) return null;
+  return { manifest, files: [...new Set(files)], cover };
+}
+
+// Each refusal by name: the account has not agreed to the current consent, a named file is not the sharer's, or a
+// picture was blocked, which would otherwise be published again under a new link.
+async function refusal(c: Context<AppEnv>, manifest: string, files: string[]) {
+  const row = await c.env.db
+    .prepare(
+      `SELECT (SELECT share_consent FROM accounts WHERE incarnation = ?1) AS consent,
+         (SELECT COUNT(*) FROM json_each(?2) AS named WHERE NOT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = named.value AND stored = 1)) AS missing,
+         (SELECT COUNT(*) FROM json_each(?2) AS named WHERE named.value IN (SELECT id FROM file_blocks)) AS blocked`,
+    )
+    .bind(c.get('account').incarnation, JSON.stringify([manifest, ...files]))
+    .first<{ consent: number | null; missing: number; blocked: number }>();
+  if (row!.consent !== SHARE_CONSENT) return fail(c, 403, 'no-consent');
+  if (row!.blocked) return fail(c, 403, 'file-blocked');
+  if (row!.missing) return fail(c, 400, 'bad-input');
+  return null;
+}
+
+export const shares = new Hono<AppEnv>();
+
+// The account's consent at its current version, which every publish asks for.
+shares.put('/consent', requireSession, async (c) => {
+  await c.env.db.prepare('UPDATE accounts SET share_consent = ?, share_consent_at = ? WHERE incarnation = ?').bind(SHARE_CONSENT, Date.now(), c.get('account').incarnation).run();
+  return c.body(null, 204);
+});
+
+// The account's links not cut, newest first, and the consent it agreed to.
+shares.get('/mine', requireSession, async (c) => {
+  const { incarnation } = c.get('account');
+  const [consent, { results }] = await Promise.all([
+    c.env.db.prepare('SELECT share_consent FROM accounts WHERE incarnation = ?').bind(incarnation).first<number | null>('share_consent'),
+    c.env.db
+      .prepare(
+        `SELECT s.id, s.created_at AS createdAt, s.received, s.held_at IS NOT NULL AS held, s.removed_at IS NOT NULL AS removed,
+           (SELECT MAX(version) FROM share_versions WHERE share = s.id) AS version
+         FROM shares s WHERE s.incarnation = ? AND s.cut_at IS NULL ORDER BY s.created_at DESC`,
+      )
+      .bind(incarnation)
+      .all<{ held: number; removed: number }>(),
+  ]);
+  return c.json({ consent, shares: results.map((row) => ({ ...row, held: Boolean(row.held), removed: Boolean(row.removed) })) });
+});
+
+shares.post('/', requireSession, canWrite, async (c) => {
+  const version = await readVersion(c);
+  if (!version) return fail(c, 400, 'bad-input');
+  const refused = await refusal(c, version.manifest, version.files);
+  if (refused) return refused;
+  const db = c.env.db;
+  const id = newShareId();
+  const now = Date.now();
+  await db.batch([
+    db.prepare('INSERT INTO shares (id, incarnation, created_at, cover) VALUES (?, ?, ?, ?)').bind(id, c.get('account').incarnation, now, version.cover && JSON.stringify(version.cover)),
+    db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, 1, ?, ?)').bind(id, version.manifest, now),
+    db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, 1, value FROM json_each(?2)').bind(id, JSON.stringify(version.files)),
+  ]);
+  return c.json({ id, version: 1 }, 201);
+});
+
+// 새 버전으로 바꾸기: the link stays and opens this version from now on. A held link takes none until the operator has
+// looked: the version the report showed is the one under review.
+shares.post('/:id/versions', requireSession, canWrite, async (c) => {
+  const id = c.req.param('id');
+  const version = await readVersion(c);
+  if (!SHARE_ID.test(id) || !version) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const row = await db
+    .prepare(`SELECT s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open, (SELECT MAX(version) FROM share_versions WHERE share = s.id) AS version FROM shares s WHERE s.id = ? AND s.incarnation = ?`)
+    .bind(id, c.get('account').incarnation)
+    .first<{ held: number; open: number; version: number }>();
+  if (!row?.open) return fail(c, 404, 'not-found');
+  if (row.held) return fail(c, 403, 'share-held');
+  const refused = await refusal(c, version.manifest, version.files);
+  if (refused) return refused;
+  const next = row.version + 1;
+  await db.batch([
+    db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, ?, ?, ?)').bind(id, next, version.manifest, Date.now()),
+    db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, ?2, value FROM json_each(?3)').bind(id, next, JSON.stringify(version.files)),
+    db.prepare('UPDATE shares SET cover = ? WHERE id = ?').bind(version.cover && JSON.stringify(version.cover), id),
+  ]);
+  return c.json({ id, version: next });
+});
+
+// 링크 끊기. Nothing is deleted: the versions stay among the sharer's files as every file does while its account lives,
+// so a report still open on the link keeps what it reported.
+shares.delete('/:id', requireSession, async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
+  const cut = await c.env.db.prepare('UPDATE shares SET cut_at = ? WHERE id = ? AND incarnation = ? AND cut_at IS NULL RETURNING id').bind(Date.now(), id, c.get('account').incarnation).first();
+  return cut ? c.body(null, 204) : fail(c, 404, 'not-found');
+});
+
+// Anonymous from here on.
+
+shares.get('/:id', visits('reads'), async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
+  const row = await c.env.db
+    .prepare(
+      `SELECT s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open, s.received, v.version, v.manifest
+       FROM shares s JOIN share_versions v ON v.share = s.id WHERE s.id = ? ORDER BY v.version DESC LIMIT 1`,
+    )
+    .bind(id)
+    .first<{ held: number; open: number; received: number; version: number; manifest: string }>();
+  const state: ShareState = !row?.open ? { state: 'gone' } : row.held ? { state: 'held' } : { state: 'live', version: row.version, manifest: row.manifest, received: row.received };
+  return c.json(state, 200, FRESH);
+});
+
+// The embed's text for the /s/:id page (static.ts), only while the link is live.
+shares.get('/:id/cover', async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
+  const cover = await c.env.db.prepare(`SELECT s.cover FROM shares s WHERE s.id = ? AND ${LIVE}`).bind(id).first<string | null>('cover');
+  return c.json({ cover: cover ? (JSON.parse(cover) as ShareCover) : null }, 200, FRESH);
+});
+
+shares.get('/:id/files/:file', visits('files'), (c) => serveShareFile(c, false));
+
+// The 받은 횟수: a visitor finished 헤이젤로 가져오기 or 파일로 받기.
+shares.post('/:id/received', visits('reads'), async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
+  const counted = await c.env.db.prepare(`UPDATE shares AS s SET received = received + 1 WHERE s.id = ? AND ${LIVE} RETURNING id`).bind(id).first();
+  return counted ? c.body(null, 204) : fail(c, 404, 'not-found');
+});
+
+// Anyone holding the link reports from its page; a signed-in reporter is named. The first report on a share the
+// operator has not reviewed holds it at once, in the same batch. A share the operator reviewed is held only by the
+// operator: otherwise one person could pause a link again after every review.
+shares.post('/:id/reports', visits('reports'), async (c) => {
+  const id = c.req.param('id');
+  const body = await readObject(c);
+  const text = typeof body?.text === 'string' ? body.text.trim() : '';
+  const link = body?.link;
+  const version = body?.version;
+  if (!SHARE_ID.test(id) || !text || text.length > MAX_REPORT_LENGTH || typeof link !== 'string' || link.length > MAX_SHARE_LINK || !link.includes(`/s/${id}#`)) return fail(c, 400, 'bad-input');
+  if (typeof version !== 'number' || !Number.isSafeInteger(version)) return fail(c, 400, 'bad-input');
+  const reporter = await currentAccount(c);
+  const db = c.env.db;
+  const now = Date.now();
+  const [sent] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO reports (account_id, username, text, created_at, share, share_version, link)
+         SELECT ?1, ?2, ?3, ?4, s.id, ?6, ?7 FROM shares s WHERE s.id = ?5 AND s.cut_at IS NULL AND s.removed_at IS NULL
+           AND EXISTS (SELECT 1 FROM share_versions WHERE share = s.id AND version = ?6)
+           AND (SELECT COUNT(*) FROM reports WHERE share = ?5 AND resolved_at IS NULL) < ?8
+         RETURNING id`,
+      )
+      .bind(reporter?.id ?? null, reporter?.username ?? null, text, now, id, version, link, MAX_OPEN_REPORTS),
+    db.prepare('UPDATE shares SET held_at = ?2, held_report = last_insert_rowid() WHERE id = ?1 AND held_at IS NULL AND reviewed_at IS NULL AND changes() = 1').bind(id, now),
+  ]);
+  if (sent!.results.length) return c.body(null, 204);
+  const open = await db.prepare('SELECT 1 FROM shares s WHERE s.id = ? AND s.cut_at IS NULL AND s.removed_at IS NULL').bind(id).first();
+  return open ? fail(c, 429, 'too-many-reports') : fail(c, 404, 'not-found');
+});
+
+// The sharer's copy of a file a version of the share names, its manifest or a picture. The visitor's page reads it
+// while the link is live and the file is not blocked; the operator's (operator true, under the operator's guard) reads
+// it in any state, to review what was reported.
+export async function serveShareFile(c: Context<AppEnv>, operator: boolean) {
+  const id = c.req.param('id')!;
+  const file = c.req.param('file')!;
+  if (!SHARE_ID.test(id) || !FILE_ID.test(file)) return fail(c, 400, 'bad-input');
+  c.header('cache-control', FRESH['cache-control']);
+  const row = await c.env.db
+    .prepare(
+      `SELECT s.incarnation, s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open,
+         EXISTS (SELECT 1 FROM share_files WHERE share = s.id AND file = ?2) OR EXISTS (SELECT 1 FROM share_versions WHERE share = s.id AND manifest = ?2) AS named,
+         EXISTS (SELECT 1 FROM file_blocks WHERE id = ?2) AS blocked,
+         EXISTS (SELECT 1 FROM account_files WHERE incarnation = s.incarnation AND id = ?2 AND stored = 1) AS stored
+       FROM shares s WHERE s.id = ?1`,
+    )
+    .bind(id, file)
+    .first<{ incarnation: string; held: number; open: number; named: number; blocked: number; stored: number }>();
+  if (!row?.named || !row.stored || (!operator && !row.open)) return fail(c, 404, 'not-found');
+  if (!operator && row.held) return fail(c, 403, 'share-held');
+  if (!operator && row.blocked) return fail(c, 403, 'file-blocked');
+  const body = await c.env.files.get(fileKey(row.incarnation, file));
+  if (!body) return fail(c, 404, 'not-found');
+  return c.body(body, 200, { 'content-type': 'application/octet-stream' });
+}

@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { FILE_ID, MAX_FILE_IDS } from '../contracts/files';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import { CAP } from './caps';
+import type { Db, SqlValue, Statement } from './db/service-db';
 import { fail, hex, readObject, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
 
@@ -166,10 +167,7 @@ export const fileBlocks = new Hono<AppEnv>().put('/files/:id/blocked', async (c)
   const at = Date.now();
   await db.batch(
     blocked
-      ? [
-          db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?1, 'block-file', ?2 WHERE NOT EXISTS (SELECT 1 FROM file_blocks WHERE id = ?2)`).bind(at, id),
-          db.prepare('INSERT INTO file_blocks (id, blocked_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(id, at),
-        ]
+      ? blockFiles(db, at, 'SELECT ?2 AS id', id)
       : [
           db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?1, 'unblock-file', id FROM file_blocks WHERE id = ?2`).bind(at, id),
           db.prepare('DELETE FROM file_blocks WHERE id = ?').bind(id),
@@ -178,4 +176,13 @@ export const fileBlocks = new Hono<AppEnv>().put('/files/:id/blocked', async (c)
   return c.body(null, 204);
 });
 
-const fileKey =(incarnation: string, id: string) => `files/${incarnation}/${id}`;
+// The only writer of file_blocks. ids: a SELECT of the content ids to block, with its values from ?2 on; each new block
+// is logged.
+export function blockFiles(db: Db, at: number, ids: string, ...values: SqlValue[]): Statement[] {
+  return [
+    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT DISTINCT ?1, 'block-file', id FROM (${ids}) WHERE id NOT IN (SELECT id FROM file_blocks)`).bind(at, ...values),
+    db.prepare(`INSERT INTO file_blocks (id, blocked_at) SELECT DISTINCT id, ?1 FROM (${ids}) WHERE true ON CONFLICT DO NOTHING`).bind(at, ...values),
+  ];
+}
+
+export const fileKey = (incarnation: string, id: string) => `files/${incarnation}/${id}`;

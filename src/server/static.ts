@@ -1,5 +1,8 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import { SHARE_ID, type ShareCover } from '../contracts/shares';
 
 // frame-src is also the tool pages' navigation boundary: adding any host there opens a way out for them.
 export const CSP =
@@ -10,7 +13,7 @@ const HEADERS = { 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nos
 // Every file under /assets has a content hash in its name, so a changed file is a new URL.
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
-export function clientFiles(clientDir: string) {
+export function clientFiles(clientDir: string, cover: (share: string) => Promise<ShareCover | null>) {
   const client = new Hono();
   client.use(async (c, next) => {
     const started = performance.now();
@@ -34,6 +37,11 @@ export function clientFiles(clientDir: string) {
     // A tool page's origin is opaque, so its stylesheet and fonts arrive as CORS fetches. Assets are public build files.
     if (asset) c.res.headers.set('Access-Control-Allow-Origin', '*');
   });
+  client.get('/s/:id', async (c, next) => {
+    const id = c.req.param('id');
+    if (!SHARE_ID.test(id) || !c.req.header('accept')?.includes('text/html')) return next();
+    return c.html(sharePage(await readFile(join(clientDir, 'index.html'), 'utf8'), await cover(id)));
+  });
   client.get('*', serveStatic({ root: clientDir, precompressed: true }));
   // A path that is no file is a client route, whatever it looks like: model ids carry dots
   // (/models/<connection>/vendor/model-4.5). Only a page load gets the page; a missing asset is a real 404.
@@ -42,4 +50,21 @@ export function clientFiles(clientDir: string) {
     return (load && (await page(c, next))) || c.notFound();
   });
   return client;
+}
+
+const escape = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+
+// A share link's page: the app's page, whose embed carries the sharer's opt-in cover as text, or the app's own words
+// when there is none. Never a picture, not even the app's: an embed of a share shows text only.
+export function sharePage(html: string, cover: ShareCover | null): string {
+  let page = html.replace(/\s*<meta property="og:image[^>]*>/g, '').replace(/<meta name="twitter:card" content="[^"]*"/, '<meta name="twitter:card" content="summary"');
+  if (!cover) return page;
+  const title = escape(cover.creator ? `${cover.name} · ${cover.creator}` : cover.name);
+  const line = escape(cover.line);
+  page = page
+    .replace(/<title>[^<]*<\/title>/, () => `<title>${title}</title>`)
+    .replace(/<meta property="og:title" content="[^"]*"/, () => `<meta property="og:title" content="${title}"`)
+    .replace(/<meta name="description" content="[^"]*"/, () => `<meta name="description" content="${line}"`)
+    .replace(/<meta property="og:description" content="[^"]*"/, () => `<meta property="og:description" content="${line}"`);
+  return page;
 }

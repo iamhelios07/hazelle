@@ -10,7 +10,7 @@ import { openDatabase, serviceDb, type Db, type Statement } from '../db/service-
 import { diskBucket } from '../files/disk-bucket';
 import { sha256Hex, type Services } from '../http';
 import { beginRestore, cancelRestore, runRestore } from '../lifecycle';
-import { tokenBucket } from '../limits';
+import { tokenBucket, visitorLimits } from '../limits';
 import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
@@ -168,7 +168,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
     localProviders: new Set(),
-    limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
+    limits: { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits() },
     backups: backups(dir, 3, null),
   };
   const ctx = { waitUntil: () => {}, passThroughOnException: () => {}, props: {} };

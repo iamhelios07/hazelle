@@ -2,7 +2,9 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { type AccountState, type RestorePhase, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
 import { RETENTION_MS, StoreUnavailable } from './db/account-db';
-import { fileBlocks } from './files';
+import { SHARE_ID } from '../contracts/shares';
+import { blockFiles, fileBlocks } from './files';
+import { serveShareFile } from './shares';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fail, ID, readObject, refused, type AppEnv, type Services } from './http';
 import { beginRestore, cancelRestore, leaveAccount, refuseLeft, restoreActions, runRestore, store, undoable } from './lifecycle';
@@ -29,7 +31,7 @@ export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c
   const sent = await c.env.db.prepare(
     `INSERT INTO reports (account_id, username, text, created_at)
      SELECT ?1, ?2, ?3, MAX(?4, created_at) FROM accounts WHERE id = ?1 AND incarnation = ?6
-     AND (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND resolved_at IS NULL) < ?5 RETURNING id`,
+     AND (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND share IS NULL AND resolved_at IS NULL) < ?5 RETURNING id`,
   )
     .bind(id, username, text, Date.now(), MAX_OPEN_REPORTS, incarnation)
     .first();
@@ -397,9 +399,27 @@ function page(c: Context<AppEnv>, select: string, where = 'TRUE', ...values: Sql
   return c.env.db.prepare(`${select} WHERE (?1 IS NULL OR id < ?1) AND ${where} ORDER BY id DESC LIMIT ?2`).bind(before === undefined ? null : Number(before), PAGE_ROWS, ...values);
 }
 
+// A share report carries its share's state now and whose it is: held, reviewed (a hold lifted or a block, after which
+// reports no longer hold it), cut by the sharer, removed by a block. null: the share went with its sharer's account.
+type ShareRow = { held: number; reviewed: number; cut: number; removed: number; ownerId: string | null; ownerName: string | null };
+const SHARED = `(SELECT json_object('held', s.held_at IS NOT NULL, 'reviewed', s.reviewed_at IS NOT NULL, 'cut', s.cut_at IS NOT NULL,
+    'removed', s.removed_at IS NOT NULL, 'ownerId', a.id, 'ownerName', a.username)
+  FROM shares s LEFT JOIN accounts a ON a.incarnation = s.incarnation WHERE s.id = reports.share)`;
+
 admin.get('/reports', async (c) => {
-  const rows = page(c, 'SELECT id, account_id AS accountId, username, text, created_at AS createdAt, resolved_at AS resolvedAt FROM reports');
-  return rows ? c.json({ reports: (await rows.all()).results }) : fail(c, 400, 'bad-input');
+  const rows = page(
+    c,
+    `SELECT id, account_id AS accountId, username, text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link,
+       ${SHARED} AS shared FROM reports`,
+  );
+  if (!rows) return fail(c, 400, 'bad-input');
+  const { results } = await rows.all<{ share: string | null; shared: string | null }>();
+  return c.json({
+    reports: results.map(({ shared, ...row }) => {
+      const state = shared === null ? null : (JSON.parse(shared) as ShareRow);
+      return { ...row, shared: state && { held: Boolean(state.held), reviewed: Boolean(state.reviewed), cut: Boolean(state.cut), removed: Boolean(state.removed), ownerId: state.ownerId, ownerName: state.ownerName } };
+    }),
+  });
 });
 
 // reply: a notice to the report's sender, which must still hold its account: a reply that cannot arrive resolves nothing.
@@ -418,6 +438,74 @@ admin.post('/reports/:id/resolve', async (c) => {
 });
 
 admin.route('/', fileBlocks);
+
+// 열어 보기: a share's versions in any state. The report's link holds the key.
+admin.get('/shares/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
+  const { results } = await c.env.db.prepare('SELECT version, manifest, created_at AS createdAt FROM share_versions WHERE share = ? ORDER BY version').bind(id).all();
+  return results.length ? c.json({ versions: results }) : fail(c, 404, 'not-found');
+});
+
+admin.get('/shares/:id/files/:file', (c) => serveShareFile(c, true));
+
+// 보류, with or without a report: both anonymous reads answer held until the operator lifts it or blocks the share.
+admin.post('/shares/:id/hold', async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const now = Date.now();
+  return act(
+    c,
+    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, 'hold-share', id FROM shares WHERE id = ?1 AND held_at IS NULL AND removed_at IS NULL`).bind(id, now),
+    db.prepare('UPDATE shares SET held_at = ?2 WHERE id = ?1 AND held_at IS NULL AND removed_at IS NULL RETURNING id').bind(id, now),
+  );
+});
+
+// 보류 풀기: the link opens again, its open reports are resolved, and it is reviewed: a later report goes to the inbox
+// without holding it.
+admin.post('/shares/:id/release', async (c) => {
+  const id = c.req.param('id');
+  if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const now = Date.now();
+  return act(
+    c,
+    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, 'release-share', id FROM shares WHERE id = ?1 AND removed_at IS NULL`).bind(id, now),
+    resolveShareReports(db, id, now),
+    db.prepare('UPDATE shares SET held_at = NULL, held_report = NULL, reviewed_at = ?2 WHERE id = ?1 AND removed_at IS NULL RETURNING id').bind(id, now),
+  );
+});
+
+// 차단: the share is removed, the files of the version reviewed go into file_blocks (every account's copy with them), its
+// open reports are resolved, and the sharer is told why and, with suspend, suspended. A share that went with its
+// account has no one to tell: not-found.
+admin.post('/shares/:id/block', async (c) => {
+  const id = c.req.param('id');
+  const body = await readObject(c);
+  const version = body?.version;
+  const notice = noticeText(body?.notice);
+  const suspend = body?.suspend;
+  if (!SHARE_ID.test(id) || !positive(version) || !notice || typeof suspend !== 'boolean') return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const owner = await db
+    .prepare('SELECT a.id FROM shares s JOIN accounts a ON a.incarnation = s.incarnation WHERE s.id = ? AND s.removed_at IS NULL AND EXISTS (SELECT 1 FROM share_versions WHERE share = s.id AND version = ?)')
+    .bind(id, version)
+    .first<string>('id');
+  if (owner === null) return fail(c, 404, 'not-found');
+  const now = Date.now();
+  return act(
+    c,
+    db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'block-share', id, json_object('version', ?3) FROM shares WHERE id = ?1 AND removed_at IS NULL`).bind(id, now, version),
+    ...blockFiles(db, now, 'SELECT file AS id FROM share_files WHERE share = ?2 AND version = ?3', id, version),
+    ...noticed(db, notice, toAccount(owner)),
+    ...(suspend ? [logged(db, 'suspend', owner, USERNAME), db.prepare('UPDATE accounts SET suspended_at = ? WHERE id = ? AND suspended_at IS NULL').bind(now, owner)] : []),
+    resolveShareReports(db, id, now),
+    db.prepare('UPDATE shares SET removed_at = ?2, reviewed_at = ?2 WHERE id = ?1 AND removed_at IS NULL RETURNING id').bind(id, now),
+  );
+});
+
+const resolveShareReports = (db: Db, share: string, at: number) => db.prepare('UPDATE reports SET resolved_at = ? WHERE share = ? AND resolved_at IS NULL').bind(at, share);
 
 admin.get('/log', async (c) => {
   const rows = page(c, 'SELECT id, at, action, target, detail FROM admin_log');

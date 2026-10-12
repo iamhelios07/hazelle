@@ -6,6 +6,7 @@ import { files, MAX_FILE_BYTES } from './files';
 import { fail, type AppEnv } from './http';
 import { BATCH_LIMITS, objects } from './objects';
 import { modelsDev } from './models-dev';
+import { PUBLISH_BYTES, shares } from './shares';
 import { createRelay } from './relay';
 import { canCall, relayBot, requireSession } from './session';
 import { streams } from './streams';
@@ -54,6 +55,7 @@ const LARGER: [method: string, path: RegExp, bytes: number][] = [
   ['POST', /^\/api\/objects\/batch$/, BATCH_LIMITS.bytes],
   ['PUT', /^\/api\/files\/[^/]+$/, MAX_FILE_BYTES],
   ['POST', /^\/api\/(relay|streams\/[^/]+)$/, CALL_BYTES],
+  ['POST', /^\/api\/shares(\/[^/]+\/versions)?$/, PUBLISH_BYTES],
 ];
 
 // bodyLimit trusts Content-Length and passes the stream through, but buffers a chunked body whole before any route
@@ -69,6 +71,7 @@ app.route('/', accounts);
 app.route('/vault', vaults);
 app.route('/objects', objects);
 app.route('/files', files);
+app.route('/shares', shares);
 app.route('/reports', reports);
 app.route('/notices', notices);
 app.route('/admin', admin);

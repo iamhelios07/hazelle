@@ -1,5 +1,5 @@
-// A token bucket per key, in process: calls (240 a minute per account) and bot calls (20 a minute per account:chat).
-// The caller picks the key.
+// A token bucket per key, in process: calls (240 a minute per account), bot calls (20 a minute per account:chat) and
+// the visitors of share links (visitorLimits). The caller picks the key.
 
 export type Limiter = { limit(key: string): { success: boolean } };
 
@@ -28,3 +28,7 @@ export function tokenBucket(perMinute: number, clock: () => number = () => perfo
     },
   };
 }
+
+// Per visitor on the anonymous share routes: a link's page and its count, its files (a 파일로 받기 reads every picture
+// of a bot, which may be hundreds), and its reports. Requests, not bytes.
+export const visitorLimits = () => ({ reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6) });

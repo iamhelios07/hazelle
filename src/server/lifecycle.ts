@@ -129,7 +129,8 @@ const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'target
 // The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the report, ?3 the time asked
 // for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a refused one read the same text.
 const FREE = "accounts.state = 'active' AND NOT EXISTS (SELECT 1 FROM restores WHERE incarnation = accounts.incarnation AND verified = 0)";
-const REPORTED = 'EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND resolved_at IS NULL AND created_at >= accounts.created_at)';
+// A share report names the share's reporter, not an account asking about its own data.
+const REPORTED = 'EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND share IS NULL AND resolved_at IS NULL AND created_at >= accounts.created_at)';
 const TIMELY = `?3 BETWEEN ?5 - ${OLDEST_MS} AND ?5 - ${NEWEST_MS}`;
 // An undo rewinds the account's latest finished restore to its checkpoint while the checkpoint is pinned
 // (backup/snapshots.ts): for RETENTION_MS after the restore ended.

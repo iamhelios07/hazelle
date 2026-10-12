@@ -184,7 +184,7 @@ describe('the operator', () => {
     expect((await t.post('reports', { text: 'x'.repeat(4001) }, other.cookie)).status).toBe(400);
 
     const { reports } = (await (await t.get('admin/reports', admin.cookie)).json()) as { reports: { id: number }[] };
-    expect(reports).toEqual([{ id: expect.any(Number), accountId: other.id, username: 'other', text: '이 봇이 이상해요', createdAt: expect.any(Number), resolvedAt: null }]);
+    expect(reports).toEqual([{ id: expect.any(Number), accountId: other.id, username: 'other', text: '이 봇이 이상해요', createdAt: expect.any(Number), resolvedAt: null, share: null, shareVersion: null, link: null, shared: null }]);
 
     const { id } = reports[0]!;
     expect((await t.post(`admin/reports/${id}/resolve`, undefined, admin.cookie)).status).toBe(204);

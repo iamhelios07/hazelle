@@ -37,6 +37,24 @@ describe('the migration runner', () => {
     expect(db.prepare('SELECT fetched_at, tried_at FROM models_dev_fetch').get()).toEqual({ fetched_at: null, tried_at: null });
   });
 
+  it('adds shares that go with their account, and keeps every report in one inbox that also takes signed-out share reports', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON');
+    migrate(db, dir(Object.fromEntries(['0001_baseline.sql', '0002_models_dev.sql'].map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')]))));
+    db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('a', 'jin', 'h', 1, 'inc', 't');
+      INSERT INTO reports (id, account_id, username, text, created_at) VALUES (7, 'a', 'jin', '안 열려요', 2)`);
+    expect(migrate(db, 'migrations').applied).toContain('0003_shares.sql');
+    expect(db.prepare('SELECT id, account_id, username, text, share FROM reports').all()).toEqual([{ id: 7, account_id: 'a', username: 'jin', text: '안 열려요', share: null }]);
+    db.exec(`INSERT INTO shares (id, incarnation, created_at) VALUES ('s', 'inc', 3);
+      INSERT INTO share_versions VALUES ('s', 1, 'm', 3);
+      INSERT INTO share_files VALUES ('s', 1, 'f');
+      INSERT INTO reports (text, created_at, share, share_version, link) VALUES ('신고', 4, 's', 1, 'https://hazelle.app/s/s#k')`);
+    expect(() => db.exec(`INSERT INTO reports (text, created_at) VALUES ('누구?', 5)`)).toThrow(/CHECK/);
+    db.exec(`DELETE FROM accounts WHERE id = 'a'`);
+    expect(['shares', 'share_versions', 'share_files'].map((table) => db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get())).toEqual([{ n: 0 }, { n: 0 }, { n: 0 }]);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM reports').get()).toEqual({ n: 2 });
+  });
+
   it('upgrades a populated database with the files it lacks, each whole or not at all', () => {
     const db = new DatabaseSync(':memory:');
     const first = dir({ '0001_a.sql': 'CREATE TABLE a (x);' });

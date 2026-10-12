@@ -4,6 +4,8 @@ export const ACCOUNT_HEADER = 'x-account';
 export const RELAY_HEADER = 'x-relay';
 // The chat whose bot's script makes a relayed call (an embedding), counted in that chat's cap as its streams are.
 export const BOT_HEADER = 'x-hazelle-bot';
+// Who sent a request, as the public listener saw it (server/frontend-worker): the key of the per-visitor limits.
+export const VISITOR_HEADER = 'x-hazelle-visitor';
 
 // Every `error` an API answer carries (server/http fail, server/stream-box). The client words each one or names it on
 // its generic fallback (app/common/failure), so a code added here fails tsc until it is decided there.
@@ -28,10 +30,12 @@ export type ServerError =
   | 'file-blocked'
   | 'files-full'
   | 'length-required'
+  | 'no-consent'
   | 'no-session'
   | 'not-admin'
   | 'not-found'
   | 'server-error'
+  | 'share-held'
   | 'signup-closed'
   | 'sole-operator'
   | 'storage-full'
@@ -44,6 +48,7 @@ export type ServerError =
   | 'too-many-bot-calls'
   | 'too-many-calls'
   | 'too-many-reports'
+  | 'too-many-visits'
   | 'username-taken'
   | 'wrong-login';
 // The relay's own refusals, answered marked RELAY_HEADER: error (server/relay).

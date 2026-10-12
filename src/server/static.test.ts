@@ -20,7 +20,7 @@ beforeAll(() => {
   ]) {
     writeFileSync(join(dir, name!), body!);
   }
-  client = clientFiles(dir);
+  client = clientFiles(dir, async (share) => (share === 'covered-share-id' ? { name: 'Mira <b>', creator: 'jin & co', line: '$& "quoted"' } : null));
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -53,6 +53,15 @@ describe('the client files', () => {
       expect([path, response.status, response.headers.get('cache-control'), await response.text()]).toEqual([path, 200, 'no-cache', '<!doctype html>page']);
       expect(response.headers.get('content-security-policy')).toBe(CSP);
     }
+  });
+
+  it("fills a share page's embed with its escaped cover text, and never with a picture", async () => {
+    writeFileSync(join(dir, 'index.html'), '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta property="og:image" content="https://hazelle.app/og.png" /><meta name="twitter:card" content="summary_large_image" />');
+    const covered = await (await client.request('/s/covered-share-id', { headers: PAGE })).text();
+    expect(covered).toBe('<title>Mira &#60;b&#62; · jin &#38; co</title><meta name="description" content="$&#38; &#34;quoted&#34;" /><meta property="og:title" content="Mira &#60;b&#62; · jin &#38; co" /><meta property="og:description" content="$&#38; &#34;quoted&#34;" /><meta name="twitter:card" content="summary" />');
+    const bare = await client.request('/s/no-cover-share00', { headers: PAGE });
+    expect([bare.headers.get('content-security-policy'), await bare.text()]).toEqual([CSP, '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta name="twitter:card" content="summary" />']);
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
   });
 
   it('answers a real 404 for a missing asset even on a page load, and for a missing file nobody loads as a page', async () => {
