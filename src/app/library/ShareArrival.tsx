@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { countReceived, openVersion, readShareState, sharedFile } from '../../runtime/share';
+import { openVersion, sharedFile } from '../../runtime/share';
+import { countReceived, readShareState } from '../../runtime/share-link';
 import { describeFailure } from '../common/failure';
 import { fileNamed } from '../common/download';
 import { SHARE } from '../common/words';

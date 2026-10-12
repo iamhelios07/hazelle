@@ -1,7 +1,8 @@
 import { Flag, Send } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MAX_REPORT_LENGTH } from '../../contracts/admin';
-import { countReceived, openVersion, readShareLink, readShareState, reportShare, shareLink, type Opened } from '../../runtime/share';
+import { openVersion, type Opened } from '../../runtime/share';
+import { countReceived, readShareLink, readShareState, reportShare, shareLink } from '../../runtime/share-link';
 import { describeFailure } from '../common/failure';
 import { LegalNotice } from '../common/LegalNotice';
 import { SharePreview } from '../common/SharePreview';

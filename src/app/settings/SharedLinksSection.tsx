@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { live } from '../../model/library';
-import { cutShare, readShares } from '../../runtime/share';
+import { cutShare, readShares } from '../../runtime/share-link';
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';

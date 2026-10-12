@@ -3,8 +3,10 @@ import { blankCard } from '../engine/import/card';
 import { randomBytes } from '../vault/aead';
 import { holdAccount } from './api';
 import { exportCharacter } from './card-file';
-import { importCharacter } from './characters';
-import { agreeToShare, openVersion, publishShare, readShareLink, readShareState, shareLink, writeShared } from './share';
+import { importCharacter, setDeleted } from './characters';
+import { purgeNow } from './removal';
+import { openVersion, publishShare, writeShared } from './share';
+import { agreeToShare, readShareLink, readShareState, shareLink } from './share-link';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -50,5 +52,24 @@ describe('a share link', () => {
     const again = await publishShare(store, files, id, false);
     expect(again.ok && [again.data.share.value.share, again.data.version]).toEqual([share, 2]);
     expect(store.list('share')).toHaveLength(1);
+  });
+
+  it('stays live while its character is in 휴지통 and is cut when the character is removed for good', async () => {
+    const { accountId, store, files } = await server.operator();
+    const made = await importCharacter(store, files, { card: blankCard('루나'), lore: [], loreFolders: [], assets: [], own: null }, { bytes: png(), type: 'image/png' }, () => {});
+    const id = made.ok ? made.data.id : '';
+    await agreeToShare();
+    const published = await publishShare(store, files, id, false);
+    if (!published.ok) throw new Error(published.error);
+    const { share } = published.data.share.value;
+    await setDeleted(store, id, Date.now());
+    holdAccount(null);
+    expect(await readShareState(share)).toMatchObject({ ok: true, data: { state: 'live' } });
+
+    holdAccount(accountId);
+    expect(await purgeNow(store, 'character', id, () => {})).toEqual({ ok: true, data: null });
+    holdAccount(null);
+    expect(await readShareState(share)).toEqual({ ok: true, data: { state: 'gone' } });
+    expect(store.list('share')).toHaveLength(0);
   });
 });

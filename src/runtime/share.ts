@@ -1,5 +1,5 @@
 import { FILE_ID } from '../contracts/files';
-import { COVER_LENGTH, SHARE_ID, type ShareCover, type ShareState } from '../contracts/shares';
+import { COVER_LENGTH, type ShareCover } from '../contracts/shares';
 import { isRecord } from '../connectors/values';
 import { imageType } from '../engine/import/card';
 import type { Card } from '../engine/import/types';
@@ -7,26 +7,16 @@ import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import { fromBase64, toBase64 } from '../vault/aead';
 import { openFile, type FileRef } from '../vault/files';
-import { newShareKey, openShare, sealShare, SHARE_KEY } from '../vault/shares';
+import { newShareKey, openShare, sealShare } from '../vault/shares';
 import { api, type ApiResult } from './api';
 import { charxContent, writeCharxFile, type CharxContent, type ExportStep } from './card-file';
 import type { BackupOutput } from './backup-zip';
 import type { Files } from './files';
+import { shareOf } from './share-link';
 import type { ObjectStore } from './store';
 
 // A share link (server/shares): a character's charx content sealed as one manifest per version under a key that lives
 // in the link's fragment and the sharer's vault (model/share), never in a request but a report's full link.
-
-export const shareLink = (origin: string, id: string, key: string) => `${origin}/s/${id}#${key}`;
-
-// A share page's address: its id and the key its fragment holds, or null for a path that is no share's. key is null
-// for a link cut short of its key.
-export function readShareLink(path: string, hash: string): { id: string; key: string | null } | null {
-  const id = /^\/s\/([^/]+)$/.exec(path)?.[1];
-  if (id === undefined || !SHARE_ID.test(id)) return null;
-  const key = hash.slice(1);
-  return { id, key: SHARE_KEY.test(key) ? key : null };
-}
 
 // The manifest is the charx's content with each picture by its stored file, never its bytes.
 const MANIFEST = 1;
@@ -67,13 +57,6 @@ function coverOf(card: Pick<Card, 'name' | 'creator' | 'creatorNotes'>): ShareCo
   return name ? { name, creator: card.creator.trim().slice(0, COVER_LENGTH.creator), line: line.slice(0, COVER_LENGTH.line) } : null;
 }
 
-export const shareOf = (store: ObjectStore, character: string): Stored<'share'> | null => store.children('share', character)[0] ?? null;
-
-// covered: the link's embed carries the opt-in text. removed: the operator blocked it.
-export type SharedLink = { id: string; createdAt: number; received: number; held: boolean; removed: boolean; covered: boolean; version: number };
-export const readShares = () => api<{ consent: number | null; shares: SharedLink[] }>('GET', 'shares/mine');
-export const agreeToShare = () => api<undefined>('PUT', 'shares/consent');
-
 // 링크 만들기 and 새 버전으로 바꾸기: the character as it is now, sealed under the link's key, its manifest stored among the
 // account's files and named with its pictures. tools: modules left out, as 내보내기 counts them.
 export async function publishShare(store: ObjectStore, files: Files, character: string, covered: boolean): Promise<ApiResult<{ share: Stored<'share'>; version: number; tools: number }>> {
@@ -100,19 +83,9 @@ export async function setShareCover(store: ObjectStore, share: Stored<'share'>, 
   return api<undefined>('PUT', `shares/${share.value.share}/cover`, { cover: covered ? coverOf(card) : null });
 }
 
-// 링크 끊기. id: the server's, for a link this account's vault no longer names. A link already cut counts as cut.
-export async function cutShare(store: ObjectStore, id: string): Promise<ApiResult<null>> {
-  const cut = await api<undefined>('DELETE', `shares/${id}`);
-  if (!cut.ok && cut.error !== 'not-found') return cut;
-  const own = store.list('share').find(({ value }) => value.share === id);
-  return own ? store.remove(own.id) : { ok: true, data: null };
-}
-
 // Where a share is read: its page reads the live link; the operator reads it in any state (server/admin).
 export type ShareSource = { id: string; operator: boolean };
 const base = ({ id, operator }: ShareSource) => (operator ? `admin/shares/${id}` : `shares/${id}`);
-
-export const readShareState = (id: string) => api<ShareState>('GET', `shares/${id}`);
 
 export async function readSharedFile(source: ShareSource, ref: FileRef): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
   const body = await api<Uint8Array<ArrayBuffer>>('GET', `${base(source)}/files/${ref.id}`);
@@ -160,8 +133,3 @@ export async function sharedFile(source: ShareSource, content: CharxContent, nam
   const written = await writeShared(source, content, { write: async (chunk) => void parts.push(chunk), close: async () => {}, abort: async () => {} }, progress);
   return written.ok ? { ok: true, data: new File(parts, name, { type: 'application/zip' }) } : written;
 }
-
-export const countReceived = (id: string) => api<undefined>('POST', `shares/${id}/received`);
-
-// link: the full link with its key, which is how the operator opens what was reported.
-export const reportShare = (id: string, text: string, link: string, version: number) => api<undefined>('POST', `shares/${id}/reports`, { text, link, version });

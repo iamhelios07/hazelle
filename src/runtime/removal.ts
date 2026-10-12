@@ -4,6 +4,7 @@ import { daysLeft, REMOVABLE, type Mark, type Removable } from '../model/library
 import { KINDS, parentKinds, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
 import { SCOPED } from './object-cache';
+import { cutShare } from './share-link';
 import type { ObjectRow, ObjectStore, Pin } from './store';
 
 const KIND_NAMES = Object.keys(KINDS) as Kind[];
@@ -96,6 +97,12 @@ export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id
 async function purge(store: ObjectStore, kind: Removable, id: string, due: (value: Mark) => boolean, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
   const claimed = await store.update(kind, id, (current) => (current.purging || due(current) ? { ...current, purging: true } : null));
   if (!claimed.ok) return claimed;
+  // A character's links are cut before it goes: once the vault forgets a link, only 설정 can cut it. In 휴지통 they stay
+  // live, as the character can still come back.
+  for (const { value } of kind === 'character' ? store.children('share', id) : []) {
+    const cut = await cutShare(store, value.share);
+    if (!cut.ok) return cut;
+  }
   return removeOwned(store, { kind, id }, progress);
 }
 
