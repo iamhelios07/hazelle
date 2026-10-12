@@ -16,7 +16,6 @@ export function ChatBookmarks({ id, chat }: { id: string; chat: OpenChat }) {
   const { item, messages, texts, actions } = chat;
   const wide = useWide();
   const [naming, setNaming] = useState<BookmarkRow | null>(null);
-  // The whole tree is folded again only when the chat's entries change.
   const tree = useMemo(() => versionTree(store, id), [item?.messages]);
   const rows = bookmarkRows(item?.chat.bookmarks ?? [], tree);
   const { character, me, modelName } = speakers(chat);
@@ -28,8 +27,7 @@ export function ChatBookmarks({ id, chat }: { id: string; chat: OpenChat }) {
 
   // A narrow panel covers the story, so it steps aside for the message it points at.
   function show(row: BookmarkRow) {
-    actions.showBookmark(row);
-    if (!wide) actions.closePanel();
+    if (actions.showBookmark(row) && !wide) actions.closePanel();
   }
 
   return (

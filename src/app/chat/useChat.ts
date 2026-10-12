@@ -412,10 +412,17 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (id) void setBookmark(store, id, message, !bookmarked.has(message)).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  function showBookmark({ message, to }: BookmarkRow) {
-    if (!id) return;
-    if (!to.length) return searchActions.find([message.id]);
-    if (busy) return toast.show('응답이 끝나면 다른 버전으로 넘어갈 수 있어요.');
+  // false: it stays where it is.
+  function showBookmark({ message, to }: BookmarkRow): boolean {
+    if (!id) return false;
+    if (!to.length) {
+      searchActions.find([message.id]);
+      return true;
+    }
+    if (busy) {
+      toast.show('응답이 끝나면 다른 버전으로 넘어갈 수 있어요.');
+      return false;
+    }
     setSeeking(message.id);
     for (const { message: above, index } of to) {
       void pickVersion(session, id, above, index).then((saved) => {
@@ -424,6 +431,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
         toast.failed(saved);
       });
     }
+    return true;
   }
 
   function renameBookmark(message: string, name: string) {
