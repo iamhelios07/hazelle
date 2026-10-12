@@ -10,8 +10,8 @@ type Missing = { missing: Set<string>; maxBytes: number };
 const UPLOADS = 12;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
-// A file is sealed by its content, so one the server already holds, from this account or any other, is never sent
-// again; an import cut short and tried again sends only what did not arrive. Asking, uploading and reading wait out a
+// A file is sealed by its content, so one this account already holds is never sent again (accounts keep their own
+// copies, src/server/files.ts); an import cut short and tried again sends only what did not arrive. Asking, uploading and reading wait out a
 // dropped connection the way the store's calls do (store.reaching): a backup reads thousands of pictures in a row, and
 // one dropped read must not end it.
 export class Files {
