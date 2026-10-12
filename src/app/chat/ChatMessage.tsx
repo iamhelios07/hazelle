@@ -1,4 +1,4 @@
-import { Bookmark, Bot, GitBranch, ImagePlus, Info, Languages, Package, Pin, PinOff, SquarePen } from 'lucide-react';
+import { Bookmark, Bot, Info, Languages, Pin, PinOff, SquarePen } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
@@ -16,7 +16,7 @@ import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPicture, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPicture, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotOf } from './ChatPicture';
 import type { ToolActions } from './toolMenu';
 import type { ChatActions } from './useChat';
@@ -297,31 +297,35 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="xs" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}
-      {!mine && !empty && !failed && (
-        <IconButton
-          icon={ImagePlus}
-          size="xs"
-          label="삽화"
-          disabled={running}
-          onClick={() => {
-            setPage(null);
-            actions.illustrate(message);
-          }}
-        />
-      )}
       {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message)} />}
       {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
-      {!failed && <IconButton icon={Bookmark} size="xs" label={BOOKMARK} pressed={bookmarked} onClick={() => actions.bookmark(message.id)} />}
-      {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />}
-      {!mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />}
-      {statusTool}
-      {!failed && toolActions.length > 0 && (
-        <Menu place="below-end" label="도구" trigger={(opener) => <IconButton icon={Package} size="xs" label="도구" {...opener} />}>
+      {bookmarked && <IconButton icon={Bookmark} size="xs" label={BOOKMARK} pressed onClick={() => actions.bookmark(message.id)} />}
+      {!failed ? (
+        <MoreMenu of="메시지" size="xs" place="end">
+          {!mine && !empty && (
+            <MenuItem
+              label="삽화"
+              disabled={running}
+              onClick={() => {
+                setPage(null);
+                actions.illustrate(message);
+              }}
+            />
+          )}
+          <MenuItem label={BOOKMARK} checked={bookmarked} multiple onClick={() => actions.bookmark(message.id)} />
+          <MenuItem label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />
+          {!mine && <MenuItem label="응답 정보" onClick={() => actions.info(message.id)} />}
+          {offered.length > 0 && <MenuHeading>상태창으로 지정</MenuHeading>}
+          {offered.map((script) => (
+            <MenuItem key={script.id} label={script.name} checked={script.marked} multiple onClick={() => actions.markStatus(script, !script.marked)} />
+          ))}
           {toolActions.map((tool) => [
             <MenuHeading key={tool.module}>{tool.name}</MenuHeading>,
             ...tool.items.map((item) => <MenuItem key={`${tool.module}:${item.id}`} label={item.label} onClick={() => actions.toolAction(tool.module, item.id, message.id)} />),
           ])}
-        </Menu>
+        </MoreMenu>
+      ) : (
+        !mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />
       )}
       <Divider variant="tools" />
       <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => actions.remove(message)} />

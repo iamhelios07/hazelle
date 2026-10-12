@@ -118,7 +118,8 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
     expect(main().at(-1)!.messages).toContainEqual({ role: 'system', content: summary(1) });
     const last = page.getByRole('article').last();
     await last.hover();
-    await last.getByRole('button', { name: '응답 정보', exact: true }).click();
+    await last.getByRole('button', { name: '메시지 메뉴', exact: true }).click();
+    await page.getByRole('menuitem', { name: '응답 정보', exact: true }).click();
     const panel = page.getByRole('complementary', { name: '응답 정보', exact: true });
     await panel.getByRole('button', { name: '요청 원문', exact: true }).click();
     await panel.getByRole('button', { name: /^도구 · 간단 기억 · 시스템/ }).click();
@@ -219,7 +220,8 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     expect(embedded.at(-1)).toMatchObject({ input: ['Is the lamp lit?'] });
     const last = page.getByRole('article').last();
     await last.hover();
-    await last.getByRole('button', { name: '응답 정보', exact: true }).click();
+    await last.getByRole('button', { name: '메시지 메뉴', exact: true }).click();
+    await page.getByRole('menuitem', { name: '응답 정보', exact: true }).click();
     const panel = page.getByRole('complementary', { name: '응답 정보', exact: true });
     await panel.getByRole('button', { name: '기억', exact: true }).click();
     await expect(panel).toContainText('회상 기억');
@@ -231,7 +233,8 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
   await test.step('a branch carries the memory under its own ids', async () => {
     const covered = page.getByRole('article').nth(4);
     await covered.hover();
-    await covered.getByRole('button', { name: '여기서 분기', exact: true }).click();
+    await covered.getByRole('button', { name: '메시지 메뉴', exact: true }).click();
+    await page.getByRole('menuitem', { name: '여기서 분기', exact: true }).click();
     await expect(page).not.toHaveURL(chat);
     await send('Back on the stairs.');
     expect(main().at(-1)!.messages.some(({ content }) => content === node(1))).toBe(true);
@@ -257,7 +260,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
   await test.step('an action waiting on its question never holds a send, which dismisses the question', async () => {
     const target = page.getByRole('article').nth(2);
     await target.hover();
-    await target.getByRole('button', { name: '도구', exact: true }).click();
+    await target.getByRole('button', { name: '메시지 메뉴', exact: true }).click();
     await page.getByRole('menuitem', { name: '다시 정리', exact: true }).click();
     await expect(page.getByText('이 부분을 다시 정리할까요?', { exact: true })).toBeVisible();
     await send('Still here.');

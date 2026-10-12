@@ -40,7 +40,9 @@ export function useMenuOpener(handle: MenuHandle): MenuOpener {
 type Props = {
   label: string;
   trigger: (opener: MenuOpener) => ReactNode;
-  place?: 'below-start' | 'below-end' | 'above-start' | 'above-end';
+  // end: below or above, whichever half of the window the button is not in, for a button that can sit anywhere in a
+  // scrolling story, where the screen's head or the composer would cover a menu opened the fixed way.
+  place?: 'below-start' | 'below-end' | 'above-start' | 'above-end' | 'end';
   size?: 'md' | 'lg' | 'form';
   // dialog: a small form opened and closed like a menu, such as the chat's 작가의 노트; useMenuClose closes it.
   kind?: 'menu' | 'dialog';
@@ -91,6 +93,15 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
     };
   }, [open, holders, hide]);
 
+  const [upward, setUpward] = useState(false);
+  useLayoutEffect(() => {
+    if (open && place === 'end') {
+      const { top, bottom } = anchor.current!.getBoundingClientRect();
+      setUpward(top + bottom > window.innerHeight);
+    }
+  }, [open, place]);
+  const side = place === 'end' ? (upward ? 'above-end' : 'below-end') : place;
+
   useLayoutEffect(() => {
     if (panel.current) keepOnScreen(panel.current);
   }, [open]);
@@ -99,7 +110,7 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
     <div className={styles.anchor} ref={anchor}>
       {trigger({ ...opener, popup: kind })}
       {open && (
-        <div ref={panel} className={`${styles.menu} ${styles[place]} ${styles[size]} ${kind === 'dialog' ? styles.dialog : ''}`} role={kind} aria-label={label}>
+        <div ref={panel} className={`${styles.menu} ${styles[side]} ${styles[size]} ${kind === 'dialog' ? styles.dialog : ''}`} role={kind} aria-label={label}>
           <Holders.Provider value={held}>
             <CloseMenu.Provider value={() => close(true)}>
               <ButtonSlot value={null}>{children}</ButtonSlot>
