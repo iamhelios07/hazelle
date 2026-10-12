@@ -41,7 +41,7 @@ import { describeIllustrateFailure, describeTurnFailure } from '../common/failur
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
-import { BIN_KEEPS } from '../common/words';
+import { BIN_KEEPS, BOOKMARK } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useIllustrating, useSaves, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -409,7 +409,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   function bookmark(message: string) {
-    if (id) void setBookmark(store, id, message, !bookmarked.has(message)).then((saved) => saved.ok || toast.failed(saved));
+    if (!id) return;
+    const on = !bookmarked.has(message);
+    void setBookmark(store, id, message, on).then((saved) => saved.ok || toast.failed(saved));
+    const name = on ? undefined : chat.bookmarks?.find((each) => each.message === message)?.name;
+    if (name !== undefined) toast.undoable(`'${name}' ${BOOKMARK}를 해제했어요.`, () => setBookmark(store, id, message, true, name));
   }
 
   // false: it stays where it is.

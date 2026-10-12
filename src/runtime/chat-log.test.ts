@@ -77,6 +77,9 @@ describe('bookmarks', () => {
     expect(marks()).toEqual([{ message: first, name: '시작' }, { message: second }]);
     await nameBookmark(store, id, first!, ' ');
     expect(marks()).toEqual([{ message: first }, { message: second }]);
+    await setBookmark(store, id, second!, false);
+    await setBookmark(store, id, second!, true, '고백');
+    expect(marks()).toEqual([{ message: first }, { message: second, name: '고백' }]);
     await setBookmark(store, id, first!, false);
     await setBookmark(store, id, second!, false);
     expect('bookmarks' in store.get('chat', id)!.value).toBe(false);

@@ -279,12 +279,16 @@ const withBookmarks = <T extends Pick<Chat, 'bookmarks'>>(chat: T, bookmarks: Bo
 const carried = (bookmarks: Bookmark[] = [], messages: ReadonlyMap<string, string>) =>
   bookmarks.flatMap((bookmark) => (messages.has(bookmark.message) ? [{ ...bookmark, message: messages.get(bookmark.message)! }] : []));
 
-// on, not a flip: a conflict applies the change again to the copy it lost to.
-export const setBookmark = (store: ObjectStore, chat: string, message: string, on: boolean) =>
+// on, not a flip: a conflict applies the change again to the copy it lost to. name: the one an undone unmark puts back;
+// without it a bookmark already there keeps its own.
+export const setBookmark = (store: ObjectStore, chat: string, message: string, on: boolean, name?: string) =>
   store.update('chat', chat, (current) => {
     const bookmarks = current.bookmarks ?? [];
     const others = bookmarks.filter((bookmark) => bookmark.message !== message);
-    return withBookmarks(current, !on ? others : others.length < bookmarks.length ? bookmarks : [...bookmarks, { message }]);
+    if (!on) return withBookmarks(current, others);
+    const kept = bookmarks.find((bookmark) => bookmark.message === message);
+    const mark = name === undefined ? (kept ?? { message }) : { message, name };
+    return withBookmarks(current, kept ? bookmarks.map((bookmark) => (bookmark === kept ? mark : bookmark)) : [...bookmarks, mark]);
   });
 
 export const nameBookmark = (store: ObjectStore, chat: string, message: string, name: string) =>
