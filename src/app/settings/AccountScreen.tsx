@@ -10,6 +10,7 @@ import { BackupSection } from './BackupSection';
 import { LeaveSection } from './LeaveSection';
 import { NoticesSection } from './NoticesSection';
 import { ReportSection } from './ReportSection';
+import { SharedLinksSection } from './SharedLinksSection';
 
 // bytes is null while the server could not read it.
 const used = (name: string, bytes: number | null, cap: number | null) => `${name} ${bytes === null ? UNKNOWN : sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
@@ -63,6 +64,7 @@ export function AccountScreen({ section, back }: { section: 'notices' | null; ba
         />
       </SettingGroup>
       <BackupSection />
+      <SharedLinksSection />
       <NoticesSection seek={section === 'notices'} />
       <ReportSection />
       <Section title="앱 정보">

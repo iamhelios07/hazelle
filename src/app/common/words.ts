@@ -122,3 +122,22 @@ export const UNKNOWN = '알 수 없음';
 export const RESET = '기본값으로 되돌리기';
 export const UNDO = '되돌리기';
 export const STOP = '멈추기';
+
+// A share link: the character ⋯ item and its dialog, 설정 › 계정's list, the link's own page and the operator's inbox.
+// held: paused by a report or the operator; removed: blocked by the operator.
+export const SHARE = {
+  act: '링크로 공유',
+  cut: '링크 끊기',
+  update: '새 버전으로 바꾸기',
+  received: '받은 횟수',
+  list: '공유한 링크',
+  held: '보류 중',
+  removed: '운영자가 내림',
+  cover: '미리보기 글',
+  coverHelp: '링크를 붙여 넣은 곳에 이름, 제작자, 소개 첫 줄이 글로 보여요. 이미지는 보이지 않아요.',
+  heldNote: '신고가 들어와 운영자가 확인하는 동안 멈춘 링크예요.',
+  removedNote: '운영자가 내린 링크예요.',
+  download: '파일로 받기',
+  bring: '헤이젤로 가져오기',
+  report: '신고',
+};

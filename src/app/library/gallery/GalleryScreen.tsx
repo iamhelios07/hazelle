@@ -19,6 +19,7 @@ import { CharacterCard } from './CharacterCard';
 import { FolderTabs, type Filter, type Naming } from './FolderTabs';
 import { MoveBar } from './MoveBar';
 import { PurgeDialog } from './PurgeDialog';
+import { ShareDialog } from '../ShareDialog';
 
 const MODEL_SETTINGS = '모델 설정';
 const ORDERS = [{ value: 'recent', label: '최근 대화' }, { value: 'name', label: '이름' }] as const;
@@ -147,6 +148,9 @@ export function GalleryScreen({ back }: { back: Back | null }) {
             void characterActions.purge(purging);
           }}
         />
+      )}
+      {characterActions.sharing && (
+        <ShareDialog character={characterActions.sharing.id} name={characterActions.sharing.character.card.name} onClose={characterActions.stopSharing} />
       )}
       {naming && (
         <NameDialog title={naming.id ? '폴더 이름 바꾸기' : naming.parent ? `'${naming.parent.value.name}' 안에 새 폴더` : '새 폴더'} value={naming.name} onSave={(name) => saveFolder({ ...naming, name })} onClose={() => setNaming(null)} />

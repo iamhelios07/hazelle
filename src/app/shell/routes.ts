@@ -1,5 +1,6 @@
 import { CONNECTION_TYPES } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
+import { SHARE_ID } from '../../contracts/shares';
 import type { Shelf } from '../../model/library';
 
 // These paths are what a reload, a bookmark and the browser's back button land on, so an existing one never changes.
@@ -36,6 +37,8 @@ export type Route =
   | { kind: 'display' }
   | { kind: 'translator' }
   | { kind: 'admin' }
+  // 헤이젤로 가져오기 from a share link (library/ShareArrival); its key waits in common/sharePending, never in the path.
+  | { kind: 'share'; id: string }
   | { kind: 'settings' };
 
 export const HOME: Route = { kind: 'home' };
@@ -70,6 +73,7 @@ export function parseRoute(at: string): Route {
     if (sub === 'new') return { kind: 'new-chat', character: id };
     return HOME;
   }
+  if (top === 's' && id !== undefined && sub === undefined) return SHARE_ID.test(id) ? { kind: 'share', id } : HOME;
   if (top === 'chats' && id !== undefined && sub === undefined) {
     if (id === 'new') return { kind: 'new-chat', character: null };
     if (ID.test(id)) return { kind: 'chat', id };
@@ -181,6 +185,8 @@ export function href(route: Route): string {
       return '/settings/translator';
     case 'admin':
       return '/settings/admin';
+    case 'share':
+      return `/s/${route.id}`;
     case 'settings':
       return '/settings';
   }
@@ -285,6 +291,7 @@ export function up(route: Below, chatShelf?: string | null): Route {
       return shelf === undefined ? HOME : { kind: 'shelf', character: shelf };
     }
     case 'settings':
+    case 'share':
       return HOME;
     case 'connections':
     case 'prompts':

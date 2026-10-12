@@ -1,0 +1,58 @@
+import { useEffect, useState, type ReactNode } from 'react';
+import type { Opened, ShareSource } from '../../runtime/share';
+import { writeShared } from '../../runtime/share';
+import { Avatar, Button, FaceRow, Row, Stack, Text } from '../ui';
+import { ACTS } from './acts';
+import { downloadOutput, fileNamed } from './download';
+import { describeFailure } from './failure';
+import { SHARE } from './words';
+
+// What a share's version shows before anything is taken, on the link's page and in the operator's 열어 보기, with
+// 파일로 받기: the same charx 내보내기 writes. first: what comes before it in its row. onDownloaded: the file was written
+// whole.
+type Props = { source: ShareSource; opened: Opened; first?: ReactNode; onDownloaded?: () => void; failed: (failure: string) => void };
+
+export function SharePreview({ source, opened, first, onDownloaded, failed }: Props) {
+  const { preview } = opened;
+  const [face, setFace] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!preview.avatar) return;
+    const url = URL.createObjectURL(preview.avatar);
+    setFace(url);
+    return () => URL.revokeObjectURL(url);
+  }, [preview.avatar]);
+
+  // The save picker opens before any await, inside the press that asked for it.
+  function download() {
+    const destination = downloadOutput(fileNamed(preview.name, '캐릭터', 'charx'));
+    setBusy('받는 중');
+    void (async () => {
+      try {
+        const written = await writeShared(source, opened.content, await destination, ({ done, total }) => setBusy(`받는 중 · ${done} / ${total}`));
+        if (written.ok) onDownloaded?.();
+        else failed(written.error === 'export-write' ? '파일을 저장하지 못했어요.' : describeFailure(written));
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) failed('파일을 저장하지 못했어요.');
+      } finally {
+        setBusy(null);
+      }
+    })();
+  }
+
+  return (
+    <Stack gap="group">
+      <FaceRow face={<Avatar face={preview.name || '?'} image={face} size="lg" />}>
+        <Text>{preview.name}</Text>
+        {preview.creator && <Text variant="note">제작자 {preview.creator}</Text>}
+      </FaceRow>
+      {preview.notes && <Text variant="prose">{preview.notes}</Text>}
+      <Row kind="actions">
+        {first}
+        <Button variant="secondary" icon={ACTS.export.icon} busy={busy !== null} onClick={download}>
+          {busy ?? SHARE.download}
+        </Button>
+      </Row>
+    </Stack>
+  );
+}

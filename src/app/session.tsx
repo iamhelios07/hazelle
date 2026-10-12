@@ -125,6 +125,8 @@ function useKind<K extends Kind>(kind: K) {
 }
 
 export const useConnections = () => useKind('connection');
+// The account's share links, each its character's (model/share).
+export const useShares = () => useKind('share');
 // all is the memo's key only: it is a new array exactly when one changed.
 function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {
   const all = useKind(kind);

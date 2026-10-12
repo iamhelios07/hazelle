@@ -55,6 +55,8 @@ export function usePages<T extends { id: number }>(load: (before: number | null)
     older: () => void fetch(rows!.at(-1)!.id),
     // Rows are kept only on success, so none yet means the first page failed and some means an older one did.
     retry: () => void fetch(rows === null ? null : (rows.at(-1)?.id ?? null)),
+    // After an act that changed rows not in hand, such as every report on one share: the first page again.
+    reload: () => void fetch(null),
     patch: (id: number, change: Partial<T>) => setRows((shown) => shown && shown.map((row) => (row.id === id ? { ...row, ...change } : row))),
   };
 }

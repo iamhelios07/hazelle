@@ -1,6 +1,6 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -25,7 +25,8 @@ import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { readOptional } from '../common/typedNumber';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
@@ -94,7 +95,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const ownModules = character.modules ?? [];
-  const { busy, copy, exportFile, remove } = useCharacterActions();
+  const { busy, copy, exportFile, remove, sharing, share, stopSharing } = useCharacterActions();
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
@@ -363,6 +364,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       <>
         <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={busy !== null} onClick={() => void copy(shelf)} />
         <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} disabled={busy !== null} onClick={() => exportFile(shelf)} />
+        <MenuItem icon={Link2} label={SHARE.act} disabled={busy !== null} onClick={() => share(shelf)} />
         <MenuItem
           icon={ACTS.remove.icon}
           label={ACTS.remove.label}
@@ -377,6 +379,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     ),
   };
   const title = aliased(text.name, text.alias);
+  const shareDialog = sharing && <ShareDialog character={id} name={text.name} onClose={stopSharing} />;
   const state = working ?? (saved ? SAVE_STATUS[saved] : undefined);
   if (split) {
     const open = part ?? 'profile';
@@ -387,7 +390,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         ))}
       </NavGroup>
     ));
-    return frame({ head: { title, subtitle, status: state, menu }, side, body: pages[open], open });
+    return frame({ head: { title, subtitle, status: state, menu }, side, body: <>{pages[open]}{shareDialog}</>, open });
   }
   if (part) return frame({ head: { title, onBack: () => onPart(null), backLabel: LIST, status: state }, body: pages[part], open: part });
   const list = (
@@ -404,5 +407,5 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       ))}
     </>
   );
-  return frame({ head: { title, subtitle, status: state, menu }, body: list, open: LIST });
+  return frame({ head: { title, subtitle, status: state, menu }, body: <>{list}{shareDialog}</>, open: LIST });
 }

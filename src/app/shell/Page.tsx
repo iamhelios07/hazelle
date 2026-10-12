@@ -11,6 +11,7 @@ import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
 import { NO_CHARACTER } from '../common/words';
 import { useImport } from '../library/ImportFlow';
+import { ShareArrival } from '../library/ShareArrival';
 import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useModules, usePersonas, useSession, useSettings, useStored } from '../session';
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
@@ -131,6 +132,8 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       // Its path can be typed by anyone; the server refuses every call but the operator's.
       case 'admin':
         return <AdminPage back={sideBack(at)} closeSettings={closeSettings} />;
+      case 'share':
+        return <ShareArrival id={at.id} />;
     }
   }
 

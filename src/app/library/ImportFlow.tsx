@@ -39,7 +39,8 @@ type Ask = { kind: 'fill'; name: string; answer: (fill: boolean) => void } | { k
 type Target = string | null | undefined;
 type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Result[]; ask: Ask | null };
 
-const ImportContext = createContext<{ pick: () => void; pickChats: (target: string | null) => void; move: () => void } | null>(null);
+// bring: a file the app made, a share link's charx, taken as a dropped one; true once a character came of it.
+const ImportContext = createContext<{ pick: () => void; pickChats: (target: string | null) => void; move: () => void; bring: (file: File) => Promise<boolean> } | null>(null);
 
 export function useImport() {
   const context = useContext(ImportContext);
@@ -192,14 +193,17 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function take(files: File[], target: Target) {
-    if (files.length === 0 || state?.busy || moving) return;
+  async function take(files: File[], target: Target): Promise<Result[]> {
+    if (files.length === 0 || state?.busy || moving) return [];
     const backups = files.filter((file) => file.name.toLowerCase().endsWith('.bin'));
-    if (backups.length > 0) return setMoving({ files: backups, aside: files.length - backups.length });
+    if (backups.length > 0) {
+      setMoving({ files: backups, aside: files.length - backups.length });
+      return [];
+    }
     const place = placeOf(store, route);
     const results: Result[] = [];
     for (const file of files) {
-      if (!mounted.current) return;
+      if (!mounted.current) return results;
       setState({ busy: { file: file.name, steps: [] }, results, ask: null });
       const progress = (step: ProgressStep) => setState({ busy: { file: file.name, steps: [step] }, results, ask: null });
       const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'fill', name, answer } }));
@@ -207,6 +211,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       results.push(await save(file, place, target, progress, ask, choose));
     }
     setState({ busy: null, results, ask: null });
+    return results;
   }
 
   // then runs inside the confirming press, so a file picker it opens still counts as the user's own.
@@ -234,7 +239,14 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const came = state?.results.some((result) => result.kind !== 'failed') ?? false;
   const title = state?.ask ? (state.ask.kind === 'fill' ? '이미지만 가져올까요?' : '어느 캐릭터에 넣을까요?') : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
   return (
-    <ImportContext.Provider value={{ pick: () => open(undefined), pickChats: open, move: () => asked(() => setAsking(true)) }}>
+    <ImportContext.Provider
+      value={{
+        pick: () => open(undefined),
+        pickChats: open,
+        move: () => asked(() => setAsking(true)),
+        bring: (file) => new Promise((done) => asked(() => void take([file], undefined).then((results) => done(results.some((result) => result.kind === 'character'))))),
+      }}
+    >
       {children}
       <input
         ref={input}

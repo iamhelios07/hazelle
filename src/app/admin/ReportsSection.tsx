@@ -5,11 +5,16 @@ import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
 import { Button, Callout, Dialog, Empty, List, ListItem, Section, Text } from '../ui';
 import { NoticeDialog } from './NoticeDialog';
+import { ShareReportDialog } from './ShareReportDialog';
+import { shareTags } from './shareTags';
 import { usePages } from '../common/useLoaded';
 import { ACTS } from '../common/acts';
 
-// A restore starts only from a report the account sent, so it is asked from the report.
-export function ReportsSection({ onActed, onRestore }: { onActed: () => void; onRestore: (report: Report) => void }) {
+export type AccountReport = Report & { accountId: string; username: string };
+
+// A restore starts only from a report the account sent, so it is asked from the report. A share report is its own
+// dialog (ShareReportDialog).
+export function ReportsSection({ onActed, onRestore }: { onActed: () => void; onRestore: (report: AccountReport) => void }) {
   const pages = usePages(readReports);
   const [open, setOpen] = useState<Report | null>(null);
   const { rows } = pages;
@@ -22,8 +27,8 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
           {rows.map((report) => (
             <ListItem
               key={report.id}
-              title={report.username}
-              tags={report.resolvedAt === null ? [] : ['확인함']}
+              title={report.share === null ? report.username! : `링크 신고 · ${report.username ?? '익명'}`}
+              tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.shared ? shareTags(report.shared) : [])]}
               aside={ago(report.createdAt)}
               description={report.text}
               onClick={() => setOpen(report)}
@@ -36,13 +41,24 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
           더 보기
         </Button>
       )}
-      {open && (
+      {open?.share != null && (
+        <ShareReportDialog
+          report={open as Report & { share: string; shareVersion: number; link: string }}
+          onClose={() => setOpen(null)}
+          onActed={() => {
+            pages.reload();
+            setOpen(null);
+            onActed();
+          }}
+        />
+      )}
+      {open && open.share === null && (
         <ReportDialog
-          report={open}
+          report={open as AccountReport}
           onClose={() => setOpen(null)}
           onRestore={() => {
             setOpen(null);
-            onRestore(open);
+            onRestore(open as AccountReport);
           }}
           onResolved={(resolvedAt) => {
             pages.patch(open.id, { resolvedAt });
@@ -55,7 +71,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   );
 }
 
-function ReportDialog({ report, onClose, onRestore, onResolved }: { report: Report; onClose: () => void; onRestore: () => void; onResolved: (at: number) => void }) {
+function ReportDialog({ report, onClose, onRestore, onResolved }: { report: AccountReport; onClose: () => void; onRestore: () => void; onResolved: (at: number) => void }) {
   const title = `${report.username}의 알림`;
   const text = <Text variant="prose">{report.text}</Text>;
   if (report.resolvedAt !== null) {

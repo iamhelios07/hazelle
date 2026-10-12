@@ -47,6 +47,8 @@ export function useCharacterActions() {
   const files = useFiles();
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
+  // The character whose 링크로 공유 dialog is open (ShareDialog, which the screen holding these actions draws).
+  const [sharing, setSharing] = useState<Shelf | null>(null);
 
   async function copy({ id, character }: Shelf) {
     setBusy({ id, label: '사본 만드는 중' });
@@ -95,5 +97,5 @@ export function useCharacterActions() {
     else toast.failed(removed, '일부를 삭제하지 못했어요.');
   }
 
-  return { busy, copy, exportFile, remove, restore, purge };
+  return { busy, copy, exportFile, remove, restore, purge, sharing, share: setSharing, stopSharing: () => setSharing(null) };
 }

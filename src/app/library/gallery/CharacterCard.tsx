@@ -1,7 +1,8 @@
-import { SquarePen } from 'lucide-react';
+import { Link2, SquarePen } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
 import { ACTS } from '../../common/acts';
+import { SHARE } from '../../common/words';
 import { aliased } from '../../common/alias';
 import { navigate } from '../../shell/router';
 import { enterShelf } from '../../shell/routes';
@@ -38,6 +39,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
           <MenuItem icon={SquarePen} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void actions.copy(shelf)} />
           <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => actions.exportFile(shelf)} />
+          <MenuItem icon={Link2} label={SHARE.act} onClick={() => actions.share(shelf)} />
           <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => actions.remove(shelf)} />
         </>
       )}
