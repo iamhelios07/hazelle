@@ -158,7 +158,7 @@ const SHAPES = {
   asset: picture,
   likeness: shape({ portraits: listOf(shape({ ...all(str, 'name', 'look', 'artist', 'source'), aliases: listOf(str), outfits: listOf(shape(all(str, 'name', 'tags'))) })), at: num, receipt: orNull(isRecord) }),
   inlay: picture,
-  chat: shape({ title: orNull(str), character: orNull(str), models: isRecord, bookmarks: (value) => value === undefined || listOf(shape({ message: str }))(value) }),
+  chat: shape({ title: orNull(str), character: orNull(str), models: isRecord, cast: (value) => value === undefined || listOf(str)(value), bookmarks: (value) => value === undefined || listOf(shape({ message: str }))(value) }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   // A batch's marker holds no key: no server object holds its call.
