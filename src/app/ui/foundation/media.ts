@@ -53,6 +53,9 @@ export const useSplit = watch(MEDIA.split);
 
 export const usePanelCovers = watch(MEDIA.panelCovers);
 
+// Two side panels fit beside the page, neither covering it (ChatFrame's beside).
+export const usePanelsBeside = () => !usePanelCovers();
+
 export const useHover = watch(MEDIA.hover);
 
 // A string, so an unchanged size is the same snapshot.

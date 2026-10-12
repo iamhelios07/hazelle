@@ -17,7 +17,7 @@ const panel =
   );
 
 // Each editor is keyed by its id and saves as it unmounts, so going back to the list or closing the panel saves what
-// was typed.
+// was typed. A prompt opened at a block is keyed by the block too, so another block asked for opens there.
 export function ChatSide(props: SideAt) {
   const { open } = props;
   if (open.kind === 'character') return <CharacterSide {...props} open={open} />;
@@ -36,10 +36,11 @@ function PromptSide({ open, inUse, onOpen, onClose }: Props<'prompts'>) {
   if (!stored) return <PromptList onPick={(id) => onOpen({ kind: 'prompts', id, pane: null })} inUse={inUse ?? undefined} frame={panel('프롬프트', onClose)} />;
   return (
     <PromptEditor
-      key={stored.id}
+      key={`${stored.id}:${open.block ?? ''}`}
       stored={stored}
       layout="drill"
       pane={open.pane}
+      block={open.block}
       onPane={(pane) => onOpen({ ...open, pane })}
       backLabel="프롬프트 목록"
       onBack={toList}

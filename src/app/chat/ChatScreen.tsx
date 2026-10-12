@@ -18,7 +18,8 @@ import { ChatSearch } from './ChatSearch';
 import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useEditBeside } from './editBeside';
-import { useChat, type Side } from './useChat';
+import type { Side } from './panels';
+import { useChat } from './useChat';
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
 export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Side) => void; onClose: () => void };
@@ -48,6 +49,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
   });
   useShortcut('find', () => actions.openSearch());
   const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
+  const cache = chat.cacheShown && <ChatCachePanel chat={chat} />;
   return (
     <>
       <ChatFrame
@@ -66,14 +68,15 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
             id && <ChatMemory id={id} record={panel.record} chat={chat} />
           ) : panel?.kind === 'bookmarks' ? (
             id && <ChatBookmarks id={id} chat={chat} />
-          ) : panel?.kind === 'cache' ? (
-            <ChatCachePanel chat={chat} />
           ) : panel?.kind === 'tool' ? (
             id && <ChatToolPanel key={panel.module} chat={id} module={panel.module} onClose={actions.closePanel} />
+          ) : panel ? (
+            side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           ) : (
-            panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
+            cache
           )
         }
+        beside={panel && cache}
         peek={
           <SidePeeks>
             {chat.peeking && <ChatStatusPeek chat={chat} />}
