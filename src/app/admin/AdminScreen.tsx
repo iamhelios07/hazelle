@@ -24,8 +24,8 @@ const WARNINGS: Record<BackupWarning, string> = {
 };
 
 // Every act lands in the log, which is asked again after one. Only the changed account's row is asked again;
-// whole-service usage is refreshed separately by the operator. A failed service read shows the moderation sections: it
-// cannot tell that nothing waits in them.
+// whole-service usage is refreshed separately by the operator; with one person it would repeat that person's row. A
+// failed service read shows every section: it cannot tell that nothing waits in them.
 export function AdminScreen({ back }: { back: Back | null }) {
   const service = useLoaded(readService);
   const accounts = useAccounts();
@@ -33,6 +33,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
   const [restoring, setRestoring] = useState<Restoring | null>(null);
   const acted = () => setActs((count) => count + 1);
   const moderating = service.data ? moderates(service.data) : service.failure !== null;
+  const shared = service.data ? service.data.people > 1 : service.failure !== null;
   const actedOnAccount = (id?: string) => {
     if (id) void accounts.refresh(id).then((removed) => { if (removed) service.reload(); });
     acted();
@@ -42,7 +43,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
       {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
       {service.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: service.reload }}>{service.failure}</Callout>}
       {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} onNoticed={moderating ? acted : null} />}
-      <UsageSection />
+      {shared && <UsageSection />}
       <AccountsSection loaded={accounts} onActed={actedOnAccount} onRestores={(account) => setRestoring({ ...account, report: null })} />
       {moderating && <>
         <ReportsSection onActed={acted} onRestore={(report: AccountReport) => setRestoring({ accountId: report.accountId, username: report.username, report })} />
