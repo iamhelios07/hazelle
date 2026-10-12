@@ -11,10 +11,10 @@ and only this folder styles elements.**
   reads `--palette-*`; a surface that needs the other theme's colors (the toast) reads tokens
   defined per theme.
 - `foundation/global.css` loads tokens and sets element defaults. `main.tsx` imports it once, then loads
-  `foundation/fonts.css` after paint; slow or unavailable webfonts leave the system faces usable. The tool
-  stylesheet imports both directly because its document has no application bootstrap.
+  `foundation/fonts.css` after paint; slow or unavailable webfonts leave the system faces usable. A tool page
+  (`sandbox.html`) has no application bootstrap, so `foundation/sandbox.css` imports both directly.
 - `foundation/media.ts` lists every media query in `MEDIA` and reads them in JavaScript (`useWide`,
-  `useSplit`, `useHover`, `usePanelsBeside`). A stylesheet cannot read it, so it writes the query out in full, and
+  `useSplit`, `useHover`, `usePanelsBeside`, `useViewport`, `hasFinePointer`). A stylesheet cannot read it, so it writes the query out in full, and
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
 - `foundation/motion.module.css` holds every keyframe, `foundation/a11y.module.css` the
   screen-reader-only box and the one-line ellipsis, and `type.module.css` and `surface.module.css` the looks several
@@ -54,7 +54,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 - **Lists:** a list of places (`List places`) shows a › on each row; a list of the user's own things shows none.
   Contents go in `description`, where it is used in `aside`; an unused thing says nothing there. Counts read
   `{label} N개`, joined by ` · `. The default is the `badge` 기본.
-- **Search** comes from `common/useSearch`: the field shows from `SEARCH_FROM` items and stays while words are typed;
+- **Search** comes from `common/useSearch`: the field shows from `SEARCH_FROM` (`common/search.ts`) items and stays while words are typed;
   it stands first in the body's toolbar `Row`, sort and filters beside it. Its no-results `Empty` takes the variant
   of the list's own empty state.
 - **Nothing here** is `Empty`, a sentence: `{noun}이 없어요.` An empty list of one's own things offers its first step as `Empty action` (the head's own 새 X or X 가져오기). A failure to load is `Callout tone="warn"` with
@@ -72,7 +72,11 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
 | foundation | — | `type.module.css` | Shared text looks: a note, an error line, a field's label |
 | foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field and its compact size, an accent dot |
-| foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`, `usePanelsBeside`) | — | Every breakpoint and media query |
+| foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`, `usePanelsBeside`, `useViewport`, `hasFinePointer`) | — | Every breakpoint and media query |
+| foundation | `theme.ts` (`applyTheme`, `THEME`) | — | The dark or light theme on the document |
+| foundation | `scrollbar.ts` (`markScrollbars`) | `scrollbar.css` | Classic scrollbars (not overlay ones) as a round thumb without arrows, on the page, its boxes and inside a bot's story |
+| foundation | `veil.ts` (`VeilContext`) | — | 이미지 가리기: whether story pictures are covered, and which ones were tapped open |
+| foundation | `mark.ts` (`MARK`) | — | The one drawing of the logo mark, also read by `brand/render.mjs` for the favicon and icons |
 | foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
 | foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |
 | foundation | `Brand` | `Brand.module.css` | The wordmark |
@@ -81,17 +85,18 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph by its role: body, a note (보조 설명: a status, a limit, a caption under a thing) or prose; its alignment |
-| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`, `useMarginRoom`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock, the header and dock floating over the story (the header hides while it is read down, the dock keeps room for the whole composer); the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties; a slot for a `SidePeek` over the story; `panel` beside the story and `beside`, a second panel right of it, drawn only where both stand beside the page (`usePanelsBeside`, 1280px and wider) and left out where a panel covers it; with `stage`, the story set left with a stage on its right for 삽화 where that stage holds half its text's width (`useMarginRoom`) |
+| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`, `useMarginRoom`) | `ChatFrame.module.css` | The chat page: a header that hides while the story is read down and a composer dock, both floating over the story; the chat's title, which opens its list of chats; the reading settings as custom properties; a `peek` slot for `SidePeeks`; `panel` beside the story and `beside`, a second panel, only where both fit (`usePanelsBeside`); with `stage`, the story set left of a stage for 삽화 where it fits (`useMarginRoom`) |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take or a lorebook entry; what is folded is made only while open, and it can start open |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
 | layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
-| layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide. `aside` adds a column beside the body once the screen is wide enough, stacked above it when not, or, for a `preview`, left out stacked and kept in view beside. Its title, section titles and the words in its boxes share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
+| layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form or wide. `aside` adds a column beside the body once the screen is wide enough, stacked above it when not (a `preview` aside is left out when stacked). Its title, section titles and box contents share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
+| layout | `SidePeek` (`SidePeeks`) | `SidePeek.module.css` | A tab at the story's right edge whose drawer slides over the story while the pointer rests on the tab, or stays open from a key or tap, such as 상태; `SidePeeks` holds them in ChatFrame's `peek` slot |
 | layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | layout | `ToolFrame` | `ToolFrame.module.css` | An opaque-origin tool page that fills the rest of its column (a `fill` Screen or SidePanel); the caller connects its window |
@@ -118,19 +123,19 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
-| collections | `Viewport` (`ROWS_RESIZED`) | `Viewport.module.css` | A keyed, measured window within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focused rows, reading choices, keyboard traversal and source/current jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
+| collections | `Viewport` (`ROWS_RESIZED`, `Seek`) | `Viewport.module.css` | A keyed, measured window of rows within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focus, row state and jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
-| collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: its leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), the sidebar's, lists' and menus', and tabs' colours, and the hover and current fills (`--color-surface-hover`, `--color-surface-raised`) |
+| collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), each place's colours, and the hover and current fills |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
 | collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them, in a box or not, a › on each row of a list of places, or, given keys, only the rows near the view; a model id; a figure at a row's end; a control beside a row, something under a row's text such as a gauge, and rows set in under it |
 | collections | `NavGroup` | `NavGroup.module.css` | A set of places in the app, spaced apart from the next set, such as 설정's |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |
-| collections | `Outline` | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
+| collections | `Outline` (`OutlineKind`, `OutlineStop`) | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
 | collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name, its ⓘ explanation and a line of facts beside its control, which goes under them on phones; outside a group, a bare row among fields, marked when it differs from its default |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
@@ -141,8 +146,8 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
 | overlays | `MoreMenu` | — | The ⋯ that opens what is done to a thing as a whole, in a screen's head (`NavBar` `menu`) or a row, named '{of} 메뉴' |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
-| overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark, as one choice of several or one of any number checked (`multiple`); a disabled item; a small form opened the same way (kind dialog), and a menu opened inside it |
-| overlays | `Toast` | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys) or error (a warn band, why, where to fix it). Its action's time runs down as a line. Someone else's words, such as a bot's, under their face and name: line breaks kept, four lines until pressed, then whole with a × |
+| overlays | `Menu` (`MenuItem`, `MenuHeading`, `MenuHandle`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state, which a handle shares with other buttons; checked items (one of several or `multiple`), disabled items, and a small form opened the same way (kind dialog) with menus inside it |
+| overlays | `Toast` (`ToastAction`) | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys, its time running down as a line) or error (a warn band, why, where to fix it); someone else's words, such as a bot's, under their face and name, four lines until pressed |
 | overlays | `ToastStack` | `ToastStack.module.css` | Notices, newest in front, bottom right (under the header on a phone); pointing at it opens it and holds their time. Above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
 | feedback | `AskCard` (`AskAnswer`) | `AskCard.module.css` | A question that waits beside what the user is doing, such as a bot's above the composer: who asks, the question with an ⓘ explanation, a line to type or a few choices, and a × that puts it away |
@@ -153,25 +158,25 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | feedback | `Gauge` | `Gauge.module.css` | How much of an allowance is used, with a mark where an even use would stand by now, a status word, a note and what is left; figures alone where there is nothing to measure against |
 | feedback | `Intro` | `Intro.module.css` | A screen's large title and lead |
 | feedback | `Outcome` | `Outcome.module.css` | What an import brought and did not, a line each with why under it |
-| feedback | `Progress` | `Progress.module.css` | Work under way. Plain: a row per step with its label, bar and count; a step without a total shows its count over a flowing bar; two or more counted steps get a 전체 row. `hero`: the mark filling with the whole and the floored percent, then the steps as stages in order (a check once over, the one under way with its count and bar, a hollow ring still to come), with `title` under the percent and `note` under the stages; a label-only step marked `finished` is a stage done before the counted ones began. Used by the first load, the Risu move and the backup dialog |
+| feedback | `Progress` (`ProgressStep`) | `Progress.module.css` | Work under way. Plain: a row per step with its label, bar and count, and a 전체 row for two or more counted steps. `hero`: the mark filling with the whole and its percent, then the steps as stages (done, under way, still to come). Used by the first load, the Risu move and the backup dialog |
 | feedback | `Steps` | `Steps.module.css` | Where the user stands in a short flow of screens, such as signup |
-| story | `Story` (`BotButton`, `inlaid`) | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons live or dimmed, and which one was pressed (`BotButton`); the streaming caret; faded while another text will take its place; the message's 삽화 slotted in where its mark stands, or at the end (`inlaid`) |
+| story | `Story` (`BotButton`, `READER_RESIZED`, `inlaid`) | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons live or dimmed, and which one was pressed (`BotButton`); math drawn with KaTeX (`math.ts`); the streaming caret; faded while another text will take its place; the message's 삽화 slotted in where its mark stands, or at the end (`inlaid`) |
 | story | `StoryPicture` | `StoryPicture.module.css` | A picture made for a message (삽화) in its story: its frame at the picture's shape while it loads or is made, the 이미지 가리기 stand-in, and a foot of controls |
-| story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its quiet tag by the name (such as 번역, which flips it), the badges tools put on it (two, then +N), its foot, a row under the message holding its markers (cut, stopped, translation, 삽화) on the left and its tools on the right, its height kept while the tools are absent; a ring that fades from a message looked for, such as a memory record's source, and the view taken to it |
-| layout | `SidePeek` (`SidePeeks`) | `SidePeek.module.css` | A tab at the story's right edge, clear of its scrollbar, whose drawer (a card the size of its content at the story's middle) slides over the story once the pointer rests on the tab, or held open (a key, a tap) with its own close, such as 상태; `SidePeeks` holds it in ChatFrame's `peek` slot |
+| story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story: its quiet tag by the name (such as 번역, which flips it), the badges tools put on it (two, then +N), a row under it with its markers (cut, stopped, translation, 삽화) and its tools, its height kept while the tools are absent; a ring that fades from a message looked for, such as a memory record's source |
 | story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text: its script's name and actions among several |
 | story | `MarginPicture` | `MarginPicture.module.css` | A message's 삽화 on the stage right of the story, level with the paragraph its anchor marks, following the reader to the message's end; a picture narrower than the text grows leftward over it to the text's width while pointed at |
 | story | `ReadingPreview` (`PreviewRow`) | `ReadingPreview.module.css` | Sample messages drawn as the chat draws them under given reading settings, inert; the reading width does not show |
-| story | `LogExport` (`LogRow`, `snapshotPage`) | `LogExport.module.css` | A chat drawn once out of sight and handed back as HTML whose look rides in style attributes only (`snapshot.ts`), for a page pasted on another site: the shadow roots read through, every picture whole, and the bot rules a style attribute cannot carry counted; `snapshotPage` wraps it as a file |
+| story | `LogExport` (`LogRow`, `snapshotPage`, `Snapshot`) | `LogExport.module.css` | A chat drawn once out of sight and handed back as HTML whose look rides in style attributes only (`snapshot.ts`), for pasting on another site: shadow roots read through, pictures whole, and the bot rules a style attribute cannot carry counted; `snapshotPage` wraps it as a file |
 
 ## Enforced by `npm run check`
 
 - stylelint: outside `tokens.css`, colors, fonts, spacing, radii, shadows, border widths, z-index,
   animation and transition timings, widths and heights must use `var(--…)`. A width or height may
-  also be a percentage or `100dvh`. Hex colors, named colors and `rgb()`/`hsl()` are refused.
+  also be a percentage, `100dvh` or `max-content`. Hex colors, named colors and `rgb()`/`hsl()` are refused.
 - Vitest: `foundation/media.test.ts` fails on a media query that `MEDIA` does not list.
 - ESLint: no `className` or `style` props and no CSS imports outside this folder and `main.tsx`,
-  and no hex color strings anywhere in `src/app`. Nothing here imports anything outside this folder
+  no hex color strings anywhere in `src/app`, an act's `lucide-react` icon (`ACT_ICONS`) only in `common/acts.ts` and this folder,
+  and no retired copy (`RETIRED` in `eslint.config.js`). Nothing here imports anything outside this folder
   but `src/change-signal` (the `ui` area in `eslint/boundaries.js`).
 - `typed-css-modules` generates a type for each `.module.css`, so a misspelled class name fails
   the type check. The generated `*.module.d.css.ts` files are not committed.

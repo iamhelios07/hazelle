@@ -4,7 +4,7 @@ import { encodeText, fromBase64, toBase64 } from './aead';
 export type FileRef = { id: string; key: string };
 
 // Every file is sealed by its own content (design §3, convergent): the key comes from the bytes, so the same file
-// seals to the same body in every account and is stored once. The id is the SHA-256 of the sealed body, which the
+// seals to the same body and id in every account, while each account stores its own copy. The id is the SHA-256 of the sealed body, which the
 // server checks on upload, so no one can store other bytes under a real file's id. The leading byte names the
 // format. Format 1: AES-256-GCM over the file's bytes, uncompressed, since images arrive compressed already.
 const FORMAT = 1;

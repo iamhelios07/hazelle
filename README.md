@@ -14,34 +14,40 @@ The project is in alpha. The UI is in Korean.
 ## Features
 
 Chat
-- Send, regenerate, continue and branch. Edits and regenerations are kept as versions instead of overwriting earlier replies.
-- A per-reply panel showing the request that was sent, the lorebook entries that fired, token counts, cache hits and cost.
-- Per-chat notes and switches, switching persona, prompt or model mid-chat, and per-device reading settings.
-- Translation per character: replies shown in one language and the user's messages sent in another, while the model always reads the original. Each message can switch between original and translation, and both can be edited.
-- Long-term memory with a token-based window, search inside a chat, bookmarks, up to five extra characters in one chat.
+- Send, regenerate, continue and branch. Each reply version keeps its own continuation, so going back to an earlier version restores the conversation that followed it.
+- A per-reply panel with the request that was sent, the lorebook entries that fired, token counts, cache hits and cost; a cache panel that predicts whether the next request will hit the prompt cache.
+- Per-chat notes and switches, switching persona, prompt or model mid-chat, per-device reading settings, search inside a chat, bookmarks, and up to five extra characters in one chat.
+- Translation, shared across chats unless a character keeps its own settings: replies shown in one language and the user's messages sent in another, while the model always reads the original. Each message switches between original and translation, and both can be edited.
+- Long-term memory: summaries of older messages kept within a token budget, with past records found again by embeddings.
+- Illustrations: pictures for a reply, drawn through NovelAI.
 - Bot HTML and CSS, status panels, and bot scripts (Lua and block triggers) run in a sandboxed worker.
+- Export a chat as an HTML log for posting elsewhere, or as a chat file that imports back.
 
 Characters
 - Drop a file anywhere to import it. A summary lists what came in and what was left out.
-- Folders, a gallery view, a character editor, modules, and a trash for deleted characters.
+- Folders, a gallery view, a character editor, a trash for deleted characters, and export as a CCv3 charx.
+- Share links: a character published as a link that anyone can open and import into their own account, with reporting and a hold on reported links.
 
-Prompts and models
+Prompts, modules and tools
 - A block-based prompt editor. RisuAI presets (`.risup`) import as prompts.
+- Modules switched on always, per prompt, per character or per persona.
+- Tools: JavaScript modules that run in an isolated frame with no network access, and can take over long-term memory, add message actions and badges.
 - Personas, per-model setting profiles, prompt caching settings, and auxiliary model slots for translation, memory and other tasks.
 
 Connections
-- OpenRouter, Vercel AI Gateway, OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Moonshot, Upstage, Groq, Together, Cerebras, DeepInfra, Perplexity, NanoGPT, Chutes, Featherless, Friendli, Surplus, Ollama, and GitHub Copilot through GitHub sign-in.
+- OpenRouter, Vercel AI Gateway, OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Moonshot, Upstage, Groq, Together, Cerebras, DeepInfra, Perplexity, NanoGPT, Chutes, Featherless, Friendli, Surplus, Ollama, and GitHub Copilot through GitHub sign-in. NovelAI for pictures and Voyage for embeddings.
 - Any OpenAI-compatible or Anthropic-compatible endpoint, including local model servers on a self-hosted machine.
-- Remaining balance and limits per connection, and cost per reply. Values a provider doesn't report are shown as unknown.
+- Remaining balance and limits per connection, cost per reply, and a usage report by day, model, character and chat. Values a provider doesn't report are shown as unknown.
+- A discount switch that sends replies through Anthropic Message Batches, OpenAI flex processing or Gemini batch mode.
 
 Moving from RisuAI
 - Drop a RisuAI full backup together with its partial backup. Characters, chats, lorebooks, regex scripts, modules, presets and pictures come over; a summary lists what did not.
 
 Backup
 - A full backup exports the whole account as one zip, which can be restored into a new, empty account.
-- The server takes a daily snapshot of every account and writes a backup generation that an rclone sidecar can copy off-site; the operator can rewind an account to a time in the last week.
+- The server snapshots every account daily. An account can rewind itself from its settings to any point kept in the last week, up to three times a day.
 
-Out of scope: group chat, image generation, TTS, RisuAI plugin compatibility, card v1, embeddings.
+Out of scope: group chat (several bots taking turns), TTS, RisuAI plugins (Hazelle has its own tool API), card v1.
 
 ## Security model
 
@@ -54,13 +60,13 @@ Model requests go through a relay on the server, which forwards the request and 
 What the server can still see:
 - Metadata: the kinds, counts, sizes and timestamps of stored items.
 - Prompts in transit through the relay. Not logging them is a rule in the code, not a cryptographic guarantee.
-- Which accounts hold the same picture. Pictures are encrypted with a key derived from their content so that identical files are stored once across accounts. Their contents stay private.
+- Which accounts hold the same picture. Pictures are encrypted with a key derived from their content, so the same picture has the same id in every account. Their contents stay private.
 
 ## RisuAI compatibility
 
 Supported: character cards v2/v3 (PNG, charx, JSON), `.risum` modules (including the one inside a charx), lorebooks, regex scripts, CBS, `.risup` presets, bot HTML/CSS, Lua and block triggers.
 
-Not imported: embeddings and encrypted cards. The import summary shows what was skipped.
+Not imported: RisuAI's long-term memory data, and encrypted cards and backups. The import summary shows what was skipped.
 
 RisuAI's bugs and quirks are deliberately not reproduced, even where existing bots rely on them.
 
@@ -70,7 +76,7 @@ Hazelle runs as one container with its data in one Docker volume. You need Docke
 
 ### Start
 
-Get `docker-compose.yml` and `deploy/rclone-backup.sh` from this repository or from the source archive attached to a release (keep the `deploy/` folder beside the compose file), then:
+Download the source archive that every instance serves, such as [hazelle.app/source.tar.gz](https://hazelle.app/source.tar.gz), unpack it, and start from its folder, which holds `docker-compose.yml` and the `deploy/` folder beside it:
 
 ```sh
 docker compose up -d
@@ -78,7 +84,7 @@ docker compose up -d
 
 Open http://localhost:8080. The app listens on 127.0.0.1 only. The image is `ghcr.io/jiniill/hazelle`; `latest` is the newest release.
 
-The first account created on a fresh installation is the operator. The operator account cannot be deleted while it is the only operator.
+The first account created on a fresh installation is the operator, and signup then closes. To let others in, raise the signup limit on the admin screen. The operator account cannot be deleted while it is the only operator.
 
 ### Phones and other devices
 
@@ -90,7 +96,7 @@ The compose file allows three local model servers on the host machine: Ollama (1
 
 ### Backups
 
-Every day after 03:00 UTC the app takes a snapshot of each account and writes a backup generation under `backup/` in its volume. To keep copies elsewhere, run the `backup` profile, which copies every complete generation to any rclone remote (S3, Backblaze, Google Drive, a second disk) with `rclone copy` (never `sync`), keeps 7 days there, and marks each generation `copied` so the app knows it is safe:
+Every day after 03:00 UTC the app takes a snapshot of each account and writes a backup generation under `backup/` in its volume. Generations are kept for 7 days: the two newest and the newest of each day. To keep copies elsewhere, run the `backup` profile, which copies every complete generation to any rclone remote (S3, Backblaze, Google Drive, a second disk) with `rclone copy` (never `sync`), keeps the same set there, and marks each generation `copied` so the app knows it is safe:
 
 1. Create the remote's settings beside the compose file: `mkdir -p rclone && rclone config --config ./rclone/rclone.conf` (the copier reads `/config/rclone/rclone.conf`). The copier runs as uid 1000: `chown -R 1000 rclone && chmod 700 rclone && chmod 600 rclone/rclone.conf`. Remotes that refresh OAuth tokens (Google Drive, Dropbox) rewrite the file, which needs the directory to be writable by that uid as well.
 2. Put the remote and path in `.env` beside the compose file, e.g. `HAZELLE_BACKUP_REMOTE=mydrive:hazelle-backup`.
@@ -119,6 +125,8 @@ docker compose up -d
 
 Sign in and look. The old volume (`hazelle_data` unless you renamed it) stays on disk until you remove it yourself. Devices that were signed in are told to download their data again.
 
+To undo changes to a single account, its owner can rewind it from the account settings instead.
+
 ### Update
 
 ```sh
@@ -126,7 +134,35 @@ docker compose pull
 docker compose up -d
 ```
 
-`pull` only downloads; `up -d` replaces the container. A stop lets requests and replies in flight finish for up to 60 seconds. An image never opens data written by a newer version; to go back, restore the generation taken before the update.
+`pull` only downloads; `up -d` replaces the container. A stop lets requests and replies in flight finish for up to 60 seconds. An image never opens data written by a newer version; to go back, restore a generation taken before the update.
+
+### Pictures in R2
+
+Pictures are stored in the volume by default. To keep them in a Cloudflare R2 bucket instead, put the values in `.env` beside the compose file and pass them through under the app's `environment` in `docker-compose.yml`:
+
+```sh
+# .env
+HAZELLE_FILES_BUCKET=r2
+HAZELLE_FILES_R2_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+HAZELLE_FILES_R2_BUCKET=<bucket>
+HAZELLE_FILES_R2_ACCESS_KEY_ID=<key id>
+HAZELLE_FILES_R2_SECRET_ACCESS_KEY=<secret>
+```
+
+```yaml
+# docker-compose.yml, services.app.environment
+HAZELLE_FILES_BUCKET: ${HAZELLE_FILES_BUCKET:-}
+HAZELLE_FILES_R2_ENDPOINT: ${HAZELLE_FILES_R2_ENDPOINT:-}
+HAZELLE_FILES_R2_BUCKET: ${HAZELLE_FILES_R2_BUCKET:-}
+HAZELLE_FILES_R2_ACCESS_KEY_ID: ${HAZELLE_FILES_R2_ACCESS_KEY_ID:-}
+HAZELLE_FILES_R2_SECRET_ACCESS_KEY: ${HAZELLE_FILES_R2_SECRET_ACCESS_KEY:-}
+```
+
+The app keeps a cache of what it reads in the volume, up to `HAZELLE_FILES_CACHE_BYTES` (20 GiB by default, `0` for none). A missing or malformed value stops the app from starting. Switching does not move the pictures already stored; [`infra/README.md`](infra/README.md) "Pictures in R2" describes how the hosted machine moved them with `scripts/move-pictures-to-r2.sh`. Backup generations taken with R2 restore only with the same settings.
+
+### Other settings
+
+Also under the app's `environment`: `HAZELLE_SNAPSHOT_HOUR` (the UTC hour of the daily snapshot, default 3) and `HAZELLE_DRAIN_SECONDS` (how long a stop waits for work in flight, default 60; keep `stop_grace_period` above it).
 
 ## Development
 
@@ -148,16 +184,7 @@ Local development needs no secrets.
 
 Styling rules are in [`src/app/ui/README.md`](src/app/ui/README.md): design values live only in `tokens.css`, and only `src/app/ui` styles elements. `eslint/boundaries.js` lists which layer may import which. The server's storage layout is in [`src/server/db/README.md`](src/server/db/README.md).
 
-The public HTTP listener runs in `frontend-worker.ts`, serving client files independently of the API's SQLite thread.
-It forwards API bodies and responses as streams to a loopback-only listener; `PORT`, the image and the external routes
-are unchanged. Shutdown drains the public requests before closing the API listener and databases.
-Client builds also write Brotli and gzip representations of compressible files; the file server negotiates these
-without compressing on the request thread. Webfonts and already-compressed downloads are left as they are.
-
-For slow loads, inspect `Server-Timing`: `static` measures the file handler, while `api_wait` measures the wait for API
-response headers, including forwarding an upload. A CDN cache hit can carry the timing of the cached response, not a
-new origin request. The API thread logs `event loop delayed` when a 10-second sample contains a delay over 250 ms;
-compare its timestamp with `backup_runs.started_at` and `ended_at` when investigating a backup-time slowdown.
+For slow loads, the `Server-Timing` header carries `static` (the file handler) and `api_wait` (the wait for the API's response headers), and the server logs `event loop delayed` when a 10-second sample holds a delay over 250 ms.
 
 ### Releases and the hosted instance
 
