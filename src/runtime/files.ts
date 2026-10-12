@@ -1,5 +1,5 @@
 import { MAX_FILE_IDS } from '../contracts/files';
-import { openFile, sealFile, type FileRef } from '../vault/files';
+import { fileId, openFile, sealFile, type FileRef } from '../vault/files';
 import type { ApiResult, api as realApi } from './api';
 import type { ObjectStore } from './store';
 
@@ -61,6 +61,13 @@ export class Files {
       maxBytes = asked.data.maxBytes;
     }
     return { ok: true, data: { missing, maxBytes } };
+  }
+
+  // A body sealed elsewhere, a share's manifest, stored as it is under its hash, as every file is. Its id.
+  async put(body: Uint8Array<ArrayBuffer>): Promise<ApiResult<string>> {
+    const id = await fileId(body);
+    const put = await this.store.reaching(() => this.request('PUT', `files/${id}`, body));
+    return put.ok ? { ok: true, data: id } : put;
   }
 
   // A body that does not open answers 'unreadable', never empty bytes. The wait ends with signal (a backup's 중지), not

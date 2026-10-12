@@ -34,11 +34,16 @@ function owned(store: ObjectStore, owner: string, folders: LoreFolder[]) {
   };
 }
 
-// 내보내기: a character as a CCv3 charx that Risu and this app both read (engine/import/card writeCharx), with the
-// modules on for it in the module list. A module holding a tool is left out, as Risu cannot run it, and counted. Its chats, its
+// What a charx holds: card.json and module.risum, and each picture's path in it with the stored file it is read from.
+// The one writer of a character as a file: 내보내기 writes it out, and a share link seals it as its manifest
+// (runtime/share), from which 파일로 받기 writes the same file again.
+export type CharxContent = { entries: { path: string; bytes: Uint8Array<ArrayBuffer> }[]; pictures: { path: string; ref: FileRef }[] };
+
+// A character as a CCv3 charx that Risu and this app both read (engine/import/card writeCharx), with the modules on
+// for it in the module list. A module holding a tool is left out, as Risu cannot run it, and counted. Its chats, its
 // persona, connections, settings, and what only tells this account's copy apart (별명, folder, its Risu id, the answers
-// it was given, its own switches) stay. A picture that cannot be read stops the export: the card already names it.
-export async function exportCharacter(store: ObjectStore, files: Files, id: string, output: BackupOutput, progress: (step: ExportStep) => void): Promise<ApiResult<{ tools: number }>> {
+// it was given, its own switches, its share link) stay.
+export function charxContent(store: ObjectStore, id: string): ApiResult<CharxContent & { tools: number }> {
   const character = live(store.get('character', id))?.value;
   if (!character) return { ok: false, error: 'gone' };
   const own = owned(store, id, character.loreFolders);
@@ -66,28 +71,48 @@ export async function exportCharacter(store: ObjectStore, files: Files, id: stri
   };
   const refs: FileRef[] = [...(avatar ? [avatar.file] : []), ...own.files, ...modules.flatMap((module) => module.files)];
   const { files: entries, pictures } = writeCharx(bot);
+  return { ok: true, data: { entries, pictures: pictures.map((path, index) => ({ path, ref: refs[index]! })), tools } };
+}
+
+// The charx's zip, its pictures read in order PICTURE_WINDOW at a time. A picture that cannot be read stops it: the card
+// already names it.
+export async function writeCharxFile(
+  { entries, pictures }: CharxContent,
+  read: (ref: FileRef) => Promise<ApiResult<Uint8Array<ArrayBuffer>>>,
+  output: BackupOutput,
+  progress: (step: ExportStep) => void,
+): Promise<ApiResult<null>> {
   const zip = zipWriter((bytes) => output.write(bytes));
   let complete = false;
   try {
     for (const { path, bytes } of entries) await zip.add(path, bytes, true);
-    for (let start = 0; start < refs.length; start += PICTURE_WINDOW) {
-      progress({ done: start, total: refs.length });
-      const read = await Promise.all(refs.slice(start, start + PICTURE_WINDOW).map((ref) => files.read(ref)));
-      for (const [index, bytes] of read.entries()) {
+    for (let start = 0; start < pictures.length; start += PICTURE_WINDOW) {
+      progress({ done: start, total: pictures.length });
+      const batch = pictures.slice(start, start + PICTURE_WINDOW);
+      const got = await Promise.all(batch.map(({ ref }) => read(ref)));
+      for (const [index, bytes] of got.entries()) {
         if (!bytes.ok) return bytes;
         // Pictures are compressed already.
-        await zip.add(pictures[start + index]!, bytes.data);
+        await zip.add(batch[index]!.path, bytes.data);
       }
     }
     await zip.end();
     await output.close();
     complete = true;
-    return { ok: true, data: { tools } };
+    return { ok: true, data: null };
   } catch {
     return { ok: false, error: 'export-write' };
   } finally {
     if (!complete) await output.abort();
   }
+}
+
+// 내보내기.
+export async function exportCharacter(store: ObjectStore, files: Files, id: string, output: BackupOutput, progress: (step: ExportStep) => void): Promise<ApiResult<{ tools: number }>> {
+  const content = charxContent(store, id);
+  if (!content.ok) return content;
+  const written = await writeCharxFile(content.data, (ref) => files.read(ref), output, progress);
+  return written.ok ? { ok: true, data: { tools: content.data.tools } } : written;
 }
 
 // A card file's character, after the modules it bundles: one already here and not deleted, by the id module files name

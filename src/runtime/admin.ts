@@ -36,7 +36,21 @@ export type AdminAccount = {
 };
 // The accounts read at readAt; the sums leave out the unread ones.
 export type Totals = { bytes: number; disk: number; unread: number; readAt: number };
-export type Report = { id: number; accountId: string; username: string; text: string; createdAt: number; resolvedAt: number | null };
+// A report is an account's message, or a report on a share (share set) sent by anyone holding its link: accountId and
+// username then name a signed-in reporter, else null. shared: the share's state now, null once it went with its sharer.
+export type SharedState = { held: boolean; reviewed: boolean; cut: boolean; removed: boolean; ownerId: string | null; ownerName: string | null };
+export type Report = {
+  id: number;
+  accountId: string | null;
+  username: string | null;
+  text: string;
+  createdAt: number;
+  resolvedAt: number | null;
+  share: string | null;
+  shareVersion: number | null;
+  link: string | null;
+  shared: SharedState | null;
+};
 export type LogRow = { id: number; at: number; action: string; target: string; detail: unknown };
 export const readService = () => api<Service>('GET', 'admin/service');
 export const setService = (values: Pick<Service, 'signupCap' | 'accountBytesCap' | 'accountFileBytesCap'>) => api<undefined>('PUT', 'admin/service', values);
@@ -122,3 +136,10 @@ export const resolveReport = (id: number, reply = '') => api<undefined>('POST', 
 export const readLog = (before: number | null) => page<'log', LogRow>('admin/log', 'log', before);
 
 export const setFileBlocked = (file: string, blocked: boolean) => api<undefined>('PUT', `admin/files/${file}/blocked`, { blocked });
+
+// A share in any state: its versions, the manifest's file id of each. A report's link holds the key (runtime/share).
+export const readShareVersions = (share: string) => api<{ versions: { version: number; manifest: string; createdAt: number }[] }>('GET', `admin/shares/${share}`);
+// 보류, by a report or directly; 보류 풀기, which marks the share reviewed; 차단, of the version reviewed.
+export const holdShare = (share: string) => api<undefined>('POST', `admin/shares/${share}/hold`);
+export const releaseShare = (share: string) => api<undefined>('POST', `admin/shares/${share}/release`);
+export const blockShare = (share: string, version: number, notice: string, suspend: boolean) => api<undefined>('POST', `admin/shares/${share}/block`, { version, notice, suspend });

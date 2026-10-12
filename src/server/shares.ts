@@ -85,14 +85,14 @@ shares.get('/mine', requireSession, async (c) => {
     c.env.db.prepare('SELECT share_consent FROM accounts WHERE incarnation = ?').bind(incarnation).first<number | null>('share_consent'),
     c.env.db
       .prepare(
-        `SELECT s.id, s.created_at AS createdAt, s.received, s.held_at IS NOT NULL AS held, s.removed_at IS NOT NULL AS removed,
+        `SELECT s.id, s.created_at AS createdAt, s.received, s.held_at IS NOT NULL AS held, s.removed_at IS NOT NULL AS removed, s.cover IS NOT NULL AS covered,
            (SELECT MAX(version) FROM share_versions WHERE share = s.id) AS version
          FROM shares s WHERE s.incarnation = ? AND s.cut_at IS NULL ORDER BY s.created_at DESC`,
       )
       .bind(incarnation)
-      .all<{ held: number; removed: number }>(),
+      .all<{ held: number; removed: number; covered: number }>(),
   ]);
-  return c.json({ consent, shares: results.map((row) => ({ ...row, held: Boolean(row.held), removed: Boolean(row.removed) })) });
+  return c.json({ consent, shares: results.map((row) => ({ ...row, held: Boolean(row.held), removed: Boolean(row.removed), covered: Boolean(row.covered) })) });
 });
 
 shares.post('/', requireSession, canWrite, async (c) => {
@@ -133,6 +133,15 @@ shares.post('/:id/versions', requireSession, canWrite, async (c) => {
     db.prepare('UPDATE shares SET cover = ? WHERE id = ?').bind(version.cover && JSON.stringify(version.cover), id),
   ]);
   return c.json({ id, version: next });
+});
+
+// The opt-in embed text, turned on or off at once; null turns it off.
+shares.put('/:id/cover', requireSession, canWrite, async (c) => {
+  const id = c.req.param('id');
+  const cover = readCover((await readObject(c))?.cover);
+  if (!SHARE_ID.test(id) || cover === undefined) return fail(c, 400, 'bad-input');
+  const set = await c.env.db.prepare('UPDATE shares SET cover = ? WHERE id = ? AND incarnation = ? AND cut_at IS NULL RETURNING id').bind(cover && JSON.stringify(cover), id, c.get('account').incarnation).first();
+  return set ? c.body(null, 204) : fail(c, 404, 'not-found');
 });
 
 // 링크 끊기. Nothing is deleted: the versions stay among the sharer's files as every file does while its account lives,
