@@ -1,4 +1,5 @@
 import { fitsRole } from '../connectors/assignment';
+import { RETRIES } from '../connectors/registry';
 import type { Account, Connection, ConnectionType, Model, Starred, Turns } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Stored } from '../model/kinds';
@@ -81,6 +82,14 @@ export async function refreshStarred(store: ObjectStore, id: string, models: Mod
   if (store.get('connection', id)?.value.starred.every((model) => sameValue(fresh(model), model)) !== false) return;
   await store.update('connection', id, (current) => ({ ...current, starred: current.starred.map(fresh) }));
 }
+
+// The default count is kept as none, so it follows the default.
+export const setRetries = (store: ObjectStore, id: string, retries: number) =>
+  store.update('connection', id, (current) => {
+    const next: Connection = { ...current, retries };
+    if (retries === RETRIES) delete next.retries;
+    return next;
+  });
 
 export const removeConnection = (store: ObjectStore, id: string) => store.take('connection', id);
 

@@ -107,9 +107,15 @@ export const ARCA_LOG = '아카라이브용 HTML';
 // Not 기본값, which reads as the default 설정 named 기본.
 export const UNSET = '모델 원래 값';
 
-// A 설정 묶음's discount lane (design §6.7), and a reply waiting on its batch.
+// A 설정 묶음's discount lane (design §6.7), a reply waiting on its batch, and one whose batch 멈추기 canceled, which
+// shows an answer made before the cancel landed.
 export const DISCOUNT = '할인 받기';
 export const DISCOUNT_WAITING = '할인 받는 중이에요. 답이 다 만들어지면 한 번에 보여요.';
+export const DISCOUNT_STOPPING = '멈추는 중이에요. 그사이 답이 다 만들어지면 그 답을 보여요.';
+
+// A reply whose try failed before any of it came, sent again (design §6.7, retry on failure); the connection's count.
+export const RETRYING = '응답을 받지 못해서 다시 보내고 있어요.';
+export const RETRY_COUNT = '실패하면 다시 보내기';
 
 // A value nobody reported, said as such rather than as a made-up figure.
 export const UNKNOWN = '알 수 없음';

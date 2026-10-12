@@ -14,7 +14,7 @@ import { BOOKMARK } from '../common/words';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
-import { DISCOUNT_WAITING } from '../common/words';
+import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPicture, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotOf } from './ChatPicture';
@@ -145,10 +145,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       />
     );
   } else if (live && empty) {
-    body = message.batch ? (
+    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : null;
+    body = waiting ? (
       <>
         <Waiting />
-        <Text variant="note">{DISCOUNT_WAITING}</Text>
+        <Text variant="note">{waiting}</Text>
       </>
     ) : (
       <Waiting />

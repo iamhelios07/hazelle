@@ -191,7 +191,7 @@ describe('이어 쓰기', () => {
 
   it('continues again on 다시 시도 after the continuation failed, so the cut text and every call stay', () =>
     server.withSession(async (session) => {
-      const { chat, log, reply, cut } = await cutReply(session, [upstream(500, { error: { message: 'overloaded' } }), saying(' 끝.')]);
+      const { chat, log, reply, cut } = await cutReply(session, [upstream(400, { error: { message: 'bad' } }), saying(' 끝.')]);
       await vi.waitFor(() => expect(shown(reply()).receipt?.state).toBe('failed'));
       // The failed version shows before its save lands, and the turn holds Talk until then.
       await vi.waitFor(() => expect(session.talk.snapshot(chat)).toBeNull());
@@ -248,7 +248,7 @@ describe('내 메시지 번역', () => {
       await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await setTranslate(session.store, null, { replies: false, input: true });
-      const log = stubRelay(inTurn([upstream(500, { error: { message: 'overloaded' } })]));
+      const log = stubRelay(inTurn([upstream(400, { error: { message: 'bad' } })]));
 
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toMatchObject({ kind: 'untranslated', failure: { kind: 'failed' } });
       expect(log).toHaveLength(1);

@@ -21,7 +21,8 @@ const left = (remaining: number) => ({ quota_snapshots: { premium_interactions: 
 // By the account's secret: what its allowance answers, or a status it fails with.
 const allowances = (answers: Record<string, object | number>) =>
   stubRelay(({ url, headers }: HttpRequest) => {
-    if (url !== USER) return url === EXCHANGE ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + 1800 }) : upstream(500, { message: 'down' });
+    if (url === EXCHANGE) return upstream(200, { token: `tid:${headers.authorization}`, expires_at: Math.floor(Date.now() / 1000) + 1800 });
+    if (url !== USER) return new Response('{"message":"down"}', { status: 500, headers: { 'x-relay': 'upstream', 'retry-after': '0' } });
     const answer = answers[headers.authorization!.replace('Bearer ', '')]!;
     return typeof answer === 'number' ? upstream(answer, { message: 'no' }) : upstream(200, answer);
   });
@@ -59,7 +60,7 @@ describe('Pool.pick', () => {
   });
 });
 
-it('reads a failed reply’s account again before the next pick, and never sends that reply on another account', async () => {
+it('reads a failed reply’s account again before the next pick, and sends that reply again only on its own account', async () => {
   const log = allowances({ a: left(5), b: left(5) });
   at(OCTOBER_10);
   const credentials = new Credentials();
@@ -72,7 +73,9 @@ it('reads a failed reply’s account again before the next pick, and never sends
   expect(await send()).toMatchObject({ state: 'failed', account: 'a' });
   const urls = log.map(({ sent }) => sent.url);
   expect(urls.filter((url) => url === USER)).toHaveLength(3);
-  expect(urls.filter((url) => url.endsWith('/chat/completions'))).toHaveLength(2);
+  const tries = log.filter(({ sent }) => sent.url.endsWith('/chat/completions'));
+  expect(tries).toHaveLength(6);
+  expect(new Set(tries.map(({ sent }) => sent.headers.authorization))).toEqual(new Set([tries[0]!.sent.headers.authorization]));
 });
 
 it('has no pool type that books a cost after the reply, which settles on the connection’s one account', () => {

@@ -1,15 +1,49 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
+import { setDefaultModel } from './assignment';
 import { appendUserMessage, editMessage, selectVersion, startChat } from './chat-log';
 import { RELAY_HEADER } from '../contracts/http';
 import { chatPrint, forecast, prior } from './cache';
 import { FIRST_PROFILE_ID } from './profiles';
+import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { withTurn } from './talk';
 import { takeTurn } from './turn';
 import { cacheSend, wouldSend } from './turn-context';
 
 const server = testServer();
+
+async function chatSaid(session: Session) {
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
+  return chat;
+}
+
+const replies = (session: Session, chat: string) => fold(session.store.children('entry', chat)).filter(({ role }) => role === 'assistant').map((message) => shown(message));
+
+// A chat model on Anthropic with 할인 받기 on, whose batch the provider answers: each check with the next of checks, and
+// its result once ended.
+async function batching(session: Session, checks: string[], result: unknown) {
+  const claude = { id: 'claude', name: 'Claude', input: null, output: null, contextLength: null, maxOutput: 1000, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+  const connection = await session.store.create('connection', { type: 'anthropic', label: 'Anthropic', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-ant-x' }], turns: null, starred: [claude] });
+  if (!connection.ok) throw new Error(connection.error);
+  await setDefaultModel(session.store, 'main', { connection: connection.data.id, model: claude.id });
+  await session.store.update('profile', FIRST_PROFILE_ID, (current) => ({ ...current, settings: { discount: true } }));
+  const BATCHES = 'https://api.anthropic.com/v1/messages/batches';
+  const batch = (status: string) => upstream(200, { id: 'b1', type: 'message_batch', processing_status: status });
+  let key = '';
+  return stubRelay(({ url, body }) => {
+    if (url === BATCHES) {
+      key = (JSON.parse(body!) as { requests: { custom_id: string }[] }).requests[0]!.custom_id;
+      return batch('in_progress');
+    }
+    if (url === `${BATCHES}/b1`) return batch(checks.shift()!);
+    if (url === `${BATCHES}/b1/cancel`) return batch('canceling');
+    return new Response(JSON.stringify({ custom_id: key, result }), { headers: { [RELAY_HEADER]: 'upstream' } });
+  });
+}
 
 describe('withTurn', () => {
   it('shows a message sent translated with its translation before it is saved', () => {
@@ -130,6 +164,49 @@ describe('Talk', () => {
       expect(fold(session.store.children('entry', chat)).map((message) => shown(message).text)).toEqual(['안녕']);
     }));
 
+  it('stops a reply while its try waits to be sent again, and sends nothing more', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = await chatSaid(session);
+      const log = stubRelay(() => new Response('{}', { status: 429, headers: { [RELAY_HEADER]: 'upstream', 'retry-after': '30' } }));
+      const turning = takeTurn(session, chat, { kind: 'answer' });
+      await vi.waitFor(() => expect(session.talk.snapshot(chat)?.retrying).toBe(true));
+      session.talk.stop(chat);
+      expect(await turning).toBeNull();
+      expect(replies(session, chat)[0]!.receipt).toMatchObject({ state: 'cut', cut: 'stopped', error: null });
+      expect(log).toHaveLength(1);
+    }));
+
+  it('keeps a batch answer made before 멈추기 canceled it, the reply saying it stops meanwhile', () =>
+    server.withSession(async (session) => {
+      const message = { id: 'msg_1', type: 'message', role: 'assistant', content: [{ type: 'text', text: '반가워요' }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } };
+      const log = await batching(session, ['ended'], { type: 'succeeded', message });
+      const chat = await chatSaid(session);
+      const turning = takeTurn(session, chat, { kind: 'answer' });
+      await vi.waitFor(() => expect(session.talk.snapshot(chat)?.batch).toBe(true));
+      session.talk.stop(chat);
+      expect(session.talk.snapshot(chat)?.stopping).toBe(true);
+      expect(await turning).toBeNull();
+      expect(replies(session, chat)[0]).toMatchObject({ text: '반가워요', receipt: { state: 'done', discount: 'batch' } });
+      expect(log.map(({ sent }) => sent.url).slice(-3)).toEqual(['https://api.anthropic.com/v1/messages/batches/b1/cancel', 'https://api.anthropic.com/v1/messages/batches/b1', 'https://api.anthropic.com/v1/messages/batches/b1/results']);
+      expect(session.store.list('stream')).toEqual([]);
+    }));
+
+  it('ends a turn waiting on a batch once a restore ends its timeline, canceling the batch, and the chat saves again', () =>
+    server.withSession(async (session) => {
+      const log = await batching(session, ['canceling'], null);
+      const chat = await chatSaid(session);
+      const turning = takeTurn(session, chat, { kind: 'answer' });
+      await vi.waitFor(() => expect(session.talk.snapshot(chat)?.batch).toBe(true));
+      const through = globalThis.fetch;
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url.startsWith('/api/objects?') ? (vi.stubGlobal('fetch', through), Promise.resolve(Response.json({ error: 'cache-reset' }, { status: 409 }))) : through(url, init)));
+      void session.store.pull();
+      expect(await turning).toEqual({ kind: 'unsaved', reply: null, failure: { ok: false, error: 'timeline-changed' } });
+      expect(log.map(({ sent }) => sent.url)).toContain('https://api.anthropic.com/v1/messages/batches/b1/cancel');
+      await server.hold(session.store, chat);
+      expect((await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '또 안녕' })).ok).toBe(true);
+    }));
+
   it('keeps what each call sent, its address and body and never its headers, through an edit and while its chat is held', () =>
     server.withSession(async (session) => {
       await answerable(session);
@@ -164,7 +241,7 @@ describe('Talk', () => {
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       const usage = { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 40, cache_write_tokens: 50 } };
       const cached = (text: string) => new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }], usage })}\n\ndata: [DONE]\n\n`, { headers: { [RELAY_HEADER]: 'upstream' } });
-      stubRelay(inTurn([cached('반가워요'), cached('또 반가워요'), upstream(500, { error: { message: 'down' } })]));
+      stubRelay(inTurn([cached('반가워요'), cached('또 반가워요'), upstream(400, { error: { message: 'bad' } })]));
       const receipts = () => fold(session.store.children('entry', chat)).filter(({ role }) => role === 'assistant').map((message) => shown(message).receipt!);
 
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();

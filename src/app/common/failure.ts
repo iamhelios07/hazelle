@@ -11,7 +11,7 @@ import type { SignInFailure } from '../../runtime/sign-in';
 import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
 import { count } from './typedNumber';
-import { BIN, BOT_STUCK, inSettings, MODEL_ROLES, UNREADABLE_IMAGE } from './words';
+import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, UNREADABLE_IMAGE } from './words';
 
 // The server's codes left on the generic fallback, which names the code for the operator. Every other server code needs
 // words in MESSAGES; its remaining keys are codes the runtime makes itself.
@@ -107,6 +107,7 @@ const REFUSED: Record<string, string> = {
   'unknown-sampler': '이 모델이 모르는 샘플러예요. 삽화 프롬프트에서 샘플러를 다시 선택해 주세요.',
   'model-gone': '모델이 연결에서 빠져서 응답을 이어 받을 수 없어요.',
   'batch-expired': '제공자가 정해진 시간 안에 답을 만들지 못해 할인 요청이 만료됐어요.',
+  'discount-busy': `제공자에게 지금은 할인으로 처리할 자리가 없어요. ${DISCOUNT}를 끄면 바로 답해요.`,
 };
 
 // The relay refuses these, and 직접 연결 says so before it tries.

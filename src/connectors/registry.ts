@@ -165,6 +165,23 @@ function sending(route: Route, { model, messages, settings: stored }: ChatReques
   return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
 }
 
+// Retry on failure (design §6.7): the answers worth a try sent again, the provider refusing for a moment. A bad key or a
+// bad request is not among them, so it is shown at once.
+export const RETRYABLE: readonly number[] = [408, 429, 500, 502, 503, 504, 520, 522, 524, 529];
+export const RETRIES = 2;
+
+// null: each call is sent once.
+export function retryOf(connection: Connection): { times: number; statuses: readonly number[] } | null {
+  const times = connection.retries ?? RETRIES;
+  return times ? { times, statuses: RETRYABLE } : null;
+}
+
+// Whether a refusal is the discount lane's own: no room for the call on it now (Discount busy).
+export function laneBusy(route: Route, request: ChatRequest, status: number, code: string | null): boolean {
+  const lane = route.type?.discount;
+  return lane?.lane === 'tier' && sending(route, request).settings.discount === true && lane.busy(status, code);
+}
+
 // The batch lane a request is answered through: the type's, where its settings ask for the discount and the model is not
 // known to refuse it.
 export function batchLane(route: Route, request: ChatRequest): Batches | null {

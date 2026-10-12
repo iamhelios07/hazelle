@@ -1,5 +1,5 @@
-import type { ServerError } from '../contracts/http';
-import { HELLO, HEAD, DATA, END, PING } from '../contracts/streams';
+import { RELAY_HEADER, type ServerError } from '../contracts/http';
+import { HELLO, HEAD, DATA, END, PING, WAIT, retryWait, type Retry } from '../contracts/streams';
 import { forward, type Upstream } from './relay';
 
 // A stream that closes with no end frame was lost: the process restarted with the call gone.
@@ -83,6 +83,27 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> | null {
 
 const json = (status: number, error: ServerError) => Response.json({ error }, { status });
 
+// Of the relay's own refusals, only an address it could not reach is worth a try sent again.
+async function passing(response: Response, statuses: Retry['statuses']): Promise<boolean> {
+  if (response.headers.get(RELAY_HEADER) === 'upstream') return statuses.includes(response.status);
+  const body: unknown = await response.clone().json().catch(() => null);
+  return typeof body === 'object' && body !== null && (body as { error?: unknown }).error === 'upstream-unreachable';
+}
+
+const sleep = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason as Error);
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', stop);
+      resolve();
+    }, ms);
+    const stop = () => {
+      clearTimeout(timer);
+      reject(signal.reason as Error);
+    };
+    signal.addEventListener('abort', stop, { once: true });
+  });
+
 // Memory holds the frames not yet written (from persisted on, in seq order, no gap) and what each reader is sent;
 // storage holds every page before them, however long the answer. idle: the box has no start pending, no call running
 // and no reader, so its registry may forget it.
@@ -110,7 +131,7 @@ export class StreamBox {
     private readonly idle: () => void,
   ) {}
 
-  async start({ id, key, request }: { id: string; key: unknown; request: unknown }, signal: AbortSignal): Promise<Response> {
+  async start({ id, key, request, retry }: { id: string; key: unknown; request: unknown; retry?: Retry }, signal: AbortSignal): Promise<Response> {
     this.starts++;
     try {
       const theirs = typeof key === 'string' ? fromBase64(key) : null;
@@ -133,7 +154,7 @@ export class StreamBox {
       this.next = this.persisted = 1;
       this.call = new AbortController();
       this.running = true;
-      this.ended = this.run(request, sealing, this.call.signal);
+      this.ended = this.run(request, retry ?? null, sealing, this.call.signal);
       return await this.read(0, signal);
     } finally {
       this.starts--;
@@ -159,7 +180,7 @@ export class StreamBox {
     if (!this.starts && !this.running && !this.readers) this.idle();
   }
 
-  private async run(envelope: unknown, sealing: Key, signal: AbortSignal) {
+  private async run(envelope: unknown, retry: Retry | null, sealing: Key, signal: AbortSignal) {
     let limited = false;
     const cut = () => {
       limited = true;
@@ -182,8 +203,18 @@ export class StreamBox {
     let received = 0;
     let end: Reason = { reason: 'done' };
     try {
-      const response = await forward(this.upstream, envelope, signal);
-      this.append(sealing, HEAD, encode(JSON.stringify({ status: response.status, statusText: response.statusText, headers: [...response.headers] })));
+      let response: Response;
+      let tries = 0;
+      for (;;) {
+        tries++;
+        response = await forward(this.upstream, envelope, signal);
+        const wait = retry && tries <= retry.times && !signal.aborted && (await passing(response, retry.statuses)) ? retryWait(tries, response.headers.get('retry-after'), Date.now()) : null;
+        if (wait === null) break;
+        await response.body?.cancel();
+        this.append(sealing, WAIT, new Uint8Array());
+        await sleep(wait, signal);
+      }
+      this.append(sealing, HEAD, encode(JSON.stringify({ status: response.status, statusText: response.statusText, headers: [...response.headers], tries })));
       const reader = response.body?.getReader();
       while (reader) {
         // Upstream is read no faster than its frames are sealed and its full pages stored.

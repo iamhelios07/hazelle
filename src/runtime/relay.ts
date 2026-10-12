@@ -1,6 +1,6 @@
 import { BOT_HEADER, RELAY_HEADER } from '../contracts/http';
-import { HEAD, DATA, END, PING } from '../contracts/streams';
-import { providerMessage } from '../connectors/errors';
+import { HEAD, DATA, END, PING, WAIT, type Retry } from '../contracts/streams';
+import { providerCode, providerMessage } from '../connectors/errors';
 import { isRecord } from '../connectors/values';
 import type { HttpRequest } from '../connectors/types';
 import { streamOpener } from '../vault/streams';
@@ -9,9 +9,10 @@ import { pause } from './pause';
 
 // Whose refusal it was decides what the user is told: the provider's answer, the relay's
 // own refusal (X-Relay: error), the app's (no X-Relay header, such as an expired session), or no
-// connection at all.
+// connection at all. code: the provider's own name for its refusal, where its body gives one; retryAfter: its
+// Retry-After header.
 export type RelayFailure =
-  | { kind: 'provider'; status: number; detail: string }
+  | { kind: 'provider'; status: number; detail: string; code?: string; retryAfter?: string }
   | { kind: 'relay'; code: string }
   | { kind: 'app'; code: string }
   | { kind: 'offline' }
@@ -51,7 +52,10 @@ async function errorCode(response: Response) {
 
 async function answered(response: Response | RelayFailure): Promise<Response | RelayFailure> {
   if (!(response instanceof Response) || response.ok) return response;
-  return { kind: 'provider', status: response.status, detail: providerMessage(await response.text().catch(() => '')) };
+  const text = await response.text().catch(() => '');
+  const code = providerCode(text);
+  const retryAfter = response.headers.get('retry-after');
+  return { kind: 'provider', status: response.status, detail: providerMessage(text), ...(code !== null && { code }), ...(retryAfter !== null && { retryAfter }) };
 }
 
 export async function relay(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
@@ -99,21 +103,22 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
 // page stops reading. With a request it starts the call; without one it reads the call already started, from the
 // start. key: the call's private key; public: its public half, to start.
 // started: told once the server holds the call, before any of it is read, or once a discount lane's batch does (its
-// id, runtime/generate). bot: the chat whose bot's script makes the
-// call, which the server limits per chat. took: how long the call ran, as the server measured it, once its end has
-// been read.
-export type StreamCall = { id: string; key: JsonWebKey; public?: string; started?: (batch?: string) => void; bot?: string; took?: number };
+// id, runtime/generate). retrying: told each time a try failed and is to be sent again (Retry). bot: the chat whose
+// bot's script makes the call, which the server limits per chat. tries: how many times the server sent it, once its
+// head has been read. took: how long the call ran, as the server measured it, once its end has been read.
+export type StreamCall = { id: string; key: JsonWebKey; public?: string; started?: (batch?: string) => void; retrying?: () => void; bot?: string; took?: number; tries?: number };
 
 // A read ends only at the call's own end: the end the server read, a call the server lost, or one it no longer holds
 // (stream-gone); or once the session is gone (no-session), when no read can reach it. This page's other failures to
 // reach it are tried again until the page stops reading; failing the read on them would save that failure as the
 // call's result and drop a call still running.
-export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal): Promise<Response | RelayFailure> {
+// retry: how the server sends again a try that failed before any of it came, absent for none.
+export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal, retry: Retry | null = null): Promise<Response | RelayFailure> {
   let body: ReadableStream<Uint8Array>;
   if (request) {
     let response: Response;
     try {
-      response = await fetchApi(`streams/${call.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request, ...(call.bot && { bot: call.bot }) }), signal });
+      response = await fetchApi(`streams/${call.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request, ...(call.bot && { bot: call.bot }), ...(retry && { retry }) }), signal });
     } catch {
       return lost(signal);
     }
@@ -160,15 +165,27 @@ const NO_BODY = new Set([101, 204, 205, 304]);
 async function unframe(call: StreamCall, body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<Response | RelayFailure> {
   const frames = framesOf(call.id, body, signal);
   let open: Awaited<ReturnType<typeof streamOpener>>;
-  let head: { status: number; statusText: string; headers: [string, string][] };
+  let head: { status: number; statusText: string; headers: [string, string][]; tries?: number };
+  const ending = (opened: Uint8Array) => {
+    const end = JSON.parse(new TextDecoder().decode(opened)) as { reason: string; detail?: string; ms: number };
+    call.took = end.ms;
+    return end;
+  };
   try {
     const hello = await frames.next();
     if (hello.done) return { kind: 'app', code: 'stream-lost' };
     open = await streamOpener(call.id, call.key, hello.value.body);
-    const sealed = await frames.next();
-    const opened = !sealed.done && sealed.value.type === HEAD ? await open(sealed.value.type, sealed.value.seq, sealed.value.body) : null;
+    let sealed = await frames.next();
+    while (!sealed.done && sealed.value.type === WAIT && (await open(sealed.value.type, sealed.value.seq, sealed.value.body))) {
+      call.retrying?.();
+      sealed = await frames.next();
+    }
+    const opened = !sealed.done && (sealed.value.type === HEAD || sealed.value.type === END) ? await open(sealed.value.type, sealed.value.seq, sealed.value.body) : null;
     if (!opened) return { kind: 'app', code: 'stream-lost' };
+    // A call ends before its head only while a try waits to be sent again: stopped, or cut at its time.
+    if (sealed.value!.type === END) return ending(opened).reason === 'stopped' ? { kind: 'stopped' } : { kind: 'app', code: 'stream-lost' };
     head = JSON.parse(new TextDecoder().decode(opened)) as typeof head;
+    call.tries = head.tries;
   } catch {
     return lost(signal);
   }
@@ -180,8 +197,7 @@ async function unframe(call: StreamCall, body: ReadableStream<Uint8Array>, signa
       if (frame.done || !opened) return controller.error(lostStream);
       if (frame.value.type === DATA) return controller.enqueue(opened);
       if (frame.value.type !== END) return controller.error(lostStream);
-      const end = JSON.parse(new TextDecoder().decode(opened)) as { reason: string; detail?: string; ms: number };
-      call.took = end.ms;
+      const end = ending(opened);
       if (end.reason === 'network') controller.error(new Error(end.detail));
       else controller.close();
     },
