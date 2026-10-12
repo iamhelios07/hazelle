@@ -18,7 +18,8 @@ import { importModule, setModuleAlways } from './modules';
 import { addPersona } from './personas';
 import { thumbnail } from './picture';
 import { savePreset } from './prompts';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 
 export type MovePick = Pick<BackupCatalog, 'characters' | 'personas' | 'presets' | 'modules'>;
 export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules' | 'pictures'; done: number; total: number };

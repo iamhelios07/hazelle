@@ -5,7 +5,8 @@ import { emptyMemory } from '../model/memory';
 import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
 import { EvaluationFailed } from './evaluation';
-import { ObjectStore, type PullProgress, type Write } from './store';
+import { ObjectStore, type PullProgress } from './store';
+import type { Write } from './object-writes';
 import { ScopeUnavailable, type ChatLease } from './chat-scope';
 import { summaryId, summaryStale } from './summary';
 import { BATCH_LIMITS, testServer } from './testing';
@@ -450,6 +451,30 @@ describe('writes shown before their answer', () => {
     answer(false);
     expect(await saving).toEqual({ ok: false, error: 'server-error' });
     expect(store.list('connection')).toEqual([]);
+  });
+
+  it.each([true, false])('keeps a later preview while the earlier write settles, then reapplies it to the confirmed copy (lands: %s)', async (lands) => {
+    const { store, hold, answer, held } = await gated();
+    const created = await store.create('connection', connection('a'));
+    if (!created.ok) throw new Error(created.error);
+    const id = created.data.id;
+    hold();
+    const first = store.update('connection', id, renamed('b'));
+    await vi.waitFor(() => expect(held()).toBe(1));
+    const second = store.update('connection', id, renamed('c'));
+    expect(store.get('connection', id)?.value.label).toBe('abc');
+    expect(store.unsentWrites()).toBe(2);
+    answer(lands);
+    hold();
+    try {
+      expect((await first).ok).toBe(lands);
+      await vi.waitFor(() => expect(held()).toBe(2));
+      expect(store.get('connection', id)).toMatchObject({ pending: expect.any(Number), value: { label: 'abc' } });
+      expect(store.unsentWrites()).toBe(1);
+    } finally { answer(true); }
+    expect(await second).toMatchObject({ ok: true, data: { value: { label: lands ? 'abc' : 'ac' } } });
+    expect(store.get('connection', id)?.pending).toBeUndefined();
+    expect(store.unsentWrites()).toBe(0);
   });
 
   it.each([true, false])('keeps later writes behind an in-flight write when an intervening queued write is cancelled (already queued: %s)', async (alreadyQueued) => {

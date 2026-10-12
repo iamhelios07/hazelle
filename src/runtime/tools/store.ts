@@ -9,7 +9,8 @@ import type { Json, Settings, ToolManifest } from '../../tool-api/manifest';
 import type { ApiResult } from '../api';
 import type { Files } from '../files';
 import type { Session } from '../session';
-import type { ObjectStore, Write } from '../store';
+import type { ObjectStore } from '../store';
+import type { Write } from '../object-writes';
 
 export type ToolImport = { id: string; previous: Tool | null };
 export const TOOL_VALUE_BYTES = 512 * 1024;

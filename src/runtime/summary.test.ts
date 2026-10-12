@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { scopeOf } from './chat-context';
 import { EvaluationStuck } from './evaluation';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 import { saveSummaries, summaryId } from './summary';
 import { testServer } from './testing';
 

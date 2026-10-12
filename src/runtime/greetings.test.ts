@@ -3,7 +3,8 @@ import { fold, shown, type Chat, type Entry } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { chatWrites, editMessage, appendScripted } from './chat-log';
 import { greetingOf, greetingPreview, projectGreetings, startingGreetings } from './greetings';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 
 const chat: Chat = { title: null, character: 'character', models: {} };
 const entries = (writes: Write[]): Stored<'entry'>[] => writes.flatMap((write, index) =>

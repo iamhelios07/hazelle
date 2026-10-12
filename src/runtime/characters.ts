@@ -12,7 +12,8 @@ import { thumbnail } from './picture';
 import { markDeleted } from './removal';
 import { allWritten } from './api';
 import { without } from '../model/fields';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 
 export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 

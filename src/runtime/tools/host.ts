@@ -12,7 +12,7 @@ import type { ScriptOutcome } from '../lua/event';
 import type { Scripts } from '../scripts';
 import { noOutcome, ToolLate, ToolStopped, ToolStuck, type Binding } from '../script-binding';
 import type { Session } from '../session';
-import type { StoreChange } from '../store';
+import type { StoreChange } from '../object-index';
 import { Heartbeat } from '../worker';
 import type { ToolMenu, ToolPage, Tools } from './facade';
 import { toolFrame, type Connection, type OpenFrame } from './frame';

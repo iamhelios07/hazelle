@@ -13,7 +13,8 @@ import { FIRST_PROFILE_ID } from './profiles';
 import { ILLUSTRATOR_ID, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import { ownershipDepth } from './removal';
 import { readRow } from './upgrade';
-import type { ObjectRow, ObjectStore, Pin, Write } from './store';
+import type { ObjectRow, ObjectStore, Pin } from './store';
+import type { Write } from './object-writes';
 
 // version is the file format's one version key: a file of any other version is refused, never read as this one. Version
 // 3 and every later file stays readable: a new stored shape adds a step in runtime/upgrade.ts, never a version bump that

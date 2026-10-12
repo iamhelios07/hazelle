@@ -14,7 +14,8 @@ import { ReadModels } from './read-model';
 import { planRemoval } from './removal';
 import { openSession } from './session';
 import { Streams } from './streams';
-import { ObjectStore, type StoreChange } from './store';
+import { ObjectStore } from './store';
+import type { StoreChange } from './object-index';
 import type { Turn } from './talk';
 
 type Wire = StoreChange & { rev: number; body: string | null };

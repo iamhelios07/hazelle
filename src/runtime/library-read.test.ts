@@ -3,7 +3,8 @@ import type { Card } from '../engine/import/types';
 import type { Kind, Stored } from '../model/kinds';
 import type { Mark } from '../model/library';
 import { ReadModels } from './read-model';
-import type { ObjectStore, StoreChange } from './store';
+import type { ObjectStore } from './store';
+import type { StoreChange } from './object-index';
 
 const folder = (id: string, name: string, parent?: string): Stored<'folder'> => ({ id, kind: 'folder', parent: null, rev: 1, value: { name, ...(parent === undefined ? {} : { parent }) } });
 const character = (id: string, inFolder: string | null, rev: number, mark: Mark = {}): Stored<'character'> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: inFolder, loreFolders: [], ...mark } });

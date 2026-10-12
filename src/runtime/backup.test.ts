@@ -13,7 +13,8 @@ import { projectGreetings } from './greetings';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
 import { addDefaults, addPrompt, removePrompt } from './prompts';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 import { SUMMARY_WINDOW, summaryId, summaryStale } from './summary';
 import { testServer } from './testing';
 

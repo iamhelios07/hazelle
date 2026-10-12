@@ -6,7 +6,8 @@ import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 
 // Fixed, so two devices adding the first persona at once meet in a version conflict instead of making two.
 export const FIRST_ID = '00000000-0000-4000-8000-000000000002';

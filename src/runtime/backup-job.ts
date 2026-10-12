@@ -4,7 +4,8 @@ import type { BackupPeer } from './backup-peer';
 import type { BackupRecords } from './backup-records';
 import { bufferedBackupOutput } from './backup-zip';
 import type { Files } from './files';
-import type { ObjectRow, ObjectStore, Pin, Write } from './store';
+import type { ObjectRow, ObjectStore, Pin } from './store';
+import type { Write } from './object-writes';
 
 export type ExportStore = Pick<ObjectStore, 'scan' | 'pin' | 'list'>;
 export type ExportFiles = Pick<Files, 'read' | 'missing'>;

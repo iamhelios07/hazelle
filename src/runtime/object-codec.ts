@@ -1,4 +1,5 @@
-import type { CodecDown, CodecJob, CodecResult, CodecUp, OpenItem, SealItem } from './object-codec-core';
+import type { SealedChange } from './object-cache';
+import { codecValue, type CodecDown, type CodecJob, type CodecResult, type CodecUp, type OpenItem, type SealItem } from './object-codec-core';
 import { PendingRequests } from './pending-requests';
 import { moduleWorker } from './worker';
 import workerUrl from './object-codec-worker?worker&url';
@@ -75,6 +76,44 @@ export class ObjectCodec {
 
   open(items: OpenItem[], signal: AbortSignal): Promise<CodecResult[]> {
     return this.run({ kind: 'open', items }, signal);
+  }
+
+  // Windows are dispatched ahead of the row being applied, one more than there are codec workers, so every worker
+  // holds a window while the main thread applies an earlier one; only those windows' decoded values are retained. The
+  // encoded-byte cap admits one atomic oversized object alone. Every window's promise gets an observer when dispatched:
+  // a caller that stops consuming after an abort leaves no rejection unobserved. Strict scans preserve codec errors.
+  // Outside a strict scan, a body that throws while opening counts as unreadable, as one that fails authentication does.
+  opener(rows: SealedChange[], signal: AbortSignal, { strict = false, accept }: { strict?: boolean; accept: (row: SealedChange) => boolean }): (index: number) => Promise<unknown> {
+    type Window = { end: number; slots: Map<number, number>; batch: Promise<CodecResult[]> };
+    const ahead = this.workers + 1;
+    const windows: Window[] = [];
+    let next = 0;
+    const dispatch = () => {
+      const items: OpenItem[] = [];
+      const slots = new Map<number, number>();
+      let bytes = 0;
+      for (; next < rows.length && items.length < OPEN_ITEMS; next++) {
+        const row = rows[next]!;
+        const { id, kind, parent, body, omitted } = row;
+        if (typeof body !== 'string' || omitted || (!strict && !accept(row))) continue;
+        if (items.length && bytes + body.length > OPEN_BYTES) break;
+        slots.set(next, items.length);
+        items.push({ id, kind, parent, body });
+        bytes += body.length;
+      }
+      const batch = items.length ? this.open(items, signal) : Promise.resolve([]);
+      batch.catch(() => {});
+      windows.push({ end: next, slots, batch });
+    };
+    return async (index) => {
+      while (windows.length && windows[0]!.end <= index) windows.shift();
+      while (windows.length < ahead && next < rows.length) dispatch();
+      const held = windows[0];
+      const slot = held?.slots.get(index);
+      if (held === undefined || slot === undefined) return undefined;
+      const result = (await held.batch)[slot]!;
+      return strict ? codecValue(result) : result.ok ? result.value : undefined;
+    };
   }
 
   seal(items: SealItem[], limit: number, signal: AbortSignal): Promise<CodecResult<string | null>[]> {

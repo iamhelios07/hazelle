@@ -7,7 +7,8 @@ import { markDeleted } from './removal';
 import { saveAssets, type Progress } from './characters';
 import type { Files } from './files';
 import type { StoredPrompt } from './prompts';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 
 // A module as the importer read it (design §6.5). Its pictures are stored first; then it is written with its lorebook
 // and assets in one batch, itself last, so a module appears only once whole. brought: a move from Risu's, with its

@@ -6,7 +6,8 @@ import type { api, ApiResult } from './api';
 import { CodecAborted, CodecUnavailable, ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SEAL_ITEMS } from './object-codec';
 import { codeObjects, codecValue, type CodecJob, type CodecResult, type CodecDown, type CodecUp } from './object-codec-core';
 import type { DeviceCache } from './object-cache';
-import { ObjectStore, type Write } from './store';
+import { ObjectStore } from './store';
+import type { Write } from './object-writes';
 import { CodecWorker } from './testing/object-codec-setup';
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });

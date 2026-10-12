@@ -18,7 +18,8 @@ import type { Greetings } from './greetings';
 import { withPersona } from './personas';
 import { toolChatId } from './tools/store';
 import { without } from '../model/fields';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
 // the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with

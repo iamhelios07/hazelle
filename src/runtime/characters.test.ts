@@ -13,7 +13,8 @@ import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
 import { thumbnail } from './picture';
-import type { ObjectStore, Write } from './store';
+import type { ObjectStore } from './store';
+import type { Write } from './object-writes';
 import { BATCH_LIMITS, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 
