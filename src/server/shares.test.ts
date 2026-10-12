@@ -49,7 +49,7 @@ const state = async (share: string) => ((await (await t.get(`shares/${share}`)).
 
 describe('a share link', () => {
   it('is held by its first report, both anonymous reads answer held, and once reviewed a report no longer holds it', async () => {
-    const { operator, picture, id } = await published();
+    const { operator, sharer, picture, id } = await published();
     expect(await state(id)).toBe('live');
     expect((await t.get(`shares/${id}/files/${picture}`)).status).toBe(200);
 
@@ -64,6 +64,11 @@ describe('a share link', () => {
     expect(await state(id)).toBe('live');
     const inbox = (await (await t.get('admin/reports', operator.cookie)).json()) as { reports: { resolvedAt: number | null; shared: { reviewed: boolean } }[] };
     expect(inbox.reports.map(({ resolvedAt, shared }) => [resolvedAt === null, shared.reviewed])).toEqual([[true, true], [false, true]]);
+
+    const next = { manifest: await stored([4, 4, 4], sharer.cookie), files: [picture], cover: null };
+    expect((await t.post(`shares/${id}/versions`, next, sharer.cookie)).status).toBe(200);
+    expect((await report(id)).status).toBe(204);
+    expect(await state(id)).toBe('held');
   });
 
   it("blocks the reviewed version's files for every account on a block, and refuses them in a publish after", async () => {

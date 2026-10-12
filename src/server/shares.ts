@@ -130,7 +130,8 @@ shares.post('/:id/versions', requireSession, canWrite, async (c) => {
   await db.batch([
     db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, ?, ?, ?)').bind(id, next, version.manifest, Date.now()),
     db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, ?2, value FROM json_each(?3)').bind(id, next, JSON.stringify(version.files)),
-    db.prepare('UPDATE shares SET cover = ? WHERE id = ?').bind(version.cover && JSON.stringify(version.cover), id),
+    // A review covers the version reviewed: a new one is held again by its first report.
+    db.prepare('UPDATE shares SET cover = ?, reviewed_at = NULL WHERE id = ?').bind(version.cover && JSON.stringify(version.cover), id),
   ]);
   return c.json({ id, version: next });
 });
