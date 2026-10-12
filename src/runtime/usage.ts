@@ -1,4 +1,5 @@
-import { foldTree, usageCall, usageCalls, type UsageCall, type UsageHeld } from '../model/chat';
+import { foldTree, usageCall, usageCalls } from '../model/chat';
+import type { UsageCall, UsageHeld } from '../model/usage';
 import { isValue, type Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { ApiResult } from './api';

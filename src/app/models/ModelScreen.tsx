@@ -3,7 +3,7 @@ import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
-import { modelUsage, type ModelUsage } from '../../model/chat';
+import { modelUsage, type ModelUsage } from '../../model/usage';
 import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';

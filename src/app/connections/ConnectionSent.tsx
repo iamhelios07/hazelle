@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { connectionUsage, type ModelUsage } from '../../model/chat';
+import { connectionUsage, type ModelUsage } from '../../model/usage';
 import { ACTS } from '../common/acts';
 import { count } from '../common/typedNumber';
 import { tally } from '../common/usage';

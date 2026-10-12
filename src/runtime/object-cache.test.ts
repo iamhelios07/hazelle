@@ -1,7 +1,7 @@
 import { ToolWrites, toolData } from './tools/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
-import { modelUsage } from '../model/chat';
+import { modelUsage } from '../model/usage';
 import { randomBytes } from '../vault/aead';
 import { lockVault } from '../vault/device';
 import { objectKey, sealObject } from '../vault/objects';

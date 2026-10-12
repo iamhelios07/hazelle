@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { ModelRef } from '../connectors/assignment';
-import { fold, modelUsage, usageCalls, usageReport, type Entry, type Receipt, type UsageHeld } from '../model/chat';
+import { fold, usageCalls, type Entry, type Receipt } from '../model/chat';
+import { modelUsage, usageReport, type UsageHeld } from '../model/usage';
 import { blankCard } from '../engine/import/card';
 import { memoryId, type Memory } from '../model/memory';
 import type { Stored } from '../model/kinds';

@@ -1,4 +1,4 @@
-import type { ModelUsage } from '../../model/chat';
+import type { ModelUsage } from '../../model/usage';
 import { money } from './money';
 import { count } from './typedNumber';
 import { UNKNOWN } from './words';

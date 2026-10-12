@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { usageReport, type ModelUsage, type ReportWindow, type UsageGroup, type UsageHeld } from '../../model/chat';
+import { usageReport, type ModelUsage, type ReportWindow, type UsageGroup, type UsageHeld } from '../../model/usage';
 import { ACTS } from '../common/acts';
 import { count } from '../common/typedNumber';
 import { spent, tally } from '../common/usage';
