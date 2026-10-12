@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { copyFile, link, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -7,7 +8,7 @@ import { ACCOUNT_SCHEMA_VERSION, RETENTION_MS, snapshotPath } from '../db/accoun
 import { fsyncPath, makeDirs } from '../db/durable';
 import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
 import type { Services } from '../http';
-import { DAY_MS, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
+import { DAY_MS, dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
 // Backup generations (docs/research/docker-port-plan.md §10.2): backup/<id>/ holds the service snapshot, the
 // snapshots its manifest names and, written last, manifest.json; pictures go once each into the shared pool
@@ -204,15 +205,27 @@ export async function listGenerations(dataDir: string): Promise<{ id: string; ca
   });
 }
 
-// A generation goes at RETENTION_MS, and one without a manifest (cut off before it was written) after a day; then every
-// picture in the pool that no remaining manifest names. Runs inside the daily job, so no capture is writing.
+// A generation goes at RETENTION_MS, one without a manifest (cut off before it was written) after a day, and a whole one
+// that is neither among the two newest nor the newest of its UTC day once it has been copied off-site: every deploy
+// captures one, and of those only the latest two are kept for a rollback (ruled 2026-10-12). Then every picture in the
+// pool that no remaining manifest names. Runs inside the daily job, so no capture is writing.
 export async function expireGenerations(dataDir: string, now: number): Promise<{ removed: number; pictures: number }> {
   let removed = 0;
+  let whole = 0;
+  const days = new Set<number>();
   const kept = new Set<string>();
-  for (const { id, capturedAt } of await listGenerations(dataDir)) {
+  for (const { id, capturedAt } of (await listGenerations(dataDir)).toSorted((a, b) => b.capturedAt - a.capturedAt)) {
     const root = join(generationsDir(dataDir), id);
     const manifest = await readManifest(root);
-    if (capturedAt <= now - RETENTION_MS || (manifest === null && capturedAt <= now - DAY_MS)) {
+    let keep: boolean;
+    if (manifest === null) keep = capturedAt > now - DAY_MS;
+    else if (capturedAt <= now - RETENTION_MS) keep = false;
+    else {
+      const day = dayStart(capturedAt);
+      keep = whole++ < 2 || !days.has(day) || !existsSync(join(root, COPIED));
+      days.add(day);
+    }
+    if (!keep) {
       await rm(root, { recursive: true, force: true });
       removed++;
     } else if (manifest) for (const picture of manifest.pictures) kept.add(picture);

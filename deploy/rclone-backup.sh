@@ -10,8 +10,8 @@
 set -u
 LOCAL=/data/backup
 REMOTE=${HAZELLE_BACKUP_REMOTE:?set HAZELLE_BACKUP_REMOTE to an rclone remote and path, e.g. r2:hazelle-backup}
-# Equals the app's retention (src/server/backup/snapshots.ts): the pool prune below counts on the machine keeping a
-# generation as long as the remote does.
+# Equals the app's retention (src/server/backup/snapshots.ts). The machine drops most of a day's generations sooner, but
+# only once they are copied here, so the pool prune below still finds every generation's pictures locally or here.
 BACKUP_RETENTION_MS=$((7 * 24 * 60 * 60 * 1000))
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
@@ -7,8 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
-import { expireGenerations, generationsDir, listGenerations, MANIFEST, POOL, readManifest, type Manifest } from './generation';
-import { DAY_MS } from './snapshots';
+import { COPIED, expireGenerations, generationsDir, listGenerations, MANIFEST, POOL, readManifest, type Manifest } from './generation';
+import { DAY_MS, dayStart } from './snapshots';
 
 // crossDevice: every link answers EXDEV, as when files/ and backup/ are separate filesystems. cutPoolCopy: a copy into
 // the pool writes part of the picture and throws, as a capture cut off mid-copy leaves it.
@@ -188,6 +188,24 @@ describe('a backup generation', () => {
     const named = (incarnation: string) => accounts.find((account) => account.incarnation === incarnation)!.baseline;
     expect(named(changed.incarnation)).toMatch(new RegExp(`^${now}-`));
     expect(named(unchanged.incarnation)).toBe(unchanged.old);
+  });
+
+  it('keeps only the newest generation of each day, besides the two newest overall and any not yet copied off-site', async () => {
+    const hour = DAY_MS / 24;
+    const today = dayStart(Date.now());
+    const made = (at: number, copied: boolean) => {
+      const root = join(generationsDir(t.dir), `${at}-${at.toString(16).slice(-8)}`);
+      mkdirSync(root, { recursive: true });
+      writeFileSync(join(root, MANIFEST), JSON.stringify({ pictures: [] }));
+      if (copied) writeFileSync(join(root, COPIED), 'copied');
+    };
+    for (const at of [1, 2, 3, 4].map((h) => today + h * hour)) made(at, true);
+    for (const at of [1, 2, 3].map((h) => today - DAY_MS + h * hour)) made(at, true);
+    made(today + hour / 2, false);
+    expect(await expireGenerations(t.dir, today + 5 * hour)).toEqual({ removed: 4, pictures: 0 });
+    expect((await listGenerations(t.dir)).map(({ capturedAt }) => capturedAt).toSorted()).toEqual(
+      [today - DAY_MS + 3 * hour, today + hour / 2, today + 3 * hour, today + 4 * hour],
+    );
   });
 
   it('collects a generation at 7 days and with it only the pictures no kept generation names', async () => {
