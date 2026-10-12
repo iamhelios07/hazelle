@@ -215,11 +215,11 @@ describe('assemble', () => {
     const messages = [message('u1', 'user', 'Is the lighthouse lit?'), message('a1', 'assistant', 'It flick')];
     const result = assembledOf(assemble({ ...input({ prompt: { ...starter, blocks }, lore: entries, messages, greeting: null }), continuing: true }));
     expect(result.parts.map(({ from }) => from)).toEqual([
-      { kind: 'block', name: null, slot: null },
-      { kind: 'lore', name: 'lighthouse', slot: 'lorebook' },
-      { kind: 'block', name: '과거 챗', slot: 'chat' },
-      { kind: 'depth', name: 'mood', depth: 1 },
-      { kind: 'block', name: '과거 챗', slot: 'chat' },
+      { kind: 'block', id: 'rules', name: null, slot: null },
+      { kind: 'lore', id: 'lighthouse', name: 'lighthouse', slot: 'lorebook' },
+      { kind: 'block', id: 'past', name: '과거 챗', slot: 'chat' },
+      { kind: 'depth', id: 'mood', name: 'mood', depth: 1 },
+      { kind: 'block', id: 'past', name: '과거 챗', slot: 'chat' },
       { kind: 'continue' },
     ]);
     expect(result.parts[0]!.tokens).toBe('Rules.'.length);

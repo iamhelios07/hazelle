@@ -63,6 +63,13 @@ describe('forecast', () => {
     expect([made.written, made.tail]).toEqual([50, 10]);
   });
 
+  it('pairs a changed part with its last version though a print stored before ids were kept has none', () => {
+    const next = send(['sys ✓', 'u1', 'a1 ✓']);
+    next.messages = next.messages.map((message) => ({ ...message, from: { ...message.from, id: 'block' } }));
+    next.messages[0] = { ...next.messages[0]!, hash: 'sys edited' };
+    expect(forecast(last, next)?.against?.broken).toMatchObject({ kind: 'changed' });
+  });
+
   it("leaves out a point under the model's minimum, and reads nothing past the provider's lookback", () => {
     const facts = { minimum: 25, lookback: 2 };
     const short = forecast(before(['sys ✓', 'u1', 'a1 ✓']), send(['sys ✓', 'u1', 'a1 ✓', 'u2 ✓'], { facts }))!;
