@@ -10,15 +10,16 @@ import { useSession } from '../session';
 const SETTLE_MS = 400;
 
 // until: when the last call's cache runs out, null when it cached nothing. next: the draft's forecast against the
-// chat's stored last call (runtime/cache), with what a break costs where the model is priced.
-export type CacheNotes = { until: number | null; next: { forecast: Forecast; cost: ReturnType<typeof breakCost> } | null };
+// chat's stored last call (runtime/cache), with what a break costs where the model is priced; undefined until it is
+// worked out after the chat opens or a reply ends.
+export type CacheNotes = { until: number | null; next: { forecast: Forecast; cost: ReturnType<typeof breakCost> } | null | undefined };
 
 // The draft is read again after any store change settles, so an edit to the prompt, a lorebook or the model shows in
 // the forecast while it is open.
 export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean) {
   const session = useSession();
   const last = useMemo(() => lastCache(messages), [messages]);
-  const [next, setNext] = useState<CacheNotes['next']>(null);
+  const [next, setNext] = useState<CacheNotes['next']>(undefined);
   const [left, setLeft] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
 
@@ -29,7 +30,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
 
   useEffect(() => {
     if (id === null || busy) {
-      setNext(null);
+      setNext(id === null ? null : undefined);
       return setLeft(null);
     }
     const controller = new AbortController();

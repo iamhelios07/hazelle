@@ -40,7 +40,7 @@ export function ChatCachePanel({ chat }: { chat: OpenChat }) {
     <SidePanel title="캐시" onClose={actions.closePanel}>
       <Stack gap="section">
         <Section title="다음 전송 예상" help="지금 보내면 어떻게 될지 입력과 프롬프트로 미리 계산해요. 토큰 수는 추정이에요.">
-          {busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty> : cache.next ? <Next forecast={cache.next.forecast} price={cache.next.cost} /> : <Empty variant="section">계산할 캐시가 없어요.</Empty>}
+          {busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty> : cache.next ? <Next forecast={cache.next.forecast} price={cache.next.cost} /> : cache.next === null && <Empty variant="section">계산할 캐시가 없어요.</Empty>}
         </Section>
         <Section title="지난 요청">
           {turns.length ? (
