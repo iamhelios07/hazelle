@@ -3,11 +3,13 @@ import type { ModelSettings } from '../connectors/settings';
 import type { InlineThoughts } from '../connectors/stream';
 import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
+import type { CacheForecast } from '../model/cache';
 import type { Message, Receipt, ReceiptError, Writes } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
 import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
+import { cacheKept, wireOf, writePrint } from './cache';
 import { appendReply, appendUserMessage, savedElsewhere, type Said, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
@@ -36,11 +38,11 @@ export type Shown = Message & { live: string | null; whole?: true; unstored?: tr
 
 // The prompt, which the reply's id seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model.
 // said: the user's message as it is saved, which a message sent translated saves translated; null when prepare saved it
-// itself.
-export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes };
+// itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt.
+export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast };
 
 // It lives in page memory only, until the session closes: the raw request is never stored.
-export type Sent = Pick<Reply, 'request' | 'cache'> & { prompt: Assembled };
+export type Sent = Pick<Reply, 'request'> & { prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
@@ -243,8 +245,13 @@ export class Talk {
     const answer = await replying;
     if (this.closed) return null;
     // Kept before the save, whose store change is what shows the reply's 정보.
-    this.sentBy.set(call.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
-    return await this.save(chat, await this.ended(chat, this.written(held, reply, callOf(route), answer, Date.now())), call.id);
+    this.sentBy.set(call.id, { chat, sent: { request: answer.request, prompt } });
+    const written = this.written(held, reply, callOf(route), answer, Date.now(), ready.forecast);
+    // A receipt's cache is the view's, so one kept means the answer has its view.
+    const printing = cacheKept(written.receipt) && writePrint(this.store, chat, call.id, wireOf(route.connection.id, answer.account, answer.cache!, prompt.parts));
+    const saved = await this.save(chat, await this.ended(chat, written), call.id);
+    await printing;
+    return saved;
   }
 
   // A reply the server was writing when this page came, which Streams hands over; it waits while its chat has a turn.
@@ -284,8 +291,8 @@ export class Talk {
     return { keep, takeBack: (chars) => this.change(held, { ...held.turn, reasoning: held.turn.reasoning.slice(0, held.turn.reasoning.length - chars) }) };
   }
 
-  private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply, at: number): Written {
-    const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
+  private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply, at: number, forecast?: CacheForecast): Written {
+    const receipt: Receipt = { ...receiptOf(call, answer), ...(forecast && { forecast }), ...(reply.continues && { continues: reply.continues.receipt }) };
     return { id: reply.id, message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), at, text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   }
 }

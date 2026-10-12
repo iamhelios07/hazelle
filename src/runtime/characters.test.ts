@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, textTranslation, type Character, type Lore } from '../model/library';
+import { cachePrintId } from '../model/cache';
 import { memoryId } from '../model/memory';
 import { likenessId } from '../model/likeness';
 import { SETTINGS_ID } from '../model/settings';
@@ -243,12 +244,13 @@ describe('purgeExpired', () => {
     expect([store.list('character'), store.list('lore')].map((left) => left.length)).toEqual([0, 0]);
   });
 
-  it('removes a chat deleted a week ago with all it owns, which the account no longer counts, and keeps one deleted since', async () => {
+  it('removes a chat deleted a week ago with all it owns (its cache print too), which the account no longer counts, and keeps one deleted since', async () => {
     const { accountId, store } = await server.account();
     let bytes = 0;
     holdAccount(accountId, (heard) => { if (heard.kind === 'bytes') bytes = heard.bytes; });
     const expired = await savedChat(store);
     await store.create('memory', { records: [], chapters: [], state: [], threads: [{ id: 't', text: '등대', opened: null }] }, { id: memoryId(expired), parent: expired });
+    await store.create('cacheprint', { call: 'r', connection: 'c', account: null, model: 'm', messages: [{ role: 'user', hash: 'h', tokens: 1, from: { kind: 'block', name: null, slot: 'chat' }, point: true }] }, { id: cachePrintId(expired), parent: expired });
     await store.create('stream', { key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } }, { parent: expired });
     const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
     await store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent: { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 }, file: { id: 'f', key: 'k' }, type: 'image/png', size: 1, at: 0 }, { parent: expired });
@@ -256,8 +258,8 @@ describe('purgeExpired', () => {
     const now = Date.now() + KEEP_DELETED;
     const recent = await savedChat(store);
     await markDeleted(store, 'chat', recent, now);
-    const owned = (chat: string) => (['entry', 'summary', 'memory', 'stream', 'illustration'] as const).flatMap((kind) => store.children(kind, chat)).length;
-    expect(owned(expired)).toBe(5);
+    const owned = (chat: string) => (['entry', 'summary', 'memory', 'cacheprint', 'stream', 'illustration'] as const).flatMap((kind) => store.children(kind, chat)).length;
+    expect(owned(expired)).toBe(6);
     const before = bytes;
 
     await purgeExpired(store, now, new AbortController().signal);

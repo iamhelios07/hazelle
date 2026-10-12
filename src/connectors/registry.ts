@@ -182,17 +182,42 @@ function codecRequest(route: Route, sent: ChatRequest): HttpRequest {
 }
 
 // cache is how long the points keep it, null when none is sent. Reasoning is there because changing it drops the cached
-// messages.
-export type CacheView = { model: string; reasoning: ModelSettings['reasoning']; cache: Cache | null; messages: (ChatMessage & { index: number })[] };
+// messages. facts: how the provider reads the points, null where they are not known.
+export type CacheView = { model: string; reasoning: ModelSettings['reasoning']; cache: Cache | null; messages: (ChatMessage & { index: number })[]; facts: CacheFacts | null };
+
+// minimum: the fewest prompt tokens up to a point that the model caches; a point short of it caches nothing, null where
+// the model's is not known. lookback: how many blocks before a point the provider looks for an earlier cache entry.
+export type CacheFacts = { minimum: number | null; lookback: number };
+
+// Anthropic's prompt caching reference (2026-10). The id names family and version as claude-opus-4-5-20251101,
+// anthropic/claude-opus-4.5 (OpenRouter) or claude-sonnet-4.5 (Copilot); Haiku 3.5's as claude-3-5-haiku.
+const CLAUDE_MINIMUMS: Record<string, number> = {
+  ...Object.fromEntries(['opus 5.5', 'opus 5.0', 'fable 5.0', 'fable 5.1', 'mythos 5.0', 'mythos 5.1', 'sonnet 5.5', 'haiku 5.5'].map((name) => [name, 512])),
+  ...Object.fromEntries(['opus 4.8', 'sonnet 5.0', 'sonnet 4.6', 'sonnet 4.5', 'opus 4.1', 'opus 4.0', 'sonnet 4.0'].map((name) => [name, 1024])),
+  ...Object.fromEntries(['opus 4.7', 'haiku 3.5'].map((name) => [name, 2048])),
+  ...Object.fromEntries(['opus 4.6', 'opus 4.5', 'haiku 4.5'].map((name) => [name, 4096])),
+};
+const CLAUDE_LOOKBACK = 20;
+
+// Only a Claude model's points are read as Anthropic reads them; any other model's are not known.
+export function claudeCacheFacts(model: string): CacheFacts | null {
+  if (!/claude/i.test(model)) return null;
+  const named = /claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:[.-](\d)(?!\d))?/i.exec(model);
+  const old = /claude-(\d)[.-](\d)-(haiku|sonnet|opus)/i.exec(model);
+  const name = named ? `${named[1]!.toLowerCase()} ${named[2]}.${named[3] ?? 0}` : old ? `${old[3]!.toLowerCase()} ${old[1]}.${old[2]}` : null;
+  return { minimum: (name === null ? null : CLAUDE_MINIMUMS[name]) ?? null, lookback: CLAUDE_LOOKBACK };
+}
 
 // A prompt_cache_key marks no point: the provider caches what prefix it finds, so the view holds none and nothing is
 // forecast.
 export function cacheView(route: Route, request: ChatRequest): CacheView {
   const { settings, messages: sent } = sending(route, request);
-  const messages = cacheWay(route, request.model)?.mark.kind === 'key' ? sent.map(({ role, content }): ChatMessage => ({ role, content })) : sent;
+  const marked = cacheWay(route, request.model)?.mark.kind;
+  const messages = marked === 'key' ? sent.map(({ role, content }): ChatMessage => ({ role, content })) : sent;
   const placed = messages.map((message, index) => ({ ...message, index }));
   const ordered = route.codec.systemFirst ? [...placed.filter(({ role }) => role === 'system'), ...placed.filter(({ role }) => role !== 'system')] : placed;
-  return { model: request.model.id, reasoning: settings.reasoning, cache: messages.some((message) => message.cache) ? settings.cache! : null, messages: ordered };
+  const facts = marked === 'part' || marked === 'message' ? claudeCacheFacts(request.model.id) : null;
+  return { model: request.model.id, reasoning: settings.reasoning, cache: messages.some((message) => message.cache) ? settings.cache! : null, messages: ordered, facts };
 }
 
 // A request takes at most four cache points (Anthropic's limit, which OpenRouter passes on). Past that the last one

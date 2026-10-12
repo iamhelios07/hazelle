@@ -111,7 +111,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box; one that fills a row, such as the chat header's search bar, with its count and buttons at its end |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
-| controls | `SendNote` | `SendNote.module.css` | A few words beside `SendButton` about what sending now does (the prompt cache's time left); a `warning` adds its words, which phones leave to its icon, and its reason behind an ⓘ |
+| controls | `SendNote` | `SendNote.module.css` | A few words beside `SendButton` about what sending now does (the prompt cache's time left); a `warning` adds its words, which phones leave to its icon, and its reason behind an ⓘ; with `onClick` the note is a button that opens where the reason is told, and keeps no ⓘ |
 | controls | `Stepper` | `Stepper.module.css` | A whole number stepped one at a time between two bounds, such as the story's text size |
 | controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once, dimmed while it has no effect |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error, and an ⓘ explanation by its label; read-only on a quieter ground; text taken as typed (a key, an address, a script's code) in the mono face |

@@ -3,7 +3,7 @@ import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import { chatModel, type RouteFailure } from './assignment';
-import type { CacheSend } from './cache';
+import { wireOf, type CacheSend } from './cache';
 import { asSent, budgetOf, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
 import { cacheViewOf } from './generate';
@@ -118,5 +118,5 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scrip
 // account: the account that would serve it (runtime/pool peek).
 export function cacheSend({ turn, prompt }: Sending, account: string | null): CacheSend | null {
   const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
-  return view && { connection: turn.route.connection.id, account, view, parts: prompt.parts };
+  return view && wireOf(turn.route.connection.id, account, view, prompt.parts);
 }

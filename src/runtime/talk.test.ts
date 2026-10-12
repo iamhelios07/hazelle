@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
 import { appendUserMessage, editMessage, selectVersion, startChat } from './chat-log';
-import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
+import { RELAY_HEADER } from '../contracts/http';
+import { chatPrint, forecast, prior } from './cache';
+import { FIRST_PROFILE_ID } from './profiles';
+import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { withTurn } from './talk';
 import { takeTurn } from './turn';
+import { cacheSend, wouldSend } from './turn-context';
 
 const server = testServer();
 
@@ -147,6 +151,41 @@ describe('Talk', () => {
       lease.release();
       await vi.waitFor(() => expect(session.store.scopeState(chat)).toBe('unloaded'));
       expect(session.talk.sent(call)).toBeNull();
+    }));
+
+  it('keeps on each receipt what its send expected from the cache, and stores the call so a forecast survives a reload', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      await session.store.update('profile', FIRST_PROFILE_ID, (current) => ({ ...current, settings: { cache: '5m' } }));
+      const chat = crypto.randomUUID();
+      const lease = session.store.retainChat(chat);
+      await lease.ready;
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      const usage = { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 40, cache_write_tokens: 50 } };
+      const cached = (text: string) => new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }], usage })}\n\ndata: [DONE]\n\n`, { headers: { [RELAY_HEADER]: 'upstream' } });
+      stubRelay(inTurn([cached('반가워요'), cached('또 반가워요'), upstream(500, { error: { message: 'down' } })]));
+      const receipts = () => fold(session.store.children('entry', chat)).filter(({ role }) => role === 'assistant').map((message) => shown(message).receipt!);
+
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      expect(receipts()[0]!.forecast).toBeUndefined();
+      expect(chatPrint(session.store, chat)?.value).toMatchObject({ call: receipts()[0]!.id, model: 'm', messages: expect.arrayContaining([expect.objectContaining({ point: true })]) });
+      expect(await takeTurn(session, chat, { kind: 'send', text: '또 안녕' })).toBeNull();
+      expect(receipts()[1]!.forecast).toMatchObject({ broken: null });
+      expect(receipts()[1]!.forecast!.read).toBeGreaterThan(0);
+      expect(chatPrint(session.store, chat)?.value.call).toBe(receipts()[1]!.id);
+      // A call that kept no cache leaves the print on the one lastCache still names.
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      expect(receipts()[2]!.state).toBe('failed');
+      expect(chatPrint(session.store, chat)?.value.call).toBe(receipts()[1]!.id);
+
+      lease.release();
+      await vi.waitFor(() => expect(session.store.scopeState(chat)).toBe('unloaded'));
+      await server.hold(session.store, chat);
+      const messages = session.read.chat(chat).snapshot()!.messages;
+      const sending = (await wouldSend(session, chat, { kind: 'send', text: '셋' }))!;
+      const against = forecast(prior(session.store, chat, messages, Date.now()), cacheSend(sending, null)!)!.against!;
+      expect(against).toEqual({ read: against.of, of: against.of, broken: null });
+      expect(against.of).toBeGreaterThan(receipts()[1]!.forecast!.of);
     }));
 
   it('saves what the model thought beside the reply, never inside its text', () =>

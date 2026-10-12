@@ -11,6 +11,7 @@ import { vercel } from './vercel';
 import {
   addressProblem,
   cacheView,
+  claudeCacheFacts,
   chatRequest,
   CONNECTION_TYPES,
   detect,
@@ -431,6 +432,15 @@ describe('chat requests', () => {
     expect(cacheView(generic, { model: model(), messages: sent, settings: {} })).toMatchObject({ cache: null, messages: [{ index: 0 }, { index: 1 }] });
     const view = cacheView(connection('anthropic'), { model: model(), messages: sent, settings: { cache: '1h' } });
     expect(view).toMatchObject({ model: 'm', cache: '1h', messages: [{ role: 'system', index: 1, cache: true }, { role: 'user', index: 0, cache: true }] });
+  });
+
+  it("names a Claude model's minimum cacheable prompt and lookback however its route spells the id, and nothing for another model", () => {
+    const minimum = (id: string) => claudeCacheFacts(id)?.minimum;
+    expect([minimum('claude-opus-4-5-20251101'), minimum('anthropic/claude-opus-4.6'), minimum('claude-sonnet-4.5'), minimum('claude-sonnet-4-20250514')]).toEqual([4096, 4096, 1024, 1024]);
+    expect([minimum('claude-opus-5-5'), minimum('claude-3-5-haiku-20241022'), minimum('claude-opus-4-7')]).toEqual([512, 2048, 2048]);
+    expect(claudeCacheFacts('claude-3-7-sonnet-latest')).toEqual({ minimum: null, lookback: 20 });
+    expect(claudeCacheFacts('gpt-5')).toBeNull();
+    expect(cacheView(connection('anthropic'), { model: model({ id: 'claude-haiku-4-5' }), messages: shown, settings: { cache: '5m' } }).facts).toEqual({ minimum: 4096, lookback: 20 });
   });
 });
 

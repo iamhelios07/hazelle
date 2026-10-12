@@ -13,6 +13,15 @@
   color: var(--color-warn-text);
 }
 
+.press:hover {
+  color: var(--color-text-muted);
+}
+
+.warn.press:hover {
+  color: var(--color-warn-text);
+  text-decoration: underline;
+}
+
 @media (max-width: 959px) {
   .words {
     display: none;
