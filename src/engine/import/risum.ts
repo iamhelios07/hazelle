@@ -19,8 +19,12 @@ const RPACK = Uint8Array.from(
   (pair) => parseInt(pair, 16),
 );
 
-// Risu's RPack byte substitution, which .risum modules and .risup presets are written through.
+// Risu's RPack byte substitution, which .risum modules and .risup presets are written through. The table is a
+// permutation, so the encode half of rpack_map.bin is its inverse.
 export const unpack = (bytes: Uint8Array) => bytes.map((byte) => RPACK[byte]!);
+const PACK = new Uint8Array(256);
+RPACK.forEach((plain, packed) => (PACK[plain] = packed));
+const pack = (bytes: Uint8Array) => bytes.map((byte) => PACK[byte]!);
 
 const MAGIC = 111;
 const VERSION = 0;
@@ -55,4 +59,14 @@ export function readRisum(bytes: Uint8Array): { module: Record<string, unknown>;
     at = end;
   }
   return { module: main.module, assets };
+}
+
+// A .risum without pictures, laid out as exportModuleLegacy writes one, its JSON spaced as Risu's is.
+export function writeRisum(module: Record<string, unknown>): Uint8Array<ArrayBuffer> {
+  const main = pack(new TextEncoder().encode(JSON.stringify({ module, type: 'risuModule' }, null, 2)));
+  const bytes = new Uint8Array(HEADER + main.length + 1);
+  bytes.set([MAGIC, VERSION]);
+  new DataView(bytes.buffer).setUint32(2, main.length, true);
+  bytes.set(main, HEADER);
+  return bytes;
 }

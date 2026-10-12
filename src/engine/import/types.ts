@@ -1,5 +1,7 @@
 import type { PresetFailure, PresetResult } from './preset';
 import type { BlockCondition, BlockEffect } from './blocks';
+import type { Character } from '../../model/library';
+import type { Likeness } from '../../model/likeness';
 
 export type Card = {
   name: string;
@@ -71,6 +73,30 @@ export type Imported = {
   // The bot's own pictures, read one at a time when they are stored; read answers null for one the file lacks.
   assets: { name: string; read: () => Promise<Uint8Array<ArrayBuffer> | null> }[];
   report: ImportReport;
+  // What a Hazelle charx carries beyond Risu's fields (engine/import/hazelle); null for any other file.
+  own: HazelleOwn | null;
+  // The modules a Hazelle charx was exported with, on for the character.
+  bundled: BundledModule[];
+};
+
+// What of a character, beyond its card, a Hazelle export carries. Translations go without their receipts, which are
+// the exporting account's usage, and so do 삽화 profiles.
+export type CharacterOwn = Pick<Character, 'translatorNote' | 'keepThoughts' | 'statusScripts' | 'translations'>;
+export type Profiles = Omit<Likeness, 'receipt'>;
+export type HazelleOwn = { character: CharacterOwn; likeness: Profiles | null };
+export type BundledModule = ImportedModule & { likeness: Profiles | null };
+
+// A character as the charx writer takes it (engine/import/card writeCharx): pictures by their type, the bytes fetched
+// later in the same order.
+type Typed = { name: string; type: string };
+export type Bot = {
+  card: Card;
+  lore: LoreEntry[];
+  loreFolders: string[];
+  avatar: string | null;
+  assets: Typed[];
+  own: HazelleOwn;
+  bundled: (Omit<BundledModule, 'assets' | 'unsupported'> & { assets: Typed[] })[];
 };
 
 export const UNSUPPORTED_KINDS = [
@@ -86,6 +112,7 @@ export const UNSUPPORTED_KINDS = [
   'toggle-line',
   'mcp',
   'cjs',
+  'hazelle',
 ] as const;
 export type UnsupportedKind = (typeof UNSUPPORTED_KINDS)[number];
 
@@ -102,7 +129,8 @@ export type ImportedModule = {
   name: string;
   description: string;
   namespace: string | null;
-  // Risu's id for it, which a Risu backup's characters and settings name it by.
+  // The id a module file names it by, which a Risu backup's characters and settings name it by too: Risu's, or for one
+  // made in this app, its id in the account that exported it with a character.
   risu: string | null;
   pack: Pack;
   lore: LoreEntry[];
@@ -148,7 +176,7 @@ export const MOVE_UNSUPPORTED_KINDS = [
 export type MoveUnsupportedKind = (typeof MOVE_UNSUPPORTED_KINDS)[number];
 export type MoveUnsupported = { kind: MoveUnsupportedKind; count: number };
 
-export type RisuCharacter = Omit<Imported, 'avatar'> & {
+export type RisuCharacter = Omit<Imported, 'avatar' | 'own' | 'bundled'> & {
   // Risu's chaId.
   id: string;
   avatar: () => Promise<Picture | null>;

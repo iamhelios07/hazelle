@@ -15,6 +15,7 @@ const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   'toggle-line': (count) => `읽지 못한 토글 줄 ${count}개`,
   mcp: () => 'MCP 서버 연결',
   cjs: () => '모듈 자바스크립트(cjs)',
+  hazelle: () => '파일이 바뀌어 읽지 않은 헤이젤 설정과 모듈',
 };
 
 const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> = {

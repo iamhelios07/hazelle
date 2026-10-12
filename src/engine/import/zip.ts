@@ -1,3 +1,4 @@
+import { deflateSync } from 'fflate';
 import { inflate } from './inflate';
 
 const END_OF_DIRECTORY = 0x06054b50;
@@ -56,6 +57,72 @@ export function openZip(bytes: Uint8Array<ArrayBuffer>): Zip | null {
       } catch {
         return null;
       }
+    },
+  };
+}
+
+const CRC = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+const crc32 = (bytes: Uint8Array) => (bytes.reduce((c, byte) => CRC[(c ^ byte) & 0xff]! ^ (c >>> 8), 0xffffffff) ^ 0xffffffff) >>> 0;
+const UTF8_NAMES = 0x800;
+const encoder = new TextEncoder();
+
+export type ZipWriter = { add(path: string, bytes: Uint8Array<ArrayBuffer>, deflate?: boolean): Promise<void>; end(): Promise<void> };
+
+// Each file goes out whole, its sizes in its local header and no data descriptor after it: RisuAI reads a charx with
+// fflate's streaming Unzip, which finds the end of a file written with a descriptor by searching its bytes for the
+// descriptor's signature, so a picture holding those four bytes would be cut. Counts, sizes and offsets are those without ZIP64, as openZip
+// reads them; an archive past that throws rather than writing a damaged one.
+export function zipWriter(write: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>): ZipWriter {
+  const directory: Uint8Array<ArrayBuffer>[] = [];
+  let offset = 0;
+  const out = async (bytes: Uint8Array<ArrayBuffer>) => {
+    if (offset + bytes.length > 0xffffffff) throw new RangeError('the archive is past 4 GiB');
+    await write(bytes);
+    offset += bytes.length;
+  };
+  return {
+    async add(path, bytes, deflate = false) {
+      const name = encoder.encode(path);
+      const data = deflate ? (deflateSync(bytes) as Uint8Array<ArrayBuffer>) : bytes;
+      const crc = crc32(bytes);
+      const header = new Uint8Array(30 + name.length);
+      const local = new DataView(header.buffer);
+      local.setUint32(0, LOCAL_HEADER, true);
+      local.setUint16(4, 20, true);
+      local.setUint16(6, UTF8_NAMES, true);
+      local.setUint16(8, deflate ? DEFLATED : STORED, true);
+      local.setUint32(14, crc, true);
+      local.setUint32(18, data.length, true);
+      local.setUint32(22, bytes.length, true);
+      local.setUint16(26, name.length, true);
+      header.set(name, 30);
+      const entry = new Uint8Array(46 + name.length);
+      const central = new DataView(entry.buffer);
+      central.setUint32(0, DIRECTORY_ENTRY, true);
+      central.setUint16(4, 20, true);
+      entry.set(header.subarray(4, 30), 6);
+      central.setUint32(42, offset, true);
+      entry.set(name, 46);
+      directory.push(entry);
+      await out(header);
+      await out(data);
+    },
+    async end() {
+      if (directory.length > 0xffff) throw new RangeError('more files than an archive without ZIP64 holds');
+      const start = offset;
+      for (const entry of directory) await out(entry);
+      const record = new Uint8Array(END_RECORD);
+      const end = new DataView(record.buffer);
+      end.setUint32(0, END_OF_DIRECTORY, true);
+      end.setUint16(8, directory.length, true);
+      end.setUint16(10, directory.length, true);
+      end.setUint32(12, offset - start, true);
+      end.setUint32(16, start, true);
+      await out(record);
     },
   };
 }

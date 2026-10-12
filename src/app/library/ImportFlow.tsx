@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { ImportFailure } from '../../engine/import/types';
 import { characterTexts, live } from '../../model/library';
 import { EMPTY_SETTINGS } from '../../model/settings';
-import { importCharacter } from '../../runtime/characters';
+import { importCardFile } from '../../runtime/card-file';
 import { importChat } from '../../runtime/chat-log';
 import type { ApiFailure } from '../../runtime/api';
 import { ImportWorker } from '../../runtime/import/client';
@@ -180,7 +180,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         if (!filled.ok) return unsaved(file.name, filled);
         return { kind: 'filled', file: file.name, name, kept: filled.data.kept.length, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
       }
-      const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(stepOf(step)));
+      const saved = await importCardFile(store, files, parsed.card, (step) => progress(stepOf(step)));
       if (!saved.ok) return unsaved(file.name, saved);
       return characterOutcome(file.name, parsed.card, saved.data);
     } catch (error) {

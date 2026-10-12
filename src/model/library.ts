@@ -49,7 +49,8 @@ export type Character = Mark & {
 
 // Its lorebook and assets are its children, as a character's are.
 // namespace: Risu's, which {{moduleenabled::…}} asks by. loreFolders only group its lorebook on screen.
-// risu: the Risu id of one brought from a Risu backup, which a move skips. takesMemory: whether its tool may hold the
+// risu: the id module files name it by (engine/import/types ImportedModule.risu), set for one brought from a Risu backup,
+// which a move skips, or with a character's charx, which a later charx bundling it is attached to. takesMemory: whether its tool may hold the
 // memory slot of the chats it is on in, which turns the built-in memory off there; absent: not asked yet.
 export type Module = Pack & Mark & {
   botModels?: boolean;

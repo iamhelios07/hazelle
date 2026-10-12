@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { importCard } from './card';
-import { unpack } from './risum';
+import { readRisum, unpack, writeRisum } from './risum';
 import type { ImportResult, Imported } from './types';
 
 const CRC = Array.from({ length: 256 }, (_, n) => {
@@ -308,6 +308,13 @@ describe('importCard', () => {
       { kind: 'regex-stage', count: 2 },
       { kind: 'toggle-line', count: 1 },
     ]);
+  });
+
+  it('writes a module.risum byte for byte as Risu wrote the real one, and reads back what it wrote', () => {
+    const real = Uint8Array.from(atob(RISU_MODULE.join('')), (char) => char.charCodeAt(0));
+    expect(writeRisum(readRisum(real)!.module)).toEqual(real);
+    const module = { name: '전화', regex: [{ comment: '화면', in: '\u0000a', out: '💬', type: 'editdisplay' }] };
+    expect(readRisum(writeRisum(module))).toEqual({ module, assets: [] });
   });
 
   it('fails by kind instead of throwing', () => {

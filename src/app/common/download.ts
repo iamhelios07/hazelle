@@ -12,17 +12,23 @@ function clickDownload(filename: string, url: string) {
   link.click();
 }
 
+// What no file system takes in a name.
+const UNSAFE = /[\\/:*?"<>|\p{Cc}]/gu;
+export const fileNamed = (name: string, fallback: string, extension: string) => `${name.replace(UNSAFE, '').trim() || fallback}.${extension}`;
+
 export function download(filename: string, file: Blob): void {
   const url = URL.createObjectURL(file);
   clickDownload(filename, url);
   URL.revokeObjectURL(url);
 }
 
-// Call in the click handler, before any await: a picker requires the original user activation.
+// Call in the click handler, before any await: a picker requires the original user activation. Every file written this
+// way is a zip, whatever its extension (.zip, .charx).
 export function downloadOutput(filename: string): Promise<BackupOutput> {
   const picker = (window as Window & { showSaveFilePicker?: (options: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
   if (picker) {
-    return picker.call(window, { suggestedName: filename, types: [{ description: 'ZIP', accept: { 'application/zip': ['.zip'] } }] })
+    const extension = filename.slice(filename.lastIndexOf('.'));
+    return picker.call(window, { suggestedName: filename, types: [{ description: extension.slice(1).toUpperCase(), accept: { 'application/zip': [extension] } }] })
       .then((handle) => handle.createWritable())
       .then((stream) => ({ write: (chunk) => stream.write(chunk), close: () => stream.close(), abort: () => stream.abort() }));
   }

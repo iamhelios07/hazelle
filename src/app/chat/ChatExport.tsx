@@ -4,7 +4,7 @@ import type { ChatItem } from '../../model/chat';
 import { assetDataUrls } from '../../runtime/assets';
 import { chatFile } from '../../runtime/chat-file';
 import { ACTS } from '../common/acts';
-import { download } from '../common/download';
+import { download, fileNamed } from '../common/download';
 import { sizeText } from '../common/size';
 import { useCopyHtml } from '../common/useCopy';
 import { ARCA_LOG, CHAT_FILE, EXPORT } from '../common/words';
@@ -15,10 +15,6 @@ import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Pro
 import { speakers } from './ChatLog';
 import { logDraft, resolveLog, type LogChoices, type LogText } from './exportLog';
 import type { OpenChat } from './useChat';
-
-// What no file system takes in a name.
-const UNSAFE = /[\\/:*?"<>|\p{Cc}]/gu;
-const fileNamed = (title: string, extension: string) => `${title.replace(UNSAFE, '').trim() || '채팅'}.${extension}`;
 
 // A chat up to SHORT messages goes whole by default; a longer one from its last LATEST.
 const SHORT = 100;
@@ -64,10 +60,10 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
   async function saveFile() {
     if (form === 'file') {
       const made = await chatFile({ store, files }, item.id);
-      return made.ok ? download(fileNamed(item.title, 'json'), new Blob([made.data], { type: 'application/json' })) : toast.failed(made, '채팅 파일을 만들지 못했어요.');
+      return made.ok ? download(fileNamed(item.title, '채팅', 'json'), new Blob([made.data], { type: 'application/json' })) : toast.failed(made, '채팅 파일을 만들지 못했어요.');
     }
     const page = snapshotPage(item.title, prepared!.html, getComputedStyle(document.body).backgroundColor);
-    download(fileNamed(item.title, 'html'), new Blob([page], { type: 'text/html' }));
+    download(fileNamed(item.title, '채팅', 'html'), new Blob([page], { type: 'text/html' }));
   }
 
   // A typed number is taken once it lies in the chat; anything else waits, marked.

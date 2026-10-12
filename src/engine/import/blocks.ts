@@ -199,3 +199,75 @@ export function reparsed(effects: BlockEffect[]): BlockEffect[] | null {
   });
   return changed ? read : null;
 }
+
+// The writer's side: conditions and effects back in Risu's V2 form, by the same tables, so blockConditions and
+// blockEffects read them back as they were. A reading that failed (an operator, role or tone none of Risu's) was kept
+// as null and goes back as an empty field, which reads as null again.
+const symbol = <V>(table: Map<string, V>, value: V | null | undefined) => [...table].find(([, each]) => each === value)?.[0] ?? '';
+const operandSource = (field: string, operand: Operand): Fields =>
+  operand.kind === 'variable' ? { [field]: operand.name, [`${field}Type`]: 'var' } : { [field]: operand.text, [`${field}Type`]: 'value' };
+
+export function conditionSources(conditions: BlockCondition[]): unknown[] {
+  return conditions.map((condition) => {
+    if (condition.kind === 'opaque') return condition.raw;
+    if (condition.kind === 'exists') return { type: 'exists', value: condition.value, depth: condition.depth, type2: condition.match ?? '' };
+    const { source } = condition;
+    const side = source.kind === 'variable' ? { type: 'var', var: source.name } : source.kind === 'length' ? { type: 'chatindex' } : { type: 'value', var: source.text };
+    return condition.kind === 'probe' ? { ...side, operator: '', value: '' } : { ...side, operator: symbol(CONDITIONS, condition.comparison.operator), value: condition.value };
+  });
+}
+
+// Indents are not kept: an opener's comes back from the line that closes it, a close and a local variable keep their
+// own, and any other line takes the depth it sits at.
+export function effectSources(effects: BlockEffect[]): unknown[] {
+  let depth = 0;
+  const opened = (close: number) => {
+    const line = effects[close];
+    return line?.kind === 'close' || line?.kind === 'repeat' ? line.indent - 1 : depth;
+  };
+  return effects.map((effect, index) => {
+    let indent = depth;
+    let source: Fields;
+    switch (effect.kind) {
+      case 'noop': source = { type: index === 0 ? 'v2Header' : 'v2Comment' }; break;
+      case 'close': case 'repeat':
+        indent = effect.indent;
+        depth = indent - 1;
+        source = effect.kind === 'repeat' ? { type: 'v2EndIndent', endOfLoop: true } : { type: 'v2EndIndent' };
+        break;
+      case 'local': indent = effect.indent; source = { type: 'v2DeclareLocalVar', var: effect.name, ...operandSource('value', effect.value) }; break;
+      case 'if':
+        indent = opened(effects[effect.otherwise - 1]?.kind === 'else' ? effect.otherwise - 2 : effect.otherwise - 1);
+        depth = indent + 1;
+        source = { type: 'v2IfAdvanced', ...operandSource('source', effect.source), ...operandSource('target', effect.target), condition: symbol(BRANCHES, effect.comparison?.operator) };
+        break;
+      case 'else': indent = opened(effect.next - 1); depth = indent + 1; source = { type: 'v2Else' }; break;
+      case 'loop':
+        indent = opened(effect.end);
+        depth = indent + 1;
+        source = effect.times === null ? { type: 'v2Loop' } : { type: 'v2LoopNTimes', ...operandSource('value', effect.times) };
+        break;
+      case 'break': source = { type: 'v2BreakLoop' }; break;
+      case 'set': source = { type: 'v2SetVar', var: effect.name, operator: symbol(ARITHMETIC, effect.operator), ...operandSource('value', effect.value) }; break;
+      case 'add': source = { type: 'v2Impersonate', role: effect.role ?? '', ...operandSource('value', effect.value) }; break;
+      case 'modify': source = { type: 'v2ModifyChat', ...operandSource('index', effect.index), ...operandSource('value', effect.value) }; break;
+      case 'cut': source = { type: 'v2CutChat', ...operandSource('start', effect.start), ...operandSource('end', effect.end) }; break;
+      case 'alert': source = { type: 'showAlert', alertType: effect.tone ?? '', value: effect.value, inputVar: effect.input }; break;
+      case 'stop': source = { type: 'v2StopPromptSending' }; break;
+      case 'end': source = { type: 'v2StopTrigger' }; break;
+      case 'extract': source = { type: 'extractRegex', regex: effect.regex, flags: effect.flags, value: effect.value, inputVar: effect.input, result: effect.result }; break;
+      case 'trigger': source = { type: 'v2RunTrigger', ...operandSource('target', effect.name) }; break;
+      case 'reload': source = { type: 'v2UpdateGUI' }; break;
+      case 'call': {
+        const option = OPTIONS[effect.type];
+        const inputs = CALLS[effect.type].map((field: string, place) => operandSource(field, effect.inputs[place]!));
+        source = Object.assign({ type: effect.type, var: effect.name, outputVar: effect.output, ...(option && { [option]: effect.option }) }, ...inputs);
+        break;
+      }
+      case 'opaque':
+        if (!isRecord(effect.raw)) return effect.raw;
+        source = effect.raw;
+    }
+    return { ...source, indent };
+  });
+}

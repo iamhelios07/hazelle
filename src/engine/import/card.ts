@@ -1,7 +1,8 @@
-import { add, convert, convertModule, counted, type Converted, type Tally } from './convert';
-import { UNSUPPORTED_KINDS, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
+import { add, cardSource, convert, convertModule, counted, lorebookSource, record, type Converted, type Tally } from './convert';
+import { hazelleSource, printOf, readHazelle, type ConvertedBundle } from './hazelle';
+import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
 import { readPng } from './png';
-import { readRisum } from './risum';
+import { readRisum, writeRisum } from './risum';
 import { openZip, type Zip } from './zip';
 import { isRecord } from '../../connectors/values';
 
@@ -46,7 +47,7 @@ function fromPng(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   if (png.card.startsWith('rcc||')) return fail('encrypted');
   const tally: Tally = new Map();
   const converted = convert(JSON.parse(utf8.decode(base64(png.card))), null, tally);
-  return converted ? done('png', converted, { bytes: png.image, type: 'image/png' }, { chunks: png.assets }, tally) : fail('unreadable', 'not a character card');
+  return converted ? done('png', converted, { bytes: png.image, type: 'image/png' }, { chunks: png.assets }, tally, NOT_OWN) : fail('unreadable', 'not a character card');
 }
 
 function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
@@ -57,8 +58,11 @@ function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const moduleBytes = zip.read('module.risum');
   const module = moduleBytes ? (readRisum(moduleBytes)?.module ?? null) : null;
   if (moduleBytes && !module) add(tally, 'module');
-  const converted = convert(JSON.parse(utf8.decode(card)), module, tally);
-  return converted ? done('charx', converted, avatar(converted.icon, zip.prefix, zip, tally), { zip }, tally) : fail('unreadable', 'not a character card');
+  const raw: unknown = JSON.parse(utf8.decode(card));
+  const converted = convert(raw, module, tally);
+  if (!converted) return fail('unreadable', 'not a character card');
+  const { read, own, bundled } = readHazelle(record(record(record(raw).data).extensions).hazelle, converted, tally);
+  return done('charx', read, avatar(read.icon, zip.prefix, zip, tally), { zip }, tally, { own, bundled });
 }
 
 function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
@@ -81,30 +85,36 @@ function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
     return { ok: true, module: { ...module, assets: [], unsupported: counted(UNSUPPORTED_KINDS, tally) } };
   }
   const converted = convert(raw, null, tally);
-  return converted ? done('json', converted, avatar(converted.icon, null, null, tally), {}, tally) : fail('unreadable', 'not a character card');
+  return converted ? done('json', converted, avatar(converted.icon, null, null, tally), {}, tally, NOT_OWN) : fail('unreadable', 'not a character card');
 }
 
 type Holders = { zip?: Zip; chunks?: Map<string, string> };
+type Owned = { own: Imported['own']; bundled: ConvertedBundle[] };
+const NOT_OWN: Owned = { own: null, bundled: [] };
 
-function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], holders: Holders, tally: Tally): ImportResult {
+function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], holders: Holders, tally: Tally, { own, bundled }: Owned): ImportResult {
   const resolve: Resolve = (uri) => {
     const read = reader(uri, holders);
     if (!read) add(tally, 'asset');
     return read && (async () => read());
   };
-  return { ok: true, card: { ...assemble(format, converted, resolve, tally), avatar } };
+  const modules = bundled.map((module) => ({ ...module, assets: located(module.assets, resolve) }));
+  return { ok: true, card: { ...assemble(format, converted, resolve, tally), avatar, own, bundled: modules } };
 }
 
 // Where an asset's bytes are read from; null for a uri the source does not hold, which the resolver counts.
 export type Resolve = (uri: string) => Imported['assets'][number]['read'] | null;
 
-// The report is counted after the assets are resolved, so the resolver's counts are in it.
-export function assemble(format: ImportReport['format'], converted: Converted, resolve: Resolve, tally: Tally): Omit<Imported, 'avatar'> {
-  const { card, lore, loreFolders, spec } = converted;
-  const assets = converted.assets.flatMap(({ name, uri }) => {
+const located = (assets: Converted['assets'], resolve: Resolve): Imported['assets'] =>
+  assets.flatMap(({ name, uri }) => {
     const read = resolve(uri);
     return read ? [{ name, read }] : [];
   });
+
+// The report is counted after the assets are resolved, so the resolver's counts are in it.
+export function assemble(format: ImportReport['format'], converted: Converted, resolve: Resolve, tally: Tally): Omit<Imported, 'avatar' | 'own' | 'bundled'> {
+  const { card, lore, loreFolders, spec } = converted;
+  const assets = located(converted.assets, resolve);
   return { card, lore, loreFolders, assets, report: { format, spec, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
 }
 
@@ -164,4 +174,25 @@ export function imageType(bytes: Uint8Array): string | null {
   if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
   if (ascii(4, 12) === 'ftypavif' || ascii(4, 12) === 'ftypavis') return 'image/avif';
   return null;
+}
+
+const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif' };
+const utf8Out = new TextEncoder();
+
+// The inverse of fromCharx: card.json and module.risum, and the paths the pictures go at, the avatar's first, then the
+// assets' in the order bot lists them, the bundled modules' after the character's. Pictures are named by place, not by
+// name, so no name needs making safe for a path; the card names each. The print is made by reading what is written.
+export function writeCharx(bot: Bot): { files: { path: string; bytes: Uint8Array<ArrayBuffer> }[]; pictures: string[] } {
+  const source = hazelleSource(bot);
+  const extension = (type: string) => EXTENSIONS[type] ?? 'png';
+  const icon = bot.avatar === null ? [] : [{ type: 'icon', name: 'main', ext: extension(bot.avatar), uri: `embeded://assets/icon/image/main.${extension(bot.avatar)}` }];
+  const assets = [...icon, ...source.assets.map(({ name, type }, place) => ({ type: 'x-risu-asset', name, ext: extension(type), uri: `embeded://assets/other/image/${place}.${extension(type)}` }))];
+  const module = writeRisum({ name: bot.card.name, description: '', regex: source.regex, trigger: source.triggers, lorebook: lorebookSource(source.lore, source.loreFolders) });
+  const plain = utf8Out.encode(JSON.stringify(cardSource(bot.card, assets, {})));
+  const read = convert(JSON.parse(utf8.decode(plain)), readRisum(module)!.module, new Map())!;
+  const card = cardSource(bot.card, assets, { hazelle: { ...source.extension, print: printOf(read) } });
+  return {
+    files: [{ path: 'card.json', bytes: utf8Out.encode(JSON.stringify(card)) }, { path: 'module.risum', bytes: module }],
+    pictures: assets.map(({ uri }) => uri.slice('embeded://'.length)),
+  };
 }

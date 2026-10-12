@@ -125,11 +125,11 @@ export class ImportReader {
     return handle;
   }
 
-  private card({ avatar, assets, ...card }: Imported): CardData {
-    return { ...card, avatar: avatar ? this.picture(async () => avatar) : null, assets: this.reads(assets) };
+  private card({ avatar, assets, bundled, ...card }: Imported): CardData {
+    return { ...card, avatar: avatar ? this.picture(async () => avatar) : null, assets: this.reads(assets), bundled: bundled.map((module) => this.module(module)) };
   }
 
-  private module({ assets, ...module }: ImportedModule): ModuleData {
+  private module<M extends ImportedModule>({ assets, ...module }: M): Omit<M, 'assets'> & ModuleData {
     return { ...module, assets: this.reads(assets) };
   }
 }

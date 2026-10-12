@@ -1,4 +1,5 @@
-import type { ImportedModule } from '../engine/import/types';
+import type { ImportedModule, Profiles } from '../engine/import/types';
+import { likenessId } from '../model/likeness';
 import type { Stored } from '../model/kinds';
 import type { Module } from '../model/library';
 import { EMPTY_SETTINGS } from '../model/settings';
@@ -10,10 +11,10 @@ import type { StoredPrompt } from './prompts';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
 
-// A module as the importer read it (design §6.5). Its pictures are stored first; then it is written with its lorebook
-// and assets in one batch, itself last, so a module appears only once whole. brought: a move from Risu's, with its
-// Risu id and the id the move already turned on.
-export async function importModule(store: ObjectStore, files: Files, imported: ImportedModule, progress: Progress, brought?: { id: string; risu: string }): Promise<ApiResult<{ id: string; skipped: number }>> {
+// A module as the importer read it (design §6.5). Its pictures are stored first; then it is written with its lorebook,
+// assets and 삽화 profiles in one batch, itself last, so a module appears only once whole. brought: the id module files
+// name it by (a move from Risu's, or a charx bundling it) and the id it is saved at, which a move already turned on.
+export async function importModule(store: ObjectStore, files: Files, imported: ImportedModule & { likeness?: Profiles | null }, progress: Progress, brought?: { id: string; risu: string }): Promise<ApiResult<{ id: string; skipped: number }>> {
   const stored = await saveAssets(files, imported.assets, progress);
   if (!stored.ok) return stored;
   const id = brought?.id ?? crypto.randomUUID();
@@ -24,6 +25,7 @@ export async function importModule(store: ObjectStore, files: Files, imported: I
     { type: 'create', kind: 'module', id, parent: null, value: module },
     ...stored.data.kept.map((asset): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: id, value: asset })),
     ...imported.lore.map((entry): Write => ({ type: 'create', kind: 'lore', id: crypto.randomUUID(), parent: id, value: { ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id } })),
+    ...(imported.likeness ? [{ type: 'create' as const, kind: 'likeness' as const, id: likenessId(id), parent: id, value: { ...imported.likeness, receipt: null } }] : []),
   ];
   let done = 0;
   progress({ kind: 'saving', done, total: writes.length });

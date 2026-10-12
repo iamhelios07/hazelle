@@ -37,6 +37,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
         <>
           <MenuItem icon={SquarePen} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void actions.copy(shelf)} />
+          <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => actions.exportFile(shelf)} />
           <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => actions.remove(shelf)} />
         </>
       )}

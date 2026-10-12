@@ -14,8 +14,8 @@ export class ImportWorker {
     const result = await this.ask({ kind: 'card', file });
     if (!result.ok || 'tool' in result || 'chat' in result || 'risuChats' in result) return result;
     if ('module' in result) return { ok: true, module: this.module(result.module) };
-    const { avatar, assets, ...card } = result.card;
-    return { ok: true, card: { ...card, avatar: avatar === null ? null : await this.ask({ kind: 'picture', handle: avatar }), assets: this.assets(assets) } };
+    const { avatar, assets, bundled, ...card } = result.card;
+    return { ok: true, card: { ...card, avatar: avatar === null ? null : await this.ask({ kind: 'picture', handle: avatar }), assets: this.assets(assets), bundled: bundled.map((module) => this.module(module)) } };
   }
 
   async backup(files: File[]): Promise<BackupResult> {
@@ -61,7 +61,7 @@ export class ImportWorker {
     return reads.map(({ name, handle }) => ({ name, read: () => this.ask({ kind: 'asset', handle }) }));
   }
 
-  private module({ assets, ...module }: ModuleData): ImportedModule {
+  private module<M extends ModuleData>({ assets, ...module }: M): Omit<M, 'assets'> & Pick<ImportedModule, 'assets'> {
     return { ...module, assets: this.assets(assets) };
   }
 

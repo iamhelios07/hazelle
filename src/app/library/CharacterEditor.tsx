@@ -94,7 +94,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const ownModules = character.modules ?? [];
-  const { busy, copy, remove } = useCharacterActions();
+  const { busy, copy, exportFile, remove } = useCharacterActions();
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
@@ -356,12 +356,13 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const groups = GROUPS.map((group) => group.filter((each) => each !== 'modules' || modules.length > 0));
   const saved = merged(status, pictureSave.status, noteSave.status);
   const subtitle = card.creator ? `제작자 ${card.creator}` : undefined;
-  const copying = busy?.id === id ? busy.label : null;
+  const working = busy?.id === id ? busy.label : null;
   const menu = {
     of: '캐릭터',
     items: (
       <>
         <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={busy !== null} onClick={() => void copy(shelf)} />
+        <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} disabled={busy !== null} onClick={() => exportFile(shelf)} />
         <MenuItem
           icon={ACTS.remove.icon}
           label={ACTS.remove.label}
@@ -376,7 +377,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     ),
   };
   const title = aliased(text.name, text.alias);
-  const state = copying ?? (saved ? SAVE_STATUS[saved] : undefined);
+  const state = working ?? (saved ? SAVE_STATUS[saved] : undefined);
   if (split) {
     const open = part ?? 'profile';
     const side = groups.map((group) => (

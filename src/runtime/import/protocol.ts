@@ -1,10 +1,10 @@
 import type { ImportedTool } from '../../engine/import/tool';
-import type { BackupCatalog, BackupFailure, Imported, ImportedModule, ImportFailure, MoveUnsupported, Picture, RisuCharacter, RisuChat, RisuMessage, RisuPersona, RisuPreset } from '../../engine/import/types';
+import type { BackupCatalog, BackupFailure, BundledModule, Imported, ImportedModule, ImportFailure, MoveUnsupported, Picture, RisuCharacter, RisuChat, RisuMessage, RisuPersona, RisuPreset } from '../../engine/import/types';
 import type { ChatFile } from '../chat-file';
 
 export type AssetRead = { name: string; handle: number };
-export type CardData = Omit<Imported, 'avatar' | 'assets'> & { avatar: number | null; assets: AssetRead[] };
 export type ModuleData = Omit<ImportedModule, 'assets'> & { assets: AssetRead[] };
+export type CardData = Omit<Imported, 'avatar' | 'assets' | 'bundled'> & { avatar: number | null; assets: AssetRead[]; bundled: (ModuleData & Pick<BundledModule, 'likeness'>)[] };
 export type CharacterData = Omit<RisuCharacter, 'avatar' | 'assets' | 'chats'> & { avatar: number; assets: AssetRead[]; chatCount: number };
 export type PersonaData = Omit<RisuPersona, 'picture' | 'module'> & { picture: number; module: ModuleData | null };
 // A file of chats, which a JSON card file may be instead: this app's own, or Risu's.

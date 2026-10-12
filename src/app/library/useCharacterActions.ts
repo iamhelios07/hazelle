@@ -2,11 +2,13 @@ import { useState } from 'react';
 import type { ChatSummary } from '../../model/chat';
 import type { Stored } from '../../model/kinds';
 import type { CharacterShelf, Removable } from '../../model/library';
+import { exportCharacter } from '../../runtime/card-file';
 import { copyCharacter, createCharacter, setDeleted } from '../../runtime/characters';
 import { markDeleted, purgeNow } from '../../runtime/removal';
 import { newOf } from '../common/acts';
-import { BIN_KEEPS, moduleName, promptName } from '../common/words';
-import { useStore } from '../session';
+import { downloadOutput, fileNamed } from '../common/download';
+import { BIN_KEEPS, moduleName, promptName, TOOL } from '../common/words';
+import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { describeStep } from './saving';
@@ -42,6 +44,7 @@ export function useNewCharacter() {
 
 export function useCharacterActions() {
   const store = useStore();
+  const files = useFiles();
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
 
@@ -52,6 +55,25 @@ export function useCharacterActions() {
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
     toast.show('사본을 만들었어요.');
     navigate({ kind: 'edit', character: copied.data });
+  }
+
+  // The save picker opens before any await, inside the press that asked for it.
+  function exportFile({ id, character }: Shelf) {
+    const destination = downloadOutput(fileNamed(character.card.name, '캐릭터', 'charx'));
+    setBusy({ id, label: '내보내는 중' });
+    void (async () => {
+      try {
+        const made = await exportCharacter(store, files, id, await destination, ({ done, total }) => setBusy({ id, label: `내보내는 중 · ${done} / ${total}` }));
+        if (made.ok) toast.show(`'${character.card.name}' 캐릭터를 내보냈어요.`, made.data.tools ? { detail: `${TOOL}가 든 모듈 ${made.data.tools}개는 빼고 내보냈어요.` } : undefined);
+        else if (made.error === 'export-write') toast.error('파일을 저장하지 못했어요.', { detail: '저장 공간을 확인한 뒤 다시 시도해 주세요.' });
+        else if (made.error === 'unreadable') toast.error('내보내지 못했어요.', { detail: '열리지 않는 이미지가 있어요.' });
+        else toast.failed(made, '내보내지 못했어요.');
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('파일을 저장하지 못했어요.');
+      } finally {
+        setBusy(null);
+      }
+    })();
   }
 
   function remove(shelf: Shelf) {
@@ -73,5 +95,5 @@ export function useCharacterActions() {
     else toast.failed(removed, '일부를 삭제하지 못했어요.');
   }
 
-  return { busy, copy, remove, restore, purge };
+  return { busy, copy, exportFile, remove, restore, purge };
 }

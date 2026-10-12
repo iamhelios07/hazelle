@@ -100,13 +100,15 @@ export async function setAvatar(store: ObjectStore, files: Files, id: string, by
 // A moved character's id is already named by its staged entries; chats: their roots (runtime/chat-log chatWrites).
 export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; chats: Write[] };
 
+// modules: those on for it, a card file's bundled ones, saved before it (runtime/card-file).
 export async function importCharacter(
   store: ObjectStore,
   files: Files,
-  { card, lore, loreFolders, assets }: Pick<Imported, 'card' | 'lore' | 'loreFolders' | 'assets'>,
+  { card, lore, loreFolders, assets, own = null }: Pick<Imported, 'card' | 'lore' | 'loreFolders' | 'assets'> & Partial<Pick<Imported, 'own'>>,
   picture: Picture | null,
   progress: Progress,
   brought?: Brought,
+  modules: string[] = [],
 ): Promise<ApiResult<ImportedCharacter>> {
   let avatar: Avatar | null = null;
   if (picture) {
@@ -120,8 +122,10 @@ export async function importCharacter(
   const { kept, skipped } = stored.data;
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const entries = lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id }));
-  const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...(brought && { risu: brought.risu, ...(brought.modules.length > 0 && { modules: brought.modules }) }) };
-  const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries, likeness: null }, progress, brought && { id: brought.id, chats: brought.chats });
+  const on = brought?.modules ?? modules;
+  const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...own?.character, ...(brought && { risu: brought.risu }), ...(on.length > 0 && { modules: on }) };
+  const likeness = own?.likeness ? { ...own.likeness, receipt: null } : null;
+  const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries, likeness }, progress, brought && { id: brought.id, chats: brought.chats });
   return added.ok ? { ok: true, data: { id: added.data, skipped, faceless: picture !== null && avatar === null } } : added;
 }
 

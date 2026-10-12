@@ -2,7 +2,7 @@ import { count, flag, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
 import { parseDecorators } from '../lorebook/decorators';
 import { readToggles } from './toggles';
-import { blockConditions, blockEffects } from './blocks';
+import { blockConditions, blockEffects, conditionSources, effectSources } from './blocks';
 import type { Card, ImportedModule, ImportReport, LoreEntry, Pack, RegexScript, Trigger, UnsupportedKind } from './types';
 
 export type Json = Record<string, unknown>;
@@ -46,7 +46,7 @@ export const DEFAULT_ORDER = 100;
 
 export const text = (value: unknown) => (typeof value === 'string' ? value : '');
 export const record = (value: unknown): Json => (isRecord(value) ? value : {});
-const strings = (value: unknown) => list(value).filter((item): item is string => typeof item === 'string');
+export const strings = (value: unknown) => list(value).filter((item): item is string => typeof item === 'string');
 // CCv3 key arrays stay intact; only blank keys are dropped.
 const keys = (value: unknown) => strings(value).filter((key) => key.trim() !== '');
 // Risu's own lore joins keys into one string, split here as Risu splits it.
@@ -120,7 +120,7 @@ export function convert(raw: unknown, module: Json | null, tally: Tally, nativeL
   return { card, lore, loreFolders, spec, icon: icon && text(icon.uri), assets };
 }
 
-type Unstamped<S> = S extends unknown ? Omit<S, 'id'> : never;
+export type Unstamped<S> = S extends unknown ? Omit<S, 'id'> : never;
 type Stamped<S> = S & { id: string };
 
 // A script without an id, just read or stored before scripts had ids, takes its place in its list as its id. Derived,
@@ -131,9 +131,9 @@ export function stampIds<R extends object, T extends object>(pack: { regex: read
   return { regex: stamp(pack.regex, 'regex'), triggers: stamp(pack.triggers, 'trigger') };
 }
 
-function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; toggles: unknown }, tally: Tally): Pack {
+export function readTriggers(raw: unknown): Unstamped<Trigger>[] {
   const triggers: Unstamped<Trigger>[] = [];
-  for (const trigger of list(raw.trigger).map(record)) {
+  for (const trigger of list(raw).map(record)) {
     const name = text(trigger.comment);
     const effects = list(trigger.effect).map(record);
     const code = effects[0]?.type === 'triggerlua' ? text(effects[0].code) : null;
@@ -141,10 +141,103 @@ function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; to
       if (effects.some((effect) => !INERT.has(effect.type))) triggers.push({ kind: 'blocks', name, on: text(trigger.type), conditions: blockConditions(trigger.conditions), effects: blockEffects(trigger.effect) });
     } else if (code.trim()) triggers.push({ kind: 'lua', name, code });
   }
+  return triggers;
+}
+
+function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; toggles: unknown }, tally: Tally): Pack {
+  const triggers = readTriggers(raw.trigger);
   const background = text(raw.background);
   if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
   add(tally, 'toggle-line', readToggles(text(raw.toggles)).unread);
   return { ...stampIds({ regex: regexScripts(list(raw.regex), tally), triggers }), ...(background.trim() ? { background } : {}), toggles: text(raw.toggles) };
+}
+
+// The writer's side, each the inverse of its reader here: what convert reads back as it was written. A charx keeps
+// the scripts and lorebook in its module.risum and the rest in card.json, as Risu's own charx export splits them
+// (characterCards.ts exportCharacterCard at ca1345fc). The lorebook goes out natively, at bookVersion 2, so its content
+// is read back unmigrated.
+export const regexSource = ({ name, find, replace, stage, flags }: Unstamped<RegexScript>): Json => ({
+  comment: name, in: find, out: replace, type: [...STAGES].find(([, each]) => each === stage)![0], ableFlag: flags !== null, flag: flags ?? '',
+});
+
+// Risu's editor starts a Lua trigger at 'start'; Risu runs it at every event whatever its type.
+export const triggerSource = (trigger: Unstamped<Trigger>): Json =>
+  trigger.kind === 'lua'
+    ? { comment: trigger.name, type: 'start', conditions: [], effect: [{ type: 'triggerlua', code: trigger.code }] }
+    : { comment: trigger.name, type: trigger.on, conditions: conditionSources(trigger.conditions), effect: effectSources(trigger.effects) };
+
+export const folderKey = (folder: number) => `folder-${folder}`;
+
+// The native form has no enabled, priority or position, and joins keys into one string: an entry it cannot hold whole
+// (nativeHolds) is kept apart by the caller.
+export function lorebookSource(lore: LoreEntry[], folders: string[]): Json[] {
+  const book = (entry: Json) => ({ content: '', mode: 'normal', insertorder: DEFAULT_ORDER, alwaysActive: false, selective: false, useRegex: false, bookVersion: 2, ...entry });
+  return [
+    ...folders.map((name, folder) => book({ key: folderKey(folder), secondkey: '', comment: name, mode: 'folder' })),
+    ...lore.map((entry) =>
+      book({
+        key: entry.keys.join(','),
+        secondkey: entry.secondaryKeys.join(','),
+        comment: entry.name,
+        content: entry.content,
+        insertorder: entry.insertionOrder,
+        alwaysActive: entry.constant,
+        selective: entry.selective,
+        useRegex: entry.useRegex,
+        extentions: { risu_case_sensitive: entry.caseSensitive },
+        ...(entry.folder !== null && { folder: folderKey(entry.folder) }),
+      }),
+    ),
+  ];
+}
+
+// Whether nativeLorebook gives this entry back whole.
+export const nativeHolds = (entry: LoreEntry) =>
+  entry.enabled && entry.priority === null && entry.position === null && [entry.keys, entry.secondaryKeys].every((keys) => split(keys.join(',')).join('\0') === keys.join('\0'));
+
+// assets: the card's icon and x-risu-asset entries. The scripts and lorebook are not in it: they go in module.risum.
+export function cardSource(card: Card, assets: Json[], extensions: Json): Json {
+  const [first = '', ...alternate] = card.greetings;
+  const { scanDepth, tokenBudget, recursive, fullWordMatching } = card.loreSettings;
+  return {
+    spec: 'chara_card_v3',
+    spec_version: '3.0',
+    data: {
+      name: card.name,
+      nickname: card.nickname ?? '',
+      description: card.description,
+      personality: card.personality,
+      scenario: card.scenario,
+      first_mes: first,
+      alternate_greetings: alternate,
+      group_only_greetings: [],
+      mes_example: card.exampleDialogue,
+      system_prompt: card.systemPrompt,
+      post_history_instructions: card.postHistoryInstructions,
+      creator_notes: card.creatorNotes,
+      creator: card.creator,
+      character_version: card.version,
+      tags: card.tags,
+      character_book: {
+        ...(scanDepth !== null && { scan_depth: scanDepth }),
+        ...(tokenBudget !== null && { token_budget: tokenBudget }),
+        ...(recursive !== null && { recursive_scanning: recursive }),
+        extensions: fullWordMatching === null ? {} : { risu_fullWordMatching: fullWordMatching },
+        entries: [],
+      },
+      extensions: {
+        risuai: {
+          bias: card.bias,
+          utilityBot: card.utility,
+          defaultVariables: card.variables.map(([key, value]) => `${key}=${value}`).join('\n'),
+          toggles: card.toggles,
+          ...(card.background !== undefined && { backgroundHTML: card.background }),
+        },
+        ...extensions,
+      },
+      assets,
+    },
+  };
 }
 
 // A Risu module as RisuModule holds it (src/ts/process/modules.ts), without its pictures. Its lowLevelAccess is not
@@ -205,7 +298,7 @@ function variables(value: unknown): [string, string][] {
 }
 
 // Scripts on other stages (edittrans, disabled) never run in risu-alpha and are counted instead.
-function regexScripts(scripts: unknown[], tally: Tally): Unstamped<RegexScript>[] {
+export function regexScripts(scripts: unknown[], tally: Tally): Unstamped<RegexScript>[] {
   return scripts.filter(isRecord).flatMap((script) => {
     const stage = STAGES.get(script.type);
     if (!stage) {
