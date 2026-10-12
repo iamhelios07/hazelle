@@ -12,6 +12,8 @@ export const timeOfDay = (at: number) => clock.format(at);
 
 export const monthDay = (at: number) => date.format(at);
 
+export const moment = (at: number) => `${monthDay(at)} ${timeOfDay(at)}`;
+
 export function ago(at: number, now = Date.now()): string {
   if (now - at < 60_000) return '방금';
   const days = daysBetween(at, now);

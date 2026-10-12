@@ -5,7 +5,7 @@ import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
 import { Button, Callout, Section, Text } from '../ui';
-import { moment } from './time';
+import { moment } from '../common/time';
 
 // Whole-service totals are intentionally independent of list navigation and account/notice actions. A refresh
 // walks bounded usage pages, retains just their sums and can stop without issuing the next page.

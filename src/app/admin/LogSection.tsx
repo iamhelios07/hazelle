@@ -3,8 +3,8 @@ import { sizeText } from '../common/size';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
 import { Button, Callout, Empty, List, ListItem, Section } from '../ui';
-import { restoreError } from './RestoresDialog';
-import { moment } from './time';
+import { restoreError } from '../common/RestoresDialog';
+import { moment } from '../common/time';
 import { usePages } from '../common/useLoaded';
 import { ACTS } from '../common/acts';
 

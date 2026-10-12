@@ -1,4 +1,4 @@
-import type { BackupWarning, AccountState, RestoreAction, RestorePhase } from '../contracts/admin';
+import type { BackupWarning, AccountState } from '../contracts/admin';
 import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 import { page } from './pages';
 
@@ -98,41 +98,6 @@ export const sendNotice = (to: string | null, text: string) => api<undefined>('P
 export const setCaps = (account: string, caps: Pick<AdminAccount, 'bytesCap' | 'fileBytesCap'>) => api<undefined>('PUT', `admin/accounts/${account}/caps`, caps);
 // Also finishes the deletion of a leaving account.
 export const removeAccount = (account: string) => api<undefined>('DELETE', `admin/accounts/${account}`, undefined, undefined, SLOW_ROUTE_WAIT);
-
-// at: the time asked for, null for an undo. targetAt: when the snapshot it rewinds to was taken, null until chosen.
-// verified: the account was seen open again after done. actions: what the server allows in this phase.
-export type Restore = {
-  id: number;
-  reportId: number;
-  at: number | null;
-  undoes: number | null;
-  targetAt: number | null;
-  phase: RestorePhase;
-  verified: boolean;
-  error: string | null;
-  createdAt: number;
-  updatedAt: number;
-  canUndo: boolean;
-  undoExpiresAt: number | null;
-  actions: RestoreAction[];
-};
-export type RestoreRun = Pick<Restore, 'id' | 'phase' | 'verified' | 'error'>;
-export type RestoreAsk = { report: number; at: number } | { report: number; undoes: number };
-
-export async function readRestores(account: string): Promise<ApiResult<Restore[]>> {
-  const answer = await api<{ restores: Restore[] }>('GET', `admin/accounts/${account}/restores`);
-  return answer.ok ? { ok: true, data: answer.data.restores } : answer;
-}
-
-// When the snapshot a restore to `at` would land on was taken; null for none.
-export async function readSnapshotTime(account: string, at: number): Promise<ApiResult<number | null>> {
-  const answer = await api<{ takenAt: number | null }>('GET', `admin/accounts/${account}/snapshot?at=${at}`);
-  return answer.ok ? { ok: true, data: answer.data.takenAt } : answer;
-}
-
-// The server runs the restore in this request, so the answer comes when it is done or stopped.
-export const beginRestore = (account: string, ask: RestoreAsk) => api<RestoreRun>('POST', `admin/accounts/${account}/restores`, ask, undefined, SLOW_ROUTE_WAIT);
-export const continueRestore = (restore: number, action: RestoreAction) => api<RestoreRun>('POST', `admin/restores/${restore}/${action}`, undefined, undefined, SLOW_ROUTE_WAIT);
 
 export const readReports = (before: number | null) => page<'reports', Report>('admin/reports', 'reports', before);
 // reply: a notice to the report's sender, sent with resolving it; blank sends none.

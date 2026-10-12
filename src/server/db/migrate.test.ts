@@ -55,6 +55,21 @@ describe('the migration runner', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM reports').get()).toEqual({ n: 2 });
   });
 
+  it('lets a restore have no report, keeping its rows and never reusing an id', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON');
+    migrate(db, dir(Object.fromEntries(['0001_baseline.sql', '0002_models_dev.sql', '0003_shares.sql', '0004_picture_removals.sql'].map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')]))));
+    db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('a', 'jin', 'h', 1, 'inc', 't');
+      INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (4, 'inc', 7, 2, 't2', 'done', 3, 3);
+      INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (9, 'inc', 8, 2, 't3', 'done', 3, 3);
+      DELETE FROM restores WHERE id = 9`);
+    expect(migrate(db, 'migrations').applied).toContain('0005_self_restores.sql');
+    expect(db.prepare('SELECT id, report_id, timeline FROM restores').all()).toEqual([{ id: 4, report_id: 7, timeline: 't2' }]);
+    expect(db.prepare(`INSERT INTO restores (incarnation, at, timeline, phase, created_at, updated_at) VALUES ('inc', 2, 't4', 'begun', 5, 5) RETURNING id, report_id`).get()).toEqual({ id: 10, report_id: null });
+    db.exec(`DELETE FROM accounts WHERE id = 'a'`);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM restores').get()).toEqual({ n: 0 });
+  });
+
   it('upgrades a populated database with the files it lacks, each whole or not at all', () => {
     const db = new DatabaseSync(':memory:');
     const first = dir({ '0001_a.sql': 'CREATE TABLE a (x);' });

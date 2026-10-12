@@ -11,7 +11,7 @@ import { FileSection } from './FileSection';
 import { LogSection } from './LogSection';
 import { ReportsSection, type AccountReport } from './ReportsSection';
 import { ShareSection } from './ShareSection';
-import { RestoresDialog, type Restoring } from './RestoresDialog';
+import { RestoresDialog, type Operated } from '../common/RestoresDialog';
 import { ServiceSection } from './ServiceSection';
 import { useLoaded } from '../common/useLoaded';
 import { moderates } from './moderation';
@@ -30,7 +30,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
   const service = useLoaded(readService);
   const accounts = useAccounts();
   const [acts, setActs] = useState(0);
-  const [restoring, setRestoring] = useState<Restoring | null>(null);
+  const [restoring, setRestoring] = useState<Operated | null>(null);
   const acted = () => setActs((count) => count + 1);
   const moderating = service.data ? moderates(service.data) : service.failure !== null;
   const shared = service.data ? service.data.people > 1 : service.failure !== null;
@@ -51,7 +51,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
         <FileSection onActed={acted} />
       </>}
       <LogSection key={acts} />
-      {restoring && <RestoresDialog key={restoring.accountId} restoring={restoring} onClose={() => setRestoring(null)} onActed={() => actedOnAccount(restoring.accountId)} />}
+      {restoring && <RestoresDialog key={restoring.accountId} operated={restoring} onClose={() => setRestoring(null)} onActed={() => actedOnAccount(restoring.accountId)} />}
     </Screen>
   );
 }

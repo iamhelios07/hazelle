@@ -1,13 +1,12 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { type AccountState, type RestorePhase, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
-import { RETENTION_MS, StoreUnavailable } from './db/account-db';
+import { type AccountState, type RestoreAction, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
 import { SHARE_ID } from '../contracts/shares';
 import { blockFiles, fileBlocks } from './files';
 import { serveShareFile } from './shares';
 import type { Db, SqlValue, Statement } from './db/service-db';
-import { fail, ID, readObject, refused, type AppEnv, type Services } from './http';
-import { beginRestore, cancelRestore, leaveAccount, refuseLeft, restoreActions, runRestore, store, undoable } from './lifecycle';
+import { fail, ID, readObject, type AppEnv, type Services } from './http';
+import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
 import { requireSession } from './session';
 
 // Reports are plaintext rows no byte cap counts, so one account's unresolved ones are bounded.
@@ -297,70 +296,24 @@ admin.post('/accounts/:id/restores', async (c) => {
   const id = c.req.param('id');
   const body = await readObject(c);
   const report = body?.report;
-  const at = body?.at;
-  const undoes = body?.undoes;
-  const from = at === undefined ? (positive(undoes) ? { undoes } : null) : undoes === undefined && count(at) ? { at } : null;
+  const from = restoreFrom(body);
   if (!ID.test(id) || !positive(report) || !from) return fail(c, 400, 'bad-input');
-  const begun = await beginRestore(c.env, id, report, from);
-  if ('refused' in begun) return fail(c, REFUSAL_STATUS[begun.refused], begun.refused);
-  return c.json(await runRestore(c.env, begun.begun));
+  return answerBegin(c, id, report, from);
 });
 
 const incarnationOf = (c: Context<AppEnv>, id: string) => c.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
 
-const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 400, 'bad-time': 400, 'cannot-undo': 400 } as const;
-
-// What a restore to the time would land on, asked before the operator confirms it. takenAt: when that snapshot was
-// taken; null for none, which the restore would answer too-early.
-admin.get('/accounts/:id/snapshot', async (c) => {
-  const id = c.req.param('id');
-  const at = Number(c.req.query('at'));
-  if (!ID.test(id) || !count(at)) return fail(c, 400, 'bad-input');
-  const incarnation = await incarnationOf(c, id);
-  if (incarnation === null) return fail(c, 404, 'not-found');
-  try {
-    const snapshot = await c.env.stores.snapshotAt(incarnation, at);
-    return c.json({ takenAt: snapshot?.takenAt ?? null });
-  } catch (error) {
-    if (error instanceof StoreUnavailable) return refused(c, { unavailable: true });
-    throw error;
-  }
+admin.get('/accounts/:id/points', async (c) => {
+  const points = await restorePoints(c.env.db, c.req.param('id'));
+  return points ? c.json({ points }) : fail(c, 404, 'not-found');
 });
 
-// Newest first. targetAt: when the snapshot it rewinds to was taken, null until it is chosen.
-admin.get('/accounts/:id/restores', async (c) => {
-  const { results } = await c.env.db.prepare(
-    `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
-       (SELECT taken_at FROM snapshots WHERE id = r.target) AS targetAt, r.ended_at, ${undoable('r.id', '?2')} AS canUndo
-     FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
-  )
-    .bind(c.req.param('id'), Date.now())
-    .all<{ phase: RestorePhase; verified: number; canUndo: number; ended_at: number | null }>();
-  return c.json({
-    restores: results.map(({ ended_at, canUndo, ...row }) => ({
-      ...row,
-      verified: Boolean(row.verified),
-      canUndo: Boolean(canUndo),
-      undoExpiresAt: canUndo ? ended_at! + RETENTION_MS : null,
-      actions: restoreActions(row.phase, Boolean(row.verified)),
-    })),
-  });
-});
+admin.get('/accounts/:id/restores', async (c) => c.json({ restores: await restoresOf(c.env.db, c.req.param('id')) }));
 
-// Resume and finalize both run the operation on from its phase: they are retries of it.
-admin.post('/restores/:id/:action{resume|finalize}', async (c) => {
+admin.post('/restores/:id/:action{resume|finalize|cancel}', async (c) => {
   const id = Number(c.req.param('id'));
   if (!positive(id)) return fail(c, 400, 'bad-input');
-  const ran = await runRestore(c.env, id);
-  return ran ? c.json(ran) : fail(c, 404, 'not-found');
-});
-
-admin.post('/restores/:id/cancel', async (c) => {
-  const id = Number(c.req.param('id'));
-  if (!positive(id)) return fail(c, 400, 'bad-input');
-  const ran = await cancelRestore(c.env, id);
-  if (ran === 'too-late') return fail(c, 409, 'cannot-cancel');
-  return ran ? c.json(ran) : fail(c, 404, 'not-found');
+  return answerAction(c, id, c.req.param('action') as RestoreAction);
 });
 
 admin.get('/service', async (c) => {
