@@ -11,15 +11,14 @@ import { Button, Callout, NumberInput, Section, SettingGroup, SettingRow } from 
 import { CAP_ERROR, capText, typedCap, typedCount } from './bytes';
 import { NoticeDialog } from './NoticeDialog';
 
-// The operator raises the cap in steps, so each cap sits with the count it bounds.
-export function ServiceSection({ service, onSaved, onNoticed }: { service: Service; onSaved: () => void; onNoticed: () => void }) {
+// The operator raises the cap in steps, so each cap sits with the count it bounds. onNoticed: null where no one else
+// would read a notice (moderation).
+export function ServiceSection({ service, onSaved, onNoticed }: { service: Service; onSaved: () => void; onNoticed: (() => void) | null }) {
   // null: not typed in, so the field shows the server's value.
   const [seats, setSeats] = useState<string | null>(null);
   const [cap, setCap] = useState<string | null>(null);
   const [fileCap, setFileCap] = useState<string | null>(null);
   const { busy, failure, run } = useAttempt();
-  const toast = useToast();
-  const [writing, setWriting] = useState(false);
   const signupCap = seats === null ? service.signupCap : typedCount(seats);
   const accountBytesCap = cap === null ? service.accountBytesCap : typedCap(cap);
   const accountFileBytesCap = fileCap === null ? service.accountFileBytesCap : typedCap(fileCap);
@@ -67,6 +66,23 @@ export function ServiceSection({ service, onSaved, onNoticed }: { service: Servi
           error={accountFileBytesCap === undefined ? CAP_ERROR : undefined}
           control={<NumberInput label="계정당 이미지 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}
         />
+      </SettingGroup>
+      {onNoticed && <NoticeEveryone onNoticed={onNoticed} />}
+      {failure && (
+        <Callout tone="warn" alert>
+          {failure}
+        </Callout>
+      )}
+    </Section>
+  );
+}
+
+function NoticeEveryone({ onNoticed }: { onNoticed: () => void }) {
+  const toast = useToast();
+  const [writing, setWriting] = useState(false);
+  return (
+    <>
+      <SettingGroup label={NOTICES.send}>
         <SettingRow
           label={`모두에게 ${NOTICES.send}`}
           help="지금 있는 계정이 모두 받아요."
@@ -91,11 +107,6 @@ export function ServiceSection({ service, onSaved, onNoticed }: { service: Servi
           onClose={() => setWriting(false)}
         />
       )}
-      {failure && (
-        <Callout tone="warn" alert>
-          {failure}
-        </Callout>
-      )}
-    </Section>
+    </>
   );
 }

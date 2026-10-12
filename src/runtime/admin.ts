@@ -5,14 +5,18 @@ import { page } from './pages';
 // Only the operator's account (the installation's first signup, server/accounts) passes; any other is answered
 // not-admin.
 
-// The caps every account has unless given its own; null is no cap. fileBytes: every account's pictures together.
-// backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says needs the
-// operator (server/backup/freshness).
+// The caps every account has unless given its own; null is no cap. accounts: the rows the signup cap counts, a leaving one
+// too, since it holds its seat until removed. people: the accounts not leaving. pending: open reports plus held shares,
+// a held share counted again with its report, so it is only ever zero or not. fileBytes: every account's pictures
+// together. backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says
+// needs the operator (server/backup/freshness).
 export type Service = {
   signupCap: number;
   accountBytesCap: number | null;
   accountFileBytesCap: number | null;
   accounts: number;
+  people: number;
+  pending: number;
   fileBytes: number;
   backupAgeHours: number | null;
   diskFreePercent: number;

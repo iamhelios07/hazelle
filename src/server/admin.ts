@@ -366,7 +366,9 @@ admin.post('/restores/:id/cancel', async (c) => {
 admin.get('/service', async (c) => {
   const row = await c.env.db.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
-       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes
+       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COUNT(*) FROM accounts WHERE state != 'leaving') AS people,
+       (SELECT COUNT(*) FROM reports WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM shares WHERE held_at IS NOT NULL AND removed_at IS NULL) AS pending,
+       (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes
      FROM service`,
   ).first();
   return c.json({ ...row, ...(await c.env.backups.freshness(c.env, Date.now())) });

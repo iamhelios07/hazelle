@@ -63,6 +63,7 @@ describe('the operator', () => {
     ]);
     expect(answer.next).toBeNull();
     expect(await (await t.get('admin/usage', admin.cookie)).json()).toEqual({ accounts: 3, totals: { bytes: 40, disk: expect.any(Number), unread: 1, readAt: expect.any(Number) }, next: null });
+    expect(await (await t.get('admin/service', admin.cookie)).json()).toMatchObject({ accounts: 3, people: 2 });
   });
 
   it('bounds account and usage pages, continues tied timestamps, and refreshes one row without a service fan-out', async () => {
@@ -144,7 +145,7 @@ describe('the operator', () => {
     const admin = await operator();
     await stored(new Uint8Array([1, 2, 3]), admin.cookie);
     expect(await (await t.get('admin/service', admin.cookie)).json()).toEqual({
-      signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, fileBytes: 3, backupAgeHours: null, diskFreePercent: 50, warnings: [],
+      signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, people: 1, pending: 0, fileBytes: 3, backupAgeHours: null, diskFreePercent: 50, warnings: [],
     });
 
     expect((await t.put('admin/service', { signupCap: 1, accountBytesCap: 1000, accountFileBytesCap: 2000 }, admin.cookie)).status).toBe(204);

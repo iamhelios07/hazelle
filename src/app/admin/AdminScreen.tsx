@@ -14,6 +14,7 @@ import { ShareSection } from './ShareSection';
 import { RestoresDialog, type Restoring } from './RestoresDialog';
 import { ServiceSection } from './ServiceSection';
 import { useLoaded } from '../common/useLoaded';
+import { moderates } from './moderation';
 import { useAccounts } from './useAccounts';
 import { UsageSection } from './UsageSection';
 
@@ -23,13 +24,15 @@ const WARNINGS: Record<BackupWarning, string> = {
 };
 
 // Every act lands in the log, which is asked again after one. Only the changed account's row is asked again;
-// whole-service usage is refreshed separately by the operator.
+// whole-service usage is refreshed separately by the operator. A failed service read shows the moderation sections: it
+// cannot tell that nothing waits in them.
 export function AdminScreen({ back }: { back: Back | null }) {
   const service = useLoaded(readService);
   const accounts = useAccounts();
   const [acts, setActs] = useState(0);
   const [restoring, setRestoring] = useState<Restoring | null>(null);
   const acted = () => setActs((count) => count + 1);
+  const moderating = service.data ? moderates(service.data) : service.failure !== null;
   const actedOnAccount = (id?: string) => {
     if (id) void accounts.refresh(id).then((removed) => { if (removed) service.reload(); });
     acted();
@@ -38,12 +41,14 @@ export function AdminScreen({ back }: { back: Back | null }) {
     <Screen width="form" top={<NavBar title={PAGES.admin} {...backBar(back)} />}>
       {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
       {service.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: service.reload }}>{service.failure}</Callout>}
-      {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} onNoticed={acted} />}
+      {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} onNoticed={moderating ? acted : null} />}
       <UsageSection />
       <AccountsSection loaded={accounts} onActed={actedOnAccount} onRestores={(account) => setRestoring({ ...account, report: null })} />
-      <ReportsSection onActed={acted} onRestore={(report: AccountReport) => setRestoring({ accountId: report.accountId, username: report.username, report })} />
-      <ShareSection onActed={acted} />
-      <FileSection onActed={acted} />
+      {moderating && <>
+        <ReportsSection onActed={acted} onRestore={(report: AccountReport) => setRestoring({ accountId: report.accountId, username: report.username, report })} />
+        <ShareSection onActed={acted} />
+        <FileSection onActed={acted} />
+      </>}
       <LogSection key={acts} />
       {restoring && <RestoresDialog key={restoring.accountId} restoring={restoring} onClose={() => setRestoring(null)} onActed={() => actedOnAccount(restoring.accountId)} />}
     </Screen>
