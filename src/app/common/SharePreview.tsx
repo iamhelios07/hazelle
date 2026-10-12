@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Opened, ShareSource } from '../../runtime/share';
 import { writeShared } from '../../runtime/share';
-import { Avatar, Button, FaceRow, Row, Stack, Text } from '../ui';
+import { Avatar, Button, FaceRow, Intro, Row, Stack, Text } from '../ui';
 import { ACTS } from './acts';
 import { downloadOutput, fileNamed } from './download';
 import { describeFailure } from './failure';
@@ -43,8 +43,7 @@ export function SharePreview({ source, opened, first, onDownloaded, failed }: Pr
   return (
     <Stack gap="group">
       <FaceRow face={<Avatar face={preview.name || '?'} image={face} size="lg" />}>
-        <Text>{preview.name}</Text>
-        {preview.creator && <Text variant="note">제작자 {preview.creator}</Text>}
+        <Intro title={preview.name}>{preview.creator && `제작자 ${preview.creator}`}</Intro>
       </FaceRow>
       {preview.notes && <Text variant="prose">{preview.notes}</Text>}
       <Row kind="actions">
