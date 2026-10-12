@@ -1,7 +1,7 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
-import { CAST_MAX, foldTree, shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
+import { CAST_MAX, foldTree, shown, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import type { Illustration } from '../model/illustration';
 import { live, type Asset } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
@@ -41,12 +41,14 @@ export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, 
   // A moved chat's greeting takes its first message's time, so it does not read as newer than what follows it.
   const entries = greetings ? greetingWrites(id, greetings, messages[0]?.at ?? Date.now()) : [];
   let follows = greetings ? greetings.choices[greetings.selected]!.id : null;
-  for (const { role, text, at, reasoning } of messages) {
+  const bookmarks: Bookmark[] = [];
+  for (const { role, text, at, reasoning, bookmark } of messages) {
     const message = crypto.randomUUID();
     entries.push({ type: 'create', kind: 'entry', id: message, parent: id, value: { type: 'message', role, at, text, receipt: null, follows, staged: true, ...(reasoning && { reasoning }) } });
+    if (bookmark) bookmarks.push({ message, ...bookmark });
     follows = message;
   }
-  return { entries, root: { type: 'create', kind: 'chat', id, parent: null, value: chat } };
+  return { entries, root: { type: 'create', kind: 'chat', id, parent: null, value: withBookmarks(chat, bookmarks) } };
 }
 
 // Greetings are saved as the card wrote them; engine/render fills them each time they are shown or sent.
@@ -77,7 +79,8 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const line = item.messages.slice(0, upTo + 1).map((each, index, all) => ({ message: each, follows: index === 0 ? null : shown(all[index - 1]!).id }));
     const { writes, after, messages, versions } = copyWrites(id, line, memory, illustrations, inlays);
     writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
-    writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
+    const chat = withBookmarks(item.chat, carried(item.chat.bookmarks, messages));
+    writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
     const created = await store.batch(writes);
     return created.ok ? { ok: true, data: { id, from: item.id, messages: Object.fromEntries(messages), versions: Object.fromEntries(versions) } } : created;
   });
@@ -104,7 +107,7 @@ export async function importChat({ store, files }: Pick<Session, 'store' | 'file
   const illustrations = resealed(file.illustrations.map(({ value }) => value));
   const inlays = resealed(file.inlays.map(({ value }) => value));
   const { writes, messages } = copyWrites(id, foldTree(file.entries), file.memory?.value, illustrations, inlays);
-  const { prompt, persona, cast = [], models, origin, ...value } = without(without(file.chat.value, 'deleted'), 'purging');
+  const { prompt, persona, cast = [], models, origin, bookmarks, ...value } = without(without(file.chat.value, 'deleted'), 'purging');
   const held = (kind: 'prompt' | 'persona' | 'character' | 'chat', ref: string | undefined): ref is string => ref !== undefined && live(store.get(kind, ref)) !== null;
   const kept = cast.filter((each) => held('character', each));
   const roles = Object.entries(models).filter(([, ref]) => ref && !('kind' in routeOf(store, ref)));
@@ -126,7 +129,7 @@ export async function importChat({ store, files }: Pick<Session, 'store' | 'file
     pictures: file.illustrations.length - illustrations.length,
     inlays: file.inlays.length - inlays.length,
   };
-  writes.push({ type: 'create', kind: 'chat', id, parent: null, value: withCast(withPersona(store, chat), character, kept) });
+  writes.push({ type: 'create', kind: 'chat', id, parent: null, value: withBookmarks(withCast(withPersona(store, chat), character, kept), carried(bookmarks, messages)) });
   const failure = await saveNewChats(store, [id], writes);
   return failure ?? { ok: true, data: { id, dropped } };
 }
@@ -263,6 +266,31 @@ export function withCast<T extends Pick<Chat, 'cast'>>(chat: T, character: strin
 }
 
 export const setCast = (store: ObjectStore, chat: string, ids: string[]) => store.update('chat', chat, (current) => withCast(current, current.character, ids));
+
+const withBookmarks = <T extends Pick<Chat, 'bookmarks'>>(chat: T, bookmarks: Bookmark[]): T => (bookmarks.length ? { ...chat, bookmarks } : without(chat, 'bookmarks'));
+
+// A copy's bookmarks: those of the messages it copied, under their copies' ids.
+const carried = (bookmarks: Bookmark[] = [], messages: ReadonlyMap<string, string>) =>
+  bookmarks.flatMap((bookmark) => (messages.has(bookmark.message) ? [{ ...bookmark, message: messages.get(bookmark.message)! }] : []));
+
+// on, not a flip: a conflict applies the change again to the copy it lost to.
+export const setBookmark = (store: ObjectStore, chat: string, message: string, on: boolean) =>
+  store.update('chat', chat, (current) => {
+    const bookmarks = current.bookmarks ?? [];
+    const others = bookmarks.filter((bookmark) => bookmark.message !== message);
+    return withBookmarks(current, !on ? others : others.length < bookmarks.length ? bookmarks : [...bookmarks, { message }]);
+  });
+
+export const nameBookmark = (store: ObjectStore, chat: string, message: string, name: string) =>
+  store.update('chat', chat, (current) => {
+    const bookmarks = current.bookmarks ?? [];
+    if (!bookmarks.some((bookmark) => bookmark.message === message)) return null;
+    const named = (bookmark: Bookmark): Bookmark => (name.trim() ? { ...bookmark, name: name.trim() } : without(bookmark, 'name'));
+    return { ...current, bookmarks: bookmarks.map((bookmark) => (bookmark.message === message ? named(bookmark) : bookmark)) };
+  });
+
+// Every message a version switch can show, for the bookmarks off the line shown (app/chat/bookmarks).
+export const versionTree = (store: ObjectStore, chat: string) => foldTree(store.children('entry', chat));
 
 const append = (store: ObjectStore, chat: string, entry: Entry, id?: string) => store.create('entry', entry, { id, parent: chat });
 

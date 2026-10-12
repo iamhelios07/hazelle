@@ -1,15 +1,16 @@
-import { Bot, GitBranch, ImagePlus, Info, Languages, Package, Pin, PinOff, SquarePen } from 'lucide-react';
+import { Bookmark, Bot, GitBranch, ImagePlus, Info, Languages, Package, Pin, PinOff, SquarePen } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
-import { firstLine, shown } from '../../model/chat';
+import { firstLine, shown, type Message } from '../../model/chat';
 import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import type { Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
+import { BOOKMARK } from '../common/words';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
@@ -52,6 +53,7 @@ type Props = {
   busy: boolean;
   editing: { text: string; translation: string | null } | null;
   pinned: boolean;
+  bookmarked: boolean;
   // One of the messages a memory record was made from, marked as StoryMessage's found; the collection seeks the first.
   found: number;
   // The search bar's current hit, marked until the bar moves on or closes.
@@ -71,7 +73,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -300,6 +302,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       )}
       {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message)} />}
       {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
+      {!failed && <IconButton icon={Bookmark} size="xs" label={BOOKMARK} pressed={bookmarked} onClick={() => actions.bookmark(message.id)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />}
       {statusTool}
@@ -350,7 +353,7 @@ function sameRow(previous: Props, next: Props): boolean {
 }
 
 // The name a row goes by: the persona's for the user's, else the character's, or with none the model's.
-export const speaker = (message: Shown, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>
+export const speaker = (message: Message, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>
   message.role === 'user' ? (me?.name ?? NO_PERSONA) : (character?.name ?? shown(message).receipt?.modelName ?? modelName ?? '모델');
 
 // Without the bot's style, only the chat's own pictures show: its inlays, whose markup alone the plain display keeps.

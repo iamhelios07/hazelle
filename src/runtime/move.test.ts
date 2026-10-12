@@ -255,6 +255,16 @@ describe('importRisuChats', () => {
     await server.hold(store, imported.data[0]!);
     expect(fold(store.children('entry', imported.data[0]!)).map((message) => [shown(message).text, shown(message).staged])).toEqual([['안녕', true], ['반가워 [HP 7]', true]]);
   });
+
+  it("marks the messages Risu bookmarked, with the names it gave", async () => {
+    const { store } = await server.account();
+    const [hello, reply] = luna.chats[0]!.messages;
+    const imported = await importRisuChats(store, null, [{ ...luna.chats[0]!, messages: [{ ...hello!, bookmark: { name: '첫인사' } }, { ...reply!, bookmark: {} }] }]);
+    if (!imported.ok) throw new Error(imported.error);
+    await server.hold(store, imported.data[0]!);
+    const messages = fold(store.children('entry', imported.data[0]!));
+    expect(store.get('chat', imported.data[0]!)!.value.bookmarks).toEqual([{ message: messages[0]!.id, name: '첫인사' }, { message: messages[1]!.id }]);
+  });
 });
 
 describe('fillPictures', () => {

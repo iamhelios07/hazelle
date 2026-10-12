@@ -26,7 +26,13 @@ export type Chat = Mark & {
   // 등장인물 (design §6.9): characters whose description, lorebook and pictures join the chat's, in the order added, never
   // the chat's own. One gone or in 휴지통 reads as absent.
   cast?: string[];
+  // 북마크, by message, in the order marked. One whose message is deleted or on no version's line stays stored and reads
+  // as absent (app/chat/bookmarks bookmarkRows), so 되돌리기 of a deletion brings it back.
+  bookmarks?: Bookmark[];
 };
+
+// name: only one the user gave.
+export type Bookmark = { message: string; name?: string };
 
 export const CAST_MAX = 5;
 

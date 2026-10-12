@@ -11,9 +11,11 @@ import { chatModel, setChatModel, withMainModel } from '../../runtime/assignment
 import { illustrateSwitches, resetToggles, setIllustrate, setOwnIllustrate, setOwnTranslate, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import { removeIllustration, restoreIllustration, type Drawing } from '../../runtime/illustrate';
 import {
+  nameBookmark,
   removeChat,
   renameChat,
   restoreChat,
+  setBookmark,
   setCast,
   setChatNote,
   setChatPersona,
@@ -45,6 +47,7 @@ import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui';
 import { useSendNotes } from './useSendNotes';
+import type { BookmarkRow } from './bookmarks';
 import { useDraft } from './useDraft';
 import { pickStarted } from './infoReply';
 import { toggleRows, toggleSaveKey } from './toggles';
@@ -160,13 +163,17 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
   // Chat-owned panels and editors take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | Side | null>(null);
+  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | Side | null>(null);
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
   const { found, search, actions: searchActions } = useChatSearch(messages, texts, translating, flipped, seekTo);
+  const bookmarked = useMemo(() => new Set(chat.bookmarks?.map(({ message }) => message)), [chat.bookmarks]);
+  // A bookmark after another version, seeked once the switch to it puts it in the story: a seek to a row not there yet
+  // is lost.
+  const [seeking, setSeeking] = useState<string | null>(null);
   const { actions: statusActions, ...status } = useChatStatus(chat, shelf?.character ?? null, view, messages);
   const { editing, actions: editActions } = useMessageEdit(id, messages, (message) => ask({ kind: 'regenerate', message: message.id }));
   // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
@@ -177,6 +184,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   useEffect(() => {
     if (id) session.memory.check(id);
   }, [id]);
+
+  useEffect(() => {
+    if (seeking === null || !messages.some((message) => message.id === seeking)) return;
+    searchActions.find([seeking]);
+    setSeeking(null);
+  }, [messages, seeking]);
 
   useEffect(() => {
     for (const drawing of illustrating.values()) {
@@ -395,6 +408,36 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (id) void run(id).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
   }
 
+  function bookmark(message: string) {
+    if (id) void setBookmark(store, id, message, !bookmarked.has(message)).then((saved) => saved.ok || toast.failed(saved));
+  }
+
+  // false: it stays where it is.
+  function showBookmark({ message, to }: BookmarkRow): boolean {
+    if (!id) return false;
+    if (!to.length) {
+      searchActions.find([message.id]);
+      return true;
+    }
+    if (busy) {
+      toast.show('응답이 끝나면 다른 버전으로 넘어갈 수 있어요.');
+      return false;
+    }
+    setSeeking(message.id);
+    for (const { message: above, index } of to) {
+      void pickVersion(session, id, above, index).then((saved) => {
+        if (saved.ok) return;
+        setSeeking(null);
+        toast.failed(saved);
+      });
+    }
+    return true;
+  }
+
+  function renameBookmark(message: string, name: string) {
+    if (id) void nameBookmark(store, id, message, name).then((saved) => saved.ok || toast.failed(saved));
+  }
+
   function rename(name: string) {
     if (!id) return;
     void renameChat(store, id, name).then((saved) => saved.ok || toast.failed(saved));
@@ -449,6 +492,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     branching,
     panel,
     tools,
+    bookmarked,
     dialog,
     modelMenu,
     castMenu,
@@ -481,6 +525,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       copy,
       press: (button: BotButton | null) => void press(button),
       branch,
+      bookmark,
+      bookmarks: () => setPanel((current) => (current?.kind === 'bookmarks' ? null : { kind: 'bookmarks' })),
+      showBookmark,
+      renameBookmark,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
       info: (reply: string) => {

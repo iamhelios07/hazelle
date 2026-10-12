@@ -109,7 +109,8 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
   }
   if (list(chat.localLore).length > 0) add(missed, 'chat-lore');
   if (text(chat.supaMemoryData).trim() || [chat.hypaV2Data, chat.hypaV3Data].some(holdsData)) add(missed, 'memory');
-  add(missed, 'bookmark', list(chat.bookmarks).length);
+  const marked = new Set(list(chat.bookmarks).filter((id) => typeof id === 'string'));
+  const names = record(chat.bookmarkNames);
   return {
     title: text(chat.name),
     note: note.trim() ? note : null,
@@ -124,7 +125,8 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
       // Risu keeps a reply's reasoning inside its text as <Thoughts> blocks, and takes them out again before it draws or
       // sends the text (ParseMarkdown, and the prompt builder).
       const { text: said, reasoning } = splitThoughts(text(message.data));
-      return { role: message.role === 'user' ? 'user' : 'assistant', text: said, at, ...(reasoning && { reasoning }) };
+      const name = typeof message.chatId === 'string' && marked.has(message.chatId) ? text(names[message.chatId]).trim() : null;
+      return { role: message.role === 'user' ? 'user' : 'assistant', text: said, at, ...(reasoning && { reasoning }), ...(name !== null && { bookmark: name ? { name } : {} }) };
     }),
   };
 }

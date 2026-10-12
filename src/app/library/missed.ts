@@ -23,7 +23,6 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
   memory: (count) => `Risu 장기 기억 ${count}개`,
   inlay: (count) => `메시지 속 이미지 ${count}개`,
   'chat-folder': (count) => `채팅 폴더 ${count}개`,
-  bookmark: (count) => `북마크 ${count}개`,
   'hidden-message': (count) => `숨김·코멘트 메시지 ${count}개(일반 메시지로 들어옴)`,
   'cold-missing': (count) => `백업에 없는 대화 ${count}개`,
   'missing-picture': (count) => `백업에 없는 이미지 ${count}개`,

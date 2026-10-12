@@ -119,8 +119,9 @@ export type BackupSource = { size: number; read(offset: number, length: number):
 export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string };
 
 // Text as Risu stored it, already past the bot's input and output scripts.
-// reasoning: what Risu kept inside the text as <Thoughts> blocks, taken out of it.
-export type RisuMessage = { role: 'user' | 'assistant'; text: string; at: number; reasoning?: string };
+// reasoning: what Risu kept inside the text as <Thoughts> blocks, taken out of it. bookmark: Risu's on the message, with
+// its name if it had one.
+export type RisuMessage = { role: 'user' | 'assistant'; text: string; at: number; reasoning?: string; bookmark?: { name?: string } };
 export type RisuChat = {
   title: string;
   // 작가의 노트; null when Risu's is empty.
@@ -140,7 +141,6 @@ export const MOVE_UNSUPPORTED_KINDS = [
   'memory',
   'inlay',
   'chat-folder',
-  'bookmark',
   'hidden-message',
   'cold-missing',
   'missing-picture',
