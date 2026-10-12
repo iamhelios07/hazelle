@@ -40,7 +40,7 @@ test('a shared link opens signed out, gives its file, and a report holds it', as
     await guest.addInitScript('delete window.showSaveFilePicker');
     await guest.goto(link);
     await expect(guest.getByText('Sora', { exact: true })).toBeVisible();
-    await expect(guest.getByText('제작자 e2e-maker', { exact: true })).toBeVisible();
+    await expect(guest.getByText(/^제작자 e2e-maker · 받은 횟수 0$/)).toBeVisible();
     const saved = guest.waitForEvent('download');
     await guest.getByRole('button', { name: '파일로 받기', exact: true }).click();
     const file = await saved;
@@ -54,7 +54,7 @@ test('a shared link opens signed out, gives its file, and a report holds it', as
     await expect(page.getByRole('dialog', { name: '가져왔어요', exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
     await guest.reload();
-    await expect(guest.getByText(/^받은 횟수 2 · /)).toBeVisible();
+    await expect(guest.getByText(/받은 횟수 2$/)).toBeVisible();
   });
 
   await test.step('report it, and the link holds', async () => {

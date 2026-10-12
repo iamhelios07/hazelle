@@ -5,14 +5,15 @@ import { Button, Intro, Portrait, Row, Stack, Text } from '../ui';
 import { ACTS } from './acts';
 import { downloadOutput, fileNamed } from './download';
 import { describeFailure } from './failure';
+import { count } from './typedNumber';
 import { SHARE } from './words';
 
 // What a share's version shows before anything is taken, on the link's page and in the operator's 열어 보기, with
-// 파일로 받기: the same charx 내보내기 writes. first: what comes before it in its row. onDownloaded: the file was written
-// whole.
-type Props = { source: ShareSource; opened: Opened; first?: ReactNode; onDownloaded?: () => void; failed: (failure: string) => void };
+// 파일로 받기: the same charx 내보내기 writes. first: what comes before it in its row. received: 받은 횟수, beside the
+// creator. onDownloaded: the file was written whole.
+type Props = { source: ShareSource; opened: Opened; first?: ReactNode; received?: number; onDownloaded?: () => void; failed: (failure: string) => void };
 
-export function SharePreview({ source, opened, first, onDownloaded, failed }: Props) {
+export function SharePreview({ source, opened, first, received, onDownloaded, failed }: Props) {
   const { preview } = opened;
   const [face, setFace] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,7 +44,7 @@ export function SharePreview({ source, opened, first, onDownloaded, failed }: Pr
   return (
     <Stack gap="group">
       <Portrait image={face} name={preview.name || '?'} />
-      <Intro title={preview.name}>{preview.creator && `제작자 ${preview.creator}`}</Intro>
+      <Intro title={preview.name}>{[preview.creator && `제작자 ${preview.creator}`, received !== undefined && `${SHARE.received} ${count(received)}`].filter(Boolean).join(' · ')}</Intro>
       {preview.notes && <Text variant="prose">{preview.notes}</Text>}
       <Row kind="actions">
         {first}

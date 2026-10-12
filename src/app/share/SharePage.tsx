@@ -6,11 +6,10 @@ import { countReceived, readShareLink, readShareState, reportShare, shareLink } 
 import { describeFailure } from '../common/failure';
 import { LegalNotice } from '../common/LegalNotice';
 import { SharePreview } from '../common/SharePreview';
-import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { ACTS } from '../common/acts';
 import { SHARE } from '../common/words';
-import { Brand, Button, Callout, Dialog, Divider, Intro, Row, Screen, Stack, Text, TextField } from '../ui';
+import { Brand, Button, Callout, Dialog, Divider, Intro, Screen, Stack, Text, TextField } from '../ui';
 import { holdPending, pendingFor } from '../common/sharePending';
 
 type View =
@@ -61,7 +60,19 @@ function SharePage({ id, shareKey }: { id: string; shareKey: string | null }) {
   };
 
   return (
-    <Screen top={<Brand />} width="narrow">
+    <Screen
+      top={
+        <>
+          <Brand />
+          {view.kind === 'live' && (
+            <Button variant="link" icon={Flag} onClick={() => setReporting(true)}>
+              {SHARE.report}
+            </Button>
+          )}
+        </>
+      }
+      width="narrow"
+    >
       {view.kind === 'loading' && <Text variant="note">불러오는 중…</Text>}
       {view.kind === 'failed' && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((held) => held + 1) }}>{view.failure}</Callout>}
       {view.kind === 'held' && <Intro title="멈춘 링크">{SHARE.heldNote}</Intro>}
@@ -73,17 +84,12 @@ function SharePage({ id, shareKey }: { id: string; shareKey: string | null }) {
             source={{ id, operator: false }}
             opened={view.opened}
             first={<Button onClick={bring}>{SHARE.bring}</Button>}
+            received={view.received}
             onDownloaded={received}
             failed={setFailure}
           />
           {failure && <Callout tone="warn" alert>{failure}</Callout>}
           {said && <Callout tone="success">{said}</Callout>}
-          <Row kind="spread">
-            <Text variant="note">{`${SHARE.received} ${count(view.received)} · 운영자가 검토하지 않은 내용이에요.`}</Text>
-            <Button variant="link" icon={Flag} onClick={() => setReporting(true)}>
-              {SHARE.report}
-            </Button>
-          </Row>
         </Stack>
       )}
       {reporting && view.kind === 'live' && shareKey !== null && (
