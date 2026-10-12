@@ -23,6 +23,13 @@ services:
       # a private address; every other such destination stays refused.
       HAZELLE_LOCAL_PROVIDERS: host.docker.internal:11434,host.docker.internal:1234,host.docker.internal:5001
       HAZELLE_ALERT_WEBHOOK: ${HAZELLE_ALERT_WEBHOOK:-}
+      # Pictures in R2 instead of the volume (README "Pictures in R2"); left empty, they stay on the volume.
+      HAZELLE_FILES_BUCKET: ${HAZELLE_FILES_BUCKET:-}
+      HAZELLE_FILES_R2_ENDPOINT: ${HAZELLE_FILES_R2_ENDPOINT:-}
+      HAZELLE_FILES_R2_BUCKET: ${HAZELLE_FILES_R2_BUCKET:-}
+      HAZELLE_FILES_R2_ACCESS_KEY_ID: ${HAZELLE_FILES_R2_ACCESS_KEY_ID:-}
+      HAZELLE_FILES_R2_SECRET_ACCESS_KEY: ${HAZELLE_FILES_R2_SECRET_ACCESS_KEY:-}
+      HAZELLE_FILES_CACHE_BYTES: ${HAZELLE_FILES_CACHE_BYTES:-}
     extra_hosts:
       - host.docker.internal:host-gateway
     logging: *logging

@@ -138,7 +138,7 @@ docker compose up -d
 
 ### Pictures in R2
 
-Pictures are stored in the volume by default. To keep them in a Cloudflare R2 bucket instead, put the values in `.env` beside the compose file and pass them through under the app's `environment` in `docker-compose.yml`:
+Pictures are stored in the volume by default. To keep them in a Cloudflare R2 bucket instead, put the values in `.env` beside the compose file, which passes them to the app:
 
 ```sh
 # .env
@@ -147,15 +147,6 @@ HAZELLE_FILES_R2_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
 HAZELLE_FILES_R2_BUCKET=<bucket>
 HAZELLE_FILES_R2_ACCESS_KEY_ID=<key id>
 HAZELLE_FILES_R2_SECRET_ACCESS_KEY=<secret>
-```
-
-```yaml
-# docker-compose.yml, services.app.environment
-HAZELLE_FILES_BUCKET: ${HAZELLE_FILES_BUCKET:-}
-HAZELLE_FILES_R2_ENDPOINT: ${HAZELLE_FILES_R2_ENDPOINT:-}
-HAZELLE_FILES_R2_BUCKET: ${HAZELLE_FILES_R2_BUCKET:-}
-HAZELLE_FILES_R2_ACCESS_KEY_ID: ${HAZELLE_FILES_R2_ACCESS_KEY_ID:-}
-HAZELLE_FILES_R2_SECRET_ACCESS_KEY: ${HAZELLE_FILES_R2_SECRET_ACCESS_KEY:-}
 ```
 
 The app keeps a cache of what it reads in the volume, up to `HAZELLE_FILES_CACHE_BYTES` (20 GiB by default, `0` for none). A missing or malformed value stops the app from starting. Switching does not move the pictures already stored; [`infra/README.md`](infra/README.md) "Pictures in R2" describes how the hosted machine moved them with `scripts/move-pictures-to-r2.sh`. Backup generations taken with R2 restore only with the same settings.

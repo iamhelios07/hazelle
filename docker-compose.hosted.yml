@@ -2,7 +2,8 @@
 #   hazelle-compose up -d   (installed by infra/cloud-init.yaml.tftpl)
 # /etc/hazelle/env holds HAZELLE_IMAGE (written by scripts/deploy.sh), HAZELLE_BACKUP_REMOTE, HAZELLE_ALERT_WEBHOOK and,
 # for pictures in R2 (infra/README.md "Pictures in R2"), HAZELLE_FILES_BUCKET=r2 with the HAZELLE_FILES_R2_* values and
-# optionally HAZELLE_FILES_CACHE_BYTES; left out, pictures stay on /data.
+# optionally HAZELLE_FILES_CACHE_BYTES, which docker-compose.yml passes through; left out, pictures stay on /data.
+# Copy this file and docker-compose.yml to /etc/hazelle together: the R2 keys reach the app only through the base file.
 services:
   app:
     ports: !reset []
@@ -11,12 +12,6 @@ services:
     environment:
       # No local model servers here: every plain-http or private destination is refused.
       HAZELLE_LOCAL_PROVIDERS: !reset null
-      HAZELLE_FILES_BUCKET: ${HAZELLE_FILES_BUCKET:-}
-      HAZELLE_FILES_R2_ENDPOINT: ${HAZELLE_FILES_R2_ENDPOINT:-}
-      HAZELLE_FILES_R2_BUCKET: ${HAZELLE_FILES_R2_BUCKET:-}
-      HAZELLE_FILES_R2_ACCESS_KEY_ID: ${HAZELLE_FILES_R2_ACCESS_KEY_ID:-}
-      HAZELLE_FILES_R2_SECRET_ACCESS_KEY: ${HAZELLE_FILES_R2_SECRET_ACCESS_KEY:-}
-      HAZELLE_FILES_CACHE_BYTES: ${HAZELLE_FILES_CACHE_BYTES:-}
     extra_hosts: !reset []
 
   backup:
