@@ -127,7 +127,7 @@ export function embedAnswer(route: Route, model: Model, payload: unknown, count:
   const parsed = embedsOf(route)?.parse(payload, count);
   if (!parsed) return null;
   const { vectors, usage, raw } = parsed;
-  const cost = route.type?.cost?.({ facts: { rawUsage: raw, finishReason: null, id: null }, usage, model }) ?? (model.price ? priceCost(model.price, usage, costUnit(route.type)) : null);
+  const cost = route.type?.cost?.({ facts: { rawUsage: raw, finishReason: null, id: null, tier: null }, usage, model }) ?? (model.price ? priceCost(model.price, usage, costUnit(route.type)) : null);
   return { vectors, usage, cost };
 }
 
@@ -141,6 +141,7 @@ function carries(route: Route, model: Model): Carries {
     reasoning: reasoning.budget || !route.type?.reasoningBudget ? reasoning : { ...reasoning, budget: { min: null, max: null } },
     // accepted null is unknown, not refused.
     cache: way ? way.accepted : false,
+    discount: route.type?.discount ? route.type.discount.accepted : false,
   };
 }
 
@@ -174,8 +175,12 @@ export function chatRequest(route: Route, request: ChatRequest): HttpRequest {
 }
 
 function codecRequest(route: Route, sent: ChatRequest): HttpRequest {
-  const { reasoning, maxOutput } = sent.settings;
-  const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
+  const { reasoning, maxOutput, discount } = sent.settings;
+  const lane = discount && route.type?.discount;
+  const fields = {
+    ...(reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {}),
+    ...(lane && lane.lane === 'tier' ? lane.fields : {}),
+  };
   const mark = cacheWay(route, sent.model)?.mark ?? null;
   if (maxOutput === undefined || !route.type?.outputLimit) return route.codec.chat(route.endpoint, sent, fields, mark);
   return route.codec.chat(route.endpoint, { ...sent, settings: { ...sent.settings, maxOutput: undefined } }, { ...fields, ...route.type.outputLimit(maxOutput) }, mark);

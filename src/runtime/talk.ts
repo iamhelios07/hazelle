@@ -305,6 +305,7 @@ export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
     firstTextMs: answer.firstTextMs,
     totalMs: answer.totalMs,
     cache: answer.cache?.cache ?? null,
+    ...(answer.discount && { discount: answer.discount }),
   };
 }
 

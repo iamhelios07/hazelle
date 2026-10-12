@@ -204,3 +204,18 @@ describe('a reply asked for whole', () => {
     expect((await whole(openRouter, { error: { message: 'Overloaded' } })).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Overloaded' } });
   });
 });
+
+describe('a discount lane’s cost', () => {
+  const priced: Model = { ...model, price: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: null, tiers: [], asOf: 1 } };
+  const openai = connection('openai');
+  const reply = (tier: string) =>
+    new Response(JSON.stringify({ id: 'r', service_tier: tier, choices: [{ message: { content: '안녕' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1_000_000, prompt_tokens_details: { cached_tokens: 500_000 }, completion_tokens: 1_000_000 } }), { headers: { 'content-type': 'application/json' } });
+
+  it('is halved only when the reply reports the lane served it', async () => {
+    const flex = await decodeStream(openai, priced, reply('flex'), new AbortController().signal, () => {});
+    expect(flex).toMatchObject({ discount: 'tier', cost: { amount: (1 + 0.25 + 8) / 2, source: 'price-list' } });
+    const standard = await decodeStream(openai, priced, reply('default'), new AbortController().signal, () => {});
+    expect(standard.discount).toBeUndefined();
+    expect(standard.cost).toMatchObject({ amount: 1 + 0.25 + 8 });
+  });
+});

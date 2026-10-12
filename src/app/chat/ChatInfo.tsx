@@ -7,7 +7,7 @@ import { useChatMemory, useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest } from './ChatSent';
 import { cost, seconds, speed, tokens } from '../common/receipt';
-import { UNKNOWN } from '../common/words';
+import { DISCOUNT, UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
 import type { OpenChat } from './useChat';
 
@@ -31,6 +31,7 @@ const outcomeFacts = (receipt: Receipt) => [
   finish(receipt),
   { label: '첫 토큰까지', value: seconds(receipt.firstTextMs) },
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
+  ...(receipt.discount ? [{ label: DISCOUNT, value: '받음' }] : []),
 ];
 const callFacts = (receipt: Receipt) => [
   { label: '입력', value: tokens(receipt.usage?.inputTokens ?? null) },

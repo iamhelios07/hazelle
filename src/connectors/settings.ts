@@ -24,6 +24,8 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   cache?: Cache;
   verbosity?: Verbosity;
   serviceTier?: ServiceTier;
+  // 할인 받기 (design §6.7): the connection type's discount lane (ConnectionType discount), where it has one.
+  discount?: true;
 };
 export type Cache = '5m' | '1h';
 export const VERBOSITY = ['low', 'medium', 'high'] as const;
@@ -49,6 +51,8 @@ export type Carries = {
   serviceTier: boolean;
   // Whether the route can mark cache points: true where every model on it takes them, null where some may not.
   cache: Accepts;
+  // The connection type's discount lane, false where it has none.
+  discount: Accepts;
 };
 
 // null is unknown: the screen says so ("받는지 알 수 없어요") and still lets it be set and sent. Only a
@@ -66,10 +70,11 @@ export type SettingsSchema = {
   cache: Accepts;
   verbosity: Accepts;
   serviceTier: Accepts;
+  discount: Accepts;
 };
 
 // left-out: the model does not take it, or not the level named. capped: brought within the model's bounds, to that value.
-export type Change = { setting: Setting | 'context' | 'cache'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
+export type Change = { setting: Setting | 'context' | 'cache' | 'discount'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
 export type Fitted = { settings: ModelSettings; changes: Change[] };
 
 // Catalogs list 'none' among the effort levels of a model whose reasoning can be turned off; here that
@@ -127,6 +132,7 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
     cache: carries.cache,
     verbosity: carries.verbosity ? takes('verbosity') : false,
     serviceTier: carries.serviceTier ? takes('serviceTier') : false,
+    discount: carries.discount,
   };
 }
 
@@ -136,7 +142,7 @@ const within = (value: number, rule: Bounds) => Math.min(Math.max(value, rule.mi
 export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   const sent: ModelSettings = { ...settings };
   const changes: Change[] = [];
-  const leave = (setting: Setting | 'context' | 'cache') => {
+  const leave = (setting: Extract<Change, { change: 'left-out' }>['setting']) => {
     delete sent[setting];
     changes.push({ setting, change: 'left-out' });
   };
@@ -157,6 +163,7 @@ export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   if (settings.cache && schema.cache === false) leave('cache');
   if (settings.verbosity && schema.verbosity === false) leave('verbosity');
   if (settings.serviceTier && schema.serviceTier === false) leave('serviceTier');
+  if (settings.discount && schema.discount === false) leave('discount');
   const { reasoning } = settings;
   if (reasoning?.kind === 'budget' && schema.reasoning.budget.accepted !== false) {
     const tokens = within(reasoning.tokens, schema.reasoning.budget);

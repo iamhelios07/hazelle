@@ -20,7 +20,7 @@ import { choices } from '../common/reading';
 import { typedText } from '../common/typed';
 import { useSearch } from '../common/useSearch';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, RESET, UNSET } from '../common/words';
+import { BIN_KEEPS, DISCOUNT, RESET, UNSET } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -199,6 +199,18 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     />
   );
 
+  // Shown only where a model on this 설정 has a discount lane, or while it is set, so a stored one is never hidden.
+  const discountRow = (shown.discount || callable.some((user) => user.schema.discount !== false)) && (
+    <SettingRow
+      key="discount"
+      label={DISCOUNT}
+      help="요금이 절반이 되는 대신 응답이 느려질 수 있어요"
+      changed={shown.discount !== undefined}
+      note={noteFor('discount')}
+      control={<Switch label={DISCOUNT} checked={shown.discount === true} onChange={(on) => set({ discount: on ? true : undefined })} />}
+    />
+  );
+
   const stopRow = (
     <SettingRow
       key="stop"
@@ -355,6 +367,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           {MAIN.map(numberRow)}
           {reasoningRow()}
           {cacheRow}
+          {discountRow}
         </SettingGroup>
       </Section>
 

@@ -206,3 +206,14 @@ describe('cache points', () => {
     expect(points).toEqual([true, true, true, false, false, true]);
   });
 });
+
+describe('할인 받기', () => {
+  it('asks OpenAI for flex only when switched on, and is not offered where the type has no lane', () => {
+    expect(body(connection('openai'), bare, { discount: true, maxOutput: 100 })).toMatchObject({ service_tier: 'flex' });
+    expect(body(connection('openai'), bare, {})).not.toHaveProperty('service_tier');
+    expect(modelSettings(connection('openai'), bare)!.discount).toBeNull();
+    expect(modelSettings(generic, bare)!.discount).toBe(false);
+    expect(body(generic, bare, { discount: true })).not.toHaveProperty('service_tier');
+    expect(fit(modelSettings(generic, bare)!, { discount: true }).changes).toEqual([{ setting: 'discount', change: 'left-out' }]);
+  });
+});

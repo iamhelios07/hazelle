@@ -106,7 +106,8 @@ export type MeterRequest = { request(secret: string): HttpRequest; parse(payload
 
 export type Phase = 'text' | 'reasoning';
 
-export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: string | null; id: string | null };
+// tier: the service tier the reply says served it; null where it names none.
+export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: string | null; id: string | null; tier: string | null };
 
 export type Terminal = { state: 'completed' } | { state: 'failed'; error: string };
 
@@ -125,7 +126,7 @@ export type Codec = {
   listModels(endpoint: Endpoint): HttpRequest;
   // null when the payload is not a model list at all, which is not the same as an empty one.
   parseModels(payload: unknown): Model[] | null;
-  carries: Omit<Carries, 'cache'>;
+  carries: Omit<Carries, 'cache' | 'discount'>;
   // null for a format with no cache mark of its own; a connection type may state one (ConnectionType cachePoints).
   cache: CacheWay | null;
   // The wire sends every system message ahead of the others (Messages' system field), so a provider's cache reads them
@@ -190,6 +191,8 @@ type TypeHooks = {
   // How its endpoint takes a cache point, per model, where the format has no mark of its own (chat completions).
   cachePoints?: (model: Model) => CacheWay;
   cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
+  // 할인 받기: the lane a 설정 묶음's discount switch takes; without one the switch is not offered.
+  discount?: Discount;
   // Asked with the stored credential, all at once. They are also the check that a pasted key works, where the model
   // list is public (OpenRouter's is): a key every one of them refuses is not saved.
   meters?: MeterRequest[];
@@ -205,6 +208,13 @@ type TypeHooks = {
   // An embedding call's purpose in a field of the provider's own, where its format has none (Voyage's input_type).
   embedPurpose?: (as: EmbedPurpose | null) => Record<string, unknown>;
 };
+
+// Half price for a slower answer (design §6.7). rates: what each of the model's Price rates is multiplied by once the
+// lane served the call, never because it was asked for. accepted: whether the model takes the lane; null where its
+// catalog does not say. tier: the same call at a slower service tier, asked for with fields laid over the body; the
+// reply's reported tier (StreamFacts tier) equal to served is what says the lane served it.
+export type Discount = { rates: DiscountRates; accepted: Accepts } & { lane: 'tier'; fields: Record<string, unknown>; served: string };
+export type DiscountRates = Record<'input' | 'output' | 'cacheRead' | 'cacheWrite', number>;
 
 // center: where a character stands, 0–1 from the top left. A model that places no one gets the characters' prompts
 // joined into the main one by its connector. steps, scale (prompt guidance), rescale (guidance rescale) and sampler (an
