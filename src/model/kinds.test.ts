@@ -48,3 +48,10 @@ it("reads a chat's bookmarks as absent or well formed, and refuses a malformed l
   expect(isValue('chat', { ...chat, bookmarks: [{ message: 'm', name: '고백' }] })).toBe(true);
   expect(isValue('chat', { ...chat, bookmarks: ['m'] })).toBe(false);
 });
+
+it('accepts a call’s marker held by the server (its key) or by a provider’s batch, and refuses one held by neither', () => {
+  const marker = { call: { connection: 'c', source: 'Anthropic', model: 'm', modelName: 'M' }, at: 1, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } };
+  expect(isValue('stream', { ...marker, key: { kty: 'EC' } })).toBe(true);
+  expect(isValue('stream', { ...marker, batch: 'msgbatch_1' })).toBe(true);
+  expect(isValue('stream', marker)).toBe(false);
+});

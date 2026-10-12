@@ -156,6 +156,7 @@ export const chatCompletions: Codec = {
   read(event, facts, append) {
     if (!isRecord(event)) return;
     if (typeof event.id === 'string' && event.id) facts.id ??= event.id;
+    if (typeof event.service_tier === 'string') facts.tier = event.service_tier;
     for (const choice of list(event.choices)) {
       if (!isRecord(choice)) continue;
       const delta = isRecord(choice.delta) ? choice.delta : {};
@@ -178,6 +179,7 @@ export const chatCompletions: Codec = {
     if (failed) return failed;
     if (!isRecord(payload) || !Array.isArray(payload.choices)) return null;
     if (typeof payload.id === 'string' && payload.id) facts.id = payload.id;
+    if (typeof payload.service_tier === 'string') facts.tier = payload.service_tier;
     const [choice] = payload.choices;
     if (isRecord(choice)) {
       const message = isRecord(choice.message) ? choice.message : {};

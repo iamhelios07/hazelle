@@ -121,7 +121,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     if (purpose.kind === 'reply') void talk.resume(stream);
     else if (purpose.kind === 'translation') translator.resume(stream, purpose.version);
     else if (purpose.kind === 'memory') memory.resume(stream);
-    else void resumeSend({ store, streams }, stream, closing.signal);
+    else void resumeSend({ store, credentials, streams }, stream, closing.signal);
   });
   let started = false;
   const stopSync = keepSynced(store, () => { if (started && !closing.signal.aborted) streams.pickUp(); });

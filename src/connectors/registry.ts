@@ -30,7 +30,7 @@ import { voyage } from './voyage';
 import { xai } from './xai';
 import { MODELS_DEV_LISTS } from './models-dev';
 import { priceCost } from './pricing';
-import { carriesPictures, ConnectorError, seesPictures, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
+import { carriesPictures, ConnectorError, seesPictures, type Batches, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
 
 // Adding a provider means adding its connection type here. Nothing else names one. The order is the screen's, 주요 too.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [
@@ -127,7 +127,7 @@ export function embedAnswer(route: Route, model: Model, payload: unknown, count:
   const parsed = embedsOf(route)?.parse(payload, count);
   if (!parsed) return null;
   const { vectors, usage, raw } = parsed;
-  const cost = route.type?.cost?.({ facts: { rawUsage: raw, finishReason: null, id: null }, usage, model }) ?? (model.price ? priceCost(model.price, usage, costUnit(route.type)) : null);
+  const cost = route.type?.cost?.({ facts: { rawUsage: raw, finishReason: null, id: null, tier: null }, usage, model }) ?? (model.price ? priceCost(model.price, usage, costUnit(route.type)) : null);
   return { vectors, usage, cost };
 }
 
@@ -141,6 +141,7 @@ function carries(route: Route, model: Model): Carries {
     reasoning: reasoning.budget || !route.type?.reasoningBudget ? reasoning : { ...reasoning, budget: { min: null, max: null } },
     // accepted null is unknown, not refused.
     cache: way ? way.accepted : false,
+    discount: route.type?.discount ? route.type.discount.accepted : false,
   };
 }
 
@@ -164,6 +165,13 @@ function sending(route: Route, { model, messages, settings: stored }: ChatReques
   return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
 }
 
+// The batch lane a request is answered through: the type's, where its settings ask for the discount and the model is not
+// known to refuse it.
+export function batchLane(route: Route, request: ChatRequest): Batches | null {
+  const lane = route.type?.discount;
+  return lane?.lane === 'batch' && sending(route, request).settings.discount ? lane.batches : null;
+}
+
 // Refused here, not in sending, which cacheView shares: a forecast never refuses.
 export function chatRequest(route: Route, request: ChatRequest): HttpRequest {
   const sent = sending(route, request);
@@ -174,8 +182,12 @@ export function chatRequest(route: Route, request: ChatRequest): HttpRequest {
 }
 
 function codecRequest(route: Route, sent: ChatRequest): HttpRequest {
-  const { reasoning, maxOutput } = sent.settings;
-  const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
+  const { reasoning, maxOutput, discount } = sent.settings;
+  const lane = discount && route.type?.discount;
+  const fields = {
+    ...(reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {}),
+    ...(lane && lane.lane === 'tier' ? lane.fields : {}),
+  };
   const mark = cacheWay(route, sent.model)?.mark ?? null;
   if (maxOutput === undefined || !route.type?.outputLimit) return route.codec.chat(route.endpoint, sent, fields, mark);
   return route.codec.chat(route.endpoint, { ...sent, settings: { ...sent.settings, maxOutput: undefined } }, { ...fields, ...route.type.outputLimit(maxOutput) }, mark);

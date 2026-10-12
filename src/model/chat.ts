@@ -66,6 +66,9 @@ export type Receipt = {
   // What the send expected to read from the cache, against the chat's last call (runtime/cache); absent where that
   // call's request was not known, as on a receipt older than it.
   forecast?: CacheForecast;
+  // The discount lane that served the call (design §6.7 할인 받기), as the provider reported it, and so priced; absent
+  // when none did. tier: the same call at a slower service tier; batch: the whole reply submitted and waited for.
+  discount?: 'tier' | 'batch';
   // 이어 쓰기: the receipt of the reply this one continued, as it read then, so every call and its cost stays
   // visible after the continued version replaces the cut one. It nests when a continuation is continued again.
   continues?: Receipt;

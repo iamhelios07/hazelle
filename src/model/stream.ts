@@ -6,8 +6,9 @@ import type { Source } from './memory';
 // the id of the entry its result is saved as, or of a memory summary's first record or chapter, which tells a call already saved.
 // for a memory summary of the message versions it read: the fingerprint (engine/memory) of their text as the prompt
 // rendered it for the call. An answer picked up later is for that text, however the versions render then.
-export type Stream = {
-  key: JsonWebKey;
+// How the call is held: key, the private key of a call the server makes (runtime/relay stream); batch, the provider's id
+// of a reply submitted to a discount lane's batch (ConnectionType discount), which the page asks about through the relay.
+export type Stream = ({ key: JsonWebKey } | { batch: string }) & {
   call: Pick<Receipt, 'connection' | 'source' | 'model' | 'modelName'>;
   at: number;
   result: string;

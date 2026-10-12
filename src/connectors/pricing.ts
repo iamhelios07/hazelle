@@ -1,5 +1,5 @@
-import type { ModelsDevList } from './models-dev';
-import type { Cost, Model, Price, Usage } from './types';
+import type { ModelsDevList, Rates } from './models-dev';
+import type { Cost, DiscountRates, Model, Price, Usage } from './types';
 
 // A price the provider's own model list states, in USD per million tokens; none without both its input and output rate.
 export function statedPrice(input: number | null, output: number | null, cacheRead: number | null, cacheWrite: number | null): Price | undefined {
@@ -34,4 +34,17 @@ export function priceCost(price: Price, usage: Usage | null, unit: Cost['unit'])
   // A cache rate the list leaves out bills the token as plain input: earlier OpenAI models have no cache write price.
   const dollars = (fresh * rates.input + cached * (rates.cacheRead ?? rates.input) + written * (rates.cacheWrite ?? rates.input) + usage.outputTokens * rates.output) / 1_000_000;
   return { unit, amount: unit === 'credit' ? dollars * 100 : dollars, source: 'price-list', ...(price.asOf === null ? {} : { asOf: price.asOf }) };
+}
+
+// A Price as a discount lane bills it (ConnectionType discount). A cache rate the list leaves out stays out, so priceCost
+// still bills it as plain input, at the input rate discounted.
+export function discounted(price: Price, rates: DiscountRates): Price {
+  const scale = <R extends Omit<Rates, 'tiers'>>(each: R): R => ({
+    ...each,
+    input: each.input * rates.input,
+    output: each.output * rates.output,
+    cacheRead: each.cacheRead === null ? null : each.cacheRead * rates.cacheRead,
+    cacheWrite: each.cacheWrite === null ? null : each.cacheWrite * rates.cacheWrite,
+  });
+  return { ...scale(price), tiers: price.tiers.map(scale) };
 }

@@ -1,4 +1,46 @@
-import type { ConnectionType } from './types';
+import { errorValue } from './errors';
+import type { BatchAnswer, Batches, ConnectionType } from './types';
+import { isRecord, list } from './values';
+
+// The Gemini API's batch mode with requests inline, checked against ai.google.dev/api/batch-api on 2026-10-12. A batch
+// is a long-running operation: done once it ended, its answer inline in its response. The guide and the reference name
+// the states differently (JOB_STATE_, BATCH_STATE_), so a state is read by its ending.
+const batches: Batches = {
+  submit: (endpoint, model, request, key) => ({
+    url: `${endpoint.baseUrl}/models/${model.id}:batchGenerateContent`,
+    method: 'POST',
+    headers: request.headers,
+    body: JSON.stringify({ batch: { display_name: key, input_config: { requests: { requests: [{ request: JSON.parse(request.body!), metadata: { key } }] } } } }),
+  }),
+  submitted: (payload) => (isRecord(payload) && typeof payload.name === 'string' && payload.name.startsWith('batches/') ? payload.name : null),
+  check: (endpoint, batch) => ({ url: `${endpoint.baseUrl}/${batch}`, method: 'GET', headers: {}, body: null }),
+  ended: (payload) => (isRecord(payload) && typeof payload.name === 'string' ? payload.done === true : null),
+  results: (endpoint, batch) => ({ url: `${endpoint.baseUrl}/${batch}`, method: 'GET', headers: {}, body: null }),
+  answer(body) {
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      return null;
+    }
+    return isRecord(payload) && payload.done === true ? answerOf(payload) : null;
+  },
+  cancel: (endpoint, batch) => ({ url: `${endpoint.baseUrl}/${batch}:cancel`, method: 'POST', headers: {}, body: null }),
+};
+
+// A batch of one request has one inline answer, whatever its key.
+function answerOf(operation: Record<string, unknown>): BatchAnswer | null {
+  const response = isRecord(operation.response) ? operation.response : {};
+  const inlined = isRecord(response.inlinedResponses) ? response.inlinedResponses : {};
+  const [first] = list(inlined.inlinedResponses);
+  if (isRecord(first) && first.response !== undefined) return { kind: 'reply', payload: first.response };
+  if (isRecord(first) && first.error !== undefined) return { kind: 'failed', detail: errorValue(first.error) ?? JSON.stringify(first.error) };
+  if (operation.error !== undefined) return { kind: 'failed', detail: errorValue(operation.error) ?? JSON.stringify(operation.error) };
+  const state = isRecord(operation.metadata) && typeof operation.metadata.state === 'string' ? operation.metadata.state : '';
+  if (state.endsWith('_CANCELLED')) return { kind: 'canceled' };
+  if (state.endsWith('_EXPIRED')) return { kind: 'expired' };
+  return null;
+}
 
 export const google: ConnectionType = {
   id: 'google',
@@ -9,4 +51,8 @@ export const google: ConnectionType = {
   keyPage: 'https://aistudio.google.com/apikey',
   endpoint: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', protocol: 'gemini' },
   detect: { key: /^AIza[0-9A-Za-z_-]{35}$/, host: 'generativelanguage.googleapis.com' },
+  // Batch input and output are billed at half; cached input stays at the standard rate on some models and halves on
+  // others (Gemini's pricing page, 2026-10-12), so it is kept whole, which errs high. Which models take batches the
+  // model list does not say.
+  discount: { lane: 'batch', batches, accepted: null, rates: { input: 0.5, output: 0.5, cacheRead: 1, cacheWrite: 1 } },
 };
