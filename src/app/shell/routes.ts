@@ -31,6 +31,7 @@ export type Route =
   | { kind: 'model'; connection: string; model: string }
   // section opens the page at 운영자가 보낸 알림, which the toast saying they came links to.
   | { kind: 'account'; section: 'notices' | null }
+  | { kind: 'usage' }
   | { kind: 'chat-settings' }
   | { kind: 'display' }
   | { kind: 'translator' }
@@ -107,6 +108,7 @@ export function parseRoute(at: string): Route {
     if (top === 'settings') return { kind: 'settings' };
     if (top === 'account') return { kind: 'account', section: params.get('section') === 'notices' ? 'notices' : null };
   }
+  if (top === 'account' && id === 'usage' && sub === undefined) return { kind: 'usage' };
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
   if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };
   if (top === 'settings' && id === 'translator' && sub === undefined) return { kind: 'translator' };
@@ -169,6 +171,8 @@ export function href(route: Route): string {
       return `/models/${route.connection}/${route.model.split('/').map(encodeURIComponent).join('/')}`;
     case 'account':
       return `/account${route.section ? `?section=${route.section}` : ''}`;
+    case 'usage':
+      return '/account/usage';
     case 'chat-settings':
       return '/settings/chat';
     case 'display':
@@ -233,6 +237,8 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'translator':
     case 'admin':
       return route.kind;
+    case 'usage':
+      return 'account';
     case 'chat-settings':
       return 'chat';
     case 'settings':
@@ -291,6 +297,8 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'translator':
     case 'admin':
       return { kind: 'settings' };
+    case 'usage':
+      return { kind: 'account', section: null };
     case 'add-connection':
     case 'connection':
       return { kind: 'connections' };

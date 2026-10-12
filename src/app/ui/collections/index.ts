@@ -1,3 +1,4 @@
+export { Bars } from './Bars';
 export { Breakdown } from './Breakdown';
 export { CardGrid, FaceCard, Portrait, SelectionBar } from './CardGrid';
 export { Facts } from './Facts';
@@ -8,6 +9,7 @@ export { NavGroup } from './NavGroup';
 export { NavRow } from './NavRow';
 export { Outline, type OutlineKind, type OutlineStop } from './Outline';
 export { SettingGroup, SettingRow } from './SettingGroup';
+export { Shares } from './Shares';
 export { SideTitle } from './SideTitle';
 export { Tab, Tabs } from './Tabs';
 export { ROWS_RESIZED, Viewport, type Seek } from './Viewport';

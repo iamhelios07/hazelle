@@ -119,9 +119,11 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
 | collections | `Viewport` (`ROWS_RESIZED`) | `Viewport.module.css` | A keyed, measured window within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focused rows, reading choices, keyboard traversal and source/current jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
+| collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
+| collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: its leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), the sidebar's, lists' and menus', and tabs' colours, and the hover and current fills (`--color-surface-hover`, `--color-surface-raised`) |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |

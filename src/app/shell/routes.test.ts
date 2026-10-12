@@ -49,6 +49,7 @@ const EXAMPLES = {
     { kind: 'account', section: null },
     { kind: 'account', section: 'notices' },
   ],
+  usage: [{ kind: 'usage' }],
   admin: [{ kind: 'admin' }],
   'chat-settings': [{ kind: 'chat-settings' }],
   display: [{ kind: 'display' }],

@@ -8,9 +8,8 @@ import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
-import { money } from '../common/money';
 import { UNKNOWN } from '../common/words';
-import { tally } from '../common/usage';
+import { spent, tally } from '../common/usage';
 import { ago } from '../common/time';
 import { useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -25,12 +24,6 @@ const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미�
 // What the catalog said when the model was starred. null is unknown, never 안 됨.
 const can = (value: boolean | null) => (value === null ? UNKNOWN : value ? '됨' : '안 됨');
 const tokens = (value: number | null) => (value === null ? UNKNOWN : `${count(value)} 토큰`);
-
-function spent({ costs, costUnknown }: ModelUsage): string {
-  if (!costs.length) return UNKNOWN;
-  const sums = costs.map(({ unit, amount, estimated }) => `${estimated ? '약 ' : ''}${money(unit, amount)}`).join(' + ');
-  return costUnknown ? `${sums} · ${UNKNOWN} ${costUnknown}회` : sums;
-}
 
 type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
 

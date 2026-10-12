@@ -1,4 +1,4 @@
-import { foldTree, usageCalls, type UsageCall } from '../model/chat';
+import { foldTree, usageCall, usageCalls, type UsageCall, type UsageHeld } from '../model/chat';
 import { isValue, type Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { ApiResult } from './api';
@@ -6,7 +6,7 @@ import type { ObjectStore, Pin } from './store';
 
 // Derived receipts live only as long as the unlocked session, never in a second persisted account/cache shape.
 export class Usage {
-  private readonly chats = new Map<string, { head: number; calls: UsageCall[] }>();
+  private readonly chats = new Map<string, { stamp: string; calls: UsageCall[] }>();
   private readonly closing = new AbortController();
   private pin: Pin | null = null;
   private running: Promise<unknown> | null = null;
@@ -18,20 +18,21 @@ export class Usage {
     this.chats.clear();
   }
 
-  // count is given each remaining chat's calls, once all of them are read.
-  async read<T>(count: (chats: UsageCall[][]) => T, signal: AbortSignal): Promise<ApiResult<T>> {
+  // count is given the calls of each remaining chat and each 삽화 profile, once all of them are read. progress hears how
+  // many chats of how many are read so far.
+  async read<T>(count: (held: UsageHeld[]) => T, signal: AbortSignal, progress?: (read: number, of: number) => void): Promise<ApiResult<T>> {
     const stop = AbortSignal.any([signal, this.closing.signal]);
     while (this.running) {
       await this.running;
       if (stop.aborted) return { ok: false, error: 'stopped' };
     }
-    const running = this.aggregate(count, stop).catch((): ApiResult<T> => ({ ok: false, error: stop.aborted ? 'stopped' : 'usage-unavailable' }));
+    const running = this.aggregate(count, stop, progress).catch((): ApiResult<T> => ({ ok: false, error: stop.aborted ? 'stopped' : 'usage-unavailable' }));
     this.running = running;
     try { return await running; }
     finally { this.running = null; }
   }
 
-  private async aggregate<T>(count: (chats: UsageCall[][]) => T, signal: AbortSignal): Promise<ApiResult<T>> {
+  private async aggregate<T>(count: (held: UsageHeld[]) => T, signal: AbortSignal, progress?: (read: number, of: number) => void): Promise<ApiResult<T>> {
     if (signal.aborted) return { ok: false, error: 'stopped' };
     const failed = await this.store.pull({ signal });
     if (failed) return failed;
@@ -44,27 +45,50 @@ export class Usage {
       const chats = this.store.list('chat').filter(live);
       const ids = new Set(chats.map(({ id }) => id));
       for (const id of this.chats.keys()) if (!ids.has(id)) this.chats.delete(id);
-      for (const { id } of chats) {
+      for (const [index, { id }] of chats.entries()) {
         if (signal.aborted) return { ok: false, error: 'stopped' };
-        const head = this.store.entryHead(id);
-        if (this.chats.get(id)?.head === head) continue;
+        progress?.(index, chats.length);
+        const stamp = this.stamp(id);
+        if (this.chats.get(id)?.stamp === stamp) continue;
         const entries: Stored<'entry'>[] = [];
+        const calls: UsageCall[] = [];
         let unreadable = false;
         const failure = await this.store.scan({ parent: id }, (row, value) => {
-          if (row.kind !== 'entry') return;
-          if (isValue('entry', value)) entries.push({ ...row, kind: 'entry', value });
-          else unreadable = true;
+          if (row.kind === 'entry') {
+            if (isValue('entry', value)) entries.push({ ...row, kind: 'entry', value });
+            else unreadable = true;
+          } else if (row.kind === 'illustration') {
+            if (!isValue('illustration', value)) unreadable = true;
+            else if (value.receipt) calls.push(usageCall(value.receipt, value.at));
+          } else if (row.kind === 'memory') {
+            if (!isValue('memory', value)) unreadable = true;
+            else for (const { receipt, at } of [...value.records, ...value.chapters]) if (receipt) calls.push(usageCall(receipt, at));
+          }
         }, pin, signal);
         if (failure) return failure;
         if (unreadable) return { ok: false, error: 'unreadable' };
         if (signal.aborted) return { ok: false, error: 'stopped' };
         // Never stamp a scan with a head acquired after it: an edit during that scan must be read again.
-        if (head !== this.store.entryHead(id)) continue;
-        this.chats.set(id, { head, calls: [...usageCalls(foldTree(entries).map(({ message }) => message))] });
+        if (stamp !== this.stamp(id)) continue;
+        this.chats.set(id, { stamp, calls: [...usageCalls(foldTree(entries).map(({ message }) => message)), ...calls] });
       }
       const current = this.store.list('chat').filter(live);
-      if (current.length !== chats.length || current.some(({ id }) => !ids.has(id) || this.chats.get(id)?.head !== this.store.entryHead(id))) continue;
-      return { ok: true, data: count(current.map(({ id }) => this.chats.get(id)!.calls)) };
+      if (current.length !== chats.length || current.some(({ id }) => !ids.has(id) || this.chats.get(id)?.stamp !== this.stamp(id))) continue;
+      const held = current.map(({ id, value }): UsageHeld => ({ chat: id, character: value.character, branch: value.origin !== undefined, calls: this.chats.get(id)!.calls }));
+      // A profile describes a character, a module or a persona, and counts while that one is kept; only a character's
+      // counts under one.
+      const profiles = this.store.list('likeness').flatMap(({ parent, value }): UsageHeld[] => {
+        if (!value.receipt || !parent) return [];
+        const character = live(this.store.get('character', parent));
+        if (!character && !live(this.store.get('module', parent)) && !live(this.store.get('persona', parent))) return [];
+        return [{ character: character ? parent : null, calls: [usageCall(value.receipt, value.at)] }];
+      });
+      return { ok: true, data: count([...held, ...profiles]) };
     }
+  }
+
+  // What a chat's receipts were read at: its entries, and its 삽화 and memory, whose changes move no entry head.
+  private stamp(chat: string) {
+    return [this.store.entryHead(chat), this.store.revision({ kind: 'illustration', parent: chat }), this.store.revision({ kind: 'memory', parent: chat })].join(':');
   }
 }

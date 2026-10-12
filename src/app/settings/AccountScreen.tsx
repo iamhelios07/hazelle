@@ -1,6 +1,6 @@
 import { sizeText } from '../common/size';
 import { useAccount, useSession, useStanding } from '../session';
-import { backBar } from '../shell/router';
+import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
@@ -34,6 +34,14 @@ export function AccountScreen({ section, back }: { section: 'notices' | null; ba
           help="이미지는 삭제해도 사용량이 줄지 않아요."
           sub={`${used('텍스트', storage.bytes, storage.bytesCap)} · ${used('이미지', storage.fileBytes, storage.fileBytesCap)}`}
           control={null}
+        />
+        <SettingRow
+          label={PAGES.usage}
+          control={
+            <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'usage' })}>
+              보기
+            </Button>
+          }
         />
         <SettingRow
           label="잠그기"

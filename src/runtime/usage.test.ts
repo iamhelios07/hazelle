@@ -1,6 +1,8 @@
 import { expect, it, vi } from 'vitest';
 import type { ModelRef } from '../connectors/assignment';
-import { fold, modelUsage, usageCalls, type Entry, type Receipt, type UsageCall } from '../model/chat';
+import { fold, modelUsage, usageCalls, usageReport, type Entry, type Receipt, type UsageHeld } from '../model/chat';
+import { blankCard } from '../engine/import/card';
+import { memoryId, type Memory } from '../model/memory';
 import type { Stored } from '../model/kinds';
 import { removeChat, restoreChat } from './chat-log';
 import type { ObjectStore, Write } from './store';
@@ -10,7 +12,7 @@ import { Usage } from './usage';
 
 const server = testServer();
 const ref = { connection: 'connection', model: 'model' };
-const of = (model: ModelRef) => (chats: UsageCall[][]) => modelUsage(chats, model);
+const of = (model: ModelRef) => (held: UsageHeld[]) => modelUsage(held, model);
 const receipt = (id: string, over: Partial<Receipt> = {}): Receipt => ({
   id, ...ref, source: 'source', modelName: 'model', state: 'done', cut: null, error: null, finishReason: 'stop',
   usage: null, cost: 'pending', replyId: id, firstTextMs: null, totalMs: 100, cache: null, ...over,
@@ -36,9 +38,9 @@ it('shares receipt-only projections across models, invalidating only changed hea
   const retain = vi.spyOn(store, 'retainChat');
   const display = vi.spyOn(store.evaluation, 'display');
   const signal = new AbortController().signal;
-  expect(await usage.read(of(ref), signal)).toEqual({ ok: true, data: modelUsage(models.map(usageCalls), ref) });
+  expect(await usage.read(of(ref), signal)).toEqual({ ok: true, data: modelUsage(models.map((messages) => ({ calls: usageCalls(messages) })), ref) });
   expect(scan).toHaveBeenCalledTimes(2);
-  expect(await usage.read(of({ ...ref, model: 'other' }), signal)).toEqual({ ok: true, data: modelUsage(models.map(usageCalls), { ...ref, model: 'other' }) });
+  expect(await usage.read(of({ ...ref, model: 'other' }), signal)).toEqual({ ok: true, data: modelUsage(models.map((messages) => ({ calls: usageCalls(messages) })), { ...ref, model: 'other' }) });
   expect(scan).toHaveBeenCalledTimes(2);
   await store.batch([write(chats[1]!, { type: 'cost', replyId: 'continued', at: 15, cost: { unit: 'usd', amount: 1, source: 'reported' } })], undefined, { unheld: true });
   expect(await usage.read(of(ref), signal)).toMatchObject({ ok: true, data: { calls: 3, costUnknown: 2, costs: [{ unit: 'usd', amount: 1, estimated: false }] } });
@@ -52,6 +54,27 @@ it('shares receipt-only projections across models, invalidating only changed hea
   expect(retain).not.toHaveBeenCalled();
   expect(display).not.toHaveBeenCalled();
   expect(chats.every((id) => store.scopeState(id) === 'unloaded')).toBe(true);
+  usage.close();
+});
+
+it('counts the receipts a chat’s memory and a kept character’s 삽화 profile hold, and reads a memory changed alone again', async () => {
+  const { store } = await server.account();
+  const chat = crypto.randomUUID();
+  await seed(store, [chat], [write(chat, message(receipt('reply')))]);
+  const written = (id: string, call: string, at: number) => ({ id, sources: [], print: '', when: null, where: null, who: [], what: '', lines: [], outcome: '', receipt: receipt(call), at });
+  const memory: Memory = { records: [{ ...written('r1', 'summary', 11), state: [], opens: [], closes: [] }], chapters: [], state: [], threads: [] };
+  expect((await store.batch([{ type: 'create', kind: 'memory', id: memoryId(chat), parent: chat, value: memory }], undefined, { unheld: true })).ok).toBe(true);
+  const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [] });
+  if (!character.ok) throw new Error(character.error);
+  expect((await store.create('likeness', { portraits: [], at: 12, receipt: receipt('profile') }, { parent: character.data.id })).ok).toBe(true);
+  const usage = new Usage(store);
+  const report = (held: UsageHeld[]) => usageReport(held, 'all', Date.now()).characters.map(({ key, usage }) => [key, usage.calls]);
+  expect(await usage.read(report, new AbortController().signal)).toEqual({ ok: true, data: [[null, 2], [character.data.id, 1]] });
+  const lease = store.retainChat(chat);
+  await lease.ready;
+  expect((await store.update('memory', memoryId(chat), (held) => ({ ...held, chapters: [{ ...written('c1', 'chapter', 13), records: [{ id: 'r1', at: 11 }] }] }))).ok).toBe(true);
+  lease.release();
+  expect(await usage.read(report, new AbortController().signal)).toEqual({ ok: true, data: [[null, 3], [character.data.id, 1]] });
   usage.close();
 });
 

@@ -43,6 +43,7 @@ const PromptsScreen = lazy(() => import('../prompts/PromptsScreen').then(({ Prom
 const AccountScreen = lazy(() => import('../settings/AccountScreen').then(({ AccountScreen }) => ({ default: AccountScreen })));
 const ChatSettingsScreen = lazy(() => import('../settings/ChatSettingsScreen').then(({ ChatSettingsScreen }) => ({ default: ChatSettingsScreen })));
 const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ DisplayScreen }) => ({ default: DisplayScreen })));
+const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageScreen }) => ({ default: UsageScreen })));
 const TranslatorScreen = lazy(() => import('../settings/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
 const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
 
@@ -119,6 +120,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <ModelPage at={at} back={back(at)} />;
       case 'account':
         return <AccountScreen section={at.section} back={sideBack(at)} />;
+      case 'usage':
+        return <UsageScreen back={back(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
       case 'display':

@@ -1,0 +1,55 @@
+.bars {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.plot {
+  display: flex;
+  gap: var(--space-2);
+  height: var(--chart-height);
+  border-bottom: var(--border-thin) solid var(--color-border);
+}
+
+.column {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: var(--chart-bar-max);
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bar {
+  width: 100%;
+  min-height: var(--space-2);
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  background: var(--color-text-faint);
+}
+
+.column[aria-pressed='true'] .bar {
+  background: var(--color-accent);
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-8);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.when {
+  color: var(--color-text-muted);
+}

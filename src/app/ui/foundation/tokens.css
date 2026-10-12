@@ -272,6 +272,8 @@
   --dot: 6px;
   --bar-height: 4px;
   --gauge-height: 8px;
+  --chart-height: 120px;
+  --chart-bar-max: 40px;
   --screen-narrow: 440px;
   --toast-width: 380px;
   --toast-peek: var(--space-8);
