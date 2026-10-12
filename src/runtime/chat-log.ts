@@ -2,12 +2,14 @@ import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
 import { CAST_MAX, foldTree, shown, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
+import { cachePrintId } from '../model/cache';
 import type { Illustration } from '../model/illustration';
 import { live, type Asset } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { Badges } from '../model/tool';
 import type { ApiFailure, ApiResult } from './api';
 import { routeOf } from './assignment';
+import { chatPrint } from './cache';
 import type { ChatFile } from './chat-file';
 import type { Session } from './session';
 import { storedMemory } from './memory-read';
@@ -64,7 +66,9 @@ function greetingWrites(chat: string, { choices, selected }: Greetings, at: numb
 }
 
 // The spread takes the original's own choices; nothing links the two chats but origin, so deleting either leaves the
-// other whole. messages, versions: each copy's id by the original's.
+// other whole. messages, versions: each copy's id by the original's. The cache print goes too: the branch sends the
+// same prefix from the same account, so its first send reads the original's cache; it counts only while the print's
+// call is the branch's latest (cache prior), as when it is cut at the last reply.
 export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<Hazelle.Branched & { id: string }>> {
   return store.withChat(item.id, async () => {
     const current = store.projections.get(item.id)?.model;
@@ -79,6 +83,8 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const line = item.messages.slice(0, upTo + 1).map((each, index, all) => ({ message: each, follows: index === 0 ? null : shown(all[index - 1]!).id }));
     const { writes, after, messages, versions } = copyWrites(id, line, memory, illustrations, inlays);
     writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
+    const print = chatPrint(store, item.id);
+    if (print) writes.push({ type: 'create', kind: 'cacheprint', id: cachePrintId(id), parent: id, value: print.value });
     const chat = withBookmarks(item.chat, carried(item.chat.bookmarks, messages));
     writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
     const created = await store.batch(writes);
@@ -273,12 +279,16 @@ const withBookmarks = <T extends Pick<Chat, 'bookmarks'>>(chat: T, bookmarks: Bo
 const carried = (bookmarks: Bookmark[] = [], messages: ReadonlyMap<string, string>) =>
   bookmarks.flatMap((bookmark) => (messages.has(bookmark.message) ? [{ ...bookmark, message: messages.get(bookmark.message)! }] : []));
 
-// on, not a flip: a conflict applies the change again to the copy it lost to.
-export const setBookmark = (store: ObjectStore, chat: string, message: string, on: boolean) =>
+// on, not a flip: a conflict applies the change again to the copy it lost to. name: the one an undone unmark puts back;
+// without it a bookmark already there keeps its own.
+export const setBookmark = (store: ObjectStore, chat: string, message: string, on: boolean, name?: string) =>
   store.update('chat', chat, (current) => {
     const bookmarks = current.bookmarks ?? [];
     const others = bookmarks.filter((bookmark) => bookmark.message !== message);
-    return withBookmarks(current, !on ? others : others.length < bookmarks.length ? bookmarks : [...bookmarks, { message }]);
+    if (!on) return withBookmarks(current, others);
+    const kept = bookmarks.find((bookmark) => bookmark.message === message);
+    const mark = name === undefined ? (kept ?? { message }) : { message, name };
+    return withBookmarks(current, kept ? bookmarks.map((bookmark) => (bookmark === kept ? mark : bookmark)) : [...bookmarks, mark]);
   });
 
 export const nameBookmark = (store: ObjectStore, chat: string, message: string, name: string) =>

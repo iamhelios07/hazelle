@@ -1,6 +1,7 @@
 import { ChevronLeft } from 'lucide-react';
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
+import { usePanelsBeside } from '../foundation/media';
 import styles from './ChatFrame.module.css';
 
 type Spacing = 'narrow' | 'normal' | 'wide';
@@ -37,6 +38,9 @@ type Props = {
   above: ReactNode;
   footer: ReactNode;
   panel?: ReactNode;
+  // A second panel kept open right of panel, drawn only where both stand beside the page: covering it, each would
+  // close the other.
+  beside?: ReactNode;
   peek?: ReactNode;
   reading: Reading;
   hideHeader: boolean;
@@ -49,8 +53,9 @@ type Props = {
   onScroll: () => void;
 };
 
-export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, reading, hideHeader, stage, pictures, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, panel, beside, peek, reading, hideHeader, stage, pictures, compact, scrollRef, onScroll }: Props) {
   const scope = readingScope(reading);
+  const pairs = usePanelsBeside();
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -149,6 +154,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
         </div>
       </main>
       {panel}
+      {pairs && beside}
     </div>
   );
 }

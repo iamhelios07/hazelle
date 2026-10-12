@@ -85,7 +85,9 @@ const sums = (messages: WireMessage[]) => {
   let sum = 0;
   return messages.map(({ tokens }) => (sum += tokens));
 };
-const sameFrom = (a: WireMessage, b: WireMessage) => a.role === b.role && JSON.stringify(a.from) === JSON.stringify(b.from);
+// Without the id, which a print stored before it was kept lacks.
+const place = (from: From) => JSON.stringify({ ...from, id: undefined });
+const sameFrom = (a: WireMessage, b: WireMessage) => a.role === b.role && place(a.from) === place(b.from);
 
 // Every message that differs from the last call's, in wire order, up to where the last call's cached prompt ends in
 // the next send: what follows it there is the chat going on, not a change. One the next send has that the last call's

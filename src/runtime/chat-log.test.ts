@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, foldTree, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
+import { cachePrintId } from '../model/cache';
 import { memoryId, type MemoryRecord } from '../model/memory';
+import { chatPrint } from './cache';
 import { chatFile, readChatFile } from './chat-file';
 import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, nameBookmark, removeMessage, selectVersion, setBookmark, setCast, setChatNote, setChatPrompt, startChat, withOwn } from './chat-log';
 import { setChatModel, withMainModel } from './assignment';
@@ -75,6 +77,9 @@ describe('bookmarks', () => {
     expect(marks()).toEqual([{ message: first, name: '시작' }, { message: second }]);
     await nameBookmark(store, id, first!, ' ');
     expect(marks()).toEqual([{ message: first }, { message: second }]);
+    await setBookmark(store, id, second!, false);
+    await setBookmark(store, id, second!, true, '고백');
+    expect(marks()).toEqual([{ message: first }, { message: second, name: '고백' }]);
     await setBookmark(store, id, first!, false);
     await setBookmark(store, id, second!, false);
     expect('bookmarks' in store.get('chat', id)!.value).toBe(false);
@@ -127,7 +132,7 @@ describe('a chat not saved yet', () => {
 });
 
 describe('branchChat', () => {
-  it("carries what the bot's Lua wrote, the texts it staged, the tools' data, badges on the branch's messages, and the chat's inlays", async () => {
+  it("carries what the bot's Lua wrote, the texts it staged, the tools' data, badges on the branch's messages, the chat's inlays and its cache print", async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
@@ -148,6 +153,8 @@ describe('branchChat', () => {
 
     const inlay = { name: 'risu-id', type: 'image/png', size: 2, file: { id: 'file', key: 'key' } };
     await store.create('inlay', inlay, { parent: source });
+    const print = { call: 'r', connection: 'c', account: 'a', model: 'm', messages: [{ role: 'user' as const, hash: 'h', tokens: 1, from: { kind: 'block' as const, name: null, slot: null } }] };
+    await store.create('cacheprint', print, { id: cachePrintId(source), parent: source });
 
     const item: ChatItem = { id: source, chat, messages: folded(), count: 2, title: '', preview: '', at: null, order: 0 };
     const branched = await branchChat(store, item, folded()[1]!.id);
@@ -158,6 +165,7 @@ describe('branchChat', () => {
     expect(toolChatData(store, module, branched.data.id, 'index')).toEqual({ node: said });
     expect(toolBadges(store, module, branched.data.id)).toEqual(Object.fromEntries(copy.map((message, index) => [message.id, { version: shown(message).id, text: ['요약됨', '마지막'][index]! }])));
     expect(store.children('inlay', branched.data.id).map(({ value }) => value)).toEqual([inlay]);
+    expect(chatPrint(store, branched.data.id)?.value).toEqual(print);
   });
 
   it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {

@@ -69,6 +69,8 @@ type Props = {
   // The 토글 pane is open: a page keeps it in its address, a panel in its own state.
   pane: Pane;
   onPane: (pane: Pane) => void;
+  // The block it opens at, drilled into; read once, as it mounts.
+  block?: string;
   backLabel: string;
   onBack: () => void;
   onCopied: (id: string) => void;
@@ -77,7 +79,7 @@ type Props = {
 };
 
 // Its state is one prompt's, so a caller keys it by id; unmounting it saves.
-export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, onCopied, onErased, frame }: Props) {
+export function PromptEditor({ stored, layout, pane, onPane, block: openAt, backLabel, onBack, onCopied, onErased, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
@@ -100,8 +102,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   };
 
   const firstText = () => latest.current.blocks.find(isText)?.id ?? MODEL;
-  const [picked, setPicked] = useState<string>(firstText);
-  const [drilled, setDrilled] = useState(pane === TOGGLES);
+  const [picked, setPicked] = useState<string>(() => openAt ?? firstText());
+  const [drilled, setDrilled] = useState(pane === TOGGLES || openAt !== undefined);
   const [reordering, setReordering] = useState(false);
   const [addingToggle, setAddingToggle] = useState(false);
   const open = pane === TOGGLES ? TOGGLES : picked === MODEL || picked === PICTURE || draft.blocks.some((block) => block.id === picked) ? picked : firstText();

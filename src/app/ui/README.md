@@ -14,7 +14,7 @@ and only this folder styles elements.**
   `foundation/fonts.css` after paint; slow or unavailable webfonts leave the system faces usable. The tool
   stylesheet imports both directly because its document has no application bootstrap.
 - `foundation/media.ts` lists every media query in `MEDIA` and reads them in JavaScript (`useWide`,
-  `useSplit`, `useHover`). A stylesheet cannot read it, so it writes the query out in full, and
+  `useSplit`, `useHover`, `usePanelsBeside`). A stylesheet cannot read it, so it writes the query out in full, and
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
 - `foundation/motion.module.css` holds every keyframe, `foundation/a11y.module.css` the
   screen-reader-only box and the one-line ellipsis, and `type.module.css` and `surface.module.css` the looks several
@@ -72,7 +72,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
 | foundation | — | `type.module.css` | Shared text looks: a note, an error line, a field's label |
 | foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field and its compact size, an accent dot |
-| foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`) | — | Every breakpoint and media query |
+| foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`, `usePanelsBeside`) | — | Every breakpoint and media query |
 | foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
 | foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |
 | foundation | `Brand` | `Brand.module.css` | The wordmark |
@@ -81,7 +81,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph by its role: body, a note (보조 설명: a status, a limit, a caption under a thing) or prose; its alignment |
-| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`, `useMarginRoom`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock, the header and dock floating over the story (the header hides while it is read down, the dock keeps room for the whole composer); the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties; a slot for a `SidePeek` over the story; with `stage`, the story set left with a stage on its right for 삽화 where that stage holds half its text's width (`useMarginRoom`) |
+| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`, `useMarginRoom`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock, the header and dock floating over the story (the header hides while it is read down, the dock keeps room for the whole composer); the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties; a slot for a `SidePeek` over the story; `panel` beside the story and `beside`, a second panel right of it, drawn only where both stand beside the page (`usePanelsBeside`, 1280px and wider) and left out where a panel covers it; with `stage`, the story set left with a stage on its right for 삽화 where that stage holds half its text's width (`useMarginRoom`) |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take or a lorebook entry; what is folded is made only while open, and it can start open |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |

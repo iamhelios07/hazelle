@@ -36,16 +36,16 @@ import { translatorOf } from '../../runtime/translate';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf, translationInput } from '../../runtime/chat-context';
 import { takeTurn, type TurnFailure } from '../../runtime/turn';
-import type { CharacterPart } from '../common/characterPart';
 import { describeIllustrateFailure, describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
-import { BIN_KEEPS } from '../common/words';
+import { BIN_KEEPS, BOOKMARK } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useIllustrating, useSaves, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui';
+import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
+import { flippedCache, cacheShown, NO_PANELS, opened, type Panel, type Panels, type Side } from './panels';
 import { useSendNotes } from './useSendNotes';
 import type { BookmarkRow } from './bookmarks';
 import { useDraft } from './useDraft';
@@ -77,7 +77,6 @@ export type Reshaping = { message: string; version: string; scene: Scene; paragr
 
 export type OpenChat = ReturnType<typeof useChat>;
 
-export type Side = { kind: 'prompts'; id: string | null; pane: 'toggles' | null } | { kind: 'character'; id: string; part: CharacterPart | null };
 // Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
 export type ChatActions = OpenChat['actions'];
 
@@ -162,8 +161,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
-  // Chat-owned panels and editors take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'cache' } | Side | null>(null);
+  const pairs = usePanelsBeside();
+  const [panels, setPanels] = useState<Panels>(NO_PANELS);
+  const { panel } = panels;
+  const open = (next: Panel) => setPanels((current) => opened(current, next, pairs));
+  const flipPanel = (next: Panel, same: (current: Panel) => boolean) => setPanels((current) => (current.panel && same(current.panel) ? { ...current, panel: null } : opened(current, next, pairs)));
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -409,7 +411,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   function bookmark(message: string) {
-    if (id) void setBookmark(store, id, message, !bookmarked.has(message)).then((saved) => saved.ok || toast.failed(saved));
+    if (!id) return;
+    const on = !bookmarked.has(message);
+    void setBookmark(store, id, message, on).then((saved) => saved.ok || toast.failed(saved));
+    const name = on ? undefined : chat.bookmarks?.find((each) => each.message === message)?.name;
+    if (name !== undefined) toast.undoable(`'${name}' ${BOOKMARK}를 해제했어요.`, () => setBookmark(store, id, message, true, name));
   }
 
   // false: it stays where it is.
@@ -491,6 +497,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     pinned,
     branching,
     panel,
+    cacheShown: cacheShown(panels, pairs),
     tools,
     bookmarked,
     dialog,
@@ -526,24 +533,25 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       press: (button: BotButton | null) => void press(button),
       branch,
       bookmark,
-      bookmarks: () => setPanel((current) => (current?.kind === 'bookmarks' ? null : { kind: 'bookmarks' })),
+      bookmarks: () => flipPanel({ kind: 'bookmarks' }, ({ kind }) => kind === 'bookmarks'),
       showBookmark,
       renameBookmark,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
       info: (reply: string) => {
         setInfoPick(reply);
-        setPanel({ kind: 'info' });
+        open({ kind: 'info' });
       },
       pickInfo: setInfoPick,
-      flipToggles: () => setPanel((current) => (current?.kind === 'toggles' ? null : { kind: 'toggles' })),
-      memory: (record: string | null) => setPanel({ kind: 'memory', record }),
-      cache: () => setPanel((current) => (current?.kind === 'cache' ? null : { kind: 'cache' })),
-      tool: (module: string) => setPanel((current) => current?.kind === 'tool' && current.module === module ? null : { kind: 'tool', module }),
+      flipToggles: () => flipPanel({ kind: 'toggles' }, ({ kind }) => kind === 'toggles'),
+      memory: (record: string | null) => open({ kind: 'memory', record }),
+      cache: () => setPanels((current) => flippedCache(current, pairs)),
+      closeCache: () => setPanels((current) => ({ ...current, cache: false })),
+      tool: (module: string) => flipPanel({ kind: 'tool', module }, (current) => current.kind === 'tool' && current.module === module),
       toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scripts.menu(chat, module, item)),
       toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),
-      side: (open: Side) => setPanel(open),
-      closePanel: () => setPanel(null),
+      side: (side: Side) => open(side),
+      closePanel: () => setPanels((current) => ({ ...current, panel: null })),
       openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt' | 'export') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,

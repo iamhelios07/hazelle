@@ -42,11 +42,13 @@ it('accepts a prompt whose toggles hold layout lines, and refuses a toggle witho
   expect(isValue('prompt', { ...prompt, toggles: [{ kind: 'divider' }] })).toBe(false);
 });
 
-it("reads a chat's bookmarks as absent or well formed, and refuses a malformed list", () => {
+it("reads a chat's bookmarks and cast as absent or well formed, and refuses a malformed list", () => {
   const chat = { title: null, character: null, models: {} };
   expect(isValue('chat', chat)).toBe(true);
   expect(isValue('chat', { ...chat, bookmarks: [{ message: 'm', name: '고백' }] })).toBe(true);
   expect(isValue('chat', { ...chat, bookmarks: ['m'] })).toBe(false);
+  expect(isValue('chat', { ...chat, cast: ['c'] })).toBe(true);
+  expect(isValue('chat', { ...chat, cast: 'c' })).toBe(false);
 });
 
 it('accepts a call’s marker held by the server (its key) or by a provider’s batch, and refuses one held by neither', () => {

@@ -46,11 +46,12 @@ function stoppable<T>(build: () => T): T | RanAway {
   }
 }
 
-// slot is null for a text block.
+// slot is null for a text block. id: the prompt block's or the lore entry's, absent from a cache print or a receipt
+// stored before it was kept.
 export type From =
-  | { kind: 'block'; name: string | null; slot: SlotKind | null }
-  | { kind: 'lore'; name: string; slot: 'lorebook' | 'postEverything' }
-  | { kind: 'depth'; name: string; depth: number }
+  | { kind: 'block'; id?: string; name: string | null; slot: SlotKind | null }
+  | { kind: 'lore'; id?: string; name: string; slot: 'lorebook' | 'postEverything' }
+  | { kind: 'depth'; id?: string; name: string; depth: number }
   | { kind: 'continue' }
   | { kind: 'retrieval' }
   | { kind: 'script' }
@@ -172,7 +173,7 @@ type Filling =
 
 const loreMessage = ({ entry }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: entry(id, body) });
 const throughSlot = (laid: Laid, entries: Lore[], slot: 'lorebook' | 'postEverything') =>
-  entries.map((entry): Sent => ({ message: loreMessage(laid, entry), from: { kind: 'lore', name: laid.named(entry.id), slot } }));
+  entries.map((entry): Sent => ({ message: loreMessage(laid, entry), from: { kind: 'lore', id: entry.id, name: laid.named(entry.id), slot } }));
 const filled = (parts: Sent[]) => parts.filter(({ message }) => message.content !== '');
 
 // A prompt's blocks in order, with its chat slots left open and every other block rendered once. memory: whether a
@@ -302,7 +303,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
     .slice(covered)
     .map((text, offset) => ({ role: scope.messages[covered + offset]!.role, content: text.trim() }))
     .filter(({ content }) => content !== '');
-  const atDepth: { depth: number; sent: Sent }[] = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: { kind: 'depth', name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
+  const atDepth: { depth: number; sent: Sent }[] = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: { kind: 'depth', id: entry.id, name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
   const lastUser = messages.findLastIndex(({ role }) => role === 'user');
   const retrieved = found && lastUser !== -1 ? found : null;
   if (retrieved) atDepth.push({ depth: messages.length - lastUser, sent: { message: { role: 'user', content: retrieved.text }, from: { kind: 'retrieval' } } });
@@ -514,7 +515,7 @@ function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
   else map.set(key, [value]);
 }
 
-const blockFrom = (block: Block): From => ({ kind: 'block', name: block.name, slot: block.kind === 'slot' ? block.slot : null });
+const blockFrom = (block: Block): From => ({ kind: 'block', id: block.id, name: block.name, slot: block.kind === 'slot' ? block.slot : null });
 
 function range(kept: ChatMessage[], before: Map<number, Sent[]>, { range: { from, to }, from: slot }: ChatPart): Sent[] {
   const [start, end] = rangeBounds(kept.length, { from, to });
