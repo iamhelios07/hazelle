@@ -203,7 +203,8 @@ describe('a reply through a discount lane’s batch', () => {
     let reply: Awaited<typeof replying> | null = null;
     void replying.then((done) => (reply = done));
     for (let tick = 0; tick < 20 && !reply; tick++) await vi.advanceTimersByTimeAsync(5_000);
-    return { reply: reply!, marked, waited, retried };
+    // A call that waits on no timer can still be decoding on a slow machine once the ticks run out.
+    return { reply: reply ?? (await replying), marked, waited, retried };
   }
 
   it('submits, waits through the relay, and prices the whole answer at the lane’s discount', async () => {
