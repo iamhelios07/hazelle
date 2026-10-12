@@ -6,7 +6,7 @@ import { store } from './lifecycle';
 import { canWrite, requireSession } from './session';
 
 const KIND = /^[a-z][a-z-]{0,31}$/;
-// A timeline is 16 random bytes in hex (migrations/0009).
+// A timeline is 16 random bytes in hex (migrations/0001_baseline.sql).
 const TIMELINE =/^[0-9a-f]{32}$/;
 // bytes: worker.ts enforces it on the whole body, timeline included. The client batches by these, sent with every page.
 // The sizes date from the Cloudflare store (a 2 MB row, a 32 MiB RPC).
