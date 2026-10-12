@@ -59,6 +59,11 @@ backup generation names its pictures there instead of copying them into `backup/
 stay in it for the 7-day backup retention before the hourly sweep removes them, and a restore checks each named picture
 there by size. It must be a bucket of its own: the copier prunes everything under the backup remote.
 
+The app keeps a copy of what it reads or puts in `/data/cache` (a read from R2 costs the machine 110–175 ms, one from
+disk about 1 ms): at most `HAZELLE_FILES_CACHE_BYTES` (default 20 GiB; `0` turns it off and empties it within the hour),
+and a picture unread for 3 days goes, so a deleted account's pictures leave the machine well within the 7 days the
+privacy page promises. It counts toward the disk-full warning (below 20 % free); backups and restores ignore it.
+
 Moving the hosted machine, as root on it, after an image with the R2 store is deployed and running on disk (switching
 in the same step as a deploy would make that deploy's rollback restore a disk generation while pictures sit in R2):
 

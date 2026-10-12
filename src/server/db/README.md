@@ -10,6 +10,8 @@ service.sqlite                   accounts, sessions, vaults, service, installati
 accounts/<incarnation>.sqlite    one account's objects (head, objects, kv), WAL mode
 files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written. With HAZELLE_FILES_BUCKET=r2 the same keys
                                  live in an R2 bucket instead (src/server/files/, infra/README.md "Pictures in R2")
+cache/<sha256>                   with the R2 bucket, a copy of pictures read or put, by id alone; .tmp-* while being written.
+                                 Never fsynced, captured or restored; trimmed hourly (src/server/files/cached-r2-bucket.ts)
 streams.sqlite                   reply stream pages and their alarms (the alarm row is a stream's reservation); meta(version), a newer one is refused
 snapshots/<incarnation>/<id>.sqlite.gz   point-in-time copies of an account file (baselines and operation checkpoints)
 backup/<capturedAt>-<hex>/       one backup generation: service.sqlite.gz, snapshots/<incarnation>/<id>.sqlite.gz, manifest.json,

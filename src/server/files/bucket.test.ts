@@ -1,8 +1,10 @@
-import { mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Bucket } from './bucket';
+import { cachedR2Bucket } from './cached-r2-bucket';
 import { chooseBucket } from './choose';
 import { diskBucket } from './disk-bucket';
 import { fakeS3 } from './fake-s3';
@@ -23,6 +25,7 @@ afterAll(() => s3.close());
 afterEach(() => {
   if (dir) rmSync(dir, { recursive: true, force: true });
   s3.objects.clear();
+  s3.requests.length = 0;
 });
 
 const kinds = {
@@ -31,6 +34,10 @@ const kinds = {
     return diskBucket(dir);
   },
   r2: () => r2Bucket(s3.config),
+  cached: () => {
+    dir = mkdtempSync(join(tmpdir(), 'hazelle-'));
+    return cachedR2Bucket(r2Bucket(s3.config), dir, 1 << 20);
+  },
 };
 
 describe.each(Object.entries(kinds))('the %s bucket', (_, fresh) => {
@@ -82,10 +89,139 @@ it('the r2 bucket answers a key’s size, and a refusal names the request', asyn
   await expect(r2Bucket({ ...s3.config, secretAccessKey: 'wrong' }).get(key('a'))).rejects.toThrow(`r2: get ${key('a')} answered 403`);
 });
 
+describe('the cache in front of R2', () => {
+  const HOUR_MS = 60 * 60 * 1000;
+  const NOW = 1_800_000_000_000;
+  const idOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+  const fresh = (cap = 1 << 20) => {
+    dir = mkdtempSync(join(tmpdir(), 'hazelle-'));
+    return cachedR2Bucket(r2Bucket(s3.config), dir, cap);
+  };
+  const cached = () => (existsSync(join(dir, 'cache')) ? readdirSync(join(dir, 'cache')).sort() : []);
+  const reads = () => s3.requests.filter((request) => request.startsWith('GET /pictures/files/')).length;
+  const used = (name: string, at: number) => utimesSync(join(dir, 'cache', name), at / 1000, at / 1000);
+
+  it('reads a miss from R2 once, then serves every account holding the id from disk; only a whole read counts as use', async () => {
+    const bucket = fresh();
+    const bytes = new Uint8Array([1, 2, 3]);
+    const id = idOf(bytes);
+    s3.objects.set(`${PREFIX}${id}`, bytes);
+    expect(await read(bucket, `${PREFIX}${id}`)).toEqual(bytes);
+    expect(await read(bucket, `files/${OTHER}/${id}`)).toEqual(bytes);
+    expect(reads()).toBe(1);
+    expect(cached()).toEqual([id]);
+
+    used(id, 1000);
+    await (await bucket.get(`${PREFIX}${id}`))!.cancel();
+    expect(statSync(join(dir, 'cache', id)).mtimeMs).toBe(1000);
+    await read(bucket, `${PREFIX}${id}`);
+    await vi.waitFor(() => expect(statSync(join(dir, 'cache', id)).mtimeMs).toBeGreaterThan(1000));
+  });
+
+  it('keeps nothing of a body that does not hash to its id, nor of one cut off or cancelled', async () => {
+    const bucket = fresh();
+    const wrong = `${PREFIX}${'a'.repeat(64)}`;
+    s3.objects.set(wrong, new Uint8Array([9]));
+    expect(await read(bucket, wrong)).toEqual(new Uint8Array([9]));
+
+    const whole = new Uint8Array([4, 5]);
+    const at = `${PREFIX}${idOf(whole)}`;
+    s3.objects.set(at, whole);
+    const cancelled = (await bucket.get(at))!.getReader();
+    await cancelled.read();
+    await cancelled.cancel();
+    expect(cached()).toEqual([]);
+
+    const cut = cachedR2Bucket({
+      ...r2Bucket(s3.config),
+      get: async () => {
+        let sent = false;
+        return new ReadableStream({
+          pull: (controller) => {
+            if (sent) return controller.error(new Error('cut'));
+            sent = true;
+            controller.enqueue(whole.subarray(0, 1));
+          },
+        });
+      },
+    }, dir, 1 << 20);
+    await expect(read(cut, at)).rejects.toThrow('cut');
+    expect(cached()).toEqual([]);
+  });
+
+  it('copies and reads back a picture that arrives in many chunks', async () => {
+    const bytes = Uint8Array.from({ length: 200_000 }, (_, at) => at % 251);
+    const at = `${PREFIX}${idOf(bytes)}`;
+    dir = mkdtempSync(join(tmpdir(), 'hazelle-'));
+    let fetched = 0;
+    const bucket = cachedR2Bucket(
+      {
+        ...r2Bucket(s3.config),
+        get: async () => {
+          fetched++;
+          let sent = 0;
+          return new ReadableStream({
+            pull: (controller) => {
+              if (sent >= bytes.length) return controller.close();
+              controller.enqueue(bytes.slice(sent, sent + 30_000));
+              sent += 30_000;
+            },
+          });
+        },
+      },
+      dir,
+      1 << 20,
+    );
+    expect(await read(bucket, at)).toEqual(bytes);
+    expect(await read(bucket, at)).toEqual(bytes);
+    expect(fetched).toBe(1);
+  });
+
+  it('writes a put through to R2 and keeps the copy it reads next', async () => {
+    const bucket = fresh();
+    const bytes = new Uint8Array([6, 7]);
+    const at = `${PREFIX}${idOf(bytes)}`;
+    await bucket.put(at, bytes);
+    expect(s3.objects.get(at)).toEqual(bytes);
+    expect(await read(bucket, at)).toEqual(bytes);
+    expect(reads()).toBe(0);
+  });
+
+  it('trims what went unused for 3 days, then the least recently used down to 90 % of the cap, and settled temp files', async () => {
+    const bucket = fresh(10);
+    for (const char of ['a', 'b', 'c', 'd']) await bucket.put(key(char), new Uint8Array(4));
+    writeFileSync(join(dir, 'cache', '.tmp-old'), 'x');
+    writeFileSync(join(dir, 'cache', '.tmp-new'), 'x');
+    used('a'.repeat(64), NOW - 73 * HOUR_MS);
+    used('b'.repeat(64), NOW - 2 * HOUR_MS);
+    used('c'.repeat(64), NOW - 3 * HOUR_MS);
+    used('d'.repeat(64), NOW);
+    used('.tmp-old', NOW - 2 * HOUR_MS);
+    used('.tmp-new', NOW);
+    expect((await bucket.trim(NOW)).sort()).toEqual(['.tmp-old', 'a'.repeat(64), 'c'.repeat(64)].map((name) => `cache/${name}`).sort());
+    expect(cached()).toEqual(['.tmp-new', 'b'.repeat(64), 'd'.repeat(64)]);
+  });
+
+  it('with a cap of 0 copies nothing and trims what an earlier run copied', async () => {
+    const bucket = fresh(0);
+    mkdirSync(join(dir, 'cache'));
+    writeFileSync(join(dir, 'cache', 'e'.repeat(64)), 'x');
+    const bytes = new Uint8Array([8]);
+    const at = `${PREFIX}${idOf(bytes)}`;
+    await bucket.put(at, bytes);
+    await read(bucket, at);
+    await read(bucket, at);
+    expect(reads()).toBe(2);
+    expect(await bucket.trim(NOW)).toEqual([`cache/${'e'.repeat(64)}`]);
+    expect(cached()).toEqual([]);
+  });
+});
+
 it('chooses the disk unless the environment names a whole R2 setting', () => {
   expect(chooseBucket({ HAZELLE_FILES_BUCKET: ' ' }, '/data').kind).toBe('disk');
   expect(() => chooseBucket({ HAZELLE_FILES_BUCKET: 's3' }, '/data')).toThrow(/must be disk or r2/);
   const r2 = { HAZELLE_FILES_BUCKET: 'r2', HAZELLE_FILES_R2_ENDPOINT: 'https://x.r2.cloudflarestorage.com', HAZELLE_FILES_R2_BUCKET: 'b', HAZELLE_FILES_R2_ACCESS_KEY_ID: 'k' };
   expect(() => chooseBucket(r2, '/data')).toThrow(/needs HAZELLE_FILES_R2_SECRET_ACCESS_KEY/);
   expect(chooseBucket({ ...r2, HAZELLE_FILES_R2_SECRET_ACCESS_KEY: 's' }, '/data').kind).toBe('r2');
+  expect(() => chooseBucket({ ...r2, HAZELLE_FILES_R2_SECRET_ACCESS_KEY: 's', HAZELLE_FILES_CACHE_BYTES: '20GB' }, '/data')).toThrow(/HAZELLE_FILES_CACHE_BYTES must be a whole number/);
 });

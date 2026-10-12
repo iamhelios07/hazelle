@@ -6,9 +6,11 @@ import { authorization, sha256Hex } from './sigv4';
 
 // For tests: the part of R2's S3 API r2-bucket.ts calls, in memory on a local port. Every request's signature is
 // checked against the headers that actually arrived, and a listing answers `page` entries at a time so paging runs.
+// requests: each one's method and path, in order of arrival.
 export async function fakeS3(page = 2) {
   const config: R2Config = { endpoint: '', bucket: 'pictures', accessKeyId: 'test-key', secretAccessKey: 'test-secret' };
   const objects = new Map<string, Uint8Array>();
+  const requests: string[] = [];
   const signer = { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey, region: 'auto', service: 's3' };
 
   const read = async (request: IncomingMessage) => {
@@ -19,6 +21,7 @@ export async function fakeS3(page = 2) {
 
   const server = createServer(async (request, response) => {
     const url = new URL(request.url!, `http://${request.headers.host}`);
+    requests.push(`${request.method} ${url.pathname}`);
     const body = await read(request);
     const payload = String(request.headers['x-amz-content-sha256']);
     const date = String(request.headers['x-amz-date']);
@@ -64,5 +67,5 @@ export async function fakeS3(page = 2) {
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   config.endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { config, objects, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };
+  return { config, objects, requests, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };
 }

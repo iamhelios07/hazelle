@@ -2,7 +2,8 @@ import { checkedKey, checkedPrefix, isKey, isPrefix, type R2Bucket } from './buc
 import { authorization, sha256Hex, type Signer } from './sigv4';
 
 // Pictures in an R2 bucket through its S3 API, path-style: <endpoint>/<bucket>/<key>. A PUT that answered 200 is
-// durable, and an object is whole or absent, so nothing is left for a sweep.
+// durable, and an object is whole or absent, so nothing is left for a sweep. The server reads it through the copy on
+// its disk (cached-r2-bucket.ts), which has the trim.
 
 export type R2Config = { endpoint: string; bucket: string; accessKeyId: string; secretAccessKey: string };
 
@@ -95,5 +96,6 @@ export function r2Bucket(config: R2Config): R2Bucket {
       for (let start = 0; start < keys.length; start += DELETES) await Promise.all(keys.slice(start, start + DELETES).map(remove));
     },
     prefixes: async () => (await listing({ prefix: 'files/', delimiter: '/' })).prefixes.filter(isPrefix).sort(),
+    trim: async () => [],
   };
 }

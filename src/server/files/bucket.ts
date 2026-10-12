@@ -16,8 +16,9 @@ type Common = {
 // before settled left behind and answers those names.
 export type DiskBucket = Common & { kind: 'disk'; path(key: string): string; sweep(settled: number): Promise<string[]> };
 // The store outlives the machine, so a backup generation names its pictures here instead of copying them
-// (backup/generation.ts). head: a key's size, null when absent.
-export type R2Bucket = Common & { kind: 'r2'; head(key: string): Promise<number | null> };
+// (backup/generation.ts). head: a key's size, null when absent; it asks the store itself. trim: the hourly eviction of
+// the copy on the machine's disk (cached-r2-bucket.ts), answering the names it removed.
+export type R2Bucket = Common & { kind: 'r2'; head(key: string): Promise<number | null>; trim(now: number): Promise<string[]> };
 export type Bucket = DiskBucket | R2Bucket;
 
 // The path-traversal guard: keys come from validated route params, so a miss is a programming error.
