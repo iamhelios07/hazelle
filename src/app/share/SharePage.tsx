@@ -10,7 +10,7 @@ import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { ACTS } from '../common/acts';
 import { SHARE } from '../common/words';
-import { Brand, Button, Callout, Dialog, Intro, Row, Screen, Stack, Text, TextField } from '../ui';
+import { Brand, Button, Callout, Dialog, Divider, Intro, Row, Screen, Stack, Text, TextField } from '../ui';
 import { holdPending, pendingFor } from '../common/sharePending';
 
 type View =
@@ -78,14 +78,12 @@ function SharePage({ id, shareKey }: { id: string; shareKey: string | null }) {
           />
           {failure && <Callout tone="warn" alert>{failure}</Callout>}
           {said && <Callout tone="success">{said}</Callout>}
-          <Stack gap="related">
+          <Row kind="spread">
             <Text variant="note">{`${SHARE.received} ${count(view.received)} · 운영자가 검토하지 않은 내용이에요.`}</Text>
-            <Row kind="actions">
-              <Button variant="link" icon={Flag} onClick={() => setReporting(true)}>
-                {SHARE.report}
-              </Button>
-            </Row>
-          </Stack>
+            <Button variant="link" icon={Flag} onClick={() => setReporting(true)}>
+              {SHARE.report}
+            </Button>
+          </Row>
         </Stack>
       )}
       {reporting && view.kind === 'live' && shareKey !== null && (
@@ -99,6 +97,7 @@ function SharePage({ id, shareKey }: { id: string; shareKey: string | null }) {
           }}
         />
       )}
+      <Divider label="" />
       <LegalNotice />
     </Screen>
   );
