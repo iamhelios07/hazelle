@@ -41,3 +41,10 @@ it('accepts a prompt whose toggles hold layout lines, and refuses a toggle witho
   expect(isValue('prompt', { ...prompt, toggles: [{ label: '시뮬레이터', kind: 'check', default: '0' }] })).toBe(false);
   expect(isValue('prompt', { ...prompt, toggles: [{ kind: 'divider' }] })).toBe(false);
 });
+
+it("reads a chat's bookmarks as absent or well formed, and refuses a malformed list", () => {
+  const chat = { title: null, character: null, models: {} };
+  expect(isValue('chat', chat)).toBe(true);
+  expect(isValue('chat', { ...chat, bookmarks: [{ message: 'm', name: '고백' }] })).toBe(true);
+  expect(isValue('chat', { ...chat, bookmarks: ['m'] })).toBe(false);
+});
