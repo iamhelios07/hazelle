@@ -55,6 +55,7 @@ export function parseDisplay(stored: string, fallback: Display): Display {
 // the one whose every value matches.
 export type Look = Pick<Reading, 'font' | 'size' | 'leading' | 'width'> & Scheme;
 export type Preset = { name: string; look: Look };
+export type OwnPreset = Preset & { id: string };
 
 // 기본 takes initial's values, so --prose-size in tokens.css stays the one default size. It stays first: 기본값으로
 // 되돌리기 picks the first.
@@ -85,10 +86,10 @@ export function describeLook({ theme, bg, ink, accent, font, size, leading, widt
 
 // Written by this app, but another version may know a value this one does not: such a preset is counted as unread,
 // never shown with a value it did not save.
-export function savedPresets(looks: SavedLook[] = []): { presets: Preset[]; unread: number } {
-  const presets = looks.flatMap(({ name, look }) => {
+export function savedPresets(looks: SavedLook[] = []): { presets: OwnPreset[]; unread: number } {
+  const presets = looks.flatMap(({ id, name, look }) => {
     const read = parseLook(look);
-    return read ? [{ name, look: read }] : [];
+    return read && typeof id === 'string' ? [{ id, name, look: read }] : [];
   });
   return { presets, unread: looks.length - presets.length };
 }
@@ -105,4 +106,13 @@ function parseLook(look: SavedLook['look']): Look | null {
     width: named(SPACING, look.width),
   };
   return LOOK_KEYS.every((key) => read[key] !== undefined) ? (read as Look) : null;
+}
+
+// The look ends where target was, before it when moved toward the front and after it when moved toward the back; an
+// unread look keeps its place among the rest.
+export function moveLook(looks: SavedLook[], id: string, target: string): SavedLook[] {
+  const from = looks.findIndex((look) => look.id === id);
+  const to = looks.findIndex((look) => look.id === target);
+  if (from < 0 || to < 0 || from === to) return looks;
+  return looks.toSpliced(from, 1).toSpliced(to, 0, looks[from]!);
 }

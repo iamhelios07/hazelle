@@ -1,9 +1,10 @@
+import { ArrowLeft, ArrowRight, Save } from 'lucide-react';
 import { useState } from 'react';
 import { EMPTY_SETTINGS, type SavedLook } from '../../model/settings';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { ReadingRows, ReplyRow } from '../common/ReadingRows';
-import { choices, describeLook, lookOf, presetOf, savedPresets, type Preset } from '../common/reading';
+import { choices, describeLook, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
 import { PAGES } from '../common/words';
 import { useDisplay } from '../display';
 import { useSettings, useStore } from '../session';
@@ -22,53 +23,76 @@ const SWATCH_SAMPLE = '그녀는 찻잔을 내려놓고 고개를 들었다.';
 const colorChoices = <T extends string>(pick: 'bg' | 'ink' | 'accent', labels: Record<T, string>) =>
   choices(labels).map((option) => ({ ...option, mark: <ColorDot pick={pick} value={option.value} /> }));
 
-const withLook = (looks: SavedLook[] = [], saved: SavedLook) => [...looks.filter(({ name }) => name !== saved.name), saved];
-
 export function DisplayScreen({ back }: { back: Back | null }) {
   const { reading, display, presets, changeDisplay, pick } = useDisplay();
   const store = useStore();
   const toast = useToast();
   const own = savedPresets(useSettings().looks);
   const current = presetOf([...presets, ...own.presets], reading, display);
-  const [naming, setNaming] = useState(false);
+  const [naming, setNaming] = useState<{ preset: OwnPreset | null } | null>(null);
 
-  async function save(name: string) {
-    setNaming(false);
-    const look = { name: name.trim() || `내 프리셋 ${own.presets.length + 1}`, look: lookOf(reading, display) };
-    const saved = await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, looks: withLook(settings.looks, look) }));
-    if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
+  async function change(looks: (looks: SavedLook[]) => SavedLook[], failure: string) {
+    const done = await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, looks: looks(settings.looks ?? []) }));
+    if (!done.ok) toast.failed(done, failure);
+    return done.ok;
   }
 
-  async function remove({ name, look }: Preset) {
-    const removed = await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, looks: (settings.looks ?? []).filter((saved) => saved.name !== name) }));
-    if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
-    toast.undoable(`'${name}' 프리셋을 삭제했어요.`, () => store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, looks: withLook(settings.looks, { name, look }) })));
+  function name(typed: string) {
+    const preset = naming?.preset;
+    setNaming(null);
+    if (preset) return void change((looks) => looks.map((look) => (look.id === preset.id ? { ...look, name: typed.trim() || preset.name } : look)), '이름을 바꾸지 못했어요.');
+    const look = { id: crypto.randomUUID(), name: typed.trim() || `내 프리셋 ${own.presets.length + 1}`, look: lookOf(reading, display) };
+    void change((looks) => [...looks, look], '저장하지 못했어요.');
   }
+
+  async function remove({ id, name, look }: OwnPreset) {
+    let at = 0;
+    const removed = await change((looks) => {
+      at = looks.findIndex((saved) => saved.id === id);
+      return looks.filter((saved) => saved.id !== id);
+    }, '삭제하지 못했어요.');
+    if (removed) toast.undoable(`'${name}' 프리셋을 삭제했어요.`, () => store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, looks: (settings.looks ?? []).toSpliced(at, 0, { id, name, look }) })));
+  }
+
+  const move = (from: number, to: number) => void change((looks) => moveLook(looks, own.presets[from]!.id, own.presets[to]!.id), '옮기지 못했어요.');
 
   const swatch = (preset: Preset) => ({ name: preset.name, note: describeLook(preset.look), ...preset.look, current: preset === current, onPick: () => pick(preset) });
+  const menu = (preset: OwnPreset, index: number) => (
+    <>
+      <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming({ preset })} />
+      {preset !== current && <MenuItem icon={Save} label="지금 설정으로 덮어쓰기" onClick={() => void change((looks) => looks.map((look) => (look.id === preset.id ? { ...look, look: lookOf(reading, display) } : look)), '저장하지 못했어요.')} />}
+      {index > 0 && <MenuItem icon={ArrowLeft} label="앞으로 옮기기" onClick={() => move(index, index - 1)} />}
+      {index < own.presets.length - 1 && <MenuItem icon={ArrowRight} label="뒤로 옮기기" onClick={() => move(index, index + 1)} />}
+      <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove(preset)} />
+    </>
+  );
   return (
     <Screen width="page" top={<NavBar title={PAGES.display} {...backBar(back)} />}>
       <Section
         title="프리셋"
-        note={own.unread > 0 ? `읽지 못한 프리셋 ${own.unread}개` : undefined}
         action={
           !current && (
-            <Button variant="ghost" onClick={() => setNaming(true)}>
+            <Button variant="ghost" onClick={() => setNaming({ preset: null })}>
               지금 설정 저장
             </Button>
           )
         }
       >
-        <Swatches
-          label="프리셋"
-          sample={SWATCH_SAMPLE}
-          items={[
-            ...presets.map(swatch),
-            ...own.presets.map((preset) => ({ ...swatch(preset), menu: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove(preset)} /> })),
-          ]}
-        />
+        <Swatches label="프리셋" sample={SWATCH_SAMPLE} items={presets.map(swatch)} />
+        {(own.presets.length > 0 || own.unread > 0) && (
+          <Section title="내 프리셋" level={3} note={own.unread > 0 ? `읽지 못한 프리셋 ${own.unread}개` : undefined}>
+            <Swatches label="내 프리셋" sample={SWATCH_SAMPLE} items={own.presets.map((preset, index) => ({ ...swatch(preset), menu: menu(preset, index) }))} onMove={move} />
+          </Section>
+        )}
       </Section>
-      {naming && <NameDialog title="프리셋으로 저장" value={`내 프리셋 ${own.presets.length + 1}`} hint="같은 이름의 내 프리셋은 지금 설정으로 바뀌어요." onSave={(name) => void save(name)} onClose={() => setNaming(false)} />}
+      {naming && (
+        <NameDialog
+          title={naming.preset ? '프리셋 이름 바꾸기' : '프리셋으로 저장'}
+          value={naming.preset?.name ?? `내 프리셋 ${own.presets.length + 1}`}
+          onSave={name}
+          onClose={() => setNaming(null)}
+        />
+      )}
       <Beside
         variant="preview"
         side={

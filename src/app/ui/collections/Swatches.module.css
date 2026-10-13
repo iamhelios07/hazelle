@@ -1,6 +1,6 @@
 .swatches {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--tile-min-width)), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tile-min-width)), 1fr));
   gap: var(--space-16);
 }
 
@@ -85,4 +85,29 @@
 
 .card:has(> .menu) .meta {
   padding-right: var(--space-32);
+}
+
+.dragged {
+  opacity: 0.4;
+}
+
+/* Where a dragged card would land: a bar on the card's inner edge, since the card clips what overflows it. */
+.before::after,
+.after::after {
+  content: '';
+  position: absolute;
+  z-index: var(--layer-raised);
+  top: var(--space-8);
+  bottom: var(--space-8);
+  width: var(--border-thick);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.before::after {
+  left: var(--space-2);
+}
+
+.after::after {
+  right: var(--space-2);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Reading } from '../ui';
-import { DISPLAY_DEFAULT, lookOf, parseDisplay, parseReading, presetOf, presets, savedPresets } from './reading';
+import { DISPLAY_DEFAULT, lookOf, moveLook, parseDisplay, parseReading, presetOf, presets, savedPresets } from './reading';
 
 const FALLBACK: Reading = { font: 'serif', size: 17, leading: 'normal', width: 'normal', reply: 'follow' };
 
@@ -40,10 +40,19 @@ describe('saved presets', () => {
   it('reads each saved look, and counts one with a value this version does not know instead of showing it', () => {
     const look = lookOf(FALLBACK, { ...DISPLAY_DEFAULT, bg: 'green', accent: 'violet' });
     const read = savedPresets([
-      { name: '숲', look },
-      { name: '다음 버전', look: { ...look, bg: 'aurora' } },
+      { id: 'a', name: '숲', look },
+      { id: 'b', name: '다음 버전', look: { ...look, bg: 'aurora' } },
     ]);
-    expect(read).toEqual({ presets: [{ name: '숲', look }], unread: 1 });
+    expect(read).toEqual({ presets: [{ id: 'a', name: '숲', look }], unread: 1 });
     expect(presetOf(read.presets, FALLBACK, { ...DISPLAY_DEFAULT, bg: 'green', accent: 'violet' })?.name).toBe('숲');
+  });
+});
+
+describe('moving a saved preset', () => {
+  it('lands it where the target was, either way, and keeps an unread one among the rest', () => {
+    const look = lookOf(FALLBACK, DISPLAY_DEFAULT);
+    const looks = ['a', 'b', 'x', 'c'].map((id) => ({ id, name: id, look }));
+    expect(moveLook(looks, 'a', 'c').map(({ id }) => id)).toEqual(['b', 'x', 'c', 'a']);
+    expect(moveLook(looks, 'c', 'b').map(({ id }) => id)).toEqual(['a', 'c', 'b', 'x']);
   });
 });

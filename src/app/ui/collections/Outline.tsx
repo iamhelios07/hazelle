@@ -1,9 +1,10 @@
 import { ArrowDown, ArrowUp, Bookmark, ChevronRight, Plus, X, type LucideIcon } from 'lucide-react';
-import { useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
 import { Menu, type MenuOpener } from '../overlays/Menu';
+import { useDragOrder } from './dragOrder';
 import styles from './Outline.module.css';
 
 // The rail's sections, each drawn in its own color (tokens.css --color-kind-*).
@@ -46,7 +47,6 @@ type Props = {
 export function Outline({ label, help, start, end, stops, current, onPick, onOpen, onRemove, onMove, insert, onCache, reorder = 'drag', drill = false }: Props) {
   const list = useRef<HTMLDivElement>(null);
   const helpId = useId();
-  const [drag, setDrag] = useState<{ from: number; at: number } | null>(null);
   const refocus = useRef<string | null>(null);
 
   const focusStop = (id: string) => list.current?.querySelector<HTMLElement>(`[data-stop="${CSS.escape(id)}"]`)?.focus();
@@ -63,6 +63,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
     refocus.current = stops[from]!.id;
     onMove(from, to);
   };
+  const order = useDragOrder(move, 'y');
 
   const key = (event: KeyboardEvent, index: number) => {
     const stop = stops[index]!;
@@ -82,20 +83,6 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
       refocus.current = (stops[index + 1] ?? stops[index - 1])?.id ?? null;
       onRemove(stop.id);
     }
-  };
-
-  const over = (event: DragEvent, index: number) => {
-    if (!drag) return;
-    event.preventDefault();
-    const box = event.currentTarget.getBoundingClientRect();
-    const at = event.clientY > box.top + box.height / 2 ? index + 1 : index;
-    if (at !== drag.at) setDrag({ ...drag, at });
-  };
-  const drop = (event: DragEvent) => {
-    if (!drag) return;
-    event.preventDefault();
-    move(drag.from, drag.at > drag.from ? drag.at - 1 : drag.at);
-    setDrag(null);
   };
 
   const addMenu = (index: number, trigger: (opener: MenuOpener) => ReactNode) => (
@@ -133,18 +120,18 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
         <span className={`${styles.end} ${styles.open}`} />
         <span className={styles.capLabel}>{start}</span>
       </div>
-      <div role="list" aria-label={label} className={lastStop?.cache ? `${styles.stops} ${styles.cutEnd}` : styles.stops} onDragOver={(event) => drag && event.preventDefault()} onDrop={drop}>
+      <div role="list" aria-label={label} className={lastStop?.cache ? `${styles.stops} ${styles.cutEnd}` : styles.stops} onDragOver={order.allow} onDrop={order.drop}>
         {stops.map((stop, index) => {
           const above = stops[index - 1];
           const turn = above !== undefined && above.kind !== stop.kind;
-          const classes = [styles.stop, turn && styles.turn, above?.cache && styles.cutAbove, index === 0 && styles.first, drag?.from === index && styles.dragged].filter(Boolean).join(' ');
+          const classes = [styles.stop, turn && styles.turn, above?.cache && styles.cutAbove, index === 0 && styles.first, order.from === index && styles.dragged].filter(Boolean).join(' ');
           return (
-            <div key={stop.id} role="listitem" className={classes} onDragOver={(event) => over(event, index)}>
+            <div key={stop.id} role="listitem" className={classes} onDragOver={(event) => order.over(event, index)}>
               <span className={`${styles.segment} ${styles[above?.kind ?? stop.kind]}`} aria-hidden />
               {index === stops.length - 1 && <span className={`${styles.segment} ${styles.last} ${styles[stop.kind]}`} aria-hidden />}
               <div className={styles.gap}>
                 {cut(above)}
-                {drag?.at === index && <span className={styles.drop} />}
+                {order.at === index && <span className={styles.drop} />}
                 {reorder === 'drag' && plus(index, `${index + 1}번째 자리에 추가`)}
               </div>
               <div className={styles.row} aria-current={stop.id === current || undefined}>
@@ -158,12 +145,8 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
                   aria-current={stop.id === current || undefined}
                   onClick={() => onPick(stop.id)}
                   onKeyDown={(event) => key(event, index)}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData('text/plain', stop.id);
-                    event.dataTransfer.effectAllowed = 'move';
-                    setDrag({ from: index, at: index });
-                  }}
-                  onDragEnd={() => setDrag(null)}
+                  onDragStart={(event) => order.start(event, index, stop.id)}
+                  onDragEnd={order.end}
                 >
                   <span className={styles.number}>{index + 1}</span>
                   <span className={`${styles.node} ${styles[stop.kind]}`}>
@@ -203,7 +186,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
         })}
         <div className={styles.tail}>
           {cut(lastStop)}
-          {drag?.at === stops.length && <span className={styles.drop} />}
+          {order.at === stops.length && <span className={styles.drop} />}
         </div>
       </div>
       <div className={styles.cap} aria-hidden>

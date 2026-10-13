@@ -138,7 +138,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `Preview`, `SelectionBar`) | `CardGrid.module.css` | Characters and pictures as cards; a card's picture whole in a dialog (`Preview`) |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |
-| collections | `Swatches` (`Swatch`) | `Swatches.module.css` | Looks to pick from as cards, each drawn in its own scheme and face whatever the app's, the current one pressed and checked, an own one with a ⋯ menu |
+| collections | `Swatches` (`Swatch`) | `Swatches.module.css` | Looks to pick from as cards, each drawn in its own scheme and face whatever the app's, the current one pressed and checked, an own one with a ⋯ menu; with `onMove`, dragged into another order (`dragOrder.ts`, shared with `Outline`) |
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), each place's colours, and the hover and current fills |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
