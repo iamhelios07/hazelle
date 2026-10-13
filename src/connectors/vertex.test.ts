@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { catalogRequest, chatRequest, detect, embedRoute, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
+import { decodeStream } from './stream';
 import type { Connection } from './types';
 import { vertex } from './vertex';
 
@@ -60,5 +61,22 @@ describe('Vertex AI', () => {
       ['gemini-2.5-flash-tts', 'gemini-2.5-flash-tts', null, null, null],
     ]);
     expect(parseCatalog(route, { models: [] })).toBeNull();
+  });
+
+  it('asks for Flex with both headers only on the discount lane, and halves only a reply Flex served', async () => {
+    const route = resolveConnection(connection) as Route;
+    const [model] = parseCatalog(route, { publisherModels: [{ name: 'publishers/google/models/gemini-3-flash-preview' }] })!;
+    const asked = (settings: { discount?: true }) => withCredential(route, chatRequest(route, { model: model!, messages: [{ role: 'user', content: '안녕' }], settings }), 'token').headers;
+    expect(asked({ discount: true })).toMatchObject({ 'x-vertex-ai-llm-request-type': 'shared', 'x-vertex-ai-llm-shared-request-type': 'flex', authorization: 'Bearer token' });
+    expect(Object.keys(asked({})).filter((name) => name.startsWith('x-vertex-ai-'))).toEqual([]);
+
+    const priced = { ...model!, price: { input: 2, output: 8, cacheRead: null, cacheWrite: null, tiers: [], asOf: 1 } };
+    const reply = (trafficType: string) =>
+      new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '안녕' }], role: 'model' }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1_000_000, candidatesTokenCount: 1_000_000, trafficType } }), { headers: { 'content-type': 'application/json' } });
+    const flex = await decodeStream(route, priced, reply('ON_DEMAND_FLEX'), new AbortController().signal, () => {});
+    expect(flex).toMatchObject({ discount: 'tier', cost: { amount: (2 + 8) / 2 } });
+    const standard = await decodeStream(route, priced, reply('ON_DEMAND'), new AbortController().signal, () => {});
+    expect(standard.discount).toBeUndefined();
+    expect(standard.cost).toMatchObject({ amount: 2 + 8 });
   });
 });
