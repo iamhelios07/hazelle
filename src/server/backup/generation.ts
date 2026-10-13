@@ -29,12 +29,13 @@ const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 export type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
 // leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
-// into every account that holds one. snapshots: those baselines, and every snapshot an operation pins. operations:
-// those not done, and any not yet seen ending. bucket: where pictures are, the pool for disk, the R2 store for r2.
-// pictures: ids, which are their SHA-256. pictures and migrations are the last two keys written, and bucket comes before
-// them: deploy/rclone-backup.sh matches that tail and keeps only a disk generation's pictures in its pool.
+// into every account that holds one. snapshots: those baselines, every snapshot an operation pins, and the base of each
+// delta among them. operations: those not done, and any not yet seen ending. bucket: where pictures are, the pool for
+// disk, the R2 store for r2. pictures: ids, which are their SHA-256. pictures and migrations are the last two keys
+// written, and bucket comes before them: deploy/rclone-backup.sh matches that tail and the version, and keeps only a
+// disk generation's pictures in its pool.
 export type Manifest = {
-  version: 2;
+  version: 2 | 3;
   id: string;
   capturedAt: number;
   service: Artifact;
@@ -85,8 +86,9 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
     const unbacked = accounts.filter(({ state, baseline }) => state !== 'leaving' && baseline === null);
     if (unbacked.length) throw new Error(`generation: ${unbacked.length} accounts have no baseline`);
     const snapshots = all<{ id: string; incarnation: string; bytes: number; expanded: number; sha256: string }>(
-      `SELECT id, incarnation, bytes, expanded, sha256 FROM snapshots s
-       WHERE id IN (SELECT value FROM json_each(?1)) OR ${PINNED('s', '?2')} ORDER BY incarnation, id`,
+      `WITH named AS (SELECT id, base FROM snapshots s WHERE id IN (SELECT value FROM json_each(?1)) OR ${PINNED('s', '?2')})
+       SELECT id, incarnation, bytes, expanded, sha256 FROM snapshots
+       WHERE id IN (SELECT id FROM named UNION SELECT base FROM named) ORDER BY incarnation, id`,
       JSON.stringify(accounts.map(({ baseline }) => baseline).filter((id) => id !== null)),
       now,
     );
@@ -157,7 +159,7 @@ export async function captureGeneration(
   const artifact = await archiveSnapshot(plain, compressed);
   await rm(plain);
   const manifest: Manifest = {
-    version: 2,
+    version: 3,
     id,
     capturedAt: now,
     service: { path: 'service.sqlite.gz', ...artifact },
@@ -191,7 +193,9 @@ async function placePicture(files: DiskBucket, target: string, picture: string, 
   throw new Error(`generation: picture ${picture} is stored but on no disk`);
 }
 
-// Version 1 was written before the R2 bucket, so its pictures are in the pool. Any other version is answered as read.
+// Version 1 was written before the R2 bucket, so its pictures are in the pool. Any other version is answered as read:
+// 2 names whole snapshots only; 3 may name deltas beside their bases, and a build before it refuses one, since it would
+// install a delta file as the account.
 export async function readManifest(root: string): Promise<Manifest | null> {
   try {
     const manifest = JSON.parse(await readFile(join(root, MANIFEST), 'utf8')) as Manifest | (Omit<Manifest, 'version' | 'bucket'> & { version: 1 });

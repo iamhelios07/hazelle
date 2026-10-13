@@ -7,7 +7,7 @@ import { createGunzip } from 'node:zlib';
 import type { ExecutionContext } from 'hono';
 import type { RestorePhase } from '../../contracts/admin';
 import { serviceReads } from '../account-store';
-import { accountPath, accountRegistry, installSnapshot, snapshotPath } from '../db/account-db';
+import { accountPath, accountRegistry, installSnapshot, materializeSnapshot, snapshotPath } from '../db/account-db';
 import { digest, fsyncPath, makeDirs } from '../db/durable';
 import { migrate } from '../db/migrate';
 import { openDatabase, serviceDb } from '../db/service-db';
@@ -30,12 +30,6 @@ import { POOL, readManifest, type Manifest } from './generation';
 
 const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 const HEADS = 16;
-
-async function gunzipTo(source: string, target: string) {
-  makeDirs(dirname(target));
-  await pipeline(createReadStream(source), createGunzip(), createWriteStream(target, { flags: 'wx' }));
-  fsyncPath(target);
-}
 
 async function copyInto(source: string, target: string) {
   makeDirs(dirname(target));
@@ -83,20 +77,22 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   // No `copied` needed: that marker is for freshness and the copier; a generation with its manifest and verified
   // hashes is a whole restore source wherever it lies.
   if (manifest === null) throw new Error(`restore: ${generation} has no manifest; it is not a complete generation`);
-  if (manifest.version !== 2) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
+  if (manifest.version !== 2 && manifest.version !== 3) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
   await mkdir(dataDir, { recursive: true });
   if ((await readdir(dataDir)).length) throw new Error(`restore: ${dataDir} is not empty`);
   await verify(generation, manifest, files);
 
-  await gunzipTo(join(generation, manifest.service.path), join(dataDir, 'service.sqlite'));
+  const service = join(dataDir, 'service.sqlite');
+  await pipeline(createReadStream(join(generation, manifest.service.path)), createGunzip(), createWriteStream(service, { flags: 'wx' }));
+  fsyncPath(service);
   // verify refused an r2 generation into any other bucket. A failure leaves the directory empty, as it found it.
   if (manifest.bucket === 'r2' && files.kind === 'r2') {
-    await inStore(files, join(dataDir, 'service.sqlite')).catch(async (error: unknown) => {
+    await inStore(files, service).catch(async (error: unknown) => {
       for (const suffix of ['', '-wal', '-shm']) await rm(join(dataDir, `service.sqlite${suffix}`), { force: true });
       throw error;
     });
   }
-  const raw = openDatabase(join(dataDir, 'service.sqlite'));
+  const raw = openDatabase(service);
   migrate(raw, migrationsDir);
   const db = serviceDb(raw);
   // The catalog names every snapshot the source had; only the generation's came along.
@@ -107,7 +103,9 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   const fenced = new Map(manifest.operations.flatMap(({ incarnation, phase, checkpoint }) => (BEFORE_ARMED.includes(phase) && checkpoint !== null ? [[incarnation, checkpoint]] : [])));
   for (const { incarnation, baseline } of manifest.accounts) {
     const source = fenced.get(incarnation) ?? baseline;
-    if (source !== null) await gunzipTo(snapshotPath(dataDir, incarnation, source), accountPath(dataDir, incarnation));
+    if (source === null) continue;
+    await materializeSnapshot(dataDir, db, incarnation, source, accountPath(dataDir, incarnation));
+    fsyncPath(accountPath(dataDir, incarnation));
   }
   // Past its install already: the live file was the target when the generation was taken.
   for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id);
