@@ -57,10 +57,10 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
   return { taken, skipped, unchanged, failed };
 }
 
-// A snapshot goes once it is RETENTION_MS old, unless it is pinned (PINNED) or it is a live account's floor: its newest
-// baseline RETENTION_MS old or older, the account as it was when the window began. Baselines are taken only on days the
-// account changed, so a time inside the window may land on one from before it; the floor is also an unchanged
-// account's only copy.
+// A snapshot goes once it is RETENTION_MS old, unless it is pinned (PINNED), it is a live account's floor: its newest
+// baseline RETENTION_MS old or older, the account as it was when the window began, or a delta names it as its base.
+// Baselines are taken only on days the account changed, so a time inside the window may land on one from before it;
+// the floor is also an unchanged account's only copy. A base goes on a later pass, once its last delta has gone.
 // A deleted account has no restores and no row, so every snapshot of it goes at RETENTION_MS from its taking, which is
 // within RETENTION_MS of the deletion. The row goes before the file; a file left by a crash between has no row, and the
 // hourly reconciliation removes it.
@@ -70,6 +70,7 @@ export async function expireSnapshots(env: Services, dataDir: string, now: numbe
       `SELECT id, incarnation FROM snapshots s
        WHERE taken_at <= ?1 - ${RETENTION_MS}
          AND NOT ${PINNED('s', '?1')}
+         AND NOT EXISTS (SELECT 1 FROM snapshots d WHERE d.incarnation = s.incarnation AND d.base = s.id)
          AND NOT (kind = 'baseline' AND EXISTS (SELECT 1 FROM accounts WHERE incarnation = s.incarnation)
            AND id = (SELECT id FROM snapshots WHERE incarnation = s.incarnation AND kind = 'baseline' AND taken_at <= ?1 - ${RETENTION_MS}
              ORDER BY taken_at DESC, id DESC LIMIT 1))

@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreRules, type FeedPage, type FeedQuery, type StoreDb, type StoreReads, type Write } from './account-store';
 import { AccountDb, accountRegistry, type Stores } from './db/account-db';
+import { migrate } from './db/migrate';
 import { serviceDb, type Db } from './db/service-db';
 
 const INC = 'a'.repeat(32);
@@ -50,7 +51,7 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-rules-'));
   raw = new DatabaseSync(':memory:');
   raw.exec('PRAGMA foreign_keys = ON');
-  raw.exec(readFileSync('migrations/0001_baseline.sql', 'utf8'));
+  migrate(raw, 'migrations');
   db = serviceDb(raw);
   stores = accountRegistry(dir, db, reads, () => now);
   await stores.prepare(INC, 't1');

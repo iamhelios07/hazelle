@@ -67,12 +67,13 @@ describe('the daily job', () => {
     await t.daily(day(1));
     await t.daily(day(6));
     await t.daily(day(13));
-    expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(1) }]);
+    // day(0), the signup's baseline, stays as the base of day(1)'s delta.
+    expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(0) }, { takenAt: day(1) }]);
     expect(await t.stores.snapshotAt(incarnation, day(10))).toMatchObject({ takenAt: day(1) });
     await written(incarnation, 'after it');
     await t.daily(day(14));
     await t.daily(day(17));
-    expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(1) }, { takenAt: day(14) }]);
+    expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(0) }, { takenAt: day(1) }, { takenAt: day(14) }]);
     expect(await t.stores.snapshotAt(incarnation, day(12))).toMatchObject({ takenAt: day(1) });
   });
 
@@ -112,7 +113,8 @@ describe('retention', () => {
   it('reclaims a snapshot file whose expiry committed before the process stopped without deleting the live floor', async () => {
     const incarnation = await signedUp('jin');
     const now = Date.now();
-    t.clock.now = () => now - 10 * DAY_MS;
+    // Older than RETENTION_MS before the floor, so the floor is whole and names no base.
+    t.clock.now = () => now - 17 * DAY_MS;
     const old = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
     await written(incarnation, 'floor');
     t.clock.now = () => now - 9 * DAY_MS;
@@ -176,5 +178,26 @@ describe('retention', () => {
     for (const [id, incarnation] of snapshots) expect(existsSync(snapshotPath(t.dir, incarnation, id))).toBe(left.includes(id));
     expect(await expireSnapshots(t.env, t.dir, now + 3 * DAY_MS)).toBe(2);
     expect((await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id)).toEqual(['cancelled', 'newest', 'open-target', 'young']);
+  });
+
+  it('keeps a base while a delta names it, and lets it go on the pass after its last delta went', async () => {
+    const gone = 'f'.repeat(32);
+    const now = Date.now();
+    const rows: [string, string | null, number][] = [
+      ['base', null, now - 10 * DAY_MS],
+      ['delta', 'base', now - 4 * DAY_MS],
+    ];
+    for (const [id, base, takenAt] of rows) {
+      await t.env.db.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256, base) VALUES (?, ?, 'baseline', ?, 0, 1, 1, 'x', ?)").bind(id, gone, takenAt, base).run();
+      mkdirSync(join(t.dir, 'snapshots', gone), { recursive: true });
+      writeFileSync(snapshotPath(t.dir, gone, id), 'x');
+    }
+    const left = async () => (await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id);
+    expect(await expireSnapshots(t.env, t.dir, now)).toBe(0);
+    expect(await expireSnapshots(t.env, t.dir, now + 4 * DAY_MS)).toBe(1);
+    expect(await left()).toEqual(['base']);
+    expect(await expireSnapshots(t.env, t.dir, now + 4 * DAY_MS)).toBe(1);
+    expect(await left()).toEqual([]);
+    expect(existsSync(snapshotPath(t.dir, gone, 'base'))).toBe(false);
   });
 });

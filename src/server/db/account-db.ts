@@ -30,17 +30,25 @@ const SCHEMA = [
 // replaced or already was, and a baseline taken then would read, once the rewind is done, as the account after it.
 export const TAKES_BASELINE = (a: string) =>
   `(${a}.state = 'active' OR (${a}.state = 'restoring' AND (SELECT phase FROM restores WHERE id = ${a}.operation) IN ('begun', 'fenced')))`;
+const LAST_REWIND = (incarnation: string) => `COALESCE((SELECT MAX(ended_at) FROM restores WHERE incarnation = ${incarnation} AND phase = 'done'), -1)`;
 // Over an accounts row aliased `a` and a time `now` (a bind): `column` of the account's current baseline, its newest
 // taken by `now` and not before the last rewind finished on it, or null. A rewind replaces the file, and the installed
 // head.rev can equal the one an older baseline recorded, so only the current baseline's rev says the file is unchanged.
 // A baseline stamped after `now` is evidence of a clock since put back, not of the account's state.
 export const CURRENT_BASELINE = (column: 'taken_at' | 'rev', a: string, now: string) =>
   `SELECT ${column} FROM snapshots WHERE incarnation = ${a}.incarnation AND kind = 'baseline' AND taken_at <= ${now}
-     AND taken_at >= COALESCE((SELECT MAX(ended_at) FROM restores WHERE incarnation = ${a}.incarnation AND phase = 'done'), -1)
+     AND taken_at >= ${LAST_REWIND(`${a}.incarnation`)}
    ORDER BY taken_at DESC, id DESC LIMIT 1`;
 
 // How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
 export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+// For an incarnation and a time `now` (binds): the id and rev of the whole snapshot a new snapshot is a delta against,
+// or no row, and the new one is whole. Only a finished rewind replaces the file; a cancelled one leaves it untouched.
+export const CURRENT_BASE = (incarnation: string, now: string) =>
+  `SELECT id, rev FROM snapshots WHERE incarnation = ${incarnation} AND base IS NULL AND taken_at > ${now} - ${RETENTION_MS}
+     AND taken_at >= ${LAST_REWIND(incarnation)}
+   ORDER BY taken_at DESC, id DESC LIMIT 1`;
+
 const MAX_HANDLES = 256;
 const IDLE_MS = 10 * 60 * 1000;
 // node:sqlite error codes that mean the file itself is unreadable.
@@ -132,10 +140,13 @@ export const landing = (service: Db, incarnation: string, at: number) =>
     .first<{ id: string; takenAt: number; kind: SnapshotKind }>();
 
 // The one check that a snapshot can be installed: its row is there and its file has the size and SHA-256 the row
-// recorded. The preview, the choice of a target and the install all pass through it, so a snapshot the install would
-// refuse is refused before an operation is armed on it.
-async function verifySnapshot(dataDir: string, service: Db, incarnation: string, id: string): Promise<void> {
-  const row = await service.prepare('SELECT bytes, sha256 FROM snapshots WHERE id = ? AND incarnation = ?').bind(id, incarnation).first<{ bytes: number; sha256: string }>();
+// recorded, and for a delta its base's too. The preview, the choice of a target and the install all pass through it,
+// so a snapshot the install would refuse is refused before an operation is armed on it.
+async function verifySnapshot(dataDir: string, service: Db, incarnation: string, id: string): Promise<{ base: string | null; rev: number }> {
+  const row = await service
+    .prepare('SELECT bytes, sha256, base, rev FROM snapshots WHERE id = ? AND incarnation = ?')
+    .bind(id, incarnation)
+    .first<{ bytes: number; sha256: string; base: string | null; rev: number }>();
   if (row === null) throw new StoreUnavailable('snapshot-missing');
   let found: { sha256: string; bytes: number };
   try {
@@ -145,6 +156,43 @@ async function verifySnapshot(dataDir: string, service: Db, incarnation: string,
     throw error;
   }
   if (found.bytes !== row.bytes || found.sha256 !== row.sha256) throw new StoreUnavailable('snapshot-corrupt');
+  if (row.base !== null) await verifySnapshot(dataDir, service, incarnation, row.base);
+  return { base: row.base, rev: row.rev };
+}
+
+// The one reader of a snapshot's format: writes snapshot `id` to `target` as a plain whole account file. A delta is
+// applied on a copy of its base; a delta whose result is not the rev its row recorded is corrupt.
+export async function materializeSnapshot(dataDir: string, service: Db, incarnation: string, id: string, target: string): Promise<void> {
+  const { base, rev } = await verifySnapshot(dataDir, service, incarnation, id);
+  await pipeline(createReadStream(snapshotPath(dataDir, incarnation, base ?? id)), createGunzip(), createWriteStream(target));
+  if (base === null) return;
+  const delta = `${target}.delta`;
+  try {
+    await pipeline(createReadStream(snapshotPath(dataDir, incarnation, id)), createGunzip(), createWriteStream(delta));
+    const db = new DatabaseSync(target);
+    try {
+      db.prepare('ATTACH DATABASE ? AS delta').run(delta);
+      try {
+        transaction(db, () => {
+          db.exec(`INSERT OR REPLACE INTO objects (id, kind, parent_id, rev, body, deleted_at) SELECT id, kind, parent_id, rev, body, deleted_at FROM delta.objects;
+            DELETE FROM kv; INSERT INTO kv SELECT * FROM delta.kv;
+            DELETE FROM head; INSERT INTO head SELECT * FROM delta.head;`);
+        });
+      } finally {
+        db.exec('DETACH DATABASE delta');
+      }
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(delta, { force: true });
+  }
+  const check = new DatabaseSync(target, { readOnly: true });
+  try {
+    if ((check.prepare('SELECT rev FROM head').get() as { rev: number } | undefined)?.rev !== rev) throw new StoreUnavailable('snapshot-corrupt');
+  } finally {
+    check.close();
+  }
 }
 
 // Exported for tests that wrap a StoreDb; production code reaches a file only through the registry.
@@ -192,7 +240,7 @@ export class AccountDb implements StoreDb {
     return this.exec<{ size: number }>('SELECT page_count * page_size AS size FROM pragma_page_count(), pragma_page_size()')[0]!.size;
   }
 
-  // Capture runs on the account queue: eligibility, takenAt and rev must describe the same file, before any
+  // Capture runs on the account queue: eligibility, takenAt, the base and rev must describe the same file, before any
   // later checkpoint or replacement. Publishing the private copy needs no live handle or account queue.
   async captureSnapshot(kind: SnapshotKind, operation: number | null): Promise<() => Promise<string>> {
     const takenAt = this.clock();
@@ -201,9 +249,29 @@ export class AccountDb implements StoreDb {
     makeDirs(dir);
     const plain = join(dir, `.tmp-${id}.sqlite`);
     const gz = join(dir, `.tmp-${id}.sqlite.gz`);
-    const rev = this.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev;
+    const base = await this.service.prepare(CURRENT_BASE('?1', '?2')).bind(this.incarnation, takenAt).first<{ id: string; rev: number }>();
+    let rev: number;
     try {
-      await backup(this.db(), plain);
+      if (base === null) {
+        rev = this.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev;
+        await backup(this.db(), plain);
+      } else {
+        const db = this.db();
+        db.prepare('ATTACH DATABASE ? AS delta').run(plain);
+        try {
+          rev = this.transaction(() => {
+            // Exact only while account-store.ts writes every objects row with a rev above the previous head.rev and
+            // never hard-deletes one (a purge empties body under a new rev): then `rev > base.rev` is every change
+            // since the base. A hard delete there needs a purge log this delta carries first.
+            db.exec(`CREATE TABLE delta.head AS SELECT * FROM main.head;
+              CREATE TABLE delta.kv AS SELECT * FROM main.kv;
+              CREATE TABLE delta.objects AS SELECT * FROM main.objects WHERE rev > ${base.rev};`);
+            return this.exec<{ rev: number }>('SELECT rev FROM delta.head')[0]!.rev;
+          });
+        } finally {
+          db.exec('DETACH DATABASE delta');
+        }
+      }
     } catch (error) {
       rmSync(plain, { force: true });
       throw error;
@@ -216,8 +284,8 @@ export class AccountDb implements StoreDb {
         // The row follows the durable artifact. A crash before publication leaves a .tmp-* or uncatalogued gzip
         // for reconciliation; the capture's time and revision never advance to publication time.
         await this.service
-          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256)
+          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256, base) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256, base?.id ?? null)
           .run();
       } finally {
         rmSync(plain, { force: true });
@@ -231,7 +299,9 @@ export class AccountDb implements StoreDb {
     // A checkpoint stays on the queue through publication: a rewind must have its durable undo before advancing.
     take: async (kind: SnapshotKind, operation: number | null): Promise<string> => (await this.captureSnapshot(kind, operation))(),
     forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at))?.id ?? null,
-    verify: (id: string) => verifySnapshot(this.dataDir, this.service, this.incarnation, id),
+    verify: async (id: string) => {
+      await verifySnapshot(this.dataDir, this.service, this.incarnation, id);
+    },
   };
 
   close() {
@@ -426,11 +496,9 @@ async function installArmed(dataDir: string, service: Db, incarnation: string): 
 // may hold the live file.
 export async function installSnapshot(dataDir: string, service: Db, incarnation: string, armed: string, operation: number): Promise<void> {
   const live = accountPath(dataDir, incarnation);
-  const source = snapshotPath(dataDir, incarnation, armed);
-  await verifySnapshot(dataDir, service, incarnation, armed);
   const staged = join(dataDir, 'accounts', `${incarnation}.install-${random()}.sqlite`);
   try {
-    await pipeline(createReadStream(source), createGunzip(), createWriteStream(staged));
+    await materializeSnapshot(dataDir, service, incarnation, armed, staged);
     const db = new DatabaseSync(staged);
     try {
       const [check] = db.prepare('PRAGMA quick_check').all() as { quick_check: string }[];

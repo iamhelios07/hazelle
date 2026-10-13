@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serviceReads, type Write } from '../account-store';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
-import { accountPath, accountRegistry, snapshotPath, type Stores } from './account-db';
+import { accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, snapshotPath, type Stores } from './account-db';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
 import * as snapshots from './snapshot';
@@ -45,6 +45,35 @@ async function signup(state = 'active', timeline = 't1') {
 const store = () => stores.getByName(INC);
 const baseline = async () => ((await stores.snapshot(INC, 'baseline')) as { taken: string }).taken;
 const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
+const B = '22222222-2222-4222-8222-222222222222';
+const C = '33333333-3333-4333-8333-333333333333';
+// A whole snapshot at rev 2, then two writes and a kv row, then a delta at rev 4.
+async function baseAndDelta() {
+  await signup();
+  await write(put(A, 'a1'), put(B, 'b1'));
+  now = 2_000_000;
+  const base = await baseline();
+  await write(put(A, 'a2', 1));
+  await write(put(C, 'c1'));
+  const file = new DatabaseSync(accountPath(dir, INC));
+  file.prepare("INSERT INTO kv (key, value) VALUES ('mark', 'm')").run();
+  file.close();
+  now = 3_000_000;
+  return { base, delta: await baseline() };
+}
+const opened = <T>(path: string, read: (db: DatabaseSync) => T): T => {
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    return read(db);
+  } finally {
+    db.close();
+  }
+};
+const contents = (db: DatabaseSync) => ({
+  head: db.prepare('SELECT * FROM head').all(),
+  kv: db.prepare('SELECT * FROM kv ORDER BY key').all(),
+  objects: db.prepare('SELECT id, kind, parent_id, rev, body, deleted_at FROM objects ORDER BY id').all(),
+});
 const bodies = async () => {
   const page = (await store().feed(INC, { timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, kind: null, count: false })) as { changes: { id: string; body: string | null }[] };
   return page.changes.map(({ body }) => body);
@@ -334,6 +363,76 @@ describe('the account registry', () => {
     raw.prepare("UPDATE accounts SET state = 'active', operation = NULL").run();
     expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 2 });
+  });
+
+  it('takes a delta that holds the head, the kv table and exactly the objects above its base’s rev', async () => {
+    const { base, delta } = await baseAndDelta();
+    expect(raw.prepare('SELECT id, base, rev FROM snapshots ORDER BY taken_at').all()).toEqual([
+      { id: base, base: null, rev: 2 },
+      { id: delta, base, rev: 4 },
+    ]);
+    expect(readdirSync(join(dir, 'snapshots', INC)).filter((name) => name.startsWith('.tmp-'))).toEqual([]);
+    const plain = join(dir, 'delta.sqlite');
+    writeFileSync(plain, gunzipSync(readFileSync(snapshotPath(dir, INC, delta))));
+    opened(plain, (file) => {
+      expect(file.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all()).toEqual([{ name: 'head' }, { name: 'kv' }, { name: 'objects' }]);
+      expect(file.prepare('SELECT rev FROM head').all()).toEqual([{ rev: 4 }]);
+      expect(file.prepare('SELECT key, value FROM kv').all()).toEqual([{ key: 'mark', value: 'm' }]);
+      expect(file.prepare('SELECT id, rev, body FROM objects ORDER BY rev').all()).toEqual([{ id: A, rev: 3, body: 'a2' }, { id: C, rev: 4, body: 'c1' }]);
+    });
+  });
+
+  it('materializes a delta on its base into the same rows as the file it was taken of', async () => {
+    const { delta } = await baseAndDelta();
+    stores.close();
+    const target = join(dir, 'materialized.sqlite');
+    await materializeSnapshot(dir, db, INC, delta, target);
+    expect(opened(target, contents)).toEqual(opened(accountPath(dir, INC), contents));
+    expect(existsSync(`${target}.delta`)).toBe(false);
+  });
+
+  it('takes a whole snapshot first, a delta next, and a whole one again after a finished rewind and once the base is RETENTION_MS old', async () => {
+    await signup();
+    const take = async (at: number, body: string) => {
+      now = at;
+      await write(put(crypto.randomUUID(), body));
+      const id = await baseline();
+      return (raw.prepare('SELECT base FROM snapshots WHERE id = ?').get(id) as { base: string | null }).base === null ? 'whole' : 'delta';
+    };
+    expect(await take(2_000_000, 'first')).toBe('whole');
+    expect(await take(3_000_000, 'next')).toBe('delta');
+    raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't1', 3500000, 'done', 1, 1, 4000000)").run(INC);
+    expect(await take(5_000_000, 'after the rewind')).toBe('whole');
+    expect(await take(5_000_000 + RETENTION_MS - 1, 'within the base’s week')).toBe('delta');
+    expect(await take(5_000_000 + RETENTION_MS, 'the base aged out')).toBe('whole');
+  });
+
+  it('answers unavailable for a delta whose base file is altered or gone', async () => {
+    const { base } = await baseAndDelta();
+    const path = snapshotPath(dir, INC, base);
+    const bytes = readFileSync(path);
+    bytes[bytes.length - 1]! ^= 1;
+    writeFileSync(path, bytes);
+    await expect(stores.snapshotAt(INC, 3_000_000)).rejects.toThrow(/snapshot-corrupt/);
+    rmSync(path);
+    await expect(stores.snapshotAt(INC, 3_000_000)).rejects.toThrow(/snapshot-missing/);
+  });
+
+  it('installs a rewind to a delta as its materialized file', async () => {
+    const { delta } = await baseAndDelta();
+    await write(put(B, 'b2', 2));
+    raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7 WHERE incarnation = ?").run(INC);
+    raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 3000000, 't2', ?, 'armed', 1, 1)").run(INC, delta);
+    await store().restart(INC).catch(() => {});
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: delta, installedOp: 7 });
+    expect(stores.inspect(INC).exec('SELECT rev FROM head')).toEqual([{ rev: 4 }]);
+    expect(stores.inspect(INC).exec('SELECT body FROM objects ORDER BY id')).toEqual([{ body: 'a2' }, { body: 'b1' }, { body: 'c1' }]);
+  });
+
+  it('keeps every hard delete of objects out of the store', () => {
+    for (const source of ['src/server/account-store.ts', 'src/server/db/account-db.ts']) {
+      expect(/delete\s+from\s+objects/i.test(readFileSync(source, 'utf8')), `${source}: a hard delete of objects breaks delta snapshots (docs/research/incremental-snapshots-plan.md); add a purge log the delta carries before deleting rows`).toBe(false);
+    }
   });
 
   it('closes an idle session after ten minutes and reopens it on the next call', async () => {
