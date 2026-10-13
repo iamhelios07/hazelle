@@ -1,8 +1,9 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Menu, MenuItem } from '../overlays/Menu';
 import { ChipButton } from './ChipButton';
 import styles from './ChoiceGroup.module.css';
 
+// mark: drawn before a chip's label, such as the color it names.
 // fit: a strip while it holds a few short options; more or longer ones, which a strip squeezes to a letter wide each,
 // open as a menu from a chip naming the choice.
 const STRIP = { options: 4, letters: 14 };
@@ -10,7 +11,7 @@ const STRIP = { options: 4, letters: 14 };
 type Props<T extends string> = {
   label: string;
   showLabel?: boolean;
-  options: { value: T; label: string; sub?: string }[];
+  options: { value: T; label: string; sub?: string; mark?: ReactNode }[];
   value: T | null;
   onChange: (value: T) => void;
   layout?: 'chips' | 'buttons' | 'segmented' | 'list' | 'fit';
@@ -43,7 +44,10 @@ export function ChoiceGroup<T extends string>({ label, showLabel = false, option
               </span>
             </>
           ) : (
-            option.label
+            <>
+              {option.mark}
+              {option.label}
+            </>
           )}
         </button>
       ))}

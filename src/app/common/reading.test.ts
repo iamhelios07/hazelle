@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Reading } from '../ui';
-import { DISPLAY_DEFAULT, parseDisplay, parseReading, presetOf, presets } from './reading';
+import { DISPLAY_DEFAULT, lookOf, parseDisplay, parseReading, presetOf, presets, savedPresets } from './reading';
 
 const FALLBACK: Reading = { font: 'serif', size: 17, leading: 'normal', width: 'normal', reply: 'follow' };
 
@@ -19,10 +19,10 @@ describe('stored reading settings', () => {
 });
 
 describe('stored display settings', () => {
-  it('keeps a known theme and real switches, and starts anything else from the fallback', () => {
-    const chosen = { theme: 'light', hideHeader: false, foldComposer: true, hidePictures: true } as const;
+  it('keeps a known theme, color picks and real switches, and starts anything else from the fallback', () => {
+    const chosen = { theme: 'light', bg: 'blue', ink: 'soft', accent: 'rose', hideHeader: false, foldComposer: true, hidePictures: true } as const;
     expect(parseDisplay(JSON.stringify(chosen), DISPLAY_DEFAULT)).toEqual(chosen);
-    expect(parseDisplay(JSON.stringify({ theme: 'sepia', hideHeader: 'no', hidePictures: 1 }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
+    expect(parseDisplay(JSON.stringify({ theme: 'sepia', bg: 'teal', accent: 3, hideHeader: 'no', hidePictures: 1 }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
   });
 });
 
@@ -32,5 +32,18 @@ describe('the current preset', () => {
     expect(presetOf(list, { ...FALLBACK, reply: 'stay' }, { ...DISPLAY_DEFAULT, hideHeader: false })?.name).toBe('기본');
     expect(presetOf(list, FALLBACK, { ...DISPLAY_DEFAULT, theme: 'light' })?.name).toBe('밝은 서재');
     expect(presetOf(list, { ...FALLBACK, size: 16 }, DISPLAY_DEFAULT)).toBeUndefined();
+    expect(presetOf(list, FALLBACK, { ...DISPLAY_DEFAULT, accent: 'blue' })).toBeUndefined();
+  });
+});
+
+describe('saved presets', () => {
+  it('reads each saved look, and counts one with a value this version does not know instead of showing it', () => {
+    const look = lookOf(FALLBACK, { ...DISPLAY_DEFAULT, bg: 'green', accent: 'violet' });
+    const read = savedPresets([
+      { name: '숲', look },
+      { name: '다음 버전', look: { ...look, bg: 'aurora' } },
+    ]);
+    expect(read).toEqual({ presets: [{ name: '숲', look }], unread: 1 });
+    expect(presetOf(read.presets, FALLBACK, { ...DISPLAY_DEFAULT, bg: 'green', accent: 'violet' })?.name).toBe('숲');
   });
 });

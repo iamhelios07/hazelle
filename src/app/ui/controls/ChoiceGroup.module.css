@@ -20,6 +20,9 @@
 }
 
 .chips .choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
   min-height: var(--control-chip);
   padding: 0 var(--space-12);
   border-radius: var(--radius-full);

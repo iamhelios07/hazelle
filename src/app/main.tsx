@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { AccountFlow } from './account/AccountFlow';
 import { legalPage } from './common/LegalPage';
 import { ScreenLoad } from './common/ScreenLoad';
-import { applyStoredTheme } from './display';
+import { applyStoredScheme } from './display';
 import { sharePage } from './share/SharePage';
 import { markScrollbars } from './ui';
 import './ui/foundation/global.css';
@@ -13,7 +13,7 @@ const Workspace = lazy(() => import('./shell/Workspace').then(({ Workspace }) =>
 const root = document.getElementById('root');
 if (!root) throw new Error('index.html has no #root element');
 
-applyStoredTheme();
+applyStoredScheme();
 markScrollbars();
 
 createRoot(root).render(

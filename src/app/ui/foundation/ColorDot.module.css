@@ -1,0 +1,19 @@
+.dot {
+  flex-shrink: 0;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  border: var(--border-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+
+.bg {
+  background: var(--color-pick-bg);
+}
+
+.ink {
+  background: var(--color-pick-ink);
+}
+
+.accent {
+  background: var(--color-pick-accent);
+}

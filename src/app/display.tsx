@@ -1,7 +1,7 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { DISPLAY_DEFAULT, parseDisplay, parseReading, presets, type Display, type Preset } from './common/reading';
 import { readPersisted, usePersisted } from './common/usePersisted';
-import { applyTheme, readingDefault, VeilContext, type Reading } from './ui';
+import { applyScheme, readingDefault, VeilContext, type Reading } from './ui';
 
 // Per device, never in the synced settings, since a phone and a desktop screen differ (user, 2026-09-29).
 const READING = 'risu-alpha:reading';
@@ -9,8 +9,8 @@ const DISPLAY = 'risu-alpha:display';
 
 const parseStoredDisplay = (stored: string) => parseDisplay(stored, DISPLAY_DEFAULT);
 
-// Before the first render, so a light theme never paints dark first.
-export const applyStoredTheme = () => applyTheme(readPersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT).theme);
+// Before the first render, so a light theme or a picked color never paints the default first.
+export const applyStoredScheme = () => applyScheme(readPersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT));
 
 type DisplayControl = {
   reading: Reading;
@@ -31,11 +31,12 @@ export function DisplayProvider({ children }: { children: ReactNode }) {
   const [list] = useState(() => presets(initial));
   const [reading, setReading] = usePersisted(READING, (stored) => parseReading(stored, initial), initial);
   const [display, setDisplay] = usePersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT);
-  useLayoutEffect(() => applyTheme(display.theme), [display.theme]);
+  const { theme, bg, ink, accent } = display;
+  useLayoutEffect(() => applyScheme({ theme, bg, ink, accent }), [theme, bg, ink, accent]);
   const veil = useMemo(() => (display.hidePictures ? { revealed: new Set<string>() } : null), [display.hidePictures]);
-  const pick = ({ look: { theme, ...look } }: Preset) => {
+  const pick = ({ look: { theme, bg, ink, accent, ...look } }: Preset) => {
     setReading({ ...reading, ...look });
-    setDisplay({ ...display, theme });
+    setDisplay({ ...display, theme, bg, ink, accent });
   };
   const control: DisplayControl = {
     reading,

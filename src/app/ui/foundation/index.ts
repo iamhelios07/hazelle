@@ -1,5 +1,6 @@
 export { Avatar } from './Avatar';
 export { Brand } from './Brand';
+export { ColorDot } from './ColorDot';
 export { Divider } from './Divider';
 export { Icon } from './Icon';
 export { formatKeys, pressed, pressedKey, type Chord } from './keys';
@@ -7,5 +8,5 @@ export { hasFinePointer, usePanelsBeside, useSplit, useViewport, useWide } from 
 export { markScrollbars } from './scrollbar';
 export { Tag } from './Tag';
 export { Text } from './Text';
-export { applyTheme, THEME, type Theme } from './theme';
+export { ACCENT, applyScheme, BG, INK, schemeAttributes, THEME, type Accent, type Bg, type Ink, type Scheme, type Theme } from './theme';
 export { VeilContext } from './veil';

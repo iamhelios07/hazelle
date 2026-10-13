@@ -6,9 +6,11 @@ and only this folder styles elements.**
 - `foundation/tokens.css` holds every color, font, size, spacing, radius, border width, duration and
   layer (z-index). The palette layer is raw values from the approved mockups; the semantic layer
   (`--color-text-muted`, `--space-16`, `--layer-dialog`, …) is what components use.
-- Themes: `:root` in `tokens.css` is dark and `:root[data-theme='light']` gives every palette-backed
-  color token a light value; `foundation/theme.ts` (`applyTheme`) sets the attribute. A module never
-  reads `--palette-*`; a surface that needs the other theme's colors (the toast) reads tokens
+- Themes: `:root` in `tokens.css` is dark and `[data-theme='light']` gives every palette-backed
+  color token a light value; `[data-bg]`, `[data-ink]` and `[data-accent]` turn the page, text and
+  accent tokens to a color pick. `foundation/theme.ts` (`applyScheme`) sets the attributes on the
+  document, and `schemeAttributes` on an element drawn in another scheme (a preset's swatch). A module
+  never reads `--palette-*`; a surface that needs the other theme's colors (the toast) reads tokens
   defined per theme.
 - `foundation/global.css` loads tokens and sets element defaults. `main.tsx` imports it once, then loads
   `foundation/fonts.css` after paint; slow or unavailable webfonts leave the system faces usable. A tool page
@@ -73,7 +75,8 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | — | `type.module.css` | Shared text looks: a note, an error line, a field's label |
 | foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field and its compact size, an accent dot |
 | foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`, `usePanelsBeside`, `useViewport`, `hasFinePointer`) | — | Every breakpoint and media query |
-| foundation | `theme.ts` (`applyTheme`, `THEME`) | — | The dark or light theme on the document |
+| foundation | `theme.ts` (`applyScheme`, `schemeAttributes`, `THEME`, `BG`, `INK`, `ACCENT`) | — | The theme and color picks on the document or an element |
+| foundation | `ColorDot` | `ColorDot.module.css` | A color pick as the current theme draws it |
 | foundation | `scrollbar.ts` (`markScrollbars`) | `scrollbar.css` | Classic scrollbars (not overlay ones) as a round thumb without arrows, on the page, its boxes and inside a bot's story |
 | foundation | `veil.ts` (`VeilContext`) | — | 이미지 가리기: whether story pictures are covered, and which ones were tapped open |
 | foundation | `mark.ts` (`MARK`) | — | The one drawing of the logo mark, also read by `brand/render.mjs` for the favicon and icons |
@@ -108,7 +111,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `Button` (`ButtonSlot`, inside the kit only) | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner; the size a slot decides |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, shaped like a field for a setting, or borderless in the composer; with a leading icon or face |
-| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, a list with a line under each, or (fit) a strip that becomes a menu past four short options, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does |
+| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, a list with a line under each, or (fit) a strip that becomes a menu past four short options, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does; a chip may lead with a mark |
 | controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar; `compact` folds it to one line until focus goes inside |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` (`pickFiles`) | — | A `Button` that opens a file picker; `pickFiles` opens one from any press, such as a menu item |
@@ -135,7 +138,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `Preview`, `SelectionBar`) | `CardGrid.module.css` | Characters and pictures as cards; a card's picture whole in a dialog (`Preview`) |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |
-| collections | `Swatches` (`Swatch`) | `Swatches.module.css` | Looks to pick from as cards, each drawn in its own theme and face whatever the app's, the current one pressed and checked |
+| collections | `Swatches` (`Swatch`) | `Swatches.module.css` | Looks to pick from as cards, each drawn in its own scheme and face whatever the app's, the current one pressed and checked, an own one with a ⋯ menu |
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), each place's colours, and the hover and current fills |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |

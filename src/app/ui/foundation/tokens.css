@@ -91,7 +91,23 @@
   --palette-cream-wash: rgb(241 236 228 / 7%);
   --palette-cream-line: rgb(241 236 228 / 16%);
   --palette-cream-trace: rgb(241 236 228 / 22%);
+  --palette-white: #fff;
+  --palette-black: #000;
+  --palette-graphite-900: #131313;
+  --palette-navy-900: #0c131c;
+  --palette-pine-900: #0b1511;
+  --palette-cocoa-900: #18110b;
+  --palette-mist-150: #efefef;
+  --palette-frost-150: #e9f1f9;
+  --palette-sage-150: #e9f3eb;
+  --palette-sepia-150: #f7eee0;
+  --palette-snow-50: #f8fafd;
+  --palette-coal-950: #0c0d0f;
+}
 
+/* The dark theme: the document's default, and any element drawn in it inside a light one (a preset's swatch). */
+:root,
+[data-theme='dark'] {
   color-scheme: dark;
 
   /* The fills, one rung each, bottom to top: the page, the panes beside it (rail, sidebar, side panel), what stands on
@@ -180,12 +196,24 @@
   --color-toast-accent: var(--palette-ink-800);
   --color-toast-accent-hover: var(--palette-ink-600);
   --color-toast-on-accent: var(--palette-cream-100);
-  /* A preset's swatch (Swatches) draws each theme's page and text whatever the app's, so the light block leaves these. */
-  --color-look-dark-bg: var(--palette-ink-900);
-  --color-look-dark-text: var(--palette-sand-50);
-  --color-look-light-bg: var(--palette-paper-150);
-  --color-look-light-text: var(--palette-umber-900);
 
+  /* 설정 › 디스플레이's color picks in this theme (foundation/theme.ts BG, INK, ACCENT); base is the theme's own. */
+  --color-pick-bg-base: var(--palette-ink-900);
+  --color-pick-bg-gray: var(--palette-graphite-900);
+  --color-pick-bg-blue: var(--palette-navy-900);
+  --color-pick-bg-green: var(--palette-pine-900);
+  --color-pick-bg-brown: var(--palette-cocoa-900);
+  --color-pick-ink-base: var(--palette-cream-100);
+  --color-pick-ink-bright: var(--palette-snow-50);
+  --color-pick-ink-soft: var(--palette-sand-100);
+  --color-pick-accent-base: var(--palette-gold-400);
+  --color-pick-accent-rose: var(--palette-rose-400);
+  --color-pick-accent-blue: var(--palette-sky-400);
+  --color-pick-accent-green: var(--palette-jade-400);
+  --color-pick-accent-violet: var(--palette-violet-300);
+}
+
+:root {
   --color-accent-bg: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
   --color-accent-border: color-mix(in srgb, var(--color-accent) 40%, var(--color-bg));
   --color-warn-bg: color-mix(in srgb, var(--color-warn) 10%, var(--color-bg));
@@ -423,7 +451,7 @@
 
 /* Every color token above that names a palette step needs a value here; the color-mix ones follow on their own.
    A bot's own 꾸밈 CSS is written for dark and is not turned (design §F3, light theme). */
-:root[data-theme='light'] {
+[data-theme='light'] {
   color-scheme: light;
 
   /* Panes and what stands on them are lighter than the page, as in dark; under the pointer and current go darker. */
@@ -498,4 +526,77 @@
   --color-toast-accent: var(--palette-cream-100);
   --color-toast-accent-hover: var(--palette-sand-200);
   --color-toast-on-accent: var(--palette-ink-800);
+
+  --color-pick-bg-base: var(--palette-paper-150);
+  --color-pick-bg-gray: var(--palette-mist-150);
+  --color-pick-bg-blue: var(--palette-frost-150);
+  --color-pick-bg-green: var(--palette-sage-150);
+  --color-pick-bg-brown: var(--palette-sepia-150);
+  --color-pick-ink-base: var(--palette-ink-800);
+  --color-pick-ink-bright: var(--palette-coal-950);
+  --color-pick-ink-soft: var(--palette-lilac-800);
+  --color-pick-accent-base: var(--palette-gold-700);
+  --color-pick-accent-rose: var(--palette-rose-700);
+  --color-pick-accent-blue: var(--palette-sky-700);
+  --color-pick-accent-green: var(--palette-jade-700);
+  --color-pick-accent-violet: var(--palette-violet-700);
+}
+
+/* A color pick (foundation/theme.ts applyScheme, schemeAttributes) on the document or on an element drawn in another
+   scheme. base turns nothing, so the theme's own values above stay exact. A picked page derives its rungs by the
+   ladder's L* steps above it (the mixes were fitted to ink-900 and paper-150), so every pick keeps ΔL* ≥ 4 in dark and
+   the light theme's own gaps: a new pick keeps its theme's base lightness. */
+[data-bg='base'] { --color-pick-bg: var(--color-pick-bg-base); }
+[data-bg='gray'] { --color-pick-bg: var(--color-pick-bg-gray); }
+[data-bg='blue'] { --color-pick-bg: var(--color-pick-bg-blue); }
+[data-bg='green'] { --color-pick-bg: var(--color-pick-bg-green); }
+[data-bg='brown'] { --color-pick-bg: var(--color-pick-bg-brown); }
+[data-ink='base'] { --color-pick-ink: var(--color-pick-ink-base); }
+[data-ink='bright'] { --color-pick-ink: var(--color-pick-ink-bright); }
+[data-ink='soft'] { --color-pick-ink: var(--color-pick-ink-soft); }
+[data-accent='base'] { --color-pick-accent: var(--color-pick-accent-base); }
+[data-accent='rose'] { --color-pick-accent: var(--color-pick-accent-rose); }
+[data-accent='blue'] { --color-pick-accent: var(--color-pick-accent-blue); }
+[data-accent='green'] { --color-pick-accent: var(--color-pick-accent-green); }
+[data-accent='violet'] { --color-pick-accent: var(--color-pick-accent-violet); }
+
+[data-theme='dark'][data-bg]:not([data-bg='base']) {
+  --color-bg: var(--color-pick-bg);
+  --color-sidebar: color-mix(in oklab, var(--palette-white) 5.5%, var(--color-pick-bg));
+  --color-surface: color-mix(in oklab, var(--palette-white) 10%, var(--color-pick-bg));
+  --color-surface-hover: color-mix(in oklab, var(--palette-white) 14.5%, var(--color-pick-bg));
+  --color-surface-raised: color-mix(in oklab, var(--palette-white) 19%, var(--color-pick-bg));
+  --color-divider: var(--color-surface-raised);
+  --color-border: var(--color-surface-raised);
+  --color-border-strong: color-mix(in oklab, var(--palette-white) 26.5%, var(--color-pick-bg));
+}
+
+[data-theme='light'][data-bg]:not([data-bg='base']) {
+  --color-bg: var(--color-pick-bg);
+  --color-sidebar: color-mix(in oklab, var(--palette-white) 53%, var(--color-pick-bg));
+  --color-surface: color-mix(in oklab, var(--palette-white) 84%, var(--color-pick-bg));
+  --color-surface-hover: color-mix(in oklab, var(--palette-black) 2.5%, var(--color-pick-bg));
+  --color-surface-raised: color-mix(in oklab, var(--palette-black) 4.5%, var(--color-pick-bg));
+  --color-divider: var(--color-surface-raised);
+  --color-border: color-mix(in oklab, var(--palette-black) 9%, var(--color-pick-bg));
+  --color-border-strong: color-mix(in oklab, var(--palette-black) 20%, var(--color-pick-bg));
+}
+
+/* Muted, faint and the action voice stay the theme's: a softer pick would sink them under contrast. */
+[data-ink]:not([data-ink='base']) {
+  --color-text: var(--color-pick-ink);
+  --color-prose-dialogue: var(--color-pick-ink);
+  --color-prose-narration: color-mix(in oklab, var(--color-pick-ink) 86%, var(--color-bg));
+}
+
+[data-theme='dark'][data-accent]:not([data-accent='base']) {
+  --color-accent: var(--color-pick-accent);
+  --color-accent-hover: color-mix(in oklab, var(--palette-white) 25%, var(--color-pick-accent));
+  --color-on-accent: color-mix(in oklab, var(--color-pick-accent) 15%, var(--palette-black));
+}
+
+[data-theme='light'][data-accent]:not([data-accent='base']) {
+  --color-accent: var(--color-pick-accent);
+  --color-accent-hover: color-mix(in oklab, var(--palette-black) 20%, var(--color-pick-accent));
+  --color-on-accent: color-mix(in oklab, var(--color-pick-accent) 5%, var(--palette-white));
 }

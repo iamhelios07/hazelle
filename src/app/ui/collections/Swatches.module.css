@@ -6,21 +6,32 @@
 
 .card {
   composes: box from '../foundation/surface.module.css';
+  position: relative;
   min-width: 0;
+  overflow: hidden;
+}
+
+.card:has(> .pick:hover) {
+  background: var(--color-surface-hover);
+}
+
+.card:has(> .pick[aria-pressed='true']) {
+  border-color: var(--color-accent);
+  outline: var(--border-thin) solid var(--color-accent);
+}
+
+.pick {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  width: 100%;
   color: var(--color-text);
   text-align: left;
 }
 
-.card:hover {
-  background: var(--color-surface-hover);
-}
-
-.card[aria-pressed='true'] {
-  border-color: var(--color-accent);
-  outline: var(--border-thin) solid var(--color-accent);
+.menu {
+  position: absolute;
+  right: var(--space-8);
+  bottom: var(--space-8);
 }
 
 .sample {
@@ -34,16 +45,8 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
-}
-
-.dark {
-  background: var(--color-look-dark-bg);
-  color: var(--color-look-dark-text);
-}
-
-.light {
-  background: var(--color-look-light-bg);
-  color: var(--color-look-light-text);
+  background: var(--color-bg);
+  color: var(--color-prose-dialogue);
 }
 
 .serif {
@@ -77,4 +80,8 @@
   composes: ellipsis from '../foundation/a11y.module.css';
   color: var(--color-text-faint);
   font-size: var(--text-xs);
+}
+
+.card:has(> .menu) .meta {
+  padding-right: var(--space-32);
 }
