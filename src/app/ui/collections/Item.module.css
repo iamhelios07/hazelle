@@ -38,7 +38,7 @@
 .tall {
   gap: var(--space-8);
   min-height: var(--row-min-height);
-  padding: var(--space-8) max(var(--space-8), var(--box-hang));
+  padding: var(--space-8) max(var(--space-8), var(--box-inset));
   border-radius: var(--radius-md);
   transition: background-color var(--duration-fast);
 }

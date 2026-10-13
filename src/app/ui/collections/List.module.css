@@ -47,7 +47,7 @@
 }
 
 .detail {
-  padding: 0 max(var(--space-8), var(--box-hang)) var(--space-8);
+  padding: 0 max(var(--space-8), var(--box-inset)) var(--space-8);
 }
 
 .nested {

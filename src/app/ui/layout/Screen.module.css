@@ -1,6 +1,7 @@
 .screen {
+  --box-inset: var(--space-16);
   /* A box's edge hangs out so the words inside it start on the line of the page title and section titles. */
-  --box-hang: var(--space-16);
+  --box-hang: var(--box-inset);
 
   min-height: 100dvh;
   max-width: var(--screen-narrow);
@@ -65,6 +66,13 @@
 
 .page {
   max-width: var(--page-max-width);
+}
+
+/* A settings page is cards, and so is the drawer beside it: their edges, not their words, stand on the title's line
+   (user, 2026-10-13). */
+.page,
+.drawer {
+  --box-hang: 0px;
 }
 
 .split {
