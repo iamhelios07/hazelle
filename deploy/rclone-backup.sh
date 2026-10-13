@@ -34,11 +34,11 @@ copy_generation() {
 # Prints the pooled picture ids of manifest $1, which must be generation $2's and whole. The pattern follows the key
 # order captureGeneration writes (src/server/backup/generation.ts: one line, "bucket" before "pictures", "pictures"
 # once, "migrations" last), so no cut-off prefix of a manifest matches it; a change of that order fails every prune
-# here until this follows it. A version 2 manifest whose bucket is r2 names pictures in the app's R2 store, not in the
+# here until this follows it. A version 2 or 3 manifest whose bucket is r2 names pictures in the app's R2 store, not in the
 # pool: it prints none, so the pool of the generations before a switch to R2 empties as they go.
 pictures() {
-  grep -Eq "^\{\"version\":[12],\"id\":\"$2\",.*\"pictures\":\[(\"[0-9a-f]{64}\"(,\"[0-9a-f]{64}\")*)?\],\"migrations\":\[[^]]*\]\}\$" "$1" || return 1
-  if grep -q '^{"version":2,.*,"bucket":"r2","accounts":' "$1"; then return 0; fi
+  grep -Eq "^\{\"version\":[123],\"id\":\"$2\",.*\"pictures\":\[(\"[0-9a-f]{64}\"(,\"[0-9a-f]{64}\")*)?\],\"migrations\":\[[^]]*\]\}\$" "$1" || return 1
+  if grep -q '^{"version":[23],.*,"bucket":"r2","accounts":' "$1"; then return 0; fi
   sed -e 's/.*"pictures":\[\([^]]*\)\],"migrations".*/\1,/' -e 's/"//g' -e 's/,/\n/g' "$1"
 }
 

@@ -190,6 +190,38 @@ describe('a backup generation', () => {
     expect(named(unchanged.incarnation)).toBe(unchanged.old);
   });
 
+  it('names the base of a delta baseline and of a pinned delta beside them', async () => {
+    await signedUp('operator');
+    const now = Date.now();
+    const baselineAt = async (account: Awaited<ReturnType<typeof signedUp>>, at: number) => {
+      expect((await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: String(at), baseRev: null }], account.cookie)).status).toBe(200);
+      t.clock.now = () => at;
+      return ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+    };
+    const base = async (id: string) => t.env.db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(id).first<string | null>('base');
+    const delta = await signedUp('delta');
+    const deltaBase = await baselineAt(delta, now - 2 * 60 * 60_000);
+    const deltaBaseline = await baselineAt(delta, now - 60 * 60_000);
+    expect(await base(deltaBaseline)).toBe(deltaBase);
+    // Past the base window, so its current baseline is whole and names neither the pinned delta nor its base.
+    const pinner = await signedUp('pinner');
+    const pinnedBase = await baselineAt(pinner, now - 6.5 * DAY_MS);
+    const pinned = await baselineAt(pinner, now - 6.4 * DAY_MS);
+    const current = await baselineAt(pinner, now - 60 * 60_000);
+    expect([await base(pinned), await base(current)]).toEqual([pinnedBase, null]);
+    await t.env.db
+      .prepare("INSERT INTO restores (incarnation, report_id, at, timeline, target, phase, verified, created_at, updated_at, ended_at) VALUES (?1, 1, 1, 't', ?2, 'cancelled', 1, ?3, ?3, ?3)")
+      .bind(pinner.incarnation, pinned, now - 60 * 60_000)
+      .run();
+
+    expect((await t.daily(now)).generation).toEqual({ outcome: 'ok', error: null });
+    const manifest = await newest();
+    const named = (incarnation: string) => manifest.snapshots.filter((snapshot) => snapshot.incarnation === incarnation).map(({ id }) => id);
+    expect(named(delta.incarnation)).toEqual([deltaBase, deltaBaseline].toSorted());
+    expect(named(pinner.incarnation)).toEqual([pinnedBase, pinned, current].toSorted());
+    for (const snapshot of manifest.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
+  });
+
   it('keeps only the newest generation of each day, besides the two newest overall and any not yet copied off-site', async () => {
     const hour = DAY_MS / 24;
     const today = dayStart(Date.now());
