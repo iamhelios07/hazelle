@@ -2,10 +2,16 @@ import styles from './Breakdown.module.css';
 
 type Part = { label: string; value: string; mark: 'accent' | 'plain' | 'outline' };
 
-// When every share is known, a bar with each part's fraction of it, in the parts' order.
-export function Breakdown({ parts, shares }: { parts: Part[]; shares: number[] | null }) {
+// When every share is known, a bar with each part's fraction of it, in the parts' order; total names the whole above it.
+export function Breakdown({ parts, shares, total }: { parts: Part[]; shares: number[] | null; total?: { label: string; value: string } }) {
   return (
     <div className={styles.breakdown}>
+      {total && (
+        <p className={styles.total}>
+          <span className={styles.totalLabel}>{total.label}</span>
+          <span className={styles.totalValue}>{total.value}</span>
+        </p>
+      )}
       {shares && (
         <div className={styles.bar} aria-hidden>
           {shares.map((share, index) => (

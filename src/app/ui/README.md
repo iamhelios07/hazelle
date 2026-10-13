@@ -93,6 +93,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it; a drawer, the list taking the width and the item beside it only while one is picked (its head closes with ×); or the list stacked over the item in one scroll |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Panel` | `Panel.module.css` | A card of its own on a page: a title with its ⓘ and an action or a switch by it, then what it holds |
+| layout | `PreviewSplit` | `PreviewSplit.module.css` | Settings beside a preview of what they change, the preview staying in view as they scroll; above them where narrow |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form, wide or page (설정's pages, the column beside the settings sidebar). `aside` adds a column beside the body once the screen is wide enough, stacked above it when not (a `preview` aside is left out when stacked). Its title, section titles and box contents share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
@@ -102,7 +103,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too, and a search under its title |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | layout | `ToolFrame` | `ToolFrame.module.css` | An opaque-origin tool page that fills the rest of its column (a `fill` Screen or SidePanel); the caller connects its window |
-| layout | `TranslateDesk` | `TranslateDesk.module.css` | 번역기: a bar of choices, then the source and its translation side by side in one box (stacked on a narrow page), each pane with a foot of counts and buttons |
+| layout | `TranslateDesk` | `TranslateDesk.module.css` | 번역기: a bar of choices, then the source and its translation side by side in one box, taking the height a `fill` Screen leaves, each scrolling its own text (stacked on a narrow page), each pane with a foot of counts and buttons |
 | controls | `Button` (`ButtonSlot`, inside the kit only) | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner; the size a slot decides |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, shaped like a field for a setting, or borderless in the composer; with a leading icon or face |
@@ -128,10 +129,11 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
 | collections | `Viewport` (`ROWS_RESIZED`, `Seek`) | `Viewport.module.css` | A keyed, measured window of rows within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focus, row state and jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
-| collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
+| collections | `Breakdown` | `Breakdown.module.css` | A total split into parts, the whole named above the bar when given |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |
+| collections | `Swatches` (`Swatch`) | `Swatches.module.css` | Looks to pick from as cards, each drawn in its own theme and face whatever the app's, the current one pressed and checked |
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), each place's colours, and the hover and current fills |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
