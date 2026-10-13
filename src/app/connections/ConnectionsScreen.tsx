@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { resolveConnection } from '../../connectors/registry';
 import type { Connection } from '../../connectors/types';
 import { accountName } from '../../runtime/pool';
@@ -16,6 +17,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
   const unreadable = useUnreadable();
   const route = useRoute();
   const { credentials } = useSession();
+  useSyncExternalStore(credentials.pool.subscribe, credentials.pool.settled);
   const search = useSearch(connections, '연결 검색', (connection) => [connection.value.label]);
 
   // A pool names who would serve now and what it has left, from meters already read; nothing is fetched for the list.

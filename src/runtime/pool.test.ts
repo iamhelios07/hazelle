@@ -41,6 +41,18 @@ const pool = (two: string[] = ['c']): Connection => ({
 const at = (now: number) => vi.useFakeTimers({ toFake: ['Date'], now });
 
 describe('Pool.pick', () => {
+  it('tells its subscribers when a read settles, so a screen shows what peek and held now say', async () => {
+    allowances({ a: left(5) });
+    at(OCTOBER_10);
+    const reading = new Pool();
+    const heard = vi.fn();
+    reading.subscribe(heard);
+    const connection = pool();
+    await reading.meters(connection, connection.accounts[0]!);
+    expect(heard).toHaveBeenCalledOnce();
+    expect(reading.held(connection, connection.accounts[0]!)).not.toBeNull();
+  });
+
   it('serves the group whose turn it is by the switch day, and in it the first account with allowance left', async () => {
     allowances({ a: left(0), b: left(5), c: { quota_snapshots: { premium_interactions: { unlimited: true } } } });
     at(OCTOBER_10);

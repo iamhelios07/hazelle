@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import type { Account, Connection } from '../connectors/types';
 import { onTurn, schedule } from '../model/turns';
 import { loadMeters, type MetersResult } from './meters';
@@ -29,6 +30,12 @@ type Known = { at: number; result: Promise<MetersResult>; settled?: MetersResult
 export class Pool {
   private readonly known = new Map<string, Known>();
   private readonly closing = new AbortController();
+  private readonly changes = new ChangeSignal();
+  private reads = 0;
+
+  // For screens that show what peek and held say: notified when a read settles.
+  readonly subscribe = this.changes.subscribe;
+  readonly settled = () => this.reads;
 
   // null for a type that reports no meters. A read that failed is not kept, so the next asks again.
   meters(connection: Connection, account: Account, { fresh = false } = {}): Promise<MetersResult> | null {
@@ -43,6 +50,8 @@ export class Pool {
       if (this.known.get(key) !== entry) return;
       if (settled.failures.length) this.known.delete(key);
       else entry.settled = settled;
+      this.reads += 1;
+      this.changes.notify();
     });
     return result;
   }
@@ -92,5 +101,6 @@ export class Pool {
   close() {
     this.closing.abort();
     this.known.clear();
+    this.changes.clear();
   }
 }
