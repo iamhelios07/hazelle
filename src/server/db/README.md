@@ -53,8 +53,8 @@ current account schema version and younger than 6 days, a day short of expiry so
 the capture's row names it (none: the snapshot taken is whole), never against another delta; a whole snapshot stays as long as a delta
 names it, normally up to 13 days (a delta that is the account's floor keeps its base as long as itself). An operation pins its checkpoint and target (an undo's from its begin) until it ends and
 for 7 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
-recoverable by hand. A live account keeps its floor, its current baseline as of 7 days ago (on its timeline, like the current baseline itself), whatever its age: a time inside the
-window may land on it. Pins are read from `restores`, so a deleted account
+recoverable by hand. A live account keeps its floor, its newest baseline 7 days old or older of any timeline, whatever its age: a time inside the
+window may land on it, also one from before a rewind. Pins are read from `restores`, so a deleted account
 (whose restores cascade away) loses every snapshot at 7 days from its taking. A rewind lands on the newest snapshot at or before the
 time asked, however old (the 6-day request window is the lifecycle's), never on one taken before the checkpoint of a rewind ended by then; the preview, the choice of a target (an undo's too)
 and the install check the snapshot's size and SHA-256 against its row, and a mismatch answers unavailable before anything is armed.

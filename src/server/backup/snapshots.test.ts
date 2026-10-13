@@ -110,17 +110,23 @@ describe('the daily job', () => {
 });
 
 describe('retention', () => {
-  it('keeps as the floor the baseline of the account’s timeline, not one of an older timeline stamped later by a clock put back', async () => {
+  it('keeps as the floor a baseline from before a rewind, which a time inside the window from before the rewind still lands on', async () => {
     const incarnation = await signedUp('jin');
     const now = Date.now();
-    t.clock.now = () => now - 9 * DAY_MS;
+    t.clock.now = () => now - 11 * DAY_MS;
     const floor = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
-    await written(incarnation, 'then rewound, on a clock put back');
-    t.clock.now = () => now - 8 * DAY_MS;
-    const old = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
-    await t.env.db.prepare("UPDATE snapshots SET timeline = 'old' WHERE id = ?").bind(old).run();
-    expect(await expireSnapshots(t.env, t.dir, now)).toBe(1);
-    expect((await t.env.db.prepare('SELECT id FROM snapshots WHERE incarnation = ?').bind(incarnation).all<{ id: string }>()).results).toEqual([{ id: floor }]);
+    await written(incarnation, 'then rewound away');
+    t.clock.now = () => now - 4 * DAY_MS;
+    const target = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    await t.env.db
+      .prepare("INSERT INTO restores (incarnation, report_id, at, timeline, target, phase, verified, created_at, updated_at, ended_at) VALUES (?1, 1, ?2, 'new', ?3, 'done', 1, ?4, ?4, ?4)")
+      .bind(incarnation, now - 4 * DAY_MS, target, now - 2 * DAY_MS)
+      .run();
+    await t.env.db.prepare("UPDATE accounts SET timeline = 'new' WHERE incarnation = ?").bind(incarnation).run();
+    t.clock.now = () => now - DAY_MS;
+    expect(await t.stores.snapshot(incarnation, 'baseline')).toEqual({ taken: expect.any(String) });
+    expect(await expireSnapshots(t.env, t.dir, now)).toBe(0);
+    expect(await t.stores.snapshotAt(incarnation, now - 5 * DAY_MS)).toEqual({ id: floor, takenAt: now - 11 * DAY_MS });
   });
 
   it('reclaims a snapshot file whose expiry committed before the process stopped without deleting the live floor', async () => {

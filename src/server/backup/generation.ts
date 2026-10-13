@@ -28,10 +28,11 @@ const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 // trailer holds that only modulo 4 GiB).
 export type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the snapshot its file is restored from: its current
-// baseline, or, once its operation holds a checkpoint, that checkpoint, which is newer than any baseline, holds the file
-// as it still is (a restore cancels the operation) or as it was before the target went in (a rewound one installs the
-// target over it again), and is the one copy it can have, since past the fence no baseline is taken (TAKES_BASELINE)
-// and a finished rewind started a new timeline. Null only for a leaving one, whose deletion a restore finishes.
+// baseline, or, once its operation holds a checkpoint, that checkpoint, which is newer than any baseline and holds the
+// file as it was at the fence: a restore cancels the operation before `armed` and from `armed` on finishes it, installing
+// the target over that file. It is the one copy the account can have, since past the fence no baseline is taken
+// (TAKES_BASELINE) and a finished rewind started a new timeline. Null only for a leaving one, whose deletion a restore
+// finishes.
 // pictureBytes: the sizes of its stored pictures, which a restore copies
 // into every account that holds one. snapshots: those baselines, every snapshot an operation pins, and the base of each
 // delta among them, each with `materialized`, an estimate of the file it restores to: a whole one's expanded, a delta's
