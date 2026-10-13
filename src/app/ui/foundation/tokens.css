@@ -358,6 +358,9 @@
   /* The least space left of a story with a 삽화 stage (ChatFrame.tsx). */
   --read-stage-least: 64px;
   --peek-tab-width: 27px;
+  /* Beside: the body's least width (a Table stays wide in it) and the column beside it. */
+  --beside-main-min-width: 600px;
+  --beside-side-min-width: 300px;
 
   /* The gap a menu keeps from the screen's sides, the phone gutter. layers.ts reads it too. */
   --menu-edge: var(--space-16);
