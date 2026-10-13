@@ -4,7 +4,7 @@ import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
-import { Button, Callout, Section, Text } from '../ui';
+import { Button, Callout, Panel, Text } from '../ui';
 import { moment } from '../common/time';
 
 // Whole-service totals are intentionally independent of list navigation and account/notice actions. A refresh
@@ -33,7 +33,7 @@ export function UsageSection() {
   }
 
   return (
-    <Section
+    <Panel
       title="전체 사용량"
       action={busy
         ? <Button variant="secondary" onClick={() => job.current?.abort()}>집계 멈추기</Button>
@@ -43,6 +43,6 @@ export function UsageSection() {
         ? <Text variant="note">{count(totals.accounts)}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · ${count(totals.unread)}명은 읽지 못해 합계에서 빠짐` : ''}</Text>
         : <Text variant="note">{busy ? '집계 중…' : '집계 전'}</Text>}
       {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => void refresh() }}>{failure}</Callout>}
-    </Section>
+    </Panel>
   );
 }

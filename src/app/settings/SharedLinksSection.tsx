@@ -9,7 +9,7 @@ import { useLoaded } from '../common/useLoaded';
 import { SHARE, UNKNOWN } from '../common/words';
 import { useShares, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, Empty, List, ListItem, Section } from '../ui';
+import { Button, Callout, Empty, List, ListItem, Panel } from '../ui';
 
 // 설정 › 계정 › 공유한 링크: the server's links joined to the characters this account's vault names them by. A link no
 // character here names, its character purged, is listed by what the server knows.
@@ -35,9 +35,9 @@ export function SharedLinksSection() {
   };
   const links = loaded.data?.shares;
   return (
-    <Section title={SHARE.list}>
+    <Panel title={SHARE.list}>
       {loaded.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: loaded.reload }}>{loaded.failure}</Callout>}
-      {links && links.length === 0 && <Empty variant="section">{SHARE.list}이 없어요.</Empty>}
+      {links && links.length === 0 && <Empty variant="section">{SHARE.list}가 없어요.</Empty>}
       {links && links.length > 0 && (
         <List label={SHARE.list}>
           {links.map((link) => (
@@ -55,6 +55,6 @@ export function SharedLinksSection() {
           ))}
         </List>
       )}
-    </Section>
+    </Panel>
   );
 }

@@ -1,5 +1,5 @@
 import { Ban, HardDrive, History, LockOpen, Send } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { AccountState } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
 import { liftSuspension, removeAccount, sendNotice, suspend, type AdminAccount, type OwnCap } from '../../runtime/admin';
@@ -11,7 +11,7 @@ import { count } from '../common/typedNumber';
 import { NOTICES, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, ConfirmDialog, List, ListItem, MenuItem, MoreMenu, Section } from '../ui';
+import { Button, Callout, ConfirmDialog, MenuItem, MoreMenu, Section, Table, Tag, type TableColumn } from '../ui';
 import { CapsDialog } from './CapsDialog';
 import { NoticeDialog } from './NoticeDialog';
 import type { useAccounts } from './useAccounts';
@@ -19,7 +19,17 @@ import type { useAccounts } from './useAccounts';
 const STATES: Record<AccountState, string | null> = { active: null, restoring: '복원 중', leaving: '탈퇴 중' };
 
 const size = (bytes: number | null) => (bytes === null ? UNKNOWN : sizeText(bytes));
-const held = (name: string, bytes: number | null, cap: OwnCap) => `${name} ${size(bytes)}${cap === 'default' ? '' : ` / ${cap === null ? '한도 없음' : sizeText(cap)}`}`;
+const held = (bytes: number | null, cap: OwnCap) => `${size(bytes)}${cap === 'default' ? '' : ` / ${cap === null ? '한도 없음' : sizeText(cap)}`}`;
+
+// 텍스트 and 이미지 are fill columns: an account's own cap is read beside its size.
+const COLUMNS: TableColumn[] = [
+  { label: '계정', size: 'fill' },
+  { label: '가입', size: 'figure' },
+  { label: '텍스트', size: 'fill' },
+  { label: '디스크', size: 'figure' },
+  { label: '이미지', size: 'fill' },
+  { label: '', size: 'button', keep: true },
+];
 
 type Named = Pick<AdminAccount, 'accountId' | 'username'>;
 
@@ -58,40 +68,52 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
     >
       {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: reload }}>{failure}</Callout>}
       {data && (
-        <List label="계정">
-          {data.accounts.map((account) => {
+        <Table
+          label="계정"
+          columns={COLUMNS}
+          rows={data.accounts.map((account) => {
             const state = STATES[account.state];
             const others = account.username !== own;
-            return (
-              <ListItem
-                key={account.accountId}
-                title={account.username}
-                tags={[...(others ? [] : ['운영자']), ...(state ? [state] : []), ...(account.suspended ? ['정지됨'] : [])]}
-                description={`${monthDay(account.createdAt)} 가입 · ${held('텍스트', account.bytes, account.bytesCap)} · 디스크 ${size(account.disk)} · ${held('이미지', account.fileBytes, account.fileBytesCap)}`}
-                trailing={
-                  <MoreMenu of={account.username}>
-                    {account.state === 'leaving' ? (
-                      <MenuItem icon={ACTS.remove.icon} label="탈퇴 마무리" sub="중단된 탈퇴를 완료해요" tone="warn" onClick={() => setRemoving(account)} />
-                    ) : (
-                      <>
-                        <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
-                        <MenuItem icon={History} label="복원 기록" onClick={() => onRestores(account)} />
-                        {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
-                        {others &&
-                          (account.suspended ? (
-                            <MenuItem icon={LockOpen} label="정지 해제" onClick={() => void act(account.accountId, liftSuspension(account.accountId), `${account.username} 계정의 정지를 해제하지 못했어요.`)} />
-                          ) : (
-                            <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알림, 탈퇴만 가능해요" onClick={() => setWriting({ account, suspend: true })} />
-                          ))}
-                        {others && account.state === 'active' && <MenuItem icon={ACTS.remove.icon} label="계정 삭제" tone="warn" onClick={() => setRemoving(account)} />}
-                      </>
-                    )}
-                  </MoreMenu>
-                }
-              />
-            );
+            const tags = [...(others ? [] : ['운영자']), ...(state ? [state] : []), ...(account.suspended ? ['정지됨'] : [])];
+            return {
+              key: account.accountId,
+              summary: `${monthDay(account.createdAt)} 가입 · 텍스트 ${held(account.bytes, account.bytesCap)} · 디스크 ${size(account.disk)} · 이미지 ${held(account.fileBytes, account.fileBytesCap)}`,
+              cells: [
+                <>
+                  {account.username}
+                  {tags.map((tag) => (
+                    <Fragment key={tag}>
+                      {' '}
+                      <Tag>{tag}</Tag>
+                    </Fragment>
+                  ))}
+                </>,
+                monthDay(account.createdAt),
+                held(account.bytes, account.bytesCap),
+                size(account.disk),
+                held(account.fileBytes, account.fileBytesCap),
+                <MoreMenu of={account.username}>
+                  {account.state === 'leaving' ? (
+                    <MenuItem icon={ACTS.remove.icon} label="탈퇴 마무리" sub="중단된 탈퇴를 완료해요" tone="warn" onClick={() => setRemoving(account)} />
+                  ) : (
+                    <>
+                      <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
+                      <MenuItem icon={History} label="복원 기록" onClick={() => onRestores(account)} />
+                      {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
+                      {others &&
+                        (account.suspended ? (
+                          <MenuItem icon={LockOpen} label="정지 해제" onClick={() => void act(account.accountId, liftSuspension(account.accountId), `${account.username} 계정의 정지를 해제하지 못했어요.`)} />
+                        ) : (
+                          <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알림, 탈퇴만 가능해요" onClick={() => setWriting({ account, suspend: true })} />
+                        ))}
+                      {others && account.state === 'active' && <MenuItem icon={ACTS.remove.icon} label="계정 삭제" tone="warn" onClick={() => setRemoving(account)} />}
+                    </>
+                  )}
+                </MoreMenu>,
+              ],
+            };
           })}
-        </List>
+        />
       )}
       {capping && (
         <CapsDialog

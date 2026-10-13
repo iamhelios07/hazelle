@@ -2,7 +2,7 @@ import { readLog, type LogRow } from '../../runtime/admin';
 import { sizeText } from '../common/size';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
-import { Button, Callout, Empty, List, ListItem, Section } from '../ui';
+import { Button, Callout, Empty, List, ListItem, Panel } from '../ui';
 import { restoreError } from '../common/RestoresDialog';
 import { moment } from '../common/time';
 import { usePages } from '../common/useLoaded';
@@ -49,7 +49,7 @@ export function LogSection() {
   const pages = usePages(readLog);
   const { rows } = pages;
   return (
-    <Section title="기록">
+    <Panel title="기록">
       {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">기록이 없어요.</Empty>}
       {rows && rows.length > 0 && (
@@ -64,6 +64,6 @@ export function LogSection() {
           더 보기
         </Button>
       )}
-    </Section>
+    </Panel>
   );
 }

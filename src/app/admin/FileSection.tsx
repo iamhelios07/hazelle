@@ -4,7 +4,7 @@ import { setFileBlocked } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
 import { useToast } from '../toast';
-import { Button, Callout, Row, Section, Stack, TextField } from '../ui';
+import { Button, Callout, Panel, Row, Stack, TextField } from '../ui';
 
 // A block refuses the file to every account; its body stays, so lifting the block brings it back.
 export function FileSection({ onActed }: { onActed: () => void }) {
@@ -25,7 +25,7 @@ export function FileSection({ onActed }: { onActed: () => void }) {
     });
 
   return (
-    <Section title="파일 차단" help="차단한 파일은 어느 계정에서도 올리거나 열 수 없어요.">
+    <Panel title="파일 차단" help="차단한 파일은 어느 계정에서도 올리거나 열 수 없어요.">
       <Stack gap="related">
         <TextField label="파일 id" kind="key" value={id} onChange={setId} placeholder="64자리 16진수" error={typed && !valid ? '파일 id는 64자리 16진수예요.' : undefined} />
         <Row kind="actions">
@@ -42,6 +42,6 @@ export function FileSection({ onActed }: { onActed: () => void }) {
           </Callout>
         )}
       </Stack>
-    </Section>
+    </Panel>
   );
 }

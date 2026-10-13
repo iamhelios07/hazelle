@@ -6,7 +6,7 @@ import { describeFailure } from '../common/failure';
 import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { useToast } from '../toast';
-import { Button, Callout, Row, Section, Stack, TextField } from '../ui';
+import { Button, Callout, Panel, Row, Stack, TextField } from '../ui';
 
 export function ReportSection() {
   const toast = useToast();
@@ -25,7 +25,7 @@ export function ReportSection() {
     });
 
   return (
-    <Section title="운영자에게 알리기" help="이 내용은 종단 간 암호화되지 않고, 운영자가 아이디와 함께 확인해요.">
+    <Panel title="운영자에게 알리기" help="이 내용은 종단 간 암호화되지 않고, 운영자가 아이디와 함께 확인해요.">
       <Stack gap="related">
         <TextField
           label="알릴 내용"
@@ -47,6 +47,6 @@ export function ReportSection() {
           </Callout>
         )}
       </Stack>
-    </Section>
+    </Panel>
   );
 }

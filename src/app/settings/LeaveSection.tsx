@@ -5,26 +5,24 @@ import { describeFailure, wrongSecret } from '../common/failure';
 import { useCredential } from '../common/useCredential';
 import { useAttempt } from '../common/useAttempt';
 import { useAccount, useSession } from '../session';
-import { Button, ConfirmDialog, Section, SettingGroup, SettingRow, Stack, TextField } from '../ui';
+import { Button, ConfirmDialog, Panel, SettingRow, Stack, TextField } from '../ui';
 
 // 탈퇴. The server asks the password or the recovery key again, as login does.
 export function LeaveSection() {
   const [asking, setAsking] = useState(false);
   return (
-    <Section title="탈퇴">
-      <SettingGroup label="탈퇴">
-        <SettingRow
-          label="계정 삭제"
-          help="되돌릴 수 없어요. 전체 백업을 내보내 두세요."
-          control={
-            <Button variant="danger" size="sm" icon={UserX} onClick={() => setAsking(true)}>
-              탈퇴
-            </Button>
-          }
-        />
-      </SettingGroup>
+    <Panel title="탈퇴">
+      <SettingRow
+        label="계정 삭제"
+        help="되돌릴 수 없어요. 전체 백업을 내보내 두세요."
+        control={
+          <Button variant="danger" size="sm" icon={UserX} onClick={() => setAsking(true)}>
+            탈퇴
+          </Button>
+        }
+      />
       {asking && <LeaveDialog onClose={() => setAsking(false)} />}
-    </Section>
+    </Panel>
   );
 }
 

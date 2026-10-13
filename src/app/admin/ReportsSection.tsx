@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { readReports, resolveReport, type Report } from '../../runtime/admin';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
-import { Button, Callout, Dialog, Empty, List, ListItem, Section, Text } from '../ui';
+import { Button, Callout, Dialog, Empty, List, ListItem, Panel, Text } from '../ui';
 import { NoticeDialog } from './NoticeDialog';
 import { ShareReportDialog } from './ShareReportDialog';
 import { shareTags } from './shareTags';
@@ -19,7 +19,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   const [open, setOpen] = useState<Report | null>(null);
   const { rows } = pages;
   return (
-    <Section title={NOTICES.received}>
+    <Panel title={NOTICES.received}>
       {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.received}이 없어요.</Empty>}
       {rows && rows.length > 0 && (
@@ -67,7 +67,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
           }}
         />
       )}
-    </Section>
+    </Panel>
   );
 }
 
