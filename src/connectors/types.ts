@@ -177,6 +177,9 @@ type TypeHooks = {
   major?: true;
   description: string;
   keyPage?: string;
+  // The secret where it is no one-line API key: its name on 연결, how many lines its field takes, and the files it can
+  // be read from (an input accept list).
+  keyForm?: { label: string; lines: number; placeholder: string; accept: string };
   routes?: Partial<Record<Protocol, string>>;
   // Absent for a type the user connects by signing in: there is no key to paste.
   detect?: { key: RegExp | null; host: string };

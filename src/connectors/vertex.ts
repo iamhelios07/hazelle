@@ -47,6 +47,7 @@ export const vertex: ConnectionType = {
   group: 'maker',
   description: '서비스 계정 키(JSON)로 Vertex AI의 Gemini를 사용해요.',
   keyPage: 'https://console.cloud.google.com/iam-admin/serviceaccounts',
+  keyForm: { label: '서비스 계정 키', lines: 6, placeholder: '{ "type": "service_account", … }', accept: '.json,application/json' },
   detect: { key: /^\{[\s\S]*"type"\s*:\s*"service_account"[\s\S]*\}$/, host: 'aiplatform.googleapis.com' },
   endpointFor(secret): Endpoint | null {
     const account = serviceAccount(secret);

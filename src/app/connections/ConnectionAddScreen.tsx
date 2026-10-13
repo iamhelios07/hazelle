@@ -63,7 +63,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
                     key={type.id}
                     title={type.label}
                     description={type.description}
-                    tags={[type.signIn ? `${type.signIn.site} 로그인` : 'API 키', ...(count ? [`연결 ${count}개`] : [])]}
+                    tags={[type.signIn ? `${type.signIn.site} 로그인` : (type.keyForm?.label ?? 'API 키'), ...(count ? [`연결 ${count}개`] : [])]}
                     current={route.kind === 'connect' && route.type === type}
                     onClick={() => navigate({ kind: 'connect', type })}
                   />
