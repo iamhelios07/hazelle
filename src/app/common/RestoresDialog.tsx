@@ -1,5 +1,5 @@
 import { History, Play, Undo2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase } from '../../contracts/admin';
 import type { ServerError } from '../../contracts/http';
 import type { Report } from '../../runtime/admin';
@@ -54,6 +54,31 @@ const REFUSED: Partial<Record<ServerError, string>> = {
 
 // Up to targeted nothing has changed, so resuming from there arms the restore, which cannot be taken back.
 const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
+const ENDED: RestorePhase[] = ['done', 'failed', 'cancelled'];
+
+// The operation under way while a request runs, read every second. The server runs the whole operation inside the
+// request (go), so its answer comes only at the end; the list is read again for the phase meanwhile. One account has
+// at most one operation open, so the one not ended is it.
+function useUnderWay(whose: string | null, busy: boolean): RestoreRun | null {
+  const [run, setRun] = useState<RestoreRun | null>(null);
+  useEffect(() => {
+    if (!busy) {
+      setRun(null);
+      return;
+    }
+    let live = true;
+    const timer = setInterval(() => {
+      void readRestores(whose).then((answer) => {
+        if (live && answer.ok) setRun(answer.data.find(({ phase }) => !ENDED.includes(phase)) ?? null);
+      });
+    }, 1000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [whose, busy]);
+  return run;
+}
 
 const ACTIONS: Record<RestoreAction, { label: string; sub: string }> = {
   resume: { label: '이어서 하기', sub: '중단된 단계부터 이어서 진행해요' },
@@ -80,6 +105,9 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
   const points = useLoaded(() => (begins ? readPoints(whose) : Promise.resolve({ ok: true as const, data: [] })));
   const [asking, setAsking] = useState<Asking | null>(null);
   const { busy, run } = useAttempt();
+  const underWay = useUnderWay(whose, busy);
+  // The confirm dialog's text: the warning, and once the operation is seen under way, its phase.
+  const standing = (warning: string) => (underWay ? `${wordsOf(underWay).tag} · ${wordsOf(underWay).says}` : warning);
 
   // The server runs it in the request and the operation keeps its phase if the page goes, so the request is not stopped
   // when the dialog closes; the toast tells where it ended.
@@ -107,21 +135,21 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
   if (asking?.kind === 'restore') {
     return (
       <ConfirmDialog title={`${subject}을 ${moment(asking.point.takenAt)} 기록으로 복원할까요?`} confirm="복원" icon={History} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { report, at: asking.point.at }))} onClose={() => setAsking(null)}>
-        그 기록 이후 저장한 텍스트, 캐릭터, 채팅, 설정은 사라지고 이미지는 남아요. 복원하는 동안은 계정을 쓸 수 없어요. 완료 후 7일 안에는 복원 전으로 되돌릴 수 있어요.
+        {standing('그 기록 이후 저장한 텍스트, 캐릭터, 채팅, 설정은 사라지고 이미지는 남아요. 복원하는 동안은 계정을 쓸 수 없어요. 완료 후 7일 안에는 복원 전으로 되돌릴 수 있어요.')}
       </ConfirmDialog>
     );
   }
   if (asking?.kind === 'undo') {
     return (
       <ConfirmDialog title={`${subject}을 복원 전으로 되돌릴까요?`} confirm="복원 전으로 되돌리기" icon={Undo2} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { report, undoes: asking.restore.id }))} onClose={() => setAsking(null)}>
-        이 복원 직전 상태로 돌아가요. 그 복원 이후 저장한 것은 사라져요.
+        {standing('이 복원 직전 상태로 돌아가요. 그 복원 이후 저장한 것은 사라져요.')}
       </ConfirmDialog>
     );
   }
   if (asking?.kind === 'resume') {
     return (
       <ConfirmDialog title="복원을 이어서 할까요?" confirm="이어서 하기" icon={Play} busy={busy} onConfirm={() => void go(() => continueRestore(whose, asking.restore.id, 'resume'))} onClose={() => setAsking(null)}>
-        적용하면 취소할 수 없고, 복원 시점 이후 저장한 것은 사라져요.
+        {standing('적용하면 취소할 수 없고, 복원 시점 이후 저장한 것은 사라져요.')}
       </ConfirmDialog>
     );
   }
