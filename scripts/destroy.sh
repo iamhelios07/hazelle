@@ -49,8 +49,9 @@ id=$(remote 'set -eu
   space=$(df -Pk $drill | awk "NR == 2 { print \$2, \$4 }")
   disk_kb=${space% *}
   free_kb=${space#* }
-  # The restore gunzips the service and materializes each account file (expanded: the service's size and every
-  # snapshot's materialized one, a delta counted with its base, a rewound account's target as a second file), copies the
+  # The restore gunzips the service and materializes each account file (expanded: the size of the service and the
+  # materialized one of every snapshot, a delta counted with its base, the target of a rewound account as a second
+  # file; no apostrophe in this quoted script), copies the
   # snapshots as they are (artifacts, which counts the service gzip too) and copies each picture into every account
   # holding it (held).
   download=$((artifacts + pictures))
@@ -60,7 +61,9 @@ id=$(remote 'set -eu
   [ $((free_kb * 1024)) -ge "$need" ] || { echo "destroy: not enough free space for the drill" >&2; exit 1; }
   rclone copy "$remote/$id" "/drill/$id"
   if [ -s $drill/pictures ]; then rclone copy "$remote/files" /drill/files --files-from-raw /drill/pictures; fi
-  docker run --rm --user 1000:1000 --entrypoint /app/scripts/restore.sh -v $drill:/drill "$image" "/drill/$id" /drill/data >&2
+  # The env of the app names the picture store: an r2 generation restores only into it, and without the env the
+  # restore looks for a pool beside the generation.
+  docker run --rm --user 1000:1000 --env-file /etc/hazelle/env --entrypoint /app/scripts/restore.sh -v $drill:/drill "$image" "/drill/$id" /drill/data >&2
   echo "destroy: $id restores" >&2
   echo "$id"')
 
