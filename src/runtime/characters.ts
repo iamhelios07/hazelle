@@ -103,8 +103,11 @@ export async function addAssets(store: ObjectStore, files: Files, owner: string,
   const saved = await saveAssets(files, assets, () => {});
   if (!saved.ok) return saved;
   const { kept, skipped } = saved.data;
-  const written = await store.batch(kept.map((asset): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: owner, value: asset })));
-  return written.ok ? { ok: true, data: { added: kept.length, skipped } } : written;
+  if (kept.length) {
+    const written = await store.batch(kept.map((asset): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: owner, value: asset })));
+    if (!written.ok) return written;
+  }
+  return { ok: true, data: { added: kept.length, skipped } };
 }
 
 export const renameAsset = (store: ObjectStore, id: string, name: string) => store.update('asset', id, (current) => ({ ...current, name }));
