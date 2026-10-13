@@ -9,7 +9,7 @@ export function PersonasScreen({ back }: { back: Back | null }) {
     <PersonaList
       onPick={(id) => navigate({ kind: 'persona', id })}
       current={route.kind === 'persona' ? route.id : undefined}
-      frame={({ head, body }) => <Screen width="wide" top={<NavBar {...head} {...backBar(back)} />}>{body}</Screen>}
+      frame={({ head, body }) => <Screen width="page" top={<NavBar {...head} {...backBar(back)} />}>{body}</Screen>}
     />
   );
 }
