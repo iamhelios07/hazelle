@@ -12,7 +12,7 @@ import { NameDialog } from '../common/NameDialog';
 import { monthDay } from '../common/time';
 import { useSession } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, ChipButton, CodeCard, Link, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, Row, Section, Stack, Text, useMenuClose } from '../ui';
+import { Button, Callout, ChipButton, CodeCard, Link, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, Panel, Row, Section, Stack, Text, useMenuClose } from '../ui';
 import { MeterGauge, useMeters } from './ConnectionMeters';
 import { useDeviceSignIn } from './useDeviceSignIn';
 
@@ -20,7 +20,7 @@ import { useDeviceSignIn } from './useDeviceSignIn';
 const HELP =
   '응답은 지금 차례인 그룹에서 한도가 남은 첫 계정으로 보내요. 남은 계정이 없으면 그룹의 첫 계정으로 보내고, 초과 사용은 GitHub 설정을 따라요.';
 
-export function ConnectionAccounts({ id, connection, signIn }: { id: string; connection: Connection & { turns: Turns }; signIn: SignIn }) {
+export function ConnectionAccounts({ id, connection, signIn, level }: { id: string; connection: Connection & { turns: Turns }; signIn: SignIn; level: 2 | 3 }) {
   const { store } = useSession();
   const toast = useToast();
   const [signing, setSigning] = useState<{ for: Account | null } | null>(null);
@@ -40,9 +40,9 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
   }
 
   return (
-    <Section
+    <Panel
       title="계정"
-      note={next ? `${monthDay(next.startsAt)}에 ${next.group.name} 차례` : undefined}
+      level={level}
       help={HELP}
       action={
         <Button variant="secondary" icon={ACTS.create.icon} onClick={() => setSigning({ for: null })}>
@@ -50,6 +50,7 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
         </Button>
       }
     >
+      {next && <Text variant="note">{`${monthDay(next.startsAt)}에 ${next.group.name} 차례`}</Text>}
       <Stack gap="group">
         {signing && (
           <AccountSignIn
@@ -118,7 +119,7 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
           onClose={() => setRenaming(null)}
         />
       )}
-    </Section>
+    </Panel>
   );
 }
 

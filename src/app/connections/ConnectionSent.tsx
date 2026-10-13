@@ -4,14 +4,14 @@ import { ACTS } from '../common/acts';
 import { count } from '../common/typedNumber';
 import { tally } from '../common/usage';
 import { useSession } from '../session';
-import { Button, Callout, Empty, Facts, Section, Text } from '../ui';
+import { Button, Callout, Empty, Facts, Panel, Text } from '../ui';
 
 const WINDOWS = [['hour', '지난 1시간'], ['today', '오늘'], ['week', '이번 주']] as const;
 
 const sent = (usage: ModelUsage) =>
   usage.calls ? `응답 ${count(usage.calls)}회 · 입력 ${tally(usage.input, usage.calls)} · 출력 ${tally(usage.output, usage.calls)}` : '없음';
 
-export function ConnectionSent({ connection }: { connection: string }) {
+export function ConnectionSent({ connection, level }: { connection: string; level: 2 | 3 }) {
   const { usage: usageIndex } = useSession();
   const [attempt, setAttempt] = useState(0);
   const retry = () => setAttempt((held) => held + 1);
@@ -30,7 +30,8 @@ export function ConnectionSent({ connection }: { connection: string }) {
   }, [usageIndex, connection, attempt]);
 
   return (
-    <Section title="사용 내역" note="남아 있는 채팅 기준" action={<Button variant="secondary" onClick={retry}>다시 집계</Button>}>
+    <Panel title="사용 내역" level={level} action={<Button variant="secondary" onClick={retry}>다시 집계</Button>}>
+      <Text variant="note">남아 있는 채팅 기준</Text>
       {failed ? (
         <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: retry }}>
           사용 내역을 불러오지 못했어요.
@@ -42,6 +43,6 @@ export function ConnectionSent({ connection }: { connection: string }) {
       ) : (
         <Empty variant="section">이번 주에 이 연결로 받은 응답이 없어요.</Empty>
       )}
-    </Section>
+    </Panel>
   );
 }

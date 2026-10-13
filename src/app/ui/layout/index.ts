@@ -4,6 +4,7 @@ export { Columns } from './Columns';
 export { Disclosure } from './Disclosure';
 export { FaceRow } from './FaceRow';
 export { EditorFrame } from './EditorFrame';
+export { ItemSection } from './ItemSection';
 export { ListDetail } from './ListDetail';
 export { NavBar, type NavBarProps } from './NavBar';
 export { Panel } from './Panel';

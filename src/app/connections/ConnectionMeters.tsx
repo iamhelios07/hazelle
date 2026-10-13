@@ -10,7 +10,7 @@ import { creditAmount, usd } from '../common/money';
 import { monthDay } from '../common/time';
 import { count } from '../common/typedNumber';
 import { useSession } from '../session';
-import { Callout, Empty, Gauge, Link, Section, Stack, Text } from '../ui';
+import { Callout, Empty, Gauge, Link, Panel, Stack, Text } from '../ui';
 
 const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${monthDay(resets.at)} 초기화`);
@@ -21,10 +21,18 @@ const UNITS: Record<Exclude<MeterUnit, 'usd'>, string> = { credit: ' 크레딧',
 const figure = (unit: MeterUnit, value: number) => (unit === 'usd' ? usd(value) : `${plain(value)}${UNITS[unit]}`);
 const amount = (unit: MeterUnit, value: number) => (unit === 'usd' || unit === 'percent' ? figure(unit, value) : plain(value));
 
-// What is left of the first allowance, as a row elsewhere names it; null where there is none.
-export function leftOf(result: MetersResult): string | null {
+// What is left of an allowance as a Gauge reads it; no share where it has no limit.
+function remaining(meter: Extract<Meter, { kind: 'left' }>) {
+  const left = amount(meter.unit, meter.amount);
+  if (meter.limit === null) return { amount: left, of: '남음' };
+  return { amount: left, of: meter.unit === 'percent' ? '남음' : `/ ${figure(meter.unit, meter.limit)} 남음`, share: (meter.limit - meter.amount) / meter.limit };
+}
+
+// The first allowance left, without a pace: a pace needs the account's turn, which a summary of the connection lacks.
+export function LeftGauge({ result }: { result: MetersResult }) {
   const meter = result.meters.find((entry) => entry.kind === 'left');
-  return meter ? `${amount(meter.unit, meter.amount)} 남음` : null;
+  if (!meter) return null;
+  return meter.amount <= 0 ? <Gauge {...remaining(meter)} tone="warn" status="소진" /> : <Gauge {...remaining(meter)} />;
 }
 
 const VERDICT = { fast: { status: '빠르게 쓰는 중', tone: 'accent' }, even: { status: '적정', tone: 'plain' }, slow: { status: '여유 있음', tone: 'plain' } } as const;
@@ -34,8 +42,8 @@ const VERDICT = { fast: { status: '빠르게 쓰는 중', tone: 'accent' }, even
 export function MeterGauge({ meter, turn = null, waiting = false, labeled = true }: { meter: Meter; turn?: { start: number; end: number } | null; waiting?: boolean; labeled?: boolean }) {
   if (meter.kind === 'spent') return <Gauge label={meter.label} amount={amount(meter.unit, meter.amount)} of="사용" />;
   const label = labeled ? (meter.resets ? `${meter.label} · ${reset(meter.resets)}` : meter.label) : undefined;
-  if (meter.limit === null) return <Gauge label={label} amount={amount(meter.unit, meter.amount)} of="남음" />;
-  const left = { amount: amount(meter.unit, meter.amount), of: meter.unit === 'percent' ? '남음' : `/ ${figure(meter.unit, meter.limit)} 남음`, share: (meter.limit - meter.amount) / meter.limit };
+  const left = remaining(meter);
+  if (meter.limit === null) return <Gauge label={label} {...left} />;
   if (meter.amount <= 0) {
     const back = meter.resets === null ? undefined : reset(meter.resets);
     return <Gauge label={label} {...left} tone="warn" status="소진" note={back} />;
@@ -66,14 +74,14 @@ export function useMeters(connection: Connection, account: Account): { result: M
   return { result, retry: () => setAttempt((held) => held + 1) };
 }
 
-export function ConnectionMeters({ connection }: { connection: Connection }) {
+export function ConnectionMeters({ connection, level }: { connection: Connection; level: 2 | 3 }) {
   const type = resolveConnection(connection)?.type;
   if (!type?.meters && !type?.usagePage) return null;
   return (
-    <Section title="사용량과 한도">
+    <Panel title="사용량과 한도" level={level}>
       {type.meters && <Figures connection={connection} account={connection.accounts[0]!} />}
       {type.usagePage && <Link href={type.usagePage}>사용량 페이지</Link>}
-    </Section>
+    </Panel>
   );
 }
 
