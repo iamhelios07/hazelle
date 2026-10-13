@@ -1,4 +1,4 @@
-import { ago } from '../common/time';
+import { day } from '../common/time';
 import { NEWS } from '../common/release';
 import { Empty, List, ListItem, Panel, Stack, Text } from '../ui';
 
@@ -15,7 +15,7 @@ export function NewsSection({ seek }: { seek: boolean }) {
             <ListItem
               key={version}
               title={version}
-              aside={ago(Date.parse(date))}
+              aside={day(Date.parse(`${date}T00:00`))}
               detail={
                 <Stack gap="related">
                   {lines.map((line) => (
