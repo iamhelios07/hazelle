@@ -34,6 +34,7 @@
   --palette-mint-100: #cfe8da;
   --palette-sand-200: #cfc8bc;
   --palette-sand-50: #f7f1e7;
+  --palette-lilac-350: #a39cb0;
   --palette-lilac-250: #c9c2d4;
   --palette-lilac-450: #6e6879;
   --palette-violet-300: #a993f0;
@@ -73,6 +74,7 @@
   --palette-mint-150: #dcefe3;
   --palette-mint-700: #2b7350;
   --palette-mint-900: #1f4a36;
+  --palette-umber-700: #3a342d;
   --palette-umber-600: #4f4841;
   --palette-umber-900: #15120e;
   --palette-violet-100: #ece6fb;
@@ -144,11 +146,12 @@
   --color-you-bg: var(--palette-mint-800);
   --color-you-text: var(--palette-mint-100);
 
-  /* The story's voices step down from dialogue: speech in gold (L* 86, ruled the default) over narration (72) so it
-     stands out, and action under narration in its own hue. */
-  --color-prose-narration: var(--palette-sand-300);
+  /* Gold dialogue stands apart from narration by its hue, so narration keeps its brightness (user, 2026-10-14); only
+     무채색 dialogue steps narration and action down (the [data-dialogue='plain'] rule). */
+  --prose-narration-share: 86%;
+  --color-prose-narration: var(--palette-sand-200);
   --color-prose-dialogue: var(--palette-gold-200);
-  --color-prose-action: var(--palette-lilac-400);
+  --color-prose-action: var(--palette-lilac-350);
 
   /* A prompt's blocks by kind, on the outline's rail: the line and ring, and the node's fill. */
   --color-kind-text: var(--palette-lilac-450);
@@ -223,6 +226,8 @@
   --color-pick-accent-violet: var(--palette-violet-300);
   --color-pick-dialogue-base: var(--palette-gold-200);
   --color-pick-dialogue-plain: var(--palette-sand-50);
+  --color-pick-narration-plain: var(--palette-sand-300);
+  --color-pick-action-plain: var(--palette-lilac-400);
   --color-pick-dialogue-sky: var(--palette-sky-200);
   --color-pick-dialogue-rose: var(--palette-rose-200);
   --color-pick-dialogue-lime: var(--palette-lime-200);
@@ -491,7 +496,7 @@
   --color-you-bg: var(--palette-mint-150);
   --color-you-text: var(--palette-mint-900);
 
-  --color-prose-narration: var(--palette-umber-600);
+  --color-prose-narration: var(--palette-umber-700);
   --color-prose-dialogue: var(--palette-gold-850);
   --color-prose-action: var(--palette-lilac-650);
 
@@ -557,6 +562,8 @@
   --color-pick-accent-violet: var(--palette-violet-700);
   --color-pick-dialogue-base: var(--palette-gold-850);
   --color-pick-dialogue-plain: var(--palette-umber-900);
+  --color-pick-narration-plain: var(--palette-umber-600);
+  --color-pick-action-plain: var(--palette-lilac-650);
   --color-pick-dialogue-sky: var(--palette-sky-850);
   --color-pick-dialogue-rose: var(--palette-rose-850);
   --color-pick-dialogue-lime: var(--palette-lime-850);
@@ -611,11 +618,18 @@
    contrast. */
 [data-ink]:not([data-ink='base']) {
   --color-text: var(--color-pick-ink);
-  --color-prose-narration: color-mix(in oklab, var(--color-pick-ink) 75%, var(--color-bg));
+  --color-prose-narration: color-mix(in oklab, var(--color-pick-ink) var(--prose-narration-share), var(--color-bg));
 }
 
 [data-dialogue]:not([data-dialogue='base']) {
   --color-prose-dialogue: var(--color-pick-dialogue);
+}
+
+/* White dialogue has no hue to stand apart by, so narration (L* 81 → 72) and action step down under it. */
+[data-dialogue='plain'] {
+  --prose-narration-share: 75%;
+  --color-prose-narration: var(--color-pick-narration-plain);
+  --color-prose-action: var(--color-pick-action-plain);
 }
 
 [data-theme='dark'][data-accent]:not([data-accent='base']) {
