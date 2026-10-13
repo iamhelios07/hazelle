@@ -1,6 +1,7 @@
 import { Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { RETRY_MOST } from '../../contracts/streams';
+import { bareModel } from '../../connectors/chat-completions';
 import { modelSettings, resolveConnection, RETRIES } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
@@ -20,6 +21,8 @@ import { Button, Callout, ChoiceGroup, Columns, Empty, IconButton, ItemSection, 
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
+
+const BY_ID = '모델 ID로 추가';
 
 type Filter = 'all' | 'starred' | 'reasoning' | 'vision' | 'tools';
 
@@ -44,6 +47,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<Filter>('all');
   const [naming, setNaming] = useState(false);
+  const [adding, setAdding] = useState(false);
   // Under API 연결's cards the connection is a part of that page, not a page of its own.
   const stacked = usePane() === 'stack';
 
@@ -85,6 +89,15 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     void setStarred(store, id, model, !starredIds.has(model.id)).then((result) => result.ok || toast.failed(result));
   }
 
+  // A model the list does not name yet (a new release) is starred by its id alone, knowing nothing of it; a listed id
+  // stars the listed model, and a starred one stays as it is, keeping its 설정.
+  function addById(text: string) {
+    setAdding(false);
+    const modelId = text.trim();
+    if (!modelId || starredIds.has(modelId)) return;
+    toggle(models.find((model) => model.id === modelId) ?? bareModel(modelId));
+  }
+
   function row(model: Model) {
     const on = starredIds.has(model.id);
     const listed = !listedIds || listedIds.has(model.id);
@@ -123,7 +136,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     toast.undoable(`'${connection.label}' 연결을 삭제했어요.`, () => restoreConnection(store, stored));
   }
 
-  const signIn = resolveConnection(connection)?.type?.signIn;
+  const resolved = resolveConnection(connection);
+  const signIn = resolved?.type?.signIn;
   // Accounts join a pool by signing in, so a pool type always has a sign-in.
   const pool = connection.turns && signIn ? { connection: { ...connection, turns: connection.turns }, signIn } : null;
 
@@ -144,7 +158,12 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     if (label.trim()) void renameConnection(store, id, label.trim()).then((result) => result.ok || toast.failed(result));
   };
   const level = stacked ? 3 : 2;
-  const dialog = naming && <NameDialog title="연결 이름 바꾸기" value={connection.label} onSave={rename} onClose={() => setNaming(false)} />;
+  const dialog = (
+    <>
+      {naming && <NameDialog title="연결 이름 바꾸기" value={connection.label} onSave={rename} onClose={() => setNaming(false)} />}
+      {adding && <NameDialog title={BY_ID} field="모델 ID" value="" hint="목록에 없는 새 모델도 제공자가 쓰는 ID로 추가할 수 있어요." onSave={addById} onClose={() => setAdding(false)} />}
+    </>
+  );
 
   const body = (
     <Columns min="panel">
@@ -169,7 +188,17 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         </Panel>
         <ConnectionSent connection={id} level={level} />
       </Stack>
-      <Panel title="모델" level={level}>
+      <Panel
+        title="모델"
+        level={level}
+        action={
+          resolved?.codec && (
+            <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => setAdding(true)}>
+              {BY_ID}
+            </Button>
+          )
+        }
+      >
         <Text variant="note">{[listed, starred.length ? `즐겨찾기 ${starred.length}개` : ''].filter(Boolean).join(' · ')}</Text>
         <Row kind="toolbar">
           {search.field}
