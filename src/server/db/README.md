@@ -13,7 +13,8 @@ files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written. Wi
 cache/<sha256>                   with the R2 bucket, a copy of pictures read or put, by id alone; .tmp-* while being written.
                                  Never fsynced, captured or restored; trimmed hourly (src/server/files/cached-r2-bucket.ts)
 streams.sqlite                   reply stream pages and their alarms (the alarm row is a stream's reservation); meta(version), a newer one is refused
-snapshots/<incarnation>/<id>.sqlite.gz   point-in-time copies of an account file (baselines and operation checkpoints)
+snapshots/<incarnation>/<id>.sqlite.gz   point-in-time copies of an account file (baselines and operation checkpoints), whole files
+                                 or deltas against one whole snapshot
 backup/<capturedAt>-<hex>/       one backup generation: service.sqlite.gz, snapshots/<incarnation>/<id>.sqlite.gz, manifest.json,
                                  and copied once the copier has sent it off-site
 backup/files/<sha256>            the pictures every disk generation names, each once
@@ -24,15 +25,17 @@ costs one fsync per commit and buys that an acknowledged commit survives power l
 account's deletion and relies on it.
 
 A file is durable before any row says so. A picture: write `.tmp-<random>`, fsync it, rename, fsync the directory, then the service
-commit that sets `stored = 1`. A snapshot: SQLite's asynchronous online backup makes a temp copy while the account queue holds its
+commit that sets `stored = 1`. A snapshot: SQLite's asynchronous online backup makes a temp copy (a whole snapshot), or the live handle
+selects the whole `head` and `kv` and the `objects` above the base's rev into a temp file (a delta), while the account queue holds its
 writers, then releases the baseline queue (and any handle opened just for it). Checkpoints keep the queue until publication. The capture fixes `taken_at` and `rev`; an archive worker compacts that private copy, runs `quick_check`, gzips it and fsyncs the gzip. The owner then renames it,
 fsyncs the directory and writes the `snapshots` row. An account file at signup: schema and `head` written, checkpointed, fsynced, directory fsynced, then
 the account's row. A directory made on the way is synced into its parent too (`makeDirs`, `durable.ts`). Deletion is the reverse: the service commit first, then the files. A crash between the two leaves a file with no row,
 which the hourly reconciliation (`reconcile.ts`) removes once it is an hour old (a picture prefix in R2 is queued in
 `picture_removals` and goes 7 days later); it never leaves a row with no file.
 
-Installing a snapshot over a live account file (an armed restore, `account-db.ts`): check the snapshot's size and SHA-256 against its
-row, decompress beside the live file, `quick_check`, write `head.installed_from` and `head.installed_op` (the operation installing it, so
+Installing a snapshot over a live account file (an armed restore, `account-db.ts`): `materializeSnapshot` checks the snapshot's size and
+SHA-256 against its row (a delta's base too), decompresses the whole file beside the live file, applies a delta's rows onto it and checks
+`head.rev` against the row; then `quick_check`, write `head.installed_from` and `head.installed_op` (the operation installing it, so
 a second rewind to the same snapshot installs again), `wal_checkpoint(TRUNCATE)`, close, verify, fsync, delete the live file's `-wal` and `-shm`, rename over the live
 file, fsync the directory. The WAL and shm go first so an orphan WAL is never replayed onto the installed file.
 
@@ -44,7 +47,9 @@ equal, copies nothing (`backup_runs.detail.unchanged`), since that baseline is s
 upgrade) selects every live account instead of those from before today, and a take that fails there fails its generation. A baseline is taken only of an
 account that is active or restoring before its operation's checkpoint (begun, fenced), read from the service inside the account's
 queue; any other is skipped.
-A snapshot goes at 7 days (`RETENTION_MS`) unless pinned. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
+A snapshot goes at 7 days (`RETENTION_MS`) unless pinned. A delta is taken against the account's base, its newest whole snapshot
+taken at or after its last finished rewind and younger than 6 days, a day short of expiry so a base chosen for a capture is not expired before
+the capture's row names it (none: the snapshot taken is whole), never against another delta; a whole snapshot stays while any delta names it, so it lives up to 13 days. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
 for 7 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
 recoverable by hand. A live account keeps its floor, its newest baseline 7 days old or older, whatever its age: a time inside the
 window may land on it. Pins are read from `restores`, so a deleted account
@@ -55,11 +60,12 @@ and the install check the snapshot's size and SHA-256 against its row, and a mis
 Backup generations (`src/server/backup/generation.ts`), captured by the daily job after the baselines: while a gate keeps signup,
 deletion and every rewind step out (ordinary writes go on), every active account with no current baseline gets one, as does one
 restoring before its checkpoint whose current baseline is from before today unless its file is unchanged since, `Db.snapshot` makes an online copy of the service, and what that copy names is hard-linked (copied across filesystems) into
-the generation: each account's newest baseline, every pinned snapshot and, with the disk bucket, every picture whose
+the generation: each account's newest baseline, every pinned snapshot, the base of each and, with the disk bucket, every picture whose
 `account_files` row says `stored = 1` into the pool. With the R2 bucket the manifest names those pictures where they are and
 nothing is pooled; a deleted account's pictures stay there until `picture_removals.due_at`, 7 days after its deletion was queued,
-when the hourly sweep removes them, so every kept generation still finds its pictures. The manifest (version 2) says which by
-`bucket`; a version 1 manifest is a disk one. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The archive worker then compacts, checks and gzips the service copy, and `manifest.json` is written last (temp,
+when the hourly sweep removes them, so every kept generation still finds its pictures. The manifest (version 3) says which by
+`bucket`; a version 2 manifest is one whose snapshots are all whole, a version 1 manifest is a disk one, and a build before version 3
+refuses one. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The archive worker then compacts, checks and gzips the service copy, and `manifest.json` is written last (temp,
 fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256) and a database's size gzipped and gunzipped, each account's stored picture bytes, the migrations applied,
 the account schema version, and every operation not done or not yet seen ending. A directory without a manifest is cut off and goes
 after a day; a generation goes at 7 days, and sooner once copied off-site unless it is one of the two newest or the newest of its UTC
@@ -79,7 +85,7 @@ Disaster restore (`scripts/restore.sh <generation> <empty data dir>`, `src/serve
 `dist/server/restore-cli.js`, into the picture store `HAZELLE_FILES_BUCKET` names): verifies every hash first (an R2
 generation's pictures by a HEAD of each, size only, and only into an R2 store; a pooled generation's are put into whichever
 store is set), writes the service (migrated to this build) before the pictures, drops
-catalog rows for snapshots the generation lacks, restores each account from its newest baseline (a fenced one from its checkpoint,
+catalog rows for snapshots the generation lacks, restores each account by materializing its newest baseline (a fenced one's checkpoint,
 one past `rewound` by installing its target), then ends every pending operation through `lifecycle.ts` (before `armed` cancelled,
 from `armed` on finished, unverified ones finalized), finishes pending deletions, and gives every account a fresh timeline. The
 server must not start on the directory until it has finished.
