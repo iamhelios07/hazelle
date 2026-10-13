@@ -48,6 +48,7 @@ const EXAMPLES = {
   account: [
     { kind: 'account', section: null },
     { kind: 'account', section: 'notices' },
+    { kind: 'account', section: 'news' },
   ],
   usage: [{ kind: 'usage' }],
   admin: [{ kind: 'admin' }],

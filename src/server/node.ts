@@ -25,6 +25,7 @@ import { reconcile } from './reconcile';
 import { streamRegistry } from './stream-registry';
 import { streamStore } from './db/streams-db';
 import app from './worker';
+import { VERSION_HEADER } from '../contracts/http';
 
 // Configuration is the environment (docs/research/docker-port-plan.md §11).
 const dataDir = process.env.HAZELLE_DATA ?? '/data';
@@ -48,6 +49,8 @@ const alertWebhook = process.env.HAZELLE_ALERT_WEBHOOK || null;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
 const clientDir = process.env.HAZELLE_CLIENT ?? 'dist/client';
+// The Dockerfile's HAZELLE_VERSION, the tag the image was built from; a build without one says none.
+const version = process.env.HAZELLE_VERSION || null;
 let files: Services['files'];
 try {
   files = chooseBucket(process.env, dataDir);
@@ -103,6 +106,10 @@ const ctx: ExecutionContext = {
 
 let draining = false;
 const root = new Hono();
+if (version) root.use('/api/*', async (c, next) => {
+  c.header(VERSION_HEADER, version);
+  await next();
+});
 root.get('/api/health', async (c) => {
   // Seen only by a request already on an open connection: server.close refuses new connections at once.
   if (draining) return c.json({ ok: false, draining: true }, 503);

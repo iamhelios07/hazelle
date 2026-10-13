@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { api, holdAccount, SLOW_ROUTE_WAIT } from './api';
+import { api, hearServedVersion, holdAccount, SLOW_ROUTE_WAIT } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -47,6 +47,20 @@ it('states the account the page holds with every request, and hears what answers
     { kind: 'file-bytes', fileBytes: 30 },
     { kind: 'elsewhere' },
   ]);
+});
+
+it('tells each release the server says it runs once, and a listener that comes later the last one said', async () => {
+  const answers = ['v1', 'v1', null, 'v2'].map((version) => Response.json({}, { headers: version ? { 'x-hazelle-version': version } : {} }));
+  vi.stubGlobal('fetch', async () => answers.shift()!);
+  const heard = vi.fn();
+  hearServedVersion(heard);
+  for (let sent = 0; sent < 4; sent++) await api('GET', 'session');
+  expect(heard.mock.calls).toEqual([['v1'], ['v2']]);
+
+  const later = vi.fn();
+  hearServedVersion(later);
+  expect(later.mock.calls).toEqual([['v2']]);
+  hearServedVersion(null);
 });
 
 it('gives up on headers that never come as offline, so the store waits for the connection instead', async () => {

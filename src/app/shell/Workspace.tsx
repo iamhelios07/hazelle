@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { hearServedVersion } from '../../runtime/api';
 import { openSession, type Session } from '../../runtime/session';
 import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
+import { BUILT_VERSION, NEWS, newsToSay } from '../common/release';
 import { count } from '../common/typedNumber';
+import { usePersisted } from '../common/usePersisted';
 import { DisplayProvider } from '../display';
 import { BIN, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
@@ -45,6 +48,34 @@ function Unread({ unread }: { unread: number }) {
     if (!unread || said.current) return;
     said.current = true;
     toast.show(`${NOTICES.from}이 ${count(unread)}개 있어요`, { action: { label: '보기', onClick: () => navigate({ kind: 'account', section: 'notices' }) } });
+  }, []);
+  return null;
+}
+
+// A tab left open across a deploy runs the old release, whose chunks the new image no longer serves; said once for each
+// release the server starts saying it runs.
+function Stale() {
+  const toast = useToast();
+  useEffect(() => {
+    if (BUILT_VERSION === null) return;
+    hearServedVersion((served) => {
+      if (served !== BUILT_VERSION) toast.show('새 버전이 나왔어요', { action: { label: '새로고침', onClick: () => location.reload() } });
+    });
+    return () => hearServedVersion(null);
+  }, [toast]);
+  return null;
+}
+
+// The release this device last opened; the ref: StrictMode runs a mount's effect twice.
+function News() {
+  const toast = useToast();
+  const [lastOpened, setLastOpened] = usePersisted('risu-alpha:opened-version', String, '', String);
+  const said = useRef(false);
+  useEffect(() => {
+    if (BUILT_VERSION === null || said.current) return;
+    said.current = true;
+    if (newsToSay(BUILT_VERSION, lastOpened, NEWS)) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'account', section: 'news' }) } });
+    if (lastOpened !== BUILT_VERSION) setLastOpened(BUILT_VERSION);
   }, []);
   return null;
 }
@@ -104,6 +135,8 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
         <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
           <Restored store={session.store} />
           <Unread unread={unreadNotices} />
+          <Stale />
+          <News />
           <BotNotes />
           <ImportProvider>
             <Layout />

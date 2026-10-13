@@ -3,6 +3,9 @@ import type { ConnectionType } from '../../connectors/types';
 import { SHARE_ID } from '../../contracts/shares';
 import type { Shelf } from '../../model/library';
 
+const ACCOUNT_SECTIONS = ['notices', 'news'] as const;
+export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
+
 // These paths are what a reload, a bookmark and the browser's back button land on, so an existing one never changes.
 export type Route =
   | { kind: 'home' }
@@ -30,8 +33,8 @@ export type Route =
   | { kind: 'profile'; id: string }
   // model: a starred model's id, which may hold any character; the path carries it escaped.
   | { kind: 'model'; connection: string; model: string }
-  // section opens the page at 운영자가 보낸 알림, which the toast saying they came links to.
-  | { kind: 'account'; section: 'notices' | null }
+  // section opens the page at 운영자가 보낸 알림 or 새 소식, which the toasts saying they came link to.
+  | { kind: 'account'; section: AccountSection | null }
   | { kind: 'usage' }
   | { kind: 'chat-settings' }
   | { kind: 'display' }
@@ -110,7 +113,7 @@ export function parseRoute(at: string): Route {
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
-    if (top === 'account') return { kind: 'account', section: params.get('section') === 'notices' ? 'notices' : null };
+    if (top === 'account') return { kind: 'account', section: ACCOUNT_SECTIONS.find((section) => section === params.get('section')) ?? null };
   }
   if (top === 'account' && id === 'usage' && sub === undefined) return { kind: 'usage' };
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };

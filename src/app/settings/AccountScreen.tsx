@@ -1,13 +1,15 @@
 import { sizeText } from '../common/size';
 import { useAccount, useSession, useStanding } from '../session';
 import { backBar, navigate } from '../shell/router';
-import type { Back } from '../shell/routes';
+import type { AccountSection, Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
+import { BUILT_VERSION } from '../common/release';
 import { PAGES, UNKNOWN } from '../common/words';
 import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { LeaveSection } from './LeaveSection';
+import { NewsSection } from './NewsSection';
 import { NoticesSection } from './NoticesSection';
 import { ReportSection } from './ReportSection';
 import { SharedLinksSection } from './SharedLinksSection';
@@ -19,7 +21,7 @@ function Used({ label, bytes, cap }: { label: string; bytes: number | null; cap:
 }
 
 // section: the one the page was opened at (shell/routes).
-export function AccountScreen({ section, back }: { section: 'notices' | null; back: Back | null }) {
+export function AccountScreen({ section, back }: { section: AccountSection | null; back: Back | null }) {
   const { username } = useSession();
   const { onLock, onLogout } = useAccount();
   const { suspended, storage } = useStanding();
@@ -69,7 +71,9 @@ export function AccountScreen({ section, back }: { section: 'notices' | null; ba
         <ReportSection />
         <SharedLinksSection />
         <NoticesSection seek={section === 'notices'} />
+        <NewsSection seek={section === 'news'} />
         <Panel title="앱 정보">
+          <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
           <LegalNotice />
         </Panel>
       </Columns>

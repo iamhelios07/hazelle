@@ -9,7 +9,10 @@ RUN npm ci
 COPY . .
 # release/source.tar.gz is the release commit's archive (scripts/source.sh, run by .github/workflows/release.yml before
 # this build). The context holds no .git, so a build without it serves no /source.tar.gz and says so here.
-RUN ./node_modules/.bin/vite build \
+# HAZELLE_VERSION: the release tag (.github/workflows/release.yml). The page and the server each carry it, and a page
+# whose tag differs from the server's offers a reload; a build without one compares nothing.
+ARG HAZELLE_VERSION=
+RUN VITE_HAZELLE_VERSION=$HAZELLE_VERSION ./node_modules/.bin/vite build \
  && npm run -s build:server \
  && cp LICENSE dist/client/license.txt \
  && if [ -f release/source.tar.gz ]; then cp release/source.tar.gz dist/client/; else echo 'hazelle: source archive absent, /source.tar.gz will answer 404' >&2; fi \
@@ -18,7 +21,8 @@ RUN ./node_modules/.bin/vite build \
  && cp -r node_modules/undici /out/node_modules/
 
 FROM node:24-alpine
-ENV NODE_ENV=production HAZELLE_DATA=/data PORT=8080
+ARG HAZELLE_VERSION=
+ENV NODE_ENV=production HAZELLE_DATA=/data PORT=8080 HAZELLE_VERSION=$HAZELLE_VERSION
 # node.ts finds dist/client relative to the working directory and migrations/ two levels above dist/server.
 WORKDIR /app
 COPY --from=build /src/package.json ./

@@ -1,4 +1,4 @@
-import { ACCOUNT_HEADER, RELAY_HEADER, ACCOUNT_USAGE_HEADERS } from '../contracts/http';
+import { ACCOUNT_HEADER, RELAY_HEADER, ACCOUNT_USAGE_HEADERS, VERSION_HEADER } from '../contracts/http';
 import { isRecord } from '../connectors/values';
 
 export type ApiFailure = { ok: false; error: string; retryAfter?: number; status?: number };
@@ -23,9 +23,24 @@ export function holdAccount(account: string | null, onHeard: ((heard: Heard) => 
   hear = onHeard;
 }
 
+// The release the server last said it runs, and who hears when that changes; apart from holdAccount's listener, since
+// the release is not of the account.
+let served: string | null = null;
+let hearServed: ((version: string) => void) | null = null;
+
+export function hearServedVersion(listener: ((version: string) => void) | null) {
+  hearServed = listener;
+  if (listener && served !== null) listener(served);
+}
+
 // Every request to this app's server leaves through here (api, and runtime/relay's raw ones).
 export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {}): Promise<Response> {
   const response = await fetch(`/api/${path}`, { ...init, headers: { ...(held === null ? {} : { [ACCOUNT_HEADER]: held }), ...init.headers } });
+  const version = response.headers.get(VERSION_HEADER);
+  if (version !== null && version !== served) {
+    served = version;
+    hearServed?.(version);
+  }
   const tell = hear;
   if (!tell) return response;
   const bytes = response.headers.get(ACCOUNT_USAGE_HEADERS.bytes);

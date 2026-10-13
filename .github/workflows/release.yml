@@ -1,7 +1,8 @@
 # A v* tag: the check, and beside it the source archive of the tag's commit and the image for amd64 and arm64 on GHCR
 # under the tag. Once both pass, a release carrying that archive and image-digest.txt (one line, sha256:…;
-# scripts/deploy.sh reads it), and :latest moves to the highest plain vMAJOR.MINOR.PATCH release. A tag
-# whose check failed may have an image, but never a release, so neither a deploy nor :latest takes it.
+# scripts/deploy.sh reads it), its notes the commits since the previous tag (scripts/release-notes.sh), and :latest
+# moves to the highest plain vMAJOR.MINOR.PATCH release. A tag whose check failed may have an image, but never a
+# release, so neither a deploy nor :latest takes it.
 name: release
 
 on:
@@ -55,12 +56,17 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/jiniill/hazelle:${{ github.ref_name }}
+          build-args: HAZELLE_VERSION=${{ github.ref_name }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
 
   release:
     needs: [check, image]
     runs-on: ubuntu-24.04
     steps:
+      # The whole history, for the notes' commits since the previous tag; before the download, which it would wipe.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       # The archive inside the image, not a second one made here.
       - uses: actions/download-artifact@v8
         with:
@@ -72,8 +78,9 @@ jobs:
           DIGEST: ${{ needs.image.outputs.digest }}
         run: |
           echo "$DIGEST" >release/image-digest.txt
+          { scripts/release-notes.sh "$GITHUB_REF_NAME"; echo; echo "image: ghcr.io/jiniill/hazelle:$GITHUB_REF_NAME; its digest is image-digest.txt"; } >release/notes.md
           gh release create "$GITHUB_REF_NAME" release/source.tar.gz release/image-digest.txt --title "$GITHUB_REF_NAME" \
-            --notes "image: ghcr.io/jiniill/hazelle:$GITHUB_REF_NAME; its digest is image-digest.txt"
+            --notes-file release/notes.md
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
