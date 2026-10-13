@@ -8,7 +8,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addAssets, addCharacter, replaceAsset, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addAssets, addCharacter, removeAssets, replaceAsset, restoreAssets, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
@@ -169,6 +169,18 @@ describe('addAssets', () => {
     expect(more).toEqual([]);
     expect(asset!.value).toMatchObject({ name: 'smile.happy', type: 'image/png', size: smile.length });
     expect(await files.read(asset!.value.file)).toEqual({ ok: true, data: smile });
+  });
+
+  it('removes several assets in one write and brings them back as they were', async () => {
+    const { store, files } = await server.account();
+    const imported = await importCharacter(store, files, { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] }, null, () => {});
+    const id = imported.ok ? imported.data.id : '';
+    await addAssets(store, files, id, [new File([png()], 'a.png'), new File([png()], 'b.png'), new File([png()], 'c.png')]);
+    const before = store.children('asset', id);
+    const removed = await removeAssets(store, before.slice(0, 2).map(({ id }) => id));
+    expect(store.children('asset', id).map(({ value }) => value.name)).toEqual([before[2]!.value.name]);
+    expect(await restoreAssets(store, removed.ok ? removed.data : [])).toEqual({ ok: true, data: null });
+    expect(store.children('asset', id).map(({ id, value }) => ({ id, value })).toSorted((a, b) => a.value.name.localeCompare(b.value.name))).toEqual(before.map(({ id, value }) => ({ id, value })).toSorted((a, b) => a.value.name.localeCompare(b.value.name)));
   });
 
   it('replaces an asset’s picture under the same id and name, and leaves it as it was for a file that is no picture', async () => {

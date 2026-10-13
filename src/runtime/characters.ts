@@ -121,8 +121,15 @@ export async function replaceAsset(store: ObjectStore, files: Files, id: string,
 }
 
 export const renameAsset = (store: ObjectStore, id: string, name: string) => store.update('asset', id, (current) => ({ ...current, name }));
-export const removeAsset = (store: ObjectStore, id: string) => store.take('asset', id);
-export const restoreAsset = (store: ObjectStore, removed: Stored<'asset'>) => store.restore(removed);
+// The files stay stored, as for setAvatar. removed: what restoreAssets brings back.
+export async function removeAssets(store: ObjectStore, ids: readonly string[]): Promise<ApiResult<Stored<'asset'>[]>> {
+  const removed = ids.flatMap((id) => store.get('asset', id) ?? []);
+  const written = await store.batch(removed.map(({ id }): Write => ({ type: 'remove', id })));
+  return written.ok ? { ok: true, data: removed } : written;
+}
+
+export const restoreAssets = (store: ObjectStore, removed: readonly Stored<'asset'>[]) =>
+  store.batch(removed.map(({ id, kind, parent, value }): Write => ({ type: 'restore', id, kind, parent, value })));
 
 // A moved character's id is already named by its staged entries; chats: their roots (runtime/chat-log chatWrites).
 export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; chats: Write[] };

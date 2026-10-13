@@ -312,6 +312,8 @@
   /* Table: a figure's column (a count, a size) and a trailing button's. */
   --table-figure-width: 72px;
   --portrait-width: 200px;
+  /* A picture shown whole in a dialog (에셋): the tallest it grows, so the dialog's head and actions stay in view. */
+  --preview-max-height: 60dvh;
   --header-height: 60px;
   --control-compact: 38px;
   --control-tool: 32px;

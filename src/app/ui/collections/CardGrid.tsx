@@ -98,6 +98,12 @@ export function Portrait({ image, name }: { image: string | null; name: string }
   );
 }
 
+// A card's picture whole, at its own ratio, as a dialog shows it.
+export function Preview({ image, name }: { image: string | null; name: string }) {
+  const veil = useVeil();
+  return <span className={styles.preview}>{image && !veil ? <img className={styles.whole} src={image} alt={name} /> : <Face image={null} name={name} />}</span>;
+}
+
 const TINTS = [styles.tint1, styles.tint2, styles.tint3, styles.tint4, styles.tint5];
 const tint = (name: string) => TINTS[[...name].reduce((hash, char) => (hash * 31 + char.codePointAt(0)!) >>> 0, 0) % TINTS.length];
 

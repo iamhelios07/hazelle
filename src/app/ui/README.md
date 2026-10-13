@@ -132,7 +132,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts, the whole named above the bar when given |
 | collections | `CardList` (`CardItem`) | `CardList.module.css` | The user's own things as cards across the width, one column in a side panel or on a phone: name, badge and tags, where it is used under it, a control beside it, and things folded under it (its copies) as rows inside the card |
-| collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
+| collections | `CardGrid` (`FaceCard`, `Portrait`, `Preview`, `SelectionBar`) | `CardGrid.module.css` | Characters and pictures as cards; a card's picture whole in a dialog (`Preview`) |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |
 | collections | `Swatches` (`Swatch`) | `Swatches.module.css` | Looks to pick from as cards, each drawn in its own theme and face whatever the app's, the current one pressed and checked |

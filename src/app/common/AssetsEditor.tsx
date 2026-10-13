@@ -1,10 +1,10 @@
-import { ImageUp } from 'lucide-react';
+import { ImageUp, type LucideIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
-import { addAssets, removeAsset, renameAsset, replaceAsset, restoreAsset } from '../../runtime/characters';
+import { addAssets, removeAssets, renameAsset, replaceAsset, restoreAssets } from '../../runtime/characters';
 import { useAssetUrl, useChildren, useFiles, useStore } from '../session';
 import { useToast } from '../toast';
-import { CardGrid, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, pickFiles, Row, Section, Stack, useFileDrop, useMenuHandle, useMenuOpener } from '../ui';
+import { Button, CardGrid, Dialog, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, pickFiles, Preview, Row, Section, SelectionBar, Stack, useFileDrop } from '../ui';
 import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { useCopy } from './useCopy';
@@ -23,6 +23,10 @@ export function AssetsEditor({ owner }: { owner: string }) {
   const assets = useMemo(() => stored.toSorted((a, b) => byName(a.value.name, b.value.name)), [stored]);
   const [adding, setAdding] = useState(false);
   const [naming, setNaming] = useState<Stored<'asset'> | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
+  // null while not picking.
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const copy = useCopy();
   const search = useSearch(assets, `${ASSET} 검색`, ({ value }) => [value.name]);
   const named = (asset: Stored<'asset'>) => asset.value.name.toLowerCase();
   const shared = new Map<string, number>();
@@ -39,10 +43,11 @@ export function AssetsEditor({ owner }: { owner: string }) {
 
   const dragging = useFileDrop((dropped) => void add(dropped), 'screen');
 
-  async function remove({ id, value }: Stored<'asset'>) {
-    const removed = await removeAsset(store, id);
+  async function remove(ids: readonly string[]) {
+    const removed = await removeAssets(store, ids);
     if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
-    toast.undoable(`'${value.name}' ${ASSET}을 삭제했어요.`, () => restoreAsset(store, removed.data));
+    const [only] = removed.data;
+    toast.undoable(removed.data.length === 1 ? `'${only!.value.name}' ${ASSET}을 삭제했어요.` : `${ASSET} ${removed.data.length}개를 삭제했어요.`, () => restoreAssets(store, removed.data));
   }
 
   async function replace(id: string, file: File) {
@@ -57,12 +62,34 @@ export function AssetsEditor({ owner }: { owner: string }) {
     void renameAsset(store, naming.id, trimmed).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
+  // One list for a card's ⋯ and its preview's buttons.
+  const actionsOf = (asset: Stored<'asset'>): Action[] => [
+    { icon: ACTS.copy.icon, label: `태그 ${ACTS.copy.label}`, run: () => copy(`{{img::${asset.value.name}}}`) },
+    { icon: ACTS.rename.icon, label: ACTS.rename.label, run: () => setNaming(asset) },
+    { icon: ImageUp, label: CHANGE_IMAGE, run: () => pickFiles('image/*', false, ([file]) => void replace(asset.id, file!)) },
+    { icon: ACTS.remove.icon, label: ACTS.remove.label, warn: true, run: () => { setViewing(null); void remove([asset.id]); } },
+  ];
+
+  function press(id: string) {
+    if (!picked) return setViewing(id);
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPicked(next);
+  }
+
+  const viewed = viewing === null ? undefined : assets.find(({ id }) => id === viewing);
   return (
     <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}처럼 이름으로 불러 보여 주는 이미지예요. 이름이 같은 에셋이 여럿이면 그중 하나가 무작위로 나와요. 파일이나 폴더를 끌어다 놓아도 추가돼요.">
       <Stack gap="related">
         <Row kind="toolbar">
           {search.field}
-          <FileButton accept="image/*" multiple size="sm" icon={ACTS.create.icon} busy={adding} onFiles={(picked) => void add(picked)}>
+          {assets.length > 0 && (
+            <Button variant="secondary" size="sm" icon={ACTS.remove.icon} onClick={() => setPicked(picked ? null : new Set())}>
+              {picked ? '완료' : '선택해서 삭제'}
+            </Button>
+          )}
+          <FileButton accept="image/*" multiple size="sm" icon={ACTS.create.icon} busy={adding} onFiles={(dropped) => void add(dropped)}>
             {addOf(ASSET)}
           </FileButton>
         </Row>
@@ -70,42 +97,80 @@ export function AssetsEditor({ owner }: { owner: string }) {
           <CardGrid label={ASSET} keys={search.found.map(({ id }) => id)}>
             {(index) => {
               const asset = search.found[index]!;
-              return <AssetCard key={asset.id} asset={asset} shared={shared.get(named(asset))!} onRename={() => setNaming(asset)} onReplace={(file) => void replace(asset.id, file)} onRemove={() => void remove(asset)} />;
+              return <AssetCard key={asset.id} asset={asset} shared={shared.get(named(asset))!} picked={picked && picked.has(asset.id)} onPress={() => press(asset.id)} actions={actionsOf(asset)} />;
             }}
           </CardGrid>
         ) : (
           <Empty variant="section">{search.none ?? `${ASSET}이 없어요.`}</Empty>
         )}
+        {picked && (
+          <SelectionBar>
+            <span>{picked.size ? `${picked.size}개 선택됨` : '삭제할 에셋을 선택하세요'}</span>
+            <Button variant="secondary" size="sm" onClick={() => setPicked(new Set(search.found.map(({ id }) => id)))}>
+              모두 선택
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setPicked(null)}>
+              취소
+            </Button>
+            <Button variant="danger" size="sm" disabled={picked.size === 0} onClick={() => { setPicked(null); void remove([...picked]); }}>
+              {ACTS.remove.label}
+            </Button>
+          </SelectionBar>
+        )}
       </Stack>
       {dragging && <DropOverlay>여기에 놓으면 에셋으로 추가해요</DropOverlay>}
+      {viewed && <AssetPreview asset={viewed} actions={actionsOf(viewed)} onClose={() => setViewing(null)} />}
       {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 이미지를 불러요." onSave={rename} onClose={() => setNaming(null)} />}
     </Section>
   );
 }
 
-type CardProps = { asset: Stored<'asset'>; shared: number; onRename: () => void; onReplace: (file: File) => void; onRemove: () => void };
+type Action = { icon: LucideIcon; label: string; warn?: boolean; run: () => void };
+const kindOf = ({ value }: Stored<'asset'>) => value.type.replace('image/', '').toUpperCase();
+
+type CardProps = { asset: Stored<'asset'>; shared: number; picked: boolean | null; onPress: () => void; actions: Action[] };
 
 // Each card holds its own picture while drawn, so a grid of thousands keeps only the rows on screen.
-function AssetCard({ asset: { id, value }, shared, onRename, onReplace, onRemove }: CardProps) {
+function AssetCard({ asset, shared, picked, onPress, actions }: CardProps) {
   const url = useAssetUrl();
-  const copy = useCopy();
-  const handle = useMenuHandle();
-  const opener = useMenuOpener(handle);
+  const { id, value } = asset;
   return (
     <FaceCard
       image={url('asset', id) ?? null}
       name={value.name}
-      note={shared > 1 ? `같은 이름 ${shared}개` : value.type.replace('image/', '').toUpperCase()}
-      selected={null}
-      {...opener}
+      note={shared > 1 ? `같은 이름 ${shared}개` : kindOf(asset)}
+      selected={picked}
+      onClick={onPress}
+      popup={picked === null ? 'dialog' : undefined}
       menu={
-        <MoreMenu handle={handle} of={`'${value.name}'`}>
-          <MenuItem icon={ACTS.copy.icon} label={`태그 ${ACTS.copy.label}`} onClick={() => copy(`{{img::${value.name}}}`)} />
-          <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={onRename} />
-          <MenuItem icon={ImageUp} label={CHANGE_IMAGE} onClick={() => pickFiles('image/*', false, ([file]) => onReplace(file!))} />
-          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={onRemove} />
-        </MoreMenu>
+        picked === null && (
+          <MoreMenu of={`'${value.name}'`}>
+            {actions.map(({ icon, label, warn, run }) => (
+              <MenuItem key={label} icon={icon} label={label} tone={warn ? 'warn' : undefined} onClick={run} />
+            ))}
+          </MoreMenu>
+        )
       }
     />
+  );
+}
+
+// Its own view, so the whole picture is held only while it is open.
+function AssetPreview({ asset, actions, onClose }: { asset: Stored<'asset'>; actions: Action[]; onClose: () => void }) {
+  const url = useAssetUrl();
+  return (
+    <Dialog
+      title={asset.value.name}
+      note={kindOf(asset)}
+      size="wide"
+      onClose={onClose}
+      actions={actions.map(({ icon, label, warn, run }) => (
+        <Button key={label} variant={warn ? 'danger' : 'secondary'} icon={icon} onClick={run}>
+          {label}
+        </Button>
+      ))}
+    >
+      <Preview image={url('asset', asset.id) ?? null} name={asset.value.name} />
+    </Dialog>
   );
 }
