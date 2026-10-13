@@ -3,6 +3,7 @@ import { SELF_RESTORES_PER_DAY } from '../../contracts/admin';
 // to accounts, storage, deletion, the relay or the operator's routes may make one false.
 
 export const OPERATOR = '정말고마워요';
+export const REPOSITORY = 'https://github.com/jiniill/hazelle';
 // The date the current text takes effect, set by the operator. Changing either text sets it anew.
 export const EFFECTIVE: string | null = '2026년 10월 12일';
 

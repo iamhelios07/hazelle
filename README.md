@@ -76,7 +76,7 @@ Hazelle runs as one container with its data in one Docker volume. You need Docke
 
 ### Start
 
-Download the source archive that every instance serves, such as [hazelle.app/source.tar.gz](https://hazelle.app/source.tar.gz), unpack it, and start from its folder, which holds `docker-compose.yml` and the `deploy/` folder beside it:
+Clone the repository, or download the source archive of a [release](https://github.com/jiniill/hazelle/releases) (every instance also serves its own at `/source.tar.gz`), and start from the folder that holds `docker-compose.yml` and the `deploy/` folder beside it:
 
 ```sh
 docker compose up -d
@@ -133,6 +133,8 @@ To undo changes to a single account, its owner can rewind it from the account se
 docker compose pull
 docker compose up -d
 ```
+
+To hear of new versions, watch the repository on GitHub with "Custom › Releases"; each release lists its changes.
 
 `pull` only downloads; `up -d` replaces the container. A stop lets requests and replies in flight finish for up to 60 seconds. An image never opens data written by a newer version; to go back, restore a generation taken before the update.
 
