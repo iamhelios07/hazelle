@@ -17,3 +17,7 @@
 .accent {
   background: var(--color-pick-accent);
 }
+
+.dialogue {
+  background: var(--color-pick-dialogue);
+}

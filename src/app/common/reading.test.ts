@@ -20,7 +20,7 @@ describe('stored reading settings', () => {
 
 describe('stored display settings', () => {
   it('keeps a known theme, color picks and real switches, and starts anything else from the fallback', () => {
-    const chosen = { theme: 'light', bg: 'blue', ink: 'soft', accent: 'rose', hideHeader: false, foldComposer: true, hidePictures: true } as const;
+    const chosen = { theme: 'light', bg: 'blue', ink: 'soft', accent: 'rose', dialogue: 'gold', hideHeader: false, foldComposer: true, hidePictures: true } as const;
     expect(parseDisplay(JSON.stringify(chosen), DISPLAY_DEFAULT)).toEqual(chosen);
     expect(parseDisplay(JSON.stringify({ theme: 'sepia', bg: 'teal', accent: 3, hideHeader: 'no', hidePictures: 1 }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
   });
@@ -45,6 +45,13 @@ describe('saved presets', () => {
     ]);
     expect(read).toEqual({ presets: [{ id: 'a', name: '숲', look }], unread: 1 });
     expect(presetOf(read.presets, FALLBACK, { ...DISPLAY_DEFAULT, bg: 'green', accent: 'violet' })?.name).toBe('숲');
+  });
+
+  it('reads a look saved before 대사 as the base dialogue', () => {
+    const look = lookOf(FALLBACK, { ...DISPLAY_DEFAULT, bg: 'blue' });
+    const before: Record<string, string | number> = { ...look };
+    delete before.dialogue;
+    expect(savedPresets([{ id: 'a', name: '밤', look: before }]).presets[0]?.look).toEqual(look);
   });
 });
 

@@ -11,7 +11,7 @@ import { useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { ACCENT, Beside, BG, Button, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
+import { ACCENT, Beside, BG, Button, DIALOGUE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
   { name: '캐릭터', mine: false, html: '<p><em>창밖으로 늦은 오후의 햇살이 기울어 든다. 그녀는 찻잔을 내려놓고 고개를 들었다.</em></p><p>"오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아."</p>' },
@@ -20,7 +20,7 @@ const SAMPLE: PreviewRow[] = [
 
 const SWATCH_SAMPLE = '그녀는 찻잔을 내려놓고 고개를 들었다.';
 
-const colorChoices = <T extends string>(pick: 'bg' | 'ink' | 'accent', labels: Record<T, string>) =>
+const colorChoices = <T extends string>(pick: 'bg' | 'ink' | 'accent' | 'dialogue', labels: Record<T, string>) =>
   choices(labels).map((option) => ({ ...option, mark: <ColorDot pick={pick} value={option.value} /> }));
 
 export function DisplayScreen({ back }: { back: Back | null }) {
@@ -109,6 +109,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             control={<ChoiceGroup label="배경" options={colorChoices('bg', BG)} value={display.bg} onChange={(bg) => changeDisplay({ bg })} />}
           />
           <SettingRow label="글자" control={<ChoiceGroup label="글자" options={colorChoices('ink', INK)} value={display.ink} onChange={(ink) => changeDisplay({ ink })} />} />
+          <SettingRow label="대사" control={<ChoiceGroup label="대사" options={colorChoices('dialogue', DIALOGUE)} value={display.dialogue} onChange={(dialogue) => changeDisplay({ dialogue })} />} />
           <SettingRow label="강조" control={<ChoiceGroup label="강조" options={colorChoices('accent', ACCENT)} value={display.accent} onChange={(accent) => changeDisplay({ accent })} />} />
           <SettingRow
             label="이미지 가리기"

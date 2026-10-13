@@ -8,5 +8,5 @@ export { hasFinePointer, usePanelsBeside, useSplit, useViewport, useWide } from 
 export { markScrollbars } from './scrollbar';
 export { Tag } from './Tag';
 export { Text } from './Text';
-export { ACCENT, applyScheme, BG, INK, schemeAttributes, THEME, type Accent, type Bg, type Ink, type Scheme, type Theme } from './theme';
+export { ACCENT, applyScheme, BG, DIALOGUE, INK, schemeAttributes, THEME, type Accent, type Bg, type Dialogue, type Ink, type Scheme, type Theme } from './theme';
 export { VeilContext } from './veil';

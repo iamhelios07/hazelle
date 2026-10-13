@@ -1,5 +1,5 @@
 import type { SavedLook } from '../../model/settings';
-import { ACCENT, BG, INK, THEME, type Reading, type Scheme } from '../ui';
+import { ACCENT, BG, DIALOGUE, INK, THEME, type Reading, type Scheme } from '../ui';
 
 export const SIZE = { min: 14, max: 21 };
 
@@ -34,7 +34,7 @@ export function parseReading(stored: string, fallback: Reading): Reading {
 
 export type Display = Scheme & { hideHeader: boolean; foldComposer: boolean; hidePictures: boolean };
 
-const PLAIN = { bg: 'base', ink: 'base', accent: 'base' } as const;
+const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
 export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, hideHeader: true, foldComposer: true, hidePictures: false };
 
@@ -45,6 +45,7 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     bg: known(BG, read.bg, fallback.bg),
     ink: known(INK, read.ink, fallback.ink),
     accent: known(ACCENT, read.accent, fallback.accent),
+    dialogue: known(DIALOGUE, read.dialogue, fallback.dialogue),
     hideHeader: flag(read.hideHeader, fallback.hideHeader),
     foldComposer: flag(read.foldComposer, fallback.foldComposer),
     hidePictures: flag(read.hidePictures, fallback.hidePictures),
@@ -66,12 +67,16 @@ export function presets(initial: Reading): Preset[] {
     { name: '밝은 서재', look: { theme: 'light', ...PLAIN, font: 'serif', size, leading, width } },
     { name: '고딕 간결', look: { theme: 'dark', ...PLAIN, font: 'sans', size: 15, leading: 'narrow', width: 'narrow' } },
     { name: '넓게 읽기', look: { theme: 'dark', ...PLAIN, font: 'serif', size: 18, leading: 'wide', width: 'wide' } },
+    { name: '대사 강조', look: { theme: 'dark', ...PLAIN, dialogue: 'gold', font, size, leading, width } },
+    { name: '밤바다', look: { theme: 'dark', ...PLAIN, bg: 'blue', accent: 'blue', dialogue: 'sky', font, size, leading, width } },
+    { name: '숲', look: { theme: 'dark', ...PLAIN, bg: 'green', accent: 'green', dialogue: 'lime', font, size, leading, width } },
+    { name: '세피아', look: { theme: 'light', ...PLAIN, bg: 'brown', font: 'serif', size, leading: 'wide', width } },
   ];
 }
 
-export const lookOf = ({ font, size, leading, width }: Reading, { theme, bg, ink, accent }: Display): Look => ({ theme, bg, ink, accent, font, size, leading, width });
+export const lookOf = ({ font, size, leading, width }: Reading, { theme, bg, ink, accent, dialogue }: Display): Look => ({ theme, bg, ink, accent, dialogue, font, size, leading, width });
 
-const LOOK: Record<keyof Look, true> = { theme: true, bg: true, ink: true, accent: true, font: true, size: true, leading: true, width: true };
+const LOOK: Record<keyof Look, true> = { theme: true, bg: true, ink: true, accent: true, dialogue: true, font: true, size: true, leading: true, width: true };
 const LOOK_KEYS = Object.keys(LOOK) as (keyof Look)[];
 
 export function presetOf(list: Preset[], reading: Reading, display: Display): Preset | undefined {
@@ -79,8 +84,8 @@ export function presetOf(list: Preset[], reading: Reading, display: Display): Pr
   return list.find(({ look }) => LOOK_KEYS.every((key) => look[key] === now[key]));
 }
 
-export function describeLook({ theme, bg, ink, accent, font, size, leading, width }: Look) {
-  const picks = [bg !== 'base' && `배경 ${BG[bg]}`, ink !== 'base' && `글자 ${INK[ink]}`, accent !== 'base' && `강조 ${ACCENT[accent]}`].filter(Boolean);
+export function describeLook({ theme, bg, ink, accent, dialogue, font, size, leading, width }: Look) {
+  const picks = [bg !== 'base' && `배경 ${BG[bg]}`, ink !== 'base' && `글자 ${INK[ink]}`, dialogue !== 'base' && `대사 ${DIALOGUE[dialogue]}`, accent !== 'base' && `강조 ${ACCENT[accent]}`].filter(Boolean);
   return [THEME[theme], ...picks, `${FONT[font]} ${size}`, `줄 간격 ${SPACING[leading]}`, `읽기 폭 ${SPACING[width]}`].join(' · ');
 }
 
@@ -100,6 +105,8 @@ function parseLook(look: SavedLook['look']): Look | null {
     bg: named(BG, look.bg),
     ink: named(INK, look.ink),
     accent: named(ACCENT, look.accent),
+    // Looks saved by v0.1.73 predate 대사.
+    dialogue: look.dialogue === undefined ? 'base' : named(DIALOGUE, look.dialogue),
     font: named(FONT, look.font),
     size: sized(look.size),
     leading: named(SPACING, look.leading),

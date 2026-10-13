@@ -31,12 +31,12 @@ export function DisplayProvider({ children }: { children: ReactNode }) {
   const [list] = useState(() => presets(initial));
   const [reading, setReading] = usePersisted(READING, (stored) => parseReading(stored, initial), initial);
   const [display, setDisplay] = usePersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT);
-  const { theme, bg, ink, accent } = display;
-  useLayoutEffect(() => applyScheme({ theme, bg, ink, accent }), [theme, bg, ink, accent]);
+  const { theme, bg, ink, accent, dialogue } = display;
+  useLayoutEffect(() => applyScheme({ theme, bg, ink, accent, dialogue }), [theme, bg, ink, accent, dialogue]);
   const veil = useMemo(() => (display.hidePictures ? { revealed: new Set<string>() } : null), [display.hidePictures]);
-  const pick = ({ look: { theme, bg, ink, accent, ...look } }: Preset) => {
+  const pick = ({ look: { theme, bg, ink, accent, dialogue, ...look } }: Preset) => {
     setReading({ ...reading, ...look });
-    setDisplay({ ...display, theme, bg, ink, accent });
+    setDisplay({ ...display, theme, bg, ink, accent, dialogue });
   };
   const control: DisplayControl = {
     reading,

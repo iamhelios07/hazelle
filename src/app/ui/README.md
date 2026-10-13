@@ -7,8 +7,8 @@ and only this folder styles elements.**
   layer (z-index). The palette layer is raw values from the approved mockups; the semantic layer
   (`--color-text-muted`, `--space-16`, `--layer-dialog`, …) is what components use.
 - Themes: `:root` in `tokens.css` is dark and `[data-theme='light']` gives every palette-backed
-  color token a light value; `[data-bg]`, `[data-ink]` and `[data-accent]` turn the page, text and
-  accent tokens to a color pick. `foundation/theme.ts` (`applyScheme`) sets the attributes on the
+  color token a light value; `[data-bg]`, `[data-ink]`, `[data-dialogue]` and `[data-accent]` turn the page,
+  text, dialogue and accent tokens to a color pick. `foundation/theme.ts` (`applyScheme`) sets the attributes on the
   document, and `schemeAttributes` on an element drawn in another scheme (a preset's swatch). A module
   never reads `--palette-*`; a surface that needs the other theme's colors (the toast) reads tokens
   defined per theme.

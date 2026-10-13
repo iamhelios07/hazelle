@@ -16,14 +16,14 @@ export function Swatches({ label, sample, items, onMove }: { label: string; samp
   const order = useDragOrder(onMove ?? (() => {}), 'x');
   return (
     <div className={styles.swatches} role="group" aria-label={label} onDragOver={order.allow} onDrop={order.drop}>
-      {items.map(({ name, note, theme, bg, ink, accent, font, size, current, onPick, menu }, index) => (
+      {items.map(({ name, note, theme, bg, ink, accent, dialogue, font, size, current, onPick, menu }, index) => (
         <div
           key={index}
           className={[styles.card, order.from === index && styles.dragged, order.at === index && styles.before, index === items.length - 1 && order.at === items.length && styles.after].filter(Boolean).join(' ')}
           onDragOver={(event) => order.over(event, index)}
         >
           <button type="button" className={styles.pick} aria-pressed={current} onClick={onPick} draggable={onMove !== undefined} onDragStart={(event) => order.start(event, index, name)} onDragEnd={order.end}>
-            <span className={`${styles.sample} ${styles[font]}`} {...schemeAttributes({ theme, bg, ink, accent })} style={{ '--swatch-size': `${size}px` } as CSSProperties} aria-hidden>
+            <span className={`${styles.sample} ${styles[font]}`} {...schemeAttributes({ theme, bg, ink, accent, dialogue })} style={{ '--swatch-size': `${size}px` } as CSSProperties} aria-hidden>
               {sample}
             </span>
             <span className={styles.meta}>
