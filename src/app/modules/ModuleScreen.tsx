@@ -4,6 +4,7 @@ import { likenessId } from '../../model/likeness';
 import { editModule, setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
+import { holdsLine } from '../common/pack';
 import { LoreEditor } from '../common/LoreEditor';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
@@ -14,7 +15,7 @@ import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Avatar, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
-import { useHolds } from './ModulesScreen';
+import { useModuleParts } from './ModulesScreen';
 
 const ALWAYS_ON = `${ALWAYS} 켜기`;
 const USED_BY = '쓰는 캐릭터';
@@ -30,7 +31,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
   const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
   const personas = usePersonas().filter(({ value }) => value.modules?.includes(id));
-  const holds = useHolds(stored);
+  const holds = holdsLine(useModuleParts([stored])[0]!);
   // A module of scripts alone describes no one, so it offers no 삽화 profiles.
   const describes = useChildren('lore', id).length + useChildren('asset', id).length > 0 || useStored('likeness', likenessId(id)) !== null;
   const autosave = useAutosave<{ name: string; description: string }>(`module:${id}`, (patch) => editModule(store, id, patch));

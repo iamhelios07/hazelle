@@ -154,6 +154,28 @@ export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'toolc
   const model = parent === null ? null : read.children(kind, parent);
   return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNone);
 }
+// A list per parent, in their order; the whole is new exactly when one list changed. key stands for parents, whose array
+// a caller makes anew on each render.
+export function useChildrenOf<K extends 'lore' | 'asset'>(kind: K, parents: readonly string[]): Stored<K>[][] {
+  const { read } = useSession();
+  const key = parents.join();
+  const { subscribe, snapshot } = useMemo(() => {
+    const models = parents.map((parent) => read.children(kind, parent));
+    let held: Stored<K>[][] = [];
+    return {
+      subscribe: (listener: () => void) => {
+        const stops = models.map((model) => model.subscribe(listener));
+        return () => stops.forEach((stop) => stop());
+      },
+      snapshot: () => {
+        const lists = models.map((model) => model.snapshot());
+        if (lists.length !== held.length || lists.some((list, index) => list !== held[index])) held = lists;
+        return held;
+      },
+    };
+  }, [read, kind, key]);
+  return useSyncExternalStore(subscribe, snapshot);
+}
 export function useSettings() {
   const { read } = useSession();
   return useSyncExternalStore(read.settings.subscribe, read.settings.snapshot);
@@ -243,6 +265,7 @@ export function useTool(module: string | null) {
   const tool = useStored('tool', module === null ? null : toolId(module));
   return owner && live(owner) ? tool : null;
 }
+export const useTools = () => useKind('tool');
 
 export function useChatTools(chat: string | null): ToolMenu[] {
   const { read, tools } = useSession();

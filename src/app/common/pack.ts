@@ -4,12 +4,26 @@ import { isToggle } from '../../model/prompt';
 import { SCRIPTS, TOOL } from './words';
 
 export const counted = (counts: [string, number][]) => counts.flatMap(([label, count]) => (count > 0 ? [`${label} ${count}개`] : []));
-const scriptCounts = ({ regex, triggers }: Pick<Pack, 'regex' | 'triggers'>) => counted([[SCRIPTS.regex, regex.length], [SCRIPTS.triggers, triggers.length]]);
+const scriptCounts = ({ regex, triggers }: { regex: number; triggers: number }) => counted([[SCRIPTS.regex, regex], [SCRIPTS.triggers, triggers]]);
 
-export const scriptHolds = (pack: Pick<Pack, 'regex' | 'triggers'>): string => scriptCounts(pack).join(' · ');
+export const scriptHolds = ({ regex, triggers }: Pick<Pack, 'regex' | 'triggers'>): string => scriptCounts({ regex: regex.length, triggers: triggers.length }).join(' · ');
+
+export type PackParts = { tool: boolean; lore: number; regex: number; triggers: number; toggles: number; assets: number; style: boolean };
 
 // A pack's lorebook and assets are stored apart from it, so their counts are given.
-export function packHolds(pack: Pack, lore: number, assets: number, tool = false): string {
-  const held = [...(tool ? [TOOL] : []), ...counted([['로어북', lore]]), ...scriptCounts(pack), ...counted([['토글', readToggles(pack.toggles).lines.filter(isToggle).length], ['에셋', assets]]), ...(pack.background ? ['스타일'] : [])];
+export const packParts = (pack: Pack, lore: number, assets: number, tool = false): PackParts => ({
+  tool,
+  lore,
+  regex: pack.regex.length,
+  triggers: pack.triggers.length,
+  toggles: readToggles(pack.toggles).lines.filter(isToggle).length,
+  assets,
+  style: !!pack.background,
+});
+
+export function holdsLine({ tool, lore, regex, triggers, toggles, assets, style }: PackParts): string {
+  const held = [...(tool ? [TOOL] : []), ...counted([['로어북', lore]]), ...scriptCounts({ regex, triggers }), ...counted([['토글', toggles], ['에셋', assets]]), ...(style ? ['스타일'] : [])];
   return held.length > 0 ? held.join(' · ') : '담긴 것이 없어요';
 }
+
+export const packHolds = (pack: Pack, lore: number, assets: number, tool = false): string => holdsLine(packParts(pack, lore, assets, tool));

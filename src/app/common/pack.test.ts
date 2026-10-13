@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pack } from '../../engine/import/types';
-import { packHolds, scriptHolds } from './pack';
+import { packHolds, packParts, scriptHolds } from './pack';
 
 const EMPTY: Pack = { regex: [], triggers: [], toggles: '' };
 
@@ -22,5 +22,11 @@ describe('what a pack holds', () => {
 
   it('says so when it holds nothing', () => {
     expect(packHolds(EMPTY, 0, 0)).toBe('담긴 것이 없어요');
+  });
+
+  it('gives each part as a count the contents line is written from', () => {
+    const pack: Pack = { regex: [], triggers: [{ kind: 'lua', id: 'trigger-0', name: '', code: '' }], toggles: 'storm=폭풍\n=\nweather=날씨', background: '<style></style>' };
+    expect(packParts(pack, 6, 2, true)).toEqual({ tool: true, lore: 6, regex: 0, triggers: 1, toggles: 2, assets: 2, style: true });
+    expect(packParts(EMPTY, 0, 0)).toEqual({ tool: false, lore: 0, regex: 0, triggers: 0, toggles: 0, assets: 0, style: false });
   });
 });
