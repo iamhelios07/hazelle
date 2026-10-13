@@ -30,10 +30,11 @@ export type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
 // leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
 // into every account that holds one. snapshots: those baselines, every snapshot an operation pins, and the base of each
-// delta among them. operations: those not done, and any not yet seen ending. bucket: where pictures are, the pool for
-// disk, the R2 store for r2. pictures: ids, which are their SHA-256. pictures and migrations are the last two keys
-// written, and bucket comes before them: deploy/rclone-backup.sh matches that tail and the version, and keeps only a
-// disk generation's pictures in its pool.
+// delta among them, each with `materialized`, an upper bound of the file it restores to: a whole one's expanded, a
+// delta's plus its base's (scripts/destroy.sh sizes a drill by it). operations: those not done, and any not yet seen
+// ending. bucket: where pictures are, the pool for disk, the R2 store for r2. pictures: ids, which are their SHA-256.
+// pictures and migrations are the last two keys written, and bucket comes before them: deploy/rclone-backup.sh matches
+// that tail and the version, and keeps only a disk generation's pictures in its pool.
 export type Manifest = {
   version: 2 | 3;
   id: string;
@@ -43,7 +44,7 @@ export type Manifest = {
   accountSchema: number;
   bucket: Bucket['kind'];
   accounts: { incarnation: string; state: AccountState; baseline: string | null; pictureBytes: number }[];
-  snapshots: (Artifact & { id: string; incarnation: string })[];
+  snapshots: (Artifact & { id: string; incarnation: string; materialized: number })[];
   operations: { id: number; incarnation: string; phase: RestorePhase; verified: boolean; checkpoint: string | null; target: string | null }[];
   pictures: string[];
 };
@@ -85,10 +86,11 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
     );
     const unbacked = accounts.filter(({ state, baseline }) => state !== 'leaving' && baseline === null);
     if (unbacked.length) throw new Error(`generation: ${unbacked.length} accounts have no baseline`);
-    const snapshots = all<{ id: string; incarnation: string; bytes: number; expanded: number; sha256: string }>(
+    const snapshots = all<Omit<Manifest['snapshots'][number], 'path'>>(
       `WITH named AS (SELECT id, base FROM snapshots s WHERE id IN (SELECT value FROM json_each(?1)) OR ${PINNED('s', '?2')})
-       SELECT id, incarnation, bytes, expanded, sha256 FROM snapshots
-       WHERE id IN (SELECT id FROM named UNION SELECT base FROM named) ORDER BY incarnation, id`,
+       SELECT s.id, s.incarnation, s.bytes, s.expanded, s.sha256, s.expanded + COALESCE(b.expanded, 0) AS materialized
+       FROM snapshots s LEFT JOIN snapshots b ON b.id = s.base
+       WHERE s.id IN (SELECT id FROM named UNION SELECT base FROM named) ORDER BY s.incarnation, s.id`,
       JSON.stringify(accounts.map(({ baseline }) => baseline).filter((id) => id !== null)),
       now,
     );

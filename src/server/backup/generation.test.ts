@@ -190,7 +190,7 @@ describe('a backup generation', () => {
     expect(named(unchanged.incarnation)).toBe(unchanged.old);
   });
 
-  it('names the base of a delta baseline and of a pinned delta beside them', async () => {
+  it('names the base of a delta baseline and of a pinned delta beside them, and sizes a delta with its base', async () => {
     await signedUp('operator');
     const now = Date.now();
     const baselineAt = async (account: Awaited<ReturnType<typeof signedUp>>, at: number) => {
@@ -220,6 +220,9 @@ describe('a backup generation', () => {
     expect(named(delta.incarnation)).toEqual([deltaBase, deltaBaseline].toSorted());
     expect(named(pinner.incarnation)).toEqual([pinnedBase, pinned, current].toSorted());
     for (const snapshot of manifest.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
+    const entry = (id: string) => manifest.snapshots.find((snapshot) => snapshot.id === id)!;
+    expect(entry(pinned).materialized).toBe(entry(pinnedBase).expanded + entry(pinned).expanded);
+    expect(entry(current).materialized).toBe(entry(current).expanded);
   });
 
   it('keeps only the newest generation of each day, besides the two newest overall and any not yet copied off-site', async () => {

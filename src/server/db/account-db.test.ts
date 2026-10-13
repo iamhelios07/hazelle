@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serviceReads, type Write } from '../account-store';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
-import { accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, snapshotPath, type Stores } from './account-db';
+import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, snapshotPath, type Stores } from './account-db';
 import { DAY_MS } from '../backup/snapshots';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
@@ -48,7 +48,6 @@ const baseline = async () => ((await stores.snapshot(INC, 'baseline')) as { take
 const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
 const B = '22222222-2222-4222-8222-222222222222';
 const C = '33333333-3333-4333-8333-333333333333';
-// A whole snapshot at rev 2, then two writes and a kv row, then a delta at rev 4.
 async function baseAndDelta() {
   await signup();
   await write(put(A, 'a1'), put(B, 'b1'));
@@ -392,20 +391,34 @@ describe('the account registry', () => {
     expect(existsSync(`${target}.delta`)).toBe(false);
   });
 
-  it('takes a whole snapshot first, a delta next, and a whole one again after a finished rewind and once the base is a day short of RETENTION_MS old', async () => {
+  it('takes a whole snapshot first, a delta next, and a whole one again on a new timeline, once the base is a day short of RETENTION_MS old, and after a schema upgrade', async () => {
     await signup();
+    let timeline = 't1';
     const take = async (at: number, body: string) => {
       now = at;
-      await write(put(crypto.randomUUID(), body));
+      await store().batch(INC, timeline, [put(crypto.randomUUID(), body)], null);
       const id = await baseline();
       return (raw.prepare('SELECT base FROM snapshots WHERE id = ?').get(id) as { base: string | null }).base === null ? 'whole' : 'delta';
     };
     expect(await take(2_000_000, 'first')).toBe('whole');
     expect(await take(3_000_000, 'next')).toBe('delta');
-    raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't1', 3500000, 'done', 1, 1, 4000000)").run(INC);
+    // A whole of the old timeline stamped after the rewind's end, as a clock put back before the rewind finished leaves it.
+    raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256, timeline, schema_version) VALUES ('before-the-rewind', ?, 'checkpoint', 4500000, 2, 1, 1, 'x', 't1', ?)").run(INC, ACCOUNT_SCHEMA_VERSION);
+    raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't2', 3500000, 'done', 1, 1, 4000000)").run(INC);
+    raw.prepare("UPDATE accounts SET timeline = 't2'").run();
+    await store().restart(INC).catch(() => {});
+    timeline = 't2';
     expect(await take(5_000_000, 'after the rewind')).toBe('whole');
     expect(await take(5_000_000 + RETENTION_MS - DAY_MS - 1, 'within the base’s window')).toBe('delta');
     expect(await take(5_000_000 + RETENTION_MS - DAY_MS, 'the base aged out of the window, a day before it expires')).toBe('whole');
+    raw.prepare('UPDATE snapshots SET schema_version = ?').run(ACCOUNT_SCHEMA_VERSION - 1);
+    expect(await take(5_000_000 + RETENTION_MS, 'after a schema upgrade')).toBe('whole');
+  });
+
+  it('answers corrupt for a delta that does not materialize to the rev its row recorded', async () => {
+    const { delta } = await baseAndDelta();
+    raw.prepare('UPDATE snapshots SET rev = 5 WHERE id = ?').run(delta);
+    await expect(materializeSnapshot(dir, db, INC, delta, join(dir, 'materialized.sqlite'))).rejects.toThrow(/snapshot-corrupt/);
   });
 
   it('answers unavailable for a delta whose base file is altered or gone', async () => {
