@@ -6,7 +6,9 @@
 # prevent_destroy, against infra/'s state; after the typed confirmation the generation's age is checked again and the
 # saved plan is applied.
 #   scripts/destroy.sh
-# Needs: terraform initialised in infra/, VULTR_API_KEY in the shell, ssh as root to the machine, and free space on the
+# Needs: terraform initialised in infra/, VULTR_API_KEY in the shell, every required variable of infra/variables.tf
+# (infra/README.md "Inputs": the gitignored *.tfvars, TF_VAR_* for what it lacks; the plan fails only after the drill
+# without them), ssh as root to the machine, and free space on the
 # machine's disk, which the live app shares, for the generation as downloaded and as restored plus a fifth of the disk
 # (the script adds it up from the manifest and checks it).
 set -euo pipefail
