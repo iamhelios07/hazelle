@@ -36,6 +36,15 @@ describe('addConnection', () => {
       const added = await addConnection(session, openRouter);
       expect(session.store.list('connection').map((stored) => [stored.id, stored.value])).toEqual([[added.ok && added.id, openRouter]]);
     }));
+
+  it('numbers a label another connection already holds', () =>
+    server.withSession(async (session) => {
+      stubRelay(({ url }) => upstream(200, url === KEY ? openRouterKey : openRouterModels));
+      await addConnection(session, openRouter);
+      await addConnection(session, openRouter);
+      await addConnection(session, openRouter);
+      expect(session.store.list('connection').map(({ value }) => value.label).sort()).toEqual(['OpenRouter', 'OpenRouter 2', 'OpenRouter 3']);
+    }));
 });
 
 describe('setStarred', () => {

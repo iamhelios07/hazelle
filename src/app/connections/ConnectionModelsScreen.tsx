@@ -5,10 +5,11 @@ import { modelSettings, resolveConnection, RETRIES } from '../../connectors/regi
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
-import { refreshStarred, removeConnection, restoreConnection, setRetries, setStarred } from '../../runtime/connections';
+import { refreshStarred, removeConnection, renameConnection, restoreConnection, setRetries, setStarred } from '../../runtime/connections';
 import { modelProfile } from '../../runtime/profiles';
 import { ACTS } from '../common/acts';
 import { describeCatalogFailure } from '../common/failure';
+import { NameDialog } from '../common/NameDialog';
 import { useSearch } from '../common/useSearch';
 import { RETRY_COUNT } from '../common/words';
 import { useSession } from '../session';
@@ -42,6 +43,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<Filter>('all');
+  const [naming, setNaming] = useState(false);
   // Under API 연결's cards the connection is a part of that page, not a page of its own.
   const stacked = usePane() === 'stack';
 
@@ -127,8 +129,22 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
 
   const who = connection.turns ? `계정 ${connection.accounts.length}개` : connection.accounts[0]!.name;
   const listed = !catalog ? '모델 목록을 불러오는 중…' : catalog.ok ? `모델 ${catalog.models.length}개` : '모델 목록을 불러오지 못했어요';
-  const menu = { of: '연결', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> };
+  const menu = {
+    of: '연결',
+    items: (
+      <>
+        <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming(true)} />
+        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} />
+      </>
+    ),
+  };
+  // A blank name keeps the old one: a connection with no label could not be told from any other.
+  const rename = (label: string) => {
+    setNaming(false);
+    if (label.trim()) void renameConnection(store, id, label.trim()).then((result) => result.ok || toast.failed(result));
+  };
   const level = stacked ? 3 : 2;
+  const dialog = naming && <NameDialog title="연결 이름 바꾸기" value={connection.label} onSave={rename} onClose={() => setNaming(false)} />;
 
   const body = (
     <Columns min="panel">
@@ -181,10 +197,12 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       <ItemSection title={connection.label} note={who} menu={menu}>
         {body}
       </ItemSection>
+      {dialog}
     </Screen>
   ) : (
     <Screen width="page" top={<NavBar title={connection.label} subtitle={who} {...backBar(back)} menu={menu} />}>
       {body}
+      {dialog}
     </Screen>
   );
 }

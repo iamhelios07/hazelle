@@ -41,9 +41,21 @@ export async function addConnection({ store, catalogs, credentials }: Session, c
   if (!catalog.ok) return { ok: false, failure: { kind: 'models', failure: catalog.failure } };
   const refused = meters && !meters.meters.length && meters.failures.length > 0 && meters.failures.every((failure) => failure.kind === 'provider' && failure.status === 401) ? meters.failures[0] : undefined;
   if (refused) return { ok: false, failure: { kind: 'key', failure: refused } };
-  const saved = await store.create('connection', connection);
+  const saved = await store.create('connection', { ...connection, label: freeLabel(connection.label, store.list('connection')) });
   return saved.ok ? { ok: true, id: saved.data.id } : { ok: false, failure: { kind: 'save', failure: saved } };
 }
+
+// A second connection of one type would read as the first everywhere its label names it: menus, the list, usage.
+// Renamed connections are not renumbered; a name the user picks stays theirs, taken or not.
+function freeLabel(label: string, connections: readonly Stored<'connection'>[]): string {
+  const taken = new Set(connections.map(({ value }) => value.label));
+  let number = 1;
+  let free = label;
+  while (taken.has(free)) free = `${label} ${++number}`;
+  return free;
+}
+
+export const renameConnection = (store: ObjectStore, id: string, label: string) => store.update('connection', id, (current) => ({ ...current, label }));
 
 // The others are kept apart first, so a star the model got meanwhile on another device is not doubled.
 // The first model starred that can talk becomes the 대화 모델: until one is set no chat can send, and with one there is nothing to
