@@ -116,7 +116,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `Link` | `Link.module.css` | A link to another site |
 | controls | `MarkupArea` (`typeInto`, `markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea; an insert into it that Ctrl+Z takes back |
 | controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |
-| controls | `PickCard` | `PickCard.module.css` | A choice that leads its page, as a card: what it is, what is chosen and where that comes from; opens a menu, or a place |
+| controls | `PickCard` | `PickCard.module.css` | A choice that leads its page, as a card: what it is, what is chosen and where that comes from; opens a menu, or a place; an ⓘ in its corner when given help |
 | controls | `PhraseField` | `PhraseField.module.css` | Phrases as removable chips and a field that adds one on Enter, such as stop phrases |
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box; one that fills a row, such as the chat header's search bar, with its count and buttons at its end |
@@ -131,6 +131,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Viewport` (`ROWS_RESIZED`, `Seek`) | `Viewport.module.css` | A keyed, measured window of rows within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focus, row state and jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts, the whole named above the bar when given |
+| collections | `CardList` (`CardItem`) | `CardList.module.css` | The user's own things as cards across the width, one column in a side panel or on a phone: name, badge and tags, where it is used under it, a control beside it, and things folded under it (its copies) as rows inside the card |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |

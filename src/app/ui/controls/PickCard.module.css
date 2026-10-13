@@ -1,5 +1,13 @@
+.pick {
+  position: relative;
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+}
+
 .card {
   composes: box from '../foundation/surface.module.css';
+  flex: 1;
   min-width: 0;
   min-height: var(--row-min-height);
   padding: var(--space-12) var(--space-16);
@@ -45,4 +53,14 @@
   composes: ellipsis from '../foundation/a11y.module.css';
   color: var(--color-text-faint);
   font-size: var(--text-xs);
+}
+
+.helped .label {
+  padding-right: var(--control-sm);
+}
+
+.help {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
 }
