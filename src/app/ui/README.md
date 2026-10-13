@@ -153,7 +153,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
-| overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
+| overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped, each dropped folder's included; a screen's own drop over the app's |
 | overlays | `MoreMenu` | — | The ⋯ that opens what is done to a thing as a whole, in a screen's head (`NavBar` `menu`) or a row, named '{of} 메뉴' |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `MenuHandle`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state, which a handle shares with other buttons; checked items (one of several or `multiple`), disabled items, and a small form opened the same way (kind dialog) with menus inside it |

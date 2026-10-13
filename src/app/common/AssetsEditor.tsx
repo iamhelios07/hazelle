@@ -3,7 +3,7 @@ import type { Stored } from '../../model/kinds';
 import { addAssets, removeAsset, renameAsset, restoreAsset } from '../../runtime/characters';
 import { useAssetUrl, useChildren, useFiles, useStore } from '../session';
 import { useToast } from '../toast';
-import { CardGrid, Empty, FaceCard, FileButton, MenuItem, MoreMenu, Row, Section, Stack, useMenuHandle, useMenuOpener } from '../ui';
+import { CardGrid, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, Row, Section, Stack, useFileDrop, useMenuHandle, useMenuOpener } from '../ui';
 import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { useCopy } from './useCopy';
@@ -24,12 +24,15 @@ export function AssetsEditor({ owner }: { owner: string }) {
   for (const asset of assets) shared.set(named(asset), (shared.get(named(asset)) ?? 0) + 1);
 
   async function add(picked: File[]) {
+    if (!picked.length) return;
     setAdding(true);
     const added = await addAssets(store, files, owner, picked);
     setAdding(false);
     if (!added.ok) return toast.failed(added, `${ASSET}을 추가하지 못했어요.`);
     if (added.data.skipped) toast.error(`${added.data.skipped}개는 추가하지 못했어요.`, { detail: '이미지가 아니거나 너무 커요.' });
   }
+
+  const dragging = useFileDrop((dropped) => void add(dropped), 'screen');
 
   async function remove({ id, value }: Stored<'asset'>) {
     const removed = await removeAsset(store, id);
@@ -45,7 +48,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
   }
 
   return (
-    <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}처럼 이름으로 불러 보여 주는 이미지예요. 이름이 같은 에셋이 여럿이면 그중 하나가 무작위로 나와요.">
+    <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}처럼 이름으로 불러 보여 주는 이미지예요. 이름이 같은 에셋이 여럿이면 그중 하나가 무작위로 나와요. 파일이나 폴더를 끌어다 놓아도 추가돼요.">
       <Stack gap="related">
         <Row kind="toolbar">
           {search.field}
@@ -64,6 +67,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
           <Empty variant="section">{search.none ?? `${ASSET}이 없어요.`}</Empty>
         )}
       </Stack>
+      {dragging && <DropOverlay>여기에 놓으면 에셋으로 추가해요</DropOverlay>}
       {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 이미지를 불러요." onSave={rename} onClose={() => setNaming(null)} />}
     </Section>
   );

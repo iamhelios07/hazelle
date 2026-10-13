@@ -31,7 +31,10 @@ export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'scr
       event.preventDefault();
       depth = 0;
       setDragging(false);
-      latest.current([...(event.dataTransfer?.files ?? [])]);
+      // Entries are only readable during the drop event itself; their files are read after it. An item that is not from
+      // the file system has no entry, and is taken as its file.
+      const dropped = [...(event.dataTransfer?.items ?? [])].flatMap((item) => (item.kind === 'file' ? (item.webkitGetAsEntry() ?? item.getAsFile() ?? []) : []));
+      void droppedFiles(dropped).then((files) => latest.current(files));
     };
     window.addEventListener('dragenter', enter);
     window.addEventListener('dragleave', leave);
@@ -46,4 +49,32 @@ export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'scr
     };
   }, [scope]);
   return dragging;
+}
+
+// A folder brings every file under it, in its folders too. readEntries hands a folder out a batch at a time (100 in
+// Chromium), so it is asked again until it hands none.
+export async function droppedFiles(entries: readonly (FileSystemEntry | File)[]): Promise<File[]> {
+  const files: File[] = [];
+  for (const entry of entries) {
+    if (entry instanceof File) files.push(entry);
+    else if (isFolder(entry)) files.push(...(await droppedFiles(await inside(entry))));
+    else if (isFile(entry)) {
+      const file = await new Promise<File | null>((resolve) => entry.file(resolve, () => resolve(null)));
+      if (file) files.push(file);
+    }
+  }
+  return files;
+}
+
+const isFolder = (entry: FileSystemEntry): entry is FileSystemDirectoryEntry => entry.isDirectory;
+const isFile = (entry: FileSystemEntry): entry is FileSystemFileEntry => entry.isFile;
+
+async function inside(folder: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+  const reader = folder.createReader();
+  const entries: FileSystemEntry[] = [];
+  for (;;) {
+    const batch = await new Promise<FileSystemEntry[]>((resolve) => reader.readEntries(resolve, () => resolve([])));
+    if (!batch.length) return entries;
+    entries.push(...batch);
+  }
 }
