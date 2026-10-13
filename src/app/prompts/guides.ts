@@ -36,6 +36,7 @@ const SAMPLE: CbsContext = {
   language: 'Korean',
   assets: [],
   inlays: [],
+  unfound: null,
   modules: [],
   faces: { char: null, user: null },
   pickSeed: 'sample',

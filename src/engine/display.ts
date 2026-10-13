@@ -7,17 +7,18 @@ import { contexts, renderChat, type ChatScope, type LuaDisplay, type Missed } fr
 
 // texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the packs'
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
+// unfound: the asset names its tags found no picture for, backgroundHTML's included.
 // drawn: the display scripts, by place among the packs' regex, that drew a box in each message; boxes: each message's
 // boxes taken out of it (상태창 지정), their <style> blocks in css too. pass: whether the bot's Lua editDisplay pass
 // still has pending messages (lua). stopped: the bot's commands in a message or a backgroundHTML that ran away (renderChat); a
 // backgroundHTML that did is left out.
-export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: boolean; stopped: Runaway | null };
+export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: boolean; unfound: string[]; stopped: Runaway | null };
 
 // A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
 const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 
 export type DisplayWork = { items: Missed[]; staged: string[]; start: [string, string][] };
-export type DisplayPatch = { rows: { index: number; text: string; drawn: number[]; boxes: Box[] }[]; css: string; pass: boolean; stopped: Runaway | null };
+export type DisplayPatch = { rows: { index: number; text: string; drawn: number[]; boxes: Box[] }[]; css: string; pass: boolean; unfound: string[]; stopped: Runaway | null };
 
 export const display = (scope: ChatScope, take: ReadonlySet<number> = new Set(), lua?: LuaDisplay): Display => new DisplayPass(scope, take, lua).value;
 
@@ -42,7 +43,7 @@ export class DisplayPass {
     for (const { background } of scope.packs) {
       if (!background) continue;
       try {
-        stripStyles(unescapeCbs(evaluate(background, contexts(scope, 'display', null, '')({ seed: 'background' }, rendered.variables))), this.background);
+        stripStyles(unescapeCbs(evaluate(background, contexts(scope, 'display', null, '', rendered.unfound)({ seed: 'background' }, rendered.variables))), this.background);
       } catch (error) {
         if (!(error instanceof Runaway)) throw error;
         this.backgroundStop ??= error;
@@ -52,7 +53,7 @@ export class DisplayPass {
     this.boxStyles = rendered.boxes.map(() => []);
     const texts = rendered.texts.map((text, index) => stripStyles(text, this.textStyles[index]!));
     const boxes = rendered.boxes.map((rows, index) => rows.map((box) => ({ ...box, html: stripStyles(box.html, this.boxStyles[index]!) })));
-    this.value = { texts, boxes, drawn: rendered.drawn, css: this.css(), pass: this.missing.size > 0, stopped: rendered.stopped ?? this.backgroundStop };
+    this.value = { texts, boxes, drawn: rendered.drawn, css: this.css(), pass: this.missing.size > 0, unfound: [...rendered.unfound!], stopped: rendered.stopped ?? this.backgroundStop };
   }
 
   patch(items: { version: string; text: string }[]): DisplayPatch {
@@ -77,8 +78,9 @@ export class DisplayPass {
     for (const errors of [this.rendered.failures.input, this.rendered.failures.display]) for (const [index, error] of errors) {
       if (index < first) { first = index; stopped = error; }
     }
-    const patch = { rows, css: this.css(), pass: this.missing.size > 0, stopped: stopped ?? this.backgroundStop };
+    const patch = { rows, css: this.css(), pass: this.missing.size > 0, unfound: [...this.rendered.unfound!], stopped: stopped ?? this.backgroundStop };
     this.value.css = patch.css;
+    this.value.unfound = patch.unfound;
     this.value.pass = patch.pass;
     this.value.stopped = patch.stopped;
     return patch;

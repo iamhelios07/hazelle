@@ -66,6 +66,12 @@ export const useTranslator = (): Translator => useSession().translator;
 export const useIllustrator = (): Illustrator => useSession().illustrator;
 export const useLikenesses = (): Likenesses => useSession().likenesses;
 
+// What this session's open chats of the character asked for by name and found no picture for (runtime/assets).
+export function useUnfoundAssets(character: string): ReadonlySet<string> {
+  const { unfound } = useSession();
+  return useSyncExternalStore(unfound.subscribe, () => unfound.of(character));
+}
+
 // The function is a new one when a picture has loaded, so what shows pictures renders again.
 export function useAssetUrl(): PictureUrl {
   const { assets } = useSession();

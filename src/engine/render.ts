@@ -60,7 +60,7 @@ export const authorNote = (note: string | null, prompt: ConversationPrompt) => n
 const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prompt.blocks.find((block): block is TextBlock => block.kind === 'text' && block.mark === mark)?.text ?? '';
 
 // toggles: the bot's Lua reads them from its globals as they stand mid-run.
-export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null, triggerId: string): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
+export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null, triggerId: string, unfound: CbsContext['unfound']): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
   const { card, persona, prompt, note, messages, greeting, toggles, model, axModel, clock, assets, inlays, modules, faces, screen, pick } = scope;
   const fixed = {
     stage,
@@ -80,6 +80,7 @@ export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles:
     language,
     assets,
     inlays,
+    unfound,
     modules,
     faces,
   };
@@ -92,15 +93,17 @@ export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles:
 // take: the display scripts, by place among the packs' regex, whose boxes leave the messages (상태창 지정). drawn and
 // boxes are each message's; only the display reads them. staged: each message's text past its input or output stage,
 // which is what the bot's Lua reads; wrote: the variables that stage's own CBS wrote. missed: the messages whose
-// editDisplay pass (lua) is not fresh. stopped: a stage of some message whose CBS ran away, which leaves that stage's
+// editDisplay pass (lua) is not fresh. unfound: the asset names the display found no picture for, finish's included
+// (null outside the display). stopped: a stage of some message whose CBS ran away, which leaves that stage's
 // text as it came in, its tags as written; null when none did.
 export function renderChat(
   stage: Stage,
   scope: ChatScope,
   take: ReadonlySet<number> = new Set(),
   lua?: LuaDisplay,
-): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; stopped: Runaway | null; finish: ((index: number, text: string) => ReturnType<typeof renderStage>) | null; failures: { input: Map<number, Runaway>; display: Map<number, Runaway> } } {
-  const context = contexts(scope, stage, null, '');
+): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; unfound: Set<string> | null; stopped: Runaway | null; finish: ((index: number, text: string) => ReturnType<typeof renderStage>) | null; failures: { input: Map<number, Runaway>; display: Map<number, Runaway> } } {
+  const unfound = stage === 'display' ? new Set<string>() : null;
+  const context = contexts(scope, stage, null, '', unfound);
   const scripts = new Scripts(scope.packs.flatMap(({ regex }) => regex), scope.messages);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
   const variables = new Logged();
@@ -166,7 +169,7 @@ export function renderChat(
   });
   variables.record = null;
   for (const [name, value] of scope.pending ?? []) variables.set(name, value);
-  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, states.at(index), take) : null, failures };
+  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, unfound, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, states.at(index), take) : null, failures };
 }
 
 function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof contexts>, index: number, text: string, variables: ReadonlyMap<string, string>, take: ReadonlySet<number>) {

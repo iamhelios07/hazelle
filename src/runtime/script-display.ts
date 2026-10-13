@@ -4,6 +4,7 @@ import type { DisplayBatch, Displayed, Script } from '../engine/lua/run';
 import type { Snapshot } from '../engine/lua/state';
 import type { ChatScope, Missed } from '../engine/render';
 import type { Chat, Message } from '../model/chat';
+import type { UnfoundAssets } from './assets';
 import { EvaluationStopped, EvaluationStuck } from './evaluation';
 
 import { luaSnapshot, luaStanding } from './lua/snapshot';
@@ -29,6 +30,8 @@ export class ScriptDisplay {
   private readonly passes = new Map<string, Pass>();
   private readonly running = new Set<string>();
   private readonly bases = new Map<string, Basis>();
+  // Each shown chat's character, which its unfound asset names are told under.
+  private readonly characters = new Map<string, string | null>();
   private runner: Promise<LuaRunner> | null = null;
   private revisions = 0;
   private generations = 0;
@@ -40,6 +43,7 @@ export class ScriptDisplay {
     private readonly store: ObjectStore,
     private readonly open: () => Promise<LuaRunner>,
     private readonly report: (chat: string, result: Displayed | unknown) => void,
+    private readonly unfound: UnfoundAssets,
   ) {}
 
   subscribe(chat: string, listener: (display?: Display) => void | Promise<void>) {
@@ -63,11 +67,13 @@ export class ScriptDisplay {
     if (pass) void this.runner?.then((runner) => runner.forgetDisplay(chat, pass.revision));
     this.passes.delete(chat);
     this.bases.delete(chat);
+    this.characters.delete(chat);
     this.store.evaluation.forget({ asker: 'screen', chat });
   }
 
   async display(id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'], signal?: AbortSignal): Promise<Display> {
     const revision = ++this.revisions;
+    this.characters.set(id, chat.character);
     const reader = { store: this.store };
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
@@ -98,6 +104,8 @@ export class ScriptDisplay {
 
   private told(chat: string, shown: Display): Display {
     if (shown.stopped) this.report(chat, shown.stopped);
+    const character = this.characters.get(chat);
+    if (character) this.unfound.add(character, shown.unfound);
     return shown;
   }
 
@@ -159,7 +167,7 @@ export class ScriptDisplay {
           const drawn = pass.view.drawn.slice();
           const boxes = pass.view.boxes.slice();
           for (const row of patch.rows) { texts[row.index] = row.text; drawn[row.index] = row.drawn; boxes[row.index] = row.boxes; }
-          pass.view = { texts, drawn, boxes, css: patch.css, pass: patch.pass, stopped: patch.stopped };
+          pass.view = { texts, drawn, boxes, css: patch.css, pass: patch.pass, unfound: patch.unfound, stopped: patch.stopped };
           await this.tell(chat, this.told(chat, pass.view));
         } catch (error) {
           // A stuck patch whose chat was judged is said by the composer; a chat not saved yet cannot be judged from here.

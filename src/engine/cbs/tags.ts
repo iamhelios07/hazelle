@@ -129,10 +129,11 @@ define('lorebook worldinfo', 0, (_, { context }) => serialize(context.lore));
 define('button', 2, ([label, trigger]) => `<button class="button-default" risu-trigger="${trigger}">${label}</button>`);
 
 // A bot's pictures show on screen only; the prompt keeps these tags as written, as in Risu (design §6.4). A name that
-// finds no asset shows nothing.
+// finds no asset shows nothing, and is told in context.unfound.
 const assetTag = (render: (url: string) => string): Run => ([name], { context, random }) => {
   if (context.stage !== 'display') return null;
   const asset = findAsset(context.assets, name!, random);
+  if (!asset) context.unfound?.add(name!);
   return asset ? render(assetUrl(asset.id)) : '';
 };
 define('raw path', 1, assetTag((url) => url));

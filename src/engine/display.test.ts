@@ -128,13 +128,18 @@ describe('asset tags', () => {
   const smile = '11111111-1111-4111-8111-111111111111';
   const wave = '22222222-2222-4222-8222-222222222222';
   const withAssets: ChatScope = { ...scope, assets: [{ id: smile, name: 'Smile.png' }, { id: wave, name: 'wave' }], faces: { char: 'data:char', user: null } };
-  const run = (text: string, stage: 'display' | 'prompt') => evaluate(text, contexts(withAssets, stage, null, '')({ seed: 's' }, new Map()));
+  const run = (text: string, stage: 'display' | 'prompt') => evaluate(text, contexts(withAssets, stage, null, '', null)({ seed: 's' }, new Map()));
 
   it('show a picture by name in any case, or the nearest name, on screen only, and list the names everywhere', () => {
     expect(run('{{img::smile.png}}|{{raw::smiling}}|{{image::none of these}}|{{source::char}}{{source::user}}', 'display')).toBe(
       `<img src="asset:${smile}">|asset:${smile}||data:char`,
     );
     expect(run('{{img::smile.png}} {{assetlist}}', 'prompt')).toBe('{{img::smile.png}} ["Smile.png","wave"]');
+  });
+
+  it('tell the names no asset answers, a near one aside, from messages and backgroundHTML', () => {
+    const shown = display({ ...withAssets, messages: [message('a1', 'assistant', '{{img::smiel.png}}{{img::night_forest}}')], packs: [{ ...withAssets.packs[0]!, background: '{{raw::backdrop}}' }] });
+    expect(shown.unfound).toEqual(['night_forest', 'backdrop']);
   });
 
   it('take the picture’s URL once the chat has it, and nothing before', () => {

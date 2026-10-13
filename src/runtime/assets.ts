@@ -167,6 +167,27 @@ export class AssetUrls {
   }
 }
 
+const NONE: ReadonlySet<string> = new Set();
+
+// The asset names the open chats' displays found no picture for, by the chat's character, as this session met them. Not
+// stored: a name is met again when its chat is shown.
+export class UnfoundAssets {
+  private readonly names = new Map<string, ReadonlySet<string>>();
+  private readonly changes = new ChangeSignal();
+
+  readonly subscribe = this.changes.subscribe;
+
+  add(character: string, names: readonly string[]) {
+    const held = this.names.get(character) ?? NONE;
+    const fresh = names.filter((name) => !held.has(name));
+    if (!fresh.length) return;
+    this.names.set(character, new Set([...held, ...fresh]));
+    this.changes.notify();
+  }
+
+  readonly of = (character: string): ReadonlySet<string> => this.names.get(character) ?? NONE;
+}
+
 // Each picture's file as a data: URL by its pictureRef, for a page that outlives this one's blob: URLs. missing: pictures
 // gone or unreadable.
 export async function assetDataUrls(store: Pick<ObjectStore, 'get'>, files: Pick<Files, 'read'>, pictures: Iterable<{ kind: PictureKind; id: string }>): Promise<{ urls: Map<string, string>; missing: number }> {

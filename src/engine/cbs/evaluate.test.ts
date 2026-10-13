@@ -53,6 +53,7 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => {
     language: null,
     assets: [],
     inlays: [],
+    unfound: null,
     modules: [],
     faces: { char: null, user: null },
     pickSeed: 'pick-1',

@@ -50,6 +50,8 @@ export type CbsContext = {
   assets: readonly BotAsset[];
   // The chat's own pictures, brought from Risu's inlay store, each named by its tag's id exactly; never one of assets.
   inlays: readonly { id: string; name: string; type: string }[];
+  // The names the display's asset tags found no picture for, added as they are met; null outside a display.
+  unfound: Set<string> | null;
   // The namespaces of the modules on in the chat (design §6.5).
   modules: readonly string[];
   faces: { char: string | null; user: string | null };

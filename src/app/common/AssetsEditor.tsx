@@ -1,10 +1,11 @@
 import { ImageUp, type LucideIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { findAsset } from '../../engine/assets';
 import type { Stored } from '../../model/kinds';
 import { addAssets, removeAssets, renameAsset, replaceAsset, restoreAssets } from '../../runtime/characters';
-import { useAssetUrl, useChildren, useFiles, useStore } from '../session';
+import { useAssetUrl, useChildren, useFiles, useStore, useUnfoundAssets } from '../session';
 import { useToast } from '../toast';
-import { Button, CardGrid, Dialog, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, pickFiles, Preview, Row, Section, SelectionBar, Stack, useFileDrop } from '../ui';
+import { Button, Callout, CardGrid, Dialog, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, pickFiles, Preview, Row, Section, SelectionBar, Stack, useFileDrop } from '../ui';
 import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { useCopy } from './useCopy';
@@ -14,6 +15,7 @@ import { CHANGE_IMAGE } from './words';
 const ASSET = '에셋';
 // By name, never by the store's order, which moves an asset to the end on each rename or new picture.
 const byName = new Intl.Collator('ko', { numeric: true }).compare;
+const UNFOUND_SHOWN = 10;
 
 export function AssetsEditor({ owner }: { owner: string }) {
   const store = useStore();
@@ -27,6 +29,13 @@ export function AssetsEditor({ owner }: { owner: string }) {
   // null while not picking.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const copy = useCopy();
+  // A module is never a key: a chat's names are told under its character, whichever pack's text asked for them. A name
+  // the assets answer now, a near one included, is no longer missing.
+  const asked = useUnfoundAssets(owner);
+  const unfound = useMemo(() => {
+    const named = assets.map(({ id, value }) => ({ id, name: value.name }));
+    return [...asked].filter((name) => !findAsset(named, name, Math.random));
+  }, [asked, assets]);
   const search = useSearch(assets, `${ASSET} 검색`, ({ value }) => [value.name]);
   const named = (asset: Stored<'asset'>) => asset.value.name.toLowerCase();
   const shared = new Map<string, number>();
@@ -82,6 +91,11 @@ export function AssetsEditor({ owner }: { owner: string }) {
   return (
     <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}처럼 이름으로 불러 보여 주는 이미지예요. 이름이 같은 에셋이 여럿이면 그중 하나가 무작위로 나와요. 파일이나 폴더를 끌어다 놓아도 추가돼요.">
       <Stack gap="related">
+        {unfound.length > 0 && (
+          <Callout tone="warn">
+            {`채팅에서 봇이 불렀지만 없는 이름이 ${unfound.length}개 있어요: ${unfound.slice(0, UNFOUND_SHOWN).join(', ')}${unfound.length > UNFOUND_SHOWN ? ` 외 ${unfound.length - UNFOUND_SHOWN}개` : ''}`}
+          </Callout>
+        )}
         <Row kind="toolbar">
           {search.field}
           {assets.length > 0 && (
@@ -94,7 +108,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
           </FileButton>
         </Row>
         {search.found.length > 0 ? (
-          <CardGrid label={ASSET} keys={search.found.map(({ id }) => id)}>
+          <CardGrid label={ASSET} variant="face" keys={search.found.map(({ id }) => id)}>
             {(index) => {
               const asset = search.found[index]!;
               return <AssetCard key={asset.id} asset={asset} shared={shared.get(named(asset))!} picked={picked && picked.has(asset.id)} onPress={() => press(asset.id)} actions={actionsOf(asset)} />;

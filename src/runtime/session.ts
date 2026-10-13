@@ -4,7 +4,7 @@ import type { LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
 import { SETTINGS_ID } from '../model/settings';
 import { api, type ApiResult } from './api';
-import { AssetUrls } from './assets';
+import { AssetUrls, UnfoundAssets } from './assets';
 import { Catalogs } from './catalog';
 import { purgeExpired } from './removal';
 import { Costs } from './cost';
@@ -37,6 +37,7 @@ export type Session = {
   store: ObjectStore;
   files: Files;
   assets: AssetUrls;
+  unfound: UnfoundAssets;
   talk: Talk;
   costs: Costs;
   usage: Usage;
@@ -93,7 +94,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   let runner: Promise<LuaRunner> | null = null;
   // Asked for once the session has closed, it makes none: nothing would be left to end it.
   const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
-  const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
+  const unfound = new UnfoundAssets();
+  const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result), unfound);
   const read = new ReadModels(store, display);
   const likenesses = new Likenesses({ store, credentials, files, catalogs });
   const illustrator = new Illustrator({ store, credentials, files, likenesses });
@@ -168,6 +170,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { tools, username, store, files, assets, talk, costs, usage, translator, memory, illustrator, likenesses, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools, username, store, files, assets, unfound, talk, costs, usage, translator, memory, illustrator, likenesses, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }
