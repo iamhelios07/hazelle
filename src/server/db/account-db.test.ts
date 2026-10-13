@@ -9,6 +9,7 @@ import { serviceReads, type Write } from '../account-store';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
 import { accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, snapshotPath, type Stores } from './account-db';
+import { DAY_MS } from '../backup/snapshots';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
 import * as snapshots from './snapshot';
@@ -391,7 +392,7 @@ describe('the account registry', () => {
     expect(existsSync(`${target}.delta`)).toBe(false);
   });
 
-  it('takes a whole snapshot first, a delta next, and a whole one again after a finished rewind and once the base is RETENTION_MS old', async () => {
+  it('takes a whole snapshot first, a delta next, and a whole one again after a finished rewind and once the base is a day short of RETENTION_MS old', async () => {
     await signup();
     const take = async (at: number, body: string) => {
       now = at;
@@ -403,8 +404,8 @@ describe('the account registry', () => {
     expect(await take(3_000_000, 'next')).toBe('delta');
     raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't1', 3500000, 'done', 1, 1, 4000000)").run(INC);
     expect(await take(5_000_000, 'after the rewind')).toBe('whole');
-    expect(await take(5_000_000 + RETENTION_MS - 1, 'within the base’s week')).toBe('delta');
-    expect(await take(5_000_000 + RETENTION_MS, 'the base aged out')).toBe('whole');
+    expect(await take(5_000_000 + RETENTION_MS - DAY_MS - 1, 'within the base’s window')).toBe('delta');
+    expect(await take(5_000_000 + RETENTION_MS - DAY_MS, 'the base aged out of the window, a day before it expires')).toBe('whole');
   });
 
   it('answers unavailable for a delta whose base file is altered or gone', async () => {

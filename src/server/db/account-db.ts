@@ -42,10 +42,13 @@ export const CURRENT_BASELINE = (column: 'taken_at' | 'rev', a: string, now: str
 
 // How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
 export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+// A day short of retention: a base chosen for a capture is still unexpired (backup/snapshots.ts runs hourly) when the
+// capture's row comes to name it, however long the archive takes.
+const BASE_WINDOW_MS = RETENTION_MS - 24 * 60 * 60 * 1000;
 // For an incarnation and a time `now` (binds): the id and rev of the whole snapshot a new snapshot is a delta against,
 // or no row, and the new one is whole. Only a finished rewind replaces the file; a cancelled one leaves it untouched.
 export const CURRENT_BASE = (incarnation: string, now: string) =>
-  `SELECT id, rev FROM snapshots WHERE incarnation = ${incarnation} AND base IS NULL AND taken_at > ${now} - ${RETENTION_MS}
+  `SELECT id, rev FROM snapshots WHERE incarnation = ${incarnation} AND base IS NULL AND taken_at > ${now} - ${BASE_WINDOW_MS}
      AND taken_at >= ${LAST_REWIND(incarnation)}
    ORDER BY taken_at DESC, id DESC LIMIT 1`;
 
