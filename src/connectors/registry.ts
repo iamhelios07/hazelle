@@ -26,6 +26,7 @@ import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type
 import { together } from './together';
 import { upstage } from './upstage';
 import { vercel } from './vercel';
+import { vertex } from './vertex';
 import { voyage } from './voyage';
 import { xai } from './xai';
 import { MODELS_DEV_LISTS } from './models-dev';
@@ -50,6 +51,7 @@ export const CONNECTION_TYPES: readonly ConnectionType[] = [
   openai,
   anthropic,
   google,
+  vertex,
   xai,
   deepseek,
   mistral,
@@ -70,7 +72,8 @@ const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatComplet
 export type Route = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
 export type Resolved = Route | { type: ConnectionType; endpoint: null; codec: null; models: Model[] };
 
-// null for a type this version does not know, such as one saved by a newer version of the app.
+// null for a type this version does not know, such as one saved by a newer version of the app, or for a secret its type
+// cannot read, which only a key being added can be: a connection is saved once its model list loaded.
 export function resolveConnection(connection: Connection): Resolved | null {
   if (connection.type === GENERIC) {
     const codec = connection.protocol && CODECS[connection.protocol];
@@ -79,6 +82,10 @@ export function resolveConnection(connection: Connection): Resolved | null {
   }
   const type = CONNECTION_TYPES.find((candidate) => candidate.id === connection.type);
   if (!type) return null;
+  if (type.endpointFor) {
+    const endpoint = type.endpointFor(connection.accounts[0]!.secret);
+    return endpoint && { type, endpoint, codec: CODECS[endpoint.protocol]! };
+  }
   return type.endpoint ? { type, endpoint: type.endpoint, codec: CODECS[type.endpoint.protocol]! } : { type, endpoint: null, codec: null, models: type.models };
 }
 
@@ -93,6 +100,8 @@ export function resolveModel(resolved: Resolved, model: Model): Route {
   if (protocol === 'unsupported' || !baseUrl || !codec) throw new ConnectorError('unsupported-protocol');
   return { type: resolved.type, endpoint: { baseUrl, protocol }, codec };
 }
+
+export const catalogRequest = ({ type, codec, endpoint }: Route): HttpRequest => (type?.listModels ?? codec.listModels)(endpoint);
 
 export function parseCatalog({ type, codec }: Route, payload: unknown): Model[] | null {
   return (type?.parseModels ?? codec.parseModels)(payload);
@@ -283,9 +292,10 @@ export function detect(input: string): Detection | null {
     if (type) return { kind: 'url', type };
     return { kind: 'generic-url', baseUrl };
   }
-  if (/\s/.test(text)) return null;
+  // A key pattern is read before the rule that prose is no key: a service-account key is JSON, spaces and all.
   const type = CONNECTION_TYPES.find((candidate) => candidate.detect?.key?.test(text));
-  return type ? { kind: 'key', type, secret: text } : { kind: 'unknown-key', secret: text };
+  if (type) return { kind: 'key', type, secret: text };
+  return /\s/.test(text) ? null : { kind: 'unknown-key', secret: text };
 }
 
 export type Search =

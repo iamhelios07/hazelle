@@ -119,7 +119,7 @@ export const copilot: ConnectionType = {
 
   // The stored GitHub token buys a Copilot token that lasts about half an hour.
   exchange: {
-    request: (secret) => github('https://api.github.com/copilot_internal/v2/token', secret),
+    request: async (secret) => github('https://api.github.com/copilot_internal/v2/token', secret),
     parse(payload) {
       if (!isRecord(payload) || typeof payload.token !== 'string' || !payload.token) return null;
       const expiresAt = payload.expires_at;

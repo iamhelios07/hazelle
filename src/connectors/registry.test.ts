@@ -70,6 +70,7 @@ describe('detection', () => {
     [null, 'https://api.mistral.ai/v1', 'mistral'],
     [null, 'https://api.moonshot.ai/v1', 'moonshot'],
     [null, 'https://api.together.ai/v1', 'together'],
+    [null, 'https://aiplatform.googleapis.com/v1/publishers/google', 'vertex'],
   ])('recognizes %s and %s as %s', (key, address, id) => {
     if (key) expect(detect(key)).toMatchObject({ kind: 'key', type: { id } });
     expect(detect(address)).toMatchObject({ kind: 'url', type: { id } });
@@ -532,8 +533,8 @@ describe('copilot', () => {
     expect(meters!.plan!({})).toBeNull();
   });
 
-  it('trades the GitHub token for a Copilot token and names the account', () => {
-    expect(copilot.exchange!.request('gho_x')).toMatchObject({
+  it('trades the GitHub token for a Copilot token and names the account', async () => {
+    await expect(copilot.exchange!.request('gho_x')).resolves.toMatchObject({
       url: 'https://api.github.com/copilot_internal/v2/token',
       headers: { authorization: 'Bearer gho_x', 'user-agent': 'GitHubCopilotChat/0.37.4' },
     });

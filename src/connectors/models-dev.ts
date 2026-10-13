@@ -17,6 +17,7 @@ export const MODELS_DEV_LISTS: Readonly<Partial<Record<string, { list: string; c
   openai: { list: 'openai' },
   anthropic: { list: 'anthropic' },
   google: { list: 'google' },
+  vertex: { list: 'google-vertex' },
   xai: { list: 'xai' },
   deepseek: { list: 'deepseek' },
   mistral: { list: 'mistral' },

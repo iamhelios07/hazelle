@@ -1,9 +1,9 @@
 import type { Resolved } from '../connectors/registry';
-import type { Token } from '../connectors/types';
+import { ConnectorError, type HttpRequest, type Token } from '../connectors/types';
 import { Pool } from './pool';
 import { relayJson, type RelayFailure } from './relay';
 
-export type CredentialFailure = RelayFailure | { kind: 'no-token' };
+export type CredentialFailure = RelayFailure | { kind: 'no-token' } | { kind: 'refused'; code: string };
 export type CredentialResult = { ok: true; credential: string } | { ok: false; failure: CredentialFailure };
 
 // A token is traded again a minute before it runs out, so a reply never starts on a dying one.
@@ -21,7 +21,14 @@ export class Credentials {
     const key = JSON.stringify([type.id, secret]);
     const kept = this.tokens.get(key);
     if (kept && kept.expiresAt - MARGIN_MS > Date.now()) return { ok: true, credential: kept.value };
-    const answer = await relayJson(type.exchange.request(secret), signal ? AbortSignal.any([signal, this.closing.signal]) : this.closing.signal);
+    let request: HttpRequest;
+    try {
+      request = await type.exchange.request(secret);
+    } catch (error) {
+      if (error instanceof ConnectorError) return { ok: false, failure: { kind: 'refused', code: error.code } };
+      throw error;
+    }
+    const answer = await relayJson(request, signal ? AbortSignal.any([signal, this.closing.signal]) : this.closing.signal);
     if (!answer.ok) return answer;
     // A trade answered after close() is never kept: it would outlive the vault it came from.
     if (this.closing.signal.aborted) return { ok: false, failure: { kind: 'stopped' } };
