@@ -57,7 +57,10 @@ jobs:
           push: true
           tags: ghcr.io/jiniill/hazelle:${{ github.ref_name }}
           build-args: HAZELLE_VERSION=${{ github.ref_name }}
-          labels: org.opencontainers.image.revision=${{ github.sha }}
+          # The source label links the GHCR package to this repository on push.
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
   release:
     needs: [check, image]
