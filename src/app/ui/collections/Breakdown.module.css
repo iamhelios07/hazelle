@@ -4,6 +4,24 @@
   gap: var(--space-8);
 }
 
+.total {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-12);
+}
+
+.totalLabel {
+  composes: fieldLabel from '../foundation/type.module.css';
+}
+
+.totalValue {
+  composes: note from '../foundation/type.module.css';
+  font-variant-numeric: tabular-nums;
+}
+
 .bar {
   display: flex;
   height: var(--space-8);

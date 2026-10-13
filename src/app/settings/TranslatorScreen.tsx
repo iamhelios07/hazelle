@@ -79,7 +79,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
     run.kind === 'running' ? '번역 중…' : run.kind === 'done' ? [characters(run.text), run.cut && '길이 한도로 잘림'].filter(Boolean).join(' · ') : run.kind === 'stopped' ? `${characters(run.text)} · 번역 중단됨` : '';
 
   return (
-    <Screen width="wide" top={<NavBar title={PAGES.translator} {...backBar(back)} />}>
+    <Screen width="page" fill top={<NavBar title={PAGES.translator} {...backBar(back)} />}>
       <TranslateDesk
         tools={
           <>

@@ -2,13 +2,13 @@ import { setTranslatorNote } from '../../runtime/characters';
 import { useAutosave } from '../common/useAutosave';
 import { NOTE_PLACEHOLDER, TRANSLATOR_NOTE } from '../common/words';
 import { useSettings, useStore } from '../session';
-import { Section, TextField } from '../ui';
+import { Panel, TextField } from '../ui';
 
 export function TranslationDefaults() {
   return (
-    <Section title="번역">
+    <Panel title="번역">
       <GlobalNoteField />
-    </Section>
+    </Panel>
   );
 }
 

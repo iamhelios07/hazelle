@@ -180,6 +180,11 @@
   --color-toast-accent: var(--palette-ink-800);
   --color-toast-accent-hover: var(--palette-ink-600);
   --color-toast-on-accent: var(--palette-cream-100);
+  /* A preset's swatch (Swatches) draws each theme's page and text whatever the app's, so the light block leaves these. */
+  --color-look-dark-bg: var(--palette-ink-900);
+  --color-look-dark-text: var(--palette-sand-50);
+  --color-look-light-bg: var(--palette-paper-150);
+  --color-look-light-text: var(--palette-umber-900);
 
   --color-accent-bg: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
   --color-accent-border: color-mix(in srgb, var(--color-accent) 40%, var(--color-bg));
@@ -358,6 +363,8 @@
   /* The least space left of a story with a 삽화 stage (ChatFrame.tsx). */
   --read-stage-least: 64px;
   --peek-tab-width: 27px;
+  /* A preset's swatch: the sample's band above its name. */
+  --swatch-min-height: 84px;
 
   /* The gap a menu keeps from the screen's sides, the phone gutter. layers.ts reads it too. */
   --menu-edge: var(--space-16);

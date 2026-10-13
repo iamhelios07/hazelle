@@ -10,6 +10,7 @@ export { NavRow } from './NavRow';
 export { Outline, type OutlineKind, type OutlineStop } from './Outline';
 export { SettingGroup, SettingRow } from './SettingGroup';
 export { Shares } from './Shares';
+export { Swatches, type Swatch } from './Swatches';
 export { SideTitle } from './SideTitle';
 export { Table, type TableColumn, type TableRow } from './Table';
 export { Tab, Tabs } from './Tabs';
