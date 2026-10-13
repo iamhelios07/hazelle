@@ -2,7 +2,7 @@ import { Layers } from 'lucide-react';
 import { sameModelRef, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
 import { modelProfile } from '../../runtime/profiles';
-import { starredModels } from '../common/RolePicker';
+import { byConnection, starredModels } from '../common/RolePicker';
 import { useSearch } from '../common/useSearch';
 import { noStarred } from '../common/words';
 import { useSummaries, useConnections, useStore } from '../session';
@@ -53,8 +53,9 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
   const rest = starred.filter((choice) => !recent.includes(choice));
   const search = useSearch(starred, '즐겨찾기한 모델 검색', (choice) => [choice.name, choice.source]);
 
-  const item = (choice: (typeof starred)[number]) => (
-    <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={choice.source} checked={!!current && sameModelRef(choice.ref, current)} onClick={() => onPick(choice.ref)} />
+  // Recent models and search results mix connections, so each names its own; the rest sit under connection headings.
+  const item = (choice: (typeof starred)[number], sub?: string) => (
+    <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={sub} checked={!!current && sameModelRef(choice.ref, current)} onClick={() => onPick(choice.ref)} />
   );
 
   if (starred.length === 0) return <Empty variant="menu">{noStarred('선택할 수 있어요')}</Empty>;
@@ -67,7 +68,7 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
         ) : (
           <>
             <MenuHeading>검색 결과</MenuHeading>
-            {search.found.map(item)}
+            {search.found.map((choice) => item(choice, choice.source))}
           </>
         )
       ) : (
@@ -75,15 +76,10 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
           {recent.length > 0 && (
             <>
               <MenuHeading>최근</MenuHeading>
-              {recent.map(item)}
+              {recent.map((choice) => item(choice, choice.source))}
             </>
           )}
-          {rest.length > 0 && (
-            <>
-              <MenuHeading>즐겨찾기</MenuHeading>
-              {rest.map(item)}
-            </>
-          )}
+          {byConnection(rest, (choice) => item(choice))}
         </>
       )}
     </>

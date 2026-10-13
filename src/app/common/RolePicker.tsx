@@ -1,13 +1,24 @@
+import type { ReactElement } from 'react';
 import { fitsRole, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
 import { embedRoute } from '../../connectors/registry';
 import type { Stored } from '../../model/kinds';
-import { ChipButton, Empty, Menu, MenuItem, PickCard, SettingRow } from '../ui';
+import { ChipButton, Empty, Menu, MenuHeading, MenuItem, PickCard, SettingRow } from '../ui';
 import { MODEL_ROLES, NOT_STARRED, noStarred } from './words';
 
 // 임베딩 모델 offers only what its connection embeds: the type says so, not the model (design §4).
 export function starredModels(connections: readonly Stored<'connection'>[], role: Role) {
   return connections.flatMap((connection) =>
     connection.value.starred.filter((model) => fitsRole(model, role) && (role !== 'embed' || embedRoute(connection.value, model) !== null)).map((model) => ({ ref: { connection: connection.id, model: model.id }, name: model.name, source: connection.value.label })),
+  );
+}
+
+type Choice = ReturnType<typeof starredModels>[number];
+
+// A heading wherever the connection changes: same-named models on two connections differ by heading, not by a grey
+// line under each. Callers keep starredModels' order, which lists each connection's models together.
+export function byConnection(choices: readonly Choice[], item: (choice: Choice) => ReactElement): ReactElement[] {
+  return choices.flatMap((choice, at) =>
+    choices[at - 1]?.ref.connection === choice.ref.connection ? [item(choice)] : [<MenuHeading key={`heading/${choice.ref.connection}`}>{choice.source}</MenuHeading>, item(choice)],
   );
 }
 
@@ -88,14 +99,8 @@ function RoleChoices({ role, own, follow, connections, onPick }: CardProps) {
       {starred.length === 0 ? (
         <Empty variant="menu">{noStarred('선택할 수 있어요')}</Empty>
       ) : (
-        starred.map((choice) => (
-          <MenuItem
-            key={`${choice.ref.connection}/${choice.ref.model}`}
-            label={choice.name}
-            sub={choice.source}
-            checked={!!own && sameModelRef(own, choice.ref)}
-            onClick={() => onPick(choice.ref)}
-          />
+        byConnection(starred, (choice) => (
+          <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} checked={!!own && sameModelRef(own, choice.ref)} onClick={() => onPick(choice.ref)} />
         ))
       )}
     </>
