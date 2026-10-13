@@ -188,3 +188,7 @@ Design and technical documents are kept in a separate repository until launch.
 [AGPL-3.0-only](LICENSE)
 
 No RisuAI code (GPL-3.0) is used. Compatibility is implemented from a behavioral specification written by observing RisuAI. The project is AGPL because reading `.risum` files and RisuAI-exported charx files requires RPack, which is licensed AGPL-3.0 to everyone except RisuAI itself. A running instance serves its own source at `/source.tar.gz`, linked from the legal notice.
+
+The names 헤이젤 and Hazelle, the icons in `public/` and the `hazelle.app` domain identify this project and its hosted instance. They are not covered by the license: a fork or another instance built from this code chooses its own name and icons.
+
+The project does not take code contributions at this time. Bug reports and suggestions are welcome as issues.
