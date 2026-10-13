@@ -6,7 +6,7 @@ import type { SettingsPage } from '../routes';
 export const TERMS: Record<SettingsPage, string[]> = {
   models: [DEFAULT_MODELS, MODEL_ROLES.main, MODEL_ROLES.aux, MODEL_ROLES.embed, '즐겨찾기한 모델', '만들어 둔 설정', '프롬프트에서 정한 모델'],
   connections: ['새 연결', '계정 추가', '실패하면 다시 보내기', '사용 내역'],
-  chat: ['장기 기억', '기록 최대 분량', '원문으로 보낼 최근 대화', '한 번에 정리할 분량', '번역', TRANSLATOR_NOTE],
+  chat: ['장기 기억', '기록 최대 분량', '임베딩 모델로 찾는 기록', '원문으로 보낼 최근 대화', '한 번에 정리할 분량', '번역', TRANSLATOR_NOTE],
   translator: [TRANSLATOR_NOTE],
   prompts: ['기본 프롬프트', 'Risu 프리셋 가져오기', '새 프롬프트'],
   personas: ['새 페르소나', '삽화 프로필'],

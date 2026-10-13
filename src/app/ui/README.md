@@ -95,7 +95,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `Panel` | `Panel.module.css` | A card of its own on a page: a title with its ⓘ and an action or a switch by it, then what it holds |
 | layout | `PreviewSplit` | `PreviewSplit.module.css` | Settings beside a preview of what they change, the preview staying in view as they scroll; above them where narrow |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
-| layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form, wide or page (설정's pages, the column beside the settings sidebar). `aside` adds a column beside the body once the screen is wide enough, stacked above it when not (a `preview` aside is left out when stacked). Its title, section titles and box contents share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
+| layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form, wide or page (설정's pages, the column beside the settings sidebar). `aside` adds a column beside the body once the screen is wide enough, stacked above it when not. Its title, section titles and box contents share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
