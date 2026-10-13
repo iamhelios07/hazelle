@@ -31,7 +31,7 @@ id=$(remote 'set -eu
     { echo "destroy: the newest generation $id is $((age_ms / 3600000)) hours old" >&2; exit 1; }
   [ -f "/data/backup/$id/copied" ] || { echo "destroy: $id is not marked copied" >&2; exit 1; }
   rclone copyto "$remote/$id/manifest.json" /drill/manifest.json
-  grep -q "^{\"version\":1,\"id\":\"$id\"," $drill/manifest.json || { echo "destroy: the remote manifest of $id names another generation" >&2; exit 1; }
+  grep -Eq "^\{\"version\":[0-9]+,\"id\":\"$id\"," $drill/manifest.json || { echo "destroy: the remote manifest of $id names another generation" >&2; exit 1; }
   grep -q "\"expanded\":" $drill/manifest.json ||
     { echo "destroy: the manifest of $id records no expanded sizes (an older build wrote it); run this after the next daily generation" >&2; exit 1; }
   grep -o "\"pictures\":\[[^]]*\]" $drill/manifest.json | grep -o "[0-9a-f]\{64\}" >$drill/pictures || true
