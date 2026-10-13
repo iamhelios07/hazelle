@@ -1,5 +1,6 @@
 export { Bars } from './Bars';
 export { Breakdown } from './Breakdown';
+export { CardItem, CardList } from './CardList';
 export { CardGrid, FaceCard, Portrait, SelectionBar } from './CardGrid';
 export { Facts } from './Facts';
 export { FolderRow, TreeRow } from './FolderRow';

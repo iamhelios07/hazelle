@@ -8,10 +8,11 @@ import type { Frame } from '../common/frame';
 import { TASK_NAMES } from '../common/prompt-words';
 import { ago } from '../common/time';
 import { useSearch } from '../common/useSearch';
-import { usePrompts, useSettings, useStore } from '../session';
+import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { PAGES, promptName } from '../common/words';
-import { Button, ChoiceGroup, Empty, FileButton, Hint, List, ListItem, Row, Tab, Tabs } from '../ui';
+import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, FileButton, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
+import { taskModelWords } from './ModelPane';
 import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, usePromptUse, type PromptUse } from './usePromptUse';
 import { byPromptName, groupPrompts } from './copies';
@@ -28,16 +29,20 @@ type Order = 'name' | 'recent';
 const chatsWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '쓰는 채팅 없음');
 const used = (use: PromptUse) => (use.at === null ? chatsWords(use) : `${chatsWords(use)} · ${ago(use.at)} 씀`);
 
+// defaults: each kind's default leads the list, as a card that opens it. The default is chosen on the prompt's own
+// page (기본으로 정하기), never from these cards.
 type Props = {
   onPick: (id: string) => void;
   inUse?: string;
+  defaults?: boolean;
   frame: Frame;
 };
 
-export function PromptList({ onPick, inUse, frame }: Props) {
+export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const prompts = usePrompts();
+  const connections = useConnections();
   const grouped = useMemo(() => groupPrompts(prompts), [prompts]);
   const settings = useSettings();
   const uses = usePromptUse();
@@ -73,7 +78,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
     const expanded = open.has(prompt.id);
     const flip = () => setOpen((current) => new Set(current.has(prompt.id) ? [...current].filter((id) => id !== prompt.id) : [...current, prompt.id]));
     return (
-      <ListItem
+      <CardItem
         key={prompt.id}
         title={promptName(prompt.value.name)}
         badge={badge(prompt)}
@@ -89,9 +94,22 @@ export function PromptList({ onPick, inUse, frame }: Props) {
         }
       >
         {expanded && copies.map(row)}
-      </ListItem>
+      </CardItem>
     );
   };
+
+  const defaultCards = defaults && (
+    <Section title="기본 프롬프트">
+      <Columns>
+        {SORTS.map(({ sort, label }) => {
+          const prompt = prompts.find((each) => ofSort(each, sort) && isDefaultPrompt(settings, each));
+          if (!prompt) return <PickCard key={sort} label={label} value="없음" tone="warn" onClick={() => setShown(sort)} />;
+          const model = prompt.value.task && prompt.value.model;
+          return <PickCard key={sort} label={label} value={promptName(prompt.value.name)} note={model ? taskModelWords(model, connections) : usage(prompt)} onClick={() => onPick(prompt.id)} />;
+        })}
+      </Columns>
+    </Section>
+  );
 
   const search = useSearch(prompts, '프롬프트 검색', (prompt) => [promptName(prompt.value.name)]);
 
@@ -110,6 +128,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   );
   const body = (
     <>
+      {defaultCards}
       <Row kind="spread">
         <Row kind="toolbar">
           {search.field}
@@ -139,9 +158,9 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       </Row>
       {search.words ? (
         search.none === null ? (
-          <List label="검색 결과">
+          <CardList label="검색 결과">
             {search.found.toSorted(byPromptName).map((prompt) => (
-              <ListItem
+              <CardItem
                 key={prompt.id}
                 title={promptName(prompt.value.name)}
                 badge={badge(prompt)}
@@ -150,12 +169,12 @@ export function PromptList({ onPick, inUse, frame }: Props) {
                 onClick={() => onPick(prompt.id)}
               />
             ))}
-          </List>
+          </CardList>
         ) : (
           <Empty variant="section">{search.none}</Empty>
         )
       ) : top.length ? (
-        <List label={`${current.label} 프롬프트`}>{top.map(row)}</List>
+        <CardList label={`${current.label} 프롬프트`}>{top.map(row)}</CardList>
       ) : (
         <Empty variant="section" action={adding}>
           {current.none}

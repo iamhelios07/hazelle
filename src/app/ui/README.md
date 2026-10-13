@@ -85,6 +85,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph by its role: body, a note (보조 설명: a status, a limit, a caption under a thing) or prose; its alignment |
+| layout | `Beside` | `Beside.module.css` | A main column with a narrower one beside it where both fit, under it where not, such as short boxes beside a table |
 | layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`, `useMarginRoom`) | `ChatFrame.module.css` | The chat page: a header that hides while the story is read down and a composer dock, both floating over the story; the chat's title, which opens its list of chats; the reading settings as custom properties; a `peek` slot for `SidePeeks`; `panel` beside the story and `beside`, a second panel, only where both fit (`usePanelsBeside`); with `stage`, the story set left of a stage for 삽화 where it fits (`useMarginRoom`) |
 | layout | `Columns` | `Columns.module.css` | As many equal columns as fit, each no narrower than its kind (a pick card, a row-like card, a card of settings); one on a narrow page |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take or a lorebook entry; what is folded is made only while open, and it can start open |
@@ -129,6 +130,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Viewport` (`ROWS_RESIZED`, `Seek`) | `Viewport.module.css` | A keyed, measured window of rows within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focus, row state and jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
+| collections | `CardList` (`CardItem`) | `CardList.module.css` | The user's own things as cards across the width, one column in a side panel or on a phone: name, badge and tags, where it is used under it, a control beside it, and things folded under it (its copies) as rows inside the card |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `Shares` | `Shares.module.css` | The parts of a total, largest first, each over a bar of its share of the largest |

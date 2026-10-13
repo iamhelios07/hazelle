@@ -1,0 +1,41 @@
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tile-wide-min-width)), 1fr));
+  gap: var(--space-8);
+}
+
+/* The button's fill sits inside the card's edge, as a Table row's does in its box. */
+.card {
+  composes: box from '../foundation/surface.module.css';
+  min-width: 0;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  min-width: 0;
+}
+
+/* Grows with the tallest card in its line, so each card is one button from edge to edge. */
+.head {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.control {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.folded {
+  margin: 0 0 var(--space-4) var(--space-16);
+  padding: 0 0 0 var(--space-8);
+  list-style: none;
+  border-left: var(--border-thin) solid var(--color-divider);
+}

@@ -7,8 +7,9 @@ export function PromptsScreen({ back }: { back: Back | null }) {
   return (
     <PromptList
       onPick={(id) => navigate({ kind: 'prompt', id, pane: null })}
+      defaults
       frame={({ head, body }) => (
-        <Screen width="wide" top={<NavBar {...head} {...backBar(back)} />}>
+        <Screen width="page" top={<NavBar {...head} {...backBar(back)} />}>
           {body}
         </Screen>
       )}
