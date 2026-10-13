@@ -103,6 +103,7 @@ export function describeFailure(failure: ApiFailure, own: Partial<Record<ServerE
 const REFUSED: Record<string, string> = {
   'max-tokens-unknown': '이 모델의 최대 출력 길이를 알 수 없어서 보낼 수 없어요.',
   'unknown-connection-type': '지원하지 않는 연결 종류예요. 새로고침해 주세요.',
+  'unreadable-key': '키를 읽지 못했어요. 키 파일의 내용을 그대로 붙여 넣어 주세요.',
   'unsupported-protocol': '이 모델의 요청 방식은 지원하지 않아요.',
   'image-only': '이미지만 만드는 모델이라 대화에 쓸 수 없어요.',
   'no-picture-input': '이 모델은 이미지를 볼 수 없어요.',

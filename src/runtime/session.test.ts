@@ -17,13 +17,16 @@ const unlimited = { quota_snapshots: { premium_interactions: { unlimited: true }
 describe('session', () => {
   it('drops its tokens and model lists on close, and keeps none from a trade answered after it', () =>
     server.withSession(async (session) => {
-      const log = stubRelay(({ url }) => (url === EXCHANGE ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + 1800 }) : upstream(200, url === USER ? unlimited : { data: [] })));
+      // The session closes while the second trade is on its way, so its answer arrives after close.
+      const log = stubRelay(({ url, headers }) => {
+        if (headers.authorization === 'Bearer gho_other') session.close();
+        return url === EXCHANGE ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + 1800 }) : upstream(200, url === USER ? unlimited : { data: [] });
+      });
       const resolved = resolveConnection(copilot)!;
       expect(await session.credentials.get(resolved, copilot.accounts[0]!.secret)).toEqual({ ok: true, credential: 'tid' });
       expect(await session.catalogs.load(copilot)).toEqual({ ok: true, models: [] });
 
       const trading = session.credentials.get(resolved, 'gho_other');
-      session.close();
       const stopped = { ok: false, failure: { kind: 'stopped' } };
       expect(await trading).toEqual(stopped);
       expect(await session.credentials.get(resolved, copilot.accounts[0]!.secret)).toEqual(stopped);

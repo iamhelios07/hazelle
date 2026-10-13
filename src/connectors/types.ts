@@ -160,8 +160,14 @@ export type Embeds = {
 
 // Every hook is optional: without one, the codec's default answers, exactly as for a connection described by hand.
 // models: the type's whole list, for a provider with none to fetch (Voyage AI). A type that speaks no chat format has no
-// endpoint, and its models only draw.
-export type ConnectionType = TypeHooks & ({ endpoint: Endpoint; models?: Model[] } | { endpoint?: never; models: Model[] });
+// endpoint, and its models only draw. endpointFor: an endpoint the account's own key names (Vertex AI's project), read
+// from the secret of a type that is no pool; null for a secret that is not such a key.
+export type ConnectionType = TypeHooks &
+  (
+    | { endpoint: Endpoint; endpointFor?: never; models?: Model[] }
+    | { endpoint?: never; endpointFor: (secret: string) => Endpoint | null; models?: never }
+    | { endpoint?: never; endpointFor?: never; models: Model[] }
+  );
 
 type TypeHooks = {
   id: string;
@@ -178,8 +184,10 @@ type TypeHooks = {
   // One connection may hold several signed-in accounts; the core picks one per reply, by its group's turn and by the
   // allowance its meters leave.
   pool?: true;
-  exchange?: { request(secret: string): HttpRequest; parse(payload: unknown): Token | null };
+  exchange?: { request(secret: string): Promise<HttpRequest>; parse(payload: unknown): Token | null };
   headers?: (credential: string) => Record<string, string>;
+  // The model list at an address of the provider's own, in place of the codec's (Vertex AI lists models outside a project).
+  listModels?: (endpoint: Endpoint) => HttpRequest;
   parseModels?: (payload: unknown) => Model[] | null;
   // A second list, read by the same parser, for the embedding models the model list leaves out (OpenRouter).
   embeddingModels?: (endpoint: Endpoint) => HttpRequest;

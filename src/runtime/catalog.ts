@@ -1,6 +1,6 @@
 import { MODELS_DEV_LISTS, type ModelsDevList } from '../connectors/models-dev';
 import { joinModelsDev } from '../connectors/pricing';
-import { parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
+import { catalogRequest, CONNECTION_TYPES, parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
 import type { Account, Connection, Model } from '../connectors/types';
 import { onTurn } from '../model/turns';
 import { api } from './api';
@@ -44,7 +44,8 @@ export class Catalogs {
 
   private async fetch(connection: Connection): Promise<CatalogResult> {
     const resolved = resolveConnection(connection);
-    if (!resolved) return { ok: false, failure: { kind: 'refused', code: 'unknown-connection-type' } };
+    // A type this version knows resolves to nothing only for a secret it cannot read.
+    if (!resolved) return { ok: false, failure: { kind: 'refused', code: CONNECTION_TYPES.some(({ id }) => id === connection.type) ? 'unreadable-key' : 'unknown-connection-type' } };
     if (!resolved.codec) return { ok: true, models: resolved.models };
     // A provider that lists no models (Voyage AI): its type holds the list, and nothing is fetched.
     if (resolved.type?.models) return { ok: true, models: resolved.type.models };
@@ -54,7 +55,7 @@ export class Catalogs {
     const listed = list ? api<ModelsDevList>('GET', `models-dev?provider=${encodeURIComponent(list)}`) : null;
     const credential = await this.credentials.get(resolved, (await this.serving(connection)).secret);
     if (!credential.ok) return credential;
-    const response = await relayJson(withCredential(resolved, resolved.codec.listModels(resolved.endpoint), credential.credential));
+    const response = await relayJson(withCredential(resolved, catalogRequest(resolved), credential.credential));
     if (!response.ok) return response;
     const models = parseCatalog(resolved, response.data);
     if (!models) return { ok: false, failure: { kind: 'not-a-catalog' } };
