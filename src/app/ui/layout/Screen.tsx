@@ -5,7 +5,8 @@ import styles from './Screen.module.css';
 type Props = {
   top?: ReactNode;
   align?: 'start' | 'center';
-  width?: 'narrow' | 'form' | 'wide';
+  // page: 설정's pages, which use the column beside the settings sidebar.
+  width?: 'narrow' | 'form' | 'wide' | 'page';
   actions?: ReactNode;
   stickyActions?: boolean;
   // One child takes the rest of the window's height and scrolls itself.

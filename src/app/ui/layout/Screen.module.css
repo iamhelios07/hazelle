@@ -63,6 +63,10 @@
   max-width: var(--form-max-width);
 }
 
+.page {
+  max-width: var(--page-max-width);
+}
+
 .split {
   max-width: var(--screen-split-max-width);
 }
@@ -117,6 +121,7 @@
 
   .screen.wide,
   .screen.form,
+  .screen.page,
   .screen.split,
   .screen.centered {
     padding-top: var(--space-32);
@@ -149,6 +154,10 @@
 
 .screen.pane.wide {
   max-width: var(--gallery-max-width);
+}
+
+.screen.pane.page {
+  max-width: var(--page-max-width);
 }
 
 .screen.pane.split {

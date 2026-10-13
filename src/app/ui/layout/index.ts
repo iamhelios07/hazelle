@@ -1,9 +1,11 @@
 export { ChatFrame, ChatTitle, readingDefault, useMarginRoom, type Reading } from './ChatFrame';
+export { Columns } from './Columns';
 export { Disclosure } from './Disclosure';
 export { FaceRow } from './FaceRow';
 export { EditorFrame } from './EditorFrame';
 export { ListDetail } from './ListDetail';
 export { NavBar, type NavBarProps } from './NavBar';
+export { Panel } from './Panel';
 export { Row } from './Row';
 export { Screen } from './Screen';
 export { Section } from './Section';

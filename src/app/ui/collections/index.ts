@@ -11,5 +11,6 @@ export { Outline, type OutlineKind, type OutlineStop } from './Outline';
 export { SettingGroup, SettingRow } from './SettingGroup';
 export { Shares } from './Shares';
 export { SideTitle } from './SideTitle';
+export { Table, type TableColumn, type TableRow } from './Table';
 export { Tab, Tabs } from './Tabs';
 export { ROWS_RESIZED, Viewport, type Seek } from './Viewport';

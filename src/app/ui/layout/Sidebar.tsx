@@ -30,7 +30,7 @@ export function Sidebar({ page = false, actions, children, footer }: Props) {
 }
 
 // Esc joins the layer stack, so a menu open over the page closes first.
-export function LayerSidebar({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer: ReactNode }) {
+export function LayerSidebar({ title, onClose, search, children, footer }: { title: string; onClose: () => void; search?: ReactNode; children: ReactNode; footer: ReactNode }) {
   useLayer(true, { outside: () => false, close: onClose });
   return (
     <aside className={styles.sidebar} aria-label={title}>
@@ -38,9 +38,10 @@ export function LayerSidebar({ title, onClose, children, footer }: { title: stri
         <h2 className={styles.title}>{title}</h2>
         <IconButton icon={X} label={`${title} 닫기`} size="sm" onClick={onClose} />
       </div>
+      {search}
       <nav className={styles.nav} aria-label={title}>
         <div className={styles.list}>{children}</div>
-        <div className={styles.footer}>{footer}</div>
+        {footer && <div className={styles.footer}>{footer}</div>}
       </nav>
     </aside>
   );

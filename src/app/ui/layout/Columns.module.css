@@ -1,0 +1,22 @@
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--column-min)), 1fr));
+  align-items: start;
+  gap: var(--space-16);
+}
+
+.tile {
+  --column-min: var(--tile-min-width);
+}
+
+.wide {
+  --column-min: var(--tile-wide-min-width);
+
+  gap: var(--space-8);
+}
+
+.panel {
+  --column-min: var(--panel-min-width);
+
+  gap: var(--space-24);
+}

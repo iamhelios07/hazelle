@@ -61,7 +61,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
   다시 시도. Loading is a note ending in `…`.
 - **Controls:** on/off is a `Switch`; one of several is `ChoiceGroup layout="fit"`, a segmented strip for up to
   four short choices and a menu behind a field `ChipButton` past that; chips are for filters. Explanations go behind ⓘ (`help`), never as visible prose.
-- **Width:** item editors and settings pages are `form`; a one-step flow (a key, a sign-in) is `narrow`.
+- **Width:** settings pages are `page`, shaped for what each holds (`Panel`, `Columns`, `PickCard`, `Table`); item editors are `form`; a one-step flow (a key, a sign-in) is `narrow`.
 
 ## Components
 
@@ -86,18 +86,20 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph by its role: body, a note (보조 설명: a status, a limit, a caption under a thing) or prose; its alignment |
 | layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`, `useMarginRoom`) | `ChatFrame.module.css` | The chat page: a header that hides while the story is read down and a composer dock, both floating over the story; the chat's title, which opens its list of chats; the reading settings as custom properties; a `peek` slot for `SidePeeks`; `panel` beside the story and `beside`, a second panel, only where both fit (`usePanelsBeside`); with `stage`, the story set left of a stage for 삽화 where it fits (`useMarginRoom`) |
+| layout | `Columns` | `Columns.module.css` | As many equal columns as fit, each no narrower than its kind (a pick card, a row-like card, a card of settings); one on a narrow page |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take or a lorebook entry; what is folded is made only while open, and it can start open |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
-| layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it |
+| layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it; a drawer, the list taking the width and the item beside it only while one is picked (its head closes with ×); or the list stacked over the item in one scroll |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
+| layout | `Panel` | `Panel.module.css` | A card of its own on a page: a title with its ⓘ and an action or a switch by it, then what it holds |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
-| layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form or wide. `aside` adds a column beside the body once the screen is wide enough, stacked above it when not (a `preview` aside is left out when stacked). Its title, section titles and box contents share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
+| layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form, wide or page (설정's pages, the column beside the settings sidebar). `aside` adds a column beside the body once the screen is wide enough, stacked above it when not (a `preview` aside is left out when stacked). Its title, section titles and box contents share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
 | layout | `SidePeek` (`SidePeeks`) | `SidePeek.module.css` | A tab at the story's right edge whose drawer slides over the story while the pointer rests on the tab, or stays open from a key or tap, such as 상태; `SidePeeks` holds them in ChatFrame's `peek` slot |
-| layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too |
+| layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too, and a search under its title |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | layout | `ToolFrame` | `ToolFrame.module.css` | An opaque-origin tool page that fills the rest of its column (a `fill` Screen or SidePanel); the caller connects its window |
 | layout | `TranslateDesk` | `TranslateDesk.module.css` | 번역기: a bar of choices, then the source and its translation side by side in one box (stacked on a narrow page), each pane with a foot of counts and buttons |
@@ -112,6 +114,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `Link` | `Link.module.css` | A link to another site |
 | controls | `MarkupArea` (`typeInto`, `markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea; an insert into it that Ctrl+Z takes back |
 | controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |
+| controls | `PickCard` | `PickCard.module.css` | A choice that leads its page, as a card: what it is, what is chosen and where that comes from; opens a menu, or a place |
 | controls | `PhraseField` | `PhraseField.module.css` | Phrases as removable chips and a field that adds one on Enter, such as stop phrases |
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box; one that fills a row, such as the chat header's search bar, with its count and buttons at its end |
@@ -137,6 +140,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |
 | collections | `Outline` (`OutlineKind`, `OutlineStop`) | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
 | collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name, its ⓘ explanation and a line of facts beside its control, which goes under them on phones; outside a group, a bare row among fields, marked when it differs from its default |
+| collections | `Table` (`TableColumn`, `TableRow`) | `Table.module.css` | Things compared by the same few facts, a row each that opens its thing or holds its controls; a dash where a row has nothing; narrow, a row becomes its first cell over a summary line and the columns kept |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
 | overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap |

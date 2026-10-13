@@ -4,7 +4,6 @@ import type { Stored } from '../../model/kinds';
 import { binsChat, isBinned, live } from '../../model/library';
 import type { SideAt } from '../chat/ChatScreen';
 import { ACTS } from '../common/acts';
-import { personaFaces } from '../common/alias';
 import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
 import { ScreenLoad } from '../common/ScreenLoad';
@@ -12,13 +11,12 @@ import { findStarred } from '../common/RolePicker';
 import { NO_CHARACTER } from '../common/words';
 import { useImport } from '../library/ImportFlow';
 import { ShareArrival } from '../library/ShareArrival';
-import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useModules, usePersonas, useSession, useSettings, useStored } from '../session';
+import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
 
-type ListKind = NonNullable<ReturnType<typeof listOf>>['kind'];
 
 const ToolPageScreen = lazy(() => import('../modules/ToolPageScreen').then(({ ToolPageScreen }) => ({ default: ToolPageScreen })));
 const AdminScreen = lazy(() => import('../admin/AdminScreen').then(({ AdminScreen }) => ({ default: AdminScreen })));
@@ -55,13 +53,10 @@ type ItemKind = 'character' | 'prompt' | 'persona' | 'module' | 'profile';
 const absentItem = <K extends ItemKind>(kind: K, stored: Stored<K> | null): K | `deleted-${K}` =>
   stored && isBinned(stored.value) ? `deleted-${kind}` : kind;
 
-const EMPTY = {
-  connections: '연결을 선택해 주세요.',
-  'add-connection': '연결할 제공자를 선택해 주세요.',
-  personas: '페르소나를 선택해 주세요.',
-  modules: '모듈을 선택해 주세요.',
-  models: '모델을 선택해 주세요.',
-};
+
+// models and personas open a picked item in a drawer beside the page, only while one is picked; API 연결 stacks the
+// picked connection under its list.
+const VARIANTS = { connections: 'stack', 'add-connection': 'list', personas: 'drawer', models: 'drawer' } as const;
 
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
@@ -140,42 +135,23 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
   const list = listOf(route);
   if (!list) return <ScreenLoad>{screen(route)}</ScreenLoad>;
   const detail = route.kind === list.kind ? null : screen(route);
-  const empty = <Landing kind={list.kind} />;
+  const variant = VARIANTS[list.kind];
+  const pane = detail ?? (list.kind === 'connections' ? <Landing /> : list.kind === 'add-connection' ? <Empty variant="pane">연결할 제공자를 선택해 주세요.</Empty> : null);
   // One boundary for the pair, so a first visit shows one loader, and one inside for the detail alone.
-  if (split) return <ScreenLoad><ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={screen(list)} detail={<ScreenLoad>{detail ?? empty}</ScreenLoad>} /></ScreenLoad>;
+  if (split) return <ScreenLoad><ListDetail variant={variant} list={screen(list)} detail={pane && <ScreenLoad>{pane}</ScreenLoad>} /></ScreenLoad>;
   return <ScreenLoad>{detail ?? screen(list)}</ScreenLoad>;
 }
 
-// Beside its list, a page opens on what it is about: 모델 on the 대화 모델, API 연결 on its connection (else the first),
-// 페르소나 on the current persona, 모듈 on the first. The pane stays empty only while there is none. Replaced before paint, so the empty pane never
-// shows and 뒤로 does not land on it again.
-function Landing({ kind }: { kind: ListKind }) {
-  const { models: { main }, persona } = useSettings();
+// API 연결 opens on its connection: the 대화 모델's, else the first. The pane stays empty only while there is none. Replaced
+// before paint, so the empty pane never shows and 뒤로 does not land on it again.
+function Landing() {
+  const { models: { main } } = useSettings();
   const connections = useConnections();
-  const personas = usePersonas();
-  const modules = useModules();
   useLayoutEffect(() => {
-    const used = main && findStarred(main, connections) ? main : null;
-    const landing = landingOf(kind, { main: used, connection: used?.connection ?? connections[0]?.id, persona: personas.some(({ id }) => id === persona) ? persona : personaFaces(personas)[0]?.persona.id, module: modules[0]?.id });
-    if (landing) navigate(landing, { replace: true });
-  }, [kind, main, persona, connections, personas, modules]);
-  return <Empty variant="pane">{EMPTY[kind]}</Empty>;
-}
-
-type Firsts = { main: { connection: string; model: string } | null; connection?: string; persona?: string; module?: string };
-function landingOf(kind: ListKind, first: Firsts): Route | null {
-  switch (kind) {
-    case 'models':
-      return first.main && { kind: 'model', connection: first.main.connection, model: first.main.model };
-    case 'connections':
-      return first.connection ? { kind: 'connection', id: first.connection } : null;
-    case 'personas':
-      return first.persona ? { kind: 'persona', id: first.persona } : null;
-    case 'modules':
-      return first.module ? { kind: 'module', id: first.module } : null;
-    case 'add-connection':
-      return null;
-  }
+    const id = (main && findStarred(main, connections) ? main.connection : undefined) ?? connections[0]?.id;
+    if (id) navigate({ kind: 'connection', id }, { replace: true });
+  }, [main, connections]);
+  return <Empty variant="pane">연결을 선택해 주세요.</Empty>;
 }
 
 function HomePage() {

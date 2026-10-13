@@ -16,14 +16,30 @@
   overflow-y: auto;
 }
 
-.grid .list {
+.drawer .list {
   flex-grow: 1;
   width: auto;
   min-width: 0;
+  border-right: none;
 }
 
-.grid .detail {
+.drawer .detail {
   flex-grow: 0;
   flex-shrink: 0;
   width: var(--detail-pane-width);
+  border-left: var(--border-thin) solid var(--color-divider);
+  background: var(--color-sidebar);
+}
+
+.stack {
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.stack .list,
+.stack .detail {
+  width: auto;
+  flex-shrink: 0;
+  overflow-y: visible;
+  border-right: none;
 }
