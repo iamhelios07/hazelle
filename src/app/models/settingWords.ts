@@ -1,7 +1,14 @@
 import type { Cache, Change, ModelSettings, NumberSetting, ServiceTier, Verbosity } from '../../connectors/settings';
+import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { count } from '../common/typedNumber';
-import { DISCOUNT } from '../common/words';
+import { DISCOUNT, UNKNOWN } from '../common/words';
+
+export const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일', embedding: '임베딩' };
+
+// What the catalog said when the model was starred; null is unknown.
+export const tokens = (value: number | null) => (value === null ? UNKNOWN : `${count(value)} 토큰`);
+export const inputs = (model: Starred) => (model.input ? model.input.map((modality) => MODALITY[modality]).join(', ') : UNKNOWN);
 
 export type Field = NumberSetting | 'context';
 export const NUMBER: Record<Field, { label: string; help?: string; unit?: string; unset?: string }> = {

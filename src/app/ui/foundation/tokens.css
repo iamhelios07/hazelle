@@ -372,6 +372,9 @@
   --edit-max-height: 360px;
   --caret-width: 2px;
   --caret-height: 1.05em;
+  /* Beside: the narrowest its main column stands beside the side one at, and the side one's narrowest. */
+  --beside-main-min: 520px;
+  --beside-side-min: 300px;
 
   --border-thin: 1px;
   --border-medium: 1.5px;

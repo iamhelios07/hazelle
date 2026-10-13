@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
-import type { Modality, Starred } from '../../connectors/types';
+import type { Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { modelUsage, type ModelUsage } from '../../model/usage';
 import { imageOnly } from '../../runtime/assignment';
@@ -16,14 +16,11 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
-import { changeWords, defaultFirst, NOT_CALLABLE, valueWords } from './settingWords';
+import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE, tokens, valueWords } from './settingWords';
 import { count } from '../common/typedNumber';
-
-const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일', embedding: '임베딩' };
 
 // What the catalog said when the model was starred. null is unknown, never 안 됨.
 const can = (value: boolean | null) => (value === null ? UNKNOWN : value ? '됨' : '안 됨');
-const tokens = (value: number | null) => (value === null ? UNKNOWN : `${count(value)} 토큰`);
 
 type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
 
@@ -162,7 +159,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
             { label: '모델 ID', value: model.id },
             { label: '컨텍스트 길이', value: tokens(model.contextLength) },
             { label: '응답 최대 길이', value: tokens(model.maxOutput) },
-            { label: '입력', value: model.input ? model.input.map((modality) => MODALITY[modality]).join(', ') : UNKNOWN },
+            { label: '입력', value: inputs(model) },
             { label: '추론', value: can(model.reasoning) },
             { label: '도구', value: can(model.tools) },
           ]}

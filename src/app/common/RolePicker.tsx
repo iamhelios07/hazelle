@@ -1,7 +1,7 @@
 import { fitsRole, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
 import { embedRoute } from '../../connectors/registry';
 import type { Stored } from '../../model/kinds';
-import { ChipButton, Empty, Menu, MenuItem, SettingRow } from '../ui';
+import { ChipButton, Empty, Menu, MenuItem, PickCard, SettingRow } from '../ui';
 import { MODEL_ROLES, NOT_STARRED, noStarred } from './words';
 
 // 임베딩 모델 offers only what its connection embeds: the type says so, not the model (design §4).
@@ -37,7 +37,6 @@ type Props = {
 };
 
 export function RolePicker({ role, label = MODEL_ROLES[role], help, own, follow, connections, onPick }: Props) {
-  const starred = starredModels(connections, role);
   const current = own ? modelName(own, connections) : (follow ?? '정하지 않음');
   return (
     <SettingRow
@@ -45,23 +44,59 @@ export function RolePicker({ role, label = MODEL_ROLES[role], help, own, follow,
       help={help}
       control={
         <Menu place="below-end" label={label} trigger={(opener) => <ChipButton variant="field" label={current} title={label} {...opener} />}>
-          {follow && <MenuItem label={follow} checked={!own} onClick={() => onPick(null)} />}
-          {own && !findStarred(own, connections) && <MenuItem label={NOT_STARRED} sub={own.model} checked onClick={() => undefined} />}
-          {starred.length === 0 ? (
-            <Empty variant="menu">{noStarred('선택할 수 있어요')}</Empty>
-          ) : (
-            starred.map((choice) => (
-              <MenuItem
-                key={`${choice.ref.connection}/${choice.ref.model}`}
-                label={choice.name}
-                sub={choice.source}
-                checked={!!own && sameModelRef(own, choice.ref)}
-                onClick={() => onPick(choice.ref)}
-              />
-            ))
-          )}
+          <RoleChoices role={role} own={own} follow={follow} connections={connections} onPick={onPick} />
         </Menu>
       }
     />
+  );
+}
+
+type CardProps = Omit<Props, 'label' | 'help'>;
+
+// RolePicker's choices from a card that leads its page: the model's name, and its connection under it.
+export function RoleCard({ role, own, follow, connections, onPick }: CardProps) {
+  const label = MODEL_ROLES[role];
+  const choice = own && findStarred(own, connections);
+  return (
+    <Menu
+      label={label}
+      trigger={(opener) => (
+        <PickCard
+          label={label}
+          value={own ? (choice ? choice.name : NOT_STARRED) : (follow ?? '정하지 않음')}
+          note={choice ? choice.source : undefined}
+          tone={own && !choice ? 'warn' : 'default'}
+          popup="menu"
+          expanded={opener.expanded}
+          ref={opener.ref}
+          onClick={opener.onClick}
+        />
+      )}
+    >
+      <RoleChoices role={role} own={own} follow={follow} connections={connections} onPick={onPick} />
+    </Menu>
+  );
+}
+
+function RoleChoices({ role, own, follow, connections, onPick }: CardProps) {
+  const starred = starredModels(connections, role);
+  return (
+    <>
+      {follow && <MenuItem label={follow} checked={!own} onClick={() => onPick(null)} />}
+      {own && !findStarred(own, connections) && <MenuItem label={NOT_STARRED} sub={own.model} checked onClick={() => undefined} />}
+      {starred.length === 0 ? (
+        <Empty variant="menu">{noStarred('선택할 수 있어요')}</Empty>
+      ) : (
+        starred.map((choice) => (
+          <MenuItem
+            key={`${choice.ref.connection}/${choice.ref.model}`}
+            label={choice.name}
+            sub={choice.source}
+            checked={!!own && sameModelRef(own, choice.ref)}
+            onClick={() => onPick(choice.ref)}
+          />
+        ))
+      )}
+    </>
   );
 }
