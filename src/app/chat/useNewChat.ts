@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chat, ChatSummary } from '../../model/chat';
 import { textTranslation, type CharacterShelf } from '../../model/library';
 import { startChat } from '../../runtime/chat-log';
@@ -32,6 +32,11 @@ export function useNewChat(chatId: string, fresh: boolean, chat: Chat, shelf: Ch
   // The one save, which the first send and a press on the greeting share until it lands; a failed one is begun afresh
   // by the next.
   const start = useRef<Starting | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   function starting(): Starting {
     if (start.current) return start.current;
     const greetings = startingGreetings(choices);
@@ -39,10 +44,11 @@ export function useNewChat(chatId: string, fresh: boolean, chat: Chat, shelf: Ch
       if (unstarted) start.current = null;
       else {
         // The write returns before the chat's projection is made, and the chat's route shows a loading screen in place
-        // of this one until it is: the route changes only once it exists. A failed one shows on the chat's scope.
+        // of this one until it is: the route changes only once it exists. A failed one shows on the chat's scope. A
+        // screen left by then is not pulled back to the chat.
         const open = () => {
           drafts.move(draftKey(null, chat.character), chatId);
-          navigate({ kind: 'chat', id: chatId }, { replace: true });
+          if (mounted.current) navigate({ kind: 'chat', id: chatId }, { replace: true });
         };
         void store.projections.evaluate(chatId).then(open, open);
       }

@@ -10,9 +10,12 @@ vi.mock('../session', () => ({ useSession: () => session }));
 vi.mock('../../runtime/chat-log', () => ({ startChat: async () => null }));
 vi.mock('../shell/router', () => ({ navigate: vi.fn() }));
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
 
-it('opens the saved chat only once its projection is made', async () => {
+async function started() {
   let newChat: ReturnType<typeof useNewChat>;
   function Probe() {
     newChat = useNewChat('chat', true, { title: null, character: null, models: {} }, null, 'Korean');
@@ -21,8 +24,21 @@ it('opens the saved chat only once its projection is made', async () => {
   const root = probeRoot();
   await act(async () => root.render(<Probe />));
   expect(await newChat!.starting().saved).toBeNull();
+  return root;
+}
+
+it('opens the saved chat only once its projection is made', async () => {
+  const root = await started();
   expect(navigate).not.toHaveBeenCalled();
   await act(async () => projected());
   expect(navigate).toHaveBeenCalledWith({ kind: 'chat', id: 'chat' }, { replace: true });
   act(() => root.unmount());
+});
+
+it('keeps a screen left before then, and still moves the draft to the chat', async () => {
+  const root = await started();
+  act(() => root.unmount());
+  await act(async () => projected());
+  expect(navigate).not.toHaveBeenCalled();
+  expect(session.drafts.move).toHaveBeenCalledWith(expect.anything(), 'chat');
 });
