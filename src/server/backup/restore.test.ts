@@ -18,6 +18,7 @@ import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
 import app from '../worker';
+import { alerts } from '../alerts';
 import { backups } from './backups';
 import { generationsDir, listGenerations, MANIFEST, POOL, readManifest } from './generation';
 import { restoreGeneration } from './restore';
@@ -173,7 +174,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     outbound,
     localProviders: new Set(),
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits() },
-    backups: backups(dir, 3, null),
+    backups: backups(dir, 3, alerts(null)),
   };
   const ctx = { waitUntil: () => {}, passThroughOnException: () => {}, props: {} };
   try {

@@ -81,7 +81,7 @@ Freshness (`src/server/backup/freshness.ts`): `backupAgeHours` counts from the n
 is none), `diskFreePercent` is the lowest of the data directory and `files/`. Above 36 hours without one (counted from the
 installation's creation while there is none) or below 20 % free, the admin screen shows a banner and `HAZELLE_ALERT_WEBHOOK` gets a
 Discord/Slack-style `{ content, text }` POST, as it does for a failed run of the day; each condition at most once a UTC day
-(`alerts_sent`, written only after the POST succeeded). Every run of the job and every generation is a `backup_runs` row.
+(`src/server/alerts.ts`, which also sends server-slow; `alerts_sent`, written only after the POST succeeded). Every run of the job and every generation is a `backup_runs` row.
 
 Disaster restore (`scripts/restore.sh <generation> <empty data dir>`, `src/server/backup/restore.ts`, bundled as
 `dist/server/restore-cli.js`, into the picture store `HAZELLE_FILES_BUCKET` names): verifies every hash first (an R2

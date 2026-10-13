@@ -1,3 +1,4 @@
+import type { Alerts } from '../alerts';
 import type { Services } from '../http';
 import { freePercent, freshness, type DiskFree, type Freshness } from './freshness';
 import { captureGeneration, expireGenerations } from './generation';
@@ -28,14 +29,7 @@ export type Backups = {
   fresh(env: Services): Promise<{ snapshots: Outcome; generation: Outcome }>;
 };
 
-const ALERTS: Record<string, string> = {
-  'backup-stale': '백업이 36시간 넘게 없음',
-  'disk-full': '디스크 80% 초과',
-  'job-failed': '오늘 백업 작업 실패',
-};
-
-// webhook: a Discord- or Slack-compatible URL, or null for none.
-export function backups(dataDir: string, hour: number, webhook: string | null, free: DiskFree = freePercent): Backups {
+export function backups(dataDir: string, hour: number, alerts: Alerts, free: DiskFree = freePercent): Backups {
   let holds = 0;
   let capturing: Promise<void> | null = null;
   let drained: (() => void) | null = null;
@@ -106,26 +100,11 @@ export function backups(dataDir: string, hour: number, webhook: string | null, f
     return running;
   };
 
-  // A send that fails is not recorded, so the next tick tries it again.
   const alert = async (env: Services, now: number) => {
-    if (webhook === null) return;
     const day = dayStart(now);
     const failed = await env.db.prepare("SELECT 1 FROM backup_runs WHERE outcome = 'failed' AND started_at >= ?1 AND started_at < ?1 + ?2").bind(day, DAY_MS).first();
-    const standing = [...(await freshness(env, dataDir, now, free)).warnings, ...(failed === null ? [] : ['job-failed'])];
-    for (const condition of standing) {
-      if ((await env.db.prepare('SELECT 1 FROM alerts_sent WHERE condition = ? AND day = ?').bind(condition, day).first()) !== null) continue;
-      const text = `[Hazelle] ${ALERTS[condition]}`;
-      const sent = await env
-        .outbound(new URL(webhook), {
-          method: 'POST',
-          headers: new Headers({ 'content-type': 'application/json' }),
-          body: JSON.stringify({ content: text, text }),
-          redirect: 'manual',
-          signal: AbortSignal.timeout(10_000),
-        })
-        .then((response) => response.ok, () => false);
-      if (sent) await env.db.prepare('INSERT INTO alerts_sent (condition, day) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(condition, day).run();
-    }
+    const standing = [...(await freshness(env, dataDir, now, free)).warnings, ...(failed === null ? [] : ['job-failed' as const])];
+    for (const condition of standing) await alerts.send(env, condition, now);
   };
 
   const daily = (env: Services, now: number) => job(env, now, false);

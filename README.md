@@ -106,7 +106,7 @@ The copier checks every hour. `docker compose --profile backup exec backup /bin/
 
 ### Alerts
 
-`/api/health` reports `backupAgeHours` (since the newest generation that was copied off-site) and `diskFreePercent`. The admin screen shows a banner when no copied generation is newer than 36 hours, or the disk is less than 20 % free. Set `HAZELLE_ALERT_WEBHOOK` in `.env` to a Discord- or Slack-compatible webhook URL to get the same warnings, plus a failed daily backup job, at most once a day each.
+`/api/health` reports `backupAgeHours` (since the newest generation that was copied off-site) and `diskFreePercent`. The admin screen shows a banner when no copied generation is newer than 36 hours, or the disk is less than 20 % free. Set `HAZELLE_ALERT_WEBHOOK` in `.env` to a Discord- or Slack-compatible webhook URL to get the same warnings, plus a failed daily backup job and a server falling behind (its event loop delayed over 0.25 s in three 10-second windows within an hour), at most once a day each.
 
 ### Restore
 

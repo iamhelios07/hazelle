@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { ExecutionContext } from 'hono';
 import { ACCOUNT_HEADER } from '../contracts/http';
 import { serviceReads } from './account-store';
+import { alerts } from './alerts';
 import { backups } from './backup/backups';
 import { accountRegistry } from './db/account-db';
 import { migrate } from './db/migrate';
@@ -36,7 +37,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     outbound,
     localProviders: new Set(),
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits() },
-    backups: backups(dir, 3, 'https://alerts.test/hook', async () => disk.freePercent),
+    backups: backups(dir, 3, alerts('https://alerts.test/hook'), async () => disk.freePercent),
   };
 
   const pending: Promise<unknown>[] = [];

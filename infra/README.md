@@ -18,7 +18,7 @@ variable (`variables.tf`), passed as `-var` or `TF_VAR_*`, or in a `*.tfvars` fi
 | `image_digest` | `sha256:…` of the release to start with (the release's `image-digest.txt`) |
 | `r2_account_id`, `r2_access_key_id`, `r2_secret_access_key`, `r2_bucket` | the off-site backup bucket and a key that may read, write and delete in it |
 | `r2_files_bucket`, `r2_files_access_key_id`, `r2_files_secret_access_key` | optional: the app's own picture bucket and a key that may read, write and delete in it alone (see Pictures in R2); empty keeps pictures on `/data` |
-| `alert_webhook` | optional Discord/Slack webhook for backup and disk alerts |
+| `alert_webhook` | optional Discord/Slack webhook for backup, disk and server-slowness alerts |
 | `edge` | `direct` (default): 80 and 443 open to anyone, the DNS record unproxied; `cloudflare`: only Cloudflare's ranges, the record proxied (see Edge) |
 | `cloudflare_ipv4` | for `edge = cloudflare`; defaults to Cloudflare's published list; update it when https://www.cloudflare.com/ips-v4 changes |
 

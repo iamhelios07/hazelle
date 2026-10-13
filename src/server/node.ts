@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
 import { serve } from '@hono/node-server';
 import { Hono, type ExecutionContext } from 'hono';
+import { alerts, slowLoop } from './alerts';
 import { serviceReads } from './account-store';
 import { forgetOldRecords } from './admin';
 import { backups } from './backup/backups';
@@ -45,7 +46,6 @@ function wholeFrom(name: string, fallback: number, min: number, max: number): nu
 const port = wholeFrom('PORT', 8080, 1, 65535);
 const drainMs = wholeFrom('HAZELLE_DRAIN_SECONDS', 60, 0, 3600) * 1000;
 const snapshotHour = wholeFrom('HAZELLE_SNAPSHOT_HOUR', 3, 0, 23);
-const alertWebhook = process.env.HAZELLE_ALERT_WEBHOOK || null;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
 const clientDir = process.env.HAZELLE_CLIENT ?? 'dist/client';
@@ -80,6 +80,7 @@ const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
 const db = serviceDb(raw);
 const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits() };
+const operatorAlerts = alerts(process.env.HAZELLE_ALERT_WEBHOOK || null);
 const local = localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? '');
 const outbound = pinnedOutbound(local);
 const services: Services = {
@@ -90,7 +91,7 @@ const services: Services = {
   outbound,
   localProviders: local,
   limits,
-  backups: backups(dataDir, snapshotHour, alertWebhook),
+  backups: backups(dataDir, snapshotHour, operatorAlerts),
 };
 
 // Work a request leaves running after its answer; the shutdown waits for it.
@@ -139,9 +140,14 @@ const hourly = () => {
 };
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
+const slow = slowLoop();
 const timers = [
   setInterval(() => {
-    if (eventLoop.max > 250_000_000) log('event loop delayed', { maxMs: Math.round(eventLoop.max / 1e6), p99Ms: Math.round(eventLoop.percentile(99) / 1e6), background: background.size });
+    if (eventLoop.max > 250_000_000) {
+      log('event loop delayed', { maxMs: Math.round(eventLoop.max / 1e6), p99Ms: Math.round(eventLoop.percentile(99) / 1e6), background: background.size });
+      const now = Date.now();
+      if (slow(now)) ctx.waitUntil(operatorAlerts.send(services, 'server-slow', now));
+    }
     eventLoop.reset();
   }, 10_000),
   setInterval(hourly, HOUR_MS),
