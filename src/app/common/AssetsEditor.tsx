@@ -1,21 +1,26 @@
-import { useState } from 'react';
+import { ImageUp } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
-import { addAssets, removeAsset, renameAsset, restoreAsset } from '../../runtime/characters';
+import { addAssets, removeAsset, renameAsset, replaceAsset, restoreAsset } from '../../runtime/characters';
 import { useAssetUrl, useChildren, useFiles, useStore } from '../session';
 import { useToast } from '../toast';
-import { CardGrid, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, Row, Section, Stack, useFileDrop, useMenuHandle, useMenuOpener } from '../ui';
+import { CardGrid, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, pickFiles, Row, Section, Stack, useFileDrop, useMenuHandle, useMenuOpener } from '../ui';
 import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { useCopy } from './useCopy';
 import { useSearch } from './useSearch';
+import { CHANGE_IMAGE } from './words';
 
 const ASSET = '에셋';
+// By name, never by the store's order, which moves an asset to the end on each rename or new picture.
+const byName = new Intl.Collator('ko', { numeric: true }).compare;
 
 export function AssetsEditor({ owner }: { owner: string }) {
   const store = useStore();
   const files = useFiles();
   const toast = useToast();
-  const assets = useChildren('asset', owner);
+  const stored = useChildren('asset', owner);
+  const assets = useMemo(() => stored.toSorted((a, b) => byName(a.value.name, b.value.name)), [stored]);
   const [adding, setAdding] = useState(false);
   const [naming, setNaming] = useState<Stored<'asset'> | null>(null);
   const search = useSearch(assets, `${ASSET} 검색`, ({ value }) => [value.name]);
@@ -40,6 +45,11 @@ export function AssetsEditor({ owner }: { owner: string }) {
     toast.undoable(`'${value.name}' ${ASSET}을 삭제했어요.`, () => restoreAsset(store, removed.data));
   }
 
+  async function replace(id: string, file: File) {
+    const replaced = await replaceAsset(store, files, id, new Uint8Array(await file.arrayBuffer()));
+    if (!replaced.ok) toast.failed(replaced, '이미지를 바꾸지 못했어요.');
+  }
+
   function rename(name: string) {
     const trimmed = name.trim();
     if (!naming || !trimmed) return;
@@ -60,7 +70,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
           <CardGrid label={ASSET} keys={search.found.map(({ id }) => id)}>
             {(index) => {
               const asset = search.found[index]!;
-              return <AssetCard key={asset.id} asset={asset} shared={shared.get(named(asset))!} onRename={() => setNaming(asset)} onRemove={() => void remove(asset)} />;
+              return <AssetCard key={asset.id} asset={asset} shared={shared.get(named(asset))!} onRename={() => setNaming(asset)} onReplace={(file) => void replace(asset.id, file)} onRemove={() => void remove(asset)} />;
             }}
           </CardGrid>
         ) : (
@@ -73,10 +83,10 @@ export function AssetsEditor({ owner }: { owner: string }) {
   );
 }
 
-type CardProps = { asset: Stored<'asset'>; shared: number; onRename: () => void; onRemove: () => void };
+type CardProps = { asset: Stored<'asset'>; shared: number; onRename: () => void; onReplace: (file: File) => void; onRemove: () => void };
 
 // Each card holds its own picture while drawn, so a grid of thousands keeps only the rows on screen.
-function AssetCard({ asset: { id, value }, shared, onRename, onRemove }: CardProps) {
+function AssetCard({ asset: { id, value }, shared, onRename, onReplace, onRemove }: CardProps) {
   const url = useAssetUrl();
   const copy = useCopy();
   const handle = useMenuHandle();
@@ -92,6 +102,7 @@ function AssetCard({ asset: { id, value }, shared, onRename, onRemove }: CardPro
         <MoreMenu handle={handle} of={`'${value.name}'`}>
           <MenuItem icon={ACTS.copy.icon} label={`태그 ${ACTS.copy.label}`} onClick={() => copy(`{{img::${value.name}}}`)} />
           <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={onRename} />
+          <MenuItem icon={ImageUp} label={CHANGE_IMAGE} onClick={() => pickFiles('image/*', false, ([file]) => onReplace(file!))} />
           <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={onRemove} />
         </MoreMenu>
       }

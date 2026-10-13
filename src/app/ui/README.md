@@ -111,7 +111,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, a list with a line under each, or (fit) a strip that becomes a menu past four short options, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does |
 | controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar; `compact` folds it to one line until focus goes inside |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
-| controls | `FileButton` | — | A `Button` that opens a file picker |
+| controls | `FileButton` (`pickFiles`) | — | A `Button` that opens a file picker; `pickFiles` opens one from any press, such as a menu item |
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가; a dot when something behind it needs a look |
 | controls | `Link` | `Link.module.css` | A link to another site |
 | controls | `MarkupArea` (`typeInto`, `markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea; an insert into it that Ctrl+Z takes back |

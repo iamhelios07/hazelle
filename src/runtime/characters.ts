@@ -110,8 +110,17 @@ export async function addAssets(store: ObjectStore, files: Files, owner: string,
   return { ok: true, data: { added: kept.length, skipped } };
 }
 
+// The name stays, so what the bot's text shows by it becomes the new picture. The old file stays stored, as for setAvatar.
+export async function replaceAsset(store: ObjectStore, files: Files, id: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<Stored<'asset'>>> {
+  const type = imageType(bytes);
+  if (!type) return { ok: false, error: 'picture-unreadable' };
+  const saved = await files.save([bytes]);
+  if (!saved.ok) return saved;
+  const [file] = saved.data;
+  return file ? store.update('asset', id, (current) => ({ ...current, type, size: bytes.length, file })) : { ok: false, error: 'picture-refused' };
+}
+
 export const renameAsset = (store: ObjectStore, id: string, name: string) => store.update('asset', id, (current) => ({ ...current, name }));
-// The file stays stored, as for setAvatar.
 export const removeAsset = (store: ObjectStore, id: string) => store.take('asset', id);
 export const restoreAsset = (store: ObjectStore, removed: Stored<'asset'>) => store.restore(removed);
 

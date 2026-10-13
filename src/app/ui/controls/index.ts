@@ -4,7 +4,7 @@ export { ChipButton } from './ChipButton';
 export { ChoiceGroup } from './ChoiceGroup';
 export { Composer } from './Composer';
 export { EditBox } from './EditBox';
-export { FileButton } from './FileButton';
+export { FileButton, pickFiles } from './FileButton';
 export { IconButton } from './IconButton';
 export { Link } from './Link';
 export { MarkupArea, typeInto } from './MarkupArea';
