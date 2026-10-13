@@ -78,7 +78,7 @@ jobs:
           DIGEST: ${{ needs.image.outputs.digest }}
         run: |
           echo "$DIGEST" >release/image-digest.txt
-          { scripts/release-notes.sh "$GITHUB_REF_NAME"; echo; echo "image: ghcr.io/jiniill/hazelle:$GITHUB_REF_NAME; its digest is image-digest.txt"; } >release/notes.md
+          scripts/release-notes.sh "$GITHUB_REF_NAME" >release/notes.md
           gh release create "$GITHUB_REF_NAME" release/source.tar.gz release/image-digest.txt --title "$GITHUB_REF_NAME" \
             --notes-file release/notes.md
       - uses: docker/setup-buildx-action@v4
