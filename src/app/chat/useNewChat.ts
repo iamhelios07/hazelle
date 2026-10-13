@@ -38,8 +38,13 @@ export function useNewChat(chatId: string, fresh: boolean, chat: Chat, shelf: Ch
     const saved = startChat(store, chatId, chat, greetings).then((unstarted) => {
       if (unstarted) start.current = null;
       else {
-        drafts.move(draftKey(null, chat.character), chatId);
-        navigate({ kind: 'chat', id: chatId }, { replace: true });
+        // The write returns before the chat's projection is made, and the chat's route shows a loading screen in place
+        // of this one until it is: the route changes only once it exists. A failed one shows on the chat's scope.
+        const open = () => {
+          drafts.move(draftKey(null, chat.character), chatId);
+          navigate({ kind: 'chat', id: chatId }, { replace: true });
+        };
+        void store.projections.evaluate(chatId).then(open, open);
       }
       return unstarted;
     });

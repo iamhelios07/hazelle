@@ -1,0 +1,28 @@
+import { act } from 'react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { navigate } from '../shell/router';
+import { probeRoot } from '../common/probe';
+import { useNewChat } from './useNewChat';
+
+let projected: () => void = () => {};
+const session = { store: { projections: { evaluate: () => new Promise<void>((resolve) => (projected = resolve)) } }, drafts: { move: vi.fn() } };
+vi.mock('../session', () => ({ useSession: () => session }));
+vi.mock('../../runtime/chat-log', () => ({ startChat: async () => null }));
+vi.mock('../shell/router', () => ({ navigate: vi.fn() }));
+
+afterEach(() => vi.unstubAllGlobals());
+
+it('opens the saved chat only once its projection is made', async () => {
+  let newChat: ReturnType<typeof useNewChat>;
+  function Probe() {
+    newChat = useNewChat('chat', true, { title: null, character: null, models: {} }, null, 'Korean');
+    return null;
+  }
+  const root = probeRoot();
+  await act(async () => root.render(<Probe />));
+  expect(await newChat!.starting().saved).toBeNull();
+  expect(navigate).not.toHaveBeenCalled();
+  await act(async () => projected());
+  expect(navigate).toHaveBeenCalledWith({ kind: 'chat', id: 'chat' }, { replace: true });
+  act(() => root.unmount());
+});
