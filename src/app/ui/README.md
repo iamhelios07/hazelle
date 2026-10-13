@@ -90,6 +90,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take or a lorebook entry; what is folded is made only while open, and it can start open |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
+| layout | `ItemSection` | `ItemSection.module.css` | A thing picked from the cards above it as a part of their page, not a page of its own (a `ListDetail` stack): a rule, its name a step under the page title's, a line under it, a ⋯ |
 | layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it; a drawer, the list taking the width and the item beside it only while one is picked (its head closes with ×); or the list stacked over the item in one scroll |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Panel` | `Panel.module.css` | A card of its own on a page: a title with its ⓘ and an action or a switch by it, then what it holds |
@@ -135,6 +136,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), each place's colours, and the hover and current fills |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
+| collections | `ItemCard` | `ItemCard.module.css` | One of the user's things as a card in a grid, opening it: its name, tags, a line of what it holds and something under it such as a gauge; marked while it is open (API 연결's connections) |
 | collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them, in a box or not, a › on each row of a list of places, or, given keys, only the rows near the view; a model id; a figure at a row's end; a control beside a row, something under a row's text such as a gauge, and rows set in under it |
 | collections | `NavGroup` | `NavGroup.module.css` | A set of places in the app, spaced apart from the next set, such as 설정's |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |

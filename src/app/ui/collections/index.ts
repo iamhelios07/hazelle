@@ -3,6 +3,7 @@ export { Breakdown } from './Breakdown';
 export { CardGrid, FaceCard, Portrait, SelectionBar } from './CardGrid';
 export { Facts } from './Facts';
 export { FolderRow, TreeRow } from './FolderRow';
+export { ItemCard } from './ItemCard';
 export { ItemRow } from './ItemRow';
 export { List, ListItem } from './List';
 export { NavGroup } from './NavGroup';

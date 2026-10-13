@@ -15,7 +15,7 @@ import { useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, MenuItem, NavBar, Row, Screen, SettingRow, Stack, Stepper } from '../ui';
+import { Button, Callout, ChoiceGroup, Columns, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingRow, Stack, Stepper, Text, useSplit } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
@@ -42,6 +42,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<Filter>('all');
+  // From this width Page stacks a connection under API 연결's cards (ListDetail stack), so it is a part of that page.
+  const stacked = useSplit();
 
   const key = catalogKey(connection);
   useEffect(() => {
@@ -123,23 +125,16 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   // Accounts join a pool by signing in, so a pool type always has a sign-in.
   const pool = connection.turns && signIn ? { connection: { ...connection, turns: connection.turns }, signIn } : null;
 
+  const who = connection.turns ? `계정 ${connection.accounts.length}개` : connection.accounts[0]!.name;
   const listed = !catalog ? '모델 목록을 불러오는 중…' : catalog.ok ? `모델 ${catalog.models.length}개` : '모델 목록을 불러오지 못했어요';
-  const subtitle = [connection.turns ? `계정 ${connection.accounts.length}개` : connection.accounts[0]!.name, listed, starred.length ? `즐겨찾기 ${starred.length}개` : ''].filter(Boolean).join(' · ');
+  const menu = { of: '연결', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> };
+  const level = stacked ? 3 : 2;
 
-  return (
-    <Screen
-      width="form"
-      top={
-        <NavBar
-          title={connection.label}
-          subtitle={subtitle}
-          {...backBar(back)}
-          menu={{ of: '연결', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
-        />
-      }
-      aside={
-        <>
-          <ConnectionSent connection={id} />
+  const body = (
+    <Columns min="panel">
+      <Stack gap="group">
+        {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} level={level} /> : <ConnectionMeters connection={connection} level={level} />}
+        <Panel>
           <SettingRow
             label={RETRY_COUNT}
             help="응답이 오기 전에 실패하면 이 횟수만큼 다시 보내요. 키나 요청이 잘못됐을 때는 바로 알려요."
@@ -155,27 +150,41 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
               />
             }
           />
-          {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} /> : <ConnectionMeters connection={connection} />}
-        </>
-      }
-    >
-      <Row kind="toolbar">
-        {search.field}
-        <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
-      </Row>
-      {catalog && !catalog.ok && (
-        <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((count) => count + 1) }}>
-          {describeCatalogFailure(catalog.failure)}
-        </Callout>
-      )}
-      {shown.length > 0 ? (
-        <Stack gap="group">
-          {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
-          {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
-        </Stack>
-      ) : (
-        catalog?.ok && <Empty>{search.none ?? (filter !== 'all' ? '맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>
-      )}
+        </Panel>
+        <ConnectionSent connection={id} level={level} />
+      </Stack>
+      <Panel title="모델" level={level}>
+        <Text variant="note">{[listed, starred.length ? `즐겨찾기 ${starred.length}개` : ''].filter(Boolean).join(' · ')}</Text>
+        <Row kind="toolbar">
+          {search.field}
+          <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
+        </Row>
+        {catalog && !catalog.ok && (
+          <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((count) => count + 1) }}>
+            {describeCatalogFailure(catalog.failure)}
+          </Callout>
+        )}
+        {shown.length > 0 ? (
+          <Stack gap="group">
+            {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
+            {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
+          </Stack>
+        ) : (
+          catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>
+        )}
+      </Panel>
+    </Columns>
+  );
+
+  return stacked ? (
+    <Screen width="page">
+      <ItemSection title={connection.label} note={who} menu={menu}>
+        {body}
+      </ItemSection>
+    </Screen>
+  ) : (
+    <Screen width="page" top={<NavBar title={connection.label} subtitle={who} {...backBar(back)} menu={menu} />}>
+      {body}
     </Screen>
   );
 }
