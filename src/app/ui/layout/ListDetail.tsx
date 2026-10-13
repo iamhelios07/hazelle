@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import styles from './ListDetail.module.css';
 
-const PaneContext = createContext<'list' | 'detail' | 'drawer' | null>(null);
+const PaneContext = createContext<'list' | 'detail' | 'drawer' | 'stack' | null>(null);
 
 // Which pane of a ListDetail a screen is in, or null on a page of its own.
 export const usePane = () => useContext(PaneContext);
@@ -17,7 +17,7 @@ export function ListDetail({ list, detail, variant = 'list' }: { list: ReactNode
       </div>
       {detail !== null && (
         <div className={styles.detail}>
-          <PaneContext.Provider value={variant === 'drawer' ? 'drawer' : 'detail'}>{detail}</PaneContext.Provider>
+          <PaneContext.Provider value={variant === 'list' ? 'detail' : variant}>{detail}</PaneContext.Provider>
         </div>
       )}
     </div>

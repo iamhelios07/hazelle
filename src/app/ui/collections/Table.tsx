@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import a11y from '../foundation/a11y.module.css';
 import styles from './Table.module.css';
 
 // name: the row's own column, wider than the rest; figure: a count or a size, set right; button: a row's ⋯.
@@ -21,6 +22,7 @@ export function Table({ label, columns, rows }: { label: string; columns: TableC
     [styles.cell, column.size === 'figure' && styles.figure, index > 0 && !column.keep && styles.drop].filter(Boolean).join(' ');
   return (
     <div className={styles.table} style={tracks}>
+      {/* Hidden from the reader: each cell says its own column's name, which a row read as one button would lose. */}
       <div className={`${styles.row} ${styles.head}`} aria-hidden>
         {columns.map((column, index) => (
           <span key={column.label || index} className={cell(column, index)}>{column.label}</span>
@@ -30,6 +32,7 @@ export function Table({ label, columns, rows }: { label: string; columns: TableC
         {rows.map((row) => {
           const cells = row.cells.map((content, index) => (
             <span key={index} className={cell(columns[index]!, index)}>
+              {index > 0 && columns[index]!.label && <span className={a11y.srOnly}>{columns[index]!.label} </span>}
               {index === 0 ? (
                 <span className={styles.first}>
                   <span className={styles.lead}>{content}</span>

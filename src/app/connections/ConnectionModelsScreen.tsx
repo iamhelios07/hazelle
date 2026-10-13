@@ -15,7 +15,7 @@ import { useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Columns, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingRow, Stack, Stepper, Text, useSplit } from '../ui';
+import { Button, Callout, ChoiceGroup, Columns, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingRow, Stack, Stepper, Text, usePane } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
@@ -42,8 +42,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<Filter>('all');
-  // From this width Page stacks a connection under API 연결's cards (ListDetail stack), so it is a part of that page.
-  const stacked = useSplit();
+  // Under API 연결's cards the connection is a part of that page, not a page of its own.
+  const stacked = usePane() === 'stack';
 
   const key = catalogKey(connection);
   useEffect(() => {
