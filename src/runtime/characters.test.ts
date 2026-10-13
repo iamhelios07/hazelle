@@ -8,7 +8,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addCharacter, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addAssets, addCharacter, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
@@ -155,6 +155,20 @@ describe('setAvatar', () => {
     const refused = new Files(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'files-full' } : api<T>(...args), store);
     expect(await setAvatar(store, refused, id, png())).toEqual({ ok: false, error: 'picture-refused' });
     expect(store.children('avatar', id)).toEqual(before);
+  });
+});
+
+describe('addAssets', () => {
+  it('stores each picked picture under its file name without the extension, and counts a file that is no picture', async () => {
+    const { store, files } = await server.account();
+    const imported = await importCharacter(store, files, { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] }, null, () => {});
+    const id = imported.ok ? imported.data.id : '';
+    const smile = png();
+    expect(await addAssets(store, files, id, [new File([smile], 'smile.happy.png'), new File([randomBytes(16)], 'notes.txt')])).toEqual({ ok: true, data: { added: 1, skipped: 1 } });
+    const [asset, ...more] = store.children('asset', id);
+    expect(more).toEqual([]);
+    expect(asset!.value).toMatchObject({ name: 'smile.happy', type: 'image/png', size: smile.length });
+    expect(await files.read(asset!.value.file)).toEqual({ ok: true, data: smile });
   });
 });
 

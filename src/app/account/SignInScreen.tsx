@@ -65,7 +65,7 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
       <Stack>
         {!account && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         {recovery && (
-          <FileButton accept=".txt,text/plain" icon={ACTS.import.icon} onFile={(file) => void file.text().then(attempt)}>
+          <FileButton accept=".txt,text/plain" icon={ACTS.import.icon} onFiles={([file]) => void file!.text().then(attempt)}>
             파일에서 {ACTS.import.label}
           </FileButton>
         )}

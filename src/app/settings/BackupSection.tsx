@@ -121,7 +121,7 @@ export function BackupSection() {
         label={importOf('백업')}
         help="새 계정에만 가져올 수 있어요."
         control={
-          <FileButton accept=".zip" size="sm" icon={ACTS.import.icon} disabled={active !== null} onFile={(file) => void load(file)}>
+          <FileButton accept=".zip" size="sm" icon={ACTS.import.icon} disabled={active !== null} onFiles={([file]) => void load(file!)}>
             {ACTS.import.label}
           </FileButton>
         }

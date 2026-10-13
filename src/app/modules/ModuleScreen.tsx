@@ -5,6 +5,7 @@ import { editModule, setModuleAlways, setModuleDeleted } from '../../runtime/mod
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { holdsLine } from '../common/pack';
+import { AssetsEditor } from '../common/AssetsEditor';
 import { LoreEditor } from '../common/LoreEditor';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
@@ -107,6 +108,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
       </Section>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />
+      <AssetsEditor owner={id} />
       {describes && <PortraitsEditor owner={id} />}
     </Screen>
   );

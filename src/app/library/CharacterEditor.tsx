@@ -1,6 +1,6 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -14,6 +14,7 @@ import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
+import { AssetsEditor } from '../common/AssetsEditor';
 import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
 import { scriptHolds } from '../common/pack';
@@ -55,13 +56,14 @@ const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
   lore: { label: '로어북', icon: BookOpen },
   modules: { label: PAGES.modules, icon: Package },
   scripts: { label: SCRIPTS.part, icon: Braces },
+  assets: { label: '에셋', icon: Images },
   illustration: { label: '삽화', icon: Palette },
   display: { label: '표시', icon: Eye },
 };
 const GROUPS: CharacterPart[][] = [
   ['profile', 'character', 'greetings'],
   ['instructions', 'lore', 'modules', 'scripts'],
-  ['illustration', 'display'],
+  ['assets', 'illustration', 'display'],
 ];
 const LIST = '캐릭터 항목';
 type Reading = 'source' | 'translated';
@@ -91,6 +93,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const wide = useWide();
   const original = useCharacter(origin?.id ?? null);
   const lore = useChildren('lore', id);
+  const assets = useChildren('asset', id);
   const likeness = useStored('likeness', likenessId(id));
   const modules = useModules();
   const always = useSettings().modules ?? [];
@@ -214,7 +217,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     profile: (
       <>
         <FaceRow face={<Portrait image={face} name={card.name} />}>
-          <FileButton accept="image/*" size="sm" icon={ImageUp} busy={changingFace} onFile={(file) => void changeFace(file)}>
+          <FileButton accept="image/*" size="sm" icon={ImageUp} busy={changingFace} onFiles={([file]) => void changeFace(file!)}>
             {CHANGE_IMAGE}
           </FileButton>
         </FaceRow>
@@ -316,6 +319,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
+    assets: <AssetsEditor owner={id} />,
     illustration: <PortraitsEditor owner={id} />,
     display: (
       <Section title={PARTS.display.label}>
@@ -351,6 +355,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     lore: `${lore.length}개`,
     modules: `${modules.filter((module) => always.includes(module.id) || ownModules.includes(module.id)).length}개 켜짐`,
     scripts: scriptHolds(card) || undefined,
+    assets: `${assets.length}개`,
     illustration: likeness ? `${likeness.value.portraits.length}명` : undefined,
   };
   // A part with nothing to show is left out: 모듈 lists the account's modules, and there may be none.

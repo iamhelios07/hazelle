@@ -67,7 +67,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   const body = (
     <>
       <FaceRow face={<Avatar face={persona.name} image={persona.picture} size="lg" tone="you" />}>
-        <FileButton accept="image/*" size="sm" icon={ImageUp} onFile={(file) => void picture(file)}>
+        <FileButton accept="image/*" size="sm" icon={ImageUp} onFiles={([file]) => void picture(file!)}>
           {CHANGE_IMAGE}
         </FileButton>
       </FaceRow>

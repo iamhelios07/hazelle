@@ -58,7 +58,7 @@ function Slot({ title, note, help, file, onFile, children }: { title: string; no
       <Stack gap="related">
         <Text variant="note">{note}</Text>
         {children}
-        <FileButton accept=".bin" size="sm" icon={ACTS.import.icon} onFile={onFile}>
+        <FileButton accept=".bin" size="sm" icon={ACTS.import.icon} onFiles={([file]) => onFile(file!)}>
           {file ? file.name : importOf('파일')}
         </FileButton>
       </Stack>

@@ -120,7 +120,7 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   );
   const actions = (
     <Row kind="actions">
-      <FileButton accept=".risup,.risupreset" icon={ACTS.import.icon} onFile={(file) => preset.take([file])}>
+      <FileButton accept=".risup,.risupreset" icon={ACTS.import.icon} onFiles={(files) => preset.take(files)}>
         Risu 프리셋 가져오기
       </FileButton>
       {adding}

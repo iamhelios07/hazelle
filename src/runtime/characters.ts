@@ -97,6 +97,21 @@ export async function setAvatar(store: ObjectStore, files: Files, id: string, by
   return held ? store.update('avatar', held.id, () => saved.data) : store.create('avatar', saved.data, { parent: id });
 }
 
+// owner: the character or module the pictures join, each named by its file's name without the extension.
+export async function addAssets(store: ObjectStore, files: Files, owner: string, picked: Pick<File, 'name' | 'arrayBuffer'>[]): Promise<ApiResult<{ added: number; skipped: number }>> {
+  const assets = picked.map((file) => ({ name: file.name.replace(/\.[^.]+$/, '') || file.name, read: async () => new Uint8Array(await file.arrayBuffer()) }));
+  const saved = await saveAssets(files, assets, () => {});
+  if (!saved.ok) return saved;
+  const { kept, skipped } = saved.data;
+  const written = await store.batch(kept.map((asset): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: owner, value: asset })));
+  return written.ok ? { ok: true, data: { added: kept.length, skipped } } : written;
+}
+
+export const renameAsset = (store: ObjectStore, id: string, name: string) => store.update('asset', id, (current) => ({ ...current, name }));
+// The file stays stored, as for setAvatar.
+export const removeAsset = (store: ObjectStore, id: string) => store.take('asset', id);
+export const restoreAsset = (store: ObjectStore, removed: Stored<'asset'>) => store.restore(removed);
+
 // A moved character's id is already named by its staged entries; chats: their roots (runtime/chat-log chatWrites).
 export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; chats: Write[] };
 
