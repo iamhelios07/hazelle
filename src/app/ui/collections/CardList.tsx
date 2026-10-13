@@ -39,7 +39,7 @@ export function CardItem({ title, badge, tags = [], aside, control, onClick, chi
       </>
     ) : undefined;
   return (
-    <li className={folded ? styles.row : styles.card}>
+    <li className={folded ? undefined : styles.card}>
       <div className={styles.head}>
         <Item density="regular" scheme="list" title={title} meta={meta} preview={aside} onClick={onClick} />
         {control && <span className={styles.control}>{control}</span>}
