@@ -1,7 +1,7 @@
 import { KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
 import type { ApiResult } from './api';
 import { orderOwned } from './removal';
-import { SCOPED, type CacheState } from './object-cache';
+import { SCOPED, WALKED, type CacheState } from './object-cache';
 import { CodecAborted, type ObjectCodec, SEAL_ITEMS } from './object-codec';
 import { codecValue, type SealItem } from './object-codec-core';
 import type { Held, ObjectIndex, StoreChange } from './object-index';
@@ -15,7 +15,7 @@ export type Resolved = { pending: Pending | null; held: Held | null };
 // not shown before its answer. at: the copy a change applies to, live when sent and what reads show when previewed.
 export type WriteStep = { id: string; resolve: (at: (id: string) => Held | undefined) => ApiResult<Resolved>; derived?: boolean };
 
-type SealedWrite = StoreChange & { baseRev: number | null; body: string | null };
+type SealedWrite = StoreChange & { baseRev: number | null; body: string | null; once?: true };
 type Prepared = { resolved: Resolved[]; writes: SealedWrite[] };
 
 const encoder = new TextEncoder();
@@ -130,7 +130,9 @@ export class ObjectWrites {
           const { id, kind, parent, baseRev, value } = pending;
           const body = value === undefined ? null : codecValue(sealed[slots.get(index)!]!);
           if (value !== undefined && body === null) return { ok: false, error: 'too-large' };
-          const write = { id, kind, parent, baseRev, body };
+          // A walked row is never held, so a create sent again after its lost answer cannot find it here: the server
+          // answers it as landed (server/account-store once).
+          const write = { id, kind, parent, baseRev, body, ...(WALKED.has(kind) && baseRev === null && { once: true as const }) };
           const size = encoder.encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
           if (bytes + size > limits.bytes) {
             if (!resolved.length) return { ok: false, error: 'too-large' };

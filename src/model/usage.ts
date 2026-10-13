@@ -10,32 +10,25 @@ export type ModelUsage = { calls: number; last: number | null; input: Tally; out
 // modelName and source: the names when the call was made, for a model or connection renamed or deleted since.
 export type UsageCall = { at: number; call: Pick<Receipt, 'id' | 'connection' | 'model' | 'modelName' | 'source' | 'usage' | 'cost'> };
 
-// The calls one place holds: a chat, with its character and whether it is a branch, or a pack's 삽화 profile, which no
-// chat holds.
-export type UsageHeld = { calls: Iterable<UsageCall>; chat?: string; character?: string | null; branch?: boolean };
+// The account's record of its model calls (kind ledger), one row per call written where the call was made or first
+// saved, with where it was made; it outlives the chat. Rows are written once, so a cost booked after the call is a row
+// of its own naming it. chat null: a call no chat made (번역기, a card's text, a 삽화 profile).
+export type Ledger =
+  | { type: 'call'; at: number; call: UsageCall['call']; chat: string | null; character: string | null }
+  | { type: 'cost'; call: string; cost: Cost | null; at: number };
 
-type Once<H> = { one: UsageCall; from: H };
+export type Counted = UsageCall & Pick<Extract<Ledger, { type: 'call' }>, 'chat' | 'character'>;
 
-// Every call once, by its id, however many places hold it, since a branch copies the replies it holds with their
-// receipts. The cost is read from whichever copy has settled it, as the original settles later than a copy made after,
-// and the call is the first holder's that is not a branch, where it was made.
-function callsOnce<H extends UsageHeld>(held: Iterable<H>): Once<H>[] {
-  const once = new Map<string, Once<H>>();
-  const settled = ({ call }: UsageCall) => (call.cost === 'pending' ? null : call.cost);
-  for (const from of held) {
-    for (const one of from.calls) {
-      const seen = once.get(one.call.id);
-      if (!seen) {
-        once.set(one.call.id, { one, from });
-        continue;
-      }
-      const cost = settled(one);
-      const previous = settled(seen.one);
-      if (cost && (!previous || (previous.source === 'price-list' && cost.source === 'reported'))) seen.one = { at: seen.one.at, call: { ...seen.one.call, cost } };
-      if (seen.from.branch && !from.branch) seen.from = from;
-    }
+// Each call with the cost booked for it, when it was pending; a booked cost that is known wins over one that is not,
+// since two devices may both look it up.
+export function counted(rows: Iterable<Ledger>): Counted[] {
+  const calls = new Map<string, Counted>();
+  const booked = new Map<string, Cost | null>();
+  for (const row of rows) {
+    if (row.type === 'call') calls.set(row.call.id, { at: row.at, call: row.call, chat: row.chat, character: row.character });
+    else if (!booked.get(row.call)) booked.set(row.call, row.cost);
   }
-  return [...once.values()];
+  return [...calls.values()].map((one) => (one.call.cost === 'pending' && booked.has(one.call.id) ? { ...one, call: { ...one.call, cost: booked.get(one.call.id)! } } : one));
 }
 
 function sum(made: Iterable<UsageCall>): ModelUsage {
@@ -60,8 +53,8 @@ function sum(made: Iterable<UsageCall>): ModelUsage {
   return usage;
 }
 
-export const modelUsage = (held: Iterable<UsageHeld>, { connection, model }: ModelRef) =>
-  sum(callsOnce(held).flatMap(({ one }) => (one.call.connection === connection && one.call.model === model ? [one] : [])));
+export const modelUsage = (calls: Counted[], { connection, model }: ModelRef) =>
+  sum(calls.filter(({ call }) => call.connection === connection && call.model === model));
 
 export type UsageWindow = 'hour' | 'today' | 'week' | 'month';
 
@@ -75,8 +68,8 @@ export function windowStart(window: UsageWindow, now: number): number {
   return start.getTime();
 }
 
-export function connectionUsage(held: Iterable<UsageHeld>, connection: string, now: number): Record<'hour' | 'today' | 'week', ModelUsage> {
-  const made = callsOnce(held).flatMap(({ one }) => (one.call.connection === connection ? [one] : []));
+export function connectionUsage(calls: Counted[], connection: string, now: number): Record<'hour' | 'today' | 'week', ModelUsage> {
+  const made = calls.filter(({ call }) => call.connection === connection);
   const since = (window: UsageWindow) => sum(made.filter(({ at }) => at >= windowStart(window, now)));
   return { hour: since('hour'), today: since('today'), week: since('week') };
 }
@@ -84,25 +77,27 @@ export function connectionUsage(held: Iterable<UsageHeld>, connection: string, n
 export type UsageGroup<K> = { key: K; usage: ModelUsage };
 export type ModelGroup = UsageGroup<string> & Pick<UsageCall['call'], 'connection' | 'model' | 'modelName' | 'source'>;
 export type ReportWindow = Exclude<UsageWindow, 'hour'> | 'all';
+// A chat or character no longer kept counts under one group of its own, not one per id.
+export const GONE = 'gone';
+export type Kept = { chat: (id: string) => boolean; character: (id: string) => boolean };
 
 // periods: oldest first, every day of the window to its last, days to come too, or over all time every month from the
-// first call's to this one, keyed by its local start, an empty one too. The other axes busiest first. A call no chat holds (a 삽화 profile's) counts under its
-// character and in no chat.
-export type UsageReport = { total: ModelUsage; periods: UsageGroup<number>[]; models: ModelGroup[]; characters: UsageGroup<string | null>[]; chats: UsageGroup<string>[] };
+// first call's to this one, keyed by its local start, an empty one too. The other axes busiest first. chats: null for
+// the calls no chat made; characters: null for those of no character.
+export type UsageReport = { total: ModelUsage; periods: UsageGroup<number>[]; models: ModelGroup[]; characters: UsageGroup<string | null>[]; chats: UsageGroup<string | null>[] };
 
-export function usageReport(held: Iterable<UsageHeld>, window: ReportWindow, now: number): UsageReport {
+export function usageReport(calls: Counted[], window: ReportWindow, now: number, kept: Kept): UsageReport {
   const since = window === 'all' ? null : windowStart(window, now);
-  const counted = callsOnce(held).filter(({ one }) => since === null || one.at >= since);
-  const group = <K>(keyOf: (once: Once<UsageHeld>) => K | undefined): UsageGroup<K>[] => {
+  const shown = calls.filter(({ at }) => since === null || at >= since);
+  const group = <K>(keyOf: (one: Counted) => K): UsageGroup<K>[] => {
     const groups = new Map<K, UsageCall[]>();
-    for (const once of counted) {
-      const key = keyOf(once);
-      if (key === undefined) continue;
-      const calls = groups.get(key);
-      if (calls) calls.push(once.one);
-      else groups.set(key, [once.one]);
+    for (const one of shown) {
+      const key = keyOf(one);
+      const held = groups.get(key);
+      if (held) held.push(one);
+      else groups.set(key, [one]);
     }
-    return [...groups].map(([key, calls]) => ({ key, usage: sum(calls) })).sort((a, b) => b.usage.calls - a.usage.calls);
+    return [...groups].map(([key, made]) => ({ key, usage: sum(made) })).sort((a, b) => b.usage.calls - a.usage.calls);
   };
   const monthly = window === 'all';
   const startOf = (at: number) => {
@@ -111,7 +106,7 @@ export function usageReport(held: Iterable<UsageHeld>, window: ReportWindow, now
     if (monthly) start.setDate(1);
     return start.getTime();
   };
-  const made = new Map(group(({ one }) => startOf(one.at)).map(({ key, usage }) => [key, usage]));
+  const made = new Map(group(({ at }) => startOf(at)).map(({ key, usage }) => [key, usage]));
   const periods: UsageGroup<number>[] = [];
   const first = since ?? Math.min(now, ...made.keys());
   const last = new Date(startOf(now));
@@ -122,16 +117,15 @@ export function usageReport(held: Iterable<UsageHeld>, window: ReportWindow, now
   }
   const named = new Map<string, UsageCall>();
   const modelKey = ({ call }: UsageCall) => `${call.connection}\n${call.model}`;
-  for (const { one } of counted) if ((named.get(modelKey(one))?.at ?? -Infinity) <= one.at) named.set(modelKey(one), one);
+  for (const one of shown) if ((named.get(modelKey(one))?.at ?? -Infinity) <= one.at) named.set(modelKey(one), one);
   return {
-    total: sum(counted.map(({ one }) => one)),
+    total: sum(shown),
     periods,
-    models: group(({ one }) => modelKey(one)).map((entry) => {
+    models: group(modelKey).map((entry) => {
       const { connection, model, modelName, source } = named.get(entry.key)!.call;
       return { ...entry, connection, model, modelName, source };
     }),
-    characters: group(({ from }) => from.character ?? null),
-    chats: group(({ from }) => from.chat),
+    characters: group(({ character }) => (character === null || kept.character(character) ? character : GONE)),
+    chats: group(({ chat }) => (chat === null || kept.chat(chat) ? chat : GONE)),
   };
 }
-

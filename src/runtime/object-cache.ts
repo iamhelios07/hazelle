@@ -36,7 +36,11 @@ export interface DeviceCache {
 }
 
 export const SCOPED = new Set<string>(['entry', 'memory', 'illustration', 'inlay', 'toolchat', 'cacheprint']);
-export const cacheScope = (row: SealedChange) => SCOPED.has(row.kind) ? row.parent! : '';
+// Never held: read only by walking their parent (ObjectStore.walk), which caches them under it as a chat scope is.
+export const WALKED = new Set<string>(['ledger']);
+// The kinds the feed carries without their bodies.
+export const UNFED = new Set<string>([...SCOPED, ...WALKED]);
+export const cacheScope = (row: SealedChange) => UNFED.has(row.kind) ? row.parent! : '';
 // A newer omission invalidates the old body; a same-revision echo must not erase a body already cached.
 export const cacheNewer = (old: SealedChange | undefined, row: SealedChange) => !old || row.rev > old.rev || (row.rev === old.rev && old.omitted && !row.omitted);
 export const sameGeneration = (stored: Generation | undefined, stated: Generation) => stored !== undefined && stored.id === stated.id && stored.timeline === stated.timeline;

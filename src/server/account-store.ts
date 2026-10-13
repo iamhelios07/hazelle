@@ -7,7 +7,9 @@ export type Unavailable = { unavailable: true };
 // unavailable: the wake's service read failed, timed out or answered something that is neither a row nor no row, or
 // the account's file is missing, corrupt or of a newer schema.
 export type Refused = { refused: 'restoring' | 'leaving' | 'gone' } | Unavailable;
-export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null };
+// once: a create of a row written once and never changed (the client's ledger), which may be sent again after its
+// answer was lost. One already there under its kind and parent is that create landed, and answers with its rev.
+export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null; once?: true };
 export type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
 // count: the first page of a bootstrap asks how many changes the whole bootstrap holds, for a bar.
 export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null; kind: string | null; count: boolean };
@@ -157,7 +159,15 @@ export class StoreRules {
     return this.db.transaction(() => {
       const head = this.head();
       if (timeline !== head.timeline) return { stale: true };
-      const checks = JSON.stringify(writes.map(({ id, kind, parent, baseRev, body }) => ({ id, kind, parent, baseRev, remove: body === null })));
+      const landed = new Map<string, number>();
+      for (const { id, kind, parent, once } of writes) {
+        if (!once) continue;
+        const [row] = this.db.exec<{ rev: number }>('SELECT rev FROM objects WHERE id = ? AND kind = ? AND parent_id IS ? AND body IS NOT NULL', id, kind, parent);
+        if (row) landed.set(id, row.rev);
+      }
+      const fresh = writes.filter(({ id }) => !landed.has(id));
+      if (!fresh.length) return { revs: writes.map(({ id }) => landed.get(id)!), bytes: head.bytes, timeline: head.timeline };
+      const checks = JSON.stringify(fresh.map(({ id, kind, parent, baseRev, body }) => ({ id, kind, parent, baseRev, remove: body === null })));
       const moved = `o.id IS NOT NULL AND o.parent_id IS NOT json_extract(w.value, '$.parent')`;
       // replaced: the bytes of the bodies these writes replace, counted as the migration counted them.
       const [found] = this.db.exec<{ moved: number; conflict: number; replaced: number }>(
@@ -174,20 +184,21 @@ export class StoreRules {
       if (found!.moved) return { refused: 'bad-input' };
       if (found!.conflict) return { refused: 'conflict' };
       const encoder = new TextEncoder();
-      const added = writes.reduce((sum, { body }) => sum + (body === null ? 0 : encoder.encode(body).length), 0);
+      const added = fresh.reduce((sum, { body }) => sum + (body === null ? 0 : encoder.encode(body).length), 0);
       const bytes = head.bytes + added - found!.replaced;
-      const margin = writes.some(({ baseRev }) => baseRev === null) ? 0 : FULL_MARGIN;
+      const margin = fresh.some(({ baseRev }) => baseRev === null) ? 0 : FULL_MARGIN;
       if (added > found!.replaced && cap !== null && bytes > cap + margin) return { refused: 'storage-full' };
-      this.db.exec('UPDATE head SET rev = ?, bytes = ?', head.rev + writes.length, bytes);
-      const revs = writes.map((_, index) => head.rev + index + 1);
-      writes.forEach(({ id, kind, parent, body }, index) =>
+      this.db.exec('UPDATE head SET rev = ?, bytes = ?', head.rev + fresh.length, bytes);
+      const written = fresh.map((_, index) => head.rev + index + 1);
+      fresh.forEach(({ id, kind, parent, body }, index) =>
         this.db.exec(
           `INSERT INTO objects (id, kind, parent_id, rev, body, deleted_at) VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET rev = excluded.rev, body = excluded.body, deleted_at = excluded.deleted_at`,
-          id, kind, parent, revs[index]!, body, body === null ? Date.now() : null,
+          id, kind, parent, written[index]!, body, body === null ? Date.now() : null,
         ),
       );
-      return { revs, bytes, timeline: head.timeline };
+      let next = 0;
+      return { revs: writes.map(({ id }) => landed.get(id) ?? written[next++]!), bytes, timeline: head.timeline };
     });
   }
 

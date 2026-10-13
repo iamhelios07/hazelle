@@ -6,7 +6,7 @@ import type { ApiFailure, ApiResult, api as realApi } from './api';
 import { ConnectionWait } from './connection-wait';
 import { StoreChanges } from './store-changes';
 import { CodecAborted, CodecUnavailable, ObjectCodec } from './object-codec';
-import { SCOPED, type CacheState, type DeviceCache, type SealedChange } from './object-cache';
+import { SCOPED, UNFED, WALKED, type CacheState, type DeviceCache, type SealedChange } from './object-cache';
 import { ObjectCacheSession } from './object-cache-session';
 import { Evaluation, EvaluationFailed, EvaluationStopped, EvaluationStuck } from './evaluation';
 import { ChatProjections } from './summary';
@@ -154,21 +154,22 @@ export class ObjectStore {
 
   get cached(): boolean { return this.restored; }
 
-  private cacheState(scope?: Scope): CacheState {
+  private cacheState(scope?: { cursor: number; complete: boolean }): CacheState {
     return {
       cursor: scope?.cursor ?? this.cursor,
-      complete: scope ? scope.state === 'loaded' : this.bootstrapped,
+      complete: scope ? scope.complete : this.bootstrapped,
       until: scope ? null : this.bootstrap,
       limits: this.limits,
       ...(scope ? { heads: [], revisions: [] } : this.objects.snapshotRevisions()),
     };
   }
 
-  private cacheWrite(changes: SealedChange[], chat?: string, scope?: Scope, complete = false) {
+  // scope: the parent whose rows were read up to cursor (a chat's, or a walked kind's).
+  private cacheWrite(changes: SealedChange[], scope?: { chat: string; cursor: number; complete: boolean }) {
     if (!this.cachedObjects.available || this.timeline === null) return;
-    const scopes = chat && scope ? [{ chat, state: { ...this.cacheState(scope), complete } }] : [...new Set(changes.filter((row) => SCOPED.has(row.kind)).map((row) => row.parent!))].flatMap((chat) => {
+    const scopes = scope ? [{ chat: scope.chat, state: this.cacheState(scope) }] : [...new Set(changes.filter((row) => SCOPED.has(row.kind)).map((row) => row.parent!))].flatMap((chat) => {
       const held = this.scopes.get(chat);
-      return held?.state === 'loaded' && !held.loading ? [{ chat, state: this.cacheState(held) }] : [];
+      return held?.state === 'loaded' && !held.loading ? [{ chat, state: this.cacheState({ cursor: held.cursor, complete: true }) }] : [];
     });
     this.cachedObjects.write({ changes, feed: this.cacheState(), scopes }, this.ended.signal);
   }
@@ -277,8 +278,8 @@ export class ObjectStore {
   }
 
   private show(pending: Pending, commit: PendingCommit) {
-    // As hold keeps them: a chat's entries and memory only while the chat is held.
-    if (SCOPED.has(pending.kind) && !(pending.parent && this.scopes.has(pending.parent))) return;
+    // As hold keeps them: a chat's entries and memory only while the chat is held, a walked kind's rows never.
+    if (WALKED.has(pending.kind) || (SCOPED.has(pending.kind) && !(pending.parent && this.scopes.has(pending.parent)))) return;
     this.marked(commit.show(pending));
   }
 
@@ -360,7 +361,7 @@ export class ObjectStore {
     if (!scope) {
       scope = { fold: this.chatFold(chat), opening: null, abort: new AbortController(), state: created ? 'loaded' : 'unloaded', users: 0, cursor: 0, head: 0, loading: null, error: null, summarize };
       this.scopes.set(chat, scope);
-      if (created) this.cacheWrite([], chat, scope, true);
+      if (created) this.cacheWrite([], { chat, cursor: scope.cursor, complete: true });
     }
     scope.users++;
     const held = scope;
@@ -506,11 +507,46 @@ export class ObjectStore {
   }
 
   // An explicit account/parent walk; it never fills the held chat scopes. Backup and ownership walks run on their
-  // workflow's pin (pinned); usage reads on a bare pin, since it writes nothing. No row is visited once the pin's epoch
-  // has ended.
+  // workflow's pin (pinned); the ledger's fill reads on a bare pin, since a row it writes lands once on any timeline
+  // (runtime/usage). No row is visited once the pin's epoch has ended.
   async scan(options: { parent?: string; kind?: Kind; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>, pin: Pin, signal?: AbortSignal): Promise<ApiFailure | null> {
+    const walked = await this.pages(options, 0, visit, pin, signal);
+    return walked.ok ? null : walked;
+  }
+
+  // A walked kind's rows under parent (object-cache WALKED): from this device's cache, then from the server past the
+  // cursor, each visited opened and cached. since: the cursor an earlier walk answered, from which only rows written
+  // after it are read; 0 reads the cached rows first. Answers the cursor to walk on from.
+  async walk(parent: string, kind: Kind, visit: (row: ObjectRow, value: unknown) => void, since: number, pin: Pin, signal?: AbortSignal): Promise<ApiResult<number>> {
     const stop = AbortSignal.any([this.closing.signal, this.ended.signal, ...(signal ? [signal] : [])]);
-    let cursor = 0;
+    let cursor = since;
+    if (!cursor) {
+      await this.cachedObjects.settled;
+      const saved = await this.cachedObjects.read(parent, this.ended.signal);
+      if (pin.epoch !== this.epoch || stop.aborted) return this.halted(pin.epoch);
+      if (saved) {
+        // An omitted row is the feed's, past the cursor, and read from the server below.
+        const rows = saved.changes.filter((row) => row.kind === kind && row.body);
+        const opened = this.opener(rows, true, stop, true);
+        for (const [index, row] of rows.entries()) {
+          let value: unknown;
+          try {
+            value = await opened(index);
+          } catch (error) {
+            return this.codecFailure(error, pin.epoch);
+          }
+          if (pin.epoch !== this.epoch || stop.aborted) return this.halted(pin.epoch);
+          visit({ id: row.id, kind: row.kind, parent: row.parent, rev: row.rev }, upgradeValue(row.kind, value) ?? value);
+        }
+        cursor = saved.state.cursor;
+      }
+    }
+    return this.pages({ parent, kind }, cursor, visit, pin, signal, (changes, at, more) => this.cacheWrite(changes, { chat: parent, cursor: at, complete: !more }));
+  }
+
+  private async pages(options: { parent?: string; kind?: Kind; metadata?: boolean }, since: number, visit: (row: ObjectRow, value: unknown) => void | Promise<void>, pin: Pin, signal?: AbortSignal, paged?: (changes: SealedChange[], cursor: number, more: boolean) => void): Promise<ApiResult<number>> {
+    const stop = AbortSignal.any([this.closing.signal, this.ended.signal, ...(signal ? [signal] : [])]);
+    let cursor = since;
     let more = true;
     while (more) {
       if (pin.epoch !== this.epoch || stop.aborted) return this.halted(pin.epoch);
@@ -540,8 +576,9 @@ export class ObjectStore {
       }
       cursor = result.data.cursor;
       more = result.data.more;
+      paged?.(result.data.changes, cursor, more);
     }
-    return null;
+    return { ok: true, data: cursor };
   }
 
   async removeRows(rows: ObjectRow[]): Promise<ApiResult<null>> {
@@ -819,7 +856,7 @@ export class ObjectStore {
       // Only a bootstrap's first request asks for the count; the prefetched page after it is built before it answers.
       const count = !bootstrapped && !counted;
       counted ||= count;
-      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=${[...SCOPED].join(',')}${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
+      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=${[...UNFED].join(',')}${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
       return { epoch: this.epoch, sent, answer };
     };
     while (more) {
@@ -915,14 +952,14 @@ export class ObjectStore {
       if (signal.aborted) return { ok: false, error: 'stopped' };
       scope.cursor = result.data.cursor;
       more = result.data.more;
-      this.cacheWrite(result.data.changes, chat, scope, scope.state === 'loaded' || !more);
+      this.cacheWrite(result.data.changes, { chat, cursor: scope.cursor, complete: scope.state === 'loaded' || !more });
     }
     return null;
   }
 
   private opener(rows: SealedChange[], scoped: boolean, signal: AbortSignal, strict = false) {
     return this.codec.opener(rows, signal, { strict, accept: ({ id, kind, rev }) =>
-      (scoped || !SCOPED.has(kind)) && !this.objects.stale(id, rev),
+      (scoped || !UNFED.has(kind)) && !this.objects.stale(id, rev),
     });
   }
 
@@ -933,7 +970,7 @@ export class ObjectStore {
       const scope = this.scopes.get(parent)!;
       scope.head = Math.max(scope.head, rev);
     }
-    if (omitted || (SCOPED.has(kind) && !scoped)) {
+    if (omitted || (UNFED.has(kind) && !scoped)) {
       if (!parent || this.scopeState(parent) !== 'loaded') this.changes.add({ id, kind, parent });
       // This device's own writes come back here too, and are already held.
       else if (!this.objects.stale(id, rev)) this.behind.add(parent);
@@ -956,6 +993,7 @@ export class ObjectStore {
       if (scope) scope.head = Math.max(scope.head, object.rev);
     }
     if (this.closing.signal.aborted || this.objects.stale(object.id, object.rev)) return;
+    if (WALKED.has(object.kind)) return this.changes.add({ kind: object.kind, id: object.id, parent: object.parent });
     // A chat's entries and memory stay in memory only while the chat is held.
     if (SCOPED.has(object.kind) && !(object.parent && this.scopes.has(object.parent))) return;
     const previous = this.objects.get(object.id);

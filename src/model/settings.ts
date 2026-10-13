@@ -17,7 +17,8 @@ export const EMPTY_SETTINGS: Settings = { models: {} };
 // memory: every chat's memory settings, absent fields read through runtime/memory memorySetup. modules: the modules
 // on in every chat (항상), in the order they were turned on (design §6.5). translatorNote: 전역 번역가의 노트, sent in every
 // character's translations together with the character's own (runtime/characters translatorNotes). importNotice: the
-// RisuAI-only bot notice was confirmed, so imports no longer ask first (library/ImportFlow).
+// RisuAI-only bot notice was confirmed, so imports no longer ask first (library/ImportFlow). ledger: how far the one fill
+// of the ledger from the calls made before it went (runtime/usage fill), absent until it starts.
 export type Settings = {
   models: Assignment;
   prompt?: string;
@@ -33,4 +34,5 @@ export type Settings = {
   modules?: string[];
   translatorNote?: string;
   importNotice?: true;
+  ledger?: 'filled' | { after: string };
 };

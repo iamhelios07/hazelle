@@ -1,7 +1,7 @@
 import { ToolWrites, toolData } from './tools/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
-import { modelUsage } from '../model/usage';
+import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { lockVault } from '../vault/device';
 import { objectKey, sealObject } from '../vault/objects';
@@ -169,7 +169,7 @@ it('reopens a session with sealed cached objects before any network read', async
   expect(opened.data.store.get('connection', 'connection')?.value.label).toBe('cached');
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory,illustration,inlay,toolchat,cacheprint&known=1&timeline=t0', expect.anything());
+  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory,illustration,inlay,toolchat,cacheprint,ledger&known=1&timeline=t0', expect.anything());
   opened.data.close();
 });
 
@@ -203,7 +203,7 @@ it('renders a saved bootstrap prefix and resumes its original until bound in the
   expect(opened.data.store.list('connection').map((row) => row.id)).toEqual(['first']);
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory,illustration,inlay,toolchat,cacheprint&bootstrap=1&until=2&count=1&known=2&timeline=t0');
+  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory,illustration,inlay,toolchat,cacheprint,ledger&bootstrap=1&until=2&count=1&known=2&timeline=t0');
   opened.data.close();
 });
 
@@ -552,31 +552,35 @@ it('aborts an export when the timeline changes while its final picture is being 
   }
 });
 
-it('invalidates session usage on a rewind even when chat IDs and entry heads are unchanged', async () => {
+it('walks the ledger from the device cache and past its cursor, and reads it again whole after a rewind', async () => {
   const f = await fixture();
-  const chat = { title: null, character: null, models: {} };
-  await f.add('chat', 'chat', null, chat);
-  const receipt = { id: 'call', connection: 'c', source: 'source', model: 'm', modelName: 'model', state: 'done', cut: null, error: null, finishReason: null, usage: null, cost: null, replyId: null, firstTextMs: null, totalMs: 1, cache: null };
-  const message = { type: 'message', role: 'assistant', at: 1, text: 'reply', receipt };
-  await f.add('entry', 'entry', 'chat', message);
+  const call = (id: string) => ({ type: 'call', at: 1, call: { id, connection: 'c', model: 'm', modelName: 'model', source: 'source', usage: null, cost: null }, chat: null, character: null });
+  await f.add('first', 'ledger', SETTINGS_ID, call('first'));
   const original = f.snapshot();
+  const calls = async (usage: Usage) => {
+    const read = await usage.read(new AbortController().signal);
+    return read.ok ? read.data.map(({ call }) => call.id).toSorted() : read;
+  };
+  const walks = () => f.fetch.mock.calls.flatMap(([path]) => (path.includes(`parent=${SETTINGS_ID}`) ? [new URL(path, 'https://test').searchParams.get('since')] : []));
   const store = await f.open();
   const usage = new Usage(store);
-  const signal = new AbortController().signal;
-  expect(await usage.read((chats) => modelUsage(chats, { connection: 'c', model: 'm' }), signal)).toMatchObject({ ok: true, data: { calls: 1 } });
-  const head = store.entryHead('chat');
-  f.wipe();
-  await f.add('chat', 'chat', null, chat);
-  await f.add('entry', 'entry', 'chat', { ...message, receipt: null });
-  f.restore(f.snapshot(), 't1');
-  expect(await usage.read((chats) => modelUsage(chats, { connection: 'c', model: 'm' }), signal)).toMatchObject({ ok: true, data: { calls: 0 } });
-  expect(store.entryHead('chat')).toBe(head);
-  f.restore(original, 't2');
-  expect(await usage.read((chats) => modelUsage(chats, { connection: 'c', model: 'm' }), signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  expect(await calls(usage)).toEqual(['first']);
+  await vi.waitFor(() => expect(f.cache.states.get(SETTINGS_ID)?.cursor).toBe(1));
   usage.close();
   store.close();
-});
 
+  await f.add('second', 'ledger', SETTINGS_ID, call('second'));
+  const again = await f.open();
+  const reopened = new Usage(again);
+  expect(await calls(reopened)).toEqual(['first', 'second']);
+  expect(walks()).toEqual(['0', '1']);
+  f.restore({ rows: new Map(), rev: 2 }, 't1');
+  expect(await calls(reopened)).toEqual([]);
+  f.restore(original, 't2');
+  expect(await calls(reopened)).toEqual(['first']);
+  reopened.close();
+  again.close();
+});
 
 it('fences a tool write across the merge pause when the account timeline changes', async () => {
   const f = await fixture();

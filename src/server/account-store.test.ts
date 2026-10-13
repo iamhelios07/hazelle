@@ -167,6 +167,15 @@ describe('batch', () => {
     expect(await feed({ since: 5 })).toMatchObject({ changes: [{ id: C, parent: A, rev: 6, body: 'back' }] });
   });
 
+  it('answers a once create already there with its rev, writing only the rest', async () => {
+    await write(put(A, { kind: 'settings', body: 's' }));
+    expect(await write(put(B, { kind: 'ledger', parent: A, body: 'row', once: true }))).toMatchObject({ revs: [2], bytes: 4 });
+    expect(await write([put(B, { kind: 'ledger', parent: A, body: 'sealed again', once: true }), put(C, { kind: 'ledger', parent: A, body: 'next', once: true })])).toEqual({ revs: [2, 3], bytes: 8, timeline: 't1' });
+    expect(await write(put(B, { kind: 'ledger', parent: A, body: 'row', once: true }))).toEqual({ revs: [2], bytes: 8, timeline: 't1' });
+    expect(await write(put(B, { kind: 'ledger', parent: C, body: 'row', once: true }))).toEqual({ refused: 'conflict' });
+    expect(await revs()).toEqual([1, 2, 3]);
+  });
+
   it('writes nothing, not even the head, when a later item conflicts', async () => {
     await write(put(A, { body: 'original' }));
     const first = put(B, { kind: 'entry', parent: A, body: 'new' });

@@ -138,6 +138,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
       streams.pickUp();
       void purgeExpired(store, Date.now(), closing.signal);
       void backfillSummaries(store, closing.signal);
+      void usage.fill(closing.signal);
     })();
   };
 

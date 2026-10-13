@@ -22,6 +22,7 @@ import { without } from '../model/fields';
 import type { ObjectStore } from './store';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { receiptOf, unsettled } from './talk';
+import { chatPlace, keepRow } from './usage';
 import { budgetOf, promptBudget, sentSettings } from './chat-context';
 import { wouldSend } from './turn-context';
 import { indexRecords, unembedded, type Indexed } from './retrieval';
@@ -560,6 +561,7 @@ export class Rememberer {
         if (!applies(memory, fold(store.children('entry', chat)), job)) return null;
         return 'chapter' in parsed ? withChapter(memory, job, job.chapter!, parsed.chapter, span, receipt, first) : committed(memory, job, parsed.records, span, receipt, first);
       });
+      if (saved.ok) await keepRow(store, receipt, Date.now(), chatPlace(store, chat));
       return saved.ok ? 'done' : saved.error === 'gone' ? 'moved' : { kind: 'unsaved', failure: saved };
     })();
     endCall(store, id);

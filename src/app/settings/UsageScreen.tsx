@@ -1,19 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { usageReport, type ModelUsage, type ReportWindow, type UsageGroup, type UsageHeld } from '../../model/usage';
-import { ACTS } from '../common/acts';
+import { useMemo, useState } from 'react';
+import { GONE, usageReport, type ModelUsage, type ReportWindow, type UsageGroup } from '../../model/usage';
 import { count } from '../common/typedNumber';
 import { spent, tally } from '../common/usage';
 import { NO_CHARACTER, PAGES } from '../common/words';
-import { useLibrary, useSession, useSummaries } from '../session';
+import { LedgerWait, useLedger } from '../common/useLedger';
+import { useChats, useLibrary, useSummaries } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Bars, Button, Callout, Empty, Facts, NavBar, Screen, Section, Shares, Tab, Tabs, Text } from '../ui';
+import { Bars, Button, Empty, Facts, NavBar, Screen, Section, Shares, Tab, Tabs } from '../ui';
 
 const WINDOWS: [ReportWindow, string][] = [['today', '오늘'], ['week', '이번 주'], ['month', '이번 달'], ['all', '전체']];
 const CHATS_SHOWN = 10;
-// A chat already read since the last change takes no time, so the count moves by steps rather than one render a chat,
-// and a read of fewer chats is too short to count.
-const PROGRESS_STEP = 50;
 
 const day = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
 const month = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long' });
@@ -27,31 +24,17 @@ const shares = <G extends UsageGroup<unknown>>(groups: G[], name: (group: G) => 
 };
 
 export function UsageScreen({ back }: { back: Back | null }) {
-  const { usage: usageIndex } = useSession();
   const library = useLibrary();
   const summaries = useSummaries();
+  const keptChats = useChats();
   const [window, setWindow] = useState<ReportWindow>('month');
-  const [attempt, setAttempt] = useState(0);
-  const recount = () => setAttempt((held) => held + 1);
-  const [held, setHeld] = useState<UsageHeld[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [progress, setProgress] = useState<{ read: number; of: number } | null>(null);
+  const { view, retry } = useLedger();
   const [allChats, setAllChats] = useState(false);
-  useEffect(() => {
-    const abort = new AbortController();
-    setHeld(null);
-    setFailed(false);
-    setProgress(null);
-    void usageIndex.read((read) => read, abort.signal, (read, of) => of > PROGRESS_STEP && read % PROGRESS_STEP === 0 && setProgress({ read, of })).then((result) => {
-      if (abort.signal.aborted) return;
-      if (result.ok) setHeld(result.data);
-      else setFailed(true);
-    });
-    return () => abort.abort();
-  }, [usageIndex, attempt]);
-  const report = useMemo(() => held && usageReport(held, window, Date.now()), [held, window]);
   const titles = useMemo(() => new Map(summaries.map(({ parent, value }) => [parent, value.title])), [summaries]);
-  const characterName = (id: string | null) => (id === null ? NO_CHARACTER : (library.byCharacter.get(id)?.character.card.name ?? '삭제된 캐릭터'));
+  const kept = useMemo(() => new Set(keptChats.map(({ id }) => id)), [keptChats]);
+  const report = useMemo(() => view.kind === 'read' ? usageReport(view.calls, window, Date.now(), { chat: (id) => kept.has(id), character: (id) => library.byCharacter.has(id) }) : null, [view, window, kept, library]);
+  const characterName = (id: string | null) => (id === null ? NO_CHARACTER : id === GONE ? '삭제된 캐릭터' : library.byCharacter.get(id)!.character.card.name);
+  const chatName = (id: string | null) => (id === null ? '채팅 밖' : id === GONE ? '삭제된 채팅' : titles.get(id) ?? '새 채팅');
   const total = report?.total;
   const chats = report?.chats ?? [];
 
@@ -60,14 +43,10 @@ export function UsageScreen({ back }: { back: Back | null }) {
       <Tabs label="기간">
         {WINDOWS.map(([each, label]) => <Tab key={each} label={label} current={window === each} onClick={() => setWindow(each)} />)}
       </Tabs>
-      <Section title="합계" note="남아 있는 채팅 기준" action={<Button variant="secondary" size="sm" onClick={recount}>다시 집계</Button>}>
-        {failed ? (
-          <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: recount }}>
-            사용량을 불러오지 못했어요.
-          </Callout>
-        ) : !total ? (
-          <Text variant="note">{progress ? `채팅 ${count(progress.of)}개 중 ${count(progress.read)}개 확인함…` : '사용량을 확인하는 중…'}</Text>
-        ) : total.calls ? (
+      <Section title="합계">
+        {view.kind !== 'read' ? (
+          <LedgerWait view={view} retry={retry} failed="사용량을 불러오지 못했어요." />
+        ) : total?.calls ? (
           <Facts
             variant="tiles"
             items={[
@@ -96,7 +75,7 @@ export function UsageScreen({ back }: { back: Back | null }) {
           </Section>
           {chats.length > 0 && (
             <Section title="채팅" action={chats.length > CHATS_SHOWN ? <Button variant="secondary" size="sm" onClick={() => setAllChats((open) => !open)}>{allChats ? '접기' : `모두 보기 (${count(chats.length)})`}</Button> : undefined}>
-              <Shares items={shares(allChats ? chats : chats.slice(0, CHATS_SHOWN), ({ key }) => titles.get(key) ?? '새 채팅')} />
+              <Shares items={shares(allChats ? chats : chats.slice(0, CHATS_SHOWN), ({ key }) => chatName(key))} />
             </Section>
           )}
         </>

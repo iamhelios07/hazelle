@@ -12,6 +12,7 @@ import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
 import type { Tool, ToolChatData, ToolData } from './tool';
 import type { Stream } from './stream';
+import type { Ledger } from './usage';
 
 export type Values = {
   character: Character;
@@ -37,6 +38,7 @@ export type Values = {
   illustration: Illustration;
   connection: Connection;
   settings: Settings;
+  ledger: Ledger;
   prompt: Prompt;
   persona: Persona;
   profile: Profile;
@@ -77,6 +79,7 @@ export const KINDS = {
   inlay: { parent: 'chat', file: true },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
+  ledger: { parent: 'settings', appendOnly: true },
   prompt: { parent: null },
   persona: { parent: null },
   profile: { parent: null },
@@ -191,6 +194,9 @@ const SHAPES = {
     retries: (value) => value === undefined || num(value),
   }),
   settings: shape({ models: isRecord }),
+  ledger: (value) => isRecord(value) && (value.type === 'call'
+    ? shape({ at: num, call: shape(all(str, 'id', 'connection', 'model', 'modelName', 'source')), chat: orNull(str), character: orNull(str) })(value)
+    : value.type === 'cost' && shape({ call: str, cost: orNull(isRecord), at: num })(value)),
   prompt: (value) => prompt(value) && (conversation(value) || task(value)),
   persona: shape({ name: str, description: str, picture: orNull(str) }),
   profile: shape({ name: str, settings: isRecord }),

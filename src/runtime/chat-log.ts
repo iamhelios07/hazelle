@@ -20,6 +20,7 @@ import { toolChatId } from './tools/store';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
+import { chatPlace, costRow, receiptRow } from './usage';
 
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
 // the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with
@@ -303,14 +304,19 @@ export const nameBookmark = (store: ObjectStore, chat: string, message: string, 
 // Every message a version switch can show, for the bookmarks off the line shown (app/chat/bookmarks).
 export const versionTree = (store: ObjectStore, chat: string) => foldTree(store.children('entry', chat));
 
-const append = (store: ObjectStore, chat: string, entry: Entry, id?: string) => store.create('entry', entry, { id, parent: chat });
+// rows: the ledger rows of the calls the entry is the first to save (runtime/usage), written with it.
+const append = (store: ObjectStore, chat: string, entry: Entry, id?: string, rows: Write[] = []) =>
+  rows.length ? store.batch([{ type: 'create', kind: 'entry', id: id ?? crypto.randomUUID(), parent: chat, value: entry }, ...rows]) : store.create('entry', entry, { id, parent: chat });
+
+const translationRows = (store: ObjectStore, chat: string, translation?: Translation) =>
+  (translation?.receipt ? [receiptRow(translation.receipt, translation.at, chatPlace(store, chat))] : []);
 
 // translation: what the user typed, when text is its translation sent. before: what the bot's Lua wrote as it was
 // sent; follows: the version it continues, absent only on a message from a call begun before follows (model/chat Entry).
 export type Said = { id: string; text: string; follows?: string | null; translation?: Translation; before?: Writes };
 
 export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, follows, translation, before }: Said) =>
-  append(store, chat, { type: 'message', role: 'user', at: Date.now(), text, receipt: null, ...(follows !== undefined && { follows }), ...(translation && { translation }), ...(before && { before }) }, id);
+  append(store, chat, { type: 'message', role: 'user', at: Date.now(), text, receipt: null, ...(follows !== undefined && { follows }), ...(translation && { translation }), ...(before && { before }) }, id, translationRows(store, chat, translation));
 
 // at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain) sends the same entry, and a
 // first try that landed unanswered is found as it is.
@@ -318,7 +324,8 @@ export type Written = { id: string; message: string | null; replaces: string | n
 
 export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, follows, at, text, receipt, seed, before, reasoning }: Written) {
   const held = { at, text, receipt, ...(before && { before }), ...(reasoning && { reasoning }) };
-  return append(store, chat, message === null ? { type: 'message', role: 'assistant', ...(follows !== undefined && { follows }), ...held } : { type: 'version', message, replaces, edit: false, ...held, ...(seed && { seed }) }, id);
+  // A continued reply's receipt carries the one it continued, whose row its own save wrote.
+  return append(store, chat, message === null ? { type: 'message', role: 'assistant', ...(follows !== undefined && { follows }), ...held } : { type: 'version', message, replaces, edit: false, ...held, ...(seed && { seed }) }, id, [receiptRow(receipt, at, chatPlace(store, chat))]);
 }
 
 // edits: a message's new text in place of its shown version, with the variables that version's own text wrote, which
@@ -354,11 +361,12 @@ export function appendScripted(store: ObjectStore, chat: string, { edits, remove
 export async function keepCall({ store, read, costs }: Pick<Session, 'store' | 'read' | 'costs'>, chat: string, receipt: Receipt) {
   const last = read.chat(chat).snapshot()?.messages.at(-1);
   if (!last) return;
-  const saved = await append(store, chat, { type: 'call', version: shown(last).id, receipt, at: Date.now() });
+  const at = Date.now();
+  const saved = await append(store, chat, { type: 'call', version: shown(last).id, receipt, at }, undefined, [receiptRow(receipt, at, chatPlace(store, chat))]);
   if (saved.ok) costs.settle(chat, receipt);
 }
 
-export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });
+export const appendCost = (store: ObjectStore, chat: string, { id, replyId }: Receipt, cost: Cost | null) => append(store, chat, { type: 'cost', replyId: replyId!, cost, at: Date.now() }, undefined, [costRow(id, cost)]);
 
 // An edit is a new version in the place of the one shown, keeping its receipt. translation: the
 // edited translation of a version that has one, which keeps the receipt of the call that made it; a blank one leaves
@@ -372,7 +380,7 @@ export function editMessage(store: ObjectStore, chat: string, message: Message, 
 
 // id: the call's, so a call another device saved too is known as saved (runtime/streams).
 export const appendTranslation = (store: ObjectStore, chat: string, version: string, translation: Translation, id: string) =>
-  append(store, chat, { type: 'translation', version, ...translation }, id);
+  append(store, chat, { type: 'translation', version, ...translation }, id, translationRows(store, chat, translation));
 
 // A conflict over an entry already there is the same call saved by another device that read it too. Each device
 // stamps its own copy, so the store's check for a create that already landed misses it.

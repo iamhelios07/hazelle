@@ -41,7 +41,7 @@ export const CAST_MAX = 5;
 // The raw request is never stored.
 export type Receipt = {
   // The call's own id (runtime/streams newCall, pageCall), the same in every copy of the receipt: an edit, a branch's
-  // copy and a continued reply keep the receipt whole, so usage counts the call once wherever it is held.
+  // copy and a continued reply keep the receipt whole, and the call's ledger row is named by it (runtime/usage ledgerId).
   id: string;
   connection: string;
   // The id of the connection's account that served it; absent on a receipt older than accounts, and on a call picked

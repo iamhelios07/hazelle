@@ -21,6 +21,7 @@ import type { Session } from './session';
 import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
 import { receiptOf, unsettled } from './talk';
+import { keepRow } from './usage';
 import { fromBase64 } from '../vault/aead';
 
 // 삽화 profiles (design §6.6): the only writer of `likeness` objects but a backup's restore and a character's copy. A
@@ -186,6 +187,7 @@ export class Likenesses {
     const { texts, lore } = material;
     const save = async (value: Likeness) => {
       const saved = await writeLikeness(store, owner, value);
+      if (saved.ok && value.receipt) await keepRow(store, value.receipt, value.at, { chat: null, character: store.get('character', owner) ? owner : null });
       return saved.ok ? null : { kind: 'unsaved' as const, failure: saved };
     };
     const empty = { portraits: [], at: Date.now(), receipt: null };

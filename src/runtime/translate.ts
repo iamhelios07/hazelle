@@ -18,6 +18,7 @@ import { modelProfile } from './profiles';
 import { translationPrompt } from './prompts';
 import type { ObjectStore } from './store';
 import { receiptOf } from './talk';
+import { keepRow } from './usage';
 import { evaluationFailure, type Lane } from './evaluation';
 
 // take: the display scripts that draw the status window (상태창 지정), whose boxes the source leaves out.
@@ -141,7 +142,10 @@ export class Translator {
     this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials }, input, target, signal, onText), (made) =>
       this.store.get('chat', chat)
         ? appendTranslation(this.store, chat, version, made.translation, target.result)
-        : setTextTranslation(this.store, input.chat.character!, original, made.language!, made.translation),
+        : setTextTranslation(this.store, input.chat.character!, original, made.language!, made.translation).then(async (saved) => {
+          if (saved.ok) await keepRow(this.store, made.translation.receipt!, made.translation.at, { chat: null, character: input.chat.character });
+          return saved;
+        }),
     );
   }
 

@@ -173,7 +173,7 @@ describe('branchChat', () => {
     const source = crypto.randomUUID();
     await server.hold(store, source);
     const chat: Chat = { title: '기숙사의 밤', character: null, models: {}, note: '노트' };
-    const pending: Receipt = { id: 'call', connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: 'pending', replyId: 'r1', firstTextMs: 100, totalMs: 900, cache: null };
+    const pending: Receipt = { id: crypto.randomUUID(), connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: 'pending', replyId: 'r1', firstTextMs: 100, totalMs: 900, cache: null };
     const said = crypto.randomUUID();
     const deleted = crypto.randomUUID();
     const split = crypto.randomUUID();
@@ -187,7 +187,7 @@ describe('branchChat', () => {
     await appendReply(store, source, { id: reply, message: null, replaces: null, at: 1, text: '답', receipt: cut });
     const continued = crypto.randomUUID();
     await appendReply(store, source, { id: continued, message: reply, replaces: reply, at: 2, text: '답장', receipt: { ...pending, cost: null, replyId: null, continues: cut } });
-    await appendCost(store, source, 'r1', { unit: 'usd', amount: 0.01, source: 'reported' });
+    await appendCost(store, source, pending, { unit: 'usd', amount: 0.01, source: 'reported' });
     await appendTranslation(store, source, continued, { text: 'A reply', receipt: pending, at: 3 }, crypto.randomUUID());
     await appendUserMessage(store, source, { id: deleted, text: '지울 말' });
     await removeMessage(store, source, deleted);
@@ -279,7 +279,7 @@ describe('importChat', () => {
     const source = crypto.randomUUID();
     await server.hold(store, source);
     const chat: Chat = { title: '기숙사의 밤', character: null, models: {}, note: '노트', prompt: crypto.randomUUID() };
-    const receipt: Receipt = { id: 'call', connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 100, totalMs: 900, cache: null };
+    const receipt: Receipt = { id: crypto.randomUUID(), connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 100, totalMs: 900, cache: null };
     await startChat(store, source, chat, projectGreetings(['하나', '둘', '셋'], [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], 1));
     const said = crypto.randomUUID();
     await appendUserMessage(store, source, { id: said, text: '안녕' });
@@ -338,7 +338,7 @@ describe('importChat', () => {
     const { store, files } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
-    const receipt: Receipt = { id: 'call', connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 100, totalMs: 900, cache: null };
+    const receipt: Receipt = { id: crypto.randomUUID(), connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 100, totalMs: 900, cache: null };
     await startChat(store, source, { title: null, character: null, models: {} }, null);
     const [said, reply] = [crypto.randomUUID(), crypto.randomUUID()];
     await appendUserMessage(store, source, { id: said, text: '하나', follows: null });

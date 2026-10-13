@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
 import type { Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
-import { modelUsage, type ModelUsage } from '../../model/usage';
+import { modelUsage } from '../../model/usage';
 import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
-import { ACTS } from '../common/acts';
+import { LedgerWait, useLedger } from '../common/useLedger';
 import { UNKNOWN } from '../common/words';
 import { spent, tally } from '../common/usage';
 import { ago } from '../common/time';
@@ -15,7 +15,7 @@ import { useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
+import { Button, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow } from '../ui';
 import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE, tokens, valueWords } from './settingWords';
 import { count } from '../common/typedNumber';
 
@@ -72,29 +72,16 @@ function ImageModelScreen({ connection, model, back }: Props) {
 }
 
 function ChatModelScreen({ connection, model, back }: Props) {
-  const { store, usage: usageIndex } = useSession();
+  const { store } = useSession();
   const toast = useToast();
   const profiles = useProfiles();
   const settings = useSettings();
-  const [usageAttempt, retryUsage] = useState(0);
-  const [usage, setUsage] = useState<ModelUsage | null>(null);
-  const [usageFailed, setUsageFailed] = useState(false);
-  useEffect(() => {
-    const abort = new AbortController();
-    setUsage(null);
-    setUsageFailed(false);
-    void usageIndex.read((chats) => modelUsage(chats, { connection: connection.id, model: model.id }), abort.signal).then((result) => {
-      if (abort.signal.aborted) return;
-      if (result.ok) setUsage(result.data);
-      else setUsageFailed(true);
-    });
-    return () => abort.abort();
-  }, [usageIndex, connection.id, model.id, usageAttempt]);
+  const ledger = useLedger();
+  const usage = useMemo(() => (ledger.view.kind === 'read' ? modelUsage(ledger.view.calls, { connection: connection.id, model: model.id }) : null), [ledger.view, connection.id, model.id]);
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
   const sorted = defaultFirst(profiles, settings.profile);
-  const recount = () => retryUsage((attempt) => attempt + 1);
 
   // The default is what a model without its own uses, so picking it clears the model's own.
   async function choose(id: string) {
@@ -171,14 +158,10 @@ function ChatModelScreen({ connection, model, back }: Props) {
         </Row>
       </Section>
 
-      <Section title="사용량" note="남아 있는 채팅 기준 · 마지막 집계" action={<Button variant="secondary" onClick={recount}>다시 집계</Button>}>
-        {usageFailed ? (
-          <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: recount }}>
-            사용량을 불러오지 못했어요.
-          </Callout>
-        ) : usage === null ? (
-          <Text variant="note">사용량을 확인하는 중…</Text>
-        ) : usage.last !== null ? (
+      <Section title="사용량">
+        {ledger.view.kind !== 'read' ? (
+          <LedgerWait view={ledger.view} retry={ledger.retry} failed="사용량을 불러오지 못했어요." />
+        ) : usage && usage.last !== null ? (
           <Facts
             variant="tiles"
             items={[

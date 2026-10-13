@@ -24,6 +24,7 @@ import type { Session } from './session';
 import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
 import { receiptOf, unsettled } from './talk';
+import { chatPlace, receiptRow } from './usage';
 
 // 삽화 (design §6.6): one picture per message per run, from one scene call to the chat's 보조 model (or the 삽화
 // prompt's own) and one image call. The only writer of `illustration` objects but a backup's restore and a chat's copies.
@@ -189,7 +190,10 @@ export class Illustrator {
     const file = saved.data[0];
     if (!file) return { kind: 'file-refused' };
     const illustration: Illustration = { message, version, scene, receipt, model: { connection: route.connection.id, model: route.model.id }, sent: without(request, 'model'), file, type: drawn.type, size: drawn.bytes.byteLength, at: Date.now() };
-    const created = await store.create('illustration', illustration, { parent: chat });
+    const created = await store.batch([
+      { type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: chat, value: illustration },
+      ...(receipt ? [receiptRow(receipt, illustration.at, chatPlace(store, chat))] : []),
+    ]);
     return created.ok ? null : { kind: 'unsaved', failure: created };
   }
 

@@ -11,6 +11,7 @@ import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { Halted } from './scripts';
 import { appendUserMessage, type Written } from './chat-log';
+import { keepRow } from './usage';
 import type { Ask, TalkFailure } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
 import { endCall, type CallTarget } from './streams';
@@ -44,7 +45,10 @@ export const TRANSLATOR_CHAT: Chat = { title: null, character: null, models: {} 
 export function translateText(session: Pick<Session, 'store' | 'credentials'>, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
   const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language, lane: null };
   const target: CallTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
-  return translate(session, input, target, signal, onText).finally(() => endCall(session.store, target.id));
+  return translate(session, input, target, signal, onText).then(async (made) => {
+    if (made.ok) await keepRow(session.store, made.translation.receipt!, made.translation.at, { chat: null, character: chat.character });
+    return made;
+  }).finally(() => endCall(session.store, target.id));
 }
 
 // Automatic 응답 번역 is for replies received here, never for what a chat already holds: opening a chat, a greeting, a

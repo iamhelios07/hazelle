@@ -46,7 +46,7 @@ export class Costs {
     void settleCost(connection.value, replyId, this.abort.signal)
       .then(async (settled) => {
         if (this.abort.signal.aborted) return;
-        await appendCost(this.store, chat, replyId, settled.ok ? settled.cost : null);
+        await appendCost(this.store, chat, receipt, settled.ok ? settled.cost : null);
       })
       .finally(() => this.settling.delete(replyId));
   }

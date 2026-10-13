@@ -95,12 +95,13 @@ function count(value: string | undefined): number | null {
 
 function readWrite(input: unknown): Write | null {
   if (!isRecord(input)) return null;
-  const { id, kind, parent, body, baseRev } = input;
+  const { id, kind, parent, body, baseRev, once } = input;
   if (typeof id !== 'string' || !ID.test(id)) return null;
   if (typeof kind !== 'string' || !KIND.test(kind)) return null;
   if (parent !== null && (typeof parent !== 'string' || !ID.test(parent))) return null;
   if (baseRev !== null && (typeof baseRev !== 'number' || !Number.isSafeInteger(baseRev) || baseRev < 1)) return null;
   if (body !== null && (typeof body !== 'string' || !body)) return null;
   if (body === null && baseRev === null) return null;
-  return { id, kind, parent, body, baseRev };
+  if (once !== undefined && (once !== true || body === null || baseRev !== null)) return null;
+  return { id, kind, parent, body, baseRev, ...(once && { once }) };
 }
