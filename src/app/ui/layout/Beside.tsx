@@ -12,10 +12,13 @@ type Props = {
 export function Beside({ side, variant = 'after', children }: Props) {
   const body = <div className={styles.main}>{children}</div>;
   const column = <div className={styles.side}>{side}</div>;
+  // A container query measures an ancestor, never the element it styles: the frame is what the preview measures.
   return variant === 'preview' ? (
-    <div className={`${styles.beside} ${styles.preview}`}>
-      {column}
-      {body}
+    <div className={styles.frame}>
+      <div className={`${styles.beside} ${styles.preview}`}>
+        {column}
+        {body}
+      </div>
     </div>
   ) : (
     <div className={styles.beside}>

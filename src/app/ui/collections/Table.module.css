@@ -65,7 +65,7 @@
 }
 
 .summary {
-  composes: ellipsis from '../foundation/a11y.module.css';
+  /* Wraps: narrow, it is the only place the row's other columns show. */
   display: none;
   color: var(--color-text-faint);
   font-size: var(--text-xs);

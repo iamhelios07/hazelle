@@ -21,8 +21,11 @@
   flex: 1 1 var(--beside-side-min-width);
 }
 
-.preview {
+.frame {
   container-type: inline-size;
+}
+
+.preview {
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: stretch;
