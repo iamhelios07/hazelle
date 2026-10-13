@@ -1,10 +1,10 @@
 import { ChangeSignal } from '../change-signal';
-import { foldTree, usageCall, usageCalls, type Receipt } from '../model/chat';
+import { loggedCalls, usageCall, type Entry, type Receipt } from '../model/chat';
 import type { Cost } from '../connectors/types';
 import { isValue, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import { counted, type Counted, type Ledger, type UsageCall } from '../model/usage';
-import type { ApiResult } from './api';
+import type { ApiFailure, ApiResult } from './api';
 import type { Write } from './object-writes';
 import type { ObjectStore, Pin } from './store';
 
@@ -25,7 +25,7 @@ export const chatPlace = (store: ObjectStore, chat: string): CallPlace => ({ cha
 export const costRow = (call: string, cost: Cost | null): Write =>
   ({ type: 'create', kind: 'ledger', id: crypto.randomUUID(), parent: SETTINGS_ID, value: { type: 'cost', call, cost, at: Date.now() } });
 
-// For a call no other write saves.
+// Only for a call no other write saves: one that saves its receipt puts receiptRow in that write's batch.
 export const keepRow = (store: ObjectStore, receipt: Receipt, at: number, place: CallPlace) => store.batch([receiptRow(receipt, at, place)]);
 
 const FILL_STEP = 100;
@@ -93,48 +93,66 @@ export class Usage {
     return { ok: true, data: counted(this.rows.values()) };
   }
 
-  // Writes the rows of the calls made before the ledger, once per account: every chat's receipts, its 삽화 and memory,
-  // in 휴지통 too, and each 삽화 profile's. The originals go before their branches, which copy their calls, so a call
-  // counts under the chat that made it; settings keeps how far the fill went, and one cut short goes on from there.
+  // Writes the rows of the calls made before the ledger, once per account: every call each chat's log keeps, its 삽화
+  // and memory, in 휴지통 too, and each 삽화 profile's. A chat goes after the one it branched from, whose calls it
+  // copies, so a call counts under the chat that made it; settings keeps how far the fill went, and one cut short goes on
+  // from there. A fill runs on one timeline: a restore ends it, and the restored settings say whether it runs again
+  // (useLedger starts it).
   async fill(signal: AbortSignal = this.closing.signal): Promise<void> {
-    const stop = AbortSignal.any([signal, this.closing.signal]);
-    const settings = this.store.get('settings', SETTINGS_ID)?.value;
-    if (!settings || settings.ledger === 'filled' || (this.filled && this.filled !== 'failed')) return;
+    if (this.filled && this.filled !== 'failed') return;
     this.filled = { read: 0, of: 0 };
     this.changes.notify();
-    const ended = await this.filledAll(settings.ledger?.after ?? '', stop);
-    this.filled = ended || stop.aborted ? null : 'failed';
+    const stop = AbortSignal.any([signal, this.closing.signal]);
+    let failure: ApiFailure | null;
+    try {
+      failure = await this.store.pinned((pin) => this.filledAll(pin, AbortSignal.any([stop, this.store.timelineEnd(pin)])), stop);
+    } catch {
+      failure = { ok: false, error: 'usage-unavailable' };
+    }
+    this.filled = !failure || failure.error === 'stopped' || failure.error === 'timeline-changed' ? null : 'failed';
     this.changes.notify();
   }
 
-  private async filledAll(after: string, signal: AbortSignal): Promise<boolean> {
-    const pinned = await this.store.pin(signal);
-    if (!pinned.ok) return false;
-    const order = ({ id, value }: Stored<'chat'>) => `${value.origin ? 1 : 0}:${id}`;
-    const chats = this.store.list('chat').filter((chat) => order(chat) > after).sort((a, b) => (order(a) < order(b) ? -1 : 1));
-    const mark = async (ledger: 'filled' | { after: string }) => (await this.store.upsert('settings', (current) => ({ ...current!, ledger }))).ok;
-    for (const [index, chat] of chats.entries()) {
+  private async filledAll(pin: Pin, signal: AbortSignal): Promise<ApiFailure | null> {
+    const settings = this.store.get('settings', SETTINGS_ID)?.value;
+    if (!settings || settings.ledger === 'filled') return null;
+    const { ledger } = settings;
+    const depth = ({ value }: Stored<'chat'>) => {
+      let depth = 0;
+      for (let origin = value.origin?.id; origin; origin = this.store.get('chat', origin)?.value.origin?.id) depth++;
+      return depth;
+    };
+    const order = (chat: Stored<'chat'>) => `${String(depth(chat)).padStart(3, '0')}:${chat.id}`;
+    const chats = this.store.list('chat').map((chat) => ({ chat, order: order(chat) })).filter((one) => one.order > (ledger?.after ?? ''))
+      .sort((a, b) => (a.order < b.order ? -1 : 1));
+    const mark = async (ledger: 'filled' | { after: string }) => {
+      const marked = await this.store.upsert('settings', (current) => ({ ...current!, ledger }));
+      return marked.ok ? null : marked;
+    };
+    const write = async (rows: Write[]) => {
+      const written = rows.length ? await this.store.batch(rows, undefined, { signal }) : null;
+      return written && !written.ok ? written : null;
+    };
+    for (const [index, { chat, order }] of chats.entries()) {
       this.filled = { read: index, of: chats.length };
       this.changes.notify();
-      const rows = await this.chatRows(chat, pinned.data, signal);
-      if (!rows) return false;
-      if (rows.length && !(await this.store.batch(rows, undefined, { signal })).ok) return false;
-      if ((index + 1) % FILL_STEP === 0 && !(await mark({ after: order(chat) }))) return false;
+      const rows = await this.chatRows(chat, pin, signal);
+      if (!rows.ok) return rows;
+      const failure = (await write(rows.data)) ?? ((index + 1) % FILL_STEP === 0 ? await mark({ after: order }) : null);
+      if (failure) return failure;
     }
     const profiles = this.store.list('likeness').flatMap(({ parent, value }) =>
       (value.receipt ? [receiptRow(value.receipt, value.at, { chat: null, character: parent && this.store.get('character', parent) ? parent : null })] : []));
-    if (profiles.length && !(await this.store.batch(profiles, undefined, { signal })).ok) return false;
-    return mark('filled');
+    return (await write(profiles)) ?? mark('filled');
   }
 
-  // null: the chat could not be read, and the fill stops there.
-  private async chatRows({ id, value }: Stored<'chat'>, pin: Pin, signal: AbortSignal): Promise<Write[] | null> {
-    const entries: Stored<'entry'>[] = [];
+  private async chatRows({ id, value }: Stored<'chat'>, pin: Pin, signal: AbortSignal): Promise<ApiResult<Write[]>> {
+    const entries: Entry[] = [];
     const calls: UsageCall[] = [];
     let unreadable = false;
     const failure = await this.store.scan({ parent: id }, (row, held) => {
       if (row.kind === 'entry') {
-        if (isValue('entry', held)) entries.push({ ...row, kind: 'entry', value: held });
+        if (isValue('entry', held)) entries.push(held);
         else unreadable = true;
       } else if (row.kind === 'illustration') {
         if (!isValue('illustration', held)) unreadable = true;
@@ -144,11 +162,13 @@ export class Usage {
         else for (const { receipt, at } of [...held.records, ...held.chapters]) if (receipt) calls.push(usageCall(receipt, at));
       }
     }, pin, signal);
-    if (failure || unreadable) return null;
+    if (failure) return failure;
+    if (unreadable) return { ok: false, error: 'unreadable' };
     const place = { chat: id, character: value.character };
-    // An edit keeps the receipt it changes, and a batch takes an id once.
+    const logged = loggedCalls(entries);
+    // A batch takes an id once.
     const once = new Map<string, Write>();
-    for (const one of [...usageCalls(foldTree(entries).map(({ message }) => message)), ...calls]) if (!once.has(one.call.id)) once.set(one.call.id, callRow(one, place));
-    return [...once.values()];
+    for (const one of [...logged.calls, ...calls]) if (!once.has(one.call.id)) once.set(one.call.id, callRow(one, place));
+    return { ok: true, data: [...once.values(), ...logged.booked.map(({ call, cost }) => costRow(call, cost))] };
   }
 }

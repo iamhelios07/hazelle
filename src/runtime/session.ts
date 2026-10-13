@@ -2,6 +2,7 @@ import type { Tools } from './tools/facade';
 import { createTools } from './tools/host';
 import type { LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
+import { SETTINGS_ID } from '../model/settings';
 import { api, type ApiResult } from './api';
 import { AssetUrls } from './assets';
 import { Catalogs } from './catalog';
@@ -136,9 +137,11 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
       }
       if (closing.signal.aborted) return;
       streams.pickUp();
-      void purgeExpired(store, Date.now(), closing.signal);
       void backfillSummaries(store, closing.signal);
-      void usage.fill(closing.signal);
+      // A purge before the ledger's fill took a chat's calls would lose them: the trash empties only once it has.
+      void usage.fill(closing.signal).then(() => {
+        if (store.get('settings', SETTINGS_ID)?.value.ledger === 'filled') void purgeExpired(store, Date.now(), closing.signal);
+      });
     })();
   };
 

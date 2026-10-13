@@ -506,9 +506,8 @@ export class ObjectStore {
     this.scopeChanged(chat);
   }
 
-  // An explicit account/parent walk; it never fills the held chat scopes. Backup and ownership walks run on their
-  // workflow's pin (pinned); the ledger's fill reads on a bare pin, since a row it writes lands once on any timeline
-  // (runtime/usage). No row is visited once the pin's epoch has ended.
+  // An explicit account/parent walk; it never fills the held chat scopes. Backup, ownership and ledger-fill walks run on
+  // their workflow's pin (pinned). No row is visited once the pin's epoch has ended.
   async scan(options: { parent?: string; kind?: Kind; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>, pin: Pin, signal?: AbortSignal): Promise<ApiFailure | null> {
     const walked = await this.pages(options, 0, visit, pin, signal);
     return walked.ok ? null : walked;
@@ -574,6 +573,8 @@ export class ObjectStore {
         // Awaited, so a slow visitor holds the walk; no next codec window starts ahead of its demand.
         await visit(row, value);
       }
+      // A reset during the last visit: the page is of the old timeline and is never cached under the new one.
+      if (pin.epoch !== this.epoch || stop.aborted) return this.halted(pin.epoch);
       cursor = result.data.cursor;
       more = result.data.more;
       paged?.(result.data.changes, cursor, more);
@@ -827,7 +828,9 @@ export class ObjectStore {
               this.hold(ready.held);
             }
           }
-          this.cacheWrite(writes.map(({ id, kind, parent, body }, index) => ({ id, kind, parent, body, rev: answer.data.revs[index]! })));
+          // A once write may answer the rev of a row already there with another body (a branch's copy of its original's
+          // call): only the walk, which reads it from the server past its cursor, caches it.
+          this.cacheWrite(writes.flatMap(({ id, kind, parent, body, once }, index) => (once ? [] : [{ id, kind, parent, body, rev: answer.data.revs[index]! }])));
         }
         for (let index = 0; index < resolved.length; index++) this.unshow(steps[start + index]!.id, commit);
         this.changes.publish();

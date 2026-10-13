@@ -525,14 +525,28 @@ export function branchTree(items: ChatSummary[]): { item: ChatSummary; nested: b
 
 export const usageCall = ({ id, connection, model, modelName, source, usage, cost }: Receipt, at: number): UsageCall => ({ at, call: { id, connection, model, modelName, source, usage, cost } });
 
-export function* usageCalls(messages: Iterable<Message>): Generator<UsageCall> {
-  for (const message of messages) {
-    for (const { at, receipt, translation, calls: bot = [] } of message.versions) {
-      if (receipt) for (const call of calls(receipt)) yield usageCall(call, at);
-      if (translation?.receipt) yield usageCall(translation.receipt, translation.at);
-      for (const { receipt, at } of bot) yield usageCall(receipt, at);
+// Every call a chat's log keeps, whatever the chat still shows: a deleted message's, a translation made again. An edit
+// keeps the receipt it changes, so a call counts once, at its first entry. booked: what each cost entry booked for the
+// calls it names.
+export function loggedCalls(entries: Iterable<Entry>): { calls: UsageCall[]; booked: { call: string; cost: Cost | null }[] } {
+  const kept = new Map<string, UsageCall>();
+  const replies = new Map<string, string[]>();
+  const booked: { replyId: string; cost: Cost | null }[] = [];
+  const keep = (receipt: Receipt | null | undefined, at: number) => {
+    for (const call of receipt ? calls(receipt) : []) {
+      if (kept.has(call.id)) continue;
+      kept.set(call.id, usageCall(call, at));
+      if (call.replyId) replies.set(call.replyId, [...(replies.get(call.replyId) ?? []), call.id]);
     }
+  };
+  for (const entry of entries) {
+    if (entry.type === 'message' || entry.type === 'version') {
+      keep(entry.receipt, entry.at);
+      if (entry.translation) keep(entry.translation.receipt, entry.translation.at);
+    } else if (entry.type === 'translation' || entry.type === 'call') keep(entry.receipt, entry.at);
+    else if (entry.type === 'cost') booked.push(entry);
   }
+  return { calls: [...kept.values()], booked: booked.flatMap(({ replyId, cost }) => (replies.get(replyId) ?? []).map((call) => ({ call, cost }))) };
 }
 
 export function recentIn(messages: Message[]): RecentModel[] {

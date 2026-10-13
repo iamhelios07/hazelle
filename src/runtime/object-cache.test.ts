@@ -2,6 +2,7 @@ import { ToolWrites, toolData } from './tools/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { SETTINGS_ID } from '../model/settings';
+import type { Ledger } from '../model/usage';
 import { randomBytes } from '../vault/aead';
 import { lockVault } from '../vault/device';
 import { objectKey, sealObject } from '../vault/objects';
@@ -44,9 +45,11 @@ async function fixture() {
   const fetch = vi.fn(async (path: string, init: RequestInit) => {
     const url = new URL(path, 'https://test');
     if (init.method === 'POST') {
-      const { timeline: sent, writes } = JSON.parse(init.body as string) as { timeline: string; writes: Omit<SealedChange, 'rev'>[] };
+      const { timeline: sent, writes } = JSON.parse(init.body as string) as { timeline: string; writes: (Omit<SealedChange, 'rev'> & { once?: true })[] };
       if (sent !== timeline) return refuse();
-      const revs = writes.map((write) => {
+      const revs = writes.map(({ once, ...write }) => {
+        const landed = rows.get(write.id);
+        if (once && landed?.body) return landed.rev;
         rows.set(write.id, { ...write, rev: ++rev });
         return rev;
       });
@@ -60,7 +63,7 @@ async function fixture() {
     const parent = url.searchParams.get('parent');
     const bootstrap = url.searchParams.has('bootstrap');
     const changes = [...rows.values()].filter((row) => row.rev > since && (parent === null || row.parent === parent)).flatMap((row) => {
-      if (!url.searchParams.has('exclude') || !['entry', 'memory', 'illustration'].includes(row.kind)) return [row];
+      if (!url.searchParams.get('exclude')?.split(',').includes(row.kind)) return [row];
       if (bootstrap) return [];
       const { body, ...metadata } = row;
       return [body === null ? row : { ...metadata, omitted: true as const }];
@@ -580,6 +583,25 @@ it('walks the ledger from the device cache and past its cursor, and reads it aga
   expect(await calls(reopened)).toEqual(['first']);
   reopened.close();
   again.close();
+});
+
+it('caches the row the server keeps, never the body a once write sent for a row already there', async () => {
+  const f = await fixture();
+  const call = (chat: string): Ledger => ({ type: 'call', at: 1, call: { id: 'call', connection: 'c', model: 'm', modelName: 'model', source: 'source', usage: null, cost: null }, chat, character: null });
+  await f.add('row', 'ledger', SETTINGS_ID, call('original'));
+  const chats = async (store: ObjectStore) => {
+    const usage = new Usage(store);
+    const read = await usage.read(new AbortController().signal);
+    usage.close();
+    return read.ok ? read.data.map(({ chat }) => chat) : read;
+  };
+  const store = await f.open();
+  await store.pull();
+  expect((await store.batch([{ type: 'create', kind: 'ledger', id: 'row', parent: SETTINGS_ID, value: call('branch') }])).ok).toBe(true);
+  expect(await chats(store)).toEqual(['original']);
+  await vi.waitFor(() => expect(f.cache.states.get(SETTINGS_ID)?.cursor).toBe(1));
+  store.close();
+  expect(await chats(await f.open())).toEqual(['original']);
 });
 
 it('fences a tool write across the merge pause when the account timeline changes', async () => {

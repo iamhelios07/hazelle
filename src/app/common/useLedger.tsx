@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { SETTINGS_ID } from '../../model/settings';
 import type { Counted } from '../../model/usage';
 import { useSession, useSettings } from '../session';
@@ -18,6 +18,10 @@ export function useLedger(): { view: LedgerView; retry: () => void } {
   const [attempt, setAttempt] = useState(0);
   const [read, setRead] = useState<Counted[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // The ledger a restore brought back may need a fill of its own; a fill that failed waits for 다시 시도.
+  useEffect(() => {
+    if (!filled && filling === null) void usage.fill();
+  }, [usage, filled, filling]);
   useEffect(() => {
     if (!filled) return;
     const abort = new AbortController();
@@ -29,12 +33,15 @@ export function useLedger(): { view: LedgerView; retry: () => void } {
     });
     return () => abort.abort();
   }, [usage, filled, revision, attempt]);
-  if (!filled) return { view: { kind: filling === 'failed' ? 'fill-failed' : 'filling' }, retry: () => void usage.fill() };
-  const view: LedgerView = failed ? { kind: 'failed' } : read ? { kind: 'read', calls: read } : { kind: 'reading' };
-  return { view, retry: () => setAttempt((held) => held + 1) };
+  // Kept while nothing it shows changed, so what a screen computes from it is computed again only then.
+  const view = useMemo((): LedgerView => {
+    if (!filled) return { kind: filling === 'failed' ? 'fill-failed' : 'filling' };
+    return failed ? { kind: 'failed' } : read ? { kind: 'read', calls: read } : { kind: 'reading' };
+  }, [filled, filling, failed, read]);
+  return { view, retry: filled ? () => setAttempt((held) => held + 1) : () => void usage.fill() };
 }
 
-// What a usage section shows until its calls are read. failed: the screen's own words for a read that failed.
+// failed: the screen's own words for a read that failed.
 export function LedgerWait({ view, retry, failed }: { view: Exclude<LedgerView, { kind: 'read' }>; retry: () => void; failed: string }) {
   const { usage } = useSession();
   const filling = useSyncExternalStore(usage.subscribe, usage.filling);

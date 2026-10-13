@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { Entry, Receipt } from '../model/chat';
 import { blankCard } from '../engine/import/card';
 import { memoryId, type Memory } from '../model/memory';
@@ -27,20 +27,27 @@ async function account() {
   return store;
 }
 
-it('fills the ledger once from every call kept before it, a branch’s copy under its original, and writing a row again lands as written', async () => {
+it('fills the ledger once from every call kept before it, a branch’s copy under the chat that made it, and writing a row again lands as written', async () => {
   const store = await account();
-  const [original, branch] = [crypto.randomUUID(), crypto.randomUUID()];
-  const [first, continued, translated, bot, summary, profile, reply] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()] as const;
+  // The branch of the branch sorts before the branch it copies.
+  const [nested, branch] = [crypto.randomUUID(), crypto.randomUUID()].sort() as [string, string];
+  const original = crypto.randomUUID();
+  const [first, continued, translated, bot, summary, profile, reply, branched] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()] as const;
+  const booked = { unit: 'usd' as const, amount: 0.5, source: 'reported' as const };
   const record = { id: 'r1', sources: [], print: '', when: null, where: null, who: [], what: '', lines: [], outcome: '', state: [], opens: [], closes: [], receipt: receipt(summary), at: 11 };
   const memory: Memory = { records: [record], chapters: [], state: [], threads: [] };
   expect((await store.batch([
-    write(original, message(receipt(continued, { continues: receipt(first) })), reply),
+    write(original, message(receipt(continued, { continues: receipt(first), cost: 'pending', replyId: 'reply' })), reply),
     write(original, { type: 'translation', version: reply, at: 12, text: 'translation', receipt: receipt(translated) }),
     write(original, { type: 'call', version: reply, at: 13, receipt: receipt(bot) }),
-    write(branch, message(receipt(continued, { continues: receipt(first) }))),
+    write(branch, message(receipt(continued, { continues: receipt(first), cost: 'pending', replyId: 'reply' }))),
+    write(branch, { type: 'cost', replyId: 'reply', cost: booked, at: 14 }),
+    write(branch, message(receipt(branched))),
+    write(nested, message(receipt(branched))),
     { type: 'create', kind: 'memory', id: memoryId(original), parent: original, value: memory },
     chat(original),
     chat(branch, original),
+    chat(nested, branch),
   ], undefined, { unheld: true })).ok).toBe(true);
   const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [] });
   if (!character.ok) throw new Error(character.error);
@@ -51,13 +58,15 @@ it('fills the ledger once from every call kept before it, a branch’s copy unde
   expect(filled(store)).toBe('filled');
   const read = await usage.read(new AbortController().signal);
   if (!read.ok) throw new Error(read.error);
-  expect(places(read.data)).toEqual({ [first]: original, [continued]: original, [translated]: original, [bot]: original, [summary]: original, [profile]: null });
+  expect(places(read.data)).toEqual({ [first]: original, [continued]: original, [translated]: original, [bot]: original, [summary]: original, [profile]: null, [branched]: branch });
   expect(read.data.find(({ call }) => call.id === profile)!.character).toBe(character.data.id);
+  // The branch booked the cost its original was still waiting for.
+  expect(read.data.find(({ call }) => call.id === continued)!.call.cost).toEqual(booked);
 
   expect((await store.upsert('settings', (current) => ({ ...current!, ledger: undefined }))).ok).toBe(true);
   await usage.fill();
   expect(filled(store)).toBe('filled');
-  expect(await usage.read(new AbortController().signal)).toMatchObject({ ok: true, data: { length: 6 } });
+  expect(await usage.read(new AbortController().signal)).toMatchObject({ ok: true, data: { length: 7 } });
   usage.close();
 });
 
@@ -66,10 +75,22 @@ it('goes on from the chat a fill cut short reached', async () => {
   const [before, after] = [crypto.randomUUID(), crypto.randomUUID()].sort();
   const [skipped, made] = [crypto.randomUUID(), crypto.randomUUID()];
   expect((await store.batch([write(before!, message(receipt(skipped))), write(after!, message(receipt(made))), chat(before!), chat(after!)], undefined, { unheld: true })).ok).toBe(true);
-  expect((await store.upsert('settings', (current) => ({ ...current!, ledger: { after: `0:${before}` } }))).ok).toBe(true);
+  expect((await store.upsert('settings', (current) => ({ ...current!, ledger: { after: `000:${before}` } }))).ok).toBe(true);
   const usage = new Usage(store);
   await usage.fill();
   expect(await usage.read(new AbortController().signal)).toMatchObject({ ok: true, data: [{ call: { id: made } }] });
+  usage.close();
+});
+
+it('ends a fill that threw as failed, and a fill asked again goes on', async () => {
+  const store = await account();
+  vi.spyOn(store, 'scan').mockRejectedValueOnce(new Error('unreadable store'));
+  expect((await store.batch([write(crypto.randomUUID(), message(receipt())), chat(crypto.randomUUID())], undefined, { unheld: true })).ok).toBe(true);
+  const usage = new Usage(store);
+  await usage.fill();
+  expect(usage.filling()).toBe('failed');
+  await usage.fill();
+  expect([usage.filling(), filled(store)]).toEqual([null, 'filled']);
   usage.close();
 });
 

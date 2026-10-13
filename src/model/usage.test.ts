@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fold, usageCall, usageCalls, type Entry, type Receipt } from './chat';
+import { loggedCalls, usageCall, type Entry, type Receipt } from './chat';
 import { connectionUsage, counted, GONE, modelUsage, usageReport, windowStart, type Ledger, type UsageCall } from './usage';
 import type { Stored } from './kinds';
 
@@ -40,6 +40,25 @@ describe('counted', () => {
   });
 });
 
+describe('loggedCalls', () => {
+  it('keeps a deleted message’s call, every translation’s, an edited reply’s once, and books a cost on each call of its reply', () => {
+    const reply = receipt({ cost: 'pending', replyId: 'reply' });
+    const translated = receipt({ cost: 'pending', replyId: 'reply' });
+    const again = receipt();
+    const reported = { unit: 'usd' as const, amount: 0.5, source: 'reported' as const };
+    const made = loggedCalls([
+      { type: 'message', role: 'assistant', at: 1, text: '답', receipt: reply },
+      { type: 'translation', version: 'm1', at: 2, text: '번역', receipt: translated },
+      { type: 'translation', version: 'm1', at: 3, text: '다시 번역', receipt: again },
+      { type: 'version', message: 'm1', replaces: 'm1', edit: true, at: 4, text: '고친 답', receipt: reply },
+      { type: 'delete', message: 'm1', at: 5 },
+      { type: 'cost', replyId: 'reply', cost: reported, at: 6 },
+    ]);
+    expect(made.calls.map(({ at, call }) => [call.id, at])).toEqual([[reply.id, 1], [translated.id, 2], [again.id, 3]]);
+    expect(made.booked).toEqual([{ call: reply.id, cost: reported }, { call: translated.id, cost: reported }]);
+  });
+});
+
 describe('modelUsage', () => {
   it('sums costs separately by unit, marking only the unit with a price-list cost as estimated', () => {
     const made = calls(
@@ -58,10 +77,10 @@ describe('modelUsage', () => {
   it('counts each call of a continued reply and keeps what was not reported apart', () => {
     const cut = receipt({ usage: { inputTokens: 100, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 50, reasoningTokens: null }, cost: { unit: 'usd', amount: 0.5, source: 'reported' }, totalMs: 500 });
     const continued = receipt({ continues: cut, cost: { unit: 'usd', amount: 0.25, source: 'price-list' } });
-    const made = fold([bot('b1', '하나', continued), bot('b2', '둘', { model: 'm2' })]);
-    expect(modelUsage(calls(...usageCalls(made)), { connection: 'c1', model: 'm1' })).toEqual({
+    const made = [bot('b1', '하나', continued), bot('b2', '둘', { model: 'm2' })];
+    expect(modelUsage(calls(...loggedCalls(made.map(({ value }) => value)).calls), { connection: 'c1', model: 'm1' })).toEqual({
       calls: 2,
-      last: made[0]!.versions[0]!.at,
+      last: made[0]!.value.at,
       input: { total: 100, unknown: 1 },
       output: { total: 50, unknown: 1 },
       costs: [{ unit: 'usd', amount: 0.75, estimated: true }],
