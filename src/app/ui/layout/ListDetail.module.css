@@ -3,27 +3,27 @@
   height: 100dvh;
 }
 
-.list {
+.listPane {
   width: var(--list-pane-width);
   flex-shrink: 0;
   overflow-y: auto;
   border-right: var(--border-thin) solid var(--color-divider);
 }
 
-.detail {
+.detailPane {
   flex-grow: 1;
   min-width: 0;
   overflow-y: auto;
 }
 
-.drawer .list {
+.drawer .listPane {
   flex-grow: 1;
   width: auto;
   min-width: 0;
   border-right: none;
 }
 
-.drawer .detail {
+.drawer .detailPane {
   flex-grow: 0;
   flex-shrink: 0;
   width: var(--detail-pane-width);
@@ -36,8 +36,8 @@
   overflow-y: auto;
 }
 
-.stack .list,
-.stack .detail {
+.stack .listPane,
+.stack .detailPane {
   width: auto;
   flex-shrink: 0;
   overflow-y: visible;

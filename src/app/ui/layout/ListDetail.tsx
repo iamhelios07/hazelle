@@ -11,12 +11,12 @@ export const usePane = () => useContext(PaneContext);
 // while one is picked (no detail, no pane). stack: one scroll, the list over the picked item.
 export function ListDetail({ list, detail, variant = 'list' }: { list: ReactNode; detail: ReactNode | null; variant?: 'list' | 'drawer' | 'stack' }) {
   return (
-    <div className={`${styles.split} ${styles[variant]}`}>
-      <div className={styles.list}>
+    <div className={variant === 'list' ? styles.split : `${styles.split} ${styles[variant]}`}>
+      <div className={styles.listPane}>
         <PaneContext.Provider value="list">{list}</PaneContext.Provider>
       </div>
       {detail !== null && (
-        <div className={styles.detail}>
+        <div className={styles.detailPane}>
           <PaneContext.Provider value={variant === 'list' ? 'detail' : variant}>{detail}</PaneContext.Provider>
         </div>
       )}
