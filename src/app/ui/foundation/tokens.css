@@ -144,10 +144,10 @@
   --color-you-bg: var(--palette-mint-800);
   --color-you-text: var(--palette-mint-100);
 
-  /* The story's voices step down from dialogue: narration sits well under it (L* 95 → 72) so speech stands out, and
-     action under narration in its own hue. */
+  /* The story's voices step down from dialogue: speech in gold (L* 86, ruled the default) over narration (72) so it
+     stands out, and action under narration in its own hue. */
   --color-prose-narration: var(--palette-sand-300);
-  --color-prose-dialogue: var(--palette-sand-50);
+  --color-prose-dialogue: var(--palette-gold-200);
   --color-prose-action: var(--palette-lilac-400);
 
   /* A prompt's blocks by kind, on the outline's rail: the line and ring, and the node's fill. */
@@ -221,8 +221,8 @@
   --color-pick-accent-blue: var(--palette-sky-400);
   --color-pick-accent-green: var(--palette-jade-400);
   --color-pick-accent-violet: var(--palette-violet-300);
-  --color-pick-dialogue-base: var(--palette-sand-50);
-  --color-pick-dialogue-gold: var(--palette-gold-200);
+  --color-pick-dialogue-base: var(--palette-gold-200);
+  --color-pick-dialogue-plain: var(--palette-sand-50);
   --color-pick-dialogue-sky: var(--palette-sky-200);
   --color-pick-dialogue-rose: var(--palette-rose-200);
   --color-pick-dialogue-lime: var(--palette-lime-200);
@@ -492,7 +492,7 @@
   --color-you-text: var(--palette-mint-900);
 
   --color-prose-narration: var(--palette-umber-600);
-  --color-prose-dialogue: var(--palette-umber-900);
+  --color-prose-dialogue: var(--palette-gold-850);
   --color-prose-action: var(--palette-lilac-650);
 
   --color-kind-text: var(--palette-lilac-300);
@@ -555,8 +555,8 @@
   --color-pick-accent-blue: var(--palette-sky-700);
   --color-pick-accent-green: var(--palette-jade-700);
   --color-pick-accent-violet: var(--palette-violet-700);
-  --color-pick-dialogue-base: var(--palette-umber-900);
-  --color-pick-dialogue-gold: var(--palette-gold-850);
+  --color-pick-dialogue-base: var(--palette-gold-850);
+  --color-pick-dialogue-plain: var(--palette-umber-900);
   --color-pick-dialogue-sky: var(--palette-sky-850);
   --color-pick-dialogue-rose: var(--palette-rose-850);
   --color-pick-dialogue-lime: var(--palette-lime-850);
@@ -580,7 +580,7 @@
 [data-accent='green'] { --color-pick-accent: var(--color-pick-accent-green); }
 [data-accent='violet'] { --color-pick-accent: var(--color-pick-accent-violet); }
 [data-dialogue='base'] { --color-pick-dialogue: var(--color-pick-dialogue-base); }
-[data-dialogue='gold'] { --color-pick-dialogue: var(--color-pick-dialogue-gold); }
+[data-dialogue='plain'] { --color-pick-dialogue: var(--color-pick-dialogue-plain); }
 [data-dialogue='sky'] { --color-pick-dialogue: var(--color-pick-dialogue-sky); }
 [data-dialogue='rose'] { --color-pick-dialogue: var(--color-pick-dialogue-rose); }
 [data-dialogue='lime'] { --color-pick-dialogue: var(--color-pick-dialogue-lime); }
@@ -607,14 +607,13 @@
   --color-border-strong: color-mix(in oklab, var(--palette-black) 20%, var(--color-pick-bg));
 }
 
-/* Muted, faint and the action voice stay the theme's: a softer pick would sink them under contrast. */
+/* Dialogue is the 대사 pick's. Muted, faint and the action voice stay the theme's: a softer pick would sink them under
+   contrast. */
 [data-ink]:not([data-ink='base']) {
   --color-text: var(--color-pick-ink);
-  --color-prose-dialogue: var(--color-pick-ink);
   --color-prose-narration: color-mix(in oklab, var(--color-pick-ink) 75%, var(--color-bg));
 }
 
-/* After the ink rule, at the same specificity, so a dialogue pick wins over the ink's dialogue. */
 [data-dialogue]:not([data-dialogue='base']) {
   --color-prose-dialogue: var(--color-pick-dialogue);
 }

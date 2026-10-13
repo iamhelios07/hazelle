@@ -47,7 +47,7 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   background: var(--color-bg);
-  color: var(--color-prose-dialogue);
+  color: var(--color-text);
 }
 
 .serif {

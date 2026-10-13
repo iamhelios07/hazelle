@@ -67,7 +67,6 @@ export function presets(initial: Reading): Preset[] {
     { name: '밝은 서재', look: { theme: 'light', ...PLAIN, font: 'serif', size, leading, width } },
     { name: '고딕 간결', look: { theme: 'dark', ...PLAIN, font: 'sans', size: 15, leading: 'narrow', width: 'narrow' } },
     { name: '넓게 읽기', look: { theme: 'dark', ...PLAIN, font: 'serif', size: 18, leading: 'wide', width: 'wide' } },
-    { name: '대사 강조', look: { theme: 'dark', ...PLAIN, dialogue: 'gold', font, size, leading, width } },
     { name: '밤바다', look: { theme: 'dark', ...PLAIN, bg: 'blue', accent: 'blue', dialogue: 'sky', font, size, leading, width } },
     { name: '숲', look: { theme: 'dark', ...PLAIN, bg: 'green', accent: 'green', dialogue: 'lime', font, size, leading, width } },
     { name: '세피아', look: { theme: 'light', ...PLAIN, bg: 'brown', font: 'serif', size, leading: 'wide', width } },
