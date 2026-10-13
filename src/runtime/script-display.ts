@@ -27,7 +27,6 @@ const STRETCH_MOST = 512;
 export class ScriptDisplay {
   private readonly listeners = new Map<string, Set<(display?: Display) => void | Promise<void>>>();
   private readonly passes = new Map<string, Pass>();
-  private readonly wanted = new Map<string, number>();
   private readonly running = new Set<string>();
   private readonly bases = new Map<string, Basis>();
   private runner: Promise<LuaRunner> | null = null;
@@ -63,14 +62,12 @@ export class ScriptDisplay {
     const pass = this.passes.get(chat);
     if (pass) void this.runner?.then((runner) => runner.forgetDisplay(chat, pass.revision));
     this.passes.delete(chat);
-    this.wanted.delete(chat);
     this.bases.delete(chat);
     this.store.evaluation.forget({ asker: 'screen', chat });
   }
 
   async display(id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'], signal?: AbortSignal): Promise<Display> {
     const revision = ++this.revisions;
-    this.wanted.set(id, revision);
     const reader = { store: this.store };
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
@@ -91,10 +88,11 @@ export class ScriptDisplay {
     // not make the others' results stale.
     const generation = this.generation(id, [String(all.length), ...all.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
     const { display, work } = await this.store.evaluation.display({ asker: 'screen', chat: id }, scope, take, signal, { waits, generation, revision });
-    if (work && this.listeners.has(id) && this.wanted.get(id) === revision && !signal?.aborted) {
+    if (!this.listeners.has(id) || signal?.aborted) return this.told(id, display);
+    if (work) {
       this.passes.set(id, { revision, generation, scripts, snapshot: luaSnapshot(scope, standing, work.staged, work.start), items: work.items, remaining: work.items.length, installed: false, view: display, signal });
       this.drain(id);
-    }
+    } else this.passes.delete(id);
     return this.told(id, display);
   }
 
@@ -118,7 +116,9 @@ export class ScriptDisplay {
     return basis.generation;
   }
 
-  // One stretch at a time per chat, of the latest pass asked for: its newest messages, which are the ones on screen.
+  // One stretch at a time per chat, of the latest pass landed, which the screen shows (ChatScreenRead asks for one at a
+  // time): its newest messages, which are the ones on screen. A stretch of a pass replaced meanwhile is not shown, but
+  // its results are held (Evaluator) and shown by the passes after it, so a reply being written shows them as it grows.
   // The installed queue owns remaining work; a completion never redisplays the history to rediscover it.
   private drain(chat: string) {
     if (this.running.has(chat)) return;
@@ -127,7 +127,7 @@ export class ScriptDisplay {
       let size = 8;
       for (;;) {
         const pass = this.passes.get(chat);
-        if (!pass || !pass.remaining || pass.signal?.aborted || this.wanted.get(chat) !== pass.revision || !this.listeners.has(chat)) break;
+        if (!pass || !pass.remaining || pass.signal?.aborted || !this.listeners.has(chat)) break;
         const from = Math.max(0, pass.remaining - size);
         const items = pass.items.slice(from, pass.remaining);
         const began = performance.now();
@@ -154,7 +154,7 @@ export class ScriptDisplay {
         const rows = pass.items.slice(batch.from, batch.from + batch.texts.length).map((item, at) => ({ version: item.version, text: item.text, stamp: item.stamp, shown: batch.texts[at]! }));
         try {
           const patch = await this.store.evaluation.patch({ asker: 'screen', chat }, pass.revision, pass.generation, rows);
-          if (!patch || pass.signal?.aborted || this.wanted.get(chat) !== pass.revision || !this.listeners.has(chat)) continue;
+          if (!patch || pass.signal?.aborted || this.passes.get(chat) !== pass || !this.listeners.has(chat)) continue;
           const texts = pass.view.texts.slice();
           const drawn = pass.view.drawn.slice();
           const boxes = pass.view.boxes.slice();

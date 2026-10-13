@@ -314,7 +314,8 @@ export class ChatScreenRead {
   private readonly state: Snapshot<ChatScreen>;
   private reads: StoreRead[] = [];
   private evaluation: AbortController | null = null;
-  private revision = 0;
+  private running: Promise<void> | null = null;
+  private again = false;
   private screen: ChatScope['screen'] = null;
   // Whether the latest refresh ran under a verdict.
   private judged = false;
@@ -358,11 +359,13 @@ export class ChatScreenRead {
         if (!display) return this.refresh();
         this.state.set({ ...this.state.snapshot(), ...placing(display) });
       });
-      this.leave = () => { this.revision++; this.evaluation?.abort(); store(); talk(); drawn(); passed(); lease.release(); };
+      this.leave = () => { this.again = false; this.evaluation?.abort(); store(); talk(); drawn(); passed(); lease.release(); };
       const model = this.models.chat(this.id).snapshot();
       const turn = this.currentTurn();
-      // A pass the display was missing while nobody listened was not run: it is asked for again now.
-      if (model !== this.model || turn !== this.turn || this.state.snapshot().display.pass || this.state.snapshot().pending) {
+      // A pass the display was missing while nobody listened was not run: it is asked for again now. A pass running
+      // now lands with a listener, so it is not, unless it was the one a leave just stopped.
+      const landing = this.running !== null && !this.evaluation?.signal.aborted;
+      if (model !== this.model || turn !== this.turn || (!landing && (this.state.snapshot().display.pass || this.state.snapshot().pending))) {
         this.model = model;
         this.turn = turn;
         this.refresh();
@@ -397,11 +400,28 @@ export class ChatScreenRead {
     this.models.store.projections.clear(this.id);
   }
 
-  refresh() {
-    this.evaluation?.abort();
+  // One pass at a time, and a pass that lands is shown even when a refresh came meanwhile: a streamed reply asks for
+  // one every chunk, and a pass slower than the chunks would otherwise be dropped each time, so the screen stood still
+  // until the reply paused. What changed meanwhile is taken by the one pass that follows.
+  refresh(): Promise<void> {
+    this.again = true;
+    return (this.running ??= this.drain());
+  }
+
+  private async drain() {
+    try {
+      while (this.again) {
+        this.again = false;
+        await this.pass();
+      }
+    } finally {
+      this.running = null;
+    }
+  }
+
+  private pass() {
     const evaluation = new AbortController();
     this.evaluation = evaluation;
-    const revision = ++this.revision;
     const judged = this.judged = this.verdict();
     const chat = this.model ? this.model.chat : this.opening.chat;
     const messages = withTurn(this.model ? this.model.messages : this.opening.messages, this.turn, this.id);
@@ -412,12 +432,13 @@ export class ChatScreenRead {
     });
     this.reads = reads;
     return value.then((display) => {
-      if (evaluation.signal.aborted || revision !== this.revision) return;
+      if (evaluation.signal.aborted) return;
       this.state.set({ chat, messages, ...placing(display), stuck: judged });
       // Only a visible screen's completed display may prefetch the tokenizer; account projections must not load it.
       if (this.listeners.size) store.evaluation.warm();
     }, (error: unknown) => {
-      if (evaluation.signal.aborted || revision !== this.revision || error instanceof EvaluationStopped) return;
+      // A failure is left to the pass that follows, which may not share it.
+      if (evaluation.signal.aborted || this.again || error instanceof EvaluationStopped) return;
       // The worker judged a saved chat itself; one not saved yet is judged here, on what it was displayed from. The
       // verdict's publish displays it again without the bot's regex, and a display that sticks even so fails.
       if (error instanceof EvaluationStuck && error.regex && !this.models.store.get('chat', this.id)) return this.models.store.projections.judge(this.id, this.reads);

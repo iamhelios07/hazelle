@@ -305,8 +305,9 @@ describe("the display with the bot's Lua", () => {
       });
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
       const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
-      const leave = screen.subscribe(() => {});
+      // As a chat screen does (useChatDisplay): a refresh while the first pass runs would make a second.
       screen.setInputs(opening, { width: 1200, height: 800 });
+      const leave = screen.subscribe(() => {});
       await vi.waitFor(() => expect(passed).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [-1, 0]]));
       await session.scripts.press(chat, { trigger: 'again', id: '' });
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -322,8 +323,8 @@ describe("the display with the bot's Lua", () => {
         const { chat, messages } = await chatWith(session, script);
         const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
         const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
-        const leave = screen.subscribe(() => {});
         screen.setInputs(opening, { width: 1200, height: 800 });
+        const leave = screen.subscribe(() => {});
         return { texts: () => screen.snapshot().display.texts, again: () => screen.setInputs(opening, { width: 800, height: 800 }), leave };
       };
       const { display, hold } = luaDisplays();

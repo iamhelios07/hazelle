@@ -608,6 +608,53 @@ describe('per-chat read models', () => {
     read.close();
   });
 
+  it('shows a reply as it streams when each pass is slower than the chunks, and ends on the last chunk', async () => {
+    const { store } = await account();
+    await store.create('chat', chat, { id: 'a' });
+    await hold(store, 'a');
+    const read = new ReadModels(store);
+    const talk = liveTalk();
+    const opening = { chat, messages: [] };
+    const screen = read.screen('a', talk, NO_DRAWINGS, opening);
+    const display = read.open.display.bind(read.open);
+    const passes: Promise<unknown>[] = [];
+    vi.spyOn(read.open, 'display').mockImplementation((...args) => {
+      const pass = new Promise<void>((resolve) => setTimeout(resolve, 30)).then(() => display(...args));
+      passes.push(pass);
+      return pass;
+    });
+    const replies: string[] = [];
+    const leave = screen.subscribe(() => replies.push(screen.snapshot().display.texts[1] ?? ''));
+    screen.setInputs(opening, { width: 800, height: 600 });
+    await vi.waitFor(() => expect(screen.snapshot().pending).not.toBe(true));
+    const turn: Turn = { chat: 'a', said: { id: 'said', text: 'q' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
+    for (let chunk = 1; chunk <= 12; chunk++) {
+      talk.set({ ...turn, text: 'x'.repeat(chunk) });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await vi.waitFor(() => expect(screen.snapshot().display.texts[1]).toBe('x'.repeat(12)));
+    expect(replies.filter((text) => text.length > 0 && text.length < 12).length).toBeGreaterThan(1);
+    expect(passes.length).toBeLessThan(12);
+    leave();
+    read.close();
+  });
+
+  it('shows a screen left and opened again while its first pass ran', async () => {
+    const { store } = await account();
+    await store.create('chat', chat, { id: 'a' });
+    await store.create('entry', message('hi'), { parent: 'a' });
+    await hold(store, 'a');
+    const read = new ReadModels(store);
+    const opening = { chat, messages: [] };
+    const screen = read.screen('a', liveTalk(), NO_DRAWINGS, opening);
+    screen.setInputs(opening, { width: 800, height: 600 });
+    screen.subscribe(() => {})();
+    const leave = screen.subscribe(() => {});
+    await vi.waitFor(() => expect(screen.snapshot().display.texts).toEqual(['hi']));
+    leave();
+    read.close();
+  });
+
   it('keeps a shown display through a failed one, and stays pending when none was shown', async () => {
     const { store } = await account();
     await store.create('chat', chat, { id: 'a' });

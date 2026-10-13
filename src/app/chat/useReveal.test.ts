@@ -1,14 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { revealCut, revealStep } from './useReveal';
+import { pace, revealCut, startPace } from './useReveal';
 
-describe('revealStep', () => {
-  it('spreads a burst over the wait for the next one, keeps a slow trickle moving, and never passes what arrived', () => {
-    let shown = 0;
-    for (let frame = 0; frame < 30; frame++) shown = revealStep(shown, 300, 1000 / 60);
-    expect(shown).toBeGreaterThan(100);
-    expect(shown).toBeLessThan(300);
-    expect(revealStep(0, 2, 1000)).toBe(2);
-    expect(revealStep(5, 5, 16)).toBe(5);
+describe('pace', () => {
+  it('spreads each arrival over the measured wait for the next one, and ends one wait after the last', () => {
+    let current = startPace(0, 0);
+    let now = 0;
+    const frames = (until: number) => {
+      for (; now < until; now += 16) current = pace(current, current.total, now);
+    };
+    for (let arrival = 1; arrival <= 20; arrival++) {
+      frames(arrival * 200);
+      current = pace(current, arrival * 100, now);
+    }
+    expect(current.gap).toBeGreaterThan(190);
+    expect(current.gap).toBeLessThan(201);
+    frames(now + 100);
+    expect(current.shown).toBeGreaterThan(1940);
+    expect(current.shown).toBeLessThan(1960);
+    frames(now + 120);
+    expect(current.shown).toBe(2000);
+    expect(pace(current, 1500, now).shown).toBe(1500);
   });
 });
 
