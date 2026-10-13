@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ACCOUNT_SCHEMA_VERSION } from '../db/account-db';
 import type { Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
@@ -188,6 +189,19 @@ describe('a backup generation', () => {
     const named = (incarnation: string) => accounts.find((account) => account.incarnation === incarnation)!.baseline;
     expect(named(changed.incarnation)).toMatch(new RegExp(`^${now}-`));
     expect(named(unchanged.incarnation)).toBe(unchanged.old);
+  });
+
+  it('names the baseline of the account’s timeline, not one of an older timeline stamped later by a clock put back', async () => {
+    const account = await signedUp('rewound');
+    const day = dayStart(Date.now()) - DAY_MS;
+    t.clock.now = () => day + 60 * 60_000;
+    const current = ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+    await t.env.db
+      .prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256, timeline, schema_version) VALUES ('old-timeline', ?1, 'baseline', ?2, 1, 1, 1, 'x', 'old', ?3)")
+      .bind(account.incarnation, day + 2 * 60 * 60_000, ACCOUNT_SCHEMA_VERSION)
+      .run();
+    expect((await t.daily(day + 3 * 60 * 60_000)).generation).toEqual({ outcome: 'ok', error: null });
+    expect((await newest()).accounts.find(({ incarnation }) => incarnation === account.incarnation)!.baseline).toBe(current);
   });
 
   it('names the base of a delta baseline and of a pinned delta beside them, and sizes a delta with its base', async () => {

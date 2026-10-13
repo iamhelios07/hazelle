@@ -360,7 +360,7 @@ describe('the account registry', () => {
     expect(await stores.snapshot(INC, 'baseline')).toEqual({ refused: true });
     now = 2_000_000;
     raw.prepare("UPDATE restores SET phase = 'done', ended_at = ? WHERE id = 3").run(now);
-    raw.prepare("UPDATE accounts SET state = 'active', operation = NULL").run();
+    raw.prepare("UPDATE accounts SET state = 'active', operation = NULL, timeline = 't2'").run();
     expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 2 });
   });
@@ -413,6 +413,19 @@ describe('the account registry', () => {
     expect(await take(5_000_000 + RETENTION_MS - DAY_MS, 'the base aged out of the window, a day before it expires')).toBe('whole');
     raw.prepare('UPDATE snapshots SET schema_version = ?').run(ACCOUNT_SCHEMA_VERSION - 1);
     expect(await take(5_000_000 + RETENTION_MS, 'after a schema upgrade')).toBe('whole');
+  });
+
+  it('takes a baseline on a new timeline though a baseline of the old one, stamped later by a clock put back, recorded the same rev', async () => {
+    await signup();
+    now = 2_000_000;
+    await write(put(A, 'a1'));
+    const rev = stores.inspect(INC).exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev;
+    raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256, timeline, schema_version) VALUES ('old-timeline', ?, 'baseline', 3000000, ?, 1, 1, 'x', 't1', ?)").run(INC, rev, ACCOUNT_SCHEMA_VERSION);
+    raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't2', 2500000, 'done', 1, 1, 2800000)").run(INC);
+    raw.prepare("UPDATE accounts SET timeline = 't2'").run();
+    await store().restart(INC).catch(() => {});
+    now = 3_500_000;
+    expect(await stores.snapshot(INC, 'baseline')).toMatchObject({ taken: expect.any(String) });
   });
 
   it('answers corrupt for a delta that does not materialize to the rev its row recorded', async () => {

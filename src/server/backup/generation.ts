@@ -4,7 +4,7 @@ import { copyFile, link, open, readdir, readFile, rename, rm } from 'node:fs/pro
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { AccountState, RestorePhase } from '../../contracts/admin';
-import { ACCOUNT_SCHEMA_VERSION, RETENTION_MS, snapshotPath } from '../db/account-db';
+import { ACCOUNT_SCHEMA_VERSION, CURRENT_BASELINE, RETENTION_MS, snapshotPath } from '../db/account-db';
 import { fsyncPath, makeDirs } from '../db/durable';
 import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
 import { fileKey, type Bucket, type DiskBucket } from '../files/bucket';
@@ -30,8 +30,9 @@ export type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
 // leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
 // into every account that holds one. snapshots: those baselines, every snapshot an operation pins, and the base of each
-// delta among them, each with `materialized`, an upper bound of the file it restores to: a whole one's expanded, a
-// delta's plus its base's (scripts/destroy.sh sizes a drill by it). operations: those not done, and any not yet seen
+// delta among them, each with `materialized`, an estimate of the file it restores to: a whole one's expanded, a delta's
+// plus its base's, short by what the base's indexes grow over the delta's rows (scripts/destroy.sh sizes a drill by it,
+// with its own margin). operations: those not done, and any not yet seen
 // ending. bucket: where pictures are, the pool for disk, the R2 store for r2. pictures: ids, which are their SHA-256.
 // pictures and migrations are the last two keys written, and bucket comes before them: deploy/rclone-backup.sh matches
 // that tail and the version, and keeps only a disk generation's pictures in its pool.
@@ -79,7 +80,7 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
     const all = <T>(sql: string, ...binds: (string | number)[]) => db.prepare(sql).all(...binds) as T[];
     const accounts = all<Manifest['accounts'][number]>(
       `SELECT incarnation, state,
-         (SELECT id FROM snapshots s WHERE s.incarnation = a.incarnation AND kind = 'baseline' AND taken_at <= ?1 ORDER BY taken_at DESC, id DESC LIMIT 1) AS baseline,
+         (${CURRENT_BASELINE('id', 'a', '?1')}) AS baseline,
          (SELECT COALESCE(SUM(size), 0) FROM account_files f WHERE f.incarnation = a.incarnation AND stored = 1) AS pictureBytes
        FROM accounts a ORDER BY incarnation`,
       now,

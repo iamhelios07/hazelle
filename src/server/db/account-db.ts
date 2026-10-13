@@ -30,14 +30,15 @@ const SCHEMA = [
 // replaced or already was, and a baseline taken then would read, once the rewind is done, as the account after it.
 export const TAKES_BASELINE = (a: string) =>
   `(${a}.state = 'active' OR (${a}.state = 'restoring' AND (SELECT phase FROM restores WHERE id = ${a}.operation) IN ('begun', 'fenced')))`;
-const LAST_REWIND = (incarnation: string) => `COALESCE((SELECT MAX(ended_at) FROM restores WHERE incarnation = ${incarnation} AND phase = 'done'), -1)`;
 // Over an accounts row aliased `a` and a time `now` (a bind): `column` of the account's current baseline, its newest
-// taken by `now` and not before the last rewind finished on it, or null. A rewind replaces the file, and the installed
+// on the account's timeline taken by `now`, or null. A rewind replaces the file and starts a timeline, and the installed
 // head.rev can equal the one an older baseline recorded, so only the current baseline's rev says the file is unchanged.
-// A baseline stamped after `now` is evidence of a clock since put back, not of the account's state.
-export const CURRENT_BASELINE = (column: 'taken_at' | 'rev', a: string, now: string) =>
-  `SELECT ${column} FROM snapshots WHERE incarnation = ${a}.incarnation AND kind = 'baseline' AND taken_at <= ${now}
-     AND taken_at >= ${LAST_REWIND(`${a}.incarnation`)}
+// Rows from before migration 0007 have no timeline and never count, and a baseline stamped after `now` is evidence of a
+// clock since put back, not of the account's state; the same clock would stamp a rewind's ended_at before the baselines
+// of the state it replaced, which is why time does not stand in for the timeline here or in CURRENT_BASE.
+export const CURRENT_BASELINE = (column: 'id' | 'taken_at' | 'rev', a: string, now: string) =>
+  `SELECT ${column} FROM snapshots WHERE incarnation = ${a}.incarnation AND timeline = ${a}.timeline AND kind = 'baseline'
+     AND taken_at <= ${now}
    ORDER BY taken_at DESC, id DESC LIMIT 1`;
 
 // How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
@@ -49,9 +50,8 @@ const BASE_WINDOW_MS = RETENTION_MS - 24 * 60 * 60 * 1000;
 // is a delta against, or null, and the new one is whole. Lineage is the account's timeline, which changes exactly when
 // the file stops descending from earlier snapshots: at signup (accounts.ts), a finished rewind (lifecycle.ts) and a
 // disaster restore (backup/restore.ts). Time cannot stand in for it: a disaster restore writes no rewind row while the
-// catalog keeps snapshots newer than the baseline it installed, and a clock put back stamps a rewind's ended_at before
-// snapshots of the state it replaced. A whole from before a schema upgrade is never a base: the delta is applied by
-// position over the current schema's columns.
+// catalog keeps snapshots newer than the baseline it installed (and see CURRENT_BASELINE on the clock). A whole from
+// before a schema upgrade is never a base: the delta is applied by position over the current schema's columns.
 const CURRENT_BASE = (a: string, now: string) =>
   `SELECT id FROM snapshots WHERE incarnation = ${a}.incarnation AND base IS NULL AND timeline = ${a}.timeline
      AND schema_version = ${ACCOUNT_SCHEMA_VERSION} AND taken_at > ${now} - ${BASE_WINDOW_MS}
@@ -168,7 +168,7 @@ async function verifySnapshot(dataDir: string, service: Db, incarnation: string,
   return { base: row.base, rev: row.rev };
 }
 
-// The one reader of a snapshot's format: writes snapshot `id` to `target` as a plain whole account file.
+// The one reader of a snapshot's format; every caller gets a plain whole account file.
 export async function materializeSnapshot(dataDir: string, service: Db, incarnation: string, id: string, target: string): Promise<void> {
   const { base, rev } = await verifySnapshot(dataDir, service, incarnation, id);
   await pipeline(createReadStream(snapshotPath(dataDir, incarnation, base ?? id)), createGunzip(), createWriteStream(target));

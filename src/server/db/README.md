@@ -40,8 +40,8 @@ a second rewind to the same snapshot installs again), `wal_checkpoint(TRUNCATE)`
 file, fsync the directory. The WAL and shm go first so an orphan WAL is never replayed onto the installed file.
 
 Snapshots (`src/server/backup/snapshots.ts`, run by the daily job at `HAZELLE_SNAPSHOT_HOUR` UTC): an account's current baseline is
-its newest one not taken before its last finished rewind; a checkpoint never counts as one, nor does a baseline stamped after now (a
-clock since put back). Every active account whose current baseline is from before today (UTC) or absent is selected; inside the
+its newest one on the account's current timeline (a row records the timeline at capture; one from before migration 0007 has none and never
+counts); a checkpoint never counts as one, nor does a baseline stamped after now (a clock since put back). Every active account whose current baseline is from before today (UTC) or absent is selected; inside the
 account's queue the take compares the file's `head.rev` with the `snapshots.rev` its current baseline recorded and, when they are
 equal, copies nothing (`backup_runs.detail.unchanged`), since that baseline is still the account. An asked-for job (`backups.fresh`, SIGUSR2 before an
 upgrade) selects every live account instead of those from before today, and a take that fails there fails its generation. A baseline is taken only of an
