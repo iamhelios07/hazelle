@@ -5,15 +5,18 @@ import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
 import { PAGES, UNKNOWN } from '../common/words';
-import { Avatar, Button, FaceRow, NavBar, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
+import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { LeaveSection } from './LeaveSection';
 import { NoticesSection } from './NoticesSection';
 import { ReportSection } from './ReportSection';
 import { SharedLinksSection } from './SharedLinksSection';
 
-// bytes is null while the server could not read it.
-const used = (name: string, bytes: number | null, cap: number | null) => `${name} ${bytes === null ? UNKNOWN : sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
+// bytes is null while the server could not read it; a meter only where both it and the cap are known.
+function Used({ label, bytes, cap }: { label: string; bytes: number | null; cap: number | null }) {
+  const share = bytes !== null && cap ? bytes / cap : undefined;
+  return <Gauge label={label} share={share} amount={bytes === null ? UNKNOWN : sizeText(bytes)} of={cap === null ? undefined : `/ ${sizeText(cap)}`} />;
+}
 
 // section: the one the page was opened at (shell/routes).
 export function AccountScreen({ section, back }: { section: 'notices' | null; back: Back | null }) {
@@ -22,28 +25,14 @@ export function AccountScreen({ section, back }: { section: 'notices' | null; ba
   const { suspended, storage } = useStanding();
   const toast = useToast();
   return (
-    <Screen width="form" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
-      <FaceRow face={<Avatar face={username} tone="you" />}>
-        <Text>{username}</Text>
-        <Text variant="note">
-          {suspended ? '로그인한 계정 · 정지됨' : '로그인한 계정'}
-        </Text>
-      </FaceRow>
-      <SettingGroup label="계정">
-        <SettingRow
-          label="저장 공간"
-          help="이미지는 삭제해도 사용량이 줄지 않아요."
-          sub={`${used('텍스트', storage.bytes, storage.bytesCap)} · ${used('이미지', storage.fileBytes, storage.fileBytesCap)}`}
-          control={null}
-        />
-        <SettingRow
-          label={PAGES.usage}
-          control={
-            <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'usage' })}>
-              보기
-            </Button>
-          }
-        />
+    <Screen width="page" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
+      <Panel>
+        <FaceRow face={<Avatar face={username} tone="you" />}>
+          <Text>{username}</Text>
+          <Text variant="note">
+            {suspended ? '로그인한 계정 · 정지됨' : '로그인한 계정'}
+          </Text>
+        </FaceRow>
         <SettingRow
           label="잠그기"
           help="다시 열 때 비밀번호가 필요해요."
@@ -62,14 +51,28 @@ export function AccountScreen({ section, back }: { section: 'notices' | null; ba
             </Button>
           }
         />
-      </SettingGroup>
-      <BackupSection />
-      <SharedLinksSection />
-      <NoticesSection seek={section === 'notices'} />
-      <ReportSection />
-      <Section title="앱 정보">
-        <LegalNotice />
-      </Section>
+      </Panel>
+      <Columns min="panel">
+        <Panel title="저장 공간" help="이미지는 삭제해도 사용량이 줄지 않아요.">
+          <Used label="텍스트" bytes={storage.bytes} cap={storage.bytesCap} />
+          <Used label="이미지" bytes={storage.fileBytes} cap={storage.fileBytesCap} />
+          <SettingRow
+            label={PAGES.usage}
+            control={
+              <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'usage' })}>
+                보기
+              </Button>
+            }
+          />
+        </Panel>
+        <BackupSection />
+        <ReportSection />
+        <SharedLinksSection />
+        <NoticesSection seek={section === 'notices'} />
+        <Panel title="앱 정보">
+          <LegalNotice />
+        </Panel>
+      </Columns>
       <LeaveSection />
     </Screen>
   );
