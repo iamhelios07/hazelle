@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
 import { featherless } from '../src/connectors/featherless';
 import { CSP } from '../src/server/static';
-import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED, pickBot } from './helpers';
+import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, pickBot, SCRIPTED, settingsPage } from './helpers';
 
 const PASSWORD = 'e2e-password';
 const NICKNAME = 'rich-steve';
@@ -40,7 +40,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();
     await page.getByRole('button', { name: '모델 선택', exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기` }).click();
-    await page.getByRole('button', { name: '모델', exact: true }).click();
+    await settingsPage(page, '모델');
     const main = page.getByRole('button', { name: /^대화 모델 · / });
     await main.click();
     await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();
@@ -48,7 +48,7 @@ test('a new account imports a card, chats through the fake provider and finds th
   });
 
   await test.step('give the default persona a 별명, which lists show and no request carries', async () => {
-    await page.getByRole('button', { name: '페르소나', exact: true }).click();
+    await settingsPage(page, '페르소나');
     await page.getByRole('button', { name: /^e2e/ }).click();
     await page.getByLabel('별명', { exact: true }).fill(NICKNAME);
     await expect(page.getByRole('button', { name: new RegExp(`^e2e ${NICKNAME}`) })).toBeVisible();

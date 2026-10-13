@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { embedded, enter, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, importFile, pickBot, saving, type FakeChatRequest } from './helpers';
+import { embedded, enter, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, importFile, pickBot, saving, settingsPage, type FakeChatRequest } from './helpers';
 
 // Ports of public plugins live in the private docs repo (their licenses are unknown), so this file runs only beside it.
 const HYPAPLUS = fileURLToPath(new URL('../docs/research/ports/hypaplus/hypaplus.js', import.meta.url));
@@ -42,7 +42,7 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
     await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기`, exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_EMBED} 즐겨찾기`, exact: true }).click();
     // Through the app, not page.goto: a reload would drop the stars still on their way to the server.
-    await page.getByRole('button', { name: '모델', exact: true }).click();
+    await settingsPage(page, '모델');
     for (const [role, model] of [['대화 모델', FAKE_MODEL], ['보조 모델', FAKE_MODEL], ['임베딩 모델', FAKE_EMBED]] as const) {
       const picker = page.getByRole('button', { name: new RegExp(`^${role} · `) });
       if ((await picker.innerText()).includes(model)) continue;

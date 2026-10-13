@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { embedded, enter, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, importFile, pickBot, saving, type FakeChatRequest } from './helpers';
+import { embedded, enter, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, importFile, pickBot, saving, settingsPage, type FakeChatRequest } from './helpers';
 
 const NOTE = 'The brass key is under the lantern.';
 const summary = (index: number) => `TOOL_SUMMARY_${index}: the gate is open.`;
@@ -54,7 +54,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
       await page.getByRole('button', { name: '모델 선택', exact: true }).click();
       await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기`, exact: true }).click();
       // Through the app, not page.goto: a reload would drop the star still on its way to the server.
-      await page.getByRole('button', { name: '모델', exact: true }).click();
+      await settingsPage(page, '모델');
     } else await page.goto('/models');
     for (const role of ['대화 모델', '보조 모델']) {
       const picker = page.getByRole('button', { name: new RegExp(`^${role} · `) });
@@ -172,7 +172,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기`, exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_EMBED} 즐겨찾기`, exact: true }).click();
     // Through the app, not page.goto: a reload would drop the stars still on their way to the server.
-    await page.getByRole('button', { name: '모델', exact: true }).click();
+    await settingsPage(page, '모델');
     for (const role of ['대화 모델', '보조 모델']) {
       const picker = page.getByRole('button', { name: new RegExp(`^${role} · `) });
       if ((await picker.innerText()).includes(FAKE_MODEL)) continue;

@@ -235,3 +235,7 @@ export async function importFile(page: Page, button: string | ((page: Page) => P
 
 // A write shows at once and reaches the server after; a navigation before it lands loses it.
 export const saving = (page: Page) => page.waitForResponse((response) => response.url().includes('/api/objects/batch') && response.request().method() === 'POST');
+
+// A settings page from the settings sidebar, whose rows read their label then what the page holds (모델 2개).
+export const settingsPage = (page: Page, label: string) =>
+  page.getByRole('navigation', { name: '설정' }).getByRole('button', { name: new RegExp(`^${label}( |$)`) }).click();

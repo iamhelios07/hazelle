@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page, type Route } from '@playw
 import { build, type Rollup } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { GENERATION_STEPS } from '../src/runtime/testing/cache';
-import { CARD, pickBot } from './helpers';
+import { CARD, pickBot, settingsPage } from './helpers';
 
 // A restore here must land between two given requests of a tab, so every /api answer comes from FakeServer, which
 // answers as the objects routes do (server/objects.ts) and switches its timeline when told. Tabs are pages of one
@@ -282,7 +282,7 @@ test('an edit made offline across a restore is dropped and counted when the tab 
   const server = await served(page.context());
   await signUp(page);
   await page.keyboard.press('Control+,');
-  await page.getByRole('button', { name: '페르소나', exact: true }).click();
+  await settingsPage(page, '페르소나');
   await page.getByRole('button', { name: /^e2e/ }).click();
   const alias = page.getByLabel('별명', { exact: true });
   await expect(alias).toHaveValue('');
@@ -314,7 +314,7 @@ test('a restore between the two scans of a backup export fails the export and wr
   // The metadata scan is answered on the old timeline, and the body scan is asked on the new one.
   server.hold(page, (url) => url.pathname === '/api/objects' && url.searchParams.has('metadata') && !url.searchParams.has('parent'));
   await page.keyboard.press('Control+,');
-  await page.getByRole('button', { name: '계정', exact: true }).click();
+  await settingsPage(page, '계정');
   await page.getByRole('button', { name: '내보내기', exact: true }).click();
   await expect.poll(() => server.held(page)).toBe(1);
   server.restore(server.snapshot(), 't1');
