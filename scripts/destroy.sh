@@ -32,12 +32,13 @@ id=$(remote 'set -eu
   [ -f "/data/backup/$id/copied" ] || { echo "destroy: $id is not marked copied" >&2; exit 1; }
   rclone copyto "$remote/$id/manifest.json" /drill/manifest.json
   grep -Eq "^\{\"version\":[0-9]+,\"id\":\"$id\"," $drill/manifest.json || { echo "destroy: the remote manifest of $id names another generation" >&2; exit 1; }
-  grep -q "\"expanded\":" $drill/manifest.json ||
-    { echo "destroy: the manifest of $id records no expanded sizes (an older build wrote it); run this after the next daily generation" >&2; exit 1; }
+  grep -q "\"materialized\":" $drill/manifest.json ||
+    { echo "destroy: the manifest of $id records no materialized sizes (an older build wrote it); run this after the next daily generation" >&2; exit 1; }
   grep -o "\"pictures\":\[[^]]*\]" $drill/manifest.json | grep -o "[0-9a-f]\{64\}" >$drill/pictures || true
   sum() { grep -o "\"$1\":[0-9]*" $drill/manifest.json | cut -d: -f2 | awk "{ s += \$1 } END { print s + 0 }"; }
   artifacts=$(sum bytes)
-  expanded=$(sum expanded)
+  service=$(grep -o "\"service\":{[^}]*}" $drill/manifest.json | grep -o "\"expanded\":[0-9]*" | cut -d: -f2)
+  expanded=$((service + $(sum materialized)))
   held=$(sum pictureBytes)
   # No pictures: the remote may have no files/ at all.
   pictures=0
@@ -48,9 +49,10 @@ id=$(remote 'set -eu
   space=$(df -Pk $drill | awk "NR == 2 { print \$2, \$4 }")
   disk_kb=${space% *}
   free_kb=${space#* }
-  # The restore gunzips the service and each account file (expanded, summed over every snapshot: a rewound account is
-  # installed from a second one), copies the snapshots as they are (artifacts, which counts the service gzip too) and
-  # copies each picture into every account holding it (held).
+  # The restore gunzips the service and materializes each account file (expanded: the service's size and every
+  # snapshot's materialized one, a delta counted with its base, a rewound account's target as a second file), copies the
+  # snapshots as they are (artifacts, which counts the service gzip too) and copies each picture into every account
+  # holding it (held).
   download=$((artifacts + pictures))
   restore=$((expanded + artifacts + held))
   need=$((download + restore + disk_kb * 1024 / 5))

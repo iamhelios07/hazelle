@@ -476,6 +476,7 @@ describe('restore', () => {
   });
 
   it('leaves the new operation and its marker untouched when an older runner resumes after the fence', async () => {
+    raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline) VALUES (?, 'jin', 'h', 1, ?, 'active', 't1') ON CONFLICT DO NOTHING").run(A, INC);
     await write(put(A));
     row = restoring(7);
     await restart();

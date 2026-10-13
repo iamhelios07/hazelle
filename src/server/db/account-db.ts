@@ -42,14 +42,19 @@ export const CURRENT_BASELINE = (column: 'taken_at' | 'rev', a: string, now: str
 
 // How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
 export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-// A day short of retention: a base chosen for a capture is still unexpired (backup/snapshots.ts runs hourly) when the
-// capture's row comes to name it, however long the archive takes.
+// A day short of retention, and expiry runs in the daily job: a base chosen for a capture is at least a day from expiry,
+// longer than any capture takes to name it.
 const BASE_WINDOW_MS = RETENTION_MS - 24 * 60 * 60 * 1000;
-// For an incarnation and a time `now` (binds): the id and rev of the whole snapshot a new snapshot is a delta against,
-// or no row, and the new one is whole. Only a finished rewind replaces the file; a cancelled one leaves it untouched.
-export const CURRENT_BASE = (incarnation: string, now: string) =>
-  `SELECT id, rev FROM snapshots WHERE incarnation = ${incarnation} AND base IS NULL AND taken_at > ${now} - ${BASE_WINDOW_MS}
-     AND taken_at >= ${LAST_REWIND(incarnation)}
+// Over an accounts row aliased `a` and a time `now` (a bind): the id of the whole snapshot a new snapshot of the account
+// is a delta against, or null, and the new one is whole. Lineage is the account's timeline, which changes exactly when
+// the file stops descending from earlier snapshots: at signup (accounts.ts), a finished rewind (lifecycle.ts) and a
+// disaster restore (backup/restore.ts). Time cannot stand in for it: a disaster restore writes no rewind row while the
+// catalog keeps snapshots newer than the baseline it installed, and a clock put back stamps a rewind's ended_at before
+// snapshots of the state it replaced. A whole from before a schema upgrade is never a base: the delta is applied by
+// position over the current schema's columns.
+const CURRENT_BASE = (a: string, now: string) =>
+  `SELECT id FROM snapshots WHERE incarnation = ${a}.incarnation AND base IS NULL AND timeline = ${a}.timeline
+     AND schema_version = ${ACCOUNT_SCHEMA_VERSION} AND taken_at > ${now} - ${BASE_WINDOW_MS}
    ORDER BY taken_at DESC, id DESC LIMIT 1`;
 
 const MAX_HANDLES = 256;
@@ -163,8 +168,7 @@ async function verifySnapshot(dataDir: string, service: Db, incarnation: string,
   return { base: row.base, rev: row.rev };
 }
 
-// The one reader of a snapshot's format: writes snapshot `id` to `target` as a plain whole account file. A delta is
-// applied on a copy of its base; a delta whose result is not the rev its row recorded is corrupt.
+// The one reader of a snapshot's format: writes snapshot `id` to `target` as a plain whole account file.
 export async function materializeSnapshot(dataDir: string, service: Db, incarnation: string, id: string, target: string): Promise<void> {
   const { base, rev } = await verifySnapshot(dataDir, service, incarnation, id);
   await pipeline(createReadStream(snapshotPath(dataDir, incarnation, base ?? id)), createGunzip(), createWriteStream(target));
@@ -243,8 +247,8 @@ export class AccountDb implements StoreDb {
     return this.exec<{ size: number }>('SELECT page_count * page_size AS size FROM pragma_page_count(), pragma_page_size()')[0]!.size;
   }
 
-  // Capture runs on the account queue: eligibility, takenAt, the base and rev must describe the same file, before any
-  // later checkpoint or replacement. Publishing the private copy needs no live handle or account queue.
+  // Capture runs on the account queue: eligibility, takenAt, the timeline, the base and rev must describe the same file,
+  // before any later checkpoint or replacement. Publishing the private copy needs no live handle or account queue.
   async captureSnapshot(kind: SnapshotKind, operation: number | null): Promise<() => Promise<string>> {
     const takenAt = this.clock();
     const id = `${takenAt}-${random()}`;
@@ -252,7 +256,10 @@ export class AccountDb implements StoreDb {
     makeDirs(dir);
     const plain = join(dir, `.tmp-${id}.sqlite`);
     const gz = join(dir, `.tmp-${id}.sqlite.gz`);
-    const base = await this.service.prepare(CURRENT_BASE('?1', '?2')).bind(this.incarnation, takenAt).first<{ id: string; rev: number }>();
+    const { timeline, base, baseRev } = (await this.service
+      .prepare(`SELECT a.timeline, s.id AS base, s.rev AS baseRev FROM accounts a LEFT JOIN snapshots s ON s.id = (${CURRENT_BASE('a', '?2')}) WHERE a.incarnation = ?1`)
+      .bind(this.incarnation, takenAt)
+      .first<{ timeline: string; base: string | null; baseRev: number | null }>())!;
     let rev: number;
     try {
       if (base === null) {
@@ -268,7 +275,7 @@ export class AccountDb implements StoreDb {
             // since the base. A hard delete there needs a purge log this delta carries first.
             db.exec(`CREATE TABLE delta.head AS SELECT * FROM main.head;
               CREATE TABLE delta.kv AS SELECT * FROM main.kv;
-              CREATE TABLE delta.objects AS SELECT * FROM main.objects WHERE rev > ${base.rev};`);
+              CREATE TABLE delta.objects AS SELECT * FROM main.objects WHERE rev > ${baseRev};`);
             return this.exec<{ rev: number }>('SELECT rev FROM delta.head')[0]!.rev;
           });
         } finally {
@@ -287,8 +294,8 @@ export class AccountDb implements StoreDb {
         // The row follows the durable artifact. A crash before publication leaves a .tmp-* or uncatalogued gzip
         // for reconciliation; the capture's time and revision never advance to publication time.
         await this.service
-          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256, base) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256, base?.id ?? null)
+          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256, base, timeline, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256, base, timeline, ACCOUNT_SCHEMA_VERSION)
           .run();
       } finally {
         rmSync(plain, { force: true });

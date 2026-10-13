@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import type { RestorePhase } from '../../contracts/admin';
 import { serviceReads } from '../account-store';
-import { accountRegistry } from '../db/account-db';
+import { accountRegistry, materializeSnapshot, RETENTION_MS } from '../db/account-db';
 import { openDatabase, serviceDb, type Db, type Statement } from '../db/service-db';
 import { diskBucket } from '../files/disk-bucket';
 import { fakeS3 } from '../files/fake-s3';
@@ -20,6 +21,7 @@ import app from '../worker';
 import { backups } from './backups';
 import { generationsDir, listGenerations, MANIFEST, POOL, readManifest } from './generation';
 import { restoreGeneration } from './restore';
+import { DAY_MS, dayStart } from './snapshots';
 
 const HOUR_MS = 60 * 60 * 1000;
 const X = '11111111-1111-4111-8111-111111111111';
@@ -249,6 +251,59 @@ it('restores an account whose baseline is a delta as its base with the delta app
   const stores = accountRegistry(dir, db, serviceReads(db), Date.now);
   try {
     expect({ objects: stores.inspect(user.incarnation).exec(rows), head: stores.inspect(user.incarnation).exec('SELECT rev FROM head') }).toEqual(live);
+  } finally {
+    stores.close();
+    raw.close();
+  }
+}, 30_000);
+
+it('takes the first snapshot after a disaster restore whole, though the catalog keeps a whole checkpoint newer than the baseline it restored', async () => {
+  const user = await signedUp('lineage');
+  const write = (body: string) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body, baseRev: null }], null);
+  const snapshotAt = async (at: number) => {
+    t.clock.now = () => at;
+    return ((await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string }).taken;
+  };
+  const day = dayStart(Date.now()) - DAY_MS;
+  await write('in the base');
+  const base = await snapshotAt(day + 3 * HOUR_MS - (RETENTION_MS - DAY_MS));
+  await write('in the baseline');
+  const baseline = await snapshotAt(day + HOUR_MS);
+  await write('only in the checkpoint');
+  t.clock.now = () => day + 4 * HOUR_MS;
+  expect((await t.post('reports', { text: 'restore' }, user.cookie)).status).toBe(204);
+  const report = (await t.env.db.prepare('SELECT MAX(id) AS id FROM reports WHERE account_id = ?').bind(user.id).first<number>('id'))!;
+  const operation = ((await beginRestore(t.env, user.id, report, { at: day + 2 * HOUR_MS })) as { begun: number }).begun;
+  await expect(runRestore(stoppingAt('targeted'), operation)).rejects.toThrow(Stop);
+  expect(await cancelRestore(t.env, operation)).toMatchObject({ phase: 'cancelled' });
+  const checkpoint = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(operation).first<string>('checkpoint'))!;
+  const bases = 'SELECT id, base FROM snapshots ORDER BY taken_at';
+  expect((await t.env.db.prepare(bases).all()).results).toEqual([{ id: base, base: null }, { id: baseline, base }, { id: checkpoint, base: null }]);
+
+  expect((await t.daily(day + 5 * HOUR_MS)).generation).toEqual({ outcome: 'ok', error: null });
+  const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
+  const manifest = (await readManifest(generation))!;
+  expect(manifest.accounts.map((account) => account.baseline)).toEqual([baseline]);
+  expect(manifest.snapshots.map(({ id }) => id).toSorted()).toEqual([base, baseline, checkpoint].toSorted());
+  const dir = emptyDir();
+  await restoreGeneration(generation, dir, 'migrations', diskBucket(dir));
+  const raw = openDatabase(join(dir, 'service.sqlite'));
+  const db = serviceDb(raw);
+  const stores = accountRegistry(dir, db, serviceReads(db), Date.now);
+  try {
+    const timeline = (await db.prepare('SELECT timeline FROM accounts WHERE id = ?').bind(user.id).first<string>('timeline'))!;
+    expect(await stores.getByName(user.incarnation).batch(user.incarnation, timeline, [{ id: X, kind: 'chat', parent: null, body: 'after the restore', baseRev: null }], null)).toMatchObject({ revs: [3] });
+    const { taken } = (await stores.snapshot(user.incarnation, 'baseline')) as { taken: string };
+    expect(await db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(taken).first('base')).toBeNull();
+    const target = join(dir, 'materialized.sqlite');
+    await materializeSnapshot(dir, db, user.incarnation, taken, target);
+    const rows = 'SELECT id, rev, body FROM objects ORDER BY id';
+    const file = new DatabaseSync(target, { readOnly: true });
+    try {
+      expect(file.prepare(rows).all().map((row) => ({ ...row }))).toEqual(stores.inspect(user.incarnation).exec(rows));
+    } finally {
+      file.close();
+    }
   } finally {
     stores.close();
     raw.close();

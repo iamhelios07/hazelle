@@ -48,8 +48,10 @@ upgrade) selects every live account instead of those from before today, and a ta
 account that is active or restoring before its operation's checkpoint (begun, fenced), read from the service inside the account's
 queue; any other is skipped.
 A snapshot goes at 7 days (`RETENTION_MS`) unless pinned. A delta is taken against the account's base, its newest whole snapshot
-taken at or after its last finished rewind and younger than 6 days, a day short of expiry so a base chosen for a capture is not expired before
-the capture's row names it (none: the snapshot taken is whole), never against another delta; a whole snapshot stays while any delta names it, so it lives up to 13 days. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
+taken on the account's current timeline (a row records it; signup, a finished rewind and a disaster restore each start a new one) at the
+current account schema version and younger than 6 days, a day short of expiry so a base chosen for a capture is not expired before
+the capture's row names it (none: the snapshot taken is whole), never against another delta; a whole snapshot stays as long as a delta
+names it, normally up to 13 days (a delta that is the account's floor keeps its base as long as itself). An operation pins its checkpoint and target (an undo's from its begin) until it ends and
 for 7 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
 recoverable by hand. A live account keeps its floor, its newest baseline 7 days old or older, whatever its age: a time inside the
 window may land on it. Pins are read from `restores`, so a deleted account
@@ -66,7 +68,7 @@ nothing is pooled; a deleted account's pictures stay there until `picture_remova
 when the hourly sweep removes them, so every kept generation still finds its pictures. The manifest (version 3) says which by
 `bucket`; a version 2 manifest is one whose snapshots are all whole, a version 1 manifest is a disk one, and a build before version 3
 refuses one. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The archive worker then compacts, checks and gzips the service copy, and `manifest.json` is written last (temp,
-fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256) and a database's size gzipped and gunzipped, each account's stored picture bytes, the migrations applied,
+fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256) and a database's size gzipped and gunzipped (a snapshot's also materialized: a delta's with its base's, which `scripts/destroy.sh` sizes a drill by), each account's stored picture bytes, the migrations applied,
 the account schema version, and every operation not done or not yet seen ending. A directory without a manifest is cut off and goes
 after a day; a generation goes at 7 days, and sooner once copied off-site unless it is one of the two newest or the newest of its UTC
 day (every deploy captures one); then every pooled picture no remaining disk generation names. The remote (`deploy/rclone-backup.sh`) drops its own generations by the same rule, read from its listing alone.
