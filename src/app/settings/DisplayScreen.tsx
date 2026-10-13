@@ -4,7 +4,7 @@ import { PAGES } from '../common/words';
 import { useDisplay } from '../display';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { ChoiceGroup, NavBar, PreviewSplit, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
+import { Beside, ChoiceGroup, NavBar, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
   { name: '캐릭터', mine: false, html: '<p><em>창밖으로 늦은 오후의 햇살이 기울어 든다. 그녀는 찻잔을 내려놓고 고개를 들었다.</em></p><p>"오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아."</p>' },
@@ -25,8 +25,9 @@ export function DisplayScreen({ back }: { back: Back | null }) {
           items={presets.map((preset) => ({ name: preset.name, note: describeLook(preset.look), ...preset.look, current: preset === current, onPick: () => pick(preset) }))}
         />
       </Section>
-      <PreviewSplit
-        preview={
+      <Beside
+        variant="preview"
+        side={
           <Section title="미리보기">
             <ReadingPreview label="미리보기" reading={reading} rows={SAMPLE} />
           </Section>
@@ -60,7 +61,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             />
           </SettingGroup>
         </Section>
-      </PreviewSplit>
+      </Beside>
     </Screen>
   );
 }

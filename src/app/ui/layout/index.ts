@@ -7,7 +7,6 @@ export { EditorFrame } from './EditorFrame';
 export { ListDetail } from './ListDetail';
 export { NavBar, type NavBarProps } from './NavBar';
 export { Panel } from './Panel';
-export { PreviewSplit } from './PreviewSplit';
 export { Row } from './Row';
 export { Screen } from './Screen';
 export { Section } from './Section';
