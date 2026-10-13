@@ -369,6 +369,8 @@
   /* Beside: the body's least width (a Table stays wide in it) and the column beside it. */
   --beside-main-min-width: 600px;
   --beside-side-min-width: 300px;
+  /* A screen title's least width beside its actions. */
+  --title-min-width: 120px;
 
   /* The gap a menu keeps from the screen's sides, the phone gutter. layers.ts reads it too. */
   --menu-edge: var(--space-16);

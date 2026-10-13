@@ -1,7 +1,7 @@
 .columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--column-min)), 1fr));
-  align-items: start;
+  /* Cards in one line share its height, so no one stands out; their contents stay at the top. */
   gap: var(--space-16);
 }
 

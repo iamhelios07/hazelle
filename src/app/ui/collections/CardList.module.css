@@ -4,7 +4,6 @@
   list-style: none;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tile-wide-min-width)), 1fr));
-  align-items: start;
   gap: var(--space-8);
 }
 
