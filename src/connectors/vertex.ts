@@ -85,4 +85,18 @@ export const vertex: ConnectionType = {
   usagePage: 'https://console.cloud.google.com/billing',
   // The gemini codec embeds through batchEmbedContents; Vertex AI embeds through predict.
   embeds: null,
+  // Flex PayGo (docs.cloud.google.com/vertex-ai/generative-ai/docs/flex-paygo, 2026-10-14): half of input and output, on
+  // the global endpoint only, asked for with both headers; the second alone lets Provisioned Throughput serve it first.
+  // The page names no cached-input rate, so cache rates are kept whole, which errs high. Which models take it the model
+  // list does not say; a model refusing it fails at the provider with 400 INVALID_ARGUMENT. The page names no refusal
+  // for want of Flex capacity, and a 429 RESOURCE_EXHAUSTED is also the project's own quota, met off the lane too, so no
+  // refusal is read as the lane's. Unverified against a live refusal.
+  discount: {
+    lane: 'tier',
+    headers: { 'x-vertex-ai-llm-request-type': 'shared', 'x-vertex-ai-llm-shared-request-type': 'flex' },
+    served: 'ON_DEMAND_FLEX',
+    busy: () => false,
+    accepted: null,
+    rates: { input: 0.5, output: 0.5, cacheRead: 1, cacheWrite: 1 },
+  },
 };

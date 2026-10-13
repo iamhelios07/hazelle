@@ -223,12 +223,12 @@ type TypeHooks = {
 
 // Half price for a slower answer (design §6.7). rates: what each of the model's Price rates is multiplied by once the
 // lane served the call, never because it was asked for. accepted: whether the model takes the lane; null where its
-// catalog does not say. tier: the same call at a slower service tier, asked for with fields laid over the body; the
-// reply's reported tier (StreamFacts tier) equal to served is what says the lane served it; busy, whether a refusal
+// catalog does not say. tier: the same call at a slower service tier, asked for with fields laid over the body, headers
+// laid over the request's, or both; the reply's reported tier (StreamFacts tier) equal to served is what says the lane served it; busy, whether a refusal
 // (its status and the provider's code, where it names one) is the lane having no room for the call now, which the same
 // call off the lane would not meet. batch: the whole reply submitted as a batch of one and waited for; an answer read
 // from the batch is one the lane served.
-export type Discount = { rates: DiscountRates; accepted: Accepts } & ({ lane: 'tier'; fields: Record<string, unknown>; served: string; busy: (status: number, code: string | null) => boolean } | { lane: 'batch'; batches: Batches });
+export type Discount = { rates: DiscountRates; accepted: Accepts } & ({ lane: 'tier'; fields?: Record<string, unknown>; headers?: Record<string, string>; served: string; busy: (status: number, code: string | null) => boolean } | { lane: 'batch'; batches: Batches });
 export type DiscountRates = Record<'input' | 'output' | 'cacheRead' | 'cacheWrite', number>;
 
 // Every request is built without the credential, which is added last (registry withCredential), as for a chat. key: the

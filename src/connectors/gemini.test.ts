@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import recorded from './fixtures/gemini.json';
 import { chatRequest, detect, embedAnswer, embedRequest, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
+import { gemini } from './gemini';
 import { decodeStream } from './stream';
-import type { Phase } from './types';
+import type { Phase, StreamFacts } from './types';
 
 const google = resolveConnection({ type: 'google', label: 'Google', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] }) as Route;
 const [flash, old] = parseCatalog(google, recorded.models)!;
@@ -72,6 +73,17 @@ describe('Gemini', () => {
     const safety = { candidates: [{ content: { parts: [], role: 'model' }, finishReason: 'SAFETY', finishMessage: 'blocked' }] };
     expect((await decode(sse(safety))).outcome).toMatchObject({ state: 'failed', error: { detail: 'SAFETY: blocked' } });
     expect((await decode(sse(recorded.error))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Resource has been exhausted (e.g. check quota).' } });
+  });
+
+  it('reports the tier usageMetadata says served it, streamed and whole, which Google’s batch lane does not read', async () => {
+    const event = { candidates: [{ content: { parts: [{ text: '안녕' }], role: 'model' }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, trafficType: 'ON_DEMAND_FLEX' } };
+    const facts = (): StreamFacts => ({ rawUsage: {}, finishReason: null, id: null, tier: null });
+    const streamed = facts();
+    gemini.read(event, streamed, () => {});
+    const whole = facts();
+    gemini.whole(event, whole, () => {});
+    expect([streamed.tier, whole.tier]).toEqual(['ON_DEMAND_FLEX', 'ON_DEMAND_FLEX']);
+    expect((await decode(sse(event))).outcome.discount).toBeUndefined();
   });
 
   it('embeds in one batch with the purpose as its task type, and reads the vectors in order', () => {

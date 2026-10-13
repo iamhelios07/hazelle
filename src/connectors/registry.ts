@@ -209,14 +209,18 @@ export function chatRequest(route: Route, request: ChatRequest): HttpRequest {
 
 function codecRequest(route: Route, sent: ChatRequest): HttpRequest {
   const { reasoning, maxOutput, discount } = sent.settings;
-  const lane = discount && route.type?.discount;
+  const lane = discount ? route.type?.discount : undefined;
+  const tier = lane?.lane === 'tier' ? lane : null;
   const fields = {
     ...(reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {}),
-    ...(lane && lane.lane === 'tier' ? lane.fields : {}),
+    ...tier?.fields,
   };
   const mark = cacheWay(route, sent.model)?.mark ?? null;
-  if (maxOutput === undefined || !route.type?.outputLimit) return route.codec.chat(route.endpoint, sent, fields, mark);
-  return route.codec.chat(route.endpoint, { ...sent, settings: { ...sent.settings, maxOutput: undefined } }, { ...fields, ...route.type.outputLimit(maxOutput) }, mark);
+  const built =
+    maxOutput === undefined || !route.type?.outputLimit
+      ? route.codec.chat(route.endpoint, sent, fields, mark)
+      : route.codec.chat(route.endpoint, { ...sent, settings: { ...sent.settings, maxOutput: undefined } }, { ...fields, ...route.type.outputLimit(maxOutput) }, mark);
+  return tier?.headers ? { ...built, headers: { ...built.headers, ...tier.headers } } : built;
 }
 
 // cache is how long the points keep it, null when none is sent. Reasoning is there because changing it drops the cached

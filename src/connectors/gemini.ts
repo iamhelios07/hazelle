@@ -63,7 +63,10 @@ function read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: s
     }
     if (typeof candidate.finishReason === 'string') facts.finishReason = candidate.finishReason;
   }
-  if (isRecord(event.usageMetadata)) Object.assign(facts.rawUsage, event.usageMetadata);
+  if (isRecord(event.usageMetadata)) {
+    Object.assign(facts.rawUsage, event.usageMetadata);
+    if (typeof event.usageMetadata.trafficType === 'string') facts.tier = event.usageMetadata.trafficType;
+  }
 }
 
 // The stream has no end marker: it closes after the chunk that names finishReason.
