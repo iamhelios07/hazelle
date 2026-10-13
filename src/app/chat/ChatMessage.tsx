@@ -345,6 +345,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       pinned={pinned}
       found={found}
       marked={marked}
+      writing={live || reveal.revealing}
       onTap={() => actions.pin(message)}
     >
       {body}

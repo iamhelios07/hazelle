@@ -1,0 +1,62 @@
+import { useLayoutEffect, type RefObject } from 'react';
+
+// Named in StoryMessage.module.css, as data-reading.
+export const MESSAGE = 'data-story-message';
+export const READING = 'data-reading';
+export const RAIL = 'data-rail';
+
+// The reader's place in a message taller than the story's view, which is the room between the header and the
+// composer: the message across the view's middle is marked, and its rail (StoryMessage) given the share of it come
+// above the composer and its length. The rail sits stuck where its sticky top puts it, so the length runs from there
+// to the message's end or to the composer, whichever comes first.
+export function useReadingRail(scrollRef: RefObject<HTMLElement | null>, footerRef: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current!;
+    const footer = footerRef.current!;
+    let marked: HTMLElement | null = null;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      const style = getComputedStyle(scroll);
+      const gap = parseFloat(style.getPropertyValue('--space-16'));
+      const top = scroll.getBoundingClientRect().top + parseFloat(style.getPropertyValue('--header-height'));
+      const bottom = footer.getBoundingClientRect().top;
+      const middle = (top + bottom) / 2;
+      let reading: HTMLElement | null = null;
+      let box: DOMRect | null = null;
+      for (const message of scroll.querySelectorAll<HTMLElement>(`[${MESSAGE}]`)) {
+        box = message.getBoundingClientRect();
+        if (box.top <= middle && box.bottom >= middle) {
+          reading = message;
+          break;
+        }
+      }
+      if (reading && box!.height <= bottom - top) reading = null;
+      if (reading !== marked) {
+        marked?.removeAttribute(READING);
+        reading?.setAttribute(READING, '');
+        marked = reading;
+      }
+      if (!reading) return;
+      const rail = reading.querySelector(`[${RAIL}]`)!.getBoundingClientRect();
+      const share = Math.min(1, Math.max(0, (bottom - box!.top) / box!.height));
+      reading.style.setProperty('--reading-length', `${Math.min(box!.bottom, bottom - gap) - Math.max(rail.top, top + gap)}px`);
+      reading.style.setProperty('--reading-share', String(share));
+      reading.style.setProperty('--reading-percent', String(Math.round(share * 100)));
+    };
+    const schedule = () => {
+      frame ||= requestAnimationFrame(place);
+    };
+    scroll.addEventListener('scroll', schedule, { passive: true });
+    const observer = new ResizeObserver(schedule);
+    observer.observe(scroll);
+    observer.observe(scroll.firstElementChild!);
+    observer.observe(footer);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      scroll.removeEventListener('scroll', schedule);
+      marked?.removeAttribute(READING);
+    };
+  }, [scrollRef, footerRef]);
+}

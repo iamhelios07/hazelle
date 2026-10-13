@@ -2,6 +2,7 @@ import { ChevronLeft } from 'lucide-react';
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { usePanelsBeside } from '../foundation/media';
+import { useReadingRail } from '../story/readingRail';
 import styles from './ChatFrame.module.css';
 
 type Spacing = 'narrow' | 'normal' | 'wide';
@@ -68,6 +69,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   const contentRef = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState({ stage: 0, lead: 0, text: 0 });
   const staged = stage && room.stage >= room.text / 2;
+  useReadingRail(scrollRef, footerRef);
 
   useLayoutEffect(() => {
     const element = footerRef.current!;

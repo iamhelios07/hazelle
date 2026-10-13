@@ -5,6 +5,69 @@
   gap: var(--space-16);
 }
 
+/* The avatar's column runs down the whole message and holds, under the avatar, the reader's place in a message taller
+   than the view (readingRail.ts), shown on the message it marks. */
+.side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.rail {
+  flex-grow: 1;
+}
+
+/* Its top is the one readingRail.ts measures the length from. */
+.reading {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-16));
+  height: var(--reading-length);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.message[data-reading] .reading {
+  display: flex;
+}
+
+.track {
+  position: relative;
+  flex-grow: 1;
+  width: var(--border-thick);
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  overflow: hidden;
+}
+
+.fill {
+  position: absolute;
+  inset: 0;
+  background: var(--color-accent);
+  transform: scaleY(var(--reading-share));
+  transform-origin: top;
+}
+
+/* A message still being written has no end yet: its track fades out, and no share is given. */
+.writing .track {
+  mask-image: linear-gradient(to bottom, var(--color-accent) calc(100% - var(--space-24)), transparent);
+}
+
+.share {
+  counter-reset: reading var(--reading-percent);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  line-height: var(--leading-none);
+  font-variant-numeric: tabular-nums;
+}
+
+.share::after {
+  content: counter(reading) '%';
+}
+
 .main {
   flex-grow: 1;
   min-width: 0;
@@ -211,6 +274,7 @@
   min-width: var(--space-32);
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+  line-height: var(--leading-none);
   font-variant-numeric: tabular-nums;
   text-align: center;
   border-radius: var(--radius-sm);

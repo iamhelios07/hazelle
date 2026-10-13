@@ -6,6 +6,7 @@ import { Icon } from '../foundation/Icon';
 import { useHover } from '../foundation/media';
 import { Menu, MenuItem } from '../overlays/Menu';
 import { RowMemoryContext } from '../collections/row-memory';
+import { MESSAGE, RAIL } from './readingRail';
 import styles from './StoryMessage.module.css';
 
 const BADGES_SHOWN = 2;
@@ -28,9 +29,11 @@ type Props = {
   found?: number;
   // Marked while true, with no fade.
   marked?: boolean;
+  // Still being written: its reading rail has no end yet.
+  writing?: boolean;
 };
 
-export function StoryMessage({ avatar, name, time, mine, mark, badges = [], children, after, tools, pinned, onTap, found = 0, marked = false }: Props) {
+export function StoryMessage({ avatar, name, time, mine, mark, badges = [], children, after, tools, pinned, onTap, found = 0, marked = false, writing = false }: Props) {
   const hover = useHover();
   const foundDelay = useMemo(() => `-${Math.max(0, Date.now() - found)}ms`, [found]);
   const memory = useContext(RowMemoryContext);
@@ -41,10 +44,20 @@ export function StoryMessage({ avatar, name, time, mine, mark, badges = [], chil
     onTap();
   };
   return (
-    <article className={`${styles.message} ${pinned ? styles.pinned : ''} ${revisited.current ? styles.revisited : ''}`} onClick={tap}>
+    <article className={`${styles.message} ${pinned ? styles.pinned : ''} ${revisited.current ? styles.revisited : ''} ${writing ? styles.writing : ''}`} onClick={tap} {...{ [MESSAGE]: '' }}>
       {found !== 0 && <span key={found} className={styles.found} style={{ animationDelay: foundDelay }} aria-hidden />}
       {marked && <span className={styles.marked} aria-hidden />}
-      {avatar}
+      <div className={styles.side}>
+        {avatar}
+        <div className={styles.rail} aria-hidden {...{ [RAIL]: '' }}>
+          <div className={styles.reading}>
+            <span className={styles.track}>
+              <span className={styles.fill} />
+            </span>
+            {!writing && <span className={styles.share} />}
+          </div>
+        </div>
+      </div>
       <div className={styles.main}>
         <div className={styles.head}>
           <span className={mine ? styles.me : styles.name}>{name}</span>
