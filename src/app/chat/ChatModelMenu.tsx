@@ -1,3 +1,4 @@
+import { Layers } from 'lucide-react';
 import { sameModelRef, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
 import { modelProfile } from '../../runtime/profiles';
@@ -6,7 +7,7 @@ import { useSearch } from '../common/useSearch';
 import { noStarred } from '../common/words';
 import { useSummaries, useConnections, useStore } from '../session';
 import { navigate } from '../shell/router';
-import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, type MenuHandle } from '../ui';
+import { ChipButton, Divider, Empty, Icon, Menu, MenuHeading, MenuItem, type MenuHandle } from '../ui';
 
 type Props = {
   // null when no layer names one.
@@ -21,7 +22,7 @@ const RECENT = 3;
 // Starred models only, recent ones first. It never lists providers.
 export function ChatModelMenu({ current, label, onPick, handle }: Props) {
   return (
-    <Menu handle={handle} place="below-end" size="lg" label="모델" trigger={(opener) => <ChipButton label={label} title="모델 바꾸기" {...opener} />}>
+    <Menu handle={handle} place="below-end" size="lg" label="모델" trigger={(opener) => <ChipButton label={label} title="모델 바꾸기" leading={<Icon icon={Layers} size="xs" />} phone="icon" {...opener} />}>
       <ModelChoices current={current} onPick={onPick} />
       <Divider variant="menu" />
       {current && <ProfileItem current={current} />}

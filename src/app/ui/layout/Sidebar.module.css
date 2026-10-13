@@ -137,6 +137,11 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Both rings are gold a few pixels apart; on the current face the focus ring alone marks it. */
+.current:focus-visible > :first-child {
+  outline: none;
+}
+
 .dot {
   position: absolute;
   top: var(--space-4);

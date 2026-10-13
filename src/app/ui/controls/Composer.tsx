@@ -34,8 +34,7 @@ export function Composer({ value, onChange, onKeyDown, placeholder, tools, actio
       <div className={styles.fold}>
         <div className={styles.tools}>
           <div className={styles.bar}>
-            {tools}
-            <span className={styles.spacer} />
+            <div className={styles.toolRow}>{tools}</div>
             {actions}
           </div>
         </div>
