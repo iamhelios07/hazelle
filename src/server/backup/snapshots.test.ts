@@ -110,6 +110,19 @@ describe('the daily job', () => {
 });
 
 describe('retention', () => {
+  it('keeps as the floor the baseline of the account’s timeline, not one of an older timeline stamped later by a clock put back', async () => {
+    const incarnation = await signedUp('jin');
+    const now = Date.now();
+    t.clock.now = () => now - 9 * DAY_MS;
+    const floor = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    await written(incarnation, 'then rewound, on a clock put back');
+    t.clock.now = () => now - 8 * DAY_MS;
+    const old = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    await t.env.db.prepare("UPDATE snapshots SET timeline = 'old' WHERE id = ?").bind(old).run();
+    expect(await expireSnapshots(t.env, t.dir, now)).toBe(1);
+    expect((await t.env.db.prepare('SELECT id FROM snapshots WHERE incarnation = ?').bind(incarnation).all<{ id: string }>()).results).toEqual([{ id: floor }]);
+  });
+
   it('reclaims a snapshot file whose expiry committed before the process stopped without deleting the live floor', async () => {
     const incarnation = await signedUp('jin');
     const now = Date.now();
@@ -156,7 +169,10 @@ describe('retention', () => {
       ['gone-young', gone, 'baseline', now - 4 * DAY_MS],
     ];
     for (const [id, incarnation, kind, takenAt] of snapshots) {
-      await t.env.db.prepare('INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES (?, ?, ?, ?, 0, 1, 1, ?)').bind(id, incarnation, kind, takenAt, 'x').run();
+      await t.env.db
+        .prepare('INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256, timeline) VALUES (?1, ?2, ?3, ?4, 0, 1, 1, ?5, (SELECT timeline FROM accounts WHERE incarnation = ?2))')
+        .bind(id, incarnation, kind, takenAt, 'x')
+        .run();
       mkdirSync(join(t.dir, 'snapshots', incarnation), { recursive: true });
       writeFileSync(snapshotPath(t.dir, incarnation, id), 'x');
     }

@@ -310,6 +310,41 @@ it('takes the first snapshot after a disaster restore whole, though the catalog 
   }
 }, 30_000);
 
+it('names and restores the checkpoint of an account past its fence whose only baseline is from before migration 0007, and cancels the operation', async () => {
+  const user = await signedUp('fenced');
+  const write = (body: string) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body, baseRev: null }], null);
+  const day = dayStart(Date.now()) - DAY_MS;
+  await write('in the baseline');
+  t.clock.now = () => day + HOUR_MS;
+  const baseline = ((await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string }).taken;
+  await write('after the baseline, in the checkpoint');
+  t.clock.now = () => day + 3 * HOUR_MS;
+  expect((await t.post('reports', { text: 'restore' }, user.cookie)).status).toBe(204);
+  const report = (await t.env.db.prepare('SELECT MAX(id) AS id FROM reports WHERE account_id = ?').bind(user.id).first<number>('id'))!;
+  const operation = ((await beginRestore(t.env, user.id, report, { at: day + 2 * HOUR_MS })) as { begun: number }).begun;
+  await expect(runRestore(stoppingAt('targeted'), operation)).rejects.toThrow(Stop);
+  const checkpoint = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(operation).first<string>('checkpoint'))!;
+  await t.env.db.prepare('UPDATE snapshots SET timeline = NULL, schema_version = NULL WHERE id = ?').bind(baseline).run();
+  const rows = 'SELECT id, rev, body FROM objects ORDER BY id';
+  const live = t.stores.inspect(user.incarnation).exec(rows);
+  expect(live).toHaveLength(2);
+
+  expect((await t.daily(day + 4 * HOUR_MS)).generation).toEqual({ outcome: 'ok', error: null });
+  const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
+  expect((await readManifest(generation))!.accounts.find(({ incarnation }) => incarnation === user.incarnation)!.baseline).toBe(checkpoint);
+  const dir = emptyDir();
+  expect((await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).operations).toEqual([{ id: operation, phase: 'cancelled' }]);
+  const raw = openDatabase(join(dir, 'service.sqlite'));
+  const db = serviceDb(raw);
+  const stores = accountRegistry(dir, db, serviceReads(db), Date.now);
+  try {
+    expect(stores.inspect(user.incarnation).exec(rows)).toEqual(live);
+  } finally {
+    stores.close();
+    raw.close();
+  }
+}, 30_000);
+
 it('restores a version 2 generation, whose snapshots are all whole, and refuses a version it does not know', async () => {
   await signedUp('operator');
   expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });

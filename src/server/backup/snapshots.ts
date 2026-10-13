@@ -57,8 +57,10 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
   return { taken, skipped, unchanged, failed };
 }
 
-// A snapshot goes once it is RETENTION_MS old, unless it is pinned (PINNED), it is a live account's floor: its newest
-// baseline RETENTION_MS old or older, the account as it was when the window began, or a delta names it as its base.
+// A snapshot goes once it is RETENTION_MS old, unless it is pinned (PINNED), it is a live account's floor: its current
+// baseline as of RETENTION_MS ago (CURRENT_BASELINE, so on its timeline: an older timeline's baseline stamped later by
+// a clock put back is not the floor and does not push the floor out), the account as it was when the window began, or
+// a delta names it as its base.
 // Baselines are taken only on days the account changed, so a time inside the window may land on one from before it;
 // the floor is also an unchanged account's only copy. A base goes on a later pass, once its last delta has gone.
 // A deleted account has no restores and no row, so every snapshot of it goes at RETENTION_MS from its taking, which is
@@ -71,9 +73,7 @@ export async function expireSnapshots(env: Services, dataDir: string, now: numbe
        WHERE taken_at <= ?1 - ${RETENTION_MS}
          AND NOT ${PINNED('s', '?1')}
          AND NOT EXISTS (SELECT 1 FROM snapshots d WHERE d.incarnation = s.incarnation AND d.base = s.id)
-         AND NOT (kind = 'baseline' AND EXISTS (SELECT 1 FROM accounts WHERE incarnation = s.incarnation)
-           AND id = (SELECT id FROM snapshots WHERE incarnation = s.incarnation AND kind = 'baseline' AND taken_at <= ?1 - ${RETENTION_MS}
-             ORDER BY taken_at DESC, id DESC LIMIT 1))
+         AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.incarnation = s.incarnation AND s.id = (${CURRENT_BASELINE('id', 'a', `?1 - ${RETENTION_MS}`)}))
        ORDER BY incarnation`,
     )
     .bind(now)

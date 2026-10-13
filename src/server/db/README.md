@@ -53,7 +53,7 @@ current account schema version and younger than 6 days, a day short of expiry so
 the capture's row names it (none: the snapshot taken is whole), never against another delta; a whole snapshot stays as long as a delta
 names it, normally up to 13 days (a delta that is the account's floor keeps its base as long as itself). An operation pins its checkpoint and target (an undo's from its begin) until it ends and
 for 7 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
-recoverable by hand. A live account keeps its floor, its newest baseline 7 days old or older, whatever its age: a time inside the
+recoverable by hand. A live account keeps its floor, its current baseline as of 7 days ago (on its timeline, like the current baseline itself), whatever its age: a time inside the
 window may land on it. Pins are read from `restores`, so a deleted account
 (whose restores cascade away) loses every snapshot at 7 days from its taking. A rewind lands on the newest snapshot at or before the
 time asked, however old (the 6-day request window is the lifecycle's), never on one taken before the checkpoint of a rewind ended by then; the preview, the choice of a target (an undo's too)
@@ -87,8 +87,8 @@ Disaster restore (`scripts/restore.sh <generation> <empty data dir>`, `src/serve
 `dist/server/restore-cli.js`, into the picture store `HAZELLE_FILES_BUCKET` names): verifies every hash first (an R2
 generation's pictures by a HEAD of each, size only, and only into an R2 store; a pooled generation's are put into whichever
 store is set), writes the service (migrated to this build) before the pictures, drops
-catalog rows for snapshots the generation lacks, restores each account by materializing its newest baseline (a fenced one's checkpoint,
-one past `rewound` by installing its target), then ends every pending operation through `lifecycle.ts` (before `armed` cancelled,
+catalog rows for snapshots the generation lacks, restores each account by materializing the snapshot the manifest names for it (its current baseline, or its operation's checkpoint once
+past the fence, where no baseline is taken; one past `rewound` by installing its target over that), then ends every pending operation through `lifecycle.ts` (before `armed` cancelled,
 from `armed` on finished, unverified ones finalized), finishes pending deletions, and gives every account a fresh timeline. The
 server must not start on the directory until it has finished.
 

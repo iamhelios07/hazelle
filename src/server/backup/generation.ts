@@ -27,8 +27,12 @@ const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 // bytes: the gzip on disk. expanded: what it gunzips to, measured on the plain file before it was gzipped (the gzip
 // trailer holds that only modulo 4 GiB).
 export type Artifact = { path: string } & SnapshotArchive;
-// accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
-// leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
+// accounts: every account the service snapshot holds, with the snapshot its file is restored from: its current
+// baseline, or, once its operation holds a checkpoint, that checkpoint, which is newer than any baseline, holds the file
+// as it still is (a restore cancels the operation) or as it was before the target went in (a rewound one installs the
+// target over it again), and is the one copy it can have, since past the fence no baseline is taken (TAKES_BASELINE)
+// and a finished rewind started a new timeline. Null only for a leaving one, whose deletion a restore finishes.
+// pictureBytes: the sizes of its stored pictures, which a restore copies
 // into every account that holds one. snapshots: those baselines, every snapshot an operation pins, and the base of each
 // delta among them, each with `materialized`, an estimate of the file it restores to: a whole one's expanded, a delta's
 // plus its base's, short by what the base's indexes grow over the delta's rows (scripts/destroy.sh sizes a drill by it,
@@ -80,7 +84,7 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
     const all = <T>(sql: string, ...binds: (string | number)[]) => db.prepare(sql).all(...binds) as T[];
     const accounts = all<Manifest['accounts'][number]>(
       `SELECT incarnation, state,
-         (${CURRENT_BASELINE('id', 'a', '?1')}) AS baseline,
+         COALESCE((SELECT checkpoint FROM restores WHERE id = a.operation), (${CURRENT_BASELINE('id', 'a', '?1')})) AS baseline,
          (SELECT COALESCE(SUM(size), 0) FROM account_files f WHERE f.incarnation = a.incarnation AND stored = 1) AS pictureBytes
        FROM accounts a ORDER BY incarnation`,
       now,

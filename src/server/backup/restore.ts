@@ -99,8 +99,9 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   await db.prepare('DELETE FROM snapshots WHERE id NOT IN (SELECT value FROM json_each(?))').bind(JSON.stringify(manifest.snapshots.map(({ id }) => id))).run();
   for (const snapshot of manifest.snapshots) await copyInto(join(generation, snapshot.path), snapshotPath(dataDir, snapshot.incarnation, snapshot.id));
   await mkdir(join(dataDir, 'accounts'), { recursive: true });
-  // A fenced account has not changed since its checkpoint, which is newer than any baseline of it.
-  const fenced = new Map(manifest.operations.flatMap(({ incarnation, phase, checkpoint }) => (BEFORE_ARMED.includes(phase) && checkpoint !== null ? [[incarnation, checkpoint]] : [])));
+  // A version 2 manifest names a baseline for every account, and a fenced one has not changed since its checkpoint,
+  // which is newer; version 3 names that checkpoint as the account's source itself (generation.ts readNamed).
+  const fenced = new Map(manifest.version === 2 ? manifest.operations.flatMap(({ incarnation, phase, checkpoint }) => (BEFORE_ARMED.includes(phase) && checkpoint !== null ? [[incarnation, checkpoint]] : [])) : []);
   for (const { incarnation, baseline } of manifest.accounts) {
     const source = fenced.get(incarnation) ?? baseline;
     if (source === null) continue;
