@@ -177,6 +177,22 @@ describe('fold', () => {
     expect(fold(looped).map(({ id }) => id)).toEqual(['u1', 'b1', 'i1', 'u2']);
   });
 
+  it('keeps the place of a message put ahead of one of two continuations saved after the same version', () => {
+    const entries = [
+      user('u1', 'first'),
+      bot('b1', 'reply from one device'),
+      entry('b2', { type: 'message', role: 'assistant', at: 0, text: 'reply from the other', receipt: receipt(), follows: 'u1' }),
+      entry('i1', { type: 'message', role: 'user', at: 0, text: 'inserted', receipt: null, follows: 'u1' }),
+      entry('f1', { type: 'follow', message: 'b1', follows: 'i1', at: 0 }),
+    ];
+    expect(fold(entries).map(({ id }) => id)).toEqual(['u1', 'i1', 'b1', 'b2']);
+    const again = [...entries,
+      entry('i2', { type: 'message', role: 'user', at: 0, text: 'inserted ahead', receipt: null, follows: 'u1' }),
+      entry('f2', { type: 'follow', message: 'i1', follows: 'i2', at: 0 }),
+    ];
+    expect(fold(again).map(({ id }) => id)).toEqual(['u1', 'i2', 'i1', 'b1', 'b2']);
+  });
+
   it('hides a deleted message until it is restored', () => {
     const entries = [user('u1', '안녕'), entry('d1', { type: 'delete', message: 'u1', at: 0 })];
     expect(fold(entries)).toEqual([]);

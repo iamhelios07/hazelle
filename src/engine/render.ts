@@ -183,7 +183,9 @@ export function renderChat(
     const replayed = guarded(0, () => evaluate(text, context({ message: 0 }, new Map(variables))), text);
     let edited = replayed;
     if (lua) {
-      const stamp = `-1//${variables.stamp}`;
+      // The greeting shows the current state, so it is passed again whenever the chat grows or shrinks, as the last
+      // LATEST messages are.
+      const stamp = `-1/${scope.messages.length - first}/${variables.stamp}`;
       const held = lua(id, replayed, stamp);
       if (!held?.fresh) {
         missed.push({ index: -1, version: id, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });

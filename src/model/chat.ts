@@ -437,6 +437,14 @@ export class ChatFold {
       }
       for (const member of path) seen.set(member, 'done');
     }
+    // Among one version's continuations, a message put ahead of another (a follow entry) stands where that one
+    // stood, not where its later save would put it; so does one put ahead of that.
+    const order = new Map<FoldedMessage, EntryIndex>(ordered.map((group) => [group, this.entries.get(group.message!.id)!]));
+    for (const group of ordered) {
+      if (!group.moved) continue;
+      const held = order.get(group)!;
+      for (let at = parents.get(group)?.parent; at && entryOrder(held, order.get(at)!) < 0; at = parents.get(at)?.parent) order.set(at, held);
+    }
     const edges = new Map<FoldedMessage, Edge[]>();
     const roots: FoldedMessage[] = [];
     for (const group of ordered) {
@@ -448,6 +456,7 @@ export class ChatFold {
         else edges.set(edge.parent, [edge]);
       }
     }
+    for (const kids of edges.values()) kids.sort((a, b) => entryOrder(order.get(a.group)!, order.get(b.group)!));
     const out: { group: FoldedMessage; follows: string | null }[] = [];
     const stack: { group: FoldedMessage; follows: string | null }[] = roots.map((group) => ({ group, follows: null })).reverse();
     while (stack.length) {

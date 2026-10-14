@@ -549,6 +549,9 @@ describe('renderChat', () => {
     expect(renderChat('prompt', scope(over)).texts[0]).toBe('lang en');
     const { missed } = renderChat('display', scope(over), new Set(), () => null);
     expect(missed.map(({ index, text }) => [index, text])).toEqual([[0, 'hi'], [1, 'reply'], [-1, 'lang en']]);
+    const stampOf = (shown: typeof messages) => renderChat('display', scope({ ...over, messages: shown }), new Set(), () => null).missed.find(({ index }) => index === -1)!.stamp;
+    expect(stampOf(messages)).toBe(stampOf(messages));
+    expect(stampOf([...messages, message('u2', 'user', 'more')])).not.toBe(stampOf(messages));
   });
 
   it('rolls a random tag in a message the same on screen as in the prompt', () => {
