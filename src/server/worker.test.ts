@@ -266,7 +266,7 @@ describe('guards', () => {
       t.raw('objects/batch', {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie, 'x-account': account },
-        body: JSON.stringify({ timeline, writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }),
+        body: JSON.stringify({ timeline, writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }], files: [] }),
       });
     const other = await send(crypto.randomUUID());
     expect(other.status).toBe(409);

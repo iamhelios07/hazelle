@@ -51,9 +51,9 @@ describe('objects', () => {
     expect((await t.batch([{ ...object, id: B }], cookie, [id])).status).toBe(503);
     expect(await t.env.db.prepare('SELECT file_bytes FROM accounts').first('file_bytes')).toBe(0);
     expect(t.stores.inspect((await t.env.db.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!).exec('SELECT id FROM objects WHERE body IS NOT NULL')).toEqual([]);
-    // A file the account lacks, and a write from a tab that sends no files, still land.
+    // A file the account lacks still lands; a batch without its file list does not.
     expect((await t.batch([{ ...object, id: B }], cookie, ['f'.repeat(64)])).status).toBe(200);
-    expect((await t.post('objects/batch', { timeline: inventory.timeline, writes: [{ ...object, id: C }] }, cookie)).status).toBe(200);
+    expect((await t.post('objects/batch', { timeline: inventory.timeline, writes: [{ ...object, id: C }] }, cookie)).status).toBe(400);
   });
 
   it('creates, updates with a version check and syncs from a cursor, stating the timeline and the bytes held', async () => {

@@ -53,7 +53,7 @@ export class Hazelle {
 
   async batch(account: Account, bodies: string[]): Promise<Response> {
     const writes = bodies.map((body) => ({ id: randomUUID(), kind: 'message', parent: null, body, baseRev: null }));
-    const response = await this.request('objects/batch', { method: 'POST', account, body: JSON.stringify({ timeline: account.timeline, writes }) });
+    const response = await this.request('objects/batch', { method: 'POST', account, body: JSON.stringify({ timeline: account.timeline, writes, files: [] }) });
     if (response.ok) {
       const { revs } = (await response.clone().json()) as { revs: number[] };
       account.rev = Math.max(account.rev, ...revs);

@@ -58,8 +58,7 @@ objects.post('/batch', canWrite, async (c) => {
   if (!input || typeof input.timeline !== 'string' || !TIMELINE.test(input.timeline) || !Array.isArray(input.writes) || !input.writes.length) {
     return fail(c, 400, 'bad-input');
   }
-  // Optional: a tab opened before files were claimed sends none, and its write claims nothing.
-  const files = input.files ?? [];
+  const files = input.files;
   if (!Array.isArray(files) || files.length > BATCH_LIMITS.items || !files.every((id): id is string => typeof id === 'string' && FILE_ID.test(id))) {
     return fail(c, 400, 'bad-input');
   }
