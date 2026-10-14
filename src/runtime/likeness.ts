@@ -44,7 +44,7 @@ export type LikenessRun = { stage: 'building' } | { stage: 'failed'; failure: Li
 export type LikenessRuns = ReadonlyMap<string, LikenessRun>;
 
 type Stopped = { kind: 'stopped' };
-type Deps = Pick<Session, 'store' | 'credentials' | 'files' | 'catalogs'>;
+type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'files' | 'catalogs'>;
 type Picture = Pick<Asset, 'name' | 'type' | 'file'> & { avatar: boolean };
 type Held = { name: string; type: string; avatar: boolean; bytes: Uint8Array<ArrayBuffer> };
 // files: pictures still to read; held: one already in the owner's value, a persona's thumb.
@@ -206,7 +206,7 @@ export class Likenesses {
     if (!sources.length) return save(empty);
 
     const text = gather();
-    const call = await pageCall(store, writer.route, 'likeness', null);
+    const call = await pageCall(this.deps, writer.route, 'likeness', null);
     const answer = await generate({ credentials, connection: writer.route.connection.value, model: writer.route.model, settings: writer.settings, retries: retriesOf(store, writer.route.connection.value, writer.settings), messages: likenessRequest(input), call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(writer.route), answer));

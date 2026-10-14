@@ -24,7 +24,7 @@ import type { ObjectStore } from './store';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { receiptOf, unsettled } from './talk';
 import { chatPlace, keepRow } from './usage';
-import { budgetOf, promptBudget, sentSettings } from './chat-context';
+import { tokenLimits, promptBudget, sentSettings } from './chat-context';
 import { wouldSend } from './turn-context';
 import { indexRecords, unembedded, type Indexed } from './retrieval';
 
@@ -449,8 +449,13 @@ export class Rememberer {
     const again = member ?? asked ?? (stale.length && await reaches() ? stale[0] : undefined);
     const span = !again && this.full.has(chat) && await reaches() ? await this.span(chat, sent.tokens, coveredBy(memory, places), setup) : null;
     const tools = this.tools(sent.chat);
-    const cap = 'kind' in tools ? null : chapterCap(setup.batch, budgetOf(tools.route.model, sentSettings(store, tools.route)));
-    const chapters = !again && !span && cap !== null && this.full.has(chat) && await reaches() ? nextChapters(memory, held, sent.read.shown, sent.tokens, setup.budget, cap, this.unchaptered.get(chat) ?? new Set()) : [];
+    let chapters: ReturnType<typeof nextChapters> = [];
+    if (!('kind' in tools) && !again && !span && this.full.has(chat) && await reaches()) {
+      const snapshot = await this.session.tokens.snapshot(tools.route, tools.settings, tokenLimits(tools.route.model, sentSettings(store, tools.route)), 'memory', chat, new AbortController().signal);
+      if (!snapshot.ok) return { kind: 'unsaved', failure: snapshot };
+      const cap = chapterCap(setup.batch, snapshot.data.fit.allowance);
+      chapters = nextChapters(memory, held, sent.read.shown, sent.tokens, setup.budget, cap, this.unchaptered.get(chat) ?? new Set());
+    }
     const next = chapters[0];
     if (!again && !span && !next) return null;
     if ('kind' in tools) return tools;
@@ -501,7 +506,7 @@ export class Rememberer {
     const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read), ...(job.chapter && { chapter: job.chapter }) } };
     const text = gather();
     const answer = await this.reads(target.id, async (signal) =>
-      generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call: await newCall(store, route, target), signal, onText: text.add }),
+      generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call: await newCall(this.session, route, target), signal, onText: text.add }),
     );
     return this.finish(chat, target.id, target.result, callOf(route), answer, text.value(), job, read);
   }

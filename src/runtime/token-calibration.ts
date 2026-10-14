@@ -5,14 +5,14 @@ import { resolveConnection, resolveModel, wireRoute } from '../connectors/regist
 import type { ModelSettings } from '../connectors/settings';
 import type { Usage as ReportedUsage } from '../connectors/types';
 import { Calibration, fitLimits, type Observation } from '../engine/token-calibration';
-import type { CallCalibration, InputMeasurement, TokenFit, TokenLimits, TokenProjection } from '../model/token-calibration';
+import type { CallCalibration, InputMeasurement, TokenFit, TokenLimits, TokenProjection, RequestClass } from '../model/token-calibration';
 import type { Counted, UsageCall } from '../model/usage';
 import type { ApiResult } from './api';
 import type { Route } from './assignment';
 import type { ObjectStore } from './store';
 import type { Usage } from './usage';
 
-export const calibrationKey = (connection: string, requestClass: string, prepared: PreparedChat) => JSON.stringify([connection, requestClass, prepared.identity]);
+export const calibrationKey = (connection: string, requestClass: RequestClass, prepared: PreparedChat) => JSON.stringify([connection, requestClass, prepared.identity]);
 
 export function providerFit(route: Route, settings: ModelSettings, allowance: number | null): ProviderFit {
   const resolved = resolveConnection(route.connection.value);
@@ -20,7 +20,7 @@ export function providerFit(route: Route, settings: ModelSettings, allowance: nu
   return { route: wireRoute(resolveModel(resolved, route.model)), model: route.model, settings, allowance };
 }
 
-export async function measureInput(store: ObjectStore, connection: string, requestClass: string, prepared: PreparedChat): Promise<InputMeasurement> {
+export async function measureInput(store: ObjectStore, connection: string, requestClass: RequestClass, prepared: PreparedChat): Promise<InputMeasurement> {
   const counts = await store.evaluation.count(prepared.wire.segments.map(({ text }) => text)).catch(() => null);
   if (!Array.isArray(counts)) return { kind: 'unavailable', reason: 'tokenizer' };
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(prepared.wire)));
@@ -48,7 +48,7 @@ export function tokenProjection(calibration: CallCalibration, usage: ReportedUsa
 type Evidence = Omit<Observation, 'input'> & { input: number | null; id: string };
 const learn = (index: Calibration, event: Evidence) => event.input === null ? index.invalidate(event.key, event.chat, event.at) : index.observe({ ...event, input: event.input });
 
-function observations(calls: Counted[]): Evidence[] {
+function observations(calls: readonly Counted[]): Evidence[] {
   const observations: Evidence[] = [];
   for (const { call, chat } of calls) {
     const calibration = call.calibration;
@@ -66,28 +66,43 @@ function observations(calls: Counted[]): Evidence[] {
 
 export class Tokens {
   private events: Evidence[] = [];
+  private rows: readonly Counted[] | null = null;
+  private readonly byKey = new Map<string, Evidence[]>();
   private index = new Calibration();
   constructor(private readonly usage: Usage) {}
 
-  async snapshot(route: Route, settings: ModelSettings, limits: TokenLimits, chat: string, signal: AbortSignal): Promise<ApiResult<TokenSnapshot>> {
+  async snapshot(route: Route, settings: ModelSettings, limits: TokenLimits, requestClass: RequestClass, chat: string | null, signal: AbortSignal): Promise<ApiResult<TokenSnapshot>> {
     const read = await this.usage.read(signal);
     if (!read.ok) { this.clear(); return read; }
-    const events = observations(this.usage.calibrationRows());
-    // A late sync replays instead of merging nonlinear robust states.
-    const prefix = this.events.length <= events.length && this.events.every((event, index) => JSON.stringify(event) === JSON.stringify(events[index]));
-    if (!prefix) this.index = new Calibration();
-    for (const event of events.slice(prefix ? this.events.length : 0)) learn(this.index, event);
-    this.events = events;
+    const rows = this.usage.calibrationRows();
+    if (rows !== this.rows) {
+      const events = observations(rows);
+      // A late sync replays instead of merging nonlinear robust states.
+      const prefix = this.events.length <= events.length && this.events.every((event, index) => JSON.stringify(event) === JSON.stringify(events[index]));
+      if (!prefix) { this.index = new Calibration(); this.byKey.clear(); }
+      const changed = new Set<string>();
+      for (const event of events.slice(prefix ? this.events.length : 0)) {
+        learn(this.index, event);
+        // A snapshot may retry after later ledger reads; its evidence sequence must stay frozen.
+        if (!changed.has(event.key)) {
+          this.byKey.set(event.key, [...(this.byKey.get(event.key) ?? [])]);
+          changed.add(event.key);
+        }
+        this.byKey.get(event.key)!.push(event);
+      }
+      this.events = events;
+      this.rows = rows;
+    }
     const resolved = resolveConnection(route.connection.value);
     if (!resolved) return { ok: false, error: 'calibration-route' };
     let prepared: PreparedChat;
     try { prepared = prepareChat(resolveModel(resolved, route.model), { model: route.model, settings, messages: [] }); }
     catch { return { ok: false, error: 'calibration-route' }; }
-    const key = calibrationKey(route.connection.id, 'conversation', prepared);
-    return { ok: true, data: new TokenSnapshot(key, chat, limits, this.events.filter((event) => event.key === key), this.index.estimate(key, chat, Date.now())) };
+    const key = calibrationKey(route.connection.id, requestClass, prepared);
+    return { ok: true, data: new TokenSnapshot(key, chat, limits, this.byKey.get(key) ?? [], this.index.estimate(key, chat, Date.now())) };
   }
 
-  clear() { this.events = []; this.index = new Calibration(); }
+  clear() { this.events = []; this.rows = null; this.byKey.clear(); this.index = new Calibration(); }
   project(calibration: CallCalibration, usage: ReportedUsage | null) { return tokenProjection(calibration, usage); }
   call(call: UsageCall['call']) { return tokenProjection(call.calibration === undefined ? unavailableCalibration('historical') : call.calibration, call.usage); }
 }
@@ -95,14 +110,17 @@ export class Tokens {
 export class TokenSnapshot {
   readonly retries: CallCalibration['retries'] = [];
   fit: TokenFit;
-  private readonly index = new Calibration();
-  constructor(readonly key: string, private readonly chat: string, private readonly limits: TokenLimits, events: Evidence[], estimate: ReturnType<Calibration['estimate']>) {
-    for (const event of events) learn(this.index, event);
+  private index: Calibration | null = null;
+  constructor(readonly key: string, private readonly chat: string | null, private readonly limits: TokenLimits, private readonly events: readonly Evidence[], readonly estimate: ReturnType<Calibration['estimate']>) {
     this.fit = fitLimits(limits, estimate);
   }
 
   refused(refusal: ContextRefusal, measurement: InputMeasurement): TokenFit | null {
     if (this.retries.length >= 2 || measurement.kind !== 'measured' || measurement.o200k <= 0) return null;
+    if (!this.index) {
+      this.index = new Calibration();
+      for (const event of this.events) learn(this.index, event);
+    }
     const previous = Math.min(this.fit.allowance ?? measurement.o200k, measurement.o200k);
     if (refusal.actual === null && measurement.pictures === 0) this.index.invalidate(this.key, this.chat, measurement.at);
     if (refusal.actual !== null && measurement.pictures === 0) this.index.observe({ key: this.key, chat: this.chat, at: measurement.at, fingerprint: measurement.fingerprint, input: refusal.actual, denominator: measurement.o200k });

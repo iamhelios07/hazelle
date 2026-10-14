@@ -1,3 +1,7 @@
+import { answerable, testServer } from './testing';
+import { appendUserMessage, startChat } from './chat-log';
+import { cacheSend, wouldSend } from './turn-context';
+import { tokenLimits } from './chat-context';
 import { describe, expect, it } from 'vitest';
 import type { CacheFacts } from '../connectors/registry';
 import type { Message, Receipt } from '../model/chat';
@@ -92,3 +96,33 @@ describe('lastCache', () => {
     expect(lastCache([reply(10_000, receipt({})), reply(20_000, receipt({ usage: { inputTokens: 100, outputTokens: 1, reasoningTokens: null, cachedInputTokens: 0, cacheWriteInputTokens: 0 } }))])).toBeNull();
   });
 });
+
+
+const server = testServer();
+
+it('converts the native cache minimum once with the conversation lower predictive bound', () => server.withSession(async (session) => {
+  await answerable(session);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
+  const sending = await wouldSend(session, chat, { kind: 'answer' });
+  if (!sending) throw new Error('not sendable');
+  const original = sending.turn.route;
+  sending.turn.route = { ...original, model: { ...original.model, id: 'claude-sonnet-4-5' }, connection: { ...original.connection, value: { ...original.connection.value, type: 'generic', baseUrl: 'https://example.test', protocol: 'anthropic-messages' } } };
+  sending.turn.settings = { cache: '5m', maxOutput: 16 };
+  const { route, settings } = sending.turn;
+  const snapshot = await session.tokens.snapshot(route, settings, tokenLimits(route.model, settings), 'conversation', chat, new AbortController().signal);
+  if (!snapshot.ok) throw new Error(snapshot.error);
+  sending.calibration = snapshot.data;
+  const threshold = Math.ceil(1024 / snapshot.data.estimate.lower);
+  expect(threshold).toBeGreaterThan(1024 / snapshot.data.estimate.centre);
+  sending.prompt = { messages: [{ role: 'user', content: 'prefix', cache: true }], parts: [{ tokens: threshold - 1, from: { kind: 'block', name: 'prefix', slot: null } }], lore: null, memory: null, dropped: 0 };
+  const short = cacheSend(sending, null)!;
+  expect(short.facts?.minimum).toBe(threshold);
+  expect(forecast(null, short)?.parts[0]!.point).toBe('short');
+  sending.prompt.parts[0]!.tokens++;
+  const reached = cacheSend(sending, null)!;
+  expect(reached.facts?.minimum).toBe(threshold);
+  expect(forecast(null, reached)?.parts[0]!.point).toBe('cache');
+}));

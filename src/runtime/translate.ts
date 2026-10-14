@@ -1,3 +1,4 @@
+import type { Tokens } from './token-calibration';
 import { ChangeSignal } from '../change-signal';
 import type { RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
@@ -38,11 +39,11 @@ export type TranslateFailure =
   | { kind: 'unsaved'; failure: ApiFailure }
   | RanAway;
 
-type Deps = { store: ObjectStore; credentials: Credentials };
+type Deps = { store: ObjectStore; credentials: Credentials; tokens: Tokens };
 
 // A translation cut at its length keeps what it wrote, and its receipt says it was cut.
 export async function translate(
-  { store, credentials }: Deps,
+  { store, credentials, tokens }: Deps,
   { chat, scope, take, translations, request, language, lane }: TranslateInput,
   target: CallTarget,
   signal: AbortSignal,
@@ -66,7 +67,7 @@ export async function translate(
     settings: profile.profile.value.settings,
     retries: retriesOf(store, route.connection.value, profile.profile.value.settings),
     messages: assembled.messages,
-    call: await newCall(store, route, target),
+    call: await newCall({ store, tokens }, route, target),
     signal,
     onText: text.add,
   });
@@ -75,7 +76,7 @@ export async function translate(
 
 // A translation the server was already making when this page came (tech-spec §6, Detached replies). Only a saved
 // chat's translations are picked up, so no language is needed: a greeting's translation is never one of them.
-export async function resumeTranslation(deps: Deps, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
+export async function resumeTranslation(deps: Pick<Deps, 'store' | 'credentials'>, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
   const text = gather(onText);
   const answer = await resume(deps, stream, signal, text.add);
   return translated(stream.value.call, answer, text.value(), null);
@@ -117,6 +118,7 @@ export class Translator {
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
     private readonly costs: Costs,
+    private readonly tokens: Tokens,
     // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {}
@@ -141,7 +143,7 @@ export class Translator {
   translate(chat: string, { id: version, text: original }: Version, input: TranslateInput) {
     if (this.closed || this.aborts.has(version)) return;
     const target: CallTarget = { id: crypto.randomUUID(), chat: this.store.get('chat', chat) ? chat : null, result: crypto.randomUUID(), for: { kind: 'translation', version } };
-    this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials }, input, target, signal, onText), (made) =>
+    this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials, tokens: this.tokens }, input, target, signal, onText), (made) =>
       this.store.get('chat', chat)
         ? appendTranslation(this.store, chat, version, made.translation, target.result)
         : setTextTranslation(this.store, input.chat.character!, original, made.language!, made.translation).then(async (saved) => {

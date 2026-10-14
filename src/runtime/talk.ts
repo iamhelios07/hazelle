@@ -1,3 +1,4 @@
+import type { Tokens } from './token-calibration';
 import type { ContextRefusal } from '../connectors/preparation';
 import type { InputMeasurement, TokenFit, CallCalibration } from '../model/token-calibration';
 import { ChangeSignal } from '../change-signal';
@@ -116,6 +117,7 @@ export class Talk {
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
     private readonly costs: Costs,
+    private readonly tokens: Tokens,
     // ended: a reply as its stream ended, which the bot's Lua may rewrite before it is saved. saved: once it is.
     private readonly ended: (chat: string, reply: Written) => Promise<Written>,
     private readonly saved: (chat: string, reply: Written) => void,
@@ -262,7 +264,7 @@ export class Talk {
     let answer: Reply;
     let call: Awaited<ReturnType<typeof newCall>>;
     for (;;) {
-      call = await newCall(this.store, route, { id: crypto.randomUUID(), ...target });
+      call = await newCall({ store: this.store, tokens: this.tokens }, route, { id: crypto.randomUUID(), ...target });
       if (decision) call.calibration = { ...call.calibration!, ...decision };
       call.retrying = this.retrying(held);
       this.reading.add(call.id);

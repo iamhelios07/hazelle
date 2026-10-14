@@ -1,4 +1,4 @@
-import { providerFit } from './token-calibration';
+import { providerFit, type TokenSnapshot } from './token-calibration';
 import type { Assembled, PromptInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
@@ -95,7 +95,7 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
 }
 
 // null while it cannot send, or the prompt is over the model's budget.
-export type Sending = { turn: TurnContext; prompt: Assembled };
+export type Sending = { turn: TurnContext; prompt: Assembled; calibration: TokenSnapshot };
 
 // asker: whose forecast this is, each with its own evaluation lane, kept with the chat so a forecast sends the worker
 // only what changed since its last: the composer's, background memory's (Rememberer) and the memory panel's. One lane
@@ -109,18 +109,21 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scrip
     const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
     const revisions = reads.map((read) => session.store.revision(read));
     if (turn === null || 'kind' in turn) return null;
-    const snapshot = await session.tokens.snapshot(turn.route, turn.settings, tokenLimits(turn.route.model, sentSettings(session.store, turn.route)), chat, signal ?? new AbortController().signal);
+    const snapshot = await session.tokens.snapshot(turn.route, turn.settings, tokenLimits(turn.route.model, sentSettings(session.store, turn.route)), 'conversation', chat, signal ?? new AbortController().signal);
     if (!snapshot.ok) return null;
     const fit = providerFit(turn.route, turn.settings, snapshot.data.fit.allowance);
     const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scripts.cachedPrompt(chat, turn), continuing: false }, signal);
     if (signal?.aborted) return null;
-    if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? null : { turn, prompt };
+    if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? null : { turn, prompt, calibration: snapshot.data };
   }
   return null;
 }
 
 // account: the account that would serve it (runtime/pool peek).
-export function cacheSend({ turn, prompt }: Sending, account: string | null): CacheSend | null {
+export function cacheSend({ turn, prompt, calibration }: Sending, account: string | null): CacheSend | null {
   const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
-  return view && wireOf(turn.route.connection.id, account, view, prompt.parts);
+  if (!view) return null;
+  // Prefix composition can differ from the whole request; this remains a lower-bound forecast, not reported eligibility.
+  const facts = view.facts && { ...view.facts, minimum: view.facts.minimum === null ? null : Math.ceil(view.facts.minimum / calibration.estimate.lower) };
+  return { ...wireOf(turn.route.connection.id, account, view, prompt.parts), facts };
 }

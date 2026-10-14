@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
+import { TokenSnapshot } from './token-calibration';
 import { fingerprint } from '../engine/memory';
 import { memoryId, type Chapter, type MemorySettings } from '../model/memory';
 import { appendUserMessage, editMessage, startChat } from './chat-log';
@@ -306,6 +307,21 @@ describe('chapters', () => {
       expect(log[1]!.sent.body).toContain('Write no state and no threads');
       await vi.waitFor(() => expect(session.store.list('stream')).toEqual([]));
       expect(log).toHaveLength(2);
+    }));
+
+  it('limits chapter source spans by the memory route calibrated allowance, not its native window', () =>
+    server.withSession(async (session) => {
+      const { chat } = await recorded(session, {});
+      const snapshot = session.tokens.snapshot.bind(session.tokens);
+      const decisions = vi.spyOn(session.tokens, 'snapshot').mockImplementation(async (...args) => {
+        if (args[3] !== 'memory') return snapshot(...args);
+        return { ok: true, data: new TokenSnapshot('memory-route', chat, { hard: 40, user: null, output: 0 }, [], { source: 'chat', evidence: 10, centre: 2, lower: 1.5, upper: 2, cold: false }) };
+      });
+      const log = stubRelay(inTurn([saying('Luna smiles.'), saying(chapterAnswer)]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      await vi.waitFor(() => expect(decisions.mock.calls.some((args) => args[3] === 'memory')).toBe(true));
+      expect(chatMemory(session.store, chat).chapters).toEqual([]);
+      expect(log).toHaveLength(1);
     }));
 
   it('holds a failed chapter apart, so records go on being made', () =>

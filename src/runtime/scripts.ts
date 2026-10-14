@@ -1,3 +1,4 @@
+import type { Tokens } from './token-calibration';
 import { ScriptInteractions } from './script-interactions';
 import { ScriptSchedule } from './script-schedule';
 import { noOutcome, ToolLate, ToolStopped, type Binding, type LuaRunner } from './script-binding';
@@ -74,7 +75,7 @@ export class Scripts {
   private readonly lastPrompt = new Map<string, Map<string, Answered>>();
 
   constructor(
-    private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; display: Pick<ScriptDisplay, 'stale'> },
+    private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
     private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> },
   ) {
     this.interactions = new ScriptInteractions(session.store, this.closing.signal);
@@ -499,7 +500,7 @@ export class Scripts {
       return refused('no-model', 'no model is set');
     }
     const text = gather();
-    const call = await pageCall(this.session.store, route, 'script', chat);
+    const call = await pageCall(this.session, route, 'script', chat);
     // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,

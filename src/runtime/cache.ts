@@ -30,19 +30,19 @@ export function lastCache(messages: Message[]): LastCache | null {
   return cacheKept(latest.receipt) ? { call: latest.receipt.id, until: latest.at - totalMs + TTL[cache!] } : null;
 }
 
-// What a send would put on the wire, as a CachePrint has it, with how its provider reads the points.
+// Forecast minimums are o200k allowances from the conversation snapshot, not the connector's native counts.
 export type CacheSend = Omit<CachePrint, 'call'> & { facts: CacheFacts | null };
 
-export function wireOf(connection: string, account: string | null, view: CacheView, parts: Assembled['parts']): CacheSend {
+export function wireOf(connection: string, account: string | null, view: CacheView, parts: Assembled['parts']): Omit<CachePrint, 'call'> {
   const messages = view.messages.map(({ role, content, index, cache }): WireMessage => ({ role, hash: fingerprint([{ role, text: content }]), tokens: parts[index]!.tokens, from: parts[index]!.from, ...(cache && { point: true as const }) }));
-  return { connection, account, model: view.model, ...(view.reasoning !== undefined && { reasoning: view.reasoning }), messages, facts: view.facts };
+  return { connection, account, model: view.model, ...(view.reasoning !== undefined && { reasoning: view.reasoning }), messages };
 }
 
 export const chatPrint = (store: Pick<ObjectStore, 'children'>, chat: string): Stored<'cacheprint'> | undefined =>
   store.children('cacheprint', chat).find((print) => print.id === cachePrintId(chat));
 
 // Replaced by each reply call that kept a cache (cacheKept), the one lastCache names.
-export function writePrint(store: ObjectStore, chat: string, call: string, { connection, account, model, reasoning, messages }: CacheSend) {
+export function writePrint(store: ObjectStore, chat: string, call: string, { connection, account, model, reasoning, messages }: Omit<CachePrint, 'call'>) {
   const value: CachePrint = { call, connection, account, model, ...(reasoning !== undefined && { reasoning }), messages };
   return store.withChat(chat, async () => {
     const id = cachePrintId(chat);
