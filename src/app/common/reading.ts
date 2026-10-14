@@ -40,7 +40,7 @@ export type Display = Scheme & { hideHeader: boolean; foldComposer: boolean; hid
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, hideHeader: true, foldComposer: true, hidePictures: false, pictureMost: 80 };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, hideHeader: false, foldComposer: true, hidePictures: false, pictureMost: 80 };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
