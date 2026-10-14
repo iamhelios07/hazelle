@@ -5,7 +5,7 @@ import { embedModel, type Route } from './assignment';
 import { Credentials } from './credential';
 import { embedTexts } from './embed';
 
-const model: Model = { id: 'text-embedding-3-small', name: 'Small', input: ['text'], output: ['embedding'], contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null }, price: { input: 0.02, output: 0, cacheRead: null, cacheWrite: null, tiers: [], asOf: 1 } };
+const model: Model = { id: 'text-embedding-3-small', name: 'Small', input: ['text'], output: ['embedding'], contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null }, price: { input: 0.02, output: 0, cacheRead: null, cacheWrite: null, tiers: [] } };
 const connection: Stored<'connection'> = { id: 'c', kind: 'connection', parent: null, rev: 1, value: { type: 'openai', label: 'OpenAI', baseUrl: null, protocol: null, accounts: [{ id: 'a', secret: 'sk' }], turns: null, starred: [model] } };
 const route: Route = { connection, model };
 const chat = crypto.randomUUID();

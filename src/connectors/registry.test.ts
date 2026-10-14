@@ -165,7 +165,7 @@ describe('catalogs', () => {
           settings: ['maxOutput', 'temperature', 'stop', 'verbosity', 'reasoning'],
           reasoning: { off: false, levels: ['max', 'xhigh', 'high', 'medium', 'low'], budget: null, adaptive: null },
         },
-        price: { input: 4, output: 20, cacheRead: expect.closeTo(0.2, 9), cacheWrite: 5, tiers: [], asOf: null },
+        price: { input: 4, output: 20, cacheRead: expect.closeTo(0.2, 9), cacheWrite: 5, tiers: [] },
       },
       expect.objectContaining({ id: 'openrouter/auto-beta', name: 'Auto Router (Beta)', output: ['text', 'image'], price: undefined }),
     ]);
@@ -187,10 +187,10 @@ describe('catalogs', () => {
           settings: ['maxOutput', 'stop', 'reasoning'],
           reasoning: { off: true, levels: ['low', 'medium', 'high', 'xhigh', 'max'], budget: { min: null, max: null }, adaptive: null },
         },
-        price: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, tiers: [], asOf: null },
+        price: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, tiers: [] },
       },
       expect.objectContaining({ id: 'alibaba/qwen3-coder', input: ['text'], reasoning: false, tools: true, price: undefined }),
-      expect.objectContaining({ id: 'alibaba/qwen3-embedding-0.6b', output: ['embedding'], price: { input: 0.01, output: 0, cacheRead: null, cacheWrite: null, tiers: [], asOf: null } }),
+      expect.objectContaining({ id: 'alibaba/qwen3-embedding-0.6b', output: ['embedding'], price: { input: 0.01, output: 0, cacheRead: null, cacheWrite: null, tiers: [] } }),
     ]);
     const [, bare] = vercelModels.data;
     expect(parseCatalog(connection('vercel'), { data: [{ ...bare, tags: undefined, modalities: undefined }] })).toEqual([
@@ -554,11 +554,11 @@ describe('embeddings', () => {
     const request = embedRequest(route, model({ id: 'text-embedding-3-small' }), ['밤', '아침'], 'query');
     expect(request).toMatchObject({ url: 'https://api.openai.com/v1/embeddings', method: 'POST' });
     expect(JSON.parse(request.body!)).toEqual({ model: 'text-embedding-3-small', input: ['밤', '아침'] });
-    const priced = model({ price: { input: 0.02, output: 0, cacheRead: null, cacheWrite: null, tiers: [], asOf: 1 } });
+    const priced = model({ price: { input: 0.02, output: 0, cacheRead: null, cacheWrite: null, tiers: [] } });
     expect(embedAnswer(route, priced, answer({ prompt_tokens: 1_000_000, total_tokens: 1_000_000 }), 2)).toEqual({
       vectors: [[0.1, 0.2], [0.3, 0.4]],
       usage: { inputTokens: 1_000_000, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 0, reasoningTokens: null },
-      cost: { unit: 'usd', amount: 0.02, source: 'price-list', asOf: 1 },
+      cost: { unit: 'usd', amount: 0.02, source: 'price-list' },
     });
     expect(embedAnswer(route, priced, answer({}), 3)).toBeNull();
     expect(embedAnswer(route, priced, { data: [{ index: 0, embedding: 'AAAA' }] }, 1)).toBeNull();

@@ -1,7 +1,8 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
 import { statedPrice } from './pricing';
-import type { ConnectionType, Modality, Price } from './types';
+import type { Rates } from './models-dev';
+import type { ConnectionType, Modality } from './types';
 import { amount, count, decimal, isRecord, modelEntries, nameOf, perMillion } from './values';
 
 const API = 'https://ai-gateway.vercel.sh/v1';
@@ -29,7 +30,7 @@ function reasoningTakes(options: unknown[]): ReasoningTakes {
 
 // A model priced by tiers is left to models.dev, which states them by context size as this app reads them. An embedding
 // model is priced by its input alone: it writes nothing.
-function price(value: unknown, embeds: boolean): Price | undefined {
+function price(value: unknown, embeds: boolean): Rates | undefined {
   if (!isRecord(value) || Object.keys(value).some((field) => field.endsWith('_tiers'))) return undefined;
   return statedPrice(perMillion(value.input), embeds ? 0 : perMillion(value.output), perMillion(value.input_cache_read), perMillion(value.input_cache_write));
 }

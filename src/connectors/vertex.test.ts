@@ -70,7 +70,7 @@ describe('Vertex AI', () => {
     expect(asked({ discount: true })).toMatchObject({ 'x-vertex-ai-llm-request-type': 'shared', 'x-vertex-ai-llm-shared-request-type': 'flex', authorization: 'Bearer token' });
     expect(Object.keys(asked({})).filter((name) => name.startsWith('x-vertex-ai-'))).toEqual([]);
 
-    const priced = { ...model!, price: { input: 2, output: 8, cacheRead: null, cacheWrite: null, tiers: [], asOf: 1 } };
+    const priced = { ...model!, price: { input: 2, output: 8, cacheRead: null, cacheWrite: null, tiers: [] } };
     const reply = (trafficType: string) =>
       new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '안녕' }], role: 'model' }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1_000_000, candidatesTokenCount: 1_000_000, trafficType } }), { headers: { 'content-type': 'application/json' } });
     const flex = await decodeStream(route, priced, reply('ON_DEMAND_FLEX'), new AbortController().signal, () => {});

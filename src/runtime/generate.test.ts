@@ -159,7 +159,7 @@ describe('a connection that trades its key for a token', () => {
 
 describe('a reply through a discount lane’s batch', () => {
   const anthropic: Connection = { ...openRouter, type: 'anthropic', accounts: [{ id: 'key', secret: 'sk-ant-x' }] };
-  const claude: Starred = { ...model, maxOutput: 1000, price: { input: 2, output: 10, cacheRead: null, cacheWrite: null, tiers: [], asOf: 1 } };
+  const claude: Starred = { ...model, maxOutput: 1000, price: { input: 2, output: 10, cacheRead: null, cacheWrite: null, tiers: [] } };
   const BATCHES = 'https://api.anthropic.com/v1/messages/batches';
   const message = { id: 'msg_1', type: 'message', role: 'assistant', content: [{ type: 'text', text: '반가워요' }], stop_reason: 'end_turn', usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 } };
   const batch = (status: string) => upstream(200, { id: 'b1', type: 'message_batch', processing_status: status });

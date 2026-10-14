@@ -57,14 +57,10 @@ export type Model = {
   // Catalogs that say nothing about request settings keep the Takes fields null.
   takes: Takes;
   // Absent when neither the model list nor models.dev prices it.
-  price?: Price;
+  price?: Rates;
   // The maker as the provider's model list names it (Copilot's vendor); absent where the list names none.
   vendor?: string;
 };
-
-// asOf: when the server fetched the models.dev list it came from; null for a price the provider's own model list
-// states, which wins over models.dev's.
-export type Price = Rates & { asOf: number | null };
 
 // profile: the 설정 묶음 it uses; without one, the default 묶음.
 export type Starred = Model & { profile?: string };
@@ -90,9 +86,9 @@ export type Usage = {
   reasoningTokens: number | null;
 };
 
-// reported: the provider said what the reply cost. price-list: worked out from the model's Price, which can fall behind
-// the provider's, so it is shown as an estimate. asOf: the Price's, absent when it has none.
-export type Cost = { unit: 'usd' | 'credit'; amount: number } & ({ source: 'reported' } | { source: 'price-list'; asOf?: number });
+// reported: the provider said what the reply cost. price-list: worked out from the model's price, which can fall behind
+// the provider's, so it is shown as an estimate.
+export type Cost = { unit: 'usd' | 'credit'; amount: number; source: 'reported' | 'price-list' };
 
 // Units are never summed together.
 export type Meter =
@@ -224,7 +220,7 @@ type TypeHooks = {
   embedPurpose?: (as: EmbedPurpose | null) => Record<string, unknown>;
 };
 
-// Half price for a slower answer (design §6.7). rates: what each of the model's Price rates is multiplied by once the
+// Half price for a slower answer (design §6.7). rates: what each of the model's price rates is multiplied by once the
 // lane served the call, never because it was asked for. accepted: whether the model takes the lane; null where its
 // catalog does not say. tier: the same call at a slower service tier, asked for with fields laid over the body, headers
 // laid over the request's, or both; the reply's reported tier (StreamFacts tier) equal to served is what says the lane
