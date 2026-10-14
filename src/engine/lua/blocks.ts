@@ -339,6 +339,22 @@ export async function runBlocks(trigger: Blocks, run: Acting, call: (name: strin
         run.messages = run.messages.slice(Number.isNaN(start) ? 0 : start, Number.isNaN(end) ? undefined : end);
         break;
       }
+      case 'command': {
+        // Risu's slash commands, of which only /cut has a caller (the 핑퐁 modules' start trigger, `/cut -N`). Risu
+        // itself undoes a trigger's command edit by installing the chat copy it took before the command ran, so the
+        // evident intent runs here. `a-b` keeps that slice and `-N` the first N, as Risu's `/cut` reads them; a lone
+        // index removes that message, which Risu's splice-assignment meant to.
+        const [name = '', argument = ''] = operand(effect.value).trim().split(/\s+/, 2);
+        if (name !== '/cut') { run.missing.add(`command ${name}`); break; }
+        if (argument.includes('-')) {
+          const [start, end] = argument.split('-').map(Number);
+          run.messages = run.messages.slice(Number.isNaN(start) ? 0 : start, Number.isNaN(end) ? undefined : end);
+        } else {
+          const index = Number(argument);
+          if (!Number.isNaN(index)) run.messages.splice(index, 1);
+        }
+        break;
+      }
       case 'alert': {
         const value = cbs(effect.value);
         const kind = effect.tone;

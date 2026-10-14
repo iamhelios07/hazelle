@@ -337,6 +337,15 @@ describe('block triggers', () => {
     expect(outcome).toMatchObject({ errors: [], stop: true, edits: [{ index: 1, text: 'hp 10' }], removed: [0], added: [{ role: 'user', text: 'more' }] });
   });
 
+  it('run a /cut command by its intent and name any other command as missing', async () => {
+    const cut = async (value: string) => (await lua.run(String(owner++), [blocks('start', [{ type: 'v2Command', value, valueType: 'value', indent: 0 }])], SNAPSHOT, { kind: 'start' }, host())).removed;
+    expect(await cut('/cut -1')).toEqual([1]);
+    expect(await cut('/cut 1-3')).toEqual([0]);
+    expect(await cut('/cut 0')).toEqual([0]);
+    const outcome = await lua.run(String(owner++), [blocks('start', [{ type: 'command', value: '/send hi', indent: 0 }])], SNAPSHOT, { kind: 'start' }, host());
+    expect(outcome).toMatchObject({ missing: ['command /send'], removed: [] });
+  });
+
   it('name an effect this app lacks and go on', async () => {
     const outcome = await lua.run(String(owner++), [blocks('start', [{ type: 'v2ImgGen', indent: 0 }, { type: 'setvar', operator: '=', var: 'after', value: '1' }])], SNAPSHOT, { kind: 'start' }, host());
     expect(outcome).toMatchObject({ missing: ['v2ImgGen'], writes: [['after', '1']] });

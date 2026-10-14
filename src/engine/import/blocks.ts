@@ -94,6 +94,7 @@ export type BlockEffect =
   | { kind: 'add'; role: 'user' | 'char' | null; value: Operand }
   | { kind: 'modify'; index: Operand; value: Operand }
   | { kind: 'cut'; start: Operand; end: Operand }
+  | { kind: 'command'; value: Operand }
   | { kind: 'alert'; tone: 'normal' | 'error' | 'input' | 'select' | null; value: string; input: string }
   | { kind: 'stop' }
   | { kind: 'end' }
@@ -169,6 +170,8 @@ export function blockEffects(values: unknown): BlockEffect[] {
       case 'impersonate': case 'v2Impersonate': return { kind: 'add', role: effect.role === 'user' || effect.role === 'char' ? effect.role : null, value: operand(effect, 'value') };
       case 'modifychat': case 'v2ModifyChat': return { kind: 'modify', index: operand(effect, 'index'), value: operand(effect, 'value') };
       case 'cutchat': case 'v2CutChat': return { kind: 'cut', start: operand(effect, 'start'), end: operand(effect, 'end') };
+      case 'command': return { kind: 'command', value: { kind: 'text', text: text(effect.value) } };
+      case 'v2Command': return { kind: 'command', value: operand(effect, 'value') };
       case 'showAlert': return { kind: 'alert', tone: effect.alertType === 'normal' || effect.alertType === 'error' || effect.alertType === 'input' || effect.alertType === 'select' ? effect.alertType : null, value: text(effect.value), input: text(effect.inputVar) };
       case 'stop': case 'v2StopPromptSending': return { kind: 'stop' };
       case 'v2StopTrigger': return { kind: 'end' };
@@ -252,6 +255,7 @@ export function effectSources(effects: BlockEffect[]): unknown[] {
       case 'add': source = { type: 'v2Impersonate', role: effect.role ?? '', ...operandSource('value', effect.value) }; break;
       case 'modify': source = { type: 'v2ModifyChat', ...operandSource('index', effect.index), ...operandSource('value', effect.value) }; break;
       case 'cut': source = { type: 'v2CutChat', ...operandSource('start', effect.start), ...operandSource('end', effect.end) }; break;
+      case 'command': source = { type: 'v2Command', ...operandSource('value', effect.value) }; break;
       case 'alert': source = { type: 'showAlert', alertType: effect.tone ?? '', value: effect.value, inputVar: effect.input }; break;
       case 'stop': source = { type: 'v2StopPromptSending' }; break;
       case 'end': source = { type: 'v2StopTrigger' }; break;
