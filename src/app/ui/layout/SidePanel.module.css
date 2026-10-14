@@ -73,9 +73,7 @@
   font-size: var(--text-xs);
 }
 
-/* A container, so a setting row in it stacks its field under its name as in a narrow SettingGroup. */
 .body {
-  container-type: inline-size;
   flex-grow: 1;
   min-height: 0;
   display: flex;

@@ -37,6 +37,14 @@
   font-weight: var(--weight-regular);
 }
 
+/* Beside a name in a narrow panel, as Risu's select: at most the narrow chip's width, so a long value is cut short
+   and the name keeps the rest of the row. Its own end padding pulled out lines the chevron up with a switch's end. */
+.value {
+  composes: ghost;
+  max-width: var(--chip-max-width-narrow);
+  margin-inline-end: calc(var(--space-8) * -1);
+}
+
 .ghost:hover,
 .ghost[aria-expanded='true'] {
   color: var(--color-text);

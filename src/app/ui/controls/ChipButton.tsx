@@ -7,7 +7,7 @@ type Props = {
   label: string;
   title: string;
   leading?: ReactNode;
-  variant?: 'chip' | 'field' | 'ghost';
+  variant?: 'chip' | 'field' | 'ghost' | 'value';
   opens?: 'down' | 'up';
   // warn: the current choice is missing.
   tone?: 'default' | 'warn';

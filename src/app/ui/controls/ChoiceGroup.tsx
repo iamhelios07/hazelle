@@ -4,8 +4,8 @@ import { ChipButton } from './ChipButton';
 import styles from './ChoiceGroup.module.css';
 
 // mark: drawn before a chip's label, such as the color it names.
-// menu: a chip naming the choice, which opens the options. fit: a strip while it holds a few short options; more or
-// longer ones, which a strip squeezes to a letter wide each, open as a menu.
+// menu: the choice as quiet words beside a name, which open the options. fit: a strip while it holds a few short
+// options; more or longer ones, which a strip squeezes to a letter wide each, open as a menu from a field chip.
 const STRIP = { options: 4, letters: 14 };
 
 type Props<T extends string> = {
@@ -19,13 +19,11 @@ type Props<T extends string> = {
 
 export function ChoiceGroup<T extends string>({ label, showLabel = false, options, value, onChange, layout = 'chips' }: Props<T>) {
   const id = useId();
-  if (layout === 'fit') {
-    const strip = options.length <= STRIP.options && options.map((option) => option.label).join('').length <= STRIP.letters;
-    return <ChoiceGroup label={label} showLabel={showLabel} options={options} value={value} onChange={onChange} layout={strip ? 'segmented' : 'menu'} />;
-  }
-  if (layout === 'menu') {
+  const strip = layout === 'fit' && options.length <= STRIP.options && options.map((option) => option.label).join('').length <= STRIP.letters;
+  if (strip) return <ChoiceGroup label={label} showLabel={showLabel} options={options} value={value} onChange={onChange} layout="segmented" />;
+  if (layout === 'fit' || layout === 'menu') {
     return (
-      <Menu label={label} place="below-end" trigger={(opener) => <ChipButton variant="field" label={options.find((option) => option.value === value)?.label ?? value ?? ''} title={label} {...opener} />}>
+      <Menu label={label} place="below-end" trigger={(opener) => <ChipButton variant={layout === 'menu' ? 'value' : 'field'} label={options.find((option) => option.value === value)?.label ?? value ?? ''} title={label} {...opener} />}>
         {options.map((option) => (
           <MenuItem key={option.value} label={option.label} sub={option.sub} checked={option.value === value} onClick={() => onChange(option.value)} />
         ))}
