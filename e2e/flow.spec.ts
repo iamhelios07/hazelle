@@ -101,7 +101,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.keyboard.press('Control+p');
     await page.getByRole('dialog', { name: '이 채팅의 프롬프트' }).getByRole('button', { name: '프롬프트 관리' }).click();
     const side = page.getByRole('complementary', { name: '프롬프트' });
-    await side.getByRole('button', { name: /핑퐁 간소화/ }).first().click();
+    await side.getByRole('button', { name: /기본 대화/ }).first().click();
     await side.getByRole('button', { name: /^1\. / }).click();
     const system = side.getByRole('button', { name: '시스템', exact: true });
     await expect(system).toHaveAttribute('aria-pressed', 'true');

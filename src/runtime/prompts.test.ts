@@ -78,7 +78,7 @@ describe('addDefaults', () => {
     await Promise.all([addDefaults(store), addDefaults(other)]);
     await store.pull();
     const names = () => store.list('prompt').filter(live).map((kept) => kept.value.name).sort();
-    expect(names()).toEqual(['기본 기억', '기본 번역', '기본 삽화', '🏓 핑퐁 간소화']);
+    expect(names()).toEqual(['기본 기억', '기본 대화', '기본 번역', '기본 삽화']);
     const settings = store.get('settings', SETTINGS_ID)?.value;
     expect([settings?.prompt, settings?.translatePrompt, settings?.memoryPrompt, settings?.illustratePrompt]).toEqual([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, ILLUSTRATOR_ID]);
 

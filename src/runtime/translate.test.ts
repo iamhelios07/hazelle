@@ -191,7 +191,7 @@ describe('Translator', () => {
       expect(made).toMatchObject({ ok: true, translation: { text: 'はい、ご主人様。' } });
       const sent: { role: string; content: string }[] = JSON.parse(log[0]!.sent.body!).messages;
       expect(sent.map(({ role }) => role)).toEqual(['system', 'system', 'user']);
-      expect(sent[0]!.content).toContain('Target language: Japanese.');
+      expect(sent[0]!.content).toContain('- Rewrite the source text into Japanese.');
       expect(sent[1]!.content).toContain('Master -> 주인님');
       expect(sent[2]!.content).toBe('Yes, Master.');
       expect(fetched.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => String(url))).toEqual([expect.stringMatching(/^\/api\/streams\//)]);

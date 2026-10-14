@@ -107,10 +107,11 @@ export async function addDefaults(store: ObjectStore): Promise<void> {
   await store.upsert('settings', (current = EMPTY_SETTINGS) => added.flat().reduce((next, { setting, id }) => (next[setting] === undefined ? { ...next, [setting]: id } : next), current));
 }
 
-// The user's own Risu preset "🏓 핑퐁 간소화", through the one preset converter.
+// The user's own Risu preset, through the one preset converter. It goes out under the app's name, not the preset's:
+// the preset's name is a well-known community prompt's.
 async function starter(): Promise<ConversationPrompt | null> {
   const read = await importPreset('starter-prompt.risup', await starterBytes());
-  return read.ok ? read.prompt : null;
+  return read.ok ? without({ ...read.prompt, name: '기본 대화' }, 'imported') : null;
 }
 
 // Vite hands an ?inline asset over as a base64 data: URL, in the browser and in tests alike. It is decoded
