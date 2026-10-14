@@ -10,10 +10,18 @@ export type UploadBudget = { take(size: number): Promise<boolean>; give(size: nu
 const UPLOAD_BYTES = 256 * 1024 * 1024;
 const UPLOAD_WAIT_MS = 30_000;
 
-// Takers wait in order, so a body that fits is never passed by one that arrived later.
+// Takers wait in order, so a body that fits is never passed by one that arrived later. The head leaving, by entering
+// or by giving up, is what lets the next in, so a wait that runs out admits as a give does.
 export function uploadBudget(bytes = UPLOAD_BYTES, waitMs = UPLOAD_WAIT_MS): UploadBudget {
   let free = bytes;
   const waiting: { size: number; enter: () => void }[] = [];
+  const admit = () => {
+    while (waiting.length && waiting[0]!.size <= free) {
+      const next = waiting.shift()!;
+      free -= next.size;
+      next.enter();
+    }
+  };
   return {
     take: (size) =>
       new Promise<boolean>((resolve) => {
@@ -31,16 +39,13 @@ export function uploadBudget(bytes = UPLOAD_BYTES, waitMs = UPLOAD_WAIT_MS): Upl
         const timer = setTimeout(() => {
           waiting.splice(waiting.indexOf(waiter), 1);
           resolve(false);
+          admit();
         }, waitMs);
         waiting.push(waiter);
       }),
     give: (size) => {
       free += size;
-      while (waiting.length && waiting[0]!.size <= free) {
-        const next = waiting.shift()!;
-        free -= next.size;
-        next.enter();
-      }
+      admit();
     },
   };
 }

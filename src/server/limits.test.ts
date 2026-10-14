@@ -65,4 +65,13 @@ describe('uploadBudget', () => {
     budget.give(5);
     expect(await budget.take(5)).toBe(true);
   });
+
+  it('lets the body behind a head that gave up in, without waiting for a give', async () => {
+    const budget = uploadBudget(10, 20);
+    expect(await budget.take(8)).toBe(true);
+    const big = budget.take(5);
+    const small = budget.take(2);
+    expect(await big).toBe(false);
+    expect(await Promise.race([small, new Promise((resolve) => setTimeout(() => resolve('late'), 10))])).toBe(true);
+  });
 });
