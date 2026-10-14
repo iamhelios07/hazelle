@@ -48,8 +48,8 @@ export class ObjectStore {
   // The server's token for the account's history (server/account-store), replaced by every restore there. Sent with
   // every feed and batch, and adopted only from the answer to a bootstrap sent with none.
   private timeline: string | null = null;
-  // Once the store ended for a restore: how many of the person's writes it dropped, told after the cache let go.
-  private rewound: Promise<number> | null = null;
+  // Once the store ended for a restore: how many of the person's writes it dropped.
+  private rewound: number | null = null;
   private readonly rewoundListeners = new Set<(dropped: number) => void>();
   private known = 0;
   private restored = false;
@@ -173,11 +173,11 @@ export class ObjectStore {
     this.cachedObjects.write({ changes, feed: this.cacheState(), scopes });
   }
 
-  // Told once, when the store ended for a restore and its device copy let go, with how many of the person's writes it
-  // dropped; a listener that comes after is told at once.
+  // Told once, when the store ended for a restore, with how many of the person's writes it dropped; a listener that
+  // comes after is told at once.
   readonly subscribeRewound = (listener: (dropped: number) => void) => {
-    if (this.rewound) {
-      void this.rewound.then(listener);
+    if (this.rewound !== null) {
+      listener(this.rewound);
       return () => {};
     }
     this.rewoundListeners.add(listener);
@@ -186,15 +186,15 @@ export class ObjectStore {
 
   // The server refused the timeline this store holds (clear: the device copy is of it too), or another tab moved the
   // device copy to a generation of its own. The store ends as close does, and its unsent writes are dropped and counted,
-  // never replayed: the session opens the next store once the copy is cleared (app/shell/Workspace).
+  // never replayed: the session opens the next store (app/shell/Workspace), which opens the device copy once it is
+  // cleared (ObjectCacheSession).
   private rewind(clear: boolean) {
     if (this.closing.signal.aborted) return;
-    const dropped = this.pending.dropUnsent();
+    this.rewound = this.pending.dropUnsent();
     if (clear) this.cachedObjects.clear();
-    this.rewound = this.cachedObjects.settled.then(() => dropped);
     // After rewound is set: work the abort cuts short answers timeline-changed (halted).
     this.closing.abort();
-    void this.rewound.then((count) => { for (const listener of this.rewoundListeners) listener(count); });
+    for (const listener of this.rewoundListeners) listener(this.rewound);
   }
 
   private adopt(timeline: string) {
@@ -388,7 +388,7 @@ export class ObjectStore {
   // What an operation answers when it is cut short: timeline-changed once the store ended for a restore, stopped for the
   // store closing, the caller's own stop and a released lease.
   private halted(): ApiFailure {
-    return { ok: false, error: this.rewound ? 'timeline-changed' : 'stopped' };
+    return { ok: false, error: this.rewound !== null ? 'timeline-changed' : 'stopped' };
   }
 
   private codecFailure(error: unknown): ApiFailure {
@@ -780,7 +780,7 @@ export class ObjectStore {
   }
 
   private async pullPages({ signal = this.closing.signal, progress }: PullOptions): Promise<ApiFailure | null> {
-    const stopped = () => signal.aborted || this.closing.signal.aborted;
+    const stop = AbortSignal.any([signal, this.closing.signal]);
     let more = true;
     let objects = 0;
     let pages = 0;
@@ -794,15 +794,15 @@ export class ObjectStore {
       // Only a bootstrap's first request asks for the count; the prefetched page after it is built before it answers.
       const count = !bootstrapped && !counted;
       counted ||= count;
-      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=${[...UNFED].join(',')}${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal]));
+      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=${[...UNFED].join(',')}${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, stop), stop);
       return { sent, answer };
     };
     while (more) {
-      if (stopped()) return this.halted();
+      if (stop.aborted) return this.halted();
       const { sent, answer } = next ?? page(this.cursor, this.bootstrapped, this.known);
       next = null;
       const result = await answer;
-      if (stopped()) return this.halted();
+      if (stop.aborted) return this.halted();
       if (!result.ok) {
         if (result.error !== 'cache-reset') return result;
         this.rewind(true);
@@ -825,10 +825,9 @@ export class ObjectStore {
         after.more = true;
       }
       if (after.more) next = page(after.cursor, after.bootstrapped, result.data.changes.reduce((known, change) => Math.max(known, change.rev), this.known));
-      const stop = AbortSignal.any([signal, this.closing.signal]);
       const opened = this.opener(result.data.changes, false, stop);
       for (const [index, change] of result.data.changes.entries()) {
-        if (stopped()) {
+        if (stop.aborted) {
           this.changes.publish();
           return this.halted();
         }
@@ -854,7 +853,7 @@ export class ObjectStore {
       if (failure) return failure;
     }
     this.projections.refreshHeld();
-    return stopped() ? this.halted() : null;
+    return stop.aborted ? this.halted() : null;
   }
 
   private async pullParent(chat: string, scope: Scope, signal: AbortSignal): Promise<ApiFailure | null> {

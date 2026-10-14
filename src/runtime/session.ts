@@ -69,13 +69,11 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
     const pulled = signal.aborted ? { ok: false as const, error: 'stopped' as const } : store.cached ? null : await store.pull({ signal, progress });
     if (!pulled) return { ok: true as const, data: store };
-    // A store that heard a restore as it opened has ended (ObjectStore.rewind); the next one bootstraps the restored
-    // account once the device copy let go.
-    if (pulled.error === 'timeline-changed') await new Promise((resolve) => store.subscribeRewound(resolve));
     store.close();
     return pulled;
   };
   let opened = await opening();
+  // A store that heard a restore as it opened has ended (ObjectStore.rewind); the next one bootstraps the restored account.
   if (!opened.ok && opened.error === 'timeline-changed') opened = await opening();
   if (!opened.ok) return opened;
   const store = opened.data;

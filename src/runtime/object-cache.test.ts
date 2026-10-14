@@ -106,7 +106,7 @@ function tab() {
 
 const ids = (store: ObjectStore) => store.list('connection').map(({ id }) => id).toSorted();
 
-// The store a restore ended, once it let go of the device copy, and the one the session opens after it (app/shell/Workspace).
+// The store a restore ended, and the one the session opens after it (app/shell/Workspace).
 async function after(store: ObjectStore, open: () => Promise<ObjectStore>) {
   await new Promise((resolve) => store.subscribeRewound(resolve));
   store.close();
@@ -403,6 +403,77 @@ it('ends the store at a restore and at its undo, and the store opened after each
   await f.flush();
   expect([...f.cache.rows.keys()].toSorted()).toEqual([...f.rows.keys()].toSorted());
   undone.close();
+});
+
+it('tells a restore at once, and the store opened after it opens the device copy only once cleared', async () => {
+  const f = await fixture();
+  await f.add('kept', 'connection', null, connection);
+  const before = f.snapshot();
+  await f.add('later', 'connection', null, connection);
+  const store = await f.open();
+  await store.pull();
+  await f.flush();
+  const clear = MemoryCache.prototype.clear.bind(f.cache);
+  let release!: () => void;
+  vi.spyOn(f.cache, 'clear').mockImplementationOnce(async (stated) => {
+    await new Promise<void>((resolve) => { release = resolve; });
+    return clear(stated);
+  });
+  const told = vi.fn();
+  store.subscribeRewound(told);
+
+  f.restore(before, 't1');
+  expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  expect(told.mock.calls).toEqual([[0]]);
+  store.close();
+  const read = vi.spyOn(f.cache, 'open');
+  const opening = f.open();
+  await vi.waitFor(() => expect(release).toBeDefined());
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(read).not.toHaveBeenCalled();
+  release();
+  const next = await opening;
+  expect(next.cached).toBe(false);
+  expect(await next.pull()).toBeNull();
+  expect(ids(next)).toEqual(['kept']);
+  next.close();
+});
+
+it('opens the store after a restore without the device copy when its clear failed, after a failed write too', async () => {
+  const f = await fixture();
+  await f.add('kept', 'connection', null, connection);
+  const before = f.snapshot();
+  const store = await f.open();
+  await store.pull();
+  await f.flush();
+  vi.spyOn(f.cache, 'write').mockRejectedValueOnce(new Error('quota'));
+  await f.add('later', 'connection', null, connection);
+  expect(await store.pull()).toBeNull();
+  const cleared = vi.spyOn(f.cache, 'clear').mockRejectedValue(new Error('broken'));
+
+  f.restore(before, 't1');
+  expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  const next = await after(store, () => f.open());
+  expect(cleared).toHaveBeenCalledOnce();
+  expect(next.cached).toBe(false);
+  expect(await next.pull()).toBeNull();
+  expect(ids(next)).toEqual(['kept']);
+  expect(f.resets()).toBe(1);
+  next.close();
+});
+
+it('aborts the page a pull is waiting on when its store ends', async () => {
+  const f = await fixture();
+  const signals: AbortSignal[] = [];
+  const store = await f.open(((method, path, body, signal) => {
+    if (path.startsWith('objects?')) signals.push(signal!);
+    return api(method, path, body, signal);
+  }) as typeof api);
+  const pulling = store.pull({ signal: new AbortController().signal });
+  await vi.waitFor(() => expect(signals).toHaveLength(1));
+  store.close();
+  expect(signals[0]!.aborted).toBe(true);
+  expect(await pulling).toEqual({ ok: false, error: 'stopped' });
 });
 
 it('drops and counts a write a restore cut short, whose late 409 or 503 neither lands nor ends the next store', async () => {
