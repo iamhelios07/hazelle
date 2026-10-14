@@ -95,7 +95,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
         </Text>
         {prompt.kind === 'prompt' && toggles.sections[0]?.from === 'prompt' && (
           <Row kind="actions">
-            <Button variant="link" size="xs" onClick={() => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles' })}>
+            <Button variant="link" size="xs" onClick={() => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles', fromToggles: true })}>
               프롬프트 토글의 기본값 바꾸기
             </Button>
           </Row>

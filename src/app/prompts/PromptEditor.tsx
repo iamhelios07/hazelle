@@ -12,7 +12,7 @@ import { BIN_KEEPS, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import { typing, useShortcut } from '../shortcuts';
 import { useOwnUndo, useToast } from '../toast';
-import { Button, Callout, Divider, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
+import { Button, Callout, Divider, MenuHeading, MenuItem, NavRow, Outline, Row, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
 import { conditionSnippet, countUses, draftOf, lineTitle, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
@@ -71,6 +71,8 @@ type Props = {
   onPane: (pane: Pane) => void;
   // The block it opens at, drilled into; read once, as it mounts.
   block?: string;
+  // Where the 토글 pane goes back to when it was opened from outside the editor; the outline is a link under its head.
+  paneBack?: { label: string; onBack: () => void };
   backLabel: string;
   onBack: () => void;
   onCopied: (id: string) => void;
@@ -79,7 +81,7 @@ type Props = {
 };
 
 // Its state is one prompt's, so a caller keys it by id; unmounting it saves.
-export function PromptEditor({ stored, layout, pane, onPane, block: openAt, backLabel, onBack, onCopied, onErased, frame }: Props) {
+export function PromptEditor({ stored, layout, pane, onPane, block: openAt, paneBack, backLabel, onBack, onCopied, onErased, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
@@ -384,6 +386,16 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, back
   const status = save.status ? SAVE_STATUS[save.status] : undefined;
   if (!split && drilled) {
     const title = open === MODEL ? '모델' : open === PICTURE ? '이미지' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
+    if (open === TOGGLES && paneBack) {
+      const toOutline = (
+        <Row kind="actions">
+          <Button variant="link" size="xs" onClick={leavePage}>
+            프롬프트 열기
+          </Button>
+        </Row>
+      );
+      return frame({ head: { title, onBack: paneBack.onBack, backLabel: paneBack.label, status }, body: <>{toOutline}{page}</>, open });
+    }
     return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status }, body: page, open });
   }
 

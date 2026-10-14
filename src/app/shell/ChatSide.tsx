@@ -10,8 +10,10 @@ import { SidePanel, type NavBarProps } from '../ui';
 type Props<K extends SideAt['open']['kind']> = Omit<SideAt, 'open'> & { open: Extract<SideAt['open'], { kind: K }> };
 const panel =
   (title: string, onClose: () => void) =>
-  ({ head, body, open: page }: { head: NavBarProps; body: ReactNode; open?: string }) => (
+  // The head is one line at the chat header's height, so a list's actions stand at the top of its body.
+  ({ head: { actions, ...head }, body, open: page }: { head: NavBarProps; body: ReactNode; open?: string }) => (
     <SidePanel title={title} nav={head} page={page} expandable onClose={onClose}>
+      {actions}
       {body}
     </SidePanel>
   );
@@ -41,7 +43,8 @@ function PromptSide({ open, inUse, onOpen, onClose }: Props<'prompts'>) {
       layout="drill"
       pane={open.pane}
       block={open.block}
-      onPane={(pane) => onOpen({ ...open, pane })}
+      onPane={(pane) => onOpen({ ...open, pane, fromToggles: undefined })}
+      paneBack={open.fromToggles && { label: '채팅 토글', onBack: () => onOpen({ kind: 'toggles' }) }}
       backLabel="프롬프트 목록"
       onBack={toList}
       onCopied={(id) => onOpen({ kind: 'prompts', id, pane: null })}

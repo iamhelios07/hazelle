@@ -43,7 +43,7 @@ import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, 
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
-import { flippedCache, cacheShown, NO_PANELS, opened, type Panel, type Panels, type Side } from './panels';
+import { flippedCache, cacheShown, NO_PANELS, opened, type Panel, type Panels } from './panels';
 import { useSendNotes } from './useSendNotes';
 import type { BookmarkRow } from './bookmarks';
 import { useDraft } from './useDraft';
@@ -534,7 +534,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       tool: (module: string) => flipPanel({ kind: 'tool', module }, (current) => current.kind === 'tool' && current.module === module),
       toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scripts.menu(chat, module, item)),
       toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),
-      side: (side: Side) => open(side),
+      side: (panel: Panel) => open(panel),
       closePanel: () => setPanels((current) => ({ ...current, panel: null })),
       openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt' | 'export') => setDialog(which),
       closeDialog: () => setDialog(null),

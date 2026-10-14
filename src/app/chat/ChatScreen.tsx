@@ -19,11 +19,11 @@ import { ChatSearch } from './ChatSearch';
 import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useEditBeside } from './editBeside';
-import type { Side } from './panels';
+import type { Panel, Side } from './panels';
 import { useChat } from './useChat';
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
-export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Side) => void; onClose: () => void };
+export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Panel) => void; onClose: () => void };
 
 type Props = {
   // The chat's id, which a new chat is saved under.
