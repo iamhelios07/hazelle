@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { forgetOldRecords, readAll } from './admin';
+import { MAX_DIAGNOSTICS_LENGTH } from '../contracts/admin';
 import { beginRestore } from './lifecycle';
 import { hex, type Services } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
@@ -185,13 +186,21 @@ describe('the operator', () => {
     expect((await t.post('reports', { text: 'x'.repeat(4001) }, other.cookie)).status).toBe(400);
 
     const { reports } = (await (await t.get('admin/reports', admin.cookie)).json()) as { reports: { id: number }[] };
-    expect(reports).toEqual([{ id: expect.any(Number), accountId: other.id, username: 'other', text: '이 봇이 이상해요', createdAt: expect.any(Number), resolvedAt: null, share: null, shareVersion: null, link: null, shared: null }]);
+    expect(reports).toEqual([{ id: expect.any(Number), accountId: other.id, username: 'other', text: '이 봇이 이상해요', createdAt: expect.any(Number), resolvedAt: null, share: null, shareVersion: null, link: null, diagnostics: null, shared: null }]);
 
     const { id } = reports[0]!;
     expect((await t.post(`admin/reports/${id}/resolve`, undefined, admin.cookie)).status).toBe(204);
     expect((await t.post(`admin/reports/${id}/resolve`, undefined, admin.cookie)).status).toBe(404);
     expect(await (await t.get('admin/reports', admin.cookie)).json()).toMatchObject({ reports: [{ id, resolvedAt: expect.any(Number) }] });
     expect(await log(admin.cookie)).toMatchObject([{ action: 'resolve-report', target: String(id), detail: null }]);
+  });
+
+  it('keeps the 문제 진단 a report was sent with, up to its cap', async () => {
+    const admin = await operator();
+    const other = await account('other');
+    expect((await t.post('reports', { text: '안 열려요', diagnostics: 'x'.repeat(MAX_DIAGNOSTICS_LENGTH + 1) }, other.cookie)).status).toBe(400);
+    expect((await t.post('reports', { text: '안 열려요', diagnostics: '헤이젤 진단 정보' }, other.cookie)).status).toBe(204);
+    expect(await (await t.get('admin/reports', admin.cookie)).json()).toMatchObject({ reports: [{ text: '안 열려요', diagnostics: '헤이젤 진단 정보' }] });
   });
 
   it('keeps a report eligible for its account when the wall clock moves backwards after signup', async () => {

@@ -1,5 +1,5 @@
 import { ChangeSignal } from '../change-signal';
-import type { AccountState } from '../contracts/admin';
+import { MAX_DIAGNOSTICS_LENGTH, type AccountState } from '../contracts/admin';
 import { passwordCredential, recoveryCredential, type Credential, type Method, type VaultRecord } from '../vault/keys';
 import { api, SLOW_ROUTE_WAIT, type Heard } from './api';
 import { page } from './pages';
@@ -69,7 +69,9 @@ export const changePassword = (current: Proof, next: { passwordProof: string; pa
 
 export const deleteAccount = (credential: Proof) => api<undefined>('DELETE', 'account', proven(credential), undefined, SLOW_ROUTE_WAIT);
 
-export const sendReport = (text: string) => api<undefined>('POST', 'reports', { text });
+// diagnostics: the 문제 진단 the sender chose to send along, or null.
+export const sendReport = (text: string, diagnostics: string | null) =>
+  api<undefined>('POST', 'reports', { text, diagnostics: diagnostics?.slice(0, MAX_DIAGNOSTICS_LENGTH) ?? null });
 
 export type Notice = { id: number; reportId: number | null; text: string; createdAt: number };
 export const readNotices = (before: number | null) => page<'notices', Notice>('notices', 'notices', before);

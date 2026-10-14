@@ -19,7 +19,7 @@ it('sets the service, suspends an account and resolves its report, each read bac
   expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, suspended: true }] } });
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { admin: true, suspended: true } } });
 
-  expect(await sendReport('그림이 이상해요')).toMatchObject({ ok: true });
+  expect(await sendReport('그림이 이상해요', null)).toMatchObject({ ok: true });
   const reports = await readReports(null);
   expect(reports).toMatchObject({ ok: true, data: { rows: [{ accountId, text: '그림이 이상해요', resolvedAt: null }], more: false } });
   expect(await resolveReport(reports.ok ? reports.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
@@ -30,7 +30,7 @@ it('sets the service, suspends an account and resolves its report, each read bac
 
 it('sends notices with a reply, a reason and to everyone, which the account reads newest first, counted unread until seen', async () => {
   const { accountId } = await server.operator();
-  await sendReport('도와주세요');
+  await sendReport('도와주세요', null);
   const reports = await readReports(null);
   const report = reports.ok ? reports.data.rows[0]!.id : 0;
   expect(await resolveReport(report, '고쳤어요')).toMatchObject({ ok: true });
@@ -54,7 +54,7 @@ it('restores an account to a time on its report: its open device drops to the ob
   server.at(() => now - 1_800_000);
   await store.create('connection', connection('later'));
   server.at(() => Date.now());
-  await sendReport('되돌려 주세요');
+  await sendReport('되돌려 주세요', null);
   const reports = await readReports(null);
   const report = reports.ok ? reports.data.rows[0]!.id : 0;
   const at = now - 2_700_000;

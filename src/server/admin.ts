@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { type AccountState, type RestoreAction, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
+import { type AccountState, type RestoreAction, MAX_DIAGNOSTICS_LENGTH, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
 import { SHARE_ID } from '../contracts/shares';
 import { blockFiles, fileBlocks } from './files';
 import { serveShareFile } from './shares';
@@ -24,15 +24,17 @@ export async function forgetOldRecords(db: Db): Promise<void> {
 export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c) => {
   const body = await readObject(c);
   const text = typeof body?.text === 'string' ? body.text.trim() : '';
+  const diagnostics = body?.diagnostics ?? null;
   if (!text || text.length > MAX_REPORT_LENGTH) return fail(c, 400, 'bad-input');
+  if (diagnostics !== null && (typeof diagnostics !== 'string' || diagnostics.length > MAX_DIAGNOSTICS_LENGTH)) return fail(c, 400, 'bad-input');
   const { id, username, incarnation } = c.get('account');
   // Reports must not predate their account: restore and reply eligibility use that bound even if wall time regresses.
   const sent = await c.env.db.prepare(
-    `INSERT INTO reports (account_id, username, text, created_at)
-     SELECT ?1, ?2, ?3, MAX(?4, created_at) FROM accounts WHERE id = ?1 AND incarnation = ?6
+    `INSERT INTO reports (account_id, username, text, created_at, diagnostics)
+     SELECT ?1, ?2, ?3, MAX(?4, created_at), ?7 FROM accounts WHERE id = ?1 AND incarnation = ?6
      AND (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND share IS NULL AND resolved_at IS NULL) < ?5 RETURNING id`,
   )
-    .bind(id, username, text, Date.now(), MAX_OPEN_REPORTS, incarnation)
+    .bind(id, username, text, Date.now(), MAX_OPEN_REPORTS, incarnation, diagnostics)
     .first();
   return sent ? c.body(null, 204) : fail(c, 429, 'too-many-reports');
 });
@@ -364,7 +366,7 @@ const SHARED = `(SELECT json_object('held', s.held_at IS NOT NULL, 'reviewed', s
 admin.get('/reports', async (c) => {
   const rows = page(
     c,
-    `SELECT id, account_id AS accountId, username, text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link,
+    `SELECT id, account_id AS accountId, username, text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link, diagnostics,
        ${SHARED} AS shared FROM reports`,
   );
   if (!rows) return fail(c, 400, 'bad-input');

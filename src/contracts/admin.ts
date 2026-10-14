@@ -1,4 +1,6 @@
 export const MAX_REPORT_LENGTH = 4000;
+// A 문제 진단 sent with a report, clipped to this by the sender.
+export const MAX_DIAGNOSTICS_LENGTH = 16000;
 export const MAX_NOTICE_LENGTH = 2000;
 
 export type BackupWarning = 'backup-stale' | 'disk-full';

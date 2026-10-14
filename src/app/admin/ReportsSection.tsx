@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { readReports, resolveReport, type Report } from '../../runtime/admin';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
-import { Button, Callout, Dialog, Empty, List, ListItem, Panel, Text } from '../ui';
+import { Button, Callout, Dialog, Empty, List, ListItem, Panel, Stack, Text, TextField } from '../ui';
 import { NoticeDialog } from './NoticeDialog';
 import { ShareReportDialog } from './ShareReportDialog';
 import { shareTags } from './shareTags';
@@ -28,7 +28,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
             <ListItem
               key={report.id}
               title={report.share === null ? report.username! : `링크 신고 · ${report.username ?? '익명'}`}
-              tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.shared ? shareTags(report.shared) : [])]}
+              tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.diagnostics === null ? [] : ['진단 정보']), ...(report.shared ? shareTags(report.shared) : [])]}
               aside={ago(report.createdAt)}
               description={report.text}
               onClick={() => setOpen(report)}
@@ -73,7 +73,12 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
 
 function ReportDialog({ report, onClose, onRestore, onResolved }: { report: AccountReport; onClose: () => void; onRestore: () => void; onResolved: (at: number) => void }) {
   const title = `${report.username}의 알림`;
-  const text = <Text variant="prose">{report.text}</Text>;
+  const text = (
+    <Stack gap="related">
+      <Text variant="prose">{report.text}</Text>
+      {report.diagnostics !== null && <TextField label="진단 정보" lines={8} value={report.diagnostics} onChange={() => {}} readOnly />}
+    </Stack>
+  );
   if (report.resolvedAt !== null) {
     return (
       <Dialog title={title} note={ago(report.createdAt)} onClose={onClose}>

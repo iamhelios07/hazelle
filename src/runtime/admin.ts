@@ -53,6 +53,7 @@ export type Report = {
   share: string | null;
   shareVersion: number | null;
   link: string | null;
+  diagnostics: string | null;
   shared: SharedState | null;
 };
 export type LogRow = { id: number; at: number; action: string; target: string; detail: unknown };
