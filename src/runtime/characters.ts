@@ -221,6 +221,14 @@ export function setToggle(store: ObjectStore, character: string | null, key: str
   return store.update('character', character, (current) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
 }
 
+export function pinToggle(store: ObjectStore, key: string, pinned: boolean): Promise<ApiResult<Stored<'settings'>>> {
+  return store.upsert('settings', (current = EMPTY_SETTINGS) => {
+    const keys = (current.pinnedToggles ?? []).filter((each) => each !== key);
+    if (pinned) keys.push(key);
+    return keys.length ? { ...current, pinnedToggles: keys } : without(current, 'pinnedToggles');
+  });
+}
+
 // What a switch not stored reads as. Switches stored before 반전 모드, the languages and the prompt choice existed
 // hold none of those, and read as these.
 const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, replyLanguage: 'Korean', inputLanguage: 'English' };

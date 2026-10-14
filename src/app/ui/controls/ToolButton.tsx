@@ -9,7 +9,9 @@ type Props = {
   detail?: string;
   // count: shown from 1. dot: the chat has its own.
   mark?: { kind: 'count'; count: number } | { kind: 'dot' };
-  expanded: boolean;
+  // expanded for one that opens something, pressed for one that is itself a switch.
+  expanded?: boolean;
+  pressed?: boolean;
   phone?: 'full' | 'icon';
   // One that opens a form from Menu takes popup and ref too; one that shows and hides a panel takes expanded alone.
   popup?: 'menu' | 'dialog';
@@ -17,7 +19,7 @@ type Props = {
   onClick: () => void;
 };
 
-export function ToolButton({ icon, label, detail, mark, phone = 'full', expanded, popup, ref, onClick }: Props) {
+export function ToolButton({ icon, label, detail, mark, phone = 'full', expanded, pressed, popup, ref, onClick }: Props) {
   const shown = mark?.kind === 'dot' || (mark?.kind === 'count' && mark.count > 0);
   return (
     <button
@@ -28,6 +30,7 @@ export function ToolButton({ icon, label, detail, mark, phone = 'full', expanded
       aria-label={detail ? `${label}, ${detail}` : label}
       aria-haspopup={popup}
       aria-expanded={expanded}
+      aria-pressed={pressed}
       onClick={onClick}
     >
       <Icon icon={icon} size="xs" />

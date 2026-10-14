@@ -1,10 +1,13 @@
+import { Pin } from 'lucide-react';
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
+import { pinToggle } from '../../runtime/characters';
 import { ToggleChoice } from '../common/ToggleChoice';
 import { useAutosave } from '../common/useAutosave';
 import { useSearch } from '../common/useSearch';
 import { PAGES, RESET } from '../common/words';
-import { Button, Disclosure, Divider, Empty, Row, Section, SettingRow, SidePanel, Stack, Switch, Tab, Tabs, Text, TextField } from '../ui';
+import { useSettings, useStore } from '../session';
+import { Button, Disclosure, Divider, Empty, IconButton, Row, Section, SettingRow, SidePanel, Stack, Switch, Tab, Tabs, Text, TextField } from '../ui';
 import { shownRows, toggleSaveKey, type ToggleItem, type ToggleNote, type ToggleRow, type ToggleSection } from './toggles';
 import type { OpenChat } from './useChat';
 
@@ -15,6 +18,8 @@ const FROM: Record<ToggleSection['from'], string> = { prompt: '프롬프트', ca
 
 export function ChatToggles({ chat }: { chat: OpenChat }) {
   const { prompt, card, toggles, toggleOwner, actions } = chat;
+  const store = useStore();
+  const pinned = new Set(useSettings().pinnedToggles);
   const [filter, setFilter] = useState<'all' | 'changed'>('all');
   const all = toggles.sections.flatMap((section) => section.rows);
   const changedKeys = () => new Set(all.filter((row) => row.changed).map((row) => row.toggle.key));
@@ -38,6 +43,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       changed={changed}
       sub={changed ? defaultOf(toggle) : undefined}
       wide={toggle.kind === 'text'}
+      action={toggle.kind !== 'text' && <IconButton icon={Pin} size="xs" label="입력창에 고정" pressed={pinned.has(toggle.key)} onClick={() => void pinToggle(store, toggle.key, !pinned.has(toggle.key))} />}
       control={
         toggle.kind === 'check' ? (
           <Switch label={toggle.label} checked={value === '1'} onChange={(on) => actions.flip(toggle.key, on ? '1' : '0')} />

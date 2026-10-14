@@ -9,6 +9,7 @@ import { ChatCache } from './ChatCache';
 import { ChatComposerTools } from './ChatComposerTools';
 import { ChatIllustrate } from './ChatIllustrate';
 import { ChatNote } from './ChatNote';
+import { ChatPinnedToggles } from './ChatPinnedToggles';
 import { ChatPersonaPicker } from './ChatPersonaPicker';
 import { ChatTranslate } from './ChatTranslate';
 import type { OpenChat } from './useChat';
@@ -84,6 +85,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
             <ChatTranslate chat={chat} />
             <ChatIllustrate chat={chat} />
             <ChatComposerTools chat={chat} />
+            <ChatPinnedToggles chat={chat} />
           </>
         }
         actions={

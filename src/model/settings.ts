@@ -32,6 +32,8 @@ export type Settings = {
   illustratePrompt?: string;
   persona?: string;
   toggles?: ToggleValues;
+  // 입력창에 고정: toggle keys shown beside the composer of every chat whose prompt, card or modules declare them.
+  pinnedToggles?: string[];
   translate?: TranslateSwitches;
   illustrate?: IllustrateSwitches;
   profile?: string;

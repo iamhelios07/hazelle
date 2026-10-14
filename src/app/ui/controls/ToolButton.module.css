@@ -12,7 +12,8 @@
 }
 
 .tool:hover,
-.tool[aria-expanded='true'] {
+.tool[aria-expanded='true'],
+.tool[aria-pressed='true'] {
   background: var(--color-surface-hover);
   color: var(--color-text);
 }

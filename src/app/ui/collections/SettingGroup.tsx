@@ -22,6 +22,8 @@ type RowProps = {
   help?: string;
   sub?: ReactNode;
   control: ReactNode;
+  // A small button after the label, such as a pin.
+  action?: ReactNode;
   // Under the words at every width, for a control as wide as the row, such as a row of chips. Beside them, its
   // grid column takes the chips' one-line width and squeezes the words to a letter a line.
   wide?: boolean;
@@ -29,7 +31,7 @@ type RowProps = {
   note?: string;
 };
 
-export function SettingRow({ label, sentence, changed = false, help, sub, control, wide = false, error, note }: RowProps) {
+export function SettingRow({ label, sentence, changed = false, help, sub, control, action, wide = false, error, note }: RowProps) {
   const id = useId();
   const grouped = useContext(Grouped);
   const className = [styles.row, grouped ? styles.ruled : styles.panel, wide && styles.wide].filter(Boolean).join(' ');
@@ -42,6 +44,7 @@ export function SettingRow({ label, sentence, changed = false, help, sub, contro
             {sentence ?? label}
           </span>
           {help && <Hint label={label}>{help}</Hint>}
+          {action}
         </span>
         {sub && <span className={styles.sub}>{sub}</span>}
       </div>

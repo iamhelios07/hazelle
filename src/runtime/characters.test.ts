@@ -9,7 +9,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addAssets, addCharacter, removeAssets, replaceAsset, restoreAssets, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addAssets, addCharacter, removeAssets, replaceAsset, restoreAssets, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, pinToggle, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
@@ -334,6 +334,19 @@ describe('setToggle', () => {
     expect([store.get('character', id)?.value.toggles, store.get('settings', SETTINGS_ID)?.value.toggles]).toEqual([{ sims: '1', mode: '2' }, { sims: '0' }]);
     await resetToggles(store, id);
     expect(store.get('character', id)?.value.toggles).toBeUndefined();
+  });
+});
+
+describe('pinToggle', () => {
+  it('keeps pinned keys in pin order, once each, and drops the field with the last', async () => {
+    const { store } = await server.account();
+    await pinToggle(store, 'sims', true);
+    await pinToggle(store, 'mode', true);
+    await pinToggle(store, 'sims', true);
+    expect(store.get('settings', SETTINGS_ID)?.value.pinnedToggles).toEqual(['mode', 'sims']);
+    await pinToggle(store, 'mode', false);
+    await pinToggle(store, 'sims', false);
+    expect(store.get('settings', SETTINGS_ID)?.value).not.toHaveProperty('pinnedToggles');
   });
 });
 
