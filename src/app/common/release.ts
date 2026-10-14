@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.1.80',
+    date: '2026-10-14',
+    lines: [
+      '디스플레이 설정에서 이미지 최대 높이를 정할 수 있어요.',
+      '채팅 메뉴를 종류별로 묶고 항목마다 아이콘을 달았어요.',
+      '채팅에서 프롬프트를 고를 때 사본이 원본 아래에 묶여 보여요.',
+      '이미지 가리기로 연 이미지를 다시 가릴 수 있어요.',
+      '읽은 만큼 표시는 화면 두 배보다 긴 답변에만 나와요.',
+    ],
+  },
+  {
     version: 'v0.1.79',
     date: '2026-10-14',
     lines: [
