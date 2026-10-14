@@ -49,12 +49,13 @@ it('states the account the page holds with every request, and hears what answers
   ]);
 });
 
-it('tells each release the server says it runs once, and a listener that comes later the last one said', async () => {
+it('tells each release the server says it runs once, not one an immutable answer carries, and a listener that comes later the last one said', async () => {
   const answers = ['v1', 'v1', null, 'v2'].map((version) => Response.json({}, { headers: version ? { 'x-hazelle-version': version } : {} }));
+  answers.splice(2, 0, Response.json({}, { headers: { 'x-hazelle-version': 'v0', 'cache-control': 'private, max-age=31536000, immutable' } }));
   vi.stubGlobal('fetch', async () => answers.shift()!);
   const heard = vi.fn();
   hearServedVersion(heard);
-  for (let sent = 0; sent < 4; sent++) await api('GET', 'session');
+  for (let sent = 0; sent < 5; sent++) await api('GET', 'session');
   expect(heard.mock.calls).toEqual([['v1'], ['v2']]);
 
   const later = vi.fn();

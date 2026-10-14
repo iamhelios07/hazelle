@@ -36,7 +36,8 @@ export function hearServedVersion(listener: ((version: string) => void) | null) 
 // Every request to this app's server leaves through here (api, and runtime/relay's raw ones).
 export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {}): Promise<Response> {
   const response = await fetch(`/api/${path}`, { ...init, headers: { ...(held === null ? {} : { [ACCOUNT_HEADER]: held }), ...init.headers } });
-  const version = response.headers.get(VERSION_HEADER);
+  // An immutable answer (a picture) may come from the browser's cache, carrying the release that first served it.
+  const version = response.headers.get('cache-control')?.includes('immutable') ? null : response.headers.get(VERSION_HEADER);
   if (version !== null && version !== served) {
     served = version;
     hearServed?.(version);
