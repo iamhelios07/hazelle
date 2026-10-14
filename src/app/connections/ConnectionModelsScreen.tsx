@@ -169,7 +169,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const body = (
     <>
       <Columns min="panel">
-        <Stack gap="group">
+        <Stack gap="section">
           {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} level={level} /> : <ConnectionMeters connection={connection} level={level} />}
           <ConnectionSent connection={id} level={level} />
         </Stack>

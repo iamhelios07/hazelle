@@ -43,6 +43,12 @@
   align-items: center;
 }
 
+/* A card's own name at level 3 still names what the card holds, so it is not muted as an inner label is. */
+.boxed.level3 > .head .title {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
 .note {
   composes: note from '../foundation/type.module.css';
 }

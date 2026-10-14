@@ -7,8 +7,10 @@ import { Empty, Facts, Panel } from '../ui';
 
 const WINDOWS = [['hour', '지난 1시간'], ['today', '오늘'], ['week', '이번 주']] as const;
 
-const sent = (usage: ModelUsage) =>
-  usage.calls ? `응답 ${count(usage.calls)}회 · 입력 ${tally(usage.input, usage.calls)} · 출력 ${tally(usage.output, usage.calls)}` : '없음';
+const tile = (label: string, usage: ModelUsage) =>
+  usage.calls
+    ? { label, value: `응답 ${count(usage.calls)}회`, detail: [`입력 ${tally(usage.input, usage.calls)}`, `출력 ${tally(usage.output, usage.calls)}`] }
+    : { label, value: '없음', tone: 'muted' as const };
 
 export function ConnectionSent({ connection, level }: { connection: string; level: 2 | 3 }) {
   const { view, retry } = useLedger();
@@ -20,7 +22,7 @@ export function ConnectionSent({ connection, level }: { connection: string; leve
       {view.kind !== 'read' ? (
         <LedgerWait view={view} retry={retry} failed="사용 내역을 불러오지 못했어요." />
       ) : used ? (
-        <Facts items={WINDOWS.map(([window, label]) => ({ label, value: sent(used[window]) }))} />
+        <Facts variant="row" items={WINDOWS.map(([window, label]) => tile(label, used[window]))} />
       ) : (
         <Empty variant="section">이번 주에 이 연결로 받은 응답이 없어요.</Empty>
       )}
