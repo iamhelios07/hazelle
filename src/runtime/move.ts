@@ -10,6 +10,7 @@ import type { MemorySettings } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { createFolder, importCharacter, saveAssets, type ImportedCharacter, type Progress } from './characters';
+import { setLoreBudget } from './chat-context';
 import { chatWrites, saveNewChats } from './chat-log';
 import type { Files } from './files';
 import { projectGreetings, startingGreetings } from './greetings';
@@ -26,7 +27,8 @@ export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' |
 // risu: its Risu chaId. skipped as in runtime/characters ImportedCharacter; faceless also when the picture did not read.
 export type MovedCharacter = { id: string; risu: string; name: string; chats: number; skipped: number; faceless: boolean; report: ImportReport; missed: MoveUnsupported[]; unused: Unused[] };
 export type MovedModule = { name: string; unsupported: ImportReport['unsupported']; skipped: number };
-export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[] };
+// loreBudget: the 로어북 최대 분량 this move set from Risu's; null when it set none.
+export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[]; loreBudget: number | null };
 
 // Those in 휴지통 too, until they are removed for good.
 export const broughtFromRisu = (store: ObjectStore): Set<string> => new Set(store.list('character').flatMap(({ value }) => (value.risu === undefined ? [] : [value.risu])));
@@ -60,6 +62,12 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   const landed = (kind: MoveStep['kind'], done: number, total: number) => progress({ kind, done, total });
   const personaIds = new Map<string, string>();
   const movedModules: MovedModule[] = [];
+  // Only onto an account that has set none: one set here is the user's later choice.
+  const loreBudget = store.get('settings', SETTINGS_ID)?.value.loreBudget === undefined ? backup.catalog.loreBudget : null;
+  if (loreBudget !== null) {
+    const set = await setLoreBudget(store, loreBudget);
+    if (!set.ok) return set;
+  }
   for (const [done, { key }] of personas.entries()) {
     landed('personas', done, personas.length);
     const persona = await backup.persona(key);
@@ -174,7 +182,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed, unused: unused(character.card) });
   }
   if (due.length) landed('characters', due.length, due.length);
-  return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
+  return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules, loreBudget } };
 }
 
 const lastTalk = (chat: RisuChat) => chat.messages.at(-1)?.at ?? 0;

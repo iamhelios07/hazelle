@@ -9,7 +9,7 @@ import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
 import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
-import { CHAPTER, loreName } from '../common/words';
+import { CHAPTER, LORE_BUDGET_LABEL, loreName } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
@@ -109,7 +109,7 @@ function why({ why }: Lore, names: Map<string, string>): string {
   }
 }
 
-const DROPPED = { probability: '확률로 빠짐', budget: '예산을 넘어 빠짐', 'no-target': '합칠 항목이 없어 빠짐' } as const;
+const DROPPED = { probability: '확률로 빠짐', budget: `${LORE_BUDGET_LABEL}을 넘어 빠짐`, 'no-target': '합칠 항목이 없어 빠짐' } as const;
 
 function fate({ fate }: Lore, names: Map<string, string>): string {
   switch (fate.kind) {

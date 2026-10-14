@@ -104,7 +104,8 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
   // One merged into another entry or set inside another text is evaluated there, and its count is of its own body.
   // The replays below count the same bodies again.
   const count = (id: string, body: string) => tokens(render(body, id, owners.get(id)));
-  const book = prepareLore(scope.lore, card?.loreSettings ?? NO_SETTINGS);
+  // The account's budget, never a card's own token_budget: the user sets how much lore every chat sends.
+  const book = prepareLore(scope.lore, card?.loreSettings ?? NO_SETTINGS, scope.loreBudget);
   const activation = card || scope.lore.length > 0 ? book.activate(loreInput(scope, history, history.length, afterMatch(scope, book, count), seed, count)) : null;
   const names = new Map(scope.lore.map(({ id, value }) => [id, value.name]));
 

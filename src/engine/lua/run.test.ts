@@ -26,6 +26,7 @@ const SNAPSHOT: Snapshot = {
     note: null,
     lore: [{ id: 'l1', parent: null, value: { name: 'Gate', keys: ['gate', 'door'], secondaryKeys: [], content: 'hp {{getvar::hp}}', enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 7, priority: null, position: null } }],
     loreFolders: {},
+    loreBudget: 800,
     messages: [],
     variables: [],
     greeting: null,

@@ -113,6 +113,7 @@ const db = {
     },
   ],
   enabledModules: ['m1'],
+  loreBookToken: 150000,
   personas: [
     { id: 'p1', name: 'old', personaPrompt: 'stale', icon: '', embeddedModule: { id: '$embedded', name: 'Ann', description: '', lorebook: [{ key: 'cape', secondkey: '', insertorder: 10, comment: 'Cape', content: 'A red cape.', mode: 'normal', alwaysActive: true, selective: false }], mcp: { url: 'https://mcp.example' }, cjs: 'run()' } },
     { id: 'p2', name: 'Bob', personaPrompt: 'b', icon: 'assets/bob.png', note: ' the rich one ' },
@@ -232,6 +233,12 @@ describe('readBackup', () => {
     const card = await result.backup.character(result.backup.catalog.characters[0]!.key);
     expect(await card.avatar()).toEqual({ bytes: PNG, type: 'image/png' });
     expect(card.assets.map(({ name }) => name)).toEqual(['map']);
+  });
+
+  it("carries the lorebook budget the user set, and not Risu's own default", async () => {
+    expect((await read()).catalog.loreBudget).toBe(150000);
+    const left = await readBackup([bin([['database.risudat', database({ ...db, loreBookToken: 800 })]])]);
+    expect(left.ok && left.backup.catalog.loreBudget).toBeNull();
   });
 
   it('refuses an encrypted, database-less or undecodable backup', async () => {

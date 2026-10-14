@@ -203,6 +203,8 @@ export type BackupCatalog = {
   modules: { key: number; name: string; risu: string | null; assetCount: number }[];
   // The Risu ids of the modules on in every chat, whether or not the backup holds them.
   alwaysModules: string[];
+  // The account's lorebook token budget as the user set it in Risu; null when left at Risu's default.
+  loreBudget: number | null;
   unsupported: MoveUnsupported[];
 };
 // Catalog rows carry no history or asset readers. Keys identify source positions even when Risu ids repeat.

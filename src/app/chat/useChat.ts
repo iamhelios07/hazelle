@@ -38,7 +38,7 @@ import { describeIllustrateFailure, describeTurnFailure } from '../common/failur
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
-import { BIN_KEEPS, BOOKMARK } from '../common/words';
+import { BIN_KEEPS, BOOKMARK, LORE_BUDGET_LABEL, PAGES } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useIllustrating, useSaves, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -59,6 +59,8 @@ const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setCha
 
 // The failures a toast already said, by run: each is said once, though the chat is left and opened again.
 const told = new WeakSet<Drawing>();
+// The chats told this session that a reply's lorebook entries went past the 로어북 최대 분량: each is told once.
+const cutTold = new Set<string>();
 
 // A version's pictures, oldest first.
 function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap<string, Stored<'illustration'>[]> {
@@ -185,6 +187,20 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       toast.error(describeIllustrateFailure(drawing.failure));
     }
   }, [illustrating]);
+
+  // Only a reply this page asked for has what it sent (runtime/talk sent), so it is told the moment that reply lands.
+  const lastReply = messages.findLast((message) => message.role === 'assistant');
+  const lastCall = lastReply && shown(lastReply).receipt?.id;
+  useEffect(() => {
+    if (!lastReply || !lastCall || cutTold.has(chatId)) return;
+    const cut = talk.sent(lastCall)?.prompt.lore?.filter(({ fate }) => fate.kind === 'dropped' && fate.cause === 'budget').length ?? 0;
+    if (cut === 0) return;
+    cutTold.add(chatId);
+    toast.show(`로어북 항목 ${cut}개가 빠졌어요`, {
+      detail: `${LORE_BUDGET_LABEL}을 넘었어요. 설정 › ${PAGES.chat}에서 늘릴 수 있어요.`,
+      action: { label: '정보 보기', onClick: () => { setInfoPick(lastReply.id); open({ kind: 'info' }); } },
+    });
+  }, [lastCall]);
 
   // 응답 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;

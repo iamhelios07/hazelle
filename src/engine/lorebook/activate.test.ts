@@ -25,8 +25,8 @@ const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
   },
 });
 const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, message: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
-const run = (entries: LoreEntries, history: HistoryMessage[], more: Partial<LoreTurn> & { settings?: Card['loreSettings'] } = {}) =>
-  prepareLore(entries, more.settings ?? NULLS).activate({ history, turn: history.length, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, ...more });
+const run = (entries: LoreEntries, history: HistoryMessage[], more: Partial<LoreTurn> & { settings?: Card['loreSettings']; budget?: number } = {}) =>
+  prepareLore(entries, more.settings ?? NULLS, more.budget ?? 800).activate({ history, turn: history.length, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, ...more });
 const order = (activation: Activation) => activation.placed.map(({ id }) => id);
 const ids = (activation: Activation) => order(activation).sort();
 const why = (activation: Activation, id: string) => activation.fired.find((fired) => fired.id === id)?.why;
@@ -178,7 +178,7 @@ describe('activate', () => {
     let reads = 0;
     const history = chat('bell', 'quiet', 'quiet', 'quiet').map((message) => ({ ...message, get text() { reads++; return message.text; } }));
     const entries = [lore('sticky', { keys: ['bell'], content: '@@scan_depth 3\n@@unknown\n@@@keep_activate_after_match\nsticky' })];
-    const book = prepareLore(entries, { ...NULLS, scanDepth: 1 });
+    const book = prepareLore(entries, { ...NULLS, scanDepth: 1 }, 800);
     const input = { history, turn: 3, greeting: null, afterMatch: [], seed: 'send', cost: (_: string, body: string) => body.length };
     const first = book.activate(input);
     expect(book.sticky).toBe(true);
@@ -187,7 +187,7 @@ describe('activate', () => {
     expect(reads).toBe(3);
     expect(book.activate(input).fired).toEqual(first.fired);
     expect(reads).toBe(3);
-    expect(prepareLore([{ ...entries[0]!, value: { ...entries[0]!.value, enabled: false } }], NULLS).sticky).toBe(false);
+    expect(prepareLore([{ ...entries[0]!, value: { ...entries[0]!.value, enabled: false } }], NULLS, 800).sticky).toBe(false);
   });
 
   it('gates on the turn and the greeting, and fires @@activate without keys under the same gates', () => {
@@ -207,7 +207,7 @@ describe('activate', () => {
       lore('mid', { constant: true, insertionOrder: 2, content: `@@priority 5\n${'x'.repeat(30)}` }),
       lore('last', { constant: true, insertionOrder: 0, content: '@@ignore_on_max_context\nx' }),
     ];
-    const result = run(entries, [], { settings: { ...NULLS, tokenBudget: 100 } });
+    const result = run(entries, [], { budget: 100 });
     expect(order(result)).toEqual(['last', 'mid', 'high']);
     expect(result.fired.find(({ id }) => id === 'low')?.fate).toEqual({ kind: 'dropped', cause: 'budget', tokens: 50 });
     expect(order(run([lore('a', { constant: true }), lore('b', { constant: true })], []))).toEqual(['b', 'a']);

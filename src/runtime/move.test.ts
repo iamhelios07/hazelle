@@ -7,6 +7,7 @@ import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api } from './api';
 import { importCharacter } from './characters';
+import { loreBudgetOf, setLoreBudget } from './chat-context';
 import { Files } from './files';
 import { MEMORY_DEFAULTS } from './memory-read';
 import { broughtFromRisu, fillInlays, fillPictures, importRisuChats, moveFromRisu, risuMatch, type MoveStep } from './move';
@@ -62,7 +63,7 @@ const bell: ImportedModule = {
   unsupported: [],
 };
 
-function source({ characters, personas = [], presets = [], modules = [], alwaysModules = [] }: { characters: RisuCharacter[]; personas?: RisuPersona[]; presets?: RisuPreset[]; modules?: ImportedModule[]; alwaysModules?: string[] }): RisuBackup {
+function source({ characters, personas = [], presets = [], modules = [], alwaysModules = [], loreBudget = null }: { characters: RisuCharacter[]; personas?: RisuPersona[]; presets?: RisuPreset[]; modules?: ImportedModule[]; alwaysModules?: string[]; loreBudget?: number | null }): RisuBackup {
   return {
     catalog: {
       pictures: 0,
@@ -71,7 +72,7 @@ function source({ characters, personas = [], presets = [], modules = [], alwaysM
       personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
       presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
       modules: modules.map(({ name, risu, assets }, key) => ({ key, name, risu, assetCount: assets.length })),
-      alwaysModules, unsupported: [],
+      alwaysModules, loreBudget, unsupported: [],
     },
     character: vi.fn(async (key) => characters[key]!),
     persona: async (key) => personas[key]!,
@@ -107,7 +108,7 @@ describe('moveFromRisu', () => {
     expect(shown(messages[0]!).greeting).toBe(2);
     expect(risuMatch(store, '루나')).toBe(id);
 
-    expect(await moveFromRisu(store, files, backup, { ...pick, personas: [] }, null, () => {})).toEqual({ ok: true, data: { characters: [], personas: 0, prompts: 0, modules: [] } });
+    expect(await moveFromRisu(store, files, backup, { ...pick, personas: [] }, null, () => {})).toEqual({ ok: true, data: { characters: [], personas: 0, prompts: 0, modules: [], loreBudget: null } });
     expect(backup.character).toHaveBeenCalledExactlyOnceWith(0);
     expect(store.list('character')).toHaveLength(1);
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
@@ -187,6 +188,17 @@ describe('moveFromRisu', () => {
     expect(sent.flatMap(({ writes }) => (writes.length && writes.every(({ kind }) => kind === 'summary') ? [writes.length] : []))).toEqual([2]);
     expect(await moveFromRisu(store, files, backup, backup.catalog, null, () => {})).toMatchObject({ ok: true, data: { characters: [] } });
   }, 30_000);
+
+  it("sets the 로어북 최대 분량 the user set in Risu, only on an account that has set none", async () => {
+    const { store, files } = await server.account();
+    const backup = source({ characters: [], loreBudget: 150_000 });
+    expect(await moveFromRisu(store, files, backup, backup.catalog, null, () => {})).toMatchObject({ ok: true, data: { loreBudget: 150_000 } });
+    expect(loreBudgetOf(store)).toBe(150_000);
+    await setLoreBudget(store, 3_000);
+    const again = source({ characters: [], loreBudget: 9_000 });
+    expect(await moveFromRisu(store, files, again, again.catalog, null, () => {})).toMatchObject({ ok: true, data: { loreBudget: null } });
+    expect(loreBudgetOf(store)).toBe(3_000);
+  });
 
   it('writes what was talked in last last, so the lists open on it', async () => {
     const { store, files } = await server.account();

@@ -11,7 +11,8 @@ import type { TranslationRequest } from '../engine/translate';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import type { Toggle, ToggleLine } from '../model/prompt';
-import { SETTINGS_ID } from '../model/settings';
+import { without } from '../model/fields';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route } from './assignment';
 import { translateSwitches } from './characters';
@@ -49,6 +50,14 @@ export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character' | '
   ];
 }
 
+export const LORE_BUDGET = 50_000;
+
+export const loreBudgetOf = (store: Reader['store']) => store.get('settings', SETTINGS_ID)?.value.loreBudget ?? LORE_BUDGET;
+
+// The default is kept as none, so it follows the default.
+export const setLoreBudget = (store: ObjectStore, budget: number) =>
+  store.upsert('settings', (current = EMPTY_SETTINGS) => (budget === LORE_BUDGET ? without(current, 'loreBudget') : { ...current, loreBudget: budget }));
+
 // id is null for a chat not saved yet.
 export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
@@ -70,6 +79,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
     lore: owners.flatMap(({ id: owner }) => store.children('lore', owner)),
+    loreBudget: loreBudgetOf(store),
     loreFolders: Object.fromEntries(
       owners.flatMap(({ id }) => {
         const folders = (store.get('character', id) ?? store.get('module', id))?.value.loreFolders ?? [];

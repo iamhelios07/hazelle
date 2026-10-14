@@ -94,6 +94,7 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   note: 'Rain tonight.',
   lore: [],
   loreFolders: {},
+  loreBudget: 800,
   messages: [message('g1', 'assistant', 'The lamp is lit, {{user}}.'), message('u1', 'user', 'Is it safe?'), message('a1', 'assistant', '{{setvar::mood::calm}}She nods. [OOC] ignore'), message('u2', 'user', 'Good.')],
   greeting: { index: 0 },
   toggles: new Map([['sims', '1']]),
@@ -255,6 +256,14 @@ describe('assemble', () => {
     const sent = build({ card: card({ loreSettings: { scanDepth: 1, tokenBudget: null, recursive: null, fullWordMatching: null } }), lore: entries, messages, greeting: null });
     const lorebook = sent.filter(({ content }) => content === 'kept' || content === 'once');
     expect(lorebook).toEqual([{ role: 'system', content: 'kept' }]);
+  });
+
+  it("fits the lorebook to the account's 로어북 최대 분량, never to a card's own budget", () => {
+    const entries = [lore('a', 'x'.repeat(40), { constant: true }), lore('b', 'y'.repeat(40), { constant: true })];
+    const own = card({ loreSettings: { scanDepth: null, tokenBudget: 1, recursive: null, fullWordMatching: null } });
+    const fates = (loreBudget: number) => assembledOf(assemble(input({ card: own, lore: entries, loreBudget }))).lore!.map(({ fate }) => fate.kind);
+    expect(fates(100)).toEqual(['placed', 'placed']);
+    expect(fates(50)).toEqual(['placed', 'dropped']);
   });
 
   it('sends a lorebook entry as the text its cost was counted on, whichever way its random tag rolls', () => {

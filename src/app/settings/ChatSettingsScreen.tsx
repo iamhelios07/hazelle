@@ -3,7 +3,7 @@ import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Columns, NavBar, Screen } from '../ui';
 import { MemoryDefaults } from './MemoryDefaults';
-import { RetryDefaults } from './RetryDefaults';
+import { ChatDetailDefaults } from './ChatDetailDefaults';
 import { TranslationDefaults } from './TranslationDefaults';
 
 export function ChatSettingsScreen({ back }: { back: Back | null }) {
@@ -13,7 +13,7 @@ export function ChatSettingsScreen({ back }: { back: Back | null }) {
         <MemoryDefaults />
         <TranslationDefaults />
       </Columns>
-      <RetryDefaults />
+      <ChatDetailDefaults />
     </Screen>
   );
 }

@@ -25,6 +25,8 @@ export type ChatScope = {
   // The lorebook folders' names by the id of the pack or 등장인물 that holds them, for those that have any: block
   // triggers number a lorebook's entries with its folders first, as Risu's list holds them when they lead it.
   loreFolders: Record<string, string[]>;
+  // 로어북 최대 분량: the most tokens the activated entries take.
+  loreBudget: number;
   // Oldest first, each as its shown version.
   messages: HistoryMessage[];
   // The chat's own starting variables, over the card's defaults.
