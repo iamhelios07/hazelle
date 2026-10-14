@@ -3,15 +3,17 @@ import { useState } from 'react';
 import { EMPTY_SETTINGS, type SavedLook } from '../../model/settings';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
+import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { ReadingRows, ReplyRow } from '../common/ReadingRows';
 import { choices, describeLook, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
+import { typedText } from '../common/typed';
 import { PAGES } from '../common/words';
 import { useDisplay } from '../display';
 import { useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { ACCENT, Beside, BG, Button, DIALOGUE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
+import { ACCENT, Beside, BG, Button, DIALOGUE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
   { name: '캐릭터', mine: false, html: '<p><em>창밖으로 늦은 오후의 햇살이 기울어 든다. 그녀는 찻잔을 내려놓고 고개를 들었다.</em></p><p>"오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아."</p>' },
@@ -121,6 +123,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
               help="채팅 속 이미지는 눌러서 하나씩 볼 수 있어요."
               control={<Switch label="이미지 가리기" checked={display.hidePictures} onChange={(hidePictures) => changeDisplay({ hidePictures })} />}
             />
+            <PictureMostRow />
           </SettingGroup>
         </Section>
         <Section title="텍스트">
@@ -145,5 +148,28 @@ export function DisplayScreen({ back }: { back: Back | null }) {
         </Section>
       </Beside>
     </Screen>
+  );
+}
+
+// Unlike a character's, this one is never empty: it is what an empty one follows.
+const readMost = (draft: string) => readPictureHeight(draft) ?? null;
+
+function PictureMostRow() {
+  const { display, changeDisplay } = useDisplay();
+  const [typed, setTyped] = useState<string>();
+  const draft = typedText(typed, readMost, display.pictureMost, String);
+  const invalid = readMost(draft) === null;
+  const type = (next: string) => {
+    setTyped(next);
+    const most = readMost(next);
+    if (most !== null) changeDisplay({ pictureMost: most });
+  };
+  return (
+    <SettingRow
+      label="이미지 최대 높이"
+      help="화면 높이 대비 비율이에요. 세로로 긴 이미지가 이 높이에 맞춰 줄어들어요. 봇마다 따로 정할 수도 있어요."
+      error={invalid ? PICTURE_HEIGHT_ERROR : undefined}
+      control={<NumberInput label="이미지 최대 높이" value={draft} unit="%" invalid={invalid} onChange={type} />}
+    />
   );
 }
