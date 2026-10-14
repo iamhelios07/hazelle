@@ -1,8 +1,32 @@
+# The privacy page lists no addresses or access records: no line keeps an IP, header or query, only what times a
+# request (method, path, status, size, duration). Keeping addresses means changing that page first. Both loggers
+# take it: the default one writes the proxy's errors with the request in them, the site's one the access lines.
+(no_visitor) {
+	format filter {
+		request>remote_ip delete
+		request>remote_port delete
+		request>client_ip delete
+		request>headers delete
+		request>tls delete
+		resp_headers delete
+		request>uri regexp \?.*$ ""
+	}
+}
+
+{
+	log default {
+		import no_visitor
+	}
+}
+
 # Caddy's own Let's Encrypt certificate serves either edge (infra/ variable edge): visitors directly, or Cloudflare's
 # proxy in Full (strict), which trusts it. Its ACME account and certificate live in the caddy volume; a lost volume
 # issues again and counts against Let's Encrypt's weekly limit.
 hazelle.app {
 	header Strict-Transport-Security "max-age=31536000"
+	log {
+		import no_visitor
+	}
 	reverse_proxy app:8080 {
 		# Replies stream as they are written; buffering would hold them until the end.
 		flush_interval -1

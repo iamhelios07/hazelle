@@ -3,7 +3,7 @@ import { tokenBucket, uploadBudget } from './limits';
 
 const setup = (perMinute: number) => {
   let now = 0;
-  const limiter = tokenBucket(perMinute, () => now);
+  const limiter = tokenBucket(perMinute, 60_000, () => now);
   const burst = (key: string) => {
     let passed = 0;
     while (limiter.limit(key).success) passed++;

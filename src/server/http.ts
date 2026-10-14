@@ -20,7 +20,7 @@ export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 // What the process gives every request (node.ts; testing.ts builds the same set over a temp directory). outbound: the
 // one way a provider is reached; localProviders: the hosts it reaches outside the public internet (outbound.ts), which
 // the session tells the client. limits: calls per account, botCalls per account and chat, visitors per visitor on the
-// anonymous share routes (shares.ts). backups: the daily job.
+// anonymous share routes (shares.ts) and signup (accounts.ts). backups: the daily job.
 export type Services = {
   db: Db;
   files: Bucket;
@@ -28,7 +28,7 @@ export type Services = {
   streams: Streams;
   outbound: Upstream;
   localProviders: ReadonlySet<string>;
-  limits: { calls: Limiter; botCalls: Limiter; visitors: { reads: Limiter; files: Limiter; reports: Limiter }; uploads: UploadBudget };
+  limits: { calls: Limiter; botCalls: Limiter; visitors: { reads: Limiter; files: Limiter; reports: Limiter; signups: Limiter }; uploads: UploadBudget };
   backups: Backups;
 };
 
