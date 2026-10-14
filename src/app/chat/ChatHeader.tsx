@@ -1,5 +1,5 @@
 import { toolMenu } from './toolMenu';
-import { SlidersHorizontal } from 'lucide-react';
+import { BookOpen, Bookmark, Brain, DatabaseZap, ImageOff, Keyboard, MessageSquarePlus, Package, Search, SlidersHorizontal, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { BOOKMARK, CAST, EXPORT, NO_CHARACTER } from '../common/words';
@@ -52,22 +52,23 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         onClick={actions.flipToggles}
       />
       <MoreMenu of="채팅" dot={failed}>
-        {!wide && <MenuItem label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />}
-        <MenuItem label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />
+        {!wide && <MenuItem icon={MessageSquarePlus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />}
         {item && <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => actions.openDialog('rename')} />}
-        {item && <MenuItem label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
-        {item && !chat.displayPending && <MenuItem label={BOOKMARK} onClick={actions.bookmarks} />}
-        {item && <MenuItem label="캐시" onClick={actions.cache} />}
+        <MenuItem icon={UsersRound} label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />
+        {item && !chat.displayPending && <MenuItem icon={ACTS.export.icon} label={EXPORT} onClick={() => actions.openDialog('export')} />}
+        <Divider variant="menu" />
+        <MenuItem icon={Search} label="검색" onClick={actions.openSearch} />
+        {item && !chat.displayPending && <MenuItem icon={Bookmark} label={BOOKMARK} onClick={actions.bookmarks} />}
+        {item && <MenuItem icon={Brain} label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        {item && <MenuItem icon={DatabaseZap} label="캐시" onClick={actions.cache} />}
         {tools.length > 0 && <>
           <Divider variant="menu" />
-          {tools.map((tool) => <MenuItem key={`${tool.module}:${tool.kind === 'page' ? 'page' : `menu:${tool.item}`}`} label={tool.label} sub={tool.name} checked={tool.kind === 'page' ? panel?.kind === 'tool' && panel.module === tool.module : undefined} onClick={() => tool.kind === 'page' ? actions.tool(tool.module) : actions.toolMenu(tool.module, tool.item)} />)}
-          <Divider variant="menu" />
+          {tools.map((tool) => <MenuItem key={`${tool.module}:${tool.kind === 'page' ? 'page' : `menu:${tool.item}`}`} icon={Package} label={tool.label} sub={tool.name} checked={tool.kind === 'page' ? panel?.kind === 'tool' && panel.module === tool.module : undefined} onClick={() => tool.kind === 'page' ? actions.tool(tool.module) : actions.toolMenu(tool.module, tool.item)} />)}
         </>}
-        <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />
-        <MenuItem label="이미지 가리기" checked={display.hidePictures} multiple onClick={() => changeDisplay({ hidePictures: !display.hidePictures })} />
-        <MenuItem label="검색" onClick={actions.openSearch} />
-        {item && !chat.displayPending && <MenuItem label={EXPORT} onClick={() => actions.openDialog('export')} />}
-        <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
+        <Divider variant="menu" />
+        <MenuItem icon={BookOpen} label="읽기 설정" onClick={() => actions.openDialog('reading')} />
+        <MenuItem icon={ImageOff} label="이미지 가리기" checked={display.hidePictures} multiple onClick={() => changeDisplay({ hidePictures: !display.hidePictures })} />
+        <MenuItem icon={Keyboard} label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>
             <Divider variant="menu" />
