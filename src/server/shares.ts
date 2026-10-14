@@ -1,12 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
+import { claimFiles } from './files/claims';
 import { createMiddleware } from 'hono/factory';
 import { MAX_REPORT_LENGTH } from '../contracts/admin';
 import { FILE_ID } from '../contracts/files';
-import { VISITOR_HEADER } from '../contracts/http';
+import { ACCOUNT_USAGE_HEADERS, VISITOR_HEADER } from '../contracts/http';
 import { COVER_LENGTH, MAX_SHARE_FILES, MAX_SHARE_LINK, SHARE_CONSENT, SHARE_ID, type ShareCover, type ShareState } from '../contracts/shares';
 import { fileKey } from './files/bucket';
-import { fail, isRecord, readObject, type AppEnv, type Services } from './http';
+import { fail, isRecord, readObject, refused as refuseStore, type AppEnv, type Services } from './http';
 import { canWrite, currentAccount, requireSession } from './session';
 
 // A share is sealed content an account publishes under one link (migrations/0003_shares.sql). The server holds the
@@ -59,18 +60,24 @@ async function readVersion(c: Context<AppEnv>) {
 // Each refusal by name: the account has not agreed to the current consent, a named file is not the sharer's, or a
 // picture was blocked, which would otherwise be published again under a new link.
 async function refusal(c: Context<AppEnv>, manifest: string, files: string[]) {
-  const row = await c.env.db
-    .prepare(
-      `SELECT (SELECT share_consent FROM accounts WHERE incarnation = ?1) AS consent,
-         (SELECT COUNT(*) FROM json_each(?2) AS named WHERE NOT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = named.value AND stored = 1)) AS missing,
-         (SELECT COUNT(*) FROM json_each(?2) AS named WHERE named.value IN (SELECT id FROM file_blocks)) AS blocked`,
-    )
-    .bind(c.get('account').incarnation, JSON.stringify([manifest, ...files]))
-    .first<{ consent: number | null; missing: number; blocked: number }>();
-  if (row!.consent !== SHARE_CONSENT) return fail(c, 403, 'no-consent');
-  if (row!.blocked) return fail(c, 403, 'file-blocked');
-  if (row!.missing) return fail(c, 400, 'bad-input');
+  const { incarnation } = c.get('account');
+  const consent = await c.env.db.prepare('SELECT share_consent FROM accounts WHERE incarnation = ?').bind(incarnation).first<number>('share_consent');
+  if (consent !== SHARE_CONSENT) return fail(c, 403, 'no-consent');
+  const claimed = await claimFiles(c.env.db, incarnation, [manifest, ...files]);
+  c.header(ACCOUNT_USAGE_HEADERS.fileBytes, String(claimed.fileBytes));
+  if (claimed.removing) return fail(c, 503, 'busy', { retryAfter: 5 });
+  if (claimed.blocked) return fail(c, 403, 'file-blocked');
+  if (claimed.missing) return fail(c, 400, 'bad-input');
   return null;
+}
+
+async function publishing(c: Context<AppEnv>, write: () => Promise<Response>): Promise<Response> {
+  const { incarnation } = c.get('account');
+  const result = await c.env.backups.hold(() => c.env.stores.withStore(incarnation, async (store) => {
+    const head = await store.revision(incarnation);
+    return 'rev' in head ? write() : refuseStore(c, head);
+  }));
+  return 'unavailable' in result ? refuseStore(c, result) : result;
 }
 
 export const shares = new Hono<AppEnv>();
@@ -101,17 +108,19 @@ shares.get('/mine', requireSession, async (c) => {
 shares.post('/', requireSession, canWrite, async (c) => {
   const version = await readVersion(c);
   if (!version) return fail(c, 400, 'bad-input');
-  const refused = await refusal(c, version.manifest, version.files);
-  if (refused) return refused;
-  const db = c.env.db;
-  const id = newShareId();
-  const now = Date.now();
-  await db.batch([
-    db.prepare('INSERT INTO shares (id, incarnation, created_at, cover) VALUES (?, ?, ?, ?)').bind(id, c.get('account').incarnation, now, version.cover && JSON.stringify(version.cover)),
-    db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, 1, ?, ?)').bind(id, version.manifest, now),
-    db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, 1, value FROM json_each(?2)').bind(id, JSON.stringify(version.files)),
-  ]);
-  return c.json({ id, version: 1 }, 201);
+  return publishing(c, async () => {
+    const refused = await refusal(c, version.manifest, version.files);
+    if (refused) return refused;
+    const db = c.env.db;
+    const id = newShareId();
+    const now = Date.now();
+    await db.batch([
+      db.prepare('INSERT INTO shares (id, incarnation, created_at, cover) VALUES (?, ?, ?, ?)').bind(id, c.get('account').incarnation, now, version.cover && JSON.stringify(version.cover)),
+      db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, 1, ?, ?)').bind(id, version.manifest, now),
+      db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, 1, value FROM json_each(?2)').bind(id, JSON.stringify(version.files)),
+    ]);
+    return c.json({ id, version: 1 }, 201);
+  });
 });
 
 // 새 버전으로 바꾸기: the link stays and opens this version from now on. A held link takes none until the operator has
@@ -120,23 +129,25 @@ shares.post('/:id/versions', requireSession, canWrite, async (c) => {
   const id = c.req.param('id');
   const version = await readVersion(c);
   if (!SHARE_ID.test(id) || !version) return fail(c, 400, 'bad-input');
-  const db = c.env.db;
-  const row = await db
-    .prepare(`SELECT s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open, (SELECT MAX(version) FROM share_versions WHERE share = s.id) AS version FROM shares s WHERE s.id = ? AND s.incarnation = ?`)
-    .bind(id, c.get('account').incarnation)
-    .first<{ held: number; open: number; version: number }>();
-  if (!row?.open) return fail(c, 404, 'not-found');
-  if (row.held) return fail(c, 403, 'share-held');
-  const refused = await refusal(c, version.manifest, version.files);
-  if (refused) return refused;
-  const next = row.version + 1;
-  await db.batch([
-    db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, ?, ?, ?)').bind(id, next, version.manifest, Date.now()),
-    db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, ?2, value FROM json_each(?3)').bind(id, next, JSON.stringify(version.files)),
-    // A review covers the version reviewed: a new one is held again by its first report.
-    db.prepare('UPDATE shares SET cover = ?, reviewed_at = NULL WHERE id = ?').bind(version.cover && JSON.stringify(version.cover), id),
-  ]);
-  return c.json({ id, version: next });
+  return publishing(c, async () => {
+    const db = c.env.db;
+    const row = await db
+      .prepare(`SELECT s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open, (SELECT MAX(version) FROM share_versions WHERE share = s.id) AS version FROM shares s WHERE s.id = ? AND s.incarnation = ?`)
+      .bind(id, c.get('account').incarnation)
+      .first<{ held: number; open: number; version: number }>();
+    if (!row?.open) return fail(c, 404, 'not-found');
+    if (row.held) return fail(c, 403, 'share-held');
+    const refused = await refusal(c, version.manifest, version.files);
+    if (refused) return refused;
+    const next = row.version + 1;
+    await db.batch([
+      db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, ?, ?, ?)').bind(id, next, version.manifest, Date.now()),
+      db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, ?2, value FROM json_each(?3)').bind(id, next, JSON.stringify(version.files)),
+      // A review covers the version reviewed: a new one is held again by its first report.
+      db.prepare('UPDATE shares SET cover = ?, reviewed_at = NULL WHERE id = ?').bind(version.cover && JSON.stringify(version.cover), id),
+    ]);
+    return c.json({ id, version: next });
+  });
 });
 
 // The opt-in embed text, turned on or off at once; null turns it off.

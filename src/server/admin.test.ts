@@ -127,7 +127,7 @@ describe('the operator', () => {
     const admin = await operator();
     const other = await account('other');
     const timeline = await t.timeline(other.cookie);
-    const write = () => t.post('objects/batch', { timeline, writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }, other.cookie);
+    const write = () => t.post('objects/batch', { timeline, files: [], writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }, other.cookie);
 
     expect((await t.put(`admin/accounts/${other.id}/suspended`, { suspended: true, reason: '도배' }, admin.cookie)).status).toBe(204);
     expect((await write()).status).toBe(403);

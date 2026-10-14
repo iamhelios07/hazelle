@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VISITOR_HEADER } from '../contracts/http';
 import { hex } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
@@ -48,6 +48,46 @@ const report = (share: string, from = `visitor-${++visitor}`) =>
 const state = async (share: string) => ((await (await t.get(`shares/${share}`)).json()) as { state: string }).state;
 
 describe('a share link', () => {
+  it('reclaims a released picture on publication and excludes a concurrent sweep through the publication', async () => {
+    const sharer = await account('sharer');
+    await t.put('shares/consent', undefined, sharer.cookie);
+    const manifest = await stored([1, 1, 1], sharer.cookie);
+    const picture = await stored([2, 2], sharer.cookie);
+    await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
+    const inventory = await (await t.get('files', sharer.cookie)).json() as { timeline: string; rev: number };
+    const body = { ...inventory, unused: [picture], named: [] };
+    expect(await (await t.post('files/sweep', body, sharer.cookie)).json()).toEqual({ released: 1, taken: 0 });
+    let reached!: () => void;
+    const reachedPromise = new Promise<void>((resolve) => { reached = resolve; });
+    let resume!: () => void;
+    const resumePromise = new Promise<void>((resolve) => { resume = resolve; });
+    const batch = t.env.db.batch.bind(t.env.db);
+    const claimed = vi.spyOn(t.env.db, 'batch').mockImplementationOnce(async (statements) => {
+      const result = await batch(statements);
+      reached();
+      await resumePromise;
+      return result as never;
+    });
+    try {
+      const publishing = t.post('shares', { manifest, files: [picture], cover: null }, sharer.cookie);
+      await reachedPromise;
+      // Even a settled claim cannot be released while its publication owns the account queue.
+      await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
+      const sweeping = t.post('files/sweep', body, sharer.cookie);
+      resume();
+      const published = await publishing;
+      expect(published.status).toBe(201);
+      const { id } = await published.json() as { id: string };
+      expect(await (await sweeping).json()).toEqual({ released: 0, taken: 0 });
+      expect((await t.get(`shares/${id}/files/${picture}`)).status).toBe(200);
+      expect((await t.env.db.prepare('SELECT id FROM file_removals').all()).results).toEqual([]);
+      expect(await t.env.db.prepare('SELECT file_bytes FROM accounts').first('file_bytes')).toBe(5);
+    } finally {
+      resume();
+      claimed.mockRestore();
+    }
+  });
+
   it('is held by its first report, both anonymous reads answer held, and once reviewed a report no longer holds it', async () => {
     const { operator, sharer, picture, id } = await published();
     expect(await state(id)).toBe('live');

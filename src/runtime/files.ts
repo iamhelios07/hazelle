@@ -1,4 +1,6 @@
-import { MAX_FILE_IDS } from '../contracts/files';
+import { isRecord } from '../connectors/values';
+import { FILE_ID, MAX_FILE_IDS } from '../contracts/files';
+import { FILE_KINDS } from '../model/kinds';
 import { fileId, openFile, sealFile, type FileRef } from '../vault/files';
 import type { ApiResult, api as realApi } from './api';
 import type { ObjectStore } from './store';
@@ -8,13 +10,19 @@ type Missing = { missing: Set<string>; maxBytes: number; room: number | null };
 
 // runtime/api's SLOWEST_UPLOAD assumes this many uploads sharing one uplink.
 const UPLOADS = 12;
+const SWEEP_TRIES = 3;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
+
+export const namedFile = (value: unknown): string | null => (isRecord(value) && isRecord(value.file) && typeof value.file.id === 'string' && FILE_ID.test(value.file.id) ? value.file.id : null);
 
 // A file is sealed by its content, so one this account already holds is never sent again (accounts keep their own
 // copies, src/server/files.ts); an import cut short and tried again sends only what did not arrive. Asking, uploading and reading wait out a
 // dropped connection the way the store's calls do (store.reaching): a backup reads thousands of pictures in a row, and
 // one dropped read must not end it.
 export class Files {
+  private sweeping: Promise<void> | null = null;
+  private owed = false;
+
   constructor(
     private readonly request: Api,
     private readonly store: ObjectStore,
@@ -68,6 +76,70 @@ export class Files {
       ({ maxBytes, room } = asked.data);
     }
     return { ok: true, data: { missing, maxBytes, room } };
+  }
+
+  // Run after a removal for good (runtime/removal), and once more when another lands meanwhile. One that fails is left to
+  // the next removal, and what it would have freed stays counted until then. A write landing mid-walk refuses it
+  // (conflict), so a chat that goes on beside the removal walks again.
+  sweep(): Promise<void> {
+    this.owed = true;
+    this.sweeping ??= (async () => {
+      while (this.owed) {
+        this.owed = false;
+        for (let tries = 1; ; tries++) {
+          const swept = await this.release();
+          if (swept.ok || swept.error !== 'conflict' || tries === SWEEP_TRIES) break;
+        }
+      }
+    })().finally(() => (this.sweeping = null));
+    return this.sweeping;
+  }
+
+  // The files the account holds that no object names, 휴지통's included, are released, and the ones objects name that it
+  // no longer holds are taken back (server/files.ts sweep). The walk must be whole: a row that does not open, or names no
+  // file, ends the sweep with nothing released, since a picture only it named would be taken for unused. The held ids
+  // are read before the walk, so a file uploaded during it is never weighed. The server checks the inventory's object
+  // revision on its account queue: any object write during the walk invalidates its unused set.
+  async release(signal?: AbortSignal): Promise<ApiResult<{ released: number; taken: number }>> {
+    return this.store.pinned(async (pin): Promise<ApiResult<{ released: number; taken: number }>> => {
+      const held: string[] = [];
+      let rev: number | null = null;
+      for (let more = true; more; ) {
+        const after = held.at(-1);
+        const page = await this.store.reaching(() => this.request<{ ids: string[]; more: boolean; timeline: string; rev: number }>('GET', after ? `files?after=${after}` : 'files'), signal);
+        if (!page.ok) return page;
+        if (page.data.timeline !== pin.timeline) return { ok: false, error: 'cache-reset' };
+        if (rev !== null && rev !== page.data.rev) return { ok: false, error: 'conflict' };
+        rev = page.data.rev;
+        held.push(...page.data.ids);
+        ({ more } = page.data);
+      }
+      const named = new Set<string>();
+      let whole = true;
+      for (const kind of FILE_KINDS) {
+        const failure = await this.store.scan({ kind }, (_, value) => {
+          const id = namedFile(value);
+          if (id === null) whole = false;
+          else named.add(id);
+        }, pin, signal);
+        if (failure) return failure;
+        if (!whole) return { ok: false, error: 'unreadable' };
+      }
+      const holds = new Set(held);
+      const unused = held.filter((id) => !named.has(id));
+      const lost = [...named].filter((id) => !holds.has(id));
+      const swept = { released: 0, taken: 0 };
+      for (let start = 0; start < lost.length + unused.length; start += MAX_FILE_IDS) {
+        const named = lost.slice(start, start + MAX_FILE_IDS);
+        const released = unused.slice(Math.max(0, start - lost.length), Math.max(0, start + MAX_FILE_IDS - lost.length));
+        const body = { timeline: pin.timeline, rev, unused: released, named };
+        const answer = await this.store.reaching(() => this.request<{ released: number; taken: number }>('POST', 'files/sweep', body), signal);
+        if (!answer.ok) return answer;
+        swept.released += answer.data.released;
+        swept.taken += answer.data.taken;
+      }
+      return { ok: true, data: swept };
+    }, signal);
   }
 
   // A body sealed elsewhere, a share's manifest, stored as it is under its hash, as every file is. Its id.

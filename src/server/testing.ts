@@ -109,7 +109,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       const incarnation = await env.db.prepare(`UPDATE accounts SET ${set} WHERE id = ? RETURNING incarnation`).bind(accountId).first<string>('incarnation');
       await env.stores.getByName(incarnation!).restart(incarnation!).catch(() => {});
     },
-    batch: async (writes: unknown[], cookie: string) => send('POST', 'objects/batch', { timeline: await timeline(cookie), writes }, cookie),
+    batch: async (writes: unknown[], cookie: string, files: string[] = []) => send('POST', 'objects/batch', { timeline: await timeline(cookie), writes, files }, cookie),
     // The daily job at a time, with the stores' clock set to it so the baselines it takes carry that time.
     daily: async (now: number) => {
       clock.now = () => now;

@@ -5,7 +5,7 @@ import type { AccountSection, Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
 import { BUILT_VERSION } from '../common/release';
-import { PAGES, UNKNOWN } from '../common/words';
+import { BIN, PAGES, UNKNOWN } from '../common/words';
 import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Stack, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
@@ -57,7 +57,7 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
       {/* The account's own data first, then help and the app, then 탈퇴 last. */}
       <Columns min="panel">
         <Stack gap="section">
-          <Panel title="저장 공간" help="이미지는 삭제해도 사용량이 줄지 않아요.">
+          <Panel title="저장 공간" help={`${BIN}에서 영구 삭제하면 공간이 생겨요.`}>
             <Used label="텍스트" bytes={storage.bytes} cap={storage.bytesCap} />
             <Used label="이미지" bytes={storage.fileBytes} cap={storage.fileBytesCap} />
             <SettingRow

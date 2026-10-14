@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BATCH_LIMITS } from './objects';
+import { hex } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -11,6 +12,7 @@ beforeEach(() => t.reset());
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
+const C = '33333333-3333-4333-8333-333333333333';
 
 async function signedIn() {
   const body = signupBody();
@@ -23,6 +25,37 @@ async function write(cookie: string, id: string, input: Record<string, unknown>)
 }
 
 describe('objects', () => {
+  it('reclaims files before publishing references, even over the cap, and publishes nothing for a deleting file', async () => {
+    const { cookie } = await signedIn();
+    const bytes = new Uint8Array([1, 2, 3]);
+    const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    await t.put(`files/${id}`, bytes, cookie);
+    await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
+    const inventory = await (await t.get('files', cookie)).json() as { timeline: string; rev: number };
+    expect(await (await t.post('files/sweep', { ...inventory, unused: [id], named: [] }, cookie)).json()).toEqual({ released: 1, taken: 0 });
+    await t.env.db.prepare('UPDATE service SET account_file_bytes_cap = 0').run();
+    const object = { id: A, kind: 'asset', parent: null, body: 'sealed-reference', baseRev: null };
+    const claimed = await t.batch([object], cookie, [id]);
+    expect(claimed.status).toBe(200);
+    expect(claimed.headers.get('x-account-file-bytes')).toBe('3');
+    expect((await t.get(`files/${id}`, cookie)).status).toBe(200);
+    // The same walk cannot release a file after that object write, even once the claim has settled.
+    await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
+    expect((await t.post('files/sweep', { ...inventory, unused: [id], named: [] }, cookie)).status).toBe(409);
+    expect(await t.env.db.prepare('SELECT file_bytes FROM accounts').first('file_bytes')).toBe(3);
+
+    await t.batch([{ ...object, body: null, baseRev: 1 }], cookie);
+    const next = await (await t.get('files', cookie)).json() as { timeline: string; rev: number };
+    await t.post('files/sweep', { ...next, unused: [id], named: [] }, cookie);
+    await t.env.db.prepare('UPDATE file_removals SET removing = 1').run();
+    expect((await t.batch([{ ...object, id: B }], cookie, [id])).status).toBe(503);
+    expect(await t.env.db.prepare('SELECT file_bytes FROM accounts').first('file_bytes')).toBe(0);
+    expect(t.stores.inspect((await t.env.db.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!).exec('SELECT id FROM objects WHERE body IS NOT NULL')).toEqual([]);
+    // A file the account lacks, and a write from a tab that sends no files, still land.
+    expect((await t.batch([{ ...object, id: B }], cookie, ['f'.repeat(64)])).status).toBe(200);
+    expect((await t.post('objects/batch', { timeline: inventory.timeline, writes: [{ ...object, id: C }] }, cookie)).status).toBe(200);
+  });
+
   it('creates, updates with a version check and syncs from a cursor, stating the timeline and the bytes held', async () => {
     const { cookie } = await signedIn();
     const timeline = await t.timeline(cookie);
@@ -55,7 +88,7 @@ describe('objects', () => {
       await t.get(`objects?since=0&timeline=${other}`, cookie),
       await t.get(`objects?since=2&timeline=${timeline}`, cookie),
       await t.get('objects?since=1', cookie),
-      await t.post('objects/batch', { timeline: other, writes: [{ id: A, kind: 'chat', parent: null, body: 'eA==', baseRev: null }] }, cookie),
+      await t.post('objects/batch', { timeline: other, files: [], writes: [{ id: A, kind: 'chat', parent: null, body: 'eA==', baseRev: null }] }, cookie),
     ];
     for (const response of sent) {
       expect(response.status).toBe(409);
@@ -78,7 +111,7 @@ describe('objects', () => {
   it('answers 503 with a wait while the account restores or its store cannot load, and 401 once it is leaving', async () => {
     const { id, cookie } = await signedIn();
     const timeline = await t.timeline(cookie);
-    const both = () => Promise.all([t.get(`objects?since=0&timeline=${timeline}`, cookie), t.post('objects/batch', { timeline, writes: [{ id: A, kind: 'chat', parent: null, body: 'eA==', baseRev: null }] }, cookie)]);
+    const both = () => Promise.all([t.get(`objects?since=0&timeline=${timeline}`, cookie), t.post('objects/batch', { timeline, files: [], writes: [{ id: A, kind: 'chat', parent: null, body: 'eA==', baseRev: null }] }, cookie)]);
 
     await t.lifecycle(id, "state = 'restoring'");
     for (const response of await both()) expect(await response.json()).toEqual({ error: 'account-restoring', retryAfter: 5 });

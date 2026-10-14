@@ -91,7 +91,7 @@ export function useCharacterActions() {
 
   async function purge({ kind, id, name }: Binned) {
     setBusy({ id, label: '삭제 중' });
-    const removed = await purgeNow(store, kind, id, (done, total) => setBusy({ id, label: `삭제 중 · ${done} / ${total}` }));
+    const removed = await purgeNow(store, files, kind, id, (done, total) => setBusy({ id, label: `삭제 중 · ${done} / ${total}` }));
     setBusy(null);
     if (removed.ok) toast.show(`'${name}' ${OBJECT[kind]} 영구 삭제했어요.`);
     else toast.failed(removed, '일부를 삭제하지 못했어요.');

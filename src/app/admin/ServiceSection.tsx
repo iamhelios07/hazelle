@@ -59,7 +59,7 @@ export function ServiceSection({ service, onSaved, onNoticed }: { service: Servi
         </SettingCard>
         <SettingCard
           label="계정당 이미지 한도"
-          help="계정별로 올린 이미지의 총 크기예요. 이미지를 삭제해도 줄지 않아요."
+          help="계정별로 올린 이미지의 총 크기예요."
           sub={`저장된 이미지 합계 ${sizeText(service.fileBytes)}`}
           error={accountFileBytesCap === undefined ? CAP_ERROR : undefined}
         >

@@ -12,8 +12,8 @@ const HOUR_MS = 60 * 60 * 1000;
 type Outcome = { outcome: 'ok' | 'failed'; error: string | null };
 
 export type Backups = {
-  // Every lifecycle step (signup, deletion, each phase of a rewind) runs inside a hold: a hold waits while a generation
-  // is being captured, and a capture waits for the holds already running. Ordinary writes take no hold. Holds never
+  // Lifecycle steps, file claims on object writes or share publication, and file sweeps hold off generation capture.
+  // A hold waits while a generation is being captured; capture waits for existing holds. Writes naming no files take none. Holds never
   // nest: a capture waiting on the outer one would keep the inner one waiting for ever.
   hold<T>(work: () => Promise<T>): Promise<T>;
   // Runs the daily job unless today's (UTC) generation is already captured or the hour has not come: a failed

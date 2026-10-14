@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { generationsDir, listGenerations, readManifest } from './backup/generation';
 import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
-import { filePrefix, type Bucket } from './files/bucket';
+import { fileKey, filePrefix, type Bucket } from './files/bucket';
 
 // The hourly sweep of what a crash or a late request left behind: the picture store, the account databases and the
 // snapshots; and the trim of the R2 store's copy on disk (files/cached-r2-bucket.ts).
@@ -38,7 +38,18 @@ async function mtime(path: string): Promise<number> {
   }
 }
 
-export async function reconcile(dataDir: string, db: Db, files: Bucket, now = Date.now()): Promise<{ removed: string[] }> {
+const running = new WeakMap<Db, Promise<{ removed: string[] }>>();
+
+export function reconcile(dataDir: string, db: Db, files: Bucket, now = Date.now()): Promise<{ removed: string[] }> {
+  const previous = running.get(db);
+  if (previous) return previous;
+  // A second remover must never finish a row and admit a PUT while the first still holds its file key.
+  const run = reconcileOnce(dataDir, db, files, now).finally(() => running.delete(db));
+  running.set(db, run);
+  return run;
+}
+
+async function reconcileOnce(dataDir: string, db: Db, files: Bucket, now: number): Promise<{ removed: string[] }> {
   const settled = now - SETTLE_MS;
   const removed: string[] = [];
   const remove = async (relative: string) => {
@@ -61,6 +72,22 @@ export async function reconcile(dataDir: string, db: Db, files: Bucket, now = Da
     await files.deletePrefix(filePrefix(incarnation));
     await db.prepare('DELETE FROM picture_removals WHERE incarnation = ?').bind(incarnation).run();
     removed.push(`files/${incarnation}`);
+  }
+  // Released pictures (files.ts release) past every generation and snapshot that could name them. Marked first, in the
+  // one statement that picks them, so an upload of one waits instead of storing bytes about to go; a run cut short
+  // leaves its marks for the next to finish.
+  const { results: released } = await db
+    .prepare(
+      `UPDATE file_removals SET removing = 1
+       WHERE removing = 1 OR (due_at <= ?1 AND NOT EXISTS (SELECT 1 FROM snapshots s WHERE s.incarnation = file_removals.incarnation AND s.taken_at <= file_removals.released_at))
+       RETURNING incarnation, id`,
+    )
+    .bind(now)
+    .all<{ incarnation: string; id: string }>();
+  for (const { incarnation, id } of released) {
+    await files.delete(fileKey(incarnation, id));
+    await db.prepare('DELETE FROM file_removals WHERE incarnation = ? AND id = ?').bind(incarnation, id).run();
+    removed.push(fileKey(incarnation, id));
   }
 
   // A database and its -wal and -shm go together, and only when all three have settled.

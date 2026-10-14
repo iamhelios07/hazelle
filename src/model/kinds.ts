@@ -85,6 +85,8 @@ export const KINDS = {
   profile: { parent: null },
 } as const satisfies Record<Kind, Rule> & { [K in Kind]: { owner?: { field: Link<K> } } };
 
+export const FILE_KINDS = (Object.keys(KINDS) as Kind[]).filter((kind) => 'file' in KINDS[kind]);
+
 export function parentKinds(kind: Kind): readonly Kind[] {
   const { parent }: Rule = KINDS[kind];
   return parent === null ? [] : typeof parent === 'string' ? [parent] : parent;

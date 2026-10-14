@@ -802,11 +802,11 @@ export class ObjectStore {
       const result = await this.retry(async (): Promise<ApiResult<(Held | null)[]>> => {
         const prepared = await this.writes.prepare(steps, { start, end, limits, timeline, signal: halt });
         if (!prepared.ok) return prepared;
-        const { resolved, writes } = prepared.data;
+        const { resolved, writes, files } = prepared.data;
         if (writes.length) {
           if (epoch !== this.epoch) return changed();
           if (stop.aborted) return { ok: false, error: 'stopped' };
-          const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { timeline, writes }, halt);
+          const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { timeline, writes, files }, halt);
           // Only the store closing or a reset drops an answer: a caller's stop that arrives after the write landed keeps
           // it held. An answer to a request sent before a reset is of the old timeline, a refusal too, so this is checked
           // before the refusal is read: an old 409 or 503 never resets the new timeline.

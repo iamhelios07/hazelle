@@ -81,6 +81,13 @@ export class StoreRules {
     return this.lifecycle(incarnation);
   }
 
+  async revision(incarnation: string): Promise<Refused | { timeline: string; rev: number }> {
+    const life = await this.lifecycle(incarnation);
+    if (!active(life)) return refusal(life);
+    const { timeline, rev } = this.head();
+    return { timeline, rev };
+  }
+
   async feed(incarnation: string, query: FeedQuery): Promise<Refused | { stale: true } | { reset: true } | FeedPage> {
     const life = await this.lifecycle(incarnation);
     if (!active(life)) return refusal(life);

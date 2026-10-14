@@ -1,5 +1,6 @@
-import { KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
+import { FILE_KINDS, KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
 import type { ApiResult } from './api';
+import { namedFile } from './files';
 import { orderOwned } from './removal';
 import { SCOPED, WALKED, type CacheState } from './object-cache';
 import { CodecAborted, type ObjectCodec, SEAL_ITEMS } from './object-codec';
@@ -16,7 +17,7 @@ export type Resolved = { pending: Pending | null; held: Held | null };
 export type WriteStep = { id: string; resolve: (at: (id: string) => Held | undefined) => ApiResult<Resolved>; derived?: boolean };
 
 type SealedWrite = StoreChange & { baseRev: number | null; body: string | null; once?: true };
-type Prepared = { resolved: Resolved[]; writes: SealedWrite[] };
+type Prepared = { resolved: Resolved[]; writes: SealedWrite[]; files: string[] };
 
 const encoder = new TextEncoder();
 
@@ -103,7 +104,8 @@ export class ObjectWrites {
   async prepare(steps: WriteStep[], { start, end, limits, timeline, signal }: { start: number; end: number; limits: Limits; timeline: string; signal: AbortSignal }): Promise<ApiResult<Prepared>> {
     const resolved: Resolved[] = [];
     const writes: SealedWrite[] = [];
-    let bytes = encoder.encode(JSON.stringify({ timeline, writes: [] })).length;
+    const files = new Set<string>();
+    let bytes = encoder.encode(JSON.stringify({ timeline, writes: [], files: [] })).length;
     // Resolve and seal afresh INSIDE every retry. Keep only a small value window, not the server's entire
     // item page. Future failures stay in their slots until the byte-limited prefix reaches them.
     filling: for (let from = start; from < end; from += SEAL_ITEMS) {
@@ -130,20 +132,26 @@ export class ObjectWrites {
           const { id, kind, parent, baseRev, value } = pending;
           const body = value === undefined ? null : codecValue(sealed[slots.get(index)!]!);
           if (value !== undefined && body === null) return { ok: false, error: 'too-large' };
+          let file: string | null = null;
+          if (value !== undefined && FILE_KINDS.includes(kind as Kind)) {
+            file = namedFile(value);
+            if (file === null) return { ok: false, error: 'unreadable' };
+          }
           // A walked row is never held, so a create sent again after its lost answer cannot find it here: the server
           // answers it as landed (server/account-store once).
           const write = { id, kind, parent, baseRev, body, ...(WALKED.has(kind) && baseRev === null && { once: true as const }) };
-          const size = encoder.encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
+          const size = encoder.encode(JSON.stringify(write)).length + (writes.length ? 1 : 0) + (file !== null && !files.has(file) ? file.length + 3 : 0);
           if (bytes + size > limits.bytes) {
             if (!resolved.length) return { ok: false, error: 'too-large' };
             break filling;
           }
           bytes += size;
           writes.push(write);
+          if (file !== null) files.add(file);
         }
         resolved.push(ready.data);
       }
     }
-    return { ok: true, data: { resolved, writes } };
+    return { ok: true, data: { resolved, writes, files: [...files] } };
   }
 }

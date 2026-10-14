@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
+import { FILE_ID } from '../contracts/files';
 import type { FeedQuery, Write } from './account-store';
 import { fail, ID, isRecord, readObject, refused, type AppEnv } from './http';
 import { store } from './lifecycle';
 import { canWrite, requireSession } from './session';
+import { claimFiles } from './files/claims';
 
 const KIND = /^[a-z][a-z-]{0,31}$/;
 // A timeline is 16 random bytes in hex (migrations/0001_baseline.sql).
@@ -56,6 +58,11 @@ objects.post('/batch', canWrite, async (c) => {
   if (!input || typeof input.timeline !== 'string' || !TIMELINE.test(input.timeline) || !Array.isArray(input.writes) || !input.writes.length) {
     return fail(c, 400, 'bad-input');
   }
+  // Optional: a tab opened before files were claimed sends none, and its write claims nothing.
+  const files = input.files ?? [];
+  if (!Array.isArray(files) || files.length > BATCH_LIMITS.items || !files.every((id): id is string => typeof id === 'string' && FILE_ID.test(id))) {
+    return fail(c, 400, 'bad-input');
+  }
   if (input.writes.length > BATCH_LIMITS.items) return fail(c, 413, 'too-large');
   const writes: Write[] = [];
   const ids = new Set<string>();
@@ -68,7 +75,21 @@ objects.post('/batch', canWrite, async (c) => {
   }
   const account = c.get('account');
   const asked = Date.now();
-  const done = await store(c.env, account.incarnation).batch(account.incarnation, input.timeline, writes, account.bytesCap);
+  const timeline = input.timeline;
+  const write = () => c.env.stores.withStore(account.incarnation, async (store) => {
+    const head = await store.revision(account.incarnation);
+    if (!('rev' in head)) return head;
+    if (head.timeline !== timeline) return { stale: true } as const;
+    if (files.length) {
+      const claimed = await claimFiles(c.env.db, account.incarnation, files);
+      c.header(ACCOUNT_USAGE_HEADERS.fileBytes, String(claimed.fileBytes));
+      // Only bytes being deleted refuse. A blocked or missing file is already named by the object copied or edited, so
+      // refusing would leave it uneditable and its chat unbranchable.
+      if (claimed.removing) return { refused: 'busy' } as const;
+    }
+    return store.batch(account.incarnation, timeline, writes, account.bytesCap);
+  });
+  const done = await (files.length ? c.env.backups.hold(write) : write());
   c.set('storeMs', Date.now() - asked);
   if ('revs' in done) {
     c.header(ACCOUNT_USAGE_HEADERS.bytes, String(done.bytes));
@@ -77,6 +98,8 @@ objects.post('/batch', canWrite, async (c) => {
   if ('stale' in done) return fail(c, 409, 'cache-reset');
   if ('unavailable' in done) return refused(c, done);
   switch (done.refused) {
+    case 'busy':
+      return fail(c, 503, 'busy', { retryAfter: 5 });
     case 'bad-input':
       return fail(c, 400, 'bad-input');
     case 'conflict':

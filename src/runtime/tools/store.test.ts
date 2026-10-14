@@ -6,8 +6,11 @@ import { purgeNow } from '../removal';
 import { exportBackup, readBackup, restoreBackup } from '../testing/backup';
 import { testServer } from '../testing';
 import { deleteToolData, importTool, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_VALUE_BYTES, undoToolImport } from './store';
+import type { Files } from '../files';
 
 const server = testServer();
+// The sweep a removal for good starts is runtime/files' to test.
+const unswept = { sweep: async () => {} } as unknown as Files;
 const source = (version = '1.0', uses = '') => {
   const result = readTool(new TextEncoder().encode(`//@api 1\n//@name notes\n//@author jin\n//@version ${version}\n${uses}//@setting {"key":"title","type":"text","label":"제목","default":"메모"}\nhazelle.on('message', () => {});`));
   if (!result.ok) throw new Error('fixture');
@@ -63,7 +66,7 @@ describe('tool storage', () => {
     await setModuleDeleted(store, module, Date.now());
     expect(await importTool(store, files, source('2'))).toEqual({ ok: false, error: 'gone' });
     expect(store.list('module')).toHaveLength(1);
-    expect((await purgeNow(store, 'module', module, () => {})).ok).toBe(true);
+    expect((await purgeNow(store, unswept, 'module', module, () => {})).ok).toBe(true);
     expect(store.list('tool')).toEqual([]);
     expect(store.list('tooldata')).toEqual([]);
   });
@@ -119,7 +122,7 @@ describe('tool storage', () => {
     const fresh = await open();
     expect(fresh.scopeState(chat)).toBe('unloaded');
     await setModuleDeleted(fresh, module, Date.now());
-    expect((await purgeNow(fresh, 'module', module, () => {})).ok).toBe(true);
+    expect((await purgeNow(fresh, unswept, 'module', module, () => {})).ok).toBe(true);
     const reopened = fresh.retainChat(chat);
     await reopened.ready;
     expect(fresh.children('toolchat', chat)).toEqual([]);

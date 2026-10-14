@@ -20,6 +20,8 @@ import { BATCH_LIMITS, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 
 const server = testServer();
+// The sweep a removal for good starts is runtime/files' to test.
+const unswept = { sweep: async () => {} } as unknown as Files;
 vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 
 // The bytes of a picture as far as the import reads one: a PNG's signature.
@@ -246,7 +248,7 @@ describe('purgeExpired', () => {
     await store.create('entry', { type: 'message', role: 'user', at: now, text: '안녕', receipt: null }, { parent: chat.ok ? chat.data.id : '' });
 
     await server.hold(store, chat.ok ? chat.data.id : '');
-    await purgeExpired(store, now, new AbortController().signal);
+    await purgeExpired(store, unswept, now, new AbortController().signal);
     expect(store.list('character').map((kept) => kept.value.card.name)).toEqual(['recent']);
     expect([store.list('chat'), store.children('entry', chat.ok ? chat.data.id : ''), store.list('lore'), store.list('avatar'), store.list('asset')].map((left) => left.length)).toEqual([0, 0, 0, 0, 0]);
   });
@@ -261,7 +263,7 @@ describe('purgeExpired', () => {
     await other.pull();
     await setDeleted(other, id, null);
 
-    await purgeExpired(store, now, new AbortController().signal);
+    await purgeExpired(store, unswept, now, new AbortController().signal);
     expect([store.get('character', id)?.value.deleted, store.get('chat', chat.ok ? chat.data.id : '')?.id]).toEqual([undefined, chat.ok ? chat.data.id : '']);
   });
 
@@ -271,7 +273,7 @@ describe('purgeExpired', () => {
     const prompt = await store.create('prompt', { name: '옛', blocks: [], toggles: [], authorNote: '', models: {}, deleted: now - KEEP_DELETED });
     await store.create('persona', { name: '린', description: '', picture: null, deleted: now - 1000 });
 
-    await purgeExpired(store, now, new AbortController().signal);
+    await purgeExpired(store, unswept, now, new AbortController().signal);
     expect([store.get('prompt', prompt.ok ? prompt.data.id : ''), store.list('persona').map(({ value }) => value.name)]).toEqual([null, ['린']]);
   });
 
@@ -280,12 +282,12 @@ describe('purgeExpired', () => {
     const now = Date.now();
     await addCharacter(store, bare('루나', { deleted: now, purging: true }), { ...none, lore: [{ name: 'lore' } as Lore] }, () => {});
 
-    await purgeExpired(store, now, new AbortController().signal);
+    await purgeExpired(store, unswept, now, new AbortController().signal);
     expect([store.list('character'), store.list('lore')].map((left) => left.length)).toEqual([0, 0]);
   });
 
   it('removes a chat deleted a week ago with all it owns (its cache print too), which the account no longer counts, and keeps one deleted since', async () => {
-    const { accountId, store } = await server.account();
+    const { accountId, store, files } = await server.account();
     let bytes = 0;
     holdAccount(accountId, (heard) => { if (heard.kind === 'bytes') bytes = heard.bytes; });
     const expired = await savedChat(store);
@@ -293,7 +295,9 @@ describe('purgeExpired', () => {
     await store.create('cacheprint', { call: 'r', connection: 'c', account: null, model: 'm', messages: [{ role: 'user', hash: 'h', tokens: 1, from: { kind: 'block', name: null, slot: 'chat' }, point: true }] }, { id: cachePrintId(expired), parent: expired });
     await store.create('stream', { calibration: unavailableCalibration('historical'), key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } }, { parent: expired });
     const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
-    await store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent: { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 }, file: { id: 'f', key: 'k' }, type: 'image/png', size: 1, at: 0 }, { parent: expired });
+    const saved = await files.save([new Uint8Array(1)]);
+    if (!saved.ok) throw new Error(saved.error);
+    await store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent: { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 }, file: saved.data[0]!, type: 'image/png', size: 1, at: 0 }, { parent: expired });
     await removeChat(store, expired);
     const now = Date.now() + KEEP_DELETED;
     const recent = await savedChat(store);
@@ -302,7 +306,7 @@ describe('purgeExpired', () => {
     expect(owned(expired)).toBe(6);
     const before = bytes;
 
-    await purgeExpired(store, now, new AbortController().signal);
+    await purgeExpired(store, unswept, now, new AbortController().signal);
     expect([store.list('chat').map(({ id }) => id), owned(expired), owned(recent)]).toEqual([[recent], 0, 2]);
     expect(bytes).toBeLessThan(before);
   });
@@ -313,12 +317,12 @@ describe('purgeExpired', () => {
     await removeChat(store, chat);
     const real = globalThis.fetch;
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === '/api/objects/batch' && (JSON.parse(init?.body as string) as { writes: { id: string; body: string | null }[] }).writes.some((write) => write.id === chat && write.body === null) ? Promise.resolve(Response.json({ error: 'server-error' }, { status: 500 })) : real(url, init)));
-    await purgeExpired(store, Date.now() + KEEP_DELETED, new AbortController().signal);
+    await purgeExpired(store, unswept, Date.now() + KEEP_DELETED, new AbortController().signal);
     expect([store.get('chat', chat)?.value.purging, store.children('entry', chat).length]).toEqual([true, 0]);
     expect(await restoreChat(store, chat)).toEqual({ ok: false, error: 'gone' });
 
     vi.stubGlobal('fetch', real);
-    await purgeExpired(store, Date.now(), new AbortController().signal);
+    await purgeExpired(store, unswept, Date.now(), new AbortController().signal);
     expect(store.list('chat')).toEqual([]);
   });
 });
@@ -393,7 +397,7 @@ describe('purgeNow', () => {
 
     const real = globalThis.fetch;
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === '/api/objects/batch' && (JSON.parse(init?.body as string) as { writes: { id: string; body: string | null }[] }).writes.some((write) => write.id === chatId && write.body === null) ? Promise.resolve(Response.json({ error: 'server-error' }, { status: 500 })) : real(url, init)));
-    expect(await purgeNow(store, 'character', id, () => {})).toEqual({ ok: false, error: 'server-error' });
+    expect(await purgeNow(store, unswept, 'character', id, () => {})).toEqual({ ok: false, error: 'server-error' });
     const other = await open();
     await other.pull();
     expect([other.get('character', id), other.get('chat', chatId)].map((kept) => kept?.id)).toEqual([id, chatId]);
@@ -403,7 +407,7 @@ describe('purgeNow', () => {
 
     vi.stubGlobal('fetch', real);
     const steps: [number, number][] = [];
-    expect(await purgeNow(store, 'character', id, (removed, total) => steps.push([removed, total]))).toEqual({ ok: true, data: null });
+    expect(await purgeNow(store, unswept, 'character', id, (removed, total) => steps.push([removed, total]))).toEqual({ ok: true, data: null });
     expect(steps).toEqual([
       [0, 3],
       [1, 3],
@@ -420,7 +424,7 @@ describe('purgeNow', () => {
     const chat = await savedChat(store, id);
     await removeChat(store, chat);
 
-    expect(await purgeNow(store, 'character', id, () => {})).toEqual({ ok: true, data: null });
+    expect(await purgeNow(store, unswept, 'character', id, () => {})).toEqual({ ok: true, data: null });
     expect([store.list('chat'), store.children('entry', chat)].map((left) => left.length)).toEqual([0, 0]);
   });
 
@@ -431,8 +435,8 @@ describe('purgeNow', () => {
     const [binned, kept] = [await savedChat(store, id), await savedChat(store, id)];
     await removeChat(store, binned);
 
-    expect(await purgeNow(store, 'chat', kept, () => {})).toEqual({ ok: false, error: 'gone' });
-    expect(await purgeNow(store, 'chat', binned, () => {})).toEqual({ ok: true, data: null });
+    expect(await purgeNow(store, unswept, 'chat', kept, () => {})).toEqual({ ok: false, error: 'gone' });
+    expect(await purgeNow(store, unswept, 'chat', binned, () => {})).toEqual({ ok: true, data: null });
     expect([store.list('chat').map((chat) => chat.id), store.children('entry', binned).length, store.get('character', id)?.id]).toEqual([[kept], 0, id]);
   });
 });

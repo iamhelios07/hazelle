@@ -61,10 +61,14 @@ time asked, however old (the 6-day request window is the lifecycle's), never on 
 and the install check the snapshot's size and SHA-256 against its row, and a mismatch answers unavailable before anything is armed.
 
 Backup generations (`src/server/backup/generation.ts`), captured by the daily job after the baselines: while a gate keeps signup,
-deletion and every rewind step out (ordinary writes go on), every active account with no current baseline gets one, as does one
+deletion, every rewind step, file-bearing writes, share publication and file sweeps out (other writes go on), every active
+account with no current baseline gets one, as does one
 restoring before its checkpoint whose current baseline is from before today unless its file is unchanged since, `Db.snapshot` makes an online copy of the service, and what that copy names is hard-linked (copied across filesystems) into
 the generation with the disk store: each account's newest baseline, every pinned snapshot, the base of each and every picture whose
-`account_files` row says `stored = 1` into the pool. With the R2 store the manifest names both pictures and archives where they are;
+`account_files` row says `stored = 1`, plus released pictures that any named snapshot can still refer to, into the pool.
+Capturing a generation extends those releases' deadlines through its retention. Restoring the generation verifies and
+copies both sets and reclaims releases against each installed snapshot; recovery never promotes a pending upload
+reservation to a stored copy. With the R2 store the manifest names both pictures and archives where they are;
 the copier pools the archives in the backup bucket before marking a generation copied. A deleted account's pictures stay in R2 until
 `picture_removals.due_at`, 7 days after deletion was queued. Snapshot catalog expiry atomically queues `snapshot_removals` (migration
 0009), due 7 days later; the hourly sweep also waits while any local v4 generation names the archive, including a generation whose

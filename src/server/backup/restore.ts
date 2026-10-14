@@ -13,6 +13,7 @@ import { migrate } from '../db/migrate';
 import { openDatabase, serviceDb } from '../db/service-db';
 import { fileKey, snapshotKey, type Bucket, type R2Bucket } from '../files/bucket';
 import { diskBucket } from '../files/disk-bucket';
+import { takeBackFiles } from '../files/claims';
 import type { Services } from '../http';
 import { cancelRestore, leaveAccount, runRestore } from '../lifecycle';
 import { tokenBucket, visitorLimits } from '../limits';
@@ -20,7 +21,7 @@ import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { alerts } from '../alerts';
 import { backups } from './backups';
-import { POOL, readManifest, type Manifest } from './generation';
+import { generationPictures, POOL, readManifest, type Manifest } from './generation';
 
 // The disaster restore (docs/research/docker-port-plan.md §10.2): one generation directory, beside the pool it was
 // copied with (<generation>/../files), into an empty data directory and the picture store the environment names. Every
@@ -50,11 +51,11 @@ async function verify(generation: string, manifest: Manifest, files: Bucket, sou
 
 // Every stored picture the service names is in the store at the size its row records, or the restore fails naming each
 // one that is not. Sizes only: reading every object back to hash it is not done.
-async function inStore(files: R2Bucket, service: string) {
+async function inStore(files: R2Bucket, service: string, manifest: Manifest) {
   const db = new DatabaseSync(service, { readOnly: true });
   let stored: { incarnation: string; id: string; size: number }[];
   try {
-    stored = db.prepare('SELECT incarnation, id, size FROM account_files WHERE stored = 1 ORDER BY incarnation, id').all() as typeof stored;
+    stored = generationPictures(db, manifest.snapshots.map(({ id }) => id));
   } finally {
     db.close();
   }
@@ -89,7 +90,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   fsyncPath(service);
   // verify refused an r2 generation into any other bucket. A failure leaves the directory empty, as it found it.
   if (manifest.bucket === 'r2' && files.kind === 'r2') {
-    await inStore(files, service).catch(async (error: unknown) => {
+    await inStore(files, service, manifest).catch(async (error: unknown) => {
       for (const suffix of ['', '-wal', '-shm']) await rm(join(dataDir, `service.sqlite${suffix}`), { force: true });
       throw error;
     });
@@ -97,6 +98,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   const raw = openDatabase(service);
   migrate(raw, migrationsDir);
   const db = serviceDb(raw);
+  const pictures = generationPictures(raw, manifest.snapshots.map(({ id }) => id));
   // The catalog names every snapshot the source had; only the generation's came along.
   await db.prepare('DELETE FROM snapshots WHERE id NOT IN (SELECT value FROM json_each(?))').bind(JSON.stringify(manifest.snapshots.map(({ id }) => id))).run();
   if (archives.kind === 'disk') for (const snapshot of manifest.snapshots) {
@@ -112,10 +114,10 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     if (source === null) continue;
     await materializeSnapshot(files, db, incarnation, source, accountPath(dataDir, incarnation));
     fsyncPath(accountPath(dataDir, incarnation));
+    await db.batch(takeBackFiles(db, incarnation, { snapshot: source }));
   }
   // Past its install already: the live file was the target when the generation was taken.
   for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id, files);
-  const { results: pictures } = await db.prepare('SELECT incarnation, id FROM account_files WHERE stored = 1').all<{ incarnation: string; id: string }>();
   if (manifest.bucket === 'disk') for (const { incarnation, id } of pictures) await files.put(fileKey(incarnation, id), await readFile(join(generation, '..', POOL, id)));
   for (const dir of ['', 'accounts']) fsyncPath(join(dataDir, dir));
 

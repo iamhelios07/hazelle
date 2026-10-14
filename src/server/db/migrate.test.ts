@@ -72,14 +72,27 @@ describe('the migration runner', () => {
 
   it('adds durable snapshot removals without changing or discarding the snapshot catalog', () => {
     const db = new DatabaseSync(':memory:');
-    const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && !name.startsWith('0009'));
+    const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0009');
     migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')]))));
     db.exec("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES ('s', 'i', 'baseline', 1, 2, 3, 4, 'h')");
-    expect(migrate(db, 'migrations').applied).toEqual(['0009_snapshot_removals.sql']);
+    expect(migrate(db, 'migrations').applied).toContain('0009_snapshot_removals.sql');
     expect(db.prepare('SELECT rev, bytes, expanded, sha256 FROM snapshots').all()).toEqual([{ rev: 2, bytes: 3, expanded: 4, sha256: 'h' }]);
     db.exec("INSERT INTO snapshot_removals VALUES ('snapshots/i/s.sqlite.gz', 7); DELETE FROM snapshots WHERE id = 's'");
     expect(db.prepare('SELECT * FROM snapshot_removals').all()).toEqual([{ key: 'snapshots/i/s.sqlite.gz', due_at: 7 }]);
     db.close();
+  });
+
+  it('dates every held file’s claim at its upload, and keeps released pictures only as long as their account', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON');
+    const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0010');
+    migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
+    db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('u', 'jin', 'h', 1, 'i', 't');
+      INSERT INTO account_files (incarnation, id, size, stored, created_at) VALUES ('i', 'f', 3, 1, 42)`);
+    expect(migrate(db, 'migrations').applied).toEqual(['0010_file_removals.sql']);
+    expect(db.prepare('SELECT claimed_at FROM account_files').get()).toEqual({ claimed_at: 42 });
+    db.exec("INSERT INTO file_removals (incarnation, id, size, created_at, released_at, due_at) VALUES ('i', 'g', 1, 1, 2, 3); DELETE FROM account_files; DELETE FROM accounts");
+    expect(db.prepare('SELECT COUNT(*) AS n FROM file_removals').get()).toEqual({ n: 0 });
   });
 
   it('upgrades a populated database with the files it lacks, each whole or not at all', () => {

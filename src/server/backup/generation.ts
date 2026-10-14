@@ -81,15 +81,24 @@ async function place(source: string, target: string) {
 
 type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'bucket' | 'snapshotStore'>;
 
+export function generationPictures(db: DatabaseSync, snapshots: string[]): { incarnation: string; id: string; size: number }[] {
+  // Generations from before migration 0010 have no released files; restore still reads those service snapshots.
+  const releases = db.prepare("SELECT 1 FROM sqlite_schema WHERE name = 'file_removals' AND type = 'table'").get();
+  const held = 'SELECT incarnation, id, size FROM account_files WHERE stored = 1';
+  const released = `SELECT incarnation, id, size FROM file_removals r WHERE EXISTS (
+    SELECT 1 FROM snapshots s WHERE s.incarnation = r.incarnation AND s.taken_at <= r.released_at
+      AND s.id IN (SELECT value FROM json_each(?)))`;
+  return db.prepare(`${held}${releases ? ` UNION ALL ${released}` : ''} ORDER BY id, incarnation`).all(...(releases ? [JSON.stringify(snapshots)] : [])) as { incarnation: string; id: string; size: number }[];
+}
+
 // What the service snapshot names, read from the snapshot itself so the manifest and the service agree.
 function readNamed(path: string, now: number): { named: Named; sources: Map<string, string[]> } {
   const db = new DatabaseSync(path, { readOnly: true });
   try {
     const all = <T>(sql: string, ...binds: (string | number)[]) => db.prepare(sql).all(...binds) as T[];
-    const accounts = all<Manifest['accounts'][number]>(
+    const accounts = all<Omit<Manifest['accounts'][number], 'pictureBytes'>>(
       `SELECT incarnation, state,
-         COALESCE((SELECT checkpoint FROM restores WHERE id = a.operation), (${CURRENT_BASELINE('id', 'a', '?1')})) AS baseline,
-         (SELECT COALESCE(SUM(size), 0) FROM account_files f WHERE f.incarnation = a.incarnation AND stored = 1) AS pictureBytes
+         COALESCE((SELECT checkpoint FROM restores WHERE id = a.operation), (${CURRENT_BASELINE('id', 'a', '?1')})) AS baseline
        FROM accounts a ORDER BY incarnation`,
       now,
     );
@@ -107,13 +116,16 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
       `SELECT id, incarnation, phase, verified, checkpoint, target FROM restores WHERE phase != 'done' OR verified = 0 ORDER BY id`,
     ).map((operation) => ({ ...operation, verified: Boolean(operation.verified) }));
     const sources = new Map<string, string[]>();
-    for (const { incarnation, id } of all<{ incarnation: string; id: string }>('SELECT incarnation, id FROM account_files WHERE stored = 1 ORDER BY id, incarnation')) {
+    const pictures = generationPictures(db, snapshots.map(({ id }) => id));
+    const sizes = new Map<string, number>();
+    for (const { incarnation, id, size } of pictures) {
+      sizes.set(incarnation, (sizes.get(incarnation) ?? 0) + size);
       sources.set(id, [...(sources.get(id) ?? []), incarnation]);
     }
     const migrations = all<{ name: string }>('SELECT name FROM migrations ORDER BY rowid').map(({ name }) => name);
     return {
       named: {
-        accounts,
+        accounts: accounts.map((account) => ({ ...account, pictureBytes: sizes.get(account.incarnation) ?? 0 })),
         snapshots: snapshots.map((snapshot) => ({ ...snapshot, path: snapshotKey(snapshot.incarnation, snapshot.id) })),
         operations,
         pictures: [...sources.keys()],
@@ -147,6 +159,11 @@ export async function captureGeneration(
     // An older baseline would restore the account as it was before its last rewind.
     const { failed } = await takeBaselines(env, await staleBaselines(env, clock(), 0));
     if (failed.length) throw new Error(`generation: ${failed.length} accounts could not be brought up to their last rewind`);
+    // A generation taken after a release can still install an older baseline or pinned target. Its R2 pictures must
+    // outlive this generation, not merely the release that first queued them.
+    await env.db.prepare(`UPDATE file_removals SET due_at = MAX(due_at, ?1) WHERE EXISTS (
+      SELECT 1 FROM snapshots s WHERE s.incarnation = file_removals.incarnation AND s.taken_at <= file_removals.released_at)`)
+      .bind(clock() + RETENTION_MS).run();
     await env.db.snapshot(plain);
     const { named, sources } = readNamed(plain, clock());
     const dirs = new Set<string>([pool]);

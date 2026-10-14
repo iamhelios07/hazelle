@@ -8,8 +8,11 @@ import { purgeNow } from './removal';
 import { openVersion, publishShare, writeShared } from './share';
 import { agreeToShare, readShareLink, readShareState, shareLink } from './share-link';
 import { testServer } from './testing';
+import type { Files } from './files';
 
 const server = testServer();
+// The sweep a removal for good starts is runtime/files' to test.
+const unswept = { sweep: async () => {} } as unknown as Files;
 vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 
 const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
@@ -67,7 +70,7 @@ describe('a share link', () => {
     expect(await readShareState(share)).toMatchObject({ ok: true, data: { state: 'live' } });
 
     holdAccount(accountId);
-    expect(await purgeNow(store, 'character', id, () => {})).toEqual({ ok: true, data: null });
+    expect(await purgeNow(store, unswept, 'character', id, () => {})).toEqual({ ok: true, data: null });
     holdAccount(null);
     expect(await readShareState(share)).toEqual({ ok: true, data: { state: 'gone' } });
     expect(store.list('share')).toHaveLength(0);

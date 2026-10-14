@@ -348,6 +348,9 @@ export type StoreStub = { [M in keyof StoreRules]: StoreRules[M] } & { restart(i
 export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.
   getByName(incarnation: string): StoreStub;
+  // File claims and the object writes or sweep they protect share this account's queue. The callback must use the
+  // supplied rules, never a queued stub, and must not wait on another call of the same account.
+  withStore<T>(incarnation: string, work: (store: StoreRules) => Promise<T>): Promise<T | Unavailable>;
   prepare(incarnation: string, timeline: string): Promise<void>;
   // A session the snapshot had to open is closed after capture, so archiving holds no otherwise idle handles. refused: the
   // account takes no baseline now (TAKES_BASELINE). unchanged: its file still holds the revision its current baseline
@@ -443,6 +446,14 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
 
   return {
     getByName,
+    withStore: (incarnation, work) => enqueue(entry(incarnation), async () => {
+      try {
+        return await work((await session(incarnation, entry(incarnation))).rules);
+      } catch (error) {
+        if (error instanceof StoreUnavailable) return { unavailable: true } as const;
+        throw error;
+      }
+    }),
     prepare: async (incarnation, timeline) => prepareAccountFile(dataDir, incarnation, timeline),
     snapshot: async (incarnation, kind) => {
       const held = entry(incarnation);

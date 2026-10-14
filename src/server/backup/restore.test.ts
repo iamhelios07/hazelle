@@ -20,7 +20,7 @@ import { proof, sessionCookie, signupBody, testApp } from '../testing';
 import app from '../worker';
 import { alerts } from '../alerts';
 import { backups } from './backups';
-import { generationsDir, listGenerations, MANIFEST, POOL, readManifest } from './generation';
+import { captureGeneration, generationsDir, listGenerations, MANIFEST, POOL, readManifest } from './generation';
 import { restoreGeneration } from './restore';
 import { DAY_MS, dayStart } from './snapshots';
 
@@ -104,6 +104,68 @@ async function leftAt(username: string, phase: RestorePhase) {
 
 const bytesOf = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
 const idOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+it.each(['disk', 'r2'] as const)('preserves a %s generation’s released pictures when its baseline still names them, and reclaims them on disaster restore', async (kind) => {
+  const disk = t.env.files;
+  const s3 = kind === 'r2' ? await fakeS3() : null;
+  if (s3) t.env.files = r2Bucket(s3.config);
+  t.restartProcess();
+  try {
+    const now = Date.now();
+    const user = await signedUp('released');
+    const bytes = bytesOf('released picture');
+    const id = idOf(bytes);
+    const key = `files/${user.incarnation}/${id}`;
+    expect((await t.put(`files/${id}`, bytes, user.cookie)).status).toBe(204);
+    t.clock.now = () => now - HOUR_MS;
+    const content = JSON.stringify({ file: { id, key: 'sealed-key' } });
+    const write = (body: string | null, baseRev: number | null) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: X, kind: 'asset', parent: null, body, baseRev }], null);
+    await write(content, null);
+    await t.stores.snapshot(user.incarnation, 'baseline');
+    await write(null, 1);
+    t.clock.now = () => Date.now();
+    await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
+    const inventory = await (await t.get('files', user.cookie)).json() as { timeline: string; rev: number };
+    expect(await (await t.post('files/sweep', { ...inventory, unused: [id], named: [] }, user.cookie)).json()).toEqual({ released: 1, taken: 0 });
+
+    const capturedAt = now + 2 * DAY_MS;
+    const captured = await captureGeneration(t.env, t.dir, capturedAt, () => capturedAt, async (work) => ({ value: await work(), gateMs: 0 }));
+    expect(captured.manifest.pictures).toEqual([id]);
+    expect(captured.manifest.accounts[0]!.pictureBytes).toBe(bytes.length);
+    expect(await t.env.db.prepare('SELECT due_at FROM file_removals').first('due_at')).toBe(capturedAt + RETENTION_MS);
+    const generation = join(generationsDir(t.dir), captured.id);
+    const destination = emptyDir();
+    const files = s3 ? t.env.files : diskBucket(destination);
+    if (s3) {
+      s3.objects.delete(key);
+      await expect(restoreGeneration(generation, destination, 'migrations', files, true)).rejects.toThrow(/missing/);
+      expect(readdirSync(destination)).toEqual([]);
+      await files.put(key, bytes);
+    }
+    expect(await restoreGeneration(generation, destination, 'migrations', files, Boolean(s3))).toMatchObject({ accounts: 1, pictures: 1 });
+    const raw = openDatabase(join(destination, 'service.sqlite'));
+    const objects = new DatabaseSync(join(destination, 'accounts', `${user.incarnation}.sqlite`), { readOnly: true });
+    try {
+      expect(objects.prepare('SELECT body FROM objects WHERE deleted_at IS NULL').all()).toEqual([{ body: content }]);
+      expect(raw.prepare('SELECT id, stored FROM account_files').all()).toEqual([{ id, stored: 1 }]);
+      expect(raw.prepare('SELECT id FROM file_removals').all()).toEqual([]);
+      expect(raw.prepare('SELECT file_bytes FROM accounts').get()).toEqual({ file_bytes: bytes.length });
+      expect(new Uint8Array(await new Response((await files.get(key))!).arrayBuffer())).toEqual(bytes);
+    } finally {
+      objects.close();
+      raw.close();
+    }
+    if (s3) {
+      await t.env.db.prepare('DELETE FROM snapshots').run();
+      await t.reconcile(now + RETENTION_MS + 1);
+      expect(s3.objects.has(key)).toBe(true);
+    }
+  } finally {
+    t.env.files = disk;
+    t.restartProcess();
+    await s3?.close();
+  }
+});
 
 it.each(['begun', 'fenced', 'checkpointed', 'done', 'cancelled', 'failed'] as const)('finishes a generation’s unverified %s operation through the live lifecycle', async (phase) => {
   const user = await leftAt(`at-${phase}`, phase === 'cancelled' ? 'targeted' : phase === 'failed' ? 'checkpointed' : phase);

@@ -375,4 +375,95 @@ describe('files', () => {
       await s3.close();
     }
   });
+
+  describe('the sweep', () => {
+    const timeline = (incarnation: string) => t.env.db.prepare('SELECT timeline FROM accounts WHERE incarnation = ?').bind(incarnation).first<string>('timeline');
+    const settle = (incarnation: string) => t.env.db.prepare('UPDATE account_files SET claimed_at = 0 WHERE incarnation = ?').bind(incarnation).run();
+    const sweep = async (cookie: string, body: Record<string, unknown>) => {
+      const { rev } = await (await t.get('files', cookie)).json() as { rev: number };
+      return t.post('files/sweep', { rev, ...body }, cookie);
+    };
+    const held = async (cookie: string) => ((await (await t.get('files', cookie)).json()) as { ids: string[] }).ids;
+    const removals = (incarnation: string) => t.env.db.prepare('SELECT id, removing FROM file_removals WHERE incarnation = ?').bind(incarnation).all().then(({ results }) => results);
+
+    it('releases a settled file nothing names, but not one asked about within the hour, one a live link names, or any on another timeline', async () => {
+      const jin = await signup();
+      const bodies = [new Uint8Array([1]), new Uint8Array([2, 2]), new Uint8Array([3, 3, 3])];
+      const [loose, asked, linked] = await Promise.all(bodies.map(idOf));
+      for (const body of bodies) await put(await idOf(body), body, jin.cookie);
+      await settle(jin.incarnation);
+      expect(await missing([asked!], jin.cookie)).toEqual([]);
+      await t.env.db.batch([
+        t.env.db.prepare("INSERT INTO shares (id, incarnation, created_at) VALUES ('link', ?, 0)").bind(jin.incarnation),
+        t.env.db.prepare("INSERT INTO share_versions (share, version, manifest, created_at) VALUES ('link', 1, ?, 0)").bind(linked!),
+      ]);
+      const unused = [loose, asked, linked];
+      expect(await (await sweep(jin.cookie, { timeline: 'other', unused, named: [] })).json()).toEqual({ error: 'cache-reset' });
+      const swept = await sweep(jin.cookie, { timeline: await timeline(jin.incarnation), unused, named: [] });
+      expect(await swept.json()).toEqual({ released: 1, taken: 0 });
+      expect(swept.headers.get('x-account-file-bytes')).toBe('5');
+      expect(await held(jin.cookie)).toEqual([asked, linked].sort());
+      expect((await t.get(`files/${loose}`, jin.cookie)).status).toBe(404);
+      expect(await stored(jin.incarnation, loose!)).toBeDefined();
+    });
+
+    it('takes a released file back when an object names it or it is uploaded again, and holds the upload while its bytes go', async () => {
+      const jin = await signup();
+      const body = new Uint8Array([4, 5]);
+      const id = await idOf(body);
+      await put(id, body, jin.cookie);
+      const release = async () => {
+        await settle(jin.incarnation);
+        return sweep(jin.cookie, { timeline: await timeline(jin.incarnation), unused: [id], named: [] });
+      };
+      await release();
+      expect(await sum(jin.incarnation)).toBe(0);
+      expect(await (await sweep(jin.cookie, { timeline: await timeline(jin.incarnation), unused: [], named: [id] })).json()).toEqual({ released: 0, taken: 1 });
+      expect([await sum(jin.incarnation), await removals(jin.incarnation)]).toEqual([2, []]);
+
+      await release();
+      expect(await missing([id], jin.cookie)).toEqual([id]);
+      await t.env.db.prepare('UPDATE file_removals SET removing = 1').run();
+      expect((await put(id, body, jin.cookie)).status).toBe(503);
+      await t.env.db.prepare('UPDATE file_removals SET removing = 0').run();
+      await withFilesPut(async () => { throw new Error('a durable released copy must not be uploaded again'); }, async () => {
+        expect((await put(id, body, jin.cookie)).status).toBe(204);
+      });
+      expect([await sum(jin.incarnation), await removals(jin.incarnation), await held(jin.cookie)]).toEqual([2, [], [id]]);
+    });
+
+    it('keeps a released file recoverable when its reupload cannot reserve room', async () => {
+      const jin = await signup();
+      const body = new Uint8Array([7, 8, 9]);
+      const id = await idOf(body);
+      await put(id, body, jin.cookie);
+      await settle(jin.incarnation);
+      const line = await timeline(jin.incarnation);
+      await sweep(jin.cookie, { timeline: line, unused: [id], named: [] });
+      await t.env.db.prepare('UPDATE service SET account_file_bytes_cap = 0').run();
+      expect((await put(id, body, jin.cookie)).status).toBe(413);
+      expect(await removals(jin.incarnation)).toEqual([{ id, removing: 0 }]);
+      expect(await sum(jin.incarnation)).toBe(0);
+      expect(await (await sweep(jin.cookie, { timeline: line, unused: [], named: [id] })).json()).toEqual({ released: 0, taken: 1 });
+      expect([await sum(jin.incarnation), await stored(jin.incarnation, id)]).toEqual([3, body.buffer]);
+    });
+
+    it('does not release an unfinished reservation or turn it into a stored file', async () => {
+      const jin = await signup();
+      const body = new Uint8Array([8, 9]);
+      const id = await idOf(body);
+      await withFilesPut(async () => { throw new Error('storage unavailable'); }, async () => {
+        expect((await put(id, body, jin.cookie)).status).toBe(500);
+      });
+      await settle(jin.incarnation);
+      expect(await (await sweep(jin.cookie, { timeline: await timeline(jin.incarnation), unused: [id], named: [] })).json()).toEqual({ released: 0, taken: 0 });
+      expect(await rows(jin.incarnation)).toEqual([{ size: 2, stored: 0 }]);
+      expect(await removals(jin.incarnation)).toEqual([]);
+      expect(await missing([id], jin.cookie)).toEqual([id]);
+      expect((await put(id, body, jin.cookie)).status).toBe(204);
+      expect(await stored(jin.incarnation, id)).toEqual(body.buffer);
+      expect(await sum(jin.incarnation)).toBe(2);
+    });
+  });
+
 });

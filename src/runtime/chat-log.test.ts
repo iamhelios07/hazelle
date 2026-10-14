@@ -133,7 +133,7 @@ describe('a chat not saved yet', () => {
 
 describe('branchChat', () => {
   it("carries what the bot's Lua wrote, the texts it staged, the tools' data, badges on the branch's messages, the chat's inlays and its cache print", async () => {
-    const { store } = await server.account();
+    const { store, files } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
     const chat: Chat = { title: null, character: null, models: {} };
@@ -151,7 +151,9 @@ describe('branchChat', () => {
     const narration = folded()[1]!;
     await saveToolChat(store, module, source, [['index', { node: said }]], [{ message: said, version: shown(folded()[0]!).id, text: '요약됨' }, { message: narration.id, version: shown(narration).id, text: '마지막' }]);
 
-    const inlay = { name: 'risu-id', type: 'image/png', size: 2, file: { id: 'file', key: 'key' } };
+    const saved = await files.save([new Uint8Array(2)]);
+    if (!saved.ok) throw new Error(saved.error);
+    const inlay = { name: 'risu-id', type: 'image/png', size: 2, file: saved.data[0]! };
     await store.create('inlay', inlay, { parent: source });
     const print = { call: 'r', connection: 'c', account: 'a', model: 'm', messages: [{ role: 'user' as const, hash: 'h', tokens: 1, from: { kind: 'block' as const, name: null, slot: null } }] };
     await store.create('cacheprint', print, { id: cachePrintId(source), parent: source });

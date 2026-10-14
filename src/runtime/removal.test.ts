@@ -9,9 +9,11 @@ const server = testServer();
 
 describe('planRemoval', () => {
   it('takes what a character owns first (its 삽화 profiles too), its chats after their entries, and the character last', async () => {
-    const { store } = await server.account();
+    const { store, files } = await server.account();
+    const saved = await files.save([new Uint8Array(8)]);
+    if (!saved.ok) throw new Error(saved.error);
     const character = (name: string) => ({ card: blankCard(name), folder: null, loreFolders: [] });
-    const avatar = { type: 'image/png', size: 8, thumb: 'data:thumb', file: { id: 'f'.repeat(64), key: 'k' } };
+    const avatar = { type: 'image/png', size: 8, thumb: 'data:thumb', file: saved.data[0]! };
     const added = await addCharacter(store, character('루나'), { avatar, assets: [], lore: [{ name: '등대' } as Lore, { name: '항구' } as Lore], likeness: { portraits: [], at: 1, receipt: null } }, () => {});
     const other = await addCharacter(store, character('카엘'), { avatar: null, assets: [], lore: [], likeness: null }, () => {});
     const id = added.ok ? added.data : '';

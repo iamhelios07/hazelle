@@ -85,8 +85,8 @@ async function savedAvatar(files: Files, picture: Picture): Promise<ApiResult<Av
   return file ? { ok: true, data: { type: picture.type, size: picture.bytes.length, thumb, file } } : { ok: false, error: 'picture-refused' };
 }
 
-// The old file stays stored: nothing removes a file while its account lives, since a copy (copyCharacter) or a backup
-// may still name it.
+// The old file stays held: a copy (copyCharacter) may still name it, so only the sweep after a removal for good weighs
+// it (runtime/files).
 export async function setAvatar(store: ObjectStore, files: Files, id: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<Stored<'avatar'>>> {
   if (!store.get('character', id)) return { ok: false, error: 'gone' };
   const type = imageType(bytes);
@@ -110,7 +110,7 @@ export async function addAssets(store: ObjectStore, files: Files, owner: string,
   return { ok: true, data: { added: kept.length, skipped } };
 }
 
-// The name stays, so what the bot's text shows by it becomes the new picture. The old file stays stored, as for setAvatar.
+// The name stays, so what the bot's text shows by it becomes the new picture. The old file stays held, as for setAvatar.
 export async function replaceAsset(store: ObjectStore, files: Files, id: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<Stored<'asset'>>> {
   const type = imageType(bytes);
   if (!type) return { ok: false, error: 'picture-unreadable' };
@@ -121,7 +121,7 @@ export async function replaceAsset(store: ObjectStore, files: Files, id: string,
 }
 
 export const renameAsset = (store: ObjectStore, id: string, name: string) => store.update('asset', id, (current) => ({ ...current, name }));
-// The files stay stored, as for setAvatar. removed: what restoreAssets brings back.
+// The files stay held, as for setAvatar. removed: what restoreAssets brings back.
 export async function removeAssets(store: ObjectStore, ids: readonly string[]): Promise<ApiResult<Stored<'asset'>[]>> {
   const removed = ids.flatMap((id) => store.get('asset', id) ?? []);
   const written = await store.batch(removed.map(({ id }): Write => ({ type: 'remove', id })));

@@ -396,6 +396,42 @@ describe('a restore', () => {
     for (const point of points) expect((await t.stores.snapshotAt(user.incarnation, point.at))?.takenAt).toBe(point.takenAt);
   });
 
+  it('takes back the pictures released since the snapshot it lands on, with their bytes counted again, and leaves older releases', async () => {
+    const seed = await seeded();
+    const now = Date.now();
+    const [before, since] = ['e'.repeat(64), 'f'.repeat(64)];
+    await t.env.db
+      .prepare('INSERT INTO file_removals (incarnation, id, size, created_at, released_at, due_at) VALUES (?1, ?2, 3, 0, ?3, ?4), (?1, ?5, 5, 0, ?6, ?4)')
+      .bind(seed.incarnation, before, now - 2 * HOUR_MS, now + 24 * HOUR_MS, since, now - HOUR_MS / 4)
+      .run();
+    expect(await runRestore(t.env, await begin(seed))).toMatchObject({ phase: 'done', verified: true, error: null });
+    const rows = (sql: string) => t.env.db.prepare(sql).bind(seed.incarnation).all().then(({ results }) => results);
+    expect(await rows('SELECT id, size, stored FROM account_files WHERE incarnation = ?')).toEqual([{ id: since, size: 5, stored: 1 }]);
+    expect(await rows('SELECT id FROM file_removals WHERE incarnation = ?')).toEqual([{ id: before }]);
+    expect(await rows('SELECT file_bytes FROM accounts WHERE incarnation = ?')).toEqual([{ file_bytes: 5 }]);
+  });
+
+  it('leaves a failed upload retryable through a sweep and rewind instead of claiming its absent bytes are stored', async () => {
+    const seed = await seeded();
+    const body = new Uint8Array([8, 8, 8]);
+    const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body)));
+    const files = t.env.files;
+    t.env.files = { ...files, put: async () => { throw new Error('upload interrupted'); } };
+    try {
+      expect((await t.put(`files/${id}`, body, seed.cookie)).status).toBe(500);
+    } finally {
+      t.env.files = files;
+    }
+    await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
+    const inventory = await (await t.get('files', seed.cookie)).json() as { timeline: string; rev: number };
+    expect(await (await t.post('files/sweep', { ...inventory, unused: [id], named: [] }, seed.cookie)).json()).toEqual({ released: 0, taken: 0 });
+    expect(await runRestore(t.env, await begin(seed))).toMatchObject({ phase: 'done', verified: true });
+    expect(await (await t.post('files/missing', { ids: [id] }, seed.cookie)).json()).toMatchObject({ missing: [id] });
+    expect((await t.put(`files/${id}`, body, seed.cookie)).status).toBe(204);
+    expect(new Uint8Array(await (await t.get(`files/${id}`, seed.cookie)).arrayBuffer())).toEqual(body);
+    expect(await t.env.db.prepare('SELECT file_bytes FROM accounts WHERE incarnation = ?').bind(seed.incarnation).first('file_bytes')).toBe(3);
+  });
+
   it('lets an account rewind itself and undo it, three times a day, and touch only its own restores', async () => {
     const seed = await seeded();
     const other = await seeded();
@@ -550,7 +586,7 @@ describe('a restore', () => {
   it('lets no write or answer of an old timeline back in across a rewind, revisions after it and its undo', async () => {
     const seed = await seeded();
     const write = (timeline: string, id: string, body: string, baseRev: number | null) =>
-      t.post('objects/batch', { timeline, writes: [{ id, kind: 'chat', parent: null, body, baseRev }] }, seed.cookie);
+      t.post('objects/batch', { timeline, files: [], writes: [{ id, kind: 'chat', parent: null, body, baseRev }] }, seed.cookie);
     // The offline tab: its write and its feed both name the timeline it last pulled.
     const held = () => write(seed.timeline, A, 'offline edit', 2);
     const heldFeed = () => t.get(`objects?since=0&timeline=${seed.timeline}`, seed.cookie);

@@ -120,7 +120,7 @@ async function ready(request: APIRequestContext, accountId?: string): Promise<Re
 }
 
 async function batch(request: APIRequestContext, account: Ready, writes: Write[]) {
-  return request.post('/api/objects/batch', { headers: headers(account), data: { timeline: account.timeline, writes } });
+  return request.post('/api/objects/batch', { headers: headers(account), data: { timeline: account.timeline, writes, files: [] } });
 }
 
 async function put(request: APIRequestContext, account: Account, body: Buffer) {

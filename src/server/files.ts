@@ -2,14 +2,19 @@ import { Hono, type Context } from 'hono';
 import { FILE_ID, MAX_FILE_IDS } from '../contracts/files';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import { CAP } from './caps';
+import { RETENTION_MS } from './db/account-db';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fileKey } from './files/bucket';
-import { fail, hex, readObject, type AppEnv } from './http';
+import { takeBackFiles } from './files/claims';
+import { fail, hex, readObject, refused, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
 
 // Counts sealed bytes, a few more than the file itself. worker.ts enforces it.
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const BUSY_RETRY_SECONDS = 5;
+// An import asks about a file before it writes the objects naming it (runtime/files), so a file asked about or
+// uploaded within this long is never released.
+const CLAIM_SETTLE_MS = 60 * 60 * 1000;
 
 export function uploadSlots(slots: number, waitMs: number) {
   let free = slots;
@@ -43,8 +48,8 @@ export function uploadSlots(slots: number, waitMs: number) {
 const uploads = uploadSlots(8, 30_000);
 
 // Each account holds its own copy of a file under its incarnation, so nothing is shared between accounts and removing
-// one account's pictures races no one else. Nothing removes a file while its account lives: an import asks /missing
-// before the objects naming the file are written (runtime/files), and a restore may bring back an object naming it.
+// one account's pictures races no one else. While its account lives, a file goes only through its sweep (below), whose
+// bytes wait out every backup and rewind that could still name it (migration 0010_file_removals).
 // An upload whose account was deleted meanwhile names the old incarnation: its statements match no row, and the bytes
 // it leaves under the old prefix are the hourly reconciliation's (reconcile.ts).
 export const files = new Hono<AppEnv>();
@@ -61,6 +66,7 @@ files.post('/missing', async (c) => {
   const ids = input?.ids;
   if (!Array.isArray(ids) || ids.length > MAX_FILE_IDS || !ids.every((id) => typeof id === 'string' && FILE_ID.test(id))) return fail(c, 400, 'bad-input');
   const { incarnation } = c.get('account');
+  await c.env.db.prepare('UPDATE account_files SET claimed_at = ?3 WHERE incarnation = ?1 AND id IN (SELECT value FROM json_each(?2))').bind(incarnation, JSON.stringify(ids), Date.now()).run();
   const { results } = await c.env.db.prepare(
     `SELECT asked.value AS id FROM json_each(?2) AS asked
      WHERE NOT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = asked.value AND stored = 1) OR value IN (SELECT id FROM file_blocks)`,
@@ -100,46 +106,119 @@ const ALIVE = "EXISTS (SELECT 1 FROM accounts WHERE incarnation = ?1 AND state !
 async function publish(c: Context<AppEnv>, id: string) {
   const db = c.env.db;
   const { incarnation } = c.get('account');
-  const [held, body] = await Promise.all([
+  const [blocked, body] = await Promise.all([
     db
-      .prepare('SELECT EXISTS (SELECT 1 FROM file_blocks WHERE id = ?2) AS blocked, (SELECT stored FROM account_files WHERE incarnation = ?1 AND id = ?2) AS stored')
-      .bind(incarnation, id)
-      .first<{ blocked: number; stored: number | null }>(),
+      .prepare('SELECT EXISTS (SELECT 1 FROM file_blocks WHERE id = ?) AS blocked')
+      .bind(id)
+      .first<number>('blocked'),
     c.req.arrayBuffer(),
   ]);
-  if (held!.blocked) return fail(c, 403, 'file-blocked');
+  if (blocked) return fail(c, 403, 'file-blocked');
   if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body))) !== id) return fail(c, 400, 'bad-input');
   // Read once the body is in, not beside it: the account may have begun leaving or be gone since the session check.
   if (!(await db.prepare(`SELECT ${ALIVE} AS alive`).bind(incarnation).first<number>('alive'))) return outlived(c);
-  if (held!.stored) return c.body(null, 204);
-  const [, , reservation] = await db.batch<{ reserved: number; alive: number }>([
+  if (await db.prepare('UPDATE account_files SET claimed_at = ?3 WHERE incarnation = ?1 AND id = ?2 AND stored = 1 RETURNING id').bind(incarnation, id, Date.now()).first()) return c.body(null, 204);
+  // A released copy is taken back unless its bytes are being deleted, which the reservation then waits out.
+  const [, , , reservation] = await db.batch<{ reserved: number; stored: number; alive: number; removing: number }>([
     db
       .prepare(
-        `INSERT INTO account_files (incarnation, id, size, created_at)
-         SELECT incarnation, ?2, ?3, ?4 FROM accounts WHERE incarnation = ?1 AND COALESCE(file_bytes + ?3 <= ${CAP.fileBytes}, 1)
+        `INSERT INTO account_files (incarnation, id, size, stored, created_at, claimed_at)
+         SELECT incarnation, ?2, ?3, EXISTS (SELECT 1 FROM file_removals WHERE incarnation = ?1 AND id = ?2), ?4, ?4
+         FROM accounts WHERE incarnation = ?1 AND COALESCE(file_bytes + ?3 <= ${CAP.fileBytes}, 1)
+           AND NOT EXISTS (SELECT 1 FROM file_removals WHERE incarnation = ?1 AND id = ?2 AND removing = 1)
          ON CONFLICT DO NOTHING`,
       )
       .bind(incarnation, id, body.byteLength, Date.now()),
     // The batch is one transaction: only an actually inserted reservation charges bytes. Existing reservations
     // remain retryable even after the cap is lowered. Deletion removes both the account's counter and its file rows.
     db.prepare('UPDATE accounts SET file_bytes = file_bytes + ?2 WHERE incarnation = ?1 AND changes() = 1').bind(incarnation, body.byteLength),
+    db.prepare('DELETE FROM file_removals WHERE incarnation = ?1 AND id = ?2 AND EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = ?2)').bind(incarnation, id),
     db
-      .prepare(`SELECT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = ?2) AS reserved, ${ALIVE} AS alive`)
+      .prepare(`SELECT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = ?2) AS reserved,
+        (SELECT stored FROM account_files WHERE incarnation = ?1 AND id = ?2) AS stored,
+        ${ALIVE} AS alive, EXISTS (SELECT 1 FROM file_removals WHERE incarnation = ?1 AND id = ?2 AND removing = 1) AS removing`)
       .bind(incarnation, id),
   ]);
-  const { reserved, alive } = reservation!.results[0]!;
+  const { reserved, stored, alive, removing } = reservation!.results[0]!;
   if (!alive) return outlived(c);
+  if (removing) return fail(c, 503, 'busy', { retryAfter: BUSY_RETRY_SECONDS });
   if (!reserved) return fail(c, 413, 'files-full');
-  await c.env.files.put(fileKey(incarnation, id), body);
+  // A reclaimed copy is already durable. Never demote it to a reservation a generation would omit.
+  if (!stored) await c.env.files.put(fileKey(incarnation, id), body);
   const fileBytes = await db
     .prepare(`UPDATE account_files SET stored = 1 WHERE incarnation = ?1 AND id = ?2 RETURNING (SELECT file_bytes FROM accounts WHERE incarnation = ?1) AS fileBytes`)
     .bind(incarnation, id)
     .first<number>('fileBytes');
-  // Only the account's deletion removes its rows, so a finalize that matches none is a request outliving its account.
+  // Sweeps leave reservations alone, so a finalize that matches none outlived its account.
   if (fileBytes === null) return outlived(c);
   c.header(ACCOUNT_USAGE_HEADERS.fileBytes, String(fileBytes));
   return c.body(null, 204);
 }
+
+// The ids of every file the account holds, stored or only reserved, a page at a time after the last one given: what its
+// sweep weighs against the objects naming files (runtime/files).
+files.get('/', async (c) => {
+  const after = c.req.query('after') ?? '';
+  if (after && !FILE_ID.test(after)) return fail(c, 400, 'bad-input');
+  const { incarnation } = c.get('account');
+  const answer = await c.env.stores.withStore(incarnation, async (store) => {
+    const head = await store.revision(incarnation);
+    if (!('rev' in head)) return refused(c, head);
+    const { results } = await c.env.db.prepare('SELECT id FROM account_files WHERE incarnation = ?1 AND id > ?2 ORDER BY id LIMIT ?3')
+      .bind(incarnation, after, MAX_FILE_IDS + 1)
+      .all<{ id: string }>();
+    return c.json({ ids: results.slice(0, MAX_FILE_IDS).map(({ id }) => id), more: results.length > MAX_FILE_IDS, ...head });
+  });
+  return 'unavailable' in answer ? refused(c, answer) : answer;
+});
+
+// The account's sweep (runtime/files), on the timeline and revision it walked; a changed revision refuses the stale
+// walk. It shares the account queue with object writes and share publication. unused: held ids no object names,
+// released unless claimed within CLAIM_SETTLE_MS or named by a link
+// the account shared while the link is live or has an open report, since the operator reads it then. named: ids objects
+// name that the account does not hold, taken back while their bytes are kept, over the cap if need be, as the objects
+// are already written.
+files.post('/sweep', canWrite, async (c) => {
+  const input = await readObject(c);
+  const { timeline, rev, unused, named } = input ?? {};
+  const ids = (list: unknown): list is string[] => Array.isArray(list) && list.length <= MAX_FILE_IDS && list.every((id) => typeof id === 'string' && FILE_ID.test(id));
+  if (typeof timeline !== 'string' || !Number.isSafeInteger(rev) || (rev as number) < 0 || !ids(unused) || !ids(named) || unused.length + named.length > MAX_FILE_IDS) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const { incarnation } = c.get('account');
+  const result = await c.env.backups.hold(() => c.env.stores.withStore(incarnation, async (store) => {
+    const head = await store.revision(incarnation);
+    if (!('rev' in head)) return refused(c, head);
+    if (head.timeline !== timeline) return fail(c, 409, 'cache-reset');
+    if (head.rev !== rev) return fail(c, 409, 'conflict');
+    const now = Date.now();
+    const current = `EXISTS (SELECT 1 FROM accounts WHERE incarnation = ?1 AND timeline = ?2 AND state = 'active')`;
+    const [, taken, , , , , answer] = await db.batch<{ changed: number; fileBytes: number; current: number }>([
+      ...takeBackFiles(db, incarnation, { ids: named, timeline }, now),
+      db
+        .prepare(
+          `INSERT INTO file_removals (incarnation, id, size, created_at, released_at, due_at)
+           SELECT f.incarnation, f.id, f.size, f.created_at, ?4, ?5 FROM account_files f
+           WHERE f.incarnation = ?1 AND f.stored = 1 AND f.id IN (SELECT value FROM json_each(?3)) AND f.claimed_at <= ?4 - ${CLAIM_SETTLE_MS} AND ${current}
+             AND NOT EXISTS (
+               SELECT 1 FROM shares s WHERE s.incarnation = ?1
+                 AND ((s.cut_at IS NULL AND s.removed_at IS NULL) OR EXISTS (SELECT 1 FROM reports r WHERE r.share = s.id AND r.resolved_at IS NULL))
+                 AND (EXISTS (SELECT 1 FROM share_files WHERE share = s.id AND file = f.id) OR EXISTS (SELECT 1 FROM share_versions WHERE share = s.id AND manifest = f.id)))`,
+        )
+        .bind(incarnation, timeline, JSON.stringify(unused), now, now + RETENTION_MS),
+      // A pair is never in both tables outside this transaction, so what they hold in common is what was just released.
+      db
+        .prepare('UPDATE accounts SET file_bytes = file_bytes - (SELECT COALESCE(SUM(f.size), 0) FROM account_files f JOIN file_removals r USING (incarnation, id) WHERE f.incarnation = ?1) WHERE incarnation = ?1')
+        .bind(incarnation),
+      db.prepare('DELETE FROM account_files WHERE incarnation = ?1 AND id IN (SELECT id FROM file_removals WHERE incarnation = ?1)').bind(incarnation),
+      db.prepare("SELECT changes() AS changed, file_bytes AS fileBytes, timeline = ?2 AND state = 'active' AS current FROM accounts WHERE incarnation = ?1").bind(incarnation, timeline),
+    ]);
+    const { changed: released, fileBytes, current: still } = answer!.results[0]!;
+    if (!still) return fail(c, 409, 'cache-reset');
+    c.header(ACCOUNT_USAGE_HEADERS.fileBytes, String(fileBytes));
+    return c.json({ released, taken: taken!.meta.changes });
+  }));
+  return 'unavailable' in result ? refused(c, result) : result;
+});
 
 // The id is the content, so the answer never changes and the browser may keep it. A block therefore stops only
 // browsers that have not read the file yet.

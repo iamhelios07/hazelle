@@ -3,6 +3,7 @@ import type { Stored, Values } from '../model/kinds';
 import { daysLeft, REMOVABLE, type Mark, type Removable } from '../model/library';
 import { KINDS, parentKinds, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
+import type { Files } from './files';
 import { SCOPED } from './object-cache';
 import { cutShare } from './share-link';
 import type { ObjectRow, ObjectStore, Pin } from './store';
@@ -11,8 +12,8 @@ const KIND_NAMES = Object.keys(KINDS) as Kind[];
 
 // The ids of everything that goes when root is removed for good, as rounds to run one after another; the removals
 // in one round may run together. The invariant: an object is removed only after everything it owns, so a removal
-// that fails midway leaves the owner in place and can be tried again. Stored files stay: other objects of
-// the account may name the same one (runtime/files). pin: the removal's, so the plan and the removal are of one
+// that fails midway leaves the owner in place and can be tried again. Stored files stay here: other objects of the
+// account may name the same one, so the sweep that follows weighs them (runtime/files). pin: the removal's, so the plan and the removal are of one
 // timeline.
 export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }, pin: Pin): Promise<ApiResult<ObjectRow[][]>> {
   const pulled = await store.pull();
@@ -106,17 +107,22 @@ async function purge(store: ObjectStore, kind: Removable, id: string, due: (valu
   return removeOwned(store, { kind, id }, progress);
 }
 
-export const purgeNow = (store: ObjectStore, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
-  purge(store, kind, id, (value) => value.deleted !== undefined, progress);
+export async function purgeNow(store: ObjectStore, files: Files, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
+  const purged = await purge(store, kind, id, (value) => value.deleted !== undefined, progress);
+  if (purged.ok) void files.sweep();
+  return purged;
+}
 
 // The session runs it when it opens, on whichever device opens first. One that fails is tried again next time. A stop
 // (the vault closing) lets the one under way finish and leaves the rest for next time.
-export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
+export async function purgeExpired(store: ObjectStore, files: Files, now: number, signal: AbortSignal): Promise<void> {
   const due = (value: Mark) => value.deleted !== undefined && daysLeft(value, now) <= 0;
+  let purged = false;
   for (const kind of REMOVABLE) {
     for (const { id, value } of store.list(kind)) {
-      if (signal.aborted) return;
-      if (value.purging || due(value)) await purge(store, kind, id, due, () => {});
+      if (signal.aborted) break;
+      if (value.purging || due(value)) purged = (await purge(store, kind, id, due, () => {})).ok || purged;
     }
   }
+  if (purged && !signal.aborted) void files.sweep();
 }

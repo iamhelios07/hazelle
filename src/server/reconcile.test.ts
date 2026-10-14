@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -38,6 +38,51 @@ function place(entries: [string, number][]) {
 }
 
 describe('reconcile', () => {
+  it('keeps a removal marked until its only remover finishes, even when another hourly run arrives', async () => {
+    const db = setup();
+    place([[`files/${LIVE}/${ID}`, OLD]]);
+    await db.prepare('DELETE FROM snapshots').run();
+    await db.prepare('INSERT INTO file_removals (incarnation, id, size, created_at, released_at, due_at) VALUES (?, ?, 1, 0, 1, 2)').bind(LIVE, ID).run();
+    const files = diskBucket(dir);
+    let reached!: () => void;
+    const reachedPromise = new Promise<void>((resolve) => { reached = resolve; });
+    let finish!: () => void;
+    const finishPromise = new Promise<void>((resolve) => { finish = resolve; });
+    let deletes = 0;
+    const slow = { ...files, delete: async (key: string) => {
+      deletes++;
+      reached();
+      await finishPromise;
+      await files.delete(key);
+    } };
+    const first = reconcile(dir, db, slow, NOW);
+    await reachedPromise;
+    const second = reconcile(dir, db, slow, NOW + 3_600_000);
+    expect(await db.prepare('SELECT removing FROM file_removals').first('removing')).toBe(1);
+    finish();
+    expect(await first).toEqual({ removed: [`files/${LIVE}/${ID}`] });
+    expect(await second).toEqual(await first);
+    expect(deletes).toBe(1);
+  });
+
+  it('removes a released picture once it is due and no snapshot of its account predates its release', async () => {
+    const db = setup();
+    const DAY = 24 * 60 * 60 * 1000;
+    const LATER = 'e'.repeat(64);
+    place([[`files/${LIVE}/${ID}`, OLD], [`files/${LIVE}/${LATER}`, OLD]]);
+    const released = NOW - 8 * DAY;
+    await db
+      .prepare('INSERT INTO file_removals (incarnation, id, size, created_at, released_at, due_at) VALUES (?1, ?2, 1, 0, ?3, ?4), (?1, ?5, 1, 0, ?3, ?6)')
+      .bind(LIVE, ID, released, NOW - DAY, LATER, NOW + DAY)
+      .run();
+    const files = diskBucket(dir);
+    expect(await reconcile(dir, db, files, NOW)).toEqual({ removed: [] });
+    await db.prepare('UPDATE snapshots SET taken_at = ? WHERE incarnation = ?').bind(released + 1, LIVE).run();
+    expect(await reconcile(dir, db, files, NOW)).toEqual({ removed: [`files/${LIVE}/${ID}`] });
+    expect([existsSync(join(dir, `files/${LIVE}/${ID}`)), existsSync(join(dir, `files/${LIVE}/${LATER}`))]).toEqual([false, true]);
+    expect((await db.prepare('SELECT id FROM file_removals').all()).results).toEqual([{ id: LATER }]);
+  });
+
   it('answers nothing on a fresh install', async () => {
     expect(await reconcile(join(tmpdir(), 'hazelle-none'), setup(), diskBucket(join(tmpdir(), 'hazelle-none')), NOW)).toEqual({ removed: [] });
   });

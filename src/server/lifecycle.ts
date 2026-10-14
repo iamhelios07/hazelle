@@ -5,6 +5,7 @@ import { landing, RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
 import { fail, refused, type AppEnv, type Services } from './http';
 import { removePictures } from './reconcile';
+import { takeBackFiles } from './files/claims';
 
 // An account's lifecycle lives on its service row, where a rewind of its store cannot touch it, and its store loads that
 // row when it starts (account-store.ts). Every change is: write the service, restart the store, read back what it
@@ -280,15 +281,18 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       }
       return undefined;
     }
-    case 'rewound':
+    case 'rewound': {
+      // The target's objects may name pictures released since it was taken; their bytes are still kept (reconcile.ts).
       await db.batch([
         db.prepare("UPDATE restores SET phase = 'done', error = NULL, updated_at = ?1, ended_at = ?1 WHERE id = ?2 AND phase = 'rewound'").bind(Date.now(), id),
         db
           .prepare("UPDATE accounts SET state = 'active', timeline = ?, operation = NULL WHERE incarnation = ? AND operation = ? AND state = 'restoring' AND changes() = 1")
           .bind(operation.timeline, incarnation, id),
         terminalLog(db, 'restore-done', operation, null),
+        ...takeBackFiles(db, incarnation, { snapshot: operation.target! }),
       ]);
       return undefined;
+    }
     default: {
       // done, cancelled or failed: the store must be seen loading the account as the service left it, or it would keep refusing
       // as restoring for as long as clients keep it awake.
