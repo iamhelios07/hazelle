@@ -177,8 +177,10 @@
     pointer-events: auto;
   }
 
-  /* On a phone the story's width puts the tools under the centred 맨 아래로 pill, so they stand above it. */
-  @media (max-width: 599px) {
+  /* Where the story's text is narrow, the tools at its end reach under the centred 맨 아래로 pill, so they stand above
+     it: on a phone, and beside a side panel. 560px leaves a gap between the pill (85px) and a reply's tools (203px),
+     which met at 507px (measured 2026-10-15). */
+  @container story (max-width: 560px) {
     .foot {
       bottom: calc(var(--footer-height) + var(--space-12) + var(--control-chip) + var(--space-8));
     }

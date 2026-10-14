@@ -129,7 +129,9 @@
   scroll-padding-top: var(--header-height);
 }
 
+/* Named for StoryMessage's foot, which stands above the 맨 아래로 pill where the story's text is narrow. */
 .content {
+  container: story / inline-size;
   max-width: var(--read-width);
   min-height: 100%;
   margin: 0 auto 0 var(--story-lead);
