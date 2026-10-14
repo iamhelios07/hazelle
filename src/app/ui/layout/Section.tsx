@@ -10,10 +10,12 @@ type Props = {
   help?: string;
   action?: ReactNode;
   seek?: boolean;
+  // Its body is one card (Panel).
+  boxed?: boolean;
   children: ReactNode;
 };
 
-export function Section({ title, level = 2, note, help, action, seek = false, children }: Props) {
+export function Section({ title, level = 2, note, help, action, seek = false, boxed = false, children }: Props) {
   const self = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     if (seek) self.current?.scrollIntoView({ block: 'start' });
@@ -21,7 +23,7 @@ export function Section({ title, level = 2, note, help, action, seek = false, ch
   const Heading = level === 2 ? 'h2' : 'h3';
   const noted = note && <span className={styles.note}>{note}</span>;
   return (
-    <section ref={self} className={`${styles.section} ${styles[`level${level}`]}`}>
+    <section ref={self} className={[styles.section, styles[`level${level}`], boxed && styles.boxed].filter(Boolean).join(' ')}>
       <div className={styles.head}>
         <span className={styles.name}>
           <Heading className={styles.title}>{title}</Heading>

@@ -36,6 +36,13 @@
   font-weight: var(--weight-medium);
 }
 
+/* A card's head is as tall as the sm button an action puts by the title, so cards side by side (Columns) start on one
+   line whether or not either has an action. */
+.boxed > .head {
+  min-height: var(--control-chip);
+  align-items: center;
+}
+
 .note {
   composes: note from '../foundation/type.module.css';
 }

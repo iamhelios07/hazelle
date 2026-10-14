@@ -380,7 +380,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동은 Anthropic 계정에 우선 처리 용량이 있으면 그 용량부터 사용해요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
           {systemRow}
           {streamingRow}
-          <RetriesRow value={shown.retries} follows="연결 설정대로" onChange={(retries) => change({ retries })} />
+          <RetriesRow value={shown.retries} follows="연결 설정" onChange={(retries) => change({ retries })} />
         </SettingGroup>
       </Disclosure>
     </Screen>
