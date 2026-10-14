@@ -163,6 +163,20 @@ describe('fold', () => {
     expect(foldTree(entries).map(({ message, follows }) => [message.id, follows])).toEqual([['u1', null], ['early', null]]);
   });
 
+  it('reads a message after the one a follow entry names, even one saved later, and passes over a move that would loop', () => {
+    const entries = [
+      user('u1', 'first'),
+      bot('b1', 'reply'),
+      user('u2', 'second'),
+      entry('i1', { type: 'message', role: 'user', at: 0, text: 'inserted', receipt: null, follows: 'b1' }),
+      entry('f1', { type: 'follow', message: 'u2', follows: 'i1', at: 0 }),
+    ];
+    expect(fold(entries).map(({ id }) => id)).toEqual(['u1', 'b1', 'i1', 'u2']);
+    expect(foldTree(entries).map(({ message, follows }) => [message.id, follows])).toEqual([['u1', null], ['b1', 'u1'], ['i1', 'b1'], ['u2', 'i1']]);
+    const looped = [...entries, entry('f2', { type: 'follow', message: 'i1', follows: 'u2', at: 0 })];
+    expect(fold(looped).map(({ id }) => id)).toEqual(['u1', 'b1', 'i1', 'u2']);
+  });
+
   it('hides a deleted message until it is restored', () => {
     const entries = [user('u1', '안녕'), entry('d1', { type: 'delete', message: 'u1', at: 0 })];
     expect(fold(entries)).toEqual([]);

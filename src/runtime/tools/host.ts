@@ -383,7 +383,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     // A page's write takes its share of the write rate before it is converted (pageWrite).
     if (context.event && (data.length || badges.length)) this.writes.take(frame.entry.module);
     // The sandbox refuses these in an event about the user's own change; a page that posts its own outcome is not trusted to.
-    const story = context.event === 'change' || context.event === 'branch' ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added };
+    const story = context.event === 'change' || context.event === 'branch' ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
     return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, json]) => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...story, tool: { data, badges } };
   }
 

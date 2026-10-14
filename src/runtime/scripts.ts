@@ -166,7 +166,7 @@ export class Scripts {
       const start = await this.dispatch(chat, { lua: scripts, event: { kind: 'start' } }, turn.scope, null);
       if (start.outcome.stop) {
         const last = turn.scope.messages.at(-1);
-        const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: null, vars: { version: last.id, set: start.outcome.writes } }));
+        const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: start.outcome.writes } }));
         if (saved && !saved.ok) this.interactions.note(chat, { kind: 'unsaved', failure: saved });
         return halted;
       }
@@ -419,8 +419,16 @@ export class Scripts {
       return message && (!stale || shown(message).id === reply) ? [{ message, wrote, text }] : [];
     });
     const removed = outcome.removed.flatMap((index) => at(index)?.id ?? []);
-    const adding = (stale ? [] : outcome.added).map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
-    const added = adding.length ? { follows: latest ? shown(latest).id : null, messages: adding } : null;
+    const adding = (stale ? [] : outcome.added).map(({ role, text, before }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text, before }));
+    // Each run of adds ahead of one message (or after the last) continues the message before that place.
+    const runs = new Map<number | null, typeof adding>();
+    for (const item of adding) runs.set(item.before, [...(runs.get(item.before) ?? []), item]);
+    const added = [...runs].flatMap(([before, items]) => {
+      const ahead = before === null ? null : (at(before) ?? null);
+      if (before !== null && !ahead) return [];
+      const previous = ahead ? current[current.indexOf(ahead) - 1] : latest;
+      return [{ follows: previous ? shown(previous).id : null, ahead, messages: items.map(({ role, text }) => ({ role, text })) }];
+    });
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
     if (!saved.ok) this.interactions.note(chat, { kind: 'unsaved', failure: saved }, from);
     // State, as variables are, so a stale reply's lands too.

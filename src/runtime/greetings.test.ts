@@ -59,6 +59,6 @@ it('keeps greeting identity through user and script edits instead of matching th
   } as unknown as ObjectStore;
   await editMessage(store, 'chat', fold(held)[0]!, 'edited', null);
   expect(greetingOf(fold(held))).toEqual({ index: 2 });
-  await appendScripted(store, 'chat', { edits: [{ message: fold(held)[0]!, text: 'scripted', wrote: [] }], removed: [], added: null, vars: null });
+  await appendScripted(store, 'chat', { edits: [{ message: fold(held)[0]!, text: 'scripted', wrote: [] }], removed: [], added: [], vars: null });
   expect(greetingOf(fold(held))).toEqual({ index: 2 });
 });

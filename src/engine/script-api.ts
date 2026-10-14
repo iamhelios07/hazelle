@@ -60,7 +60,8 @@ export type Outcome = {
   writes: [string, string][];
   edits: { index: number; text: string }[];
   removed: number[];
-  added: { role: 'user' | 'char'; text: string }[];
+  // before: the snapshot index of the message it goes ahead of (insertChat); null after the last.
+  added: { role: 'user' | 'char'; text: string; before: number | null }[];
   reload: boolean;
   lore: Omit<Lore, 'folder'>[];
   errors: ScriptError[];

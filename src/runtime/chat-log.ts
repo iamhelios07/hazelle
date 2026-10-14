@@ -337,22 +337,27 @@ export function appendReply(store: ObjectStore, chat: string, { id, message, rep
 export type Scripted = {
   edits: { message: Message; text: string; wrote: Writes }[];
   removed: string[];
-  added: { follows: string | null; messages: { role: 'user' | 'assistant'; text: string }[] } | null;
+  // ahead: the saved message that then continues the run's last (a bot's insertChat); null for a run after the last.
+  added: { follows: string | null; ahead: Message | null; messages: { role: 'user' | 'assistant'; text: string }[] }[];
   vars: { version: string; set: Writes; stays?: true } | null;
 };
 
 // One batch, so a run's changes land together. What Lua writes is already past the input and output scripts.
 export function appendScripted(store: ObjectStore, chat: string, { edits, removed, added, vars }: Scripted): Promise<ApiResult<null>> {
   const at = Date.now();
-  const messages = added?.messages ?? [];
-  const ids = messages.map(() => crypto.randomUUID());
   const entries: [string, Entry][] = [
     ...edits.map(({ message, text, wrote }): [string, Entry] => {
       const current = shown(message);
       return [crypto.randomUUID(), { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, staged: true, ...(wrote.length > 0 && { before: wrote }), ...(current.greeting !== undefined && { greeting: current.greeting }) }];
     }),
     ...removed.map((message): [string, Entry] => [crypto.randomUUID(), { type: 'delete', message, at }]),
-    ...messages.map(({ role, text }, index): [string, Entry] => [ids[index]!, { type: 'message', role, at, text, receipt: null, follows: index === 0 ? added!.follows : ids[index - 1]!, staged: true }]),
+    ...added.flatMap(({ follows, ahead, messages }): [string, Entry][] => {
+      const ids = messages.map(() => crypto.randomUUID());
+      return [
+        ...messages.map(({ role, text }, index): [string, Entry] => [ids[index]!, { type: 'message', role, at, text, receipt: null, follows: index === 0 ? follows : ids[index - 1]!, staged: true }]),
+        ...(ahead && ids.length ? [[crypto.randomUUID(), { type: 'follow', message: ahead.id, follows: ids.at(-1)!, at }] satisfies [string, Entry]] : []),
+      ];
+    }),
     ...(vars && vars.set.length > 0 ? [[crypto.randomUUID(), { type: 'vars', version: vars.version, set: vars.set, at, ...(vars.stays && { stays: true }) }] satisfies [string, Entry]] : []),
   ];
   if (entries.length === 0) return Promise.resolve({ ok: true, data: null });

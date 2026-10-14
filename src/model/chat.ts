@@ -144,6 +144,9 @@ export type Entry =
   // reply runs the bot's Lua again. stays: what a button wrote is the user's own act at that place in the story, so
   // it stays with the message whichever version is shown, and moves to the message before when its own is deleted.
   | { type: 'vars'; version: string; set: Writes; at: number; stays?: true }
+  // The message now continues follows instead: a bot's insertChat puts a new message ahead of one already saved, so
+  // this one names a version saved after it. The latest one stands; one that would loop a line is passed over.
+  | { type: 'follow'; message: string; follows: string; at: number }
   // A model call the bot's Lua made (LLM, axLLM) while version was the last one shown, kept so usage and cost count
   // it. It follows the version as vars does.
   | { type: 'call'; version: string; receipt: Receipt; at: number };
@@ -279,7 +282,8 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
 }
 
 type EntryIndex = { group: string | null; reference?: string; cost?: string; rev: number; pending?: number; at: number };
-type FoldedMessage = { entries: Set<string>; costs: Set<string>; message: Message | null; deleted: boolean; places: Map<string, number>; founded: Order[]; follows: string | null | undefined };
+// moved: the order of the follow entry that set follows; null when the message's own entry did.
+type FoldedMessage = { entries: Set<string>; costs: Set<string>; message: Message | null; deleted: boolean; places: Map<string, number>; founded: Order[]; follows: string | null | undefined; moved: Order | null };
 // slot: the one of from's versions it continues; null for a message saved before follows (Entry).
 type Edge = { group: FoldedMessage; slot: number | null };
 export const entryOrder = (a: { rev: number; pending?: number }, b: { rev: number; pending?: number }) => (a.pending ?? 0) - (b.pending ?? 0) || a.rev - b.rev;
@@ -326,7 +330,7 @@ export class ChatFold {
       if (cost) { this.add(this.costs, cost, id); costs.add(cost); }
       if (group !== null) {
         let held = this.groups.get(group);
-        if (!held) this.groups.set(group, (held = { entries: new Set(), costs: new Set(), message: null, deleted: false, places: new Map(), founded: [], follows: undefined }));
+        if (!held) this.groups.set(group, (held = { entries: new Set(), costs: new Set(), message: null, deleted: false, places: new Map(), founded: [], follows: undefined, moved: null }));
         held.entries.add(id);
         touched.add(group);
       }
@@ -356,7 +360,9 @@ export class ChatFold {
       group.places = folded.places;
       group.founded = folded.founded.get(id) ?? [];
       const head = entries.find((entry) => entry.id === id)?.value;
-      group.follows = head?.type === 'message' ? head.follows : undefined;
+      const moved = entries.filter(({ value }) => value.type === 'follow').sort(entryOrder).at(-1);
+      group.follows = moved ? (moved.value as Extract<Entry, { type: 'follow' }>).follows : head?.type === 'message' ? head.follows : undefined;
+      group.moved = moved ? { rev: moved.rev, pending: moved.pending } : null;
       if (!group.entries.size) this.groups.delete(id);
     }
     const messages: Message[] = [];
@@ -402,26 +408,45 @@ export class ChatFold {
   private walk(every: boolean): { group: FoldedMessage; follows: string | null }[] {
     const ordered = [...this.groups.values()].filter((group) => group.message !== null)
       .sort((a, b) => entryOrder(this.entries.get(a.message!.id)!, this.entries.get(b.message!.id)!));
-    // A message continues only one saved before it, so a follows naming a later or unknown version starts a line of its
-    // own and no line loops.
+    // A message continues only one saved before the entry that named it, so a follows naming a later or unknown
+    // version starts a line of its own. Follow entries can still close a loop (two devices moving at once): the line
+    // is cut at the latest move in it, which then starts its own.
     const owner = new Map<string, FoldedMessage>();
-    const edges = new Map<FoldedMessage, Edge[]>();
-    const roots: FoldedMessage[] = [];
+    for (const group of ordered) for (const id of group.places.keys()) owner.set(id, group);
+    const parents = new Map<FoldedMessage, Edge & { parent: FoldedMessage }>();
     let previous: FoldedMessage | undefined;
     for (const group of ordered) {
       const named = group.follows ? owner.get(group.follows) : undefined;
       const slot = named && named.places.get(group.follows!)!;
-      const saved = named && entryOrder(named.founded[slot!]!, this.entries.get(group.message!.id)!) < 0;
+      const saved = named && entryOrder(named.founded[slot!]!, group.moved ?? this.entries.get(group.message!.id)!) < 0;
       const parent = group.follows === undefined ? previous : saved ? named : undefined;
-      if (!parent) roots.push(group);
-      else {
-        const edge = { group, slot: group.follows ? slot! : null };
-        const held = edges.get(parent);
-        if (held) held.push(edge);
-        else edges.set(parent, [edge]);
-      }
-      for (const id of group.places.keys()) owner.set(id, group);
+      if (parent) parents.set(group, { group, slot: group.follows ? slot! : null, parent });
       previous = group;
+    }
+    const seen = new Map<FoldedMessage, 'path' | 'done'>();
+    for (const start of ordered) {
+      const path: FoldedMessage[] = [];
+      for (let at: FoldedMessage | undefined = start; at && seen.get(at) !== 'done'; at = parents.get(at)?.parent) {
+        if (seen.get(at) === 'path') {
+          const loop = path.slice(path.indexOf(at)).filter((member) => member.moved);
+          parents.delete(loop.sort((a, b) => entryOrder(a.moved!, b.moved!)).at(-1) ?? at);
+          break;
+        }
+        seen.set(at, 'path');
+        path.push(at);
+      }
+      for (const member of path) seen.set(member, 'done');
+    }
+    const edges = new Map<FoldedMessage, Edge[]>();
+    const roots: FoldedMessage[] = [];
+    for (const group of ordered) {
+      const edge = parents.get(group);
+      if (!edge) roots.push(group);
+      else {
+        const held = edges.get(edge.parent);
+        if (held) held.push(edge);
+        else edges.set(edge.parent, [edge]);
+      }
     }
     const out: { group: FoldedMessage; follows: string | null }[] = [];
     const stack: { group: FoldedMessage; follows: string | null }[] = roots.map((group) => ({ group, follows: null })).reverse();

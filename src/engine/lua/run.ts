@@ -26,7 +26,7 @@ const DEAF = Symbol('no listener');
 const TRIGGER_DEPTH = 10;
 
 const UNSUPPORTED = [
-  'setChatRole', 'insertChat', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
+  'setChatRole', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
   'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage',
 ];
 
@@ -122,7 +122,7 @@ export class Lua {
         writes: [...run.written],
         edits: kept.filter((message) => message.data !== message.first).map((message) => ({ index: message.origin!, text: message.data })),
         removed: snapshot.messages.flatMap((_, index) => (origins.has(index) ? [] : [index])),
-        added: run.messages.filter((message) => message.origin === null).map(({ role, data }) => ({ role, text: data })),
+        added: run.messages.flatMap(({ origin, role, data }, at) => origin === null ? [{ role, text: data, before: run.messages.slice(at + 1).find((next) => next.origin !== null)?.origin ?? null }] : []),
         reload: run.reload,
         lore: [...run.lore.values()],
         errors,
@@ -346,6 +346,7 @@ export class Lua {
     act('removeChat', (run, index: number) => void run.messages.splice(index, 1));
     act('cutChat', (run, start: number, end: number) => void (run.messages = run.messages.slice(start, end)));
     act('addChat', (run, role: unknown, value: unknown) => add(run, roleOf(role), text(value)));
+    act('insertChat', (run, index: number, role: unknown, value: unknown) => void run.messages.splice(index, 0, { origin: null, role: roleOf(role), data: text(value), time: Date.now(), first: '' }));
 
     // The messages given take the chat's place. One at the place of a message of its role is that message, edited;
     // any other is new, and a message no longer at its place is removed.

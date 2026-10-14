@@ -117,6 +117,9 @@ export function renderChat(
   variables.record = states;
   const failures = { input: new Map<number, Runaway>(), display: new Map<number, Runaway>() };
   const first = scope.greeting === null ? 0 : 1;
+  // Once a reply stands, the greeting's buttons write to the last message (runtime/scripts onLast), so the greeting
+  // is read again below with the chat's current variables, as Risu reads it (ruled 2026-10-14).
+  const later = first === 1 && scope.messages.length > 1;
   const missed: Missed[] = [];
   const wrote: [string, string][][] = [];
   const drawn: number[][] = [];
@@ -150,6 +153,7 @@ export function renderChat(
     variables.log = null;
     for (const [name, value] of after) variables.set(name, value);
     past.push(unescapeCbs(replayed));
+    if (greeting && later) { drawn.push([]); boxes.push([]); return replayed; }
     let edited = replayed;
     if (lua) {
       // A pass is made again when its message's place or the state as of it changes, and for the last LATEST
@@ -173,7 +177,27 @@ export function renderChat(
   });
   variables.record = null;
   for (const [name, value] of scope.pending ?? []) variables.set(name, value);
-  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, unfound, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, states.at(index), take) : null, failures };
+  if (later) {
+    // Its own writes stood in order above; this reading's are dropped.
+    const { id, text } = scope.messages[0]!;
+    const replayed = guarded(0, () => evaluate(text, context({ message: 0 }, new Map(variables))), text);
+    let edited = replayed;
+    if (lua) {
+      const stamp = `-1//${variables.stamp}`;
+      const held = lua(id, replayed, stamp);
+      if (!held?.fresh) {
+        missed.push({ index: -1, version: id, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });
+        variables.changed!.clear();
+      }
+      edited = held?.text ?? '';
+    }
+    const shown = renderStage(stage, scripts, context, 0, edited, variables, take);
+    if (shown.stopped) { stopped ??= shown.stopped; failures.display.set(0, shown.stopped); }
+    texts[0] = shown.text;
+    drawn[0] = shown.drawn;
+    boxes[0] = shown.boxes;
+  }
+  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, unfound, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, index === 0 && later ? variables : states.at(index), take) : null, failures };
 }
 
 function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof contexts>, index: number, text: string, variables: ReadonlyMap<string, string>, take: ReadonlySet<number>) {

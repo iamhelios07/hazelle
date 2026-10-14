@@ -130,6 +130,7 @@ const ENTRIES = {
   translation: shape({ version: str, ...text }),
   vars: shape({ version: str, set: listOf(Array.isArray), at: num }),
   call: shape({ version: str, receipt: isRecord, at: num }),
+  follow: shape({ message: str, follows: str, at: num }),
 } satisfies Record<Entry['type'], Check>;
 
 const picture = shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) });

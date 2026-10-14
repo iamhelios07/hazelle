@@ -142,8 +142,8 @@ describe('branchChat', () => {
     const said = crypto.randomUUID();
     await appendUserMessage(store, source, { id: said, text: '안녕', before: [['order', 'input']] });
     const folded = () => fold(store.children('entry', source));
-    await appendScripted(store, source, { edits: [{ message: folded()[0]!, text: '안녕!', wrote: [['typed', '1']] }], removed: [], added: { follows: said, messages: [{ role: 'assistant', text: 'narration' }] }, vars: { version: said, set: [['hp', '9']] } });
-    await appendScripted(store, source, { edits: [], removed: [], added: null, vars: { version: said, set: [['door', 'open']], stays: true } });
+    await appendScripted(store, source, { edits: [{ message: folded()[0]!, text: '안녕!', wrote: [['typed', '1']] }], removed: [], added: [{ follows: said, ahead: null, messages: [{ role: 'assistant', text: 'narration' }] }], vars: { version: said, set: [['hp', '9']] } });
+    await appendScripted(store, source, { edits: [], removed: [], added: [], vars: { version: said, set: [['door', 'open']], stays: true } });
     const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after, message.after]);
     expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']], [['door', 'open']]], ['narration', true, undefined, undefined, undefined]]);
 
@@ -169,6 +169,14 @@ describe('branchChat', () => {
     expect(toolBadges(store, module, branched.data.id)).toEqual(Object.fromEntries(copy.map((message, index) => [message.id, { version: shown(message).id, text: ['요약됨', '마지막'][index]! }])));
     expect(store.children('inlay', branched.data.id).map(({ value }) => value)).toEqual([inlay]);
     expect(chatPrint(store, branched.data.id)?.value).toEqual(print);
+
+    await appendScripted(store, source, { edits: [], removed: [], added: [{ follows: said, ahead: folded()[1]!, messages: [{ role: 'user', text: 'between' }] }], vars: null });
+    const texts = (messages: Message[]) => messages.map((message) => shown(message).text);
+    expect(texts(folded())).toEqual(['안녕!', 'between', 'narration']);
+    const inserted = await branchChat(store, { ...item, messages: folded() }, folded()[2]!.id);
+    if (!inserted.ok) throw new Error(inserted.error);
+    await server.hold(store, inserted.data.id);
+    expect(texts(fold(store.children('entry', inserted.data.id)))).toEqual(['안녕!', 'between', 'narration']);
   });
 
   it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {

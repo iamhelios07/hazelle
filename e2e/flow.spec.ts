@@ -206,7 +206,8 @@ test('a new account imports a card, chats through the fake provider and finds th
     await last.getByRole('button', { name: '벨 울리기', exact: true }).click();
     await expect(page.getByText('따르릉', { exact: true })).toBeVisible();
     await expect(last).toContainText('[bell:2]');
-    await expect(messages.first()).toContainText('[bell:]');
+    // The greeting reads the chat's current variables (design §6.8).
+    await expect(messages.first()).toContainText('[bell:2]');
     expect(violations).toEqual([]);
   });
 

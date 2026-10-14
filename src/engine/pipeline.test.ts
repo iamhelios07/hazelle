@@ -538,6 +538,19 @@ describe('renderChat', () => {
     expect(renderChat('display', scope(over)).texts[0]).toBe('Opening one');
   });
 
+  it("reads the greeting with the chat's current variables once a reply stands, its Lua pass last", () => {
+    const messages = [
+      { ...message('g', 'assistant', 'lang {{getvar::L}}'), after: [['L', 'ko']] as [string, string][] },
+      message('u1', 'user', 'hi'),
+      { ...message('a1', 'assistant', 'reply'), after: [['L', 'en']] as [string, string][] },
+    ];
+    const over = { card: card({ greetings: ['lang {{getvar::L}}'] }), messages, greeting: { index: 0 } };
+    expect(renderChat('display', scope(over)).texts[0]).toBe('lang en');
+    expect(renderChat('prompt', scope(over)).texts[0]).toBe('lang en');
+    const { missed } = renderChat('display', scope(over), new Set(), () => null);
+    expect(missed.map(({ index, text }) => [index, text])).toEqual([[0, 'hi'], [1, 'reply'], [-1, 'lang en']]);
+  });
+
   it('rolls a random tag in a message the same on screen as in the prompt', () => {
     const over = { card: card({ greetings: [] }), messages, greeting: null };
     expect(renderChat('display', scope(over)).texts[2]).toBe(renderChat('prompt', scope(over)).texts[2]);

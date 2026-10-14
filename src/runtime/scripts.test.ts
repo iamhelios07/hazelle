@@ -294,7 +294,7 @@ describe("the display with the bot's Lua", () => {
       release();
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
       await session.scripts.press(chat, { trigger: 'hit', id: '' });
-      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:9>']);
+      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:9>', '안녕 <0:null>', '왔구나 <1:9>']);
       lua.display.mockRestore();
       leave();
     }));
@@ -460,7 +460,7 @@ describe('tool events through Scripts', () => {
       return {
         ...noOutcome(), writes: [[variable, '"original"']],
         edits: [{ index: event.reply.index, text: 'old edit', wrote: [] }],
-        added: [{ role: 'char', text: 'old addition' }],
+        added: [{ role: 'char', text: 'old addition', before: null }],
         tool: { data: [['heard', event.reply.version]], badges: [{ index: event.reply.index, text: 'old badge' }] },
       };
     }, close: () => { release(); } };
@@ -501,7 +501,7 @@ describe('tool events through Scripts', () => {
       await takeTurn(session, f.chat, { kind: 'send', text: 'hello' });
       await expect.poll(() => finish).toBeDefined();
       if (advance) await appendUserMessage(session.store, f.chat, { id: crypto.randomUUID(), text: 'newer' });
-      finish({ ...noOutcome(), writes: [[f.variable, '"saved"']], edits: [{ index: 0, text: 'changed user', wrote: [] }, { index: 1, text: 'changed reply', wrote: [] }], added: [{ role: 'char', text: 'added' }] });
+      finish({ ...noOutcome(), writes: [[f.variable, '"saved"']], edits: [{ index: 0, text: 'changed user', wrote: [] }, { index: 1, text: 'changed reply', wrote: [] }], added: [{ role: 'char', text: 'added', before: null }] });
       await expect.poll(() => shown(f.messages()[1]!).text).toBe('changed reply');
       expect(shown(f.messages()[0]!).text).toBe(advance ? 'hello' : 'changed user');
       expect(shown(f.messages().at(-1)!).text).toBe(advance ? 'newer' : 'added');
@@ -724,7 +724,7 @@ describe('tool events through Scripts', () => {
       expect(await pending).toMatchObject({ tools: [], turn: { reply: { before: [] } } });
       expect(answer).toBeNull();
       expect(session.scripts.snapshot()).toEqual({ notes: [], questions: [] });
-      finish({ ...noOutcome(), value: 'late', writes: [[f.variable, '"late"']], added: [{ role: 'char', text: 'late' }] });
+      finish({ ...noOutcome(), value: 'late', writes: [[f.variable, '"late"']], added: [{ role: 'char', text: 'late', before: null }] });
       expect(await session.scripts.prompting(f.chat, turn, async () => turn, new AbortController().signal)).toMatchObject({ tools: [{ text: 'next' }] });
       expect(cachedTools(session, f.chat)).toMatchObject([{ text: 'next' }]);
       expect(f.messages()).toHaveLength(1);

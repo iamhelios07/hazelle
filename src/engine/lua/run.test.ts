@@ -237,6 +237,12 @@ describe('Lua runs', () => {
     ]);
   });
 
+  it('puts an inserted message ahead of the one at its index', async () => {
+    const outcome = await run(`function onStart(id) insertChat(id, 1, 'user', 'between') addChat(id, 'char', 'tail') end`, { kind: 'start' });
+    expect(outcome.added).toEqual([{ role: 'user', text: 'between', before: 1 }, { role: 'char', text: 'tail', before: null }]);
+    expect(outcome).toMatchObject({ edits: [], removed: [] });
+  });
+
   it('gives a script no way out of the sandbox', async () => {
     const outcome = await run(
       `function onStart(id)
