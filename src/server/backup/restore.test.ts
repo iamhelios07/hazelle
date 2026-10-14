@@ -120,7 +120,7 @@ it.each(['begun', 'fenced', 'checkpointed', 'done', 'cancelled', 'failed'] as co
   expect(await restoreGeneration(generation, destination, 'migrations', diskBucket(destination))).toMatchObject({ operations: [{ id: user.operation, phase: ended }], deleted: 0 });
   const raw = openDatabase(join(destination, 'service.sqlite'));
   const db = serviceDb(raw);
-  const stores = accountRegistry(destination, db, serviceReads(db), Date.now);
+  const stores = accountRegistry(destination, db, serviceReads(db), Date.now, diskBucket(destination));
   try {
     expect(await db.prepare('SELECT phase, verified, error FROM restores WHERE id = ?').bind(user.operation).first()).toEqual({ phase: ended, verified: 1, error: phase === 'failed' ? 'too-early' : null });
     expect(await stores.getByName(user.incarnation).status(user.incarnation)).toMatchObject({ state: 'active', operation: null });
@@ -169,7 +169,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   const env: Services = {
     db,
     files: diskBucket(dir),
-    stores: accountRegistry(dir, db, serviceReads(db), Date.now),
+    stores: accountRegistry(dir, db, serviceReads(db), Date.now, diskBucket(dir)),
     streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
     localProviders: new Set(),
@@ -226,7 +226,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   await expect(restoreGeneration(generation, clean, 'migrations', diskBucket(clean))).rejects.toThrow(/no manifest/);
 }, 60_000);
 
-it('restores an account whose baseline is a delta as its base with the delta applied', async () => {
+it('restores a version 3 delta baseline as its base with the delta applied', async () => {
   const user = await signedUp('delta');
   const write = (id: string, body: string, baseRev: number | null) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id, kind: 'chat', parent: null, body, baseRev }], null);
   const now = Date.now();
@@ -245,11 +245,15 @@ it('restores an account whose baseline is a delta as its base with the delta app
   expect((await t.daily(now)).generation).toEqual({ outcome: 'ok', error: null });
   const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
   expect((await readManifest(generation))!.accounts.find(({ incarnation }) => incarnation === user.incarnation)!.baseline).toBe(taken);
+  const legacy = JSON.parse(readFileSync(join(generation, MANIFEST), 'utf8'));
+  legacy.version = 3;
+  delete legacy.snapshotStore;
+  writeFileSync(join(generation, MANIFEST), JSON.stringify(legacy));
   const dir = emptyDir();
   await restoreGeneration(generation, dir, 'migrations', diskBucket(dir));
   const raw = openDatabase(join(dir, 'service.sqlite'));
   const db = serviceDb(raw);
-  const stores = accountRegistry(dir, db, serviceReads(db), Date.now);
+  const stores = accountRegistry(dir, db, serviceReads(db), Date.now, diskBucket(dir));
   try {
     expect({ objects: stores.inspect(user.incarnation).exec(rows), head: stores.inspect(user.incarnation).exec('SELECT rev FROM head') }).toEqual(live);
   } finally {
@@ -290,14 +294,14 @@ it('takes the first snapshot after a disaster restore whole, though the catalog 
   await restoreGeneration(generation, dir, 'migrations', diskBucket(dir));
   const raw = openDatabase(join(dir, 'service.sqlite'));
   const db = serviceDb(raw);
-  const stores = accountRegistry(dir, db, serviceReads(db), Date.now);
+  const stores = accountRegistry(dir, db, serviceReads(db), Date.now, diskBucket(dir));
   try {
     const timeline = (await db.prepare('SELECT timeline FROM accounts WHERE id = ?').bind(user.id).first<string>('timeline'))!;
     expect(await stores.getByName(user.incarnation).batch(user.incarnation, timeline, [{ id: X, kind: 'chat', parent: null, body: 'after the restore', baseRev: null }], null)).toMatchObject({ revs: [3] });
     const { taken } = (await stores.snapshot(user.incarnation, 'baseline')) as { taken: string };
     expect(await db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(taken).first('base')).toBeNull();
     const target = join(dir, 'materialized.sqlite');
-    await materializeSnapshot(dir, db, user.incarnation, taken, target);
+    await materializeSnapshot(diskBucket(dir), db, user.incarnation, taken, target);
     const rows = 'SELECT id, rev, body FROM objects ORDER BY id';
     const file = new DatabaseSync(target, { readOnly: true });
     try {
@@ -337,7 +341,7 @@ it('names and restores the checkpoint of an account past its fence whose only ba
   expect((await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).operations).toEqual([{ id: operation, phase: 'cancelled' }]);
   const raw = openDatabase(join(dir, 'service.sqlite'));
   const db = serviceDb(raw);
-  const stores = accountRegistry(dir, db, serviceReads(db), Date.now);
+  const stores = accountRegistry(dir, db, serviceReads(db), Date.now, diskBucket(dir));
   try {
     expect(stores.inspect(user.incarnation).exec(rows)).toEqual(live);
   } finally {
@@ -346,22 +350,26 @@ it('names and restores the checkpoint of an account past its fence whose only ba
   }
 }, 30_000);
 
-it('restores a version 2 generation, whose snapshots are all whole, and refuses a version it does not know', async () => {
+it('restores version 2 and 3 generations, whose snapshots are all whole, and refuses a version it does not know', async () => {
   await signedUp('operator');
   expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
   const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
   const written = readFileSync(join(generation, MANIFEST), 'utf8');
-  writeFileSync(join(generation, MANIFEST), written.replace('{"version":3,', '{"version":4,'));
-  await expect(restoreGeneration(generation, emptyDir(), 'migrations', diskBucket(emptyDir()))).rejects.toThrow('restore: manifest version 4 is not one this build reads');
-  writeFileSync(join(generation, MANIFEST), written.replace('{"version":3,', '{"version":2,'));
-  const dir = emptyDir();
-  expect(await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).toMatchObject({ accounts: 1 });
+  writeFileSync(join(generation, MANIFEST), written.replace('{"version":4,', '{"version":5,'));
+  await expect(restoreGeneration(generation, emptyDir(), 'migrations', diskBucket(emptyDir()))).rejects.toThrow('restore: manifest version 5 is not one this build reads');
+  writeFileSync(join(generation, MANIFEST), written.replace('{"version":4,', '{"version":2,'));
+  for (const version of [2, 3]) {
+    writeFileSync(join(generation, MANIFEST), written.replace('{"version":4,', `{"version":${version},`));
+    const dir = emptyDir();
+    expect(await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).toMatchObject({ accounts: 1 });
+  }
 }, 30_000);
 
-it('with the R2 bucket names pictures without pooling them, and restores only where every one is there at its size', async () => {
+it('names R2 snapshots in v4, supports a local store restore and a pooled disaster restore, and checks pictures by size', async () => {
   const s3 = await fakeS3();
   const disk = t.env.files;
   t.env.files = r2Bucket(s3.config);
+  t.restartProcess();
   try {
     const operator = await signedUp('operator');
     const kept = bytesOf('a kept picture');
@@ -371,8 +379,16 @@ it('with the R2 bucket names pictures without pooling them, and restores only wh
     await t.lifecycle(leaver.id, "state = 'leaving'");
     expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
     const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
-    expect(await readManifest(generation)).toMatchObject({ version: 3, bucket: 'r2', pictures: [idOf(bytesOf('leaving')), idOf(kept)].sort() });
+    expect(await readManifest(generation)).toMatchObject({ version: 4, bucket: 'r2', snapshotStore: { kind: 'r2', bucket: s3.config.bucket }, pictures: [idOf(bytesOf('leaving')), idOf(kept)].sort() });
     expect(readdirSync(join(generationsDir(t.dir), POOL))).toEqual([]);
+    expect(existsSync(join(generation, 'snapshots'))).toBe(false);
+    // Local rollback explicitly reads the store; a disaster download below can restore after that store loses archives.
+    expect(await restoreGeneration(generation, emptyDir(), 'migrations', r2Bucket(s3.config), true)).toMatchObject({ accounts: 1 });
+    const manifest = (await readManifest(generation))!;
+    for (const snapshot of manifest.snapshots) {
+      await diskBucket(generation).put(snapshot.path, s3.objects.get(snapshot.path)!);
+      s3.objects.delete(snapshot.path);
+    }
 
     await expect(restoreGeneration(generation, emptyDir(), 'migrations', diskBucket(emptyDir()))).rejects.toThrow(/HAZELLE_FILES_BUCKET=r2/);
     const keptKey = `files/${operator.incarnation}/${idOf(kept)}`;
@@ -392,9 +408,10 @@ it('with the R2 bucket names pictures without pooling them, and restores only wh
     } finally {
       raw.close();
     }
-    expect([...s3.objects.keys()].sort()).toEqual([keptKey, `files/${leaver.incarnation}/${idOf(bytesOf('leaving'))}`].sort());
+    expect([...s3.objects.keys()].filter((key) => key.startsWith('files/')).sort()).toEqual([keptKey, `files/${leaver.incarnation}/${idOf(bytesOf('leaving'))}`].sort());
   } finally {
     t.env.files = disk;
+    t.restartProcess();
     await s3.close();
   }
 }, 30_000);
@@ -405,12 +422,13 @@ it('restores a disk generation into the R2 bucket by putting its pooled pictures
     const operator = await signedUp('operator');
     const kept = bytesOf('a pooled picture');
     expect((await t.put(`files/${idOf(kept)}`, kept, operator.cookie)).status).toBe(204);
-    expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
+    const outcome = await t.daily(Date.now());
+    expect(outcome.generation, JSON.stringify(await t.env.db.prepare('SELECT detail FROM backup_runs').all())).toEqual({ outcome: 'ok', error: null });
     const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
     expect((await readManifest(generation))!.bucket).toBe('disk');
     const dir = emptyDir();
     expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: 1, pictures: 1 });
-    expect([...s3.objects.keys()]).toEqual([`files/${operator.incarnation}/${idOf(kept)}`]);
+    expect([...s3.objects.keys()].filter((key) => key.startsWith('files/'))).toEqual([`files/${operator.incarnation}/${idOf(kept)}`]);
     expect(s3.objects.get(`files/${operator.incarnation}/${idOf(kept)}`)).toEqual(kept);
     expect(existsSync(join(dir, 'files'))).toBe(false);
   } finally {

@@ -1,17 +1,18 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rm } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import type { ExecutionContext } from 'hono';
 import type { RestorePhase } from '../../contracts/admin';
 import { serviceReads } from '../account-store';
-import { accountPath, accountRegistry, installSnapshot, materializeSnapshot, snapshotPath } from '../db/account-db';
-import { digest, fsyncPath, makeDirs } from '../db/durable';
+import { accountPath, accountRegistry, installSnapshot, materializeSnapshot } from '../db/account-db';
+import { digest, fsyncPath } from '../db/durable';
 import { migrate } from '../db/migrate';
 import { openDatabase, serviceDb } from '../db/service-db';
-import { fileKey, type Bucket, type R2Bucket } from '../files/bucket';
+import { fileKey, snapshotKey, type Bucket, type R2Bucket } from '../files/bucket';
+import { diskBucket } from '../files/disk-bucket';
 import type { Services } from '../http';
 import { cancelRestore, leaveAccount, runRestore } from '../lifecycle';
 import { tokenBucket, visitorLimits } from '../limits';
@@ -32,20 +33,18 @@ import { POOL, readManifest, type Manifest } from './generation';
 const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 const HEADS = 16;
 
-async function copyInto(source: string, target: string) {
-  makeDirs(dirname(target));
-  await copyFile(source, target);
-  fsyncPath(target);
-}
-
-async function verify(generation: string, manifest: Manifest, files: Bucket) {
+async function verify(generation: string, manifest: Manifest, files: Bucket, source: Bucket) {
   if (manifest.bucket === 'r2' && files.kind !== 'r2') throw new Error('restore: the generation’s pictures are in an R2 bucket; set HAZELLE_FILES_BUCKET=r2 and its HAZELLE_FILES_R2_* to that bucket');
   const check = async (path: string, expected: string) => {
     const actual = await digest(path).then(({ sha256 }) => sha256, () => 'missing');
     if (actual !== expected) throw new Error(`restore: ${path} is ${actual === 'missing' ? 'missing' : 'corrupt'}`);
   };
   await check(join(generation, manifest.service.path), manifest.service.sha256);
-  for (const snapshot of manifest.snapshots) await check(join(generation, snapshot.path), snapshot.sha256);
+  for (const snapshot of manifest.snapshots) {
+    const body = await source.get(snapshotKey(snapshot.incarnation, snapshot.id));
+    const actual = body && await digest(body);
+    if (!actual || actual.sha256 !== snapshot.sha256 || actual.bytes !== snapshot.bytes) throw new Error(`restore: ${snapshot.path} is ${actual ? 'corrupt' : 'missing'}`);
+  }
   if (manifest.bucket === 'disk') for (const picture of manifest.pictures) await check(join(generation, '..', POOL, picture), picture);
 }
 
@@ -73,15 +72,17 @@ async function inStore(files: R2Bucket, service: string) {
 
 export type Restored = { accounts: number; pictures: number; operations: { id: number; phase: RestorePhase }[]; deleted: number };
 
-export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string, files: Bucket): Promise<Restored> {
+export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string, files: Bucket, fromStore = false): Promise<Restored> {
   const manifest = await readManifest(generation);
   // No `copied` needed: that marker is for freshness and the copier; a generation with its manifest and verified
   // hashes is a whole restore source wherever it lies.
   if (manifest === null) throw new Error(`restore: ${generation} has no manifest; it is not a complete generation`);
-  if (manifest.version !== 2 && manifest.version !== 3) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
+  if (manifest.version !== 2 && manifest.version !== 3 && manifest.version !== 4) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
+  if (fromStore && (manifest.version !== 4 || manifest.snapshotStore.kind !== 'r2' || files.kind !== 'r2' || manifest.snapshotStore.bucket !== files.name)) throw new Error('restore: store source requires a v4 generation from this R2 bucket');
+  const archives = fromStore ? files : diskBucket(generation);
   await mkdir(dataDir, { recursive: true });
   if ((await readdir(dataDir)).length) throw new Error(`restore: ${dataDir} is not empty`);
-  await verify(generation, manifest, files);
+  await verify(generation, manifest, files, archives);
 
   const service = join(dataDir, 'service.sqlite');
   await pipeline(createReadStream(join(generation, manifest.service.path)), createGunzip(), createWriteStream(service, { flags: 'wx' }));
@@ -98,7 +99,10 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   const db = serviceDb(raw);
   // The catalog names every snapshot the source had; only the generation's came along.
   await db.prepare('DELETE FROM snapshots WHERE id NOT IN (SELECT value FROM json_each(?))').bind(JSON.stringify(manifest.snapshots.map(({ id }) => id))).run();
-  for (const snapshot of manifest.snapshots) await copyInto(join(generation, snapshot.path), snapshotPath(dataDir, snapshot.incarnation, snapshot.id));
+  if (archives.kind === 'disk') for (const snapshot of manifest.snapshots) {
+    const key = snapshotKey(snapshot.incarnation, snapshot.id);
+    await files.putFile(key, archives.path(key));
+  }
   await mkdir(join(dataDir, 'accounts'), { recursive: true });
   // A version 2 manifest names a baseline for every account, and a fenced one has not changed since its checkpoint,
   // which is newer; version 3 names that checkpoint as the account's source itself (generation.ts readNamed).
@@ -106,26 +110,20 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   for (const { incarnation, baseline } of manifest.accounts) {
     const source = fenced.get(incarnation) ?? baseline;
     if (source === null) continue;
-    await materializeSnapshot(dataDir, db, incarnation, source, accountPath(dataDir, incarnation));
+    await materializeSnapshot(files, db, incarnation, source, accountPath(dataDir, incarnation));
     fsyncPath(accountPath(dataDir, incarnation));
   }
   // Past its install already: the live file was the target when the generation was taken.
-  for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id);
+  for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id, files);
   const { results: pictures } = await db.prepare('SELECT incarnation, id FROM account_files WHERE stored = 1').all<{ incarnation: string; id: string }>();
   if (manifest.bucket === 'disk') for (const { incarnation, id } of pictures) await files.put(fileKey(incarnation, id), await readFile(join(generation, '..', POOL, id)));
-  for (const dir of ['', 'accounts', 'snapshots']) {
-    try {
-      fsyncPath(join(dataDir, dir));
-    } catch {
-      // A generation without pictures or snapshots leaves that directory unmade.
-    }
-  }
+  for (const dir of ['', 'accounts']) fsyncPath(join(dataDir, dir));
 
   const outbound = () => Promise.reject(new Error('A restore calls no provider.'));
   const env: Services = {
     db,
     files,
-    stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
+    stores: accountRegistry(dataDir, db, serviceReads(db), Date.now, files),
     streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
     localProviders: new Set(),

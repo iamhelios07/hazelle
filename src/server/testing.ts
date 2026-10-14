@@ -26,13 +26,14 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   migrate(raw, 'migrations');
   const db = serviceDb(raw);
   const clock = { now: () => Date.now() };
-  const registry = () => accountRegistry(dir, db, serviceReads(db), () => clock.now());
+  const registry = () => accountRegistry(dir, db, serviceReads(db), () => clock.now(), env.files);
   const disk = { freePercent: 50 };
   const outbound: Upstream = (url, init) => upstream(url, init);
+  const files = diskBucket(dir);
   const env: Services = {
     db,
-    files: diskBucket(dir),
-    stores: registry(),
+    files,
+    stores: accountRegistry(dir, db, serviceReads(db), () => clock.now(), files),
     streams: streamRegistry(streamStore(join(dir, 'streams.sqlite')), outbound),
     outbound,
     localProviders: new Set(),
@@ -87,7 +88,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       clock.now = () => Date.now();
       env.stores.close();
       await env.db.batch([
-        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'backup_runs', 'alerts_sent'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
+        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'picture_removals', 'snapshot_removals', 'backup_runs', 'alerts_sent'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
         env.db.prepare('UPDATE installation SET operator_account = NULL'),
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);

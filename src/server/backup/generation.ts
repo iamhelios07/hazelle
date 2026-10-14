@@ -4,10 +4,10 @@ import { copyFile, link, open, readdir, readFile, rename, rm } from 'node:fs/pro
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { AccountState, RestorePhase } from '../../contracts/admin';
-import { ACCOUNT_SCHEMA_VERSION, CURRENT_BASELINE, RETENTION_MS, snapshotPath } from '../db/account-db';
+import { ACCOUNT_SCHEMA_VERSION, CURRENT_BASELINE, RETENTION_MS } from '../db/account-db';
 import { fsyncPath, makeDirs } from '../db/durable';
 import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
-import { fileKey, type Bucket, type DiskBucket } from '../files/bucket';
+import { fileKey, snapshotKey, type Bucket, type DiskBucket } from '../files/bucket';
 import type { Services } from '../http';
 import { DAY_MS, dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
@@ -15,8 +15,8 @@ import { DAY_MS, dayStart, pass, PINNED, staleBaselines, takeBaselines } from '.
 // snapshots its manifest names and, written last, manifest.json; with the disk bucket, pictures go once each into the
 // shared pool backup/files/<sha256>. Every file a manifest names is a hard link (a copy across filesystems) taken while
 // the gate held, so nothing deleted later in the live layout takes it from the generation. With the R2 bucket the
-// manifest names pictures where they are, and a deleted account's stay there until no generation can name them
-// (reconcile.ts removePictures). The copier writes backup/<id>/copied after it copied the directory; a generation is
+// manifest names pictures and archives where they are; removals wait until generations can no longer name them
+// (reconcile.ts). The copier pools named archives off-site before it writes backup/<id>/copied; a generation is
 // complete with both (src/server/db/README.md).
 
 export const MANIFEST = 'manifest.json';
@@ -39,10 +39,13 @@ export type Artifact = { path: string } & SnapshotArchive;
 // plus its base's, short by what the base's indexes grow over the delta's rows (scripts/destroy.sh sizes a drill by it,
 // with its own margin). operations: those not done, and any not yet seen
 // ending. bucket: where pictures are, the pool for disk, the R2 store for r2. pictures: ids, which are their SHA-256.
+// snapshotStore: where every snapshots entry lives; disk means inside the generation, r2 names the source bucket.
+// The copier pools R2 archives under snapshots/<bucket>/<incarnation>/<id>.sqlite.gz on the backup remote.
 // pictures and migrations are the last two keys written, and bucket comes before them: deploy/rclone-backup.sh matches
 // that tail and the version, and keeps only a disk generation's pictures in its pool.
 export type Manifest = {
-  version: 2 | 3;
+  version: 2 | 3 | 4;
+  snapshotStore: { kind: 'disk' } | { kind: 'r2'; bucket: string };
   id: string;
   capturedAt: number;
   service: Artifact;
@@ -76,7 +79,7 @@ async function place(source: string, target: string) {
   }
 }
 
-type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'bucket'>;
+type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'bucket' | 'snapshotStore'>;
 
 // What the service snapshot names, read from the snapshot itself so the manifest and the service agree.
 function readNamed(path: string, now: number): { named: Named; sources: Map<string, string[]> } {
@@ -111,7 +114,7 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
     return {
       named: {
         accounts,
-        snapshots: snapshots.map((snapshot) => ({ ...snapshot, path: `snapshots/${snapshot.incarnation}/${snapshot.id}.sqlite.gz` })),
+        snapshots: snapshots.map((snapshot) => ({ ...snapshot, path: snapshotKey(snapshot.incarnation, snapshot.id) })),
         operations,
         pictures: [...sources.keys()],
         migrations,
@@ -147,13 +150,13 @@ export async function captureGeneration(
     await env.db.snapshot(plain);
     const { named, sources } = readNamed(plain, clock());
     const dirs = new Set<string>([pool]);
-    for (const snapshot of named.snapshots) {
+    const files = env.files;
+    if (files.kind === 'disk') for (const snapshot of named.snapshots) {
       const target = join(root, snapshot.path);
       makeDirs(dirname(target));
-      await place(snapshotPath(dataDir, snapshot.incarnation, snapshot.id), target);
+      await place(files.path(snapshotKey(snapshot.incarnation, snapshot.id)), target);
       dirs.add(dirname(target));
     }
-    const files = env.files;
     if (files.kind === 'disk') {
       for (const [picture, holders] of sources) {
         await placePicture(files, join(pool, picture), picture, holders);
@@ -167,12 +170,13 @@ export async function captureGeneration(
   const artifact = await archiveSnapshot(plain, compressed);
   await rm(plain);
   const manifest: Manifest = {
-    version: 3,
+    version: 4,
     id,
     capturedAt: now,
     service: { path: 'service.sqlite.gz', ...artifact },
     accountSchema: ACCOUNT_SCHEMA_VERSION,
     bucket: env.files.kind,
+    snapshotStore: env.files.kind === 'disk' ? { kind: 'disk' } : { kind: 'r2', bucket: env.files.name },
     ...named,
   };
   const temp = join(root, `.tmp-${MANIFEST}`);
@@ -201,13 +205,15 @@ async function placePicture(files: DiskBucket, target: string, picture: string, 
   throw new Error(`generation: picture ${picture} is stored but on no disk`);
 }
 
-// Version 1 was written before the R2 bucket, so its pictures are in the pool. Any other version is answered as read:
+// Version 1 was written before the R2 bucket, so its pictures are in the pool:
 // 2 names whole snapshots only; 3 may name deltas beside their bases, and a build before it refuses one, since it would
-// install a delta file as the account.
+// install a delta file as the account. Both keep archives in the generation even when pictures are in R2.
+// Version 4 records the archive store; its bucket name also reaches the copier, which has no app-store environment.
 export async function readManifest(root: string): Promise<Manifest | null> {
   try {
-    const manifest = JSON.parse(await readFile(join(root, MANIFEST), 'utf8')) as Manifest | (Omit<Manifest, 'version' | 'bucket'> & { version: 1 });
-    return manifest.version === 1 ? { ...manifest, version: 2, bucket: 'disk' } : manifest;
+    const manifest = JSON.parse(await readFile(join(root, MANIFEST), 'utf8')) as Manifest | (Omit<Manifest, 'version' | 'bucket' | 'snapshotStore'> & { version: 1 });
+    if (manifest.version === 1) return { ...manifest, version: 2, bucket: 'disk', snapshotStore: { kind: 'disk' } };
+    return manifest.version === 2 || manifest.version === 3 ? { ...manifest, snapshotStore: { kind: 'disk' } } : manifest;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;

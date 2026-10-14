@@ -1,9 +1,11 @@
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import { checkedKey, checkedPrefix, isKey, isPrefix, type R2Bucket } from './bucket';
 import { authorization, sha256Hex, type Signer } from './sigv4';
 
-// Pictures in an R2 bucket through its S3 API, path-style: <endpoint>/<bucket>/<key>. A PUT that answered 200 is
-// durable, and an object is whole or absent, so nothing is left for a sweep. The server reads it through the copy on
-// its disk (cached-r2-bucket.ts), which has the trim.
+// Objects in an R2 bucket through its S3 API, path-style: <endpoint>/<bucket>/<key>. A PUT that answered 200 is
+// durable, and an object is whole or absent. Only pictures use cached-r2-bucket.ts.
 
 export type R2Config = { endpoint: string; bucket: string; accessKeyId: string; secretAccessKey: string };
 
@@ -21,18 +23,20 @@ export function r2Bucket(config: R2Config): R2Bucket {
   const base = new URL(config.endpoint);
 
   // Only the wait for the answer's headers is timed: a picture's body streams to a reader as slowly as it reads.
-  const send = async (method: string, path: string, query: Record<string, string> = {}, body?: Uint8Array<ArrayBuffer>) => {
+  const send = async (method: string, path: string, query: Record<string, string> = {}, body?: Uint8Array<ArrayBuffer> | ReadableStream<Uint8Array>, length?: number) => {
     const url = new URL(`/${config.bucket}/${path}`, base);
     for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
     const amzDate = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-    const payload = body ? sha256Hex(body) : EMPTY;
+    const payload = length === undefined ? (body ? sha256Hex(body as Uint8Array<ArrayBuffer>) : EMPTY) : 'UNSIGNED-PAYLOAD';
     // fetch sends the host itself.
-    const headers = { 'x-amz-content-sha256': payload, 'x-amz-date': amzDate };
+    const headers = { 'x-amz-content-sha256': payload, 'x-amz-date': amzDate, ...(length === undefined ? {} : { 'content-length': String(length) }) };
     const signed = { host: url.host, ...headers };
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(new Error(`r2: ${method} ${path} had no answer in ${HEADERS_MS / 1000} s`)), HEADERS_MS);
+    // A file PUT cannot answer before its upload finishes; the small-request header deadline would cut archives off.
+    const timeout = length === undefined ? HEADERS_MS : 30 * 60_000;
+    const timer = setTimeout(() => abort.abort(new Error(`r2: ${method} ${path} had no answer in ${timeout / 1000} s`)), timeout);
     try {
-      return await fetch(url, { method, headers: { ...headers, authorization: authorization(signer, method, url, signed, payload, amzDate) }, body, signal: abort.signal });
+      return await fetch(url, { method, headers: { ...headers, authorization: authorization(signer, method, url, signed, payload, amzDate) }, body, signal: abort.signal, ...(length === undefined ? {} : { duplex: 'half' }) } as RequestInit);
     } finally {
       clearTimeout(timer);
     }
@@ -46,17 +50,22 @@ export function r2Bucket(config: R2Config): R2Bucket {
   // ListObjectsV2, every page.
   const listing = async (query: Record<string, string>) => {
     const keys: string[] = [];
+    const archives: { key: string; modified: number }[] = [];
     const prefixes: string[] = [];
     let token: string | null = null;
     do {
       const response = await send('GET', '', { 'list-type': '2', ...query, ...(token ? { 'continuation-token': token } : {}) });
       if (!response.ok) await refused(response, `list ${query.prefix}`);
       const xml = await response.text();
+      for (const entry of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+        const key = tags(entry[1]!, /<Key>([^<]*)<\/Key>/g)[0]!;
+        if (isKey(key)) archives.push({ key, modified: Date.parse(tags(entry[1]!, /<LastModified>([^<]*)<\/LastModified>/g)[0]!) });
+      }
       keys.push(...tags(xml, /<Key>([^<]*)<\/Key>/g));
       prefixes.push(...tags(xml, /<CommonPrefixes>\s*<Prefix>([^<]*)<\/Prefix>/g));
       token = /<IsTruncated>true<\/IsTruncated>/.test(xml) ? (tags(xml, /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/g)[0] ?? null) : null;
     } while (token);
-    return { keys, prefixes };
+    return { keys, prefixes, archives };
   };
 
   const remove = async (key: string) => {
@@ -68,6 +77,21 @@ export function r2Bucket(config: R2Config): R2Bucket {
 
   return {
     kind: 'r2',
+    name: config.bucket,
+    archives: async () => (await listing({ prefix: 'snapshots/' })).archives,
+    putFile: async (key, path) => {
+      checkedKey(key);
+      const { size } = await stat(path);
+      const source = createReadStream(path);
+      try {
+        const body = Readable.toWeb(source) as ReadableStream<Uint8Array>;
+        const response = await send('PUT', key, {}, body, size);
+        if (!response.ok) await refused(response, `put ${key}`);
+        await response.body?.cancel();
+      } finally {
+        source.destroy();
+      }
+    },
     put: async (key, body) => {
       // A view of an ArrayBuffer is sent as it is; a Uint8Array, which may view a shared buffer, is copied.
       const response = await send('PUT', checkedKey(key), {}, body instanceof ArrayBuffer ? new Uint8Array(body) : new Uint8Array(body));

@@ -1,12 +1,14 @@
 import type { SnapshotKind } from '../../contracts/admin';
-import { randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, renameSync, rmSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { createWriteStream, existsSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
+import { Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import { StoreRules, type SqlValue, type StoreDb, type StoreReads, type Unavailable } from '../account-store';
-import { digest, fsyncPath, makeDirs } from './durable';
+import { snapshotKey, type Bucket } from '../files/bucket';
+import { fsyncPath, makeDirs } from './durable';
 import { openDatabase, type Db } from './service-db';
 import { archiveSnapshot } from './snapshot';
 import { transaction } from './transaction';
@@ -63,8 +65,6 @@ const IDLE_MS = 10 * 60 * 1000;
 const CORRUPT_CODES = new Set([11, 26]);
 
 export const accountPath = (dataDir: string, incarnation: string) => join(dataDir, 'accounts', `${incarnation}.sqlite`);
-const snapshotDir = (dataDir: string, incarnation: string) => join(dataDir, 'snapshots', incarnation);
-export const snapshotPath = (dataDir: string, incarnation: string, id: string) => join(snapshotDir(dataDir, incarnation), `${id}.sqlite.gz`);
 
 // Thrown inside a store call for a file the rules cannot be answered from; the registry turns it into { unavailable }.
 export class StoreUnavailable extends Error {
@@ -129,10 +129,10 @@ function corruptOr(error: unknown): unknown {
 // state at `at`. How far back a rewind may ask is lifecycle's request window; retention keeps the baseline that window
 // needs (backup/snapshots.ts).
 // A catalogued snapshot whose file is gone or altered is a storage failure, not "too early".
-export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null> {
+export async function snapshotFor(files: Bucket, service: Db, incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null> {
   const row = await landing(service, incarnation, at);
   if (row === null) return null;
-  await verifySnapshot(dataDir, service, incarnation, row.id);
+  await verifySnapshot(files, service, incarnation, row.id);
   return { id: row.id, takenAt: row.takenAt };
 }
 
@@ -147,35 +147,52 @@ export const landing = (service: Db, incarnation: string, at: number) =>
     .bind(incarnation, at)
     .first<{ id: string; takenAt: number; kind: SnapshotKind }>();
 
-// The one check that a snapshot can be installed: its row is there and its file has the size and SHA-256 the row
-// recorded, and for a delta its base's too. The preview, the choice of a target and the install all pass through it,
-// so a snapshot the install would refuse is refused before an operation is armed on it.
-async function verifySnapshot(dataDir: string, service: Db, incarnation: string, id: string): Promise<{ base: string | null; rev: number }> {
+async function snapshotRow(service: Db, incarnation: string, id: string) {
   const row = await service
     .prepare('SELECT bytes, sha256, base, rev FROM snapshots WHERE id = ? AND incarnation = ?')
     .bind(id, incarnation)
     .first<{ bytes: number; sha256: string; base: string | null; rev: number }>();
   if (row === null) throw new StoreUnavailable('snapshot-missing');
-  let found: { sha256: string; bytes: number };
+  return row;
+}
+
+// The preview and target selection verify the same bytes as the materializer, including a delta's base, so an
+// archive the install would refuse is refused before an operation is armed on it.
+async function verifySnapshot(files: Bucket, service: Db, incarnation: string, id: string): Promise<void> {
+  const row = await snapshotRow(service, incarnation, id);
+  await readSnapshot(files, incarnation, id, row);
+  if (row.base !== null) await verifySnapshot(files, service, incarnation, row.base);
+}
+
+async function readSnapshot(files: Bucket, incarnation: string, id: string, row: { bytes: number; sha256: string }, target?: string) {
+  const body = await files.get(snapshotKey(incarnation, id));
+  if (body === null) throw new StoreUnavailable('snapshot-missing');
+  const hash = createHash('sha256');
+  let bytes = 0;
+  const digest = new Transform({ transform(chunk: Buffer, _, next) { bytes += chunk.length; hash.update(chunk); next(null, chunk); } });
   try {
-    found = await digest(snapshotPath(dataDir, incarnation, id));
+    if (target) await pipeline(body, digest, createGunzip(), createWriteStream(target));
+    else await pipeline(body, digest, new Writable({ write(_, _encoding, next) { next(); } }));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new StoreUnavailable('snapshot-missing');
+    if (target) rmSync(target, { force: true });
+    if ((error as NodeJS.ErrnoException).code?.startsWith('Z_')) throw new StoreUnavailable('snapshot-corrupt');
     throw error;
   }
-  if (found.bytes !== row.bytes || found.sha256 !== row.sha256) throw new StoreUnavailable('snapshot-corrupt');
-  if (row.base !== null) await verifySnapshot(dataDir, service, incarnation, row.base);
-  return { base: row.base, rev: row.rev };
+  if (bytes !== row.bytes || hash.digest('hex') !== row.sha256) {
+    if (target) rmSync(target, { force: true });
+    throw new StoreUnavailable('snapshot-corrupt');
+  }
 }
 
 // The one reader of a snapshot's format; every caller gets a plain whole account file.
-export async function materializeSnapshot(dataDir: string, service: Db, incarnation: string, id: string, target: string): Promise<void> {
-  const { base, rev } = await verifySnapshot(dataDir, service, incarnation, id);
-  await pipeline(createReadStream(snapshotPath(dataDir, incarnation, base ?? id)), createGunzip(), createWriteStream(target));
+export async function materializeSnapshot(files: Bucket, service: Db, incarnation: string, id: string, target: string): Promise<void> {
+  const snapshot = await snapshotRow(service, incarnation, id);
+  const { base, rev } = snapshot;
+  await readSnapshot(files, incarnation, base ?? id, base === null ? snapshot : await snapshotRow(service, incarnation, base), target);
   if (base === null) return;
   const delta = `${target}.delta`;
   try {
-    await pipeline(createReadStream(snapshotPath(dataDir, incarnation, id)), createGunzip(), createWriteStream(delta));
+    await readSnapshot(files, incarnation, id, snapshot, delta);
     const db = new DatabaseSync(target);
     try {
       db.prepare('ATTACH DATABASE ? AS delta').run(delta);
@@ -211,6 +228,7 @@ export class AccountDb implements StoreDb {
     private readonly incarnation: string,
     private readonly service: Db,
     private readonly clock: () => number,
+    private readonly files: Bucket,
   ) {}
 
   private db(): DatabaseSync {
@@ -252,7 +270,7 @@ export class AccountDb implements StoreDb {
   async captureSnapshot(kind: SnapshotKind, operation: number | null): Promise<() => Promise<string>> {
     const takenAt = this.clock();
     const id = `${takenAt}-${random()}`;
-    const dir = snapshotDir(this.dataDir, this.incarnation);
+    const dir = join(this.dataDir, 'accounts');
     makeDirs(dir);
     const plain = join(dir, `.tmp-${id}.sqlite`);
     const gz = join(dir, `.tmp-${id}.sqlite.gz`);
@@ -289,8 +307,7 @@ export class AccountDb implements StoreDb {
     return async () => {
       try {
         const { bytes, expanded, sha256 } = await archiveSnapshot(plain, gz);
-        renameSync(gz, snapshotPath(this.dataDir, this.incarnation, id));
-        fsyncPath(dir);
+        await this.files.putFile(snapshotKey(this.incarnation, id), gz);
         // The row follows the durable artifact. A crash before publication leaves a .tmp-* or uncatalogued gzip
         // for reconciliation; the capture's time and revision never advance to publication time.
         await this.service
@@ -308,9 +325,9 @@ export class AccountDb implements StoreDb {
   readonly snapshots = {
     // A checkpoint stays on the queue through publication: a rewind must have its durable undo before advancing.
     take: async (kind: SnapshotKind, operation: number | null): Promise<string> => (await this.captureSnapshot(kind, operation))(),
-    forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at))?.id ?? null,
+    forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.files, this.service, this.incarnation, at))?.id ?? null,
     verify: async (id: string) => {
-      await verifySnapshot(this.dataDir, this.service, this.incarnation, id);
+      await verifySnapshot(this.files, this.service, this.incarnation, id);
     },
   };
 
@@ -347,7 +364,7 @@ export type Stores = {
 type Session = { db: AccountDb; rules: StoreRules };
 type Entry = { generation: number; queue: Promise<unknown>; pending: number; session: Session | null; lastUsed: number };
 
-export function accountRegistry(dataDir: string, service: Db, reads: StoreReads, clock: () => number): Stores {
+export function accountRegistry(dataDir: string, service: Db, reads: StoreReads, clock: () => number, files: Bucket): Stores {
   const entries = new Map<string, Entry>();
   const entry = (incarnation: string) => {
     const held = entries.get(incarnation);
@@ -381,9 +398,9 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
 
   const session = async (incarnation: string, held: Entry): Promise<Session> => {
     if (held.session) return held.session;
-    await installArmed(dataDir, service, incarnation);
+    await installArmed(dataDir, service, incarnation, files);
     bound();
-    const db = new AccountDb(dataDir, incarnation, service, clock);
+    const db = new AccountDb(dataDir, incarnation, service, clock, files);
     held.session = { db, rules: new StoreRules(db, reads, (work) => work()) };
     return held.session;
   };
@@ -449,7 +466,7 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
       // The caller still waits for publication, so fresh() and the capture gate never name an unfinished baseline.
       return typeof captured === 'function' ? { taken: await captured() } : captured;
     },
-    snapshotAt: (incarnation, at) => snapshotFor(dataDir, service, incarnation, at),
+    snapshotAt: (incarnation, at) => snapshotFor(files, service, incarnation, at),
     evictIdle: (now = clock()) => {
       for (const held of entries.values()) if (held.session && held.pending === 0 && now - held.lastUsed >= IDLE_MS) closeSession(held);
     },
@@ -480,7 +497,7 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
 // verified, and renamed over the live file after its WAL and shm are gone, so the live file is always either the old
 // one intact or the new one whole. The mark names the operation too: a later rewind to the same snapshot is a new
 // install over a file that has changed since.
-async function installArmed(dataDir: string, service: Db, incarnation: string): Promise<void> {
+async function installArmed(dataDir: string, service: Db, incarnation: string, files: Bucket): Promise<void> {
   const armed = await service
     .prepare(
       `SELECT r.id, r.target FROM restores r JOIN accounts a ON a.incarnation = r.incarnation AND a.operation = r.id
@@ -499,16 +516,16 @@ async function installArmed(dataDir: string, service: Db, incarnation: string): 
       current.close();
     }
   }
-  await installSnapshot(dataDir, service, incarnation, armed.target, armed.id);
+  await installSnapshot(dataDir, service, incarnation, armed.target, armed.id, files);
 }
 
 // The install itself, also run by a disaster restore (backup/restore.ts) for an operation already past it. No session
 // may hold the live file.
-export async function installSnapshot(dataDir: string, service: Db, incarnation: string, armed: string, operation: number): Promise<void> {
+export async function installSnapshot(dataDir: string, service: Db, incarnation: string, armed: string, operation: number, files: Bucket): Promise<void> {
   const live = accountPath(dataDir, incarnation);
   const staged = join(dataDir, 'accounts', `${incarnation}.install-${random()}.sqlite`);
   try {
-    await materializeSnapshot(dataDir, service, incarnation, armed, staged);
+    await materializeSnapshot(files, service, incarnation, armed, staged);
     const db = new DatabaseSync(staged);
     try {
       const [check] = db.prepare('PRAGMA quick_check').all() as { quick_check: string }[];

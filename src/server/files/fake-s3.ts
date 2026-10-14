@@ -25,8 +25,8 @@ export async function fakeS3(page = 2) {
     const body = await read(request);
     const payload = String(request.headers['x-amz-content-sha256']);
     const date = String(request.headers['x-amz-date']);
-    const expected = authorization(signer, request.method!, url, { host: request.headers.host!, 'x-amz-content-sha256': payload, 'x-amz-date': date }, payload, date);
-    if (request.headers.authorization !== expected || payload !== sha256Hex(body)) return response.writeHead(403).end('<Error><Code>SignatureDoesNotMatch</Code></Error>');
+    const expected = authorization(signer, request.method!, url, { host: request.headers.host!, 'x-amz-content-sha256': payload, 'x-amz-date': date, ...(payload === 'UNSIGNED-PAYLOAD' ? { 'content-length': String(request.headers['content-length']) } : {}) }, payload, date);
+    if (request.headers.authorization !== expected || (payload === 'UNSIGNED-PAYLOAD' ? Number(request.headers['content-length']) !== body.length : payload !== sha256Hex(body))) return response.writeHead(403).end('<Error><Code>SignatureDoesNotMatch</Code></Error>');
     const [, bucket, ...rest] = url.pathname.split('/');
     if (bucket !== config.bucket) return response.writeHead(404).end('<Error><Code>NoSuchBucket</Code></Error>');
     const key = rest.join('/');
@@ -44,7 +44,7 @@ export async function fakeS3(page = 2) {
       const all = [...names].sort().filter((name) => name > after);
       const shown = all.slice(0, page);
       const truncated = all.length > shown.length;
-      const entries = shown.map((name) => (name.endsWith('/') ? `<CommonPrefixes><Prefix>${name}</Prefix></CommonPrefixes>` : `<Contents><Key>${name}</Key><Size>${objects.get(name)!.byteLength}</Size></Contents>`));
+      const entries = shown.map((name) => (name.endsWith('/') ? `<CommonPrefixes><Prefix>${name}</Prefix></CommonPrefixes>` : `<Contents><Key>${name}</Key><LastModified>${new Date().toISOString()}</LastModified><Size>${objects.get(name)!.byteLength}</Size></Contents>`));
       return response
         .writeHead(200, { 'content-type': 'application/xml' })
         .end(`<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><Name>${bucket}</Name><Prefix>${prefix}</Prefix><IsTruncated>${truncated}</IsTruncated>${entries.join('')}${truncated ? `<NextContinuationToken>${shown.at(-1)}</NextContinuationToken>` : ''}</ListBucketResult>`);

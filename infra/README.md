@@ -96,6 +96,28 @@ Back to disk, while the R2 bucket still holds everything: `hazelle-compose stop 
 the bucket until the last one has expired, 7 days after the switch back; the deferred removals queued meanwhile are
 then the operator's (`picture_removals`).
 
+## Snapshot archives in R2
+
+With the R2 store, snapshot archives (the accounts' restore points) live in the same bucket under
+`snapshots/<incarnation>/<id>.sqlite.gz` instead of `/data/snapshots`, with no setting of their own. A generation names
+them there, and the copier copies each named archive into the backup remote's pool, `snapshots/<bucket>/...`, before it
+marks the generation copied, so the backup bucket alone still restores every account's text. The copier reads the
+store through the `[files]` remote of `/etc/hazelle/rclone/rclone.conf` (the one the picture move added); the bucket
+name comes from the manifest.
+
+Moving the hosted machine's existing archives, as root on it:
+
+1. Before the deploy: install the new `/etc/hazelle/deploy/rclone-backup.sh` and run `hazelle-compose --profile backup
+   up -d --force-recreate backup`. An older copier would mark a version 4 generation copied without its archives.
+2. Deploy. The new build writes archives to R2 at once; restore points still on disk fail as missing until step 3.
+3. Copy `scripts/move-pictures-to-r2.sh` to the machine; `move-pictures-to-r2.sh copy-snapshots hazelle-files` while
+   the app runs, then `hazelle-compose stop app`, `move-pictures-to-r2.sh move-snapshots hazelle-files` (copies what
+   is left, checks every catalogued archive in the bucket at its size, and only then removes `/data/snapshots`), and
+   `hazelle-compose up -d app`. Older generations keep hard links to the old archives until they expire.
+4. Take a generation (`hazelle-compose exec -T app kill -USR2 1`), let the copier run, and check that the remote holds
+   `snapshots/hazelle-files/...` and the generation's `copied`. Then run the restore drill (`scripts/restore.sh fetch`
+   into a scratch directory, as `scripts/destroy.sh` does) to prove the text restores from the backup bucket alone.
+
 ## Edge
 
 Korean visitors on KT reach a proxied record through Cloudflare's LAX location (measured 2026-10-11: health 1.5 s median,

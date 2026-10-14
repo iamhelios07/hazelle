@@ -70,6 +70,18 @@ describe('the migration runner', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM restores').get()).toEqual({ n: 0 });
   });
 
+  it('adds durable snapshot removals without changing or discarding the snapshot catalog', () => {
+    const db = new DatabaseSync(':memory:');
+    const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && !name.startsWith('0009'));
+    migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')]))));
+    db.exec("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES ('s', 'i', 'baseline', 1, 2, 3, 4, 'h')");
+    expect(migrate(db, 'migrations').applied).toEqual(['0009_snapshot_removals.sql']);
+    expect(db.prepare('SELECT rev, bytes, expanded, sha256 FROM snapshots').all()).toEqual([{ rev: 2, bytes: 3, expanded: 4, sha256: 'h' }]);
+    db.exec("INSERT INTO snapshot_removals VALUES ('snapshots/i/s.sqlite.gz', 7); DELETE FROM snapshots WHERE id = 's'");
+    expect(db.prepare('SELECT * FROM snapshot_removals').all()).toEqual([{ key: 'snapshots/i/s.sqlite.gz', due_at: 7 }]);
+    db.close();
+  });
+
   it('upgrades a populated database with the files it lacks, each whole or not at all', () => {
     const db = new DatabaseSync(':memory:');
     const first = dir({ '0001_a.sql': 'CREATE TABLE a (x);' });

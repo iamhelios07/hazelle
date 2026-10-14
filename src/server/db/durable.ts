@@ -24,10 +24,10 @@ export function makeDirs(dir: string): void {
   for (const path of made) fsyncPath(dirname(path));
 }
 
-export async function digest(path: string): Promise<{ sha256: string; bytes: number }> {
+export async function digest(source: string | ReadableStream<Uint8Array>): Promise<{ sha256: string; bytes: number }> {
   const hash = createHash('sha256');
   let bytes = 0;
-  for await (const chunk of createReadStream(path) as AsyncIterable<Buffer>) {
+  for await (const chunk of (typeof source === 'string' ? createReadStream(source) : source) as AsyncIterable<Uint8Array>) {
     hash.update(chunk);
     bytes += chunk.length;
   }

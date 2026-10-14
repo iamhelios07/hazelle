@@ -3,10 +3,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { RestorePhase } from '../contracts/admin';
 import type { Write } from './account-store';
 import { expireSnapshots } from './backup/snapshots';
-import { snapshotPath, type Stores } from './db/account-db';
+import type { Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
-import type { Bucket } from './files/bucket';
+import { snapshotKey, type Bucket } from './files/bucket';
+import { diskBucket } from './files/disk-bucket';
 import { hex, type Services } from './http';
 import { beginRestore, cancelRestore, leaveAccount, restorePoints, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
@@ -479,7 +480,7 @@ describe('a restore', () => {
     const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
     t.restartProcess();
     // 8 days on, the undone restore's own pin has lapsed.
-    await expireSnapshots(t.env, t.dir, Date.now() + 8 * 24 * HOUR_MS);
+    await expireSnapshots(t.env, Date.now() + 8 * 24 * HOUR_MS);
     expect(await runRestore(t.env, undo)).toMatchObject({ phase: 'done', verified: true, error: null });
     expect(await contents(seed.cookie)).toEqual(BEFORE);
   });
@@ -489,7 +490,7 @@ describe('a restore', () => {
     const id = await begin(seed);
     await runRestore(t.env, id);
     const { checkpoint } = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(id).first<{ checkpoint: string }>())!;
-    rmSync(snapshotPath(t.dir, seed.incarnation, checkpoint));
+    rmSync(diskBucket(t.dir).path(snapshotKey(seed.incarnation, checkpoint)));
     const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
     expect(await runRestore(t.env, undo)).toEqual({ id: undo, phase: 'checkpointed', verified: false, error: 'store-unavailable' });
     expect(await cancelRestore(t.env, undo)).toMatchObject({ phase: 'cancelled', verified: true });

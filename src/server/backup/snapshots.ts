@@ -1,5 +1,5 @@
-import { rm } from 'node:fs/promises';
-import { CURRENT_BASELINE, RETENTION_MS, snapshotPath, TAKES_BASELINE } from '../db/account-db';
+import { CURRENT_BASELINE, RETENTION_MS, TAKES_BASELINE } from '../db/account-db';
+import { snapshotKey } from '../files/bucket';
 import type { Services } from '../http';
 
 // The daily baselines and the retention of every snapshot (docs/research/docker-port-plan.md §10.1). Day boundaries
@@ -64,10 +64,10 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
 // baseline stamped later as the floor over the current timeline's; landing by time is as confused by it, accepted.)
 // Baselines are taken only on days the account changed, so a time inside the window may land on one from before it;
 // the floor is also an unchanged account's only copy. A base goes on a later pass, once its last delta has gone.
-// A deleted account has no restores and no row, so every snapshot of it goes at RETENTION_MS from its taking, which is
-// within RETENTION_MS of the deletion. The row goes before the file; a file left by a crash between has no row, and the
-// hourly reconciliation removes it.
-export async function expireSnapshots(env: Services, dataDir: string, now: number): Promise<number> {
+// A deleted account has no restores and no row, so every catalog entry of it goes at RETENTION_MS from its taking.
+// Disk generations keep hard links; R2 generations name the store, so the catalog deletion queues a removal in the same
+// transaction, due one retention later and held while a local generation still names it (reconcile.ts).
+export async function expireSnapshots(env: Services, now: number): Promise<number> {
   const { results } = await env.db
     .prepare(
       `SELECT id, incarnation FROM snapshots s
@@ -82,8 +82,15 @@ export async function expireSnapshots(env: Services, dataDir: string, now: numbe
     .bind(now)
     .all<{ id: string; incarnation: string }>();
   for (const { id, incarnation } of results) {
-    await env.db.prepare('DELETE FROM snapshots WHERE id = ?').bind(id).run();
-    await rm(snapshotPath(dataDir, incarnation, id), { force: true });
+    const key = snapshotKey(incarnation, id);
+    if (env.files.kind === 'r2') await env.db.batch([
+      env.db.prepare('INSERT INTO snapshot_removals (key, due_at) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET due_at = excluded.due_at').bind(key, now + RETENTION_MS),
+      env.db.prepare('DELETE FROM snapshots WHERE id = ?').bind(id),
+    ]);
+    else {
+      await env.db.prepare('DELETE FROM snapshots WHERE id = ?').bind(id).run();
+      await env.files.delete(key);
+    }
     await pass();
   }
   return results.length;

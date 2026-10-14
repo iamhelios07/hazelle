@@ -6,9 +6,13 @@ import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serviceReads, type Write } from '../account-store';
+import { snapshotKey } from '../files/bucket';
+import { cachedR2Bucket } from '../files/cached-r2-bucket';
+import { fakeS3 } from '../files/fake-s3';
+import { r2Bucket } from '../files/r2-bucket';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
-import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, snapshotPath, type Stores } from './account-db';
+import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, type Stores } from './account-db';
 import { DAY_MS } from '../backup/snapshots';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
@@ -31,7 +35,7 @@ beforeEach(() => {
   migrate(raw, 'migrations');
   db = serviceDb(raw);
   now = 1_000_000;
-  stores = accountRegistry(dir, db, serviceReads(db), () => now);
+  stores = accountRegistry(dir, db, serviceReads(db), () => now, diskBucket(dir));
 });
 afterEach(() => {
   stores.close();
@@ -180,7 +184,7 @@ describe('the account registry', () => {
     const id = await taking;
     expect(raw.prepare('SELECT taken_at, rev FROM snapshots WHERE id = ?').get(id)).toEqual({ taken_at: 2_000_000, rev: 1 });
     const plain = join(dir, 'captured.sqlite');
-    writeFileSync(plain, gunzipSync(readFileSync(snapshotPath(dir, INC, id))));
+    writeFileSync(plain, gunzipSync(readFileSync(diskBucket(dir).path(snapshotKey(INC, id)))));
     const copy = new DatabaseSync(plain);
     try {
       expect(copy.prepare('SELECT rev FROM head').get()).toEqual({ rev: 1 });
@@ -191,7 +195,7 @@ describe('the account registry', () => {
     expect(await stores.snapshotAt(INC, 2_500_000)).toEqual({ id, takenAt: 2_000_000 });
     expect(await stores.snapshotAt(INC, now)).toBeNull();
     expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
-    expect(readdirSync(join(dir, 'snapshots', INC)).some((name) => name.startsWith('.tmp-'))).toBe(false);
+    expect(readdirSync(join(dir, 'accounts')).some((name) => name.startsWith('.tmp-'))).toBe(false);
   });
 
   it('installs the armed target when the store next starts: the file is the snapshot, marked with its id, and the mark is gone', async () => {
@@ -236,7 +240,7 @@ describe('the account registry', () => {
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (3, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
     now = 1_500_000;
     const altered = await baseline();
-    const path = snapshotPath(dir, INC, altered);
+    const path = diskBucket(dir).path(snapshotKey(INC, altered));
     const bytes = readFileSync(path);
     bytes[bytes.length - 1]! ^= 1;
     writeFileSync(path, bytes);
@@ -273,7 +277,7 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'x'));
     const failing: Db = { ...db, prepare: (sql) => (sql.startsWith('INSERT INTO snapshots') ? ({ bind: () => ({ run: () => Promise.reject(new Error('insert failed')) }) } as never) : db.prepare(sql)) };
-    const dying = accountRegistry(dir, failing, serviceReads(db), () => now);
+    const dying = accountRegistry(dir, failing, serviceReads(db), () => now, diskBucket(dir));
     await expect(dying.snapshot(INC, 'baseline')).rejects.toThrow('insert failed');
     dying.close();
     const [orphan, ...more] = readdirSync(join(dir, 'snapshots', INC));
@@ -283,7 +287,7 @@ describe('the account registry', () => {
     expect((await reconcile(dir, db, diskBucket(dir), Date.now())).removed).toEqual([]);
     const id = await baseline();
     expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toEqual([`snapshots/${INC}/${orphan}`]);
-    expect(existsSync(snapshotPath(dir, INC, id))).toBe(true);
+    expect(existsSync(diskBucket(dir).path(snapshotKey(INC, id)))).toBe(true);
   });
 
   it('installs whole across registry restarts: a staged file left beside the live one changes nothing and the next start installs, after the install the next start installs nothing', async () => {
@@ -296,7 +300,7 @@ describe('the account registry', () => {
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 2500000, 't2', ?, 'armed', 1, 1)").run(INC, target);
     const restart = () => {
       stores.close();
-      stores = accountRegistry(dir, db, serviceReads(db), () => now);
+      stores = accountRegistry(dir, db, serviceReads(db), () => now, diskBucket(dir));
     };
     // What a staging cut off before its rename leaves: a staged file beside the live one.
     writeFileSync(join(dir, 'accounts', `${INC}.install-dead.sqlite`), 'prepared, never renamed');
@@ -306,7 +310,7 @@ describe('the account registry', () => {
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     // Installed: the marker says so, and even with its snapshot gone nothing is installed again.
     restart();
-    rmSync(snapshotPath(dir, INC, target));
+    rmSync(diskBucket(dir).path(snapshotKey(INC, target)));
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
     expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
@@ -333,18 +337,19 @@ describe('the account registry', () => {
       };
       syncBuiltinESMExports();
       const { accountRegistry } = await import('./src/server/db/account-db.ts');
+      const { diskBucket } = await import('./src/server/files/disk-bucket.ts');
       const { openDatabase, serviceDb } = await import('./src/server/db/service-db.ts');
       const { serviceReads } = await import('./src/server/account-store.ts');
       const [dir, incarnation] = process.argv.slice(1);
       const service = serviceDb(openDatabase(dir + '/service.sqlite'));
-      await accountRegistry(dir, service, serviceReads(service), Date.now).getByName(incarnation).marked(incarnation, 7);
+      await accountRegistry(dir, service, serviceReads(service), Date.now, diskBucket(dir)).getByName(incarnation).marked(incarnation, 7);
     `, dir, INC], { env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' }, stdio: 'ignore', timeout: 10_000 });
     expect({ signal: killed.signal, error: killed.error, status: killed.status }).toEqual({ signal: 'SIGKILL', error: undefined, status: null });
     const [stage] = readdirSync(join(dir, 'accounts')).filter((name) => name.includes('.install-'));
     expect(stage).toBeDefined();
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'new' }]);
     expect(stores.inspect(INC).exec('PRAGMA quick_check')).toEqual([{ quick_check: 'ok' }]);
-    stores = accountRegistry(dir, db, serviceReads(db), () => now);
+    stores = accountRegistry(dir, db, serviceReads(db), () => now, diskBucket(dir));
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
     expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toContain(`accounts/${stage}`);
@@ -371,9 +376,9 @@ describe('the account registry', () => {
       { id: base, base: null, rev: 2 },
       { id: delta, base, rev: 4 },
     ]);
-    expect(readdirSync(join(dir, 'snapshots', INC)).filter((name) => name.startsWith('.tmp-'))).toEqual([]);
+    expect(readdirSync(join(dir, 'accounts')).filter((name) => name.startsWith('.tmp-'))).toEqual([]);
     const plain = join(dir, 'delta.sqlite');
-    writeFileSync(plain, gunzipSync(readFileSync(snapshotPath(dir, INC, delta))));
+    writeFileSync(plain, gunzipSync(readFileSync(diskBucket(dir).path(snapshotKey(INC, delta)))));
     opened(plain, (file) => {
       expect(file.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all()).toEqual([{ name: 'head' }, { name: 'kv' }, { name: 'objects' }]);
       expect(file.prepare('SELECT rev FROM head').all()).toEqual([{ rev: 4 }]);
@@ -386,7 +391,7 @@ describe('the account registry', () => {
     const { delta } = await baseAndDelta();
     stores.close();
     const target = join(dir, 'materialized.sqlite');
-    await materializeSnapshot(dir, db, INC, delta, target);
+    await materializeSnapshot(diskBucket(dir), db, INC, delta, target);
     expect(opened(target, contents)).toEqual(opened(accountPath(dir, INC), contents));
     expect(existsSync(`${target}.delta`)).toBe(false);
   });
@@ -431,12 +436,12 @@ describe('the account registry', () => {
   it('answers corrupt for a delta that does not materialize to the rev its row recorded', async () => {
     const { delta } = await baseAndDelta();
     raw.prepare('UPDATE snapshots SET rev = 5 WHERE id = ?').run(delta);
-    await expect(materializeSnapshot(dir, db, INC, delta, join(dir, 'materialized.sqlite'))).rejects.toThrow(/snapshot-corrupt/);
+    await expect(materializeSnapshot(diskBucket(dir), db, INC, delta, join(dir, 'materialized.sqlite'))).rejects.toThrow(/snapshot-corrupt/);
   });
 
   it('answers unavailable for a delta whose base file is altered or gone', async () => {
     const { base } = await baseAndDelta();
-    const path = snapshotPath(dir, INC, base);
+    const path = diskBucket(dir).path(snapshotKey(INC, base));
     const bytes = readFileSync(path);
     bytes[bytes.length - 1]! ^= 1;
     writeFileSync(path, bytes);
@@ -468,4 +473,31 @@ describe('the account registry', () => {
     stores.evictIdle(now + 10 * 60 * 1000);
     expect(await bodies()).toEqual(['x']);
   });
+});
+
+it('takes and materializes whole and delta snapshots in R2, never from the picture cache or the old disk layout', async () => {
+  const s3 = await fakeS3();
+  const files = cachedR2Bucket(r2Bucket(s3.config), dir, 1 << 20);
+  stores.close();
+  stores = accountRegistry(dir, db, serviceReads(db), () => now, files);
+  try {
+    const { base, delta } = await baseAndDelta();
+    const target = join(dir, 'materialized.sqlite');
+    await materializeSnapshot(files, db, INC, base, target);
+    expect(opened(target, (db) => db.prepare('SELECT body FROM objects ORDER BY id').all())).toEqual([{ body: 'a1' }, { body: 'b1' }]);
+    rmSync(target);
+    await materializeSnapshot(files, db, INC, delta, target);
+    expect(opened(target, (db) => db.prepare('SELECT * FROM objects ORDER BY id').all())).toEqual(stores.inspect(INC).exec('SELECT * FROM objects ORDER BY id'));
+    expect(existsSync(join(dir, 'snapshots'))).toBe(false);
+    expect(existsSync(join(dir, 'cache'))).toBe(false);
+    const key = snapshotKey(INC, base);
+    const bytes = s3.objects.get(key)!;
+    s3.objects.set(key, bytes.slice(0, -1));
+    await expect(materializeSnapshot(files, db, INC, delta, target)).rejects.toThrow(/snapshot-corrupt/);
+    await diskBucket(dir).put(key, bytes);
+    s3.objects.delete(key);
+    await expect(materializeSnapshot(files, db, INC, delta, target)).rejects.toThrow(/snapshot-missing/);
+  } finally {
+    await s3.close();
+  }
 });

@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCOUNT_SCHEMA_VERSION } from '../db/account-db';
+import { fakeS3 } from '../files/fake-s3';
+import { r2Bucket } from '../files/r2-bucket';
 import type { Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
@@ -54,6 +56,34 @@ async function uploaded(cookie: string, text: string) {
 }
 const generation = async (id: string) => (await readManifest(join(generationsDir(t.dir), id)))!;
 const newest = async () => generation((await listGenerations(t.dir)).toSorted((a, b) => b.capturedAt - a.capturedAt)[0]!.id);
+
+it('names R2 whole and delta archives in manifest v4 without linking them into the generation', async () => {
+  const s3 = await fakeS3();
+  const disk = t.env.files;
+  t.env.files = r2Bucket(s3.config);
+  t.restartProcess();
+  try {
+    const user = await signedUp('operator');
+    const now = Date.now();
+    t.clock.now = () => now - 60_000;
+    const base = ((await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string }).taken;
+    const timeline = (await t.env.db.prepare('SELECT timeline FROM accounts WHERE incarnation = ?').bind(user.incarnation).first<string>('timeline'))!;
+    await t.stores.getByName(user.incarnation).batch(user.incarnation, timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'changed', baseRev: null }], null);
+    t.clock.now = () => now - 30_000;
+    await t.stores.snapshot(user.incarnation, 'baseline');
+    expect((await t.daily(now)).generation).toEqual({ outcome: 'ok', error: null });
+    const manifest = await newest();
+    expect(manifest).toMatchObject({ version: 4, snapshotStore: { kind: 'r2', bucket: s3.config.bucket } });
+    expect(manifest.snapshots).toHaveLength(2);
+    expect(manifest.snapshots.map(({ id }) => id)).toContain(base);
+    for (const snapshot of manifest.snapshots) expect(sha(s3.objects.get(snapshot.path)!)).toBe(snapshot.sha256);
+    expect(existsSync(join(generationsDir(t.dir), manifest.id, 'snapshots'))).toBe(false);
+  } finally {
+    t.env.files = disk;
+    t.restartProcess();
+    await s3.close();
+  }
+});
 
 function serviceOf(manifest: Manifest) {
   const path = join(t.dir, 'scratch.sqlite');

@@ -37,11 +37,13 @@ id=$(remote 'set -eu
   grep -q "\"materialized\":" $drill/manifest.json ||
     { echo "destroy: the manifest of $id records no materialized sizes (an older build wrote it); run this after the next daily generation" >&2; exit 1; }
   grep -o "\"pictures\":\[[^]]*\]" $drill/manifest.json | grep -o "[0-9a-f]\{64\}" >$drill/pictures || true
+  if grep -q "\"bucket\":\"r2\"" $drill/manifest.json; then : >$drill/pictures; fi
   sum() { grep -o "\"$1\":[0-9]*" $drill/manifest.json | cut -d: -f2 | awk "{ s += \$1 } END { print s + 0 }"; }
   artifacts=$(sum bytes)
   service=$(grep -o "\"service\":{[^}]*}" $drill/manifest.json | grep -o "\"expanded\":[0-9]*" | cut -d: -f2)
   expanded=$((service + $(sum materialized)))
   held=$(sum pictureBytes)
+  if grep -q "\"bucket\":\"r2\"" $drill/manifest.json; then held=0; fi
   # No pictures: the remote may have no files/ at all.
   pictures=0
   if [ -s $drill/pictures ]; then
@@ -61,8 +63,8 @@ id=$(remote 'set -eu
   need=$((download + restore + disk_kb * 1024 / 5))
   echo "destroy: $id downloads $download bytes (generation $artifacts, pictures $pictures) and restores to $restore (databases $expanded, snapshots $artifacts, pictures per account $held); the drill needs $need bytes free on $drill with a fifth of the disk, $((free_kb * 1024)) are" >&2
   [ $((free_kb * 1024)) -ge "$need" ] || { echo "destroy: not enough free space for the drill" >&2; exit 1; }
-  rclone copy "$remote/$id" "/drill/$id"
-  if [ -s $drill/pictures ]; then rclone copy "$remote/files" /drill/files --files-from-raw /drill/pictures; fi
+  docker run --rm --entrypoint cat "$image" /app/scripts/restore.sh >$drill/fetch.sh
+  docker run --rm --user 1000:1000 -e HOME=/tmp -v /etc/hazelle/rclone:/config/rclone -v $drill:/drill --entrypoint /bin/sh rclone/rclone:1.75 /drill/fetch.sh fetch "$remote" "$id" /drill
   # The env of the app names the picture store: an r2 generation restores only into it, and without the env the
   # restore looks for a pool beside the generation.
   docker run --rm --user 1000:1000 --env-file /etc/hazelle/env --entrypoint /app/scripts/restore.sh -v $drill:/drill "$image" "/drill/$id" /drill/data >&2

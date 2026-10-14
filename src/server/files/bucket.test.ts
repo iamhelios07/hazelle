@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { Bucket } from './bucket';
+import { snapshotKey, type Bucket } from './bucket';
 import { cachedR2Bucket } from './cached-r2-bucket';
 import { chooseBucket } from './choose';
 import { diskBucket } from './disk-bucket';
@@ -24,6 +25,7 @@ beforeAll(async () => {
 afterAll(() => s3.close());
 afterEach(() => {
   if (dir) rmSync(dir, { recursive: true, force: true });
+  dir = '';
   s3.objects.clear();
   s3.requests.length = 0;
 });
@@ -41,6 +43,24 @@ const kinds = {
 };
 
 describe.each(Object.entries(kinds))('the %s bucket', (_, fresh) => {
+  it('streams a file archive through the store without entering the picture cache', async () => {
+    const bucket = fresh();
+    if (!dir) dir = mkdtempSync(join(tmpdir(), 'hazelle-'));
+    const source = join(dir, 'source.gz');
+    const target = join(dir, 'download.gz');
+    const bytes = new Uint8Array(2 * 1024 * 1024).fill(123);
+    writeFileSync(source, bytes);
+    const at = snapshotKey(INCARNATION, '123-abcdef012345');
+    await bucket.putFile(at, source);
+    await pipeline((await bucket.get(at))!, createWriteStream(target));
+    expect(readFileSync(target)).toEqual(Buffer.from(bytes));
+    expect((await bucket.archives()).map(({ key }) => key)).toEqual([at]);
+    expect(existsSync(join(dir, 'cache'))).toBe(false);
+    await bucket.delete(at);
+    expect(await bucket.get(at)).toBeNull();
+    await expect(bucket.putFile(`snapshots/${INCARNATION}/../source.gz`, source)).rejects.toThrow(/Not a file key/);
+  });
+
   it('answers the bytes it was given, and null for an absent key', async () => {
     const bucket = fresh();
     await bucket.put(key('1'), new Uint8Array([1, 2, 3]));

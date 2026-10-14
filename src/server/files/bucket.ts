@@ -1,9 +1,11 @@
-// Where pictures live, keyed files/<incarnation>/<sha256>: the data directory (disk-bucket.ts) or an R2 bucket
+// Pictures and snapshot archives live in the data directory (disk-bucket.ts) or an R2 bucket
 // (r2-bucket.ts), chosen at startup (choose.ts). Every reader of that layout goes through a Bucket.
 
 type Common = {
-  // Durable once it answers: the routes write the row that says stored only after it.
+  // Durable once either put answers: a catalog row is written only after publication.
   put(key: string, body: ArrayBuffer | Uint8Array): Promise<void>;
+  putFile(key: string, path: string): Promise<void>;
+  archives(): Promise<{ key: string; modified: number }[]>;
   get(key: string): Promise<ReadableStream<Uint8Array> | null>;
   delete(key: string): Promise<void>;
   list(prefix: string): Promise<string[]>;
@@ -15,18 +17,19 @@ type Common = {
 // path: the file holding a key, which a backup generation hard-links into its pool. sweep: removes what a put cut off
 // before settled left behind and answers those names.
 export type DiskBucket = Common & { kind: 'disk'; path(key: string): string; sweep(settled: number): Promise<string[]> };
-// The store outlives the machine, so a backup generation names its pictures here instead of copying them
+// The store outlives the machine, so a backup generation names its pictures and archives here instead of copying them
 // (backup/generation.ts). head: a key's size, null when absent; it asks the store itself. trim: the hourly eviction of
 // the copy on the machine's disk (cached-r2-bucket.ts), answering the names it removed.
-export type R2Bucket = Common & { kind: 'r2'; head(key: string): Promise<number | null>; trim(now: number): Promise<string[]> };
+export type R2Bucket = Common & { kind: 'r2'; name: string; head(key: string): Promise<number | null>; trim(now: number): Promise<string[]> };
 export type Bucket = DiskBucket | R2Bucket;
 
-// The path-traversal guard: keys come from validated route params, so a miss is a programming error.
+// The path-traversal guard: keys come from validated route params or generated snapshot ids; a miss is a programming error.
 const KEY = /^files\/[0-9a-f]{32}\/[0-9a-f]{64}$/;
+const SNAPSHOT_KEY = /^snapshots\/[0-9a-f]{32}\/[0-9]+-[0-9a-f]{12}\.sqlite\.gz$/;
 const PREFIX = /^files\/[0-9a-f]{32}\/$/;
 
 export function checkedKey(key: string): string {
-  if (!KEY.test(key)) throw new Error(`Not a file key: ${key}`);
+  if (!isKey(key)) throw new Error(`Not a file key: ${key}`);
   return key;
 }
 
@@ -35,7 +38,9 @@ export function checkedPrefix(prefix: string): string {
   return prefix;
 }
 
-export const isKey = (key: string) => KEY.test(key);
+export const isKey = (key: string) => KEY.test(key) || SNAPSHOT_KEY.test(key);
 export const isPrefix = (prefix: string) => PREFIX.test(prefix);
 export const filePrefix = (incarnation: string) => `files/${incarnation}/`;
 export const fileKey = (incarnation: string, id: string) => `${filePrefix(incarnation)}${id}`;
+
+export const snapshotKey = (incarnation: string, id: string) => checkedKey(`snapshots/${incarnation}/${id}.sqlite.gz`);

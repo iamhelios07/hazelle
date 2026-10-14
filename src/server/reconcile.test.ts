@@ -24,7 +24,7 @@ function setup() {
   const raw = new DatabaseSync(':memory:');
   migrate(raw, 'migrations');
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('u', 'jin', 'h', 1, ?, 't')").run(LIVE);
-  raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES ('kept', ?, 'k', 1, 0, 1, 1, 's')").run(LIVE);
+  raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES ('1-000000000000', ?, 'k', 1, 0, 1, 1, 's')").run(LIVE);
   return serviceDb(raw);
 }
 
@@ -71,14 +71,14 @@ describe('reconcile', () => {
   it('removes an old uncatalogued snapshot and its emptied directory, and keeps a catalogued or fresh one', async () => {
     const db = setup();
     place([
-      [`snapshots/${LIVE}/kept.sqlite.gz`, OLD],
-      [`snapshots/${LIVE}/stray.sqlite.gz`, OLD],
-      [`snapshots/${LIVE}/young.sqlite.gz`, FRESH],
+      [`snapshots/${LIVE}/1-000000000000.sqlite.gz`, OLD],
+      [`snapshots/${LIVE}/1-000000000001.sqlite.gz`, OLD],
+      [`snapshots/${LIVE}/1-000000000002.sqlite.gz`, FRESH],
       [`snapshots/${LIVE}/`, OLD],
-      [`snapshots/${GONE}/stray.sqlite.gz`, OLD],
+      [`snapshots/${GONE}/1-000000000001.sqlite.gz`, OLD],
       [`snapshots/${GONE}/`, OLD],
     ]);
     const { removed } = await reconcile(dir, db, diskBucket(dir), NOW);
-    expect(removed.sort()).toEqual([`snapshots/${GONE}`, `snapshots/${GONE}/stray.sqlite.gz`, `snapshots/${LIVE}/stray.sqlite.gz`].sort());
+    expect(removed.sort()).toEqual([`snapshots/${GONE}`, `snapshots/${GONE}/1-000000000001.sqlite.gz`, `snapshots/${LIVE}/1-000000000001.sqlite.gz`].sort());
   });
 });

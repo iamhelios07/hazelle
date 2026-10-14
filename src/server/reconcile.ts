@@ -1,5 +1,6 @@
-import { readdir, rm, rmdir, stat } from 'node:fs/promises';
+import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { generationsDir, listGenerations, readManifest } from './backup/generation';
 import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
 import { filePrefix, type Bucket } from './files/bucket';
@@ -10,7 +11,6 @@ import { filePrefix, type Bucket } from './files/bucket';
 // Younger than this, an entry may belong to a signup, an upload or a snapshot still being written.
 const SETTLE_MS = 60 * 60 * 1000;
 const ACCOUNT_DB = /^([0-9a-f]{32})\.sqlite(?:-wal|-shm)?$/;
-const SNAPSHOT = '.sqlite.gz';
 
 // A deleted account's pictures. On disk they go at once: a backup generation holds its own copies in its pool. In R2 a
 // generation names them where they are, so they go once every generation that could name them has expired.
@@ -55,8 +55,7 @@ export async function reconcile(dataDir: string, db: Db, files: Bucket, now = Da
     await removePictures(files, db, incarnation, now);
     if (files.kind === 'disk') removed.push(`files/${incarnation}`);
   }
-  if (files.kind === 'disk') removed.push(...(await files.sweep(settled)));
-  else removed.push(...(await files.trim(now)));
+  if (files.kind === 'r2') removed.push(...(await files.trim(now)));
   const { results: due } = await db.prepare('SELECT incarnation FROM picture_removals WHERE due_at <= ?').bind(now).all<{ incarnation: string }>();
   for (const { incarnation } of due) {
     await files.deletePrefix(filePrefix(incarnation));
@@ -82,26 +81,35 @@ export async function reconcile(dataDir: string, db: Db, files: Bucket, now = Da
     if (newest < settled && !(await account(incarnation))) for (const name of names) await remove(`accounts/${name}`);
   }
 
-  for (const incarnation of await entries(join(dataDir, 'snapshots'))) {
-    const dir = `snapshots/${incarnation}`;
-    const dirSettled = (await mtime(join(dataDir, dir))) < settled;
-    const names = await entries(join(dataDir, dir));
-    let left = names.length;
-    for (const name of names) {
-      const id = name.endsWith(SNAPSHOT) ? name.slice(0, -SNAPSHOT.length) : name;
-      if ((await mtime(join(dataDir, dir, name))) >= settled) continue;
-      if ((await db.prepare('SELECT 1 FROM snapshots WHERE id = ?').bind(id).first()) !== null) continue;
-      await remove(`${dir}/${name}`);
-      left--;
+  const catalogued = async (key: string) => (await db.prepare('SELECT 1 FROM snapshots WHERE incarnation = ? AND id = ?').bind(key.split('/')[1]!, key.split('/')[2]!.slice(0, -'.sqlite.gz'.length)).first()) !== null;
+  for (const { key, modified } of await files.archives()) {
+    if (await catalogued(key)) {
+      await db.prepare('DELETE FROM snapshot_removals WHERE key = ?').bind(key).run();
+      continue;
     }
-    if (!dirSettled || left > 0) continue;
-    // rmdir, not rm: it refuses a directory a snapshot was written into since the listing.
-    try {
-      await rmdir(join(dataDir, dir));
-      removed.push(dir);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw error;
+    if (files.kind === 'r2') {
+      // Starts at discovery, not capture: a generation may have named an old snapshot just before its row expired.
+      await db.prepare('INSERT INTO snapshot_removals (key, due_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(key, now + RETENTION_MS).run();
+    } else if (modified < settled) {
+      await files.delete(key);
+      removed.push(key);
     }
   }
+  const { results: archives } = await db.prepare('SELECT key FROM snapshot_removals WHERE due_at <= ?').bind(now).all<{ key: string }>();
+  const named = new Set<string>();
+  if (archives.length) for (const { id } of await listGenerations(dataDir)) {
+    const manifest = await readManifest(join(generationsDir(dataDir), id));
+    if (manifest?.version === 4 && manifest.snapshotStore.kind === 'r2') for (const snapshot of manifest.snapshots) named.add(snapshot.path);
+  }
+  for (const { key } of archives) {
+    // Expiry of generations runs daily and can fail; a still-present local generation remains a rollback source.
+    if (named.has(key)) continue;
+    if (!(await catalogued(key))) {
+      await files.delete(key);
+      removed.push(key);
+    }
+    await db.prepare('DELETE FROM snapshot_removals WHERE key = ?').bind(key).run();
+  }
+  if (files.kind === 'disk') removed.push(...(await files.sweep(settled)));
   return { removed };
 }

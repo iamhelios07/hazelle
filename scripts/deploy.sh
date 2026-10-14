@@ -32,13 +32,19 @@
 #   fetch 'grep -q "\"bucket\":\"r2\"" "/restore/$0/manifest.json" ||
 #     { sed -n "s/.*\"pictures\":\[\([^]]*\)\].*/\1/p" "/restore/$0/manifest.json" | tr -d "\"" | tr , "\n" >/tmp/pictures &&
 #       rclone copy "$HAZELLE_BACKUP_REMOTE/files" /restore/files --files-from-raw /tmp/pictures; }'
+#   fetch 'if grep -q "\"snapshotStore\":{\"kind\":\"r2\"," "/restore/$0/manifest.json"; then
+#     bucket=$(sed -n "s/.*\"snapshotStore\":{\"kind\":\"r2\",\"bucket\":\"\([a-z0-9.-]*\)\"}.*/\1/p" "/restore/$0/manifest.json") &&
+#     grep -o "\"path\":\"snapshots/[^\"]*\"" "/restore/$0/manifest.json" | cut -d\" -f4 | sed "s|^snapshots/||" >/tmp/snapshots &&
+#     while IFS= read -r key; do rclone copyto "$HAZELLE_BACKUP_REMOTE/snapshots/$bucket/$key" "/restore/$0/snapshots/$key" || exit 1; done </tmp/snapshots; fi'
 #   hazelle-compose run --rm --no-deps -v /var/tmp/hazelle-restore:/restore:ro --entrypoint /app/scripts/restore.sh app \
 #     "/restore/$generation" /data
 #   hazelle-compose up -d && rm -rf /var/tmp/hazelle-restore
-# A generation whose manifest says "bucket":"r2" has no pool to fetch: its pictures stay in the app's R2 bucket, which
+# A generation whose manifest says "bucket":"r2" has no picture pool to fetch: its pictures stay in the app's R2 bucket, which
 # the restore checks there (HAZELLE_FILES_* reach it from /etc/hazelle/env). The previous digest is selected before the
 # restore so that its own restore.sh reads the generation. Writes after the
 # pre-upgrade generation's snapshots are lost; $failed keeps them until it is removed by hand.
+# A local v4 R2 generation can instead be read with restore.sh <generation> <empty dir> --snapshots-from-store;
+# its archives stay in the store for seven days after catalog expiry. Old pre-deploy generations keep their links.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO=ghcr.io/jiniill/hazelle

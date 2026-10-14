@@ -86,7 +86,7 @@ const outbound = pinnedOutbound(local);
 const services: Services = {
   db,
   files,
-  stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
+  stores: accountRegistry(dataDir, db, serviceReads(db), Date.now, files),
   streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), outbound),
   outbound,
   localProviders: local,

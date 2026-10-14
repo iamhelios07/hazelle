@@ -7,6 +7,7 @@ import { checkedKey, type R2Bucket } from './bucket';
 // A copy on the machine's disk of the pictures read from or put into an R2 store, <dataDir>/cache/<sha256>, .tmp-* while
 // one is written: the machine reaches R2 in 110–175 ms an object, its own disk in about 1 ms. An entry is named by the
 // picture's id alone, so one account's read serves every account that holds the same picture.
+// Archives have a different identity and may be hundreds of MB: only files/ keys enter this cache.
 // Below access control: get answers any key whose id the copy holds, even one the store holds no object under. Every
 // caller checks the account's account_files row and the file's block before it serves what get answers (files.ts,
 // shares.ts); nothing may read through this to decide whether a key exists.
@@ -174,6 +175,7 @@ export function cachedR2Bucket(store: R2Bucket, dataDir: string, capBytes: numbe
   return {
     ...store,
     get: async (key) => {
+      if (checkedKey(key).startsWith('snapshots/')) return store.get(key);
       const id = idOf(key);
       const cached = await hit(id);
       if (cached) return cached;
@@ -181,6 +183,7 @@ export function cachedR2Bucket(store: R2Bucket, dataDir: string, capBytes: numbe
       return body && fill(id, body);
     },
     put: async (key, body) => {
+      if (checkedKey(key).startsWith('snapshots/')) return store.put(key, body);
       const id = idOf(key);
       await store.put(key, body);
       await place(id, body instanceof Uint8Array ? body : new Uint8Array(body));

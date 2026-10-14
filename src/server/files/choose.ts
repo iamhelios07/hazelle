@@ -5,9 +5,9 @@ import { r2Bucket } from './r2-bucket';
 
 const DEFAULT_CACHE_BYTES = 20 * 1024 ** 3;
 
-// The picture store the environment names (node.ts, backup/restore-cli.ts). Unset or blank is the data directory:
+// The picture and snapshot store the environment names (node.ts, backup/restore-cli.ts). Unset or blank is the data directory:
 // compose passes "" for a variable the operator left out. A wrong or incomplete setting throws, so the process
-// refuses to start rather than write pictures somewhere the operator did not choose.
+// refuses to start rather than write objects somewhere the operator did not choose.
 export function chooseBucket(env: NodeJS.ProcessEnv, dataDir: string): Bucket {
   const kind = env.HAZELLE_FILES_BUCKET?.trim() || 'disk';
   if (kind === 'disk') return diskBucket(dataDir);

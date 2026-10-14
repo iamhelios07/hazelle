@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreRules, type FeedPage, type FeedQuery, type StoreDb, type StoreReads, type Write } from './account-store';
 import { AccountDb, accountRegistry, type Stores } from './db/account-db';
+import { diskBucket } from './files/disk-bucket';
 import { migrate } from './db/migrate';
 import { serviceDb, type Db } from './db/service-db';
 
@@ -28,7 +29,7 @@ const store = () => stores.getByName(INC);
 const restart = () => expect(store().restart(INC)).rejects.toThrow();
 const reopen = () => {
   stores.close();
-  stores = accountRegistry(dir, db, reads, () => now);
+  stores = accountRegistry(dir, db, reads, () => now, diskBucket(dir));
 };
 // The install reads the service rows, not the reads mock, so a rewind needs both.
 const armed = (operation: number, target: string) => {
@@ -53,7 +54,7 @@ beforeEach(async () => {
   raw.exec('PRAGMA foreign_keys = ON');
   migrate(raw, 'migrations');
   db = serviceDb(raw);
-  stores = accountRegistry(dir, db, reads, () => now);
+  stores = accountRegistry(dir, db, reads, () => now, diskBucket(dir));
   await stores.prepare(INC, 't1');
 });
 afterEach(() => {
@@ -227,7 +228,7 @@ describe('timeline', () => {
   });
 
   it('checks the timeline in the transaction that reads or writes', async () => {
-    const inner = new AccountDb(dir, INC, db, () => now);
+    const inner = new AccountDb(dir, INC, db, () => now, diskBucket(dir));
     const outside: string[] = [];
     let open = false;
     const spy: StoreDb = {
