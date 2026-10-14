@@ -3,18 +3,19 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { Lore, LoreFolder, LoreOwner } from '../../model/library';
 import { loreGroups } from '../../model/lore';
-import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from '../../runtime/lore';
-import { useChildren, useStore } from '../session';
+import { loreBudgetOf } from '../../runtime/chat-context';
+import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, setCharacterLoreBudget } from '../../runtime/lore';
+import { useChildren, useStore, useStored } from '../session';
 import { useToast } from '../toast';
 import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
 import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { SLOT_NAMES } from './prompt-words';
 import { typedText } from './typed';
-import { readOptional } from './typedNumber';
+import { count, readOptional } from './typedNumber';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
 import { useSearch } from './useSearch';
-import { loreName } from './words';
+import { LORE_BUDGET_LABEL, loreName } from './words';
 
 type Position = Lore['position'];
 const POSITIONS: { value: NonNullable<Position> | 'lorebook'; label: string }[] = [
@@ -27,6 +28,37 @@ const NO_FOLDER = '폴더 없음';
 const KEYS_SHOWN = 3;
 
 const readNumber = (draft: string) => readOptional(draft, false);
+// undefined: empty, which follows the account's value.
+const readBudget = (draft: string) => {
+  const typed = readOptional(draft, true);
+  return typed === null || (typed !== undefined && typed < 1) ? null : typed;
+};
+const budgetText = (value: number | undefined) => (value === undefined ? '' : String(value));
+
+function LoreBudgetRow({ id }: { id: string }) {
+  const store = useStore();
+  const stored = useStored('character', id);
+  const save = useAutosave<{ tokenBudget: number | null }>(`character-lore-budget:${id}`, ({ tokenBudget = null }) => setCharacterLoreBudget(store, id, tokenBudget));
+  const [typed, setTyped] = useState<string>();
+  const own = (save.unsaved.tokenBudget === undefined ? (stored?.value.card.loreSettings.tokenBudget ?? null) : save.unsaved.tokenBudget) ?? undefined;
+  const draft = typedText(typed, readBudget, own, budgetText);
+  const invalid = readBudget(draft) === null;
+  const shared = count(loreBudgetOf(store));
+  const type = (next: string) => {
+    setTyped(next);
+    const value = readBudget(next);
+    if (value !== null) save.change({ tokenBudget: value ?? null });
+  };
+  return (
+    <SettingRow
+      label={LORE_BUDGET_LABEL}
+      help={`이 캐릭터와의 대화에만 적용돼요. 비우면 설정의 공용 값(${shared} 토큰)을 따라요.`}
+      changed={own !== undefined}
+      error={invalid ? '1 이상의 정수를 입력해 주세요.' : undefined}
+      control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={draft} invalid={invalid} placeholder={shared} onChange={type} />}
+    />
+  );
+}
 
 function when({ enabled, constant, keys }: Lore) {
   const named = keys.filter((key) => key.trim());
@@ -113,6 +145,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
   return (
     <Section title={owner.kind === 'chat' ? '항목' : '로어북'} note={`${entries.length}개`} help={`대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.${owner.kind === 'chat' ? ' 이 채팅에서만 쓰여요.' : ''}`}>
       <Stack gap="related">
+        {owner.kind === 'character' && <LoreBudgetRow id={owner.id} />}
         {search.field}
         {listed}
         <Row kind="actions">

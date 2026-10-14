@@ -196,8 +196,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     const cut = talk.sent(lastCall)?.prompt.lore?.filter(({ fate }) => fate.kind === 'dropped' && fate.cause === 'budget').length ?? 0;
     if (cut === 0) return;
     cutTold.add(chatId);
-    toast.show(`로어북 항목 ${cut}개가 빠졌어요`, {
-      detail: `${LORE_BUDGET_LABEL}을 넘었어요. 설정 › ${PAGES.chat}에서 늘릴 수 있어요.`,
+    toast.show(`켜진 로어북 항목 중 ${cut}개가 빠졌어요`, {
+      detail: card !== null && card.loreSettings.tokenBudget !== null
+        ? `이 캐릭터의 ${LORE_BUDGET_LABEL}을 넘었어요. 캐릭터 편집 › 로어북에서 늘릴 수 있어요.`
+        : `${LORE_BUDGET_LABEL}을 넘었어요. 설정 › ${PAGES.chat}에서 늘릴 수 있어요.`,
       action: { label: '정보 보기', onClick: () => { setInfoPick(lastReply.id); open({ kind: 'info' }); } },
     });
   }, [lastCall]);

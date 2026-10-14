@@ -50,6 +50,10 @@ export function importedLore(owner: string, lore: LoreEntry[], names: string[]):
   return { folders, writes };
 }
 
+// null follows the account's 로어북 최대 분량 (chat-context loreBudgetOf).
+export const setCharacterLoreBudget = (store: ObjectStore, id: string, tokenBudget: number | null): Promise<ApiResult<Stored<'character'>>> =>
+  store.update('character', id, (current) => ({ ...current, card: { ...current.card, loreSettings: { ...current.card.loreSettings, tokenBudget } } }));
+
 function setFolders(store: ObjectStore, { kind, id }: LoreOwner, change: (folders: LoreFolder[]) => LoreFolder[]): Promise<ApiResult<unknown>> {
   switch (kind) {
     case 'character':

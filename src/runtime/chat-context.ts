@@ -81,7 +81,8 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
     lore: loreOwners.flatMap(({ id: owner }) => store.children('lore', owner)),
-    loreBudget: loreBudgetOf(store),
+    // The character's own over the account's, as its scan settings are (ruled 2026-10-14).
+    loreBudget: card?.loreSettings.tokenBudget ?? loreBudgetOf(store),
     loreFolders: Object.fromEntries(
       loreOwners.flatMap(({ id }) => {
         const folders = (store.get('character', id) ?? store.get('module', id) ?? store.get('chat', id))?.value.loreFolders ?? [];
