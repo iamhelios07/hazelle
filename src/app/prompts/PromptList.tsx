@@ -6,7 +6,6 @@ import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
 import type { Frame } from '../common/frame';
 import { TASK_NAMES } from '../common/prompt-words';
-import { ago } from '../common/time';
 import { useSearch } from '../common/useSearch';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
@@ -14,8 +13,8 @@ import { defaultMark, PAGES, promptName } from '../common/words';
 import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, FileButton, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
 import { taskModelWords } from './ModelPane';
 import { usePresetImport } from './PresetImport';
-import { EMPTY_USE, usePromptUse, type PromptUse } from './usePromptUse';
-import { byPromptName, groupPrompts } from './copies';
+import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
+import { byLastUse, byPromptName, groupPrompts } from '../common/promptCopies';
 
 const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트', illustrate: '새 삽화 프롬프트' } satisfies Record<PromptSort, string>;
 const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] = [
@@ -25,9 +24,6 @@ const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] 
   { sort: 'illustrate', label: '삽화', hint: '메시지에 넣을 이미지의 장면을 정할 때 쓰는 프롬프트예요.', none: '삽화 프롬프트가 없어요.' },
 ];
 type Order = 'name' | 'recent';
-
-const chatsWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '쓰는 채팅 없음');
-const used = (use: PromptUse) => (use.at === null ? chatsWords(use) : `${chatsWords(use)} · ${ago(use.at)} 씀`);
 
 // defaults: each kind's default leads the list, as a card that opens it. The default is chosen on the prompt's own
 // page (기본으로 정하기), never from these cards.
@@ -51,15 +47,10 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   const [order, setOrder] = useState<Order>('name');
   const preset = usePresetImport(onPick);
 
-  const use = (id: string) => uses.get(id) ?? EMPTY_USE;
   const badge = (prompt: Stored<'prompt'>) => defaultMark(isDefaultPrompt(settings, prompt), prompt.value.name);
   const tags = (id: string) => (id === inUse ? ['사용 중'] : []);
-  // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역. An unused one
-  // says nothing, so the few in use stand out in a long list.
-  const usage = (prompt: Stored<'prompt'>) => {
-    const of = use(prompt.id);
-    return ofSort(prompt, 'conversation') && (of.chats > 0 || of.at !== null) ? used(of) : undefined;
-  };
+  // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역.
+  const usage = (prompt: Stored<'prompt'>) => (ofSort(prompt, 'conversation') ? promptUseWords(uses.get(prompt.id) ?? EMPTY_USE) : undefined);
 
   function add(sort: PromptSort) {
     const id = crypto.randomUUID();
@@ -68,9 +59,8 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   }
 
   const byName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byPromptName(a, b);
-  const byRecent = (a: Stored<'prompt'>, b: Stored<'prompt'>) => (use(b.id).at ?? -1) - (use(a.id).at ?? -1) || byPromptName(a, b);
   const recentFirst = shown === 'conversation' && order === 'recent';
-  const top = grouped.top.filter((prompt) => ofSort(prompt, shown)).sort(recentFirst ? byRecent : byName);
+  const top = grouped.top.filter((prompt) => ofSort(prompt, shown)).sort(recentFirst ? byLastUse(uses, grouped.copies) : byName);
   const current = SORTS.find(({ sort }) => sort === shown)!;
 
   const row = (prompt: Stored<'prompt'>) => {

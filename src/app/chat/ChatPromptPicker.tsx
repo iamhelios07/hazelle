@@ -1,10 +1,12 @@
 import { FileText } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import { useSearch } from '../common/useSearch';
-import { defaultMark, DELETED_PROMPT, follows } from '../common/words';
-import { useChats, useSession, useSettings, usePrompts } from '../session';
+import { byLastUse, byPromptName, groupPrompts } from '../common/promptCopies';
+import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
+import { defaultMark, DELETED_PROMPT, follows, promptName } from '../common/words';
+import { useSession, useSettings, usePrompts } from '../session';
 import { useToast } from '../toast';
 import { Button, ChipButton, Dialog, Empty, hasFinePointer, Icon, List, ListItem, Row } from '../ui';
 import type { OpenChat } from './useChat';
@@ -34,7 +36,7 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
   const { prompt, actions } = chat;
   const { store } = useSession();
   const prompts = usePrompts().filter((each) => ofSort(each, 'conversation'));
-  const chats = useChats();
+  const uses = usePromptUse();
   const settings = useSettings();
   const toast = useToast();
   const field = useRef<HTMLInputElement>(null);
@@ -42,15 +44,9 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
     if (hasFinePointer()) field.current?.focus();
   }, []);
   const fallback = chatPrompt(store, {});
-
-  const used = new Map<string, number>();
-  chats.forEach((item, index) => {
-    const choice = chatPrompt(store, item.chat);
-    if (choice.kind === 'prompt' && !used.has(choice.prompt.id)) used.set(choice.prompt.id, index);
-  });
-  const order = (a: Stored<'prompt'>, b: Stored<'prompt'>) => (used.get(a.id) ?? Infinity) - (used.get(b.id) ?? Infinity) || a.value.name.localeCompare(b.value.name, 'ko');
+  const grouped = groupPrompts(prompts);
   const own = prompt.own && prompt.kind === 'prompt' ? prompt.prompt.id : null;
-  const search = useSearch(prompts.toSorted(order), '프롬프트 검색', (item) => [item.value.name], { ref: field, onEnter: (first) => choose(first.id) });
+  const search = useSearch(prompts.toSorted(byPromptName), '프롬프트 검색', (item) => [promptName(item.value.name)], { ref: field, onEnter: (first) => choose(first.id) });
 
   function choose(value: string | null) {
     actions.closeDialog();
@@ -60,6 +56,20 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
     actions.closeDialog();
     actions.side({ kind: 'prompts', id, pane: null });
   }
+
+  // A picker shows every copy under its original, since the one to pick is often a copy.
+  const row = (item: Stored<'prompt'>, nested: boolean): ReactNode => (
+    <ListItem
+      key={item.id}
+      title={promptName(item.value.name)}
+      badge={defaultMark(isDefaultPrompt(settings, item), item.value.name)}
+      aside={promptUseWords(uses.get(item.id) ?? EMPTY_USE)}
+      selected={item.id === own}
+      onClick={() => choose(item.id)}
+    >
+      {nested && grouped.copies.get(item.id)?.map((copy) => row(copy, true))}
+    </ListItem>
+  );
 
   const footer = (
     <Row kind="actions">
@@ -78,9 +88,7 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
       {search.none && <Empty>{search.none}</Empty>}
       <List label="프롬프트">
         {!search.words && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
-        {search.found.map((item) => (
-          <ListItem key={item.id} title={item.value.name} badge={defaultMark(isDefaultPrompt(settings, item), item.value.name)} selected={item.id === own} onClick={() => choose(item.id)} />
-        ))}
+        {search.words ? search.found.map((item) => row(item, false)) : grouped.top.toSorted(byLastUse(uses, grouped.copies)).map((item) => row(item, true))}
       </List>
     </Dialog>
   );

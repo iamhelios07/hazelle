@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { chatPrompt } from '../../runtime/prompts';
 import { useChats, usePrompts, useSettings, useStore } from '../session';
+import { ago } from './time';
 
 export type PromptUse = { chats: number; at: number | null };
 
@@ -24,3 +25,6 @@ export function usePromptUse(): ReadonlyMap<string, PromptUse> {
 
 export const EMPTY_USE: PromptUse = { chats: 0, at: null };
 
+
+// An unused prompt says nothing, so the few in use stand out in a long list.
+export const promptUseWords = ({ chats, at }: PromptUse) => (chats ? (at === null ? `채팅 ${chats}개` : `채팅 ${chats}개 · ${ago(at)} 씀`) : undefined);

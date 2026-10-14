@@ -1,4 +1,5 @@
 import type { Stored } from '../../model/kinds';
+import type { PromptUse } from './usePromptUse';
 
 export const byPromptName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => a.value.name.localeCompare(b.value.name, 'ko');
 
@@ -19,4 +20,11 @@ export function groupPrompts(prompts: readonly Stored<'prompt'>[]): { top: Store
   }
   for (const group of copies.values()) group.sort(byPromptName);
   return { top, copies };
+}
+
+// A row stands for its copies too, which are shown under it: the latest use among them places it, and the unused go
+// last by name.
+export function byLastUse(uses: ReadonlyMap<string, PromptUse>, copies: ReadonlyMap<string, readonly Stored<'prompt'>[]>) {
+  const last = (id: string): number => Math.max(uses.get(id)?.at ?? -1, ...(copies.get(id) ?? []).map((copy) => last(copy.id)));
+  return (a: Stored<'prompt'>, b: Stored<'prompt'>) => last(b.id) - last(a.id) || byPromptName(a, b);
 }

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import type { Stored } from '../../model/kinds';
-import { groupPrompts } from './copies';
+import { byLastUse, groupPrompts } from './promptCopies';
 
 const prompt = (id: string, name: string, origin?: string): Stored<'prompt'> => ({
   id, kind: 'prompt', parent: null, rev: 1,
@@ -23,4 +23,11 @@ it('sorts each original’s copies stably while promoting orphans and keeping ne
   expect(ids(removed.top)).toEqual(['z', 'orphan', 'a2', 'own', 'a1']);
   expect(ids(removed.copies.get('a2')!)).toEqual(['leaf']);
   expect(removed.copies.has('root')).toBe(false);
+});
+
+it('places a row by the latest use among it and its copies, the unused last by name', () => {
+  const prompts = [prompt('b', '나'), prompt('a', '가'), prompt('old', '오래'), prompt('root', '원본'), prompt('copy', '원본 (사본)', 'root')];
+  const uses = new Map([['old', { chats: 1, at: 10 }], ['copy', { chats: 1, at: 20 }]]);
+  const { top, copies } = groupPrompts(prompts);
+  expect(ids(top.toSorted(byLastUse(uses, copies)))).toEqual(['root', 'old', 'a', 'b']);
 });

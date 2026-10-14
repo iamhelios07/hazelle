@@ -43,7 +43,7 @@ import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPan
 import { chatWarning } from './ranges';
 import { PicturePane } from './PicturePane';
 import { TogglePane } from './TogglePane';
-import { EMPTY_USE, usePromptUse } from './usePromptUse';
+import { EMPTY_USE, usePromptUse } from '../common/usePromptUse';
 
 const MODEL = 'model';
 const TOGGLES = 'toggles';
