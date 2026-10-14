@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
-import { PICTURE_PERCENT, type CharacterShelf, type Pictures } from '../../model/library';
+import type { CharacterShelf, Pictures } from '../../model/library';
 import { likenessId } from '../../model/likeness';
 import { editCharacter, setAvatar, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
@@ -23,10 +23,11 @@ import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import type { CharacterPart } from '../common/characterPart';
 import type { Frame } from '../common/frame';
+import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { filled, typedText } from '../common/typed';
-import { readOptional } from '../common/typedNumber';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BOT_MODELS, BOT_MODELS_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { useDisplay } from '../display';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
 import { navigate } from '../shell/router';
@@ -37,12 +38,6 @@ import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
 type Height = 'peek' | 'most';
-const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 입력해 주세요.`;
-// undefined: left empty, which is the app's own height. null: not a height.
-const readHeight = (draft: string) => {
-  const value = readOptional(draft, true);
-  return typeof value === 'number' && (value < PICTURE_PERCENT.min || value > PICTURE_PERCENT.max) ? null : value;
-};
 const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
@@ -100,6 +95,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const ownModules = character.modules ?? [];
   const { busy, copy, exportFile, remove, sharing, share, stopSharing } = useCharacterActions();
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
+  const { display } = useDisplay();
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
   const [typedName, setTypedName] = useState<string>();
@@ -131,20 +127,20 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
 
   function changeHeight(field: Height, draft: string) {
     setTypedHeights((current) => ({ ...current, [field]: draft }));
-    const value = readHeight(draft);
+    const value = readPictureHeight(draft);
     pictureSave.change({ [field]: value ?? undefined }, value !== null);
   }
 
   function heightRow(field: Height, label: string, help: string, placeholder: string) {
-    const height = typedText(typedHeights[field], readHeight, pictures[field], (value) => String(value ?? ''));
+    const height = typedText(typedHeights[field], readPictureHeight, pictures[field], (value) => String(value ?? ''));
     const set = height.trim() !== '';
-    const invalid = readHeight(height) === null;
+    const invalid = readPictureHeight(height) === null;
     return (
       <SettingRow
         label={label}
         help={help}
         changed={set}
-        error={invalid ? HEIGHT_ERROR : undefined}
+        error={invalid ? PICTURE_HEIGHT_ERROR : undefined}
         control={<NumberInput label={label} value={height} unit="%" placeholder={placeholder} invalid={invalid} onChange={(draft) => changeHeight(field, draft)} />}
       />
     );
@@ -343,7 +339,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           <Disclosure label="이미지 크기">
             <SettingGroup label="이미지 크기">
               {fold && heightRow('peek', '접힌 높이', '화면 높이 대비 비율이에요.', '40')}
-              {heightRow('most', '최대 높이', '화면 높이 대비 비율이에요.', '원래 크기')}
+              {heightRow('most', '최대 높이', '화면 높이 대비 비율이에요. 비워 두면 디스플레이 설정을 따라요.', String(display.pictureMost))}
             </SettingGroup>
           </Disclosure>
         )}

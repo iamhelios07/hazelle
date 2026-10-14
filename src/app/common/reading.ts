@@ -1,3 +1,4 @@
+import { PICTURE_PERCENT } from '../../model/library';
 import type { SavedLook } from '../../model/settings';
 import { ACCENT, BG, DIALOGUE, INK, THEME, type Reading, type Scheme } from '../ui';
 
@@ -12,6 +13,7 @@ export const choices = <T extends string>(labels: Record<T, string>) => (Object.
 const named = <T extends string>(labels: Record<T, string>, value: unknown) => (typeof value === 'string' && Object.hasOwn(labels, value) ? (value as T) : undefined);
 const known = <T extends string>(labels: Record<T, string>, value: unknown, otherwise: T) => named(labels, value) ?? otherwise;
 const sized = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value >= SIZE.min && value <= SIZE.max ? value : undefined);
+const percent = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value >= PICTURE_PERCENT.min && value <= PICTURE_PERCENT.max ? value : undefined);
 const flag = (value: unknown, otherwise: boolean) => (typeof value === 'boolean' ? value : otherwise);
 
 function fields<K extends string>(stored: string): Partial<Record<K, unknown>> {
@@ -32,11 +34,13 @@ export function parseReading(stored: string, fallback: Reading): Reading {
   };
 }
 
-export type Display = Scheme & { hideHeader: boolean; foldComposer: boolean; hidePictures: boolean };
+// pictureMost: the height no picture-only line's picture is drawn taller than, in percent of the screen's height, unless
+// the character sets its own (Pictures.most).
+export type Display = Scheme & { hideHeader: boolean; foldComposer: boolean; hidePictures: boolean; pictureMost: number };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, hideHeader: true, foldComposer: true, hidePictures: false };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, hideHeader: true, foldComposer: true, hidePictures: false, pictureMost: 80 };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -49,6 +53,7 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     hideHeader: flag(read.hideHeader, fallback.hideHeader),
     foldComposer: flag(read.foldComposer, fallback.foldComposer),
     hidePictures: flag(read.hidePictures, fallback.hidePictures),
+    pictureMost: percent(read.pictureMost) ?? fallback.pictureMost,
   };
 }
 
