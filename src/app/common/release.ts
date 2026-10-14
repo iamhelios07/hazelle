@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.2',
+    date: '2026-10-14',
+    lines: [
+      '가져오기 결과의 못 가져온 에셋이 추가 아이콘, 감정 표현, 배경처럼 종류별로 보여요.',
+      '아직 캐릭터가 없을 때 홈에서 Risu에서 이사가 맨 위에 와요. 이사 창은 백업 파일 두 칸으로 열리고, 메시지 속 이미지는 펼쳐서 넣어요.',
+      '여러 사람이 동시에 이미지를 올려도 서로 기다리지 않아요.',
+      '응답 정보에서 앱 추정과 이번 배율, 토큰을 맞춘 기준을 볼 수 있어요.',
+      '새 소식은 최신 3개만 보이고, 모두 보기로 지난 소식을 볼 수 있어요.',
+    ],
+  },
+  {
     version: 'v0.2.0',
     date: '2026-10-14',
     lines: [
