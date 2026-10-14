@@ -91,7 +91,8 @@ img {
   }
 }
 
-/* Story.tsx's stand-in for a picture while 이미지 가리기 is on. It always answers a tap, whatever data-buttons says. */
+/* Story.tsx's controls while 이미지 가리기 is on: the stand-in for a picture, and 가리기 beside one tapped open. They
+   always answer a tap, whatever data-buttons says. */
 [data-veiled] {
   display: inline-flex;
   align-items: center;
@@ -102,6 +103,29 @@ img {
   color: var(--color-text-muted);
   font: var(--text-sm) / var(--leading-tight) var(--font-sans);
   cursor: pointer;
+}
+
+[data-cover] {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-8);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: var(--text-xs) / var(--leading-tight) var(--font-sans);
+  cursor: pointer;
+}
+
+/* On the picture's top corner, which a folded line still shows: below the picture, the fold would cut it off. */
+[data-picture]:has(> [data-cover]) {
+  position: relative;
+}
+
+[data-picture] > [data-cover] {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-8);
 }
 
 /* Story.tsx's mark for a picture of the chat it does not hold. */
@@ -115,7 +139,7 @@ img {
 }
 
 /* data-buttons is the host's (Story.tsx). A button nothing answers looks it, whatever the bot's CSS says. */
-:host([data-buttons='inert']) :is(button:not([data-veiled]), [risu-btn], [risu-trigger]) {
+:host([data-buttons='inert']) :is(button:not([data-veiled], [data-cover]), [risu-btn], [risu-trigger]) {
   opacity: var(--story-inert-opacity) !important;
   cursor: not-allowed !important;
 }
