@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import type { RestoreAction } from '../contracts/admin';
+import { VISITOR_HEADER } from '../contracts/http';
 import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
 import { VISIBLE } from './admin';
@@ -11,6 +12,9 @@ import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
 const ROOM = '(SELECT COUNT(*) FROM accounts) < (SELECT signup_cap FROM service)';
+// This machine's own requests are not counted: loopback (e2e and load runs against a local server) and none named at
+// all (in process). The hosted machine's Caddy names every outside visitor, so neither reaches it from outside.
+const LOCAL = /^(?:127\.|::1$|::ffff:127\.)/;
 
 export const accounts = new Hono<AppEnv>();
 
@@ -19,6 +23,8 @@ export const accounts = new Hono<AppEnv>();
 // recovery key is saved. The account's file is prepared before the batch: a crash between leaves a file with no row,
 // which the hourly reconciliation removes, never a row with no file.
 accounts.post('/signup', async (c) => {
+  const visitor = c.req.header(VISITOR_HEADER);
+  if (visitor && !LOCAL.test(visitor) && !c.env.limits.visitors.signups.limit(visitor).success) return fail(c, 429, 'too-many-signups');
   const body = await readObject(c);
   const accountId = typeof body?.accountId === 'string' && ID.test(body.accountId) ? body.accountId : null;
   const passwordProof = readProof(body?.passwordProof);

@@ -3,6 +3,19 @@
 # issues again and counts against Let's Encrypt's weekly limit.
 hazelle.app {
 	header Strict-Transport-Security "max-age=31536000"
+	# The privacy page lists no addresses or access records: a line keeps no IP, header or query, only what times a
+	# request (method, path, status, size, duration). Keeping addresses means changing that page first.
+	log {
+		format filter {
+			request>remote_ip delete
+			request>remote_port delete
+			request>client_ip delete
+			request>headers delete
+			request>tls delete
+			resp_headers delete
+			request>uri regexp \?.*$ ""
+		}
+	}
 	reverse_proxy app:8080 {
 		# Replies stream as they are written; buffering would hold them until the end.
 		flush_interval -1

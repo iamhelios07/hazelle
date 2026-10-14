@@ -1,5 +1,5 @@
 // A token bucket per key, in process: calls (240 a minute per account), bot calls (20 a minute per account:chat) and
-// the visitors of share links (visitorLimits). The caller picks the key.
+// visitors (visitorLimits). The caller picks the key.
 
 export type Limiter = { limit(key: string): { success: boolean } };
 export type UploadBudget = { take(size: number): Promise<boolean>; give(size: number): void };
@@ -50,25 +50,27 @@ export function uploadBudget(bytes = UPLOAD_BYTES, waitMs = UPLOAD_WAIT_MS): Upl
   };
 }
 
-// Idle this long, a bucket is full again anyway, so dropping it changes no answer.
 const IDLE_MS = 10 * 60 * 1000;
 
-// clock is monotonic (performance.now()): a wall-clock jump would refill or starve every bucket at once.
-export function tokenBucket(perMinute: number, clock: () => number = () => performance.now()): Limiter & { evict(): void } {
+// count per windowMs, refilled evenly. clock is monotonic (performance.now()): a wall-clock jump would refill or starve
+// every bucket at once.
+export function tokenBucket(count: number, windowMs = 60_000, clock: () => number = () => performance.now()): Limiter & { evict(): void } {
+  // Idle this long, a bucket is full again anyway, so dropping it changes no answer.
+  const idleMs = Math.max(IDLE_MS, windowMs);
   const buckets = new Map<string, { tokens: number; at: number }>();
   let evicted = clock();
   const evict = () => {
     const now = clock();
     evicted = now;
-    for (const [key, bucket] of buckets) if (now - bucket.at >= IDLE_MS) buckets.delete(key);
+    for (const [key, bucket] of buckets) if (now - bucket.at >= idleMs) buckets.delete(key);
   };
   return {
     evict,
     limit: (key) => {
       const now = clock();
-      if (now - evicted >= IDLE_MS) evict();
+      if (now - evicted >= idleMs) evict();
       const bucket = buckets.get(key);
-      const tokens = bucket ? Math.min(perMinute, bucket.tokens + ((now - bucket.at) * perMinute) / 60_000) : perMinute;
+      const tokens = bucket ? Math.min(count, bucket.tokens + ((now - bucket.at) * count) / windowMs) : count;
       const success = tokens >= 1;
       buckets.set(key, { tokens: success ? tokens - 1 : tokens, at: now });
       return { success };
@@ -77,5 +79,6 @@ export function tokenBucket(perMinute: number, clock: () => number = () => perfo
 }
 
 // Per visitor on the anonymous share routes: a link's page and its count, its files (a 파일로 받기 reads every picture
-// of a bot, which may be hundreds), and its reports. Requests, not bytes.
-export const visitorLimits = () => ({ reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6) });
+// of a bot, which may be hundreds), and its reports. Requests, not bytes. signups: attempts an hour, so a script cannot
+// fill signup_cap from one address.
+export const visitorLimits = () => ({ reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6), signups: tokenBucket(5, 60 * 60_000) });

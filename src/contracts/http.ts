@@ -51,6 +51,7 @@ export type ServerError =
   | 'too-many-calls'
   | 'too-many-reports'
   | 'too-many-restores'
+  | 'too-many-signups'
   | 'too-many-visits'
   | 'username-taken'
   | 'wrong-login';
