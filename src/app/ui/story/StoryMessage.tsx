@@ -54,7 +54,6 @@ export function StoryMessage({ avatar, name, time, mine, mark, badges = [], chil
             <span className={styles.track}>
               <span className={styles.fill} />
             </span>
-            {!writing && <span className={styles.share} />}
           </div>
         </div>
       </div>
