@@ -1,3 +1,4 @@
+import { Tokens } from './token-calibration';
 import type { Tools } from './tools/facade';
 import { createTools } from './tools/host';
 import type { LuaRunner } from './script-binding';
@@ -41,6 +42,7 @@ export type Session = {
   talk: Talk;
   costs: Costs;
   usage: Usage;
+  tokens: Tokens;
   translator: Translator;
   memory: Rememberer;
   illustrator: Illustrator;
@@ -88,6 +90,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const catalogs = new Catalogs(credentials);
   const costs = new Costs(store);
   const usage = new Usage(store);
+  const tokens = new Tokens(usage);
   const drafts = new Drafts();
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
@@ -101,7 +104,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const illustrator = new Illustrator({ store, credentials, files, likenesses });
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
   const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, { lua: machine, tools });
-  const memory = new Rememberer({ store, read, credentials, costs, scripts }, reading);
+  const memory = new Rememberer({ store, read, credentials, costs, scripts, tokens }, reading);
   const talk = new Talk(
     store,
     credentials,
@@ -165,11 +168,12 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     drafts.close();
     costs.close();
     usage.close();
+    tokens.clear();
     catalogs.close();
     credentials.close();
     assets.close();
     store.close();
   };
-  const session: Session = { tools, username, store, files, assets, unfound, talk, costs, usage, translator, memory, illustrator, likenesses, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools, username, store, files, assets, unfound, talk, costs, usage, tokens, translator, memory, illustrator, likenesses, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

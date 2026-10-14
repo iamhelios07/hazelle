@@ -33,3 +33,5 @@ export type TokenProjection = {
   allowance: number | null;
   retries: RefusalRetry[];
 };
+
+export const unavailableCalibration = (reason: Extract<InputMeasurement, { kind: 'unavailable' }>['reason']): CallCalibration => ({ measurement: { kind: 'unavailable', reason }, fit: null, retries: [], eligible: false });

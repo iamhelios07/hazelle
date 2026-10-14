@@ -1,4 +1,4 @@
-import { streamError } from './errors';
+import { failedTerminal } from './errors';
 import type { Reasoning } from './settings';
 import { embedUsage } from './chat-completions';
 import type { ChatMessage, Codec, EmbedPurpose, Model, Phase, StreamFacts, Terminal } from './types';
@@ -72,7 +72,7 @@ function read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: s
 // The stream has no end marker: it closes after the chunk that names finishReason.
 function terminal(event: unknown): Terminal | null {
   if (!isRecord(event)) return null;
-  if (event.error !== undefined && event.error !== null) return { state: 'failed', error: streamError(event.error) };
+  if (event.error !== undefined && event.error !== null) return failedTerminal(event.error);
   const refused = refusal(event);
   return refused === null ? null : { state: 'failed', error: refused };
 }

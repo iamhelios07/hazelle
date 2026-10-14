@@ -1,3 +1,4 @@
+import type { Terminal } from './types';
 import { isRecord } from './values';
 
 // Decoded error strings and message fields are already presentation text, never JSON-quoted.
@@ -10,6 +11,10 @@ export function errorValue(error: unknown): string | null {
 // A stream has already identified an error event: retain an unknown JSON value verbatim as JSON.
 // A malformed error event with no value still fails, but has no detail to display.
 export const streamError = (error: unknown): string => errorValue(error) ?? JSON.stringify(error) ?? '';
+
+export function failedTerminal(error: unknown): Terminal {
+  return { state: 'failed', error: streamError(error), ...(isRecord(error) && typeof error.code === 'string' && { code: error.code }) };
+}
 
 // A provider's error body in the shapes seen so far: OpenAI and OpenRouter {error: {message}}, Anthropic
 // {type: 'error', error: {message}}, others {message} or {error: '...'}. Anything else, such as

@@ -1,5 +1,9 @@
+import { unavailableCalibration } from '../model/token-calibration';
+import { prepareChat, contextRefusal, type ContextRefusal } from '../connectors/preparation';
+import type { CallCalibration } from '../model/token-calibration';
+import { completedCalibration } from './token-calibration';
 import { retryWait } from '../contracts/streams';
-import { batchLane, cacheView, chatRequest, laneBusy, resolveConnection, resolveModel, retryOf, RETRYABLE, withCredential, type CacheView, type Route } from '../connectors/registry';
+import { batchLane, cacheView, laneBusy, resolveConnection, resolveModel, retryOf, RETRYABLE, withCredential, type CacheView, type Route } from '../connectors/registry';
 import { decodeStream, type InlineThoughts, type Outcome } from '../connectors/stream';
 import type { ModelSettings } from '../connectors/settings';
 import { ConnectorError, type Account, type Batches, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase, type Starred } from '../connectors/types';
@@ -24,6 +28,8 @@ export type ReplyError =
 // tries: how many times it was sent (retry on failure); null where that is not known: never sent, or a call whose end
 // was not read.
 export type Reply = Omit<Outcome, 'error'> & {
+  calibration: CallCalibration;
+  contextRefusal: ContextRefusal | null;
   call: string;
   account: string | null;
   tries: number | null;
@@ -60,17 +66,25 @@ export async function generate({ credentials, connection, model, settings, retri
   let cached: CacheView | null = null;
   let account: Account | null = null;
   let tries: number | null = null;
-  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
-    ...outcome,
-    call: call.id,
-    account: account?.id ?? null,
-    tries,
-    error,
-    firstTextMs: firstText === null ? null : Math.round(firstText - started),
-    totalMs: Math.round(performance.now() - started),
-    request: built,
-    cache: cached,
-  });
+  let protocol = "";
+  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => {
+    const refusal = error?.kind === 'provider' ? contextRefusal(protocol, error) : null;
+    const calibration = completedCalibration(call.calibration ?? unavailableCalibration('preparation'), outcome);
+    return {
+      ...outcome,
+      ...(refusal && { usage: null, cost: null }),
+      calibration: refusal ? { ...calibration, eligible: false, refusal } : calibration,
+      contextRefusal: refusal,
+      call: call.id,
+      account: account?.id ?? null,
+      tries,
+      error,
+      firstTextMs: firstText === null ? null : Math.round(firstText - started),
+      totalMs: Math.round(performance.now() - started),
+      request: built,
+      cache: cached,
+    };
+  };
   const empty = { finishReason: null, usage: null, cost: null, replyId: null };
 
   // Refusals the connector can see coming are made here, before anything is sent.
@@ -82,9 +96,17 @@ export async function generate({ credentials, connection, model, settings, retri
   const asked = { model, messages, settings };
   try {
     route = resolveModel(resolved, model);
+    protocol = route.endpoint.protocol;
     batches = batching ? batchLane(route, asked) : null;
     // A batch answers whole, and both batch formats refuse a request that streams.
-    request = chatRequest(route, { model, messages, settings: batches ? { ...settings, streaming: false } : settings });
+    const prepared = prepareChat(route, { model, messages, settings: batches ? { ...settings, streaming: false } : settings });
+    request = prepared.request;
+    if (call.measure) call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), measurement: await call.measure(prepared) };
+    const calibration = call.calibration;
+    if (calibration?.fit) {
+      if (calibration.measurement.kind !== 'measured') return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'tokenizer' });
+      if (calibration.fit.allowance !== null && calibration.measurement.o200k > calibration.fit.allowance) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'context-fit' });
+    }
     built = { url: request.url, body: request.body };
     cached = cacheView(route, asked);
   } catch (error) {
@@ -249,11 +271,17 @@ export function cacheViewOf(connection: Connection, model: Starred, settings: Mo
 export async function resume({ store, credentials }: { store: ObjectStore; credentials: Credentials }, { id, value }: Stored<'stream'>, signal: AbortSignal, onText: GenerateInput['onText'], inline?: InlineThoughts, turn?: { retrying: () => void; cancel: AbortSignal }): Promise<Reply> {
   let took = 0;
   let tries: number | null = null;
-  const reply = ([outcome, error]: Answered): Reply => ({ ...outcome, call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, cache: null });
+  let protocol = '';
+  const reply = ([outcome, error]: Answered): Reply => {
+    const refusal = error?.kind === 'provider' ? contextRefusal(protocol, error) : null;
+    const calibration = completedCalibration(value.calibration, outcome);
+    return { ...outcome, ...(refusal && { usage: null, cost: null }), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, cache: null, calibration: refusal ? { ...calibration, eligible: false, refusal } : calibration, contextRefusal: refusal };
+  };
   const route = routeOf(store, value.call);
   const resolved = 'kind' in route ? null : resolveConnection(route.connection.value);
   if ('kind' in route || !resolved) return reply(failedWith({ kind: 'refused', code: 'model-gone' }));
   const routed = resolveModel(resolved, route.model);
+  protocol = routed.endpoint.protocol;
   if ('batch' in value) {
     const lane = routed.type?.discount;
     // A marker a newer version wrote, for a lane this one does not have.

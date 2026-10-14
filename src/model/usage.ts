@@ -8,13 +8,14 @@ type Tally = { total: number; unknown: number };
 export type ModelUsage = { calls: number; last: number | null; input: Tally; output: Tally; costs: { unit: Cost['unit']; amount: number; estimated: boolean }[]; costUnknown: number };
 
 // modelName and source: the names when the call was made, for a model or connection renamed or deleted since.
-export type UsageCall = { at: number; call: Pick<Receipt, 'id' | 'connection' | 'model' | 'modelName' | 'source' | 'usage' | 'cost'> };
+export type UsageCall = { at: number; call: Pick<Receipt, 'id' | 'connection' | 'model' | 'modelName' | 'source' | 'usage' | 'cost' | 'calibration'> };
 
 // The account's record of its model calls (kind ledger), one row per call written where the call was made or first
 // saved, with where it was made; it outlives the chat. Rows are written once, so a cost booked after the call is a row
 // of its own naming it. chat null: a call no chat made (번역기, a card's text, a 삽화 profile).
 export type Ledger =
   | { type: 'call'; at: number; call: UsageCall['call']; chat: string | null; character: string | null }
+  | { type: 'input-refusal'; at: number; call: UsageCall['call']; chat: string | null; character: string | null }
   | { type: 'cost'; call: string; cost: Cost | null; at: number };
 
 export type Counted = UsageCall & Pick<Extract<Ledger, { type: 'call' }>, 'chat' | 'character'>;
@@ -26,7 +27,7 @@ export function counted(rows: Iterable<Ledger>): Counted[] {
   const booked = new Map<string, Cost | null>();
   for (const row of rows) {
     if (row.type === 'call') calls.set(row.call.id, { at: row.at, call: row.call, chat: row.chat, character: row.character });
-    else if (!booked.get(row.call)) booked.set(row.call, row.cost);
+    else if (row.type === 'cost' && !booked.get(row.call)) booked.set(row.call, row.cost);
   }
   return [...calls.values()].map((one) => (one.call.cost === 'pending' && booked.has(one.call.id) ? { ...one, call: { ...one.call, cost: booked.get(one.call.id)! } } : one));
 }

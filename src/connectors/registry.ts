@@ -70,6 +70,16 @@ const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatComplet
 
 // Route: a connection that speaks a chat format. codec null: one whose type speaks none, with its fixed model list.
 export type Route = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
+// The evaluation worker needs the resolved endpoint and provider policy, never credentials or a model catalog.
+export type WireRoute = { provider: string | null; endpoint: Endpoint };
+export const wireRoute = ({ type, endpoint }: Route): WireRoute => ({ provider: type?.id ?? null, endpoint });
+export function requestRoute({ provider, endpoint }: WireRoute): Route {
+  const type = provider === null ? null : CONNECTION_TYPES.find(({ id }) => id === provider);
+  const codec = CODECS[endpoint.protocol];
+  if (type === undefined || !codec) throw new ConnectorError('unsupported-protocol');
+  return { type, endpoint, codec };
+}
+
 export type Resolved = Route | { type: ConnectionType; endpoint: null; codec: null; models: Model[] };
 
 // null for a type this version does not know, such as one saved by a newer version of the app, or for a secret its type
@@ -168,7 +178,7 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
 
 // settings is the 묶음's as stored; the 모델 설정 screen names each change with the same fit().
 // chatRequest writes it and cacheView reads it, so a forecast compares what is sent.
-function sending(route: Route, { model, messages, settings: stored }: ChatRequest): ChatRequest {
+export function sending(route: Route, { model, messages, settings: stored }: ChatRequest): ChatRequest {
   const { settings } = fit(settingsSchema(carries(route, model), model), stored);
   const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
   return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };

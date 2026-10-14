@@ -47,7 +47,7 @@ export function fitLimits(limits: TokenLimits, estimate: TokenEstimate): TokenFi
 
 type Clocked = Moments & { at: number; step: number };
 type Local = { stats: Clocked; contribution: Clocked; guard: number; last: string; pending: { y: number; direction: number } | null; reset: boolean };
-type ModelState = { stats: Clocked; step: number; chats: Map<string, Local>; last: string };
+type ModelState = { stats: Clocked; step: number; chats: Map<string, Local>; last: string; guard: number };
 export type Observation = { key: string; chat: string | null; at: number; fingerprint: string; input: number; denominator: number };
 const clocked = (): Clocked => ({ ...emptyMoments(), at: 0, step: 0 });
 const advance = (stats: Clocked, step: number, at: number, half: number): Clocked => ({ ...decay(stats, step - stats.step, (at - stats.at) / DAY, half), step, at });
@@ -59,7 +59,7 @@ export class Calibration {
     const { key, chat, at, input, denominator, fingerprint } = observation;
     if (!(input > 0 && denominator > 0 && Number.isFinite(input) && Number.isFinite(denominator))) return;
     let model = this.models.get(key);
-    if (!model) { model = { stats: clocked(), step: 0, chats: new Map(), last: '' }; this.models.set(key, model); }
+    if (!model) { model = { stats: clocked(), step: 0, chats: new Map(), last: '', guard: -Infinity }; this.models.set(key, model); }
     const print = `${fingerprint}:${input}:${denominator}`;
     if (model.last === print) return;
     model.last = print;
@@ -89,6 +89,7 @@ export class Calibration {
       }
       model.chats.set(chat, held);
     }
+    model.guard = Math.max(y, model.guard - Math.log(1.10) / 16);
     model.step++;
     const stats = advance(model.stats, model.step, at, 64);
     const before = posterior(GLOBAL_PRIOR, stats);
@@ -107,7 +108,8 @@ export class Calibration {
     const parent = this.parent(model, local, at);
     if (!local) {
       const p = chat === null ? parent : posterior(this.chatPrior(parent), emptyMoments());
-      return { ...centres(p), source: 'model', evidence: advance(model.stats, model.step, at, 64).w, cold: chat !== null };
+      const values = centres(p);
+      return { ...values, upper: chat === null ? Math.max(values.upper, Math.exp(model.guard)) : values.upper, source: 'model', evidence: advance(model.stats, model.step, at, 64).w, cold: chat !== null };
     }
     const stats = advance(local.stats, local.stats.step, at, 16);
     const p = posterior(this.chatPrior(parent), stats);

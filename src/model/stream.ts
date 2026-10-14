@@ -1,3 +1,4 @@
+import type { CallCalibration } from './token-calibration';
 import type { Receipt, Writes } from './chat';
 import type { Source } from './memory';
 
@@ -10,6 +11,7 @@ import type { Source } from './memory';
 // of a reply submitted to a discount lane's batch (ConnectionType discount), which the page asks about through the relay.
 export type Stream = ({ key: JsonWebKey } | { batch: string }) & {
   call: Pick<Receipt, 'connection' | 'source' | 'model' | 'modelName'>;
+  calibration: CallCalibration;
   at: number;
   result: string;
   for:

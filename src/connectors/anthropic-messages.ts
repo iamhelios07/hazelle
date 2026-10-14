@@ -1,4 +1,4 @@
-import { streamError } from './errors';
+import { failedTerminal } from './errors';
 import type { Cache, Reasoning } from './settings';
 import { carriesPictures, ConnectorError, type ChatMessage, type Codec, type InputPicture, type Modality } from './types';
 import { count, isRecord, modelEntries, nameOf } from './values';
@@ -163,7 +163,7 @@ export const anthropicMessages: Codec = {
   terminal(event) {
     if (!isRecord(event)) return null;
     if (event.type === 'message_stop') return { state: 'completed' };
-    if (event.type === 'error') return { state: 'failed', error: streamError(event.error) };
+    if (event.type === 'error') return failedTerminal(event.error);
     return null;
   },
 

@@ -1,3 +1,5 @@
+import type { PreparedChat } from '../connectors/preparation';
+import type { CallCalibration, InputMeasurement } from '../model/token-calibration';
 import { BOT_HEADER, RELAY_HEADER } from '../contracts/http';
 import { HEAD, DATA, END, PING, WAIT, type Retry } from '../contracts/streams';
 import { providerCode, providerMessage } from '../connectors/errors';
@@ -106,7 +108,7 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
 // id, runtime/generate). retrying: told each time a try failed and is to be sent again (Retry). bot: the chat whose
 // bot's script makes the call, which the server limits per chat. tries: how many times the server sent it, once its
 // head has been read. took: how long the call ran, as the server measured it, once its end has been read.
-export type StreamCall = { id: string; key: JsonWebKey; public?: string; started?: (batch?: string) => void; retrying?: () => void; bot?: string; took?: number; tries?: number };
+export type StreamCall = { calibration?: CallCalibration; measure?: (prepared: PreparedChat) => Promise<InputMeasurement>; id: string; key: JsonWebKey; public?: string; started?: (batch?: string) => void; retrying?: () => void; bot?: string; took?: number; tries?: number };
 
 // A read ends only at the call's own end: the end the server read, a call the server lost, or one it no longer holds
 // (stream-gone); or once the session is gone (no-session), when no read can reach it. This page's other failures to

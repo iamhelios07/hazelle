@@ -1,3 +1,4 @@
+import { unavailableCalibration } from '../model/token-calibration';
 import { describe, expect, it, vi } from 'vitest';
 import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, textTranslation, type Character, type Lore } from '../model/library';
@@ -290,7 +291,7 @@ describe('purgeExpired', () => {
     const expired = await savedChat(store);
     await store.create('memory', { records: [], chapters: [], state: [], threads: [{ id: 't', text: '등대', opened: null }] }, { id: memoryId(expired), parent: expired });
     await store.create('cacheprint', { call: 'r', connection: 'c', account: null, model: 'm', messages: [{ role: 'user', hash: 'h', tokens: 1, from: { kind: 'block', name: null, slot: 'chat' }, point: true }] }, { id: cachePrintId(expired), parent: expired });
-    await store.create('stream', { key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } }, { parent: expired });
+    await store.create('stream', { calibration: unavailableCalibration('historical'), key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } }, { parent: expired });
     const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
     await store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent: { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 }, file: { id: 'f', key: 'k' }, type: 'image/png', size: 1, at: 0 }, { parent: expired });
     await removeChat(store, expired);

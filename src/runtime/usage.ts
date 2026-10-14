@@ -1,3 +1,4 @@
+import { unavailableCalibration } from '../model/token-calibration';
 import { ChangeSignal } from '../change-signal';
 import { loggedCalls, usageCall, type Entry, type Receipt } from '../model/chat';
 import type { Cost } from '../connectors/types';
@@ -15,8 +16,10 @@ export const ledgerId = (call: string) => `${call.slice(0, 14)}8${call.slice(15)
 
 export type CallPlace = { chat: string | null; character: string | null };
 
-export const callRow = ({ at, call }: UsageCall, { chat, character }: CallPlace): Write =>
-  ({ type: 'create', kind: 'ledger', id: ledgerId(call.id), parent: SETTINGS_ID, value: { type: 'call', at, call, chat, character } });
+export function callRow({ at, call }: UsageCall, { chat, character }: CallPlace): Write {
+  const row = { at, call: call.calibration === undefined ? { ...call, calibration: unavailableCalibration('historical') } : call, chat, character };
+  return { type: 'create', kind: 'ledger', id: ledgerId(call.id), parent: SETTINGS_ID, value: call.calibration?.refusal ? { type: 'input-refusal', ...row } : { type: 'call', ...row } };
+}
 
 export const receiptRow = (receipt: Receipt, at: number, place: CallPlace) => callRow(usageCall(receipt, at), place);
 
@@ -49,6 +52,14 @@ export class Usage {
   readonly subscribe = this.changes.subscribe;
 
   readonly filling = () => this.filled;
+
+  calibrationTimeline(): string | null {
+    return this.pin === null ? null : JSON.stringify([this.pin.timeline, this.pin.epoch]);
+  }
+
+  calibrationRows(): Counted[] {
+    return [...this.rows.values()].flatMap((row) => row.type === 'cost' ? [] : [{ at: row.at, call: row.call, chat: row.chat, character: row.character }]);
+  }
 
   close() {
     this.closing.abort();

@@ -108,7 +108,7 @@ export type Phase = 'text' | 'reasoning';
 // tier: the service tier the reply says served it; null where it names none.
 export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: string | null; id: string | null; tier: string | null };
 
-export type Terminal = { state: 'completed' } | { state: 'failed'; error: string };
+export type Terminal = { state: 'completed' } | { state: 'failed'; error: string; code?: string };
 
 // How a cache point reaches the wire: cache_control on the message's text (Anthropic's shape, which OpenRouter also
 // reads in chat completions), a field of the provider's own on the message, or one prompt_cache_key for the cached

@@ -1,3 +1,4 @@
+import { unavailableCalibration } from '../model/token-calibration';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelSettings } from '../connectors/settings';
 import { RETRIES } from '../connectors/registry';
@@ -37,6 +38,12 @@ async function run(connection = openRouter, target: Starred = model, credentials
 }
 
 describe('generate', () => {
+  it('preserves a streamed context refusal code even when its message does not name a context window', async () => {
+    answer(200, 'data: {"error":{"code":"context_length_exceeded","message":"Input too large"}}\n\n', { 'x-relay': 'upstream' });
+    const { reply } = await run();
+    expect(reply).toMatchObject({ state: 'failed', usage: null, contextRefusal: { actual: null, maximum: null }, calibration: { eligible: false, refusal: { actual: null, maximum: null } } });
+  });
+
   it('sends the built request through the server’s stream and streams the reply', async () => {
     const log = answer(200, 'data: {"choices":[{"delta":{"content":"반가워요"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
     const { reply, text } = await run();
@@ -232,7 +239,7 @@ describe('a reply through a discount lane’s batch', () => {
   it('asks about a batch its marker names after a reload, with the connection’s account, and reads its answer', async () => {
     const connection = { id: 'c', kind: 'connection', parent: null, rev: 1, value: { ...anthropic, starred: [claude] } };
     const store = { get: (kind: string, id: string) => (kind === 'connection' && id === 'c' ? connection : null) } as unknown as ObjectStore;
-    const marker = { id: crypto.randomUUID(), kind: 'stream', parent: 'chat', rev: 1, value: { batch: 'b1', call: { connection: 'c', source: 'Anthropic', model: 'm', modelName: 'm' }, at: Date.now(), result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } } } as Stored<'stream'>;
+    const marker = { id: crypto.randomUUID(), kind: 'stream', parent: 'chat', rev: 1, value: { calibration: unavailableCalibration('historical'), batch: 'b1', call: { connection: 'c', source: 'Anthropic', model: 'm', modelName: 'm' }, at: Date.now(), result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } } } as Stored<'stream'>;
     // The results line is the marker's call's: the call's id was the batch request's key.
     const log = stubRelay(({ url }) => (url === `${BATCHES}/b1` ? batch('ended') : new Response(JSON.stringify({ custom_id: marker.id, result: { type: 'succeeded', message } }), { headers: { 'x-relay': 'upstream' } })));
     let reply: Awaited<ReturnType<typeof resume>> | null = null;

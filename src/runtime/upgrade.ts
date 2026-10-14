@@ -1,3 +1,4 @@
+import { unavailableCalibration } from '../model/token-calibration';
 import { CONNECTION_TYPES } from '../connectors/registry';
 import { isRecord } from '../connectors/values';
 import { reparsed, type BlockEffect } from '../engine/import/blocks';
@@ -13,7 +14,7 @@ const ACCOUNT = 'account-1';
 const GROUP = 'group-1';
 
 // The kinds upgradeValue upgrades, and so the only ones the store holds as upgraded.
-type Upgraded = 'connection' | 'character' | 'module' | 'memory';
+type Upgraded = 'connection' | 'character' | 'module' | 'memory' | 'stream';
 
 // Every decrypted value and every backup line passes here before anything reads it. null for a value already current.
 // No step is retired: an E2E value is upgraded only when a client reads it, so the server can still hold any old shape.
@@ -23,6 +24,8 @@ export function upgradeValue(kind: string, value: unknown): Record<string, unkno
   if (kind === 'character') return upgradeCharacter(value);
   if (kind === 'module') return upgradeModule(value);
   if (kind === 'memory') return upgradeMemory(value);
+  if (kind === 'stream' && !('calibration' in value)) return { ...value, calibration: unavailableCalibration('historical') };
+  if (kind === 'ledger' && value.type === 'call' && isRecord(value.call) && !('calibration' in value.call)) return { ...value, call: { ...value.call, calibration: unavailableCalibration('historical') } };
   return null;
 }
 
@@ -131,5 +134,5 @@ function upgradeMemory(value: Record<string, unknown>) {
 // account. Each is written as it is held then, so a change another device made meanwhile is kept. A chat's memory
 // read after this ran is written back by its next change.
 export async function saveUpgraded(store: ObjectStore): Promise<void> {
-  await Promise.all(store.takeUpgraded().map(({ id, kind }) => store.update(kind as Upgraded, id, (current) => current)));
+  await Promise.all(store.takeUpgraded().filter(({ kind }) => kind !== 'ledger').map(({ id, kind }) => store.update(kind as Upgraded, id, (current) => current)));
 }

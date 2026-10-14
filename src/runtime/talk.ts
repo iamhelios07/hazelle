@@ -1,3 +1,5 @@
+import type { ContextRefusal } from '../connectors/preparation';
+import type { InputMeasurement, TokenFit, CallCalibration } from '../model/token-calibration';
 import { ChangeSignal } from '../change-signal';
 import type { ModelSettings } from '../connectors/settings';
 import type { InlineThoughts } from '../connectors/stream';
@@ -45,10 +47,10 @@ export type Shown = Message & { live: string | null; whole?: true; batch?: true;
 // The prompt, which the reply's id seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model.
 // said: the user's message as it is saved, which a message sent translated saves translated; null when prepare saved it
 // itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt.
-export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast };
+export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast };
 
 // It lives in page memory only, until the session closes: the raw request is never stored.
-export type Sent = Pick<Reply, 'request'> & { prompt: Assembled };
+export type Sent = Pick<Reply, 'request' | 'calibration'> & { prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
@@ -257,30 +259,46 @@ export class Talk {
     if (failure) return { kind: 'unsent', failure };
     const ready = await prepare(abort.signal);
     if ('kind' in ready) return ready;
-    const { route, settings, prompt } = ready;
+    const { route, settings } = ready;
+    let prompt = ready.prompt;
     const reply = ready.before ? { ...asked, before: ready.before } : asked;
     // A message sent translated or changed by the bot shows as it is saved from the moment it is made so.
     this.change(held, { ...held.turn, reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
     const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
-    const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), continues: reply.continues, ...(reply.before && { before: reply.before }) } });
-    call.retrying = this.retrying(held);
-    this.reading.add(call.id);
-    held.calling = call.id;
+    const target = { chat, result: reply.id, for: { kind: 'reply' as const, message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), continues: reply.continues, ...(reply.before && { before: reply.before }) } };
     const batching = { waiting: () => this.change(held, { ...held.turn, whole: true, batch: true }), cancel: held.cancel.signal };
-    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(this.store, route.connection.value, settings), messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held), batching });
-    const sent = await sending;
-    if (sent && !sent.ok) {
-      held.cancel.abort();
-      abort.abort();
+    let decision = ready.calibration;
+    let answer: Reply;
+    let call: Awaited<ReturnType<typeof newCall>>;
+    for (;;) {
+      call = await newCall(this.store, route, { id: crypto.randomUUID(), ...target });
+      if (decision) call.calibration = { ...call.calibration!, ...decision };
+      call.retrying = this.retrying(held);
+      this.reading.add(call.id);
+      held.calling = call.id;
+      const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(this.store, route.connection.value, settings), messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held), batching });
+      const sent = await sending;
+      if (sent && !sent.ok) {
+        held.cancel.abort();
+        abort.abort();
+        endCall(this.store, call.id);
+        await replying;
+        return { kind: 'unsent', failure: sent };
+      }
+      answer = await replying;
+      if (!answer.contextRefusal || !ready.refit || abort.signal.aborted || this.closed) break;
+      const fitted = await ready.refit(answer.contextRefusal, answer.calibration.measurement);
+      if (!fitted) break;
+      // No receipt, ledger row or visible retry state for a context refusal.
       endCall(this.store, call.id);
-      await replying;
-      return { kind: 'unsent', failure: sent };
+      this.reading.delete(call.id);
+      prompt = fitted.prompt;
+      decision = { fit: fitted.fit, retries: fitted.retries };
     }
-    const answer = await replying;
     if (this.closed) return null;
     // Kept before the save, whose store change is what shows the reply's 정보.
-    this.sentBy.set(call.id, { chat, sent: { request: answer.request, prompt } });
-    const written = this.written(held, reply, callOf(route), answer, Date.now(), ready.forecast);
+    this.sentBy.set(call.id, { chat, sent: { request: answer.request, prompt, calibration: answer.calibration } });
+    const written = this.written(held, reply, callOf(route), answer, Date.now(), answer.calibration.retries.length ? undefined : ready.forecast);
     // A receipt's cache is the view's, so one kept means the answer has its view.
     const printing = cacheKept(written.receipt) && writePrint(this.store, chat, call.id, wireOf(route.connection.id, answer.account, answer.cache!, prompt.parts));
     const saved = await this.save(chat, await this.ended(chat, written), call.id);
@@ -339,6 +357,7 @@ export class Talk {
 export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
   return {
     id: answer.call,
+    calibration: answer.calibration,
     ...call,
     ...(answer.account !== null && { account: answer.account }),
     ...(answer.tries !== null && answer.tries > 1 && { tries: answer.tries }),

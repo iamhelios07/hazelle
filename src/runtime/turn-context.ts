@@ -1,10 +1,11 @@
+import { providerFit } from './token-calibration';
 import type { Assembled, PromptInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import { chatModel, type RouteFailure } from './assignment';
 import { wireOf, type CacheSend } from './cache';
-import { asSent, budgetOf, scopeOf, sentSettings } from './chat-context';
+import { asSent, budgetOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
 import { cacheViewOf } from './generate';
 import { memoryFill } from './memory-read';
@@ -99,7 +100,7 @@ export type Sending = { turn: TurnContext; prompt: Assembled };
 // asker: whose forecast this is, each with its own evaluation lane, kept with the chat so a forecast sends the worker
 // only what changed since its last: the composer's, background memory's (Rememberer) and the memory panel's. One lane
 // shared by two would have each cancel the other's.
-export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scripts'>, chat: string, target: Target, signal?: AbortSignal, asker: 'forecast' | 'memory' | 'view' = 'forecast'): Promise<Sending | null> {
+export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scripts' | 'tokens'>, chat: string, target: Target, signal?: AbortSignal, asker: 'forecast' | 'memory' | 'view' = 'forecast'): Promise<Sending | null> {
   // What the prompt reads may change while it is evaluated: it is gathered and evaluated again once, so a save landing
   // mid-flight does not cost memory its round.
   for (let tries = 0; tries < 2; tries++) {
@@ -108,7 +109,10 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scrip
     const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
     const revisions = reads.map((read) => session.store.revision(read));
     if (turn === null || 'kind' in turn) return null;
-    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, ...session.scripts.cachedPrompt(chat, turn), continuing: false }, signal);
+    const snapshot = await session.tokens.snapshot(turn.route, turn.settings, tokenLimits(turn.route.model, sentSettings(session.store, turn.route)), chat, signal ?? new AbortController().signal);
+    if (!snapshot.ok) return null;
+    const fit = providerFit(turn.route, turn.settings, snapshot.data.fit.allowance);
+    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scripts.cachedPrompt(chat, turn), continuing: false }, signal);
     if (signal?.aborted) return null;
     if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? null : { turn, prompt };
   }

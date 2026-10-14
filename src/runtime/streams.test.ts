@@ -53,7 +53,7 @@ describe('a detached call', () => {
     expect(first.store.projections.get(chat)).toBeNull();
 
     await writer.write(delta('traveler.'));
-    await writer.write(ending);
+    await writer.write(encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":120,"completion_tokens":2}}\n\ndata: [DONE]\n\n'));
     const second = await open();
     await server.hold(second.store, chat);
     try {
@@ -61,6 +61,11 @@ describe('a detached call', () => {
       await vi.waitFor(() => expect(second.store.list('stream')).toEqual([]));
       const saved = shown(messages(second, chat)[1]!);
       expect(saved.at).toBe(marker!.value.at + saved.receipt!.totalMs);
+      expect(saved.receipt!.calibration).toEqual({ ...marker!.value.calibration, eligible: true });
+      const read = await second.usage.read(new AbortController().signal);
+      expect(read.ok && read.data).toHaveLength(1);
+      expect(second.tokens.call(saved.receipt!)).toMatchObject({ reportedInput: 120, unavailable: null });
+      expect(second.tokens.call(saved.receipt!).ratio).toBeGreaterThan(0);
     } finally {
       second.close();
     }

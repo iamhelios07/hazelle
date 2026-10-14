@@ -1,5 +1,5 @@
 import { cachePoints, type CachePart, type Sent } from './cache-points';
-import { fitChat, type Part, type TooLong } from './prompt-budget';
+import { fitChat, wireTokens, type ProviderFit, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
 import type { Block, ConversationPrompt, IllustratePrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
@@ -21,8 +21,9 @@ export type PromptInput = {
   // probabilities, as each earlier reply's id rolled its own.
   seed: string;
   countTokens: (text: string) => number;
-  // null when the context is unknown, and then nothing is dropped.
+  // Authored memory allowances stay in o200k. Only fit compares text with provider limits.
   budget: number | null;
+  fit?: ProviderFit;
   // 이어 쓰기: the chat's messages end with the cut reply, and the continue instruction goes last.
   continuing: boolean;
   // null while the chat's memory is off.
@@ -271,7 +272,7 @@ const UTILITY: Block[] = [
   { id: 'utility:postEverything', name: null, kind: 'slot', slot: 'postEverything' },
 ];
 
-function conversation({ scope, seed, countTokens, budget, continuing, memory, tools }: PromptInput): Assembled | TooLong {
+function conversation({ scope, seed, countTokens, budget, fit, continuing, memory, tools }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const blocks = scope.card?.utility ? UTILITY : prompt.blocks;
   const chat = renderChat('prompt', scope);
@@ -316,7 +317,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   };
 
   // The rest of the template stays whole.
-  const fitted = fitChat(template, messages, atDepth, tokens, budget);
+  const fitted = fitChat(template, messages, atDepth, (parts) => wireTokens(fit!, cachePoints(parts).map(({ message }) => message), tokens), fit?.allowance ?? null);
   return 'kind' in fitted ? fitted : assembled(fitted.parts, fitted.dropped);
 }
 

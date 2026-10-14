@@ -1,3 +1,4 @@
+import { unavailableCalibration } from './token-calibration';
 import { expect, it } from 'vitest';
 import { isValue } from './kinds';
 
@@ -52,10 +53,11 @@ it("reads a chat's bookmarks and cast as absent or well formed, and refuses a ma
 });
 
 it('accepts a call’s marker held by the server (its key) or by a provider’s batch, and refuses one held by neither', () => {
-  const marker = { call: { connection: 'c', source: 'Anthropic', model: 'm', modelName: 'M' }, at: 1, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } };
+  const marker = { calibration: unavailableCalibration('historical'), call: { connection: 'c', source: 'Anthropic', model: 'm', modelName: 'M' }, at: 1, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } };
   expect(isValue('stream', { ...marker, key: { kty: 'EC' } })).toBe(true);
   expect(isValue('stream', { ...marker, batch: 'msgbatch_1' })).toBe(true);
   expect(isValue('stream', marker)).toBe(false);
+  expect(isValue('stream', { ...marker, key: {}, calibration: { measurement: null } })).toBe(false);
 });
 
 it('reads a connection’s retry count as absent or a number, and refuses any other', () => {

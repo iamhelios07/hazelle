@@ -1,0 +1,119 @@
+import type { ProviderFit } from '../engine/prompt-budget';
+import { unavailableCalibration } from '../model/token-calibration';
+import { prepareChat, type ContextRefusal, type PreparedChat } from '../connectors/preparation';
+import { resolveConnection, resolveModel, wireRoute } from '../connectors/registry';
+import type { ModelSettings } from '../connectors/settings';
+import type { Usage as ReportedUsage } from '../connectors/types';
+import { Calibration, fitLimits, type Observation } from '../engine/token-calibration';
+import type { CallCalibration, InputMeasurement, TokenFit, TokenLimits, TokenProjection } from '../model/token-calibration';
+import type { Counted, UsageCall } from '../model/usage';
+import type { ApiResult } from './api';
+import type { Route } from './assignment';
+import type { ObjectStore } from './store';
+import type { Usage } from './usage';
+
+export const calibrationKey = (connection: string, requestClass: string, prepared: PreparedChat) => JSON.stringify([connection, requestClass, prepared.identity]);
+
+export function providerFit(route: Route, settings: ModelSettings, allowance: number | null): ProviderFit {
+  const resolved = resolveConnection(route.connection.value);
+  if (!resolved) throw new Error('calibration-route');
+  return { route: wireRoute(resolveModel(resolved, route.model)), model: route.model, settings, allowance };
+}
+
+export async function measureInput(store: ObjectStore, connection: string, requestClass: string, prepared: PreparedChat): Promise<InputMeasurement> {
+  const counts = await store.evaluation.count(prepared.wire.segments.map(({ text }) => text)).catch(() => null);
+  if (!Array.isArray(counts)) return { kind: 'unavailable', reason: 'tokenizer' };
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(prepared.wire)));
+  return { kind: 'measured', key: calibrationKey(connection, requestClass, prepared), at: Date.now(), fingerprint: Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(''), o200k: counts.reduce((sum, count) => sum + count, 0), messages: prepared.wire.messages, blocks: prepared.wire.segments.length, pictures: prepared.wire.pictures };
+}
+
+export function completedCalibration(calibration: CallCalibration, outcome: { state: string; cut: string | null; usage: ReportedUsage | null; inputComplete?: true }): CallCalibration {
+  const { measurement } = calibration;
+  const input = outcome.usage?.inputTokens;
+  return { ...calibration, eligible: outcome.inputComplete === true && measurement.kind === 'measured' && measurement.pictures === 0 && measurement.o200k > 0 && typeof input === 'number' && Number.isFinite(input) && input > 0 && (outcome.state === 'done' || (outcome.state === 'cut' && outcome.cut === 'length')) };
+}
+
+export function tokenProjection(calibration: CallCalibration, usage: ReportedUsage | null): TokenProjection {
+  const { measurement, fit, retries, eligible } = calibration;
+  const reportedInput = usage?.inputTokens ?? null;
+  const denominator = measurement.kind === 'measured' ? measurement.o200k : null;
+  return {
+    reportedInput, denominator, unavailable: measurement.kind === 'unavailable' ? measurement.reason : null,
+    ineligible: measurement.kind === 'unavailable' ? null : measurement.pictures > 0 ? 'pictures' : denominator === 0 ? 'empty' : reportedInput === null || reportedInput <= 0 ? 'missing-input' : !eligible ? 'incomplete' : null,
+    ratio: eligible && denominator !== null && reportedInput !== null ? reportedInput / denominator : null,
+    source: fit?.source ?? 'unavailable', evidence: fit?.evidence ?? 0, bound: fit?.bound ?? null, multiplier: fit?.multiplier ?? null, allowance: fit?.allowance ?? null, retries,
+  };
+}
+
+function observations(calls: Counted[]): (Observation & { id: string })[] {
+  const observations: (Observation & { id: string })[] = [];
+  for (const { call, chat } of calls) {
+    const calibration = call.calibration;
+    if (!calibration) continue;
+    const add = (measurement: InputMeasurement, input: number | null, id: string) => {
+      if (measurement.kind !== 'measured' || measurement.pictures > 0 || input === null || input <= 0 || measurement.o200k <= 0) return;
+      observations.push({ id, key: measurement.key, chat, at: measurement.at, fingerprint: measurement.fingerprint, input, denominator: measurement.o200k });
+    };
+    if (calibration.refusal) add(calibration.measurement, calibration.refusal.actual, call.id);
+    if (calibration.eligible) add(calibration.measurement, call.usage?.inputTokens ?? null, call.id);
+    calibration.retries.forEach((retry, index) => add(retry.measurement, retry.actual, `${call.id}:${index}`));
+  }
+  return observations.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
+}
+
+export class Tokens {
+  private events: (Observation & { id: string })[] = [];
+  private index = new Calibration();
+  private timeline: string | null = null;
+  constructor(private readonly usage: Usage) {}
+
+  async snapshot(route: Route, settings: ModelSettings, limits: TokenLimits, chat: string, signal: AbortSignal): Promise<ApiResult<TokenSnapshot>> {
+    const read = await this.usage.read(signal);
+    if (!read.ok) { this.clear(); return read; }
+    const timeline = this.usage.calibrationTimeline();
+    if (this.timeline !== timeline) this.clear();
+    this.timeline = timeline;
+    const events = observations(this.usage.calibrationRows());
+    // A late sync or timeline restore replays instead of merging nonlinear robust states.
+    const prefix = this.events.length <= events.length && this.events.every((event, index) => JSON.stringify(event) === JSON.stringify(events[index]));
+    if (!prefix) this.index = new Calibration();
+    for (const event of events.slice(prefix ? this.events.length : 0)) this.index.observe(event);
+    this.events = events;
+    const resolved = resolveConnection(route.connection.value);
+    if (!resolved) return { ok: false, error: 'calibration-route' };
+    let prepared: PreparedChat;
+    try { prepared = prepareChat(resolveModel(resolved, route.model), { model: route.model, settings, messages: [] }); }
+    catch { return { ok: false, error: 'calibration-route' }; }
+    const key = calibrationKey(route.connection.id, 'conversation', prepared);
+    return { ok: true, data: new TokenSnapshot(key, chat, limits, this.events.filter((event) => event.key === key), this.index.estimate(key, chat, Date.now())) };
+  }
+
+  clear() { this.events = []; this.index = new Calibration(); this.timeline = null; }
+  project(calibration: CallCalibration, usage: ReportedUsage | null) { return tokenProjection(calibration, usage); }
+  call(call: UsageCall['call']) { return tokenProjection(call.calibration === undefined ? unavailableCalibration('historical') : call.calibration, call.usage); }
+}
+
+export class TokenSnapshot {
+  readonly retries: CallCalibration['retries'] = [];
+  fit: TokenFit;
+  private readonly index = new Calibration();
+  constructor(readonly key: string, private readonly chat: string, private readonly limits: TokenLimits, events: Observation[], estimate: ReturnType<Calibration['estimate']>) {
+    for (const event of events) this.index.observe(event);
+    this.fit = fitLimits(limits, estimate);
+  }
+
+  refused(refusal: ContextRefusal, measurement: InputMeasurement): TokenFit | null {
+    if (this.retries.length >= 2 || measurement.kind !== 'measured' || measurement.o200k <= 0) return null;
+    const previous = Math.min(this.fit.allowance ?? measurement.o200k, measurement.o200k);
+    if (refusal.actual !== null && measurement.pictures === 0) this.index.observe({ key: this.key, chat: this.chat, at: measurement.at, fingerprint: measurement.fingerprint, input: refusal.actual, denominator: measurement.o200k });
+    const limits = refusal.maximum === null ? this.limits : { ...this.limits, hard: Math.min(this.limits.hard ?? Infinity, refusal.maximum) };
+    const learned = fitLimits(limits, this.index.estimate(this.key, this.chat, Date.now()));
+    // With no exact input count, a refusal gives no finite upper ratio. Two geometric cuts halve room each time,
+    // covering up to a fourfold miss; the cap prevents an unbounded loop and a terminal refusal remains truthful.
+    const allowance = Math.min(previous - 1, refusal.actual === null ? Math.floor(previous / 2) : learned.allowance ?? Math.floor(previous / 2));
+    if (allowance < 0) return null;
+    this.retries.push({ measurement, actual: refusal.actual, maximum: refusal.maximum, allowance, at: Date.now() });
+    this.fit = { ...learned, bound: refusal.actual === null ? 'refusal' : learned.bound, allowance, multiplier: learned.inputLimit === null ? null : learned.inputLimit / Math.max(allowance, 1) };
+    return this.fit;
+  }
+}

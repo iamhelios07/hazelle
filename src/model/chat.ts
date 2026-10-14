@@ -1,3 +1,4 @@
+import type { CallCalibration } from './token-calibration';
 import type { Assignment, ModelRef } from '../connectors/assignment';
 import type { Cache } from '../connectors/settings';
 import type { Cost, Usage } from '../connectors/types';
@@ -40,6 +41,7 @@ export const CAST_MAX = 5;
 
 // The raw request is never stored.
 export type Receipt = {
+  calibration?: CallCalibration;
   // The call's own id (runtime/streams newCall, pageCall), the same in every copy of the receipt: an edit, a branch's
   // copy and a continued reply keep the receipt whole, and the call's ledger row is named by it (runtime/usage ledgerId).
   id: string;
@@ -523,7 +525,7 @@ export function branchTree(items: ChatSummary[]): { item: ChatSummary; nested: b
   return under(null);
 }
 
-export const usageCall = ({ id, connection, model, modelName, source, usage, cost }: Receipt, at: number): UsageCall => ({ at, call: { id, connection, model, modelName, source, usage, cost } });
+export const usageCall = ({ id, connection, model, modelName, source, usage, cost, calibration }: Receipt, at: number): UsageCall => ({ at, call: { id, connection, model, modelName, source, usage, cost, ...(calibration && { calibration }) } });
 
 // Every call a chat's log keeps, whatever the chat still shows: a deleted message's, a translation made again. An edit
 // keeps the receipt it changes, so a call counts once, at its first entry. booked: what each cost entry booked for the

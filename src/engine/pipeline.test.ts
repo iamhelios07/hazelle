@@ -1,4 +1,4 @@
-import { rewritten } from './prompt-budget';
+import { rewritten, type ProviderFit } from './prompt-budget';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '../connectors/types';
@@ -115,6 +115,8 @@ const assembledOf = (result: ReturnType<typeof assemble>) => {
   return result;
 };
 const sentOf = (result: ReturnType<typeof assemble>) => assembledOf(result).messages;
+const providerFit = (allowance: number | null): ProviderFit => ({ allowance, route: { provider: null, endpoint: { baseUrl: 'https://example.test', protocol: 'chat-completions' } }, model: { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } }, settings: {} });
+
 const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: null });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
@@ -273,7 +275,7 @@ describe('assemble', () => {
       { id: 'first', name: null, kind: 'slot', slot: 'chat', range: { from: 0, to: 1 } },
       { id: 'tail', name: null, kind: 'slot', slot: 'chat', range: { from: -2, to: null } },
     ];
-    const result = assembledOf(assemble({ ...input({ messages, greeting: null, prompt: { ...starter, blocks }, lore: [lore('depth', '@@depth 2\nabc')] }), budget: 47, countTokens: (text) => text.length }));
+    const result = assembledOf(assemble({ ...input({ messages, greeting: null, prompt: { ...starter, blocks }, lore: [lore('depth', '@@depth 2\nabc')] }), budget: 47, fit: providerFit(47), countTokens: (text) => text.length }));
     expect(result.dropped).toBe(2);
     expect(result.messages.map(({ content }) => content)).toEqual(['2', 'abc', '3'.repeat(40), '44']);
     expect(result.parts.reduce((sum, { tokens }) => sum + tokens, 0)).toBe(46);
@@ -285,7 +287,7 @@ describe('assemble', () => {
     const counted = (from: number, to: number | null, budget: number | null) => {
       const texts: string[] = [];
       const blocks: Prompt['blocks'] = [{ id: 'chat', name: null, kind: 'slot', slot: 'chat', range: { from, to } }];
-      const result = assembledOf(assemble({ ...input({ card: null, lore: [], messages, greeting: null, prompt: { ...starter, blocks } }), budget, countTokens: (text) => { texts.push(text); return text.length; } }));
+      const result = assembledOf(assemble({ ...input({ card: null, lore: [], messages, greeting: null, prompt: { ...starter, blocks } }), budget, fit: providerFit(budget), countTokens: (text) => { texts.push(text); return text.length; } }));
       return { result, texts };
     };
     expect(counted(-1, null, null).texts).toEqual(['tail']);
@@ -326,14 +328,14 @@ describe('assemble', () => {
       const expected = [fixed('top', 'T', true), ...cut.first.map((text) => expectedPart(text, 'first')), fixed('gap', 'G', true), ...cut.past.map((text) => expectedPart(text, 'past')), ...cut.tail.map((text) => expectedPart(text, 'tail')), fixed('after', 'E')];
       expected.at(-2)!.message.cache = true;
       for (const budget of cut.budgets) {
-        const result = assembledOf(assemble({ ...base, budget }));
+        const result = assembledOf(assemble({ ...base, budget, fit: providerFit(budget) }));
         expect(result.dropped).toBe(cut.dropped);
         expect(result.messages).toEqual(expected.map(({ message }) => message));
         expect(result.parts).toEqual(expected.map(({ message, from }) => ({ from, tokens: message.content.length })));
         expect(result.parts.reduce((sum, { tokens }) => sum + tokens, 0)).toBe(cut.tokens);
       }
     }
-    expect(assemble({ ...base, budget: 26 })).toEqual({ kind: 'too-long', tokens: 27, budget: 26 });
+    expect(assemble({ ...base, budget: 26, fit: providerFit(26) })).toEqual({ kind: 'too-long', tokens: 27, budget: 26 });
   });
 
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
@@ -342,15 +344,15 @@ describe('assemble', () => {
     const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, tools: [], continuing: false, memory: null };
     const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
     const inChat = ({ content }: ChatMessage) => content.startsWith('Message ');
-    const whole = sentOf(assemble({ ...input, budget: null }));
+    const whole = sentOf(assemble({ ...input, budget: null, fit: providerFit(null) }));
     const budget = Math.floor(size(whole) / 2);
-    const sent = sentOf(assemble({ ...input, budget }));
+    const sent = sentOf(assemble({ ...input, budget, fit: providerFit(budget) }));
     expect(size(sent)).toBeLessThanOrEqual(budget);
     expect(sent.filter((each) => !inChat(each))).toEqual(whole.filter((each) => !inChat(each)));
     const kept = sent.filter(inChat);
     expect(kept.length).toBeLessThan(messages.length);
     expect(kept).toEqual(whole.filter(inChat).slice(-kept.length));
-    expect(assemble({ ...input, budget: 100 })).toMatchObject({ kind: 'too-long', budget: 100 });
+    expect(assemble({ ...input, budget: 100, fit: providerFit(100) })).toMatchObject({ kind: 'too-long', budget: 100 });
   });
 });
 
@@ -546,8 +548,8 @@ describe('a request a script rewrote', () => {
   it('keeps the parts of the messages left as built, counts the script’s own, and holds the budget by the oldest chat messages', () => {
     const edited = [built[0]!, built[1]!, note, built[2]!, built[3]!];
     expect(rewritten(prompt, edited, count, null)).toEqual({ ...prompt, messages: edited, parts: [prompt.parts[0], prompt.parts[1], { from: { kind: 'script' }, tokens: 15 }, prompt.parts[2], prompt.parts[3]] });
-    expect(rewritten(prompt, edited, count, 50)).toMatchObject({ messages: [built[0], note, built[2], built[3]], dropped: 3 });
-    expect(rewritten(prompt, edited, count, 30)).toEqual({ kind: 'too-long', tokens: 38, budget: 30 });
+    expect(rewritten(prompt, edited, count, providerFit(50))).toMatchObject({ messages: [built[0], note, built[2], built[3]], dropped: 3 });
+    expect(rewritten(prompt, edited, count, providerFit(30))).toEqual({ kind: 'too-long', tokens: 38, budget: 30 });
   });
 });
 

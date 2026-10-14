@@ -1,3 +1,4 @@
+import type { TokenLimits } from '../model/token-calibration';
 import { modelSettings } from '../connectors/registry';
 import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
@@ -135,6 +136,11 @@ function botModel(route: Route, settings: ModelSettings | null): ChatScope['mode
   return { id: model.id, maxContext: contextOf(model, settings), prefill: modelSettings(connection.value, model)?.prefill ?? null };
 }
 
+export function tokenLimits(model: Starred, settings: ModelSettings | null): TokenLimits {
+  return { hard: model.contextLength, user: settings?.context ?? null, output: replyOf(model, settings) ?? 0 };
+}
+
+// Authored memory and script allowances retain their o200k meaning; provider fitting uses tokenLimits instead.
 // A reply length nobody knows reserves nothing.
 export function budgetOf(model: Starred, settings: ModelSettings | null): number | null {
   const context = contextOf(model, settings);

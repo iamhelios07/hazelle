@@ -1,4 +1,5 @@
-import { scopeOf, translationInput } from './chat-context';
+import { providerFit } from './token-calibration';
+import { scopeOf, translationInput, tokenLimits, sentSettings } from './chat-context';
 import { cacheSend, gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
 import { forecast, prior } from './cache';
 import type { RanAway } from '../engine/pipeline';
@@ -184,15 +185,25 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const { route, settings, scope, budget, said, reply } = turn;
   const memory = turn.memory?.kind === 'built-in' ? { ...turn.memory, found: await findRecords(session, chat, scope.messages, signal) } : turn.memory;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
+  const snapshot = await session.tokens.snapshot(route, settings, tokenLimits(route.model, sentSettings(session.store, route)), chat, signal);
+  if (!snapshot.ok) return { kind: 'unsent', failure: snapshot, ...kept };
+  const calibration = snapshot.data;
+  const fit = providerFit(route, settings, calibration.fit.allowance);
+  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, turn, prompt.messages);
-  const sent = requested.messages === prompt.messages ? prompt : await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, budget }, signal));
+  const sent = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
   const send = cacheSend({ turn, prompt: sent }, session.credentials.pool.peek(route.connection.value)?.id ?? null);
   const against = send && forecast(prior(session.store, chat, session.read.chat(chat).snapshot()!.messages, Date.now()), send)?.against;
-  return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }) };
+  const refit: Ask['refit'] = async (refusal, measurement) => {
+    const decision = calibration.refused(refusal, measurement);
+    if (!decision) return null;
+    const fitted = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt: sent, messages: sent.messages, fit: { ...fit, allowance: decision.allowance } }, signal));
+    return 'kind' in fitted ? null : { prompt: fitted, fit: decision, retries: [...calibration.retries] };
+  };
+  return { route, settings, prompt: sent, calibration: { fit: calibration.fit, retries: [] }, refit, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }) };
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or

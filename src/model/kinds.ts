@@ -104,6 +104,19 @@ const listOf = (check: Check): Check => (value) => Array.isArray(value) && value
 const shape = (fields: Record<string, Check>): Check => (value) => isRecord(value) && Object.entries(fields).every(([key, check]) => check(value[key]));
 const all = (check: Check, ...fields: string[]) => Object.fromEntries(fields.map((field) => [field, check]));
 
+const finite: Check = (value) => typeof value === 'number' && Number.isFinite(value);
+const nonnegative: Check = (value) => finite(value) && (value as number) >= 0;
+const measurement: Check = (value) => isRecord(value) && (value.kind === 'unavailable'
+  ? ['historical', 'preparation', 'tokenizer'].includes(String(value.reason))
+  : value.kind === 'measured' && shape({ key: str, at: finite, fingerprint: str, o200k: nonnegative, messages: nonnegative, blocks: nonnegative, pictures: nonnegative })(value));
+const calibration = shape({
+  measurement,
+  fit: orNull(shape({ source: str, evidence: nonnegative, bound: orNull(str), multiplier: orNull(nonnegative), allowance: orNull(nonnegative), inputLimit: orNull(nonnegative), epsilon: finite })),
+  retries: listOf(shape({ measurement, actual: orNull(nonnegative), maximum: orNull(nonnegative), allowance: nonnegative, at: finite })),
+  eligible: bool,
+  refusal: (value) => value === undefined || shape({ actual: orNull(nonnegative), maximum: orNull(nonnegative) })(value),
+});
+
 const text = { at: num, text: str, receipt: orNull(isRecord) };
 const ENTRIES = {
   message: shape({ role: str, ...text }),
@@ -169,7 +182,7 @@ const SHAPES = {
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   // A batch's marker holds no key: no server object holds its call.
-  stream: (value) => shape({ call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) })(value) && (shape({ key: isRecord })(value) || shape({ batch: str })(value)),
+  stream: (value) => shape({ calibration, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) })(value) && (shape({ key: isRecord })(value) || shape({ batch: str })(value)),
   vectors: shape({ model: str, items: isRecord }),
   cacheprint: shape({ ...all(str, 'call', 'connection', 'model'), account: orNull(str), messages: listOf(shape({ role: str, hash: str, tokens: num, from: isRecord })) }),
   memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), chapters: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, records: listOf(shape({ id: str, at: num })) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
@@ -194,8 +207,8 @@ const SHAPES = {
     retries: (value) => value === undefined || num(value),
   }),
   settings: shape({ models: isRecord }),
-  ledger: (value) => isRecord(value) && (value.type === 'call'
-    ? shape({ at: num, call: shape(all(str, 'id', 'connection', 'model', 'modelName', 'source')), chat: orNull(str), character: orNull(str) })(value)
+  ledger: (value) => isRecord(value) && ((value.type === 'call' || value.type === 'input-refusal')
+    ? shape({ at: num, call: shape({ ...all(str, 'id', 'connection', 'model', 'modelName', 'source'), calibration }), chat: orNull(str), character: orNull(str) })(value)
     : value.type === 'cost' && shape({ call: str, cost: orNull(isRecord), at: num })(value)),
   prompt: (value) => prompt(value) && (conversation(value) || task(value)),
   persona: shape({ name: str, description: str, picture: orNull(str) }),

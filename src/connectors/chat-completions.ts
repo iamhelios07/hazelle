@@ -1,4 +1,4 @@
-import { streamError } from './errors';
+import { failedTerminal } from './errors';
 import type { Cache, NumberSetting, Reasoning, Setting } from './settings';
 import { ephemeral, wireMessage } from './anthropic-messages';
 import { carriesPictures, type CacheMark, type ChatMessage, type Codec, type Embeds, type InputPicture, type Model, type Usage } from './types';
@@ -170,7 +170,7 @@ export const chatCompletions: Codec = {
 
   terminal(event) {
     if (event === '[DONE]') return { state: 'completed' };
-    if (isRecord(event) && event.error !== undefined && event.error !== null) return { state: 'failed', error: streamError(event.error) };
+    if (isRecord(event) && event.error !== undefined && event.error !== null) return failedTerminal(event.error);
     return null;
   },
 

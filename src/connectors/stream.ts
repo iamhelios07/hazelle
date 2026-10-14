@@ -8,7 +8,8 @@ import type { Codec, Cost, Discount, Model, Phase, StreamFacts, Terminal, Usage 
 export type Outcome = {
   state: 'done' | 'cut' | 'failed';
   cut: 'length' | 'no-terminal' | 'stopped' | null;
-  error: { kind: 'provider' | 'bad-event' | 'network'; detail: string } | null;
+  error: { kind: 'provider' | 'bad-event' | 'network'; detail: string; code?: string } | null;
+  inputComplete?: true;
   finishReason: string | null;
   usage: Usage | null;
   // pending: the type books the cost after the reply, to be looked up by replyId. A pending lookup goes ahead of the
@@ -63,11 +64,12 @@ export async function decodeStream({ type, codec }: Route, model: Model, respons
 
   if ('badEvent' in ended) return finish('failed', null, { kind: 'bad-event', detail: ended.badEvent });
   const { terminal } = ended;
-  if (terminal?.state === 'failed') return finish('failed', null, { kind: 'provider', detail: terminal.error });
+  if (terminal?.state === 'failed') return finish('failed', null, { kind: 'provider', detail: terminal.error, ...(terminal.code && { code: terminal.code }) });
   // A stream may close without its end marker after the model already said why it stopped.
   if (!terminal && facts.finishReason === null) return finish('cut', 'no-terminal', null);
-  if (facts.finishReason !== null && codec.truncated(facts.finishReason)) return finish('cut', 'length', null);
-  return finish('done', null, null);
+  const outcome = facts.finishReason !== null && codec.truncated(facts.finishReason) ? finish('cut', 'length', null) : finish('done', null, null);
+  // A finish reason without the codec's terminal is not authoritative input evidence.
+  return terminal?.state === 'completed' ? { ...outcome, inputComplete: true } : outcome;
 }
 
 type Append = (phase: Phase, text: string) => void;

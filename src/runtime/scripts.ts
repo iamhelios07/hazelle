@@ -499,7 +499,7 @@ export class Scripts {
       return refused('no-model', 'no model is set');
     }
     const text = gather();
-    const call = await pageCall(chat);
+    const call = await pageCall(this.session.store, route, 'script', chat);
     // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,

@@ -1,3 +1,5 @@
+import { unavailableCalibration } from '../model/token-calibration';
+import { measureInput } from './token-calibration';
 import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
@@ -21,15 +23,16 @@ export type CallTarget = { id: string; chat: string | null; result: string; for:
 export async function newCall(store: ObjectStore, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
   const key = await streamKey();
   const at = Date.now();
-  const started = chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), at, result, for: purpose }, { id, parent: chat });
-  return { id, key: key.private, public: key.public, started };
+  const call: StreamCall = { id, key: key.private, public: key.public, calibration: unavailableCalibration('preparation'), measure: (prepared) => measureInput(store, route.connection.id, purpose.kind === 'reply' ? 'conversation' : purpose.kind === 'input' ? 'translation' : purpose.kind, prepared) };
+  call.started = chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), calibration: call.calibration!, at, result, for: purpose }, { id, parent: chat });
+  return call;
 }
 
 // A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
 // reload has no use for (bot: its chat, where the server limits these), or a 삽화 scene (runtime/illustrate).
-export async function pageCall(bot: string | null): Promise<StreamCall> {
+export async function pageCall(store: ObjectStore, route: Route, requestClass: 'script' | 'illustration' | 'likeness', bot: string | null): Promise<StreamCall> {
   const key = await streamKey();
-  return { id: crypto.randomUUID(), key: key.private, public: key.public, ...(bot !== null && { bot }) };
+  return { id: crypto.randomUUID(), key: key.private, public: key.public, calibration: unavailableCalibration('preparation'), measure: (prepared) => measureInput(store, route.connection.id, requestClass, prepared), ...(bot !== null && { bot }) };
 }
 
 // A batch's marker names no server object to drop.

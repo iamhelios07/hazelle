@@ -66,6 +66,7 @@ describe('chat completions stream', () => {
       text: '안녕하세요, 반가워요!',
       reasoning: '인사를 생각해요.',
       outcome: {
+        inputComplete: true,
         state: 'done',
         cut: null,
         error: null,
@@ -91,7 +92,9 @@ describe('chat completions stream', () => {
 
   it('marks a stream that ends without a finish reason or end marker as cut, and one with a finish reason as done', async () => {
     expect((await decode(openRouter, body(sse(chunk({ content: '중간에' }))))).outcome).toMatchObject({ state: 'cut', cut: 'no-terminal' });
-    expect((await decode(openRouter, body(sse(chunk({ content: '끝' }, 'stop'))))).outcome).toMatchObject({ state: 'done' });
+    const endedWithoutTerminal = (await decode(openRouter, body(sse(chunk({ content: '끝' }, 'stop'))))).outcome;
+    expect(endedWithoutTerminal).toMatchObject({ state: 'done' });
+    expect(endedWithoutTerminal.inputComplete).toBeUndefined();
   });
 
   it("fails on the provider's mid-stream error and on an event that is not JSON", async () => {
@@ -138,6 +141,7 @@ describe('anthropic messages stream', () => {
       text: '안녕하세요!',
       reasoning: '짧게 답하자.',
       outcome: {
+        inputComplete: true,
         state: 'done',
         cut: null,
         error: null,
@@ -172,6 +176,7 @@ describe('a reply asked for whole', () => {
       text: '안녕하세요, 반가워요!',
       reasoning: '인사를 생각해요.',
       outcome: {
+        inputComplete: true,
         state: 'done',
         cut: null,
         error: null,
@@ -188,6 +193,7 @@ describe('a reply asked for whole', () => {
       text: '안녕하세요!',
       reasoning: '짧게 답하자.',
       outcome: {
+        inputComplete: true,
         state: 'done',
         cut: null,
         error: null,

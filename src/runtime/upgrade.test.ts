@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { memoryId } from '../model/memory';
 import { startChat } from './chat-log';
 import { testServer } from './testing';
-import { saveUpgraded, upgradeValue } from './upgrade';
+import { readRow, saveUpgraded, upgradeValue } from './upgrade';
 
 const server = testServer();
 
@@ -122,4 +122,25 @@ describe('upgradeValue', () => {
     expect(third.get('memory', memoryId(chat))?.value).toEqual({ ...memory, chapters: [] });
     expect(third.takeUpgraded()).toEqual([]);
   });
+});
+
+
+it('upgrades old encrypted ledger and stream values through the backup/restore reader, never inventing a denominator or rewriting append-only rows', async () => {
+  const call = { id: crypto.randomUUID(), connection: 'connection', source: 'Source', model: 'm', modelName: 'M', usage: { inputTokens: 123 }, cost: null };
+  const oldLedger = { id: crypto.randomUUID(), kind: 'ledger', parent: 'settings', rev: 1, value: { type: 'call', call, at: 10, chat: null, character: null } };
+  const oldStream = { id: crypto.randomUUID(), kind: 'stream', parent: 'chat', rev: 2, value: { key: {}, call, at: 10, result: 'reply', for: { kind: 'reply', message: null, replaces: null, continues: null } } };
+  const unavailable = { measurement: { kind: 'unavailable', reason: 'historical' }, fit: null, retries: [], eligible: false };
+  expect(readRow(JSON.parse(JSON.stringify(oldLedger)))?.value).toMatchObject({ call: { usage: { inputTokens: 123 }, calibration: unavailable } });
+  expect(readRow(JSON.parse(JSON.stringify(oldStream)))?.value).toMatchObject({ calibration: unavailable });
+  const current = readRow(oldLedger)!;
+  expect(upgradeValue('ledger', current.value)).toBeNull();
+  expect(readRow(JSON.parse(JSON.stringify(current)))).toEqual(current);
+  expect(upgradeValue('stream', readRow(oldStream)!.value)).toBeNull();
+  const { store } = await server.account();
+  const take = vi.spyOn(store, 'takeUpgraded').mockReturnValue([{ id: oldLedger.id, kind: 'ledger' }]);
+  const update = vi.spyOn(store, 'update');
+  await saveUpgraded(store);
+  expect(update).not.toHaveBeenCalled();
+  take.mockRestore();
+  update.mockRestore();
 });

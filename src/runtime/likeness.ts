@@ -206,7 +206,7 @@ export class Likenesses {
     if (!sources.length) return save(empty);
 
     const text = gather();
-    const call = await pageCall(null);
+    const call = await pageCall(store, writer.route, 'likeness', null);
     const answer = await generate({ credentials, connection: writer.route.connection.value, model: writer.route.model, settings: writer.settings, retries: retriesOf(store, writer.route.connection.value, writer.settings), messages: likenessRequest(input), call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(writer.route), answer));

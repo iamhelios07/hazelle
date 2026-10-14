@@ -213,7 +213,7 @@ export class Illustrator {
     });
     if ('kind' in assembled) return assembled;
     const text = gather();
-    const call = await pageCall(null);
+    const call = await pageCall(store, route, 'illustration', null);
     const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(route), answer));

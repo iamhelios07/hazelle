@@ -1,5 +1,5 @@
 import { chatCompletions, dataUrl, openAiEmbeds, promptCacheKey } from './chat-completions';
-import { streamError } from './errors';
+import { failedTerminal } from './errors';
 import type { Reasoning } from './settings';
 import { carriesPictures, type ChatMessage, type Codec, type Phase, type StreamFacts } from './types';
 import { count, isRecord, list } from './values';
@@ -105,15 +105,15 @@ export const responses: Codec = {
   terminal(event) {
     if (!isRecord(event)) return null;
     if (event.type === 'response.completed' || event.type === 'response.incomplete') return { state: 'completed' };
-    if (event.type === 'response.failed') return { state: 'failed', error: streamError(isRecord(event.response) ? event.response.error : null) };
-    if (event.type === 'error') return { state: 'failed', error: streamError(event) };
+    if (event.type === 'response.failed') return failedTerminal(isRecord(event.response) ? event.response.error : null);
+    if (event.type === 'error') return failedTerminal(event);
     return null;
   },
 
   whole(payload, facts, append) {
     if (!isRecord(payload)) return null;
-    if (payload.object !== 'response') return isRecord(payload.error) ? { state: 'failed', error: streamError(payload.error) } : null;
-    if (payload.status === 'failed') return { state: 'failed', error: streamError(payload.error) };
+    if (payload.object !== 'response') return isRecord(payload.error) ? failedTerminal(payload.error) : null;
+    if (payload.status === 'failed') return failedTerminal(payload.error);
     if (typeof payload.id === 'string' && payload.id) facts.id = payload.id;
     for (const item of list(payload.output)) readItem(item, append);
     ended(payload, facts);

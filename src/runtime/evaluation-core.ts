@@ -1,4 +1,4 @@
-import { rewritten } from '../engine/prompt-budget';
+import { rewritten, type ProviderFit } from '../engine/prompt-budget';
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { speakersOf, standing, type Standing } from '../engine/memory';
 import { activeLore, assemble, assembleIllustration, assembleMemory, assembleTranslation, type Assembled, type IllustrationInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
@@ -14,7 +14,7 @@ const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
 export type EvaluationJob =
   | { kind: 'display'; take: ReadonlySet<number>; lua?: { generation: number; revision: number; waits: boolean } }
   | { kind: 'prompt'; input: Omit<PromptInput, 'scope' | 'countTokens'> }
-  | { kind: 'rewrite'; prompt: Assembled; messages: Parameters<typeof rewritten>[1]; budget: number | null }
+  | { kind: 'rewrite'; prompt: Assembled; messages: Parameters<typeof rewritten>[1]; fit: ProviderFit | null }
   | { kind: 'translation'; input: Omit<TranslationInput, 'scope' | 'countTokens'> }
   | { kind: 'memory'; input: Omit<MemoryTaskInput, 'scope' | 'countTokens'> }
   | { kind: 'illustration'; input: Omit<IllustrationInput, 'scope' | 'countTokens'> }
@@ -101,7 +101,7 @@ export class Evaluator {
       started();
       switch (job.kind) {
         case 'rewrite':
-          return rewritten(job.prompt, job.messages, countTokens, job.budget);
+          return rewritten(job.prompt, job.messages, countTokens, job.fit);
         case 'prompt':
           return assemble({ ...job.input, scope: scope as PromptInput['scope'], countTokens });
         case 'translation':
