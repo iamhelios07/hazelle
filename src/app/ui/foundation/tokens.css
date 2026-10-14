@@ -443,6 +443,8 @@
   --border-thick: 2px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
+  /* How far a ring reaches past its element: the room a box that scrolls or clips keeps around what can take focus. */
+  --focus-ring-reach: calc(var(--focus-ring-width) + var(--focus-ring-offset));
 
   /* Every keyframe is in motion.module.css. */
   --duration-instant: 0.01ms;

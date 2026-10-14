@@ -63,6 +63,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
   다시 시도. Loading is a note ending in `…`.
 - **Controls:** on/off is a `Switch`; one of several is `ChoiceGroup layout="fit"`, a segmented strip for up to
   four short choices and a menu behind a field `ChipButton` past that; chips are for filters. Explanations go behind ⓘ (`help`), never as visible prose.
+- **Focus rings are never cut.** The global ring sits `--focus-ring-reach` outside its element, and a box that scrolls or clips cuts whatever passes its padding. So a field (`surface` `field`, `SearchField`) and a row in a `List box` draw the ring inside, and a scrolling box with no padding of its own keeps that reach as padding, given back with a negative margin (`Dialog`'s body, `Sidebar`'s rail, `AskCard`'s choices). A new scrolling box does the same.
 - **Width:** settings pages are `page`, shaped for what each holds (`Panel`, `Columns`, `PickCard`, `Table`); item editors are `form`; a one-step flow (a key, a sign-in) is `narrow`.
 
 ## Components

@@ -26,6 +26,9 @@
 
 .body {
   min-height: 0;
+  /* The ring's room, given back to the dialog's padding, so a control at the edge keeps its whole ring. */
+  margin: calc(-1 * var(--focus-ring-reach));
+  padding: var(--focus-ring-reach);
   overflow-y: auto;
 }
 

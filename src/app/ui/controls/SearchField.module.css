@@ -23,10 +23,11 @@
   border-color: var(--color-border-strong);
 }
 
-/* The ring goes around the whole field; on the inner input it would sit inside the border. */
+/* The ring goes on the whole field's border, as every field's (surface.module.css field); on the inner input it would
+   sit inside the padding. */
 .field:focus-within {
   outline: var(--focus-ring-width) solid var(--color-focus);
-  outline-offset: var(--focus-ring-offset);
+  outline-offset: calc(-1 * var(--border-thin));
 }
 
 .label {

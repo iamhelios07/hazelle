@@ -15,6 +15,11 @@
   background: var(--color-surface);
 }
 
+/* A field fills its line, so its ring lies on its border, inside: outside, the edge of a box that scrolls would cut it. */
+.field:focus-visible {
+  outline-offset: calc(-1 * var(--border-thin));
+}
+
 .field:read-only {
   background: var(--color-bg);
 }
