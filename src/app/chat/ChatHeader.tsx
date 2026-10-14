@@ -1,5 +1,5 @@
 import { toolMenu } from './toolMenu';
-import { BookOpen, Bookmark, Brain, DatabaseZap, ImageOff, Keyboard, MessageSquarePlus, Package, Search, SlidersHorizontal, UsersRound } from 'lucide-react';
+import { BookOpen, Bookmark, Brain, DatabaseZap, ImageOff, Keyboard, MessageSquarePlus, Package, Search, SlidersHorizontal, SquarePen, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { BOOKMARK, CAST, EXPORT, NO_CHARACTER } from '../common/words';
@@ -7,7 +7,7 @@ import { useDisplay } from '../display';
 import { useRemembering } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
-import { ChatTitle, Divider, MenuItem, MoreMenu, ToolButton, useMenuOpener, useWide } from '../ui';
+import { Avatar, ChatTitle, Divider, MenuItem, MoreMenu, ToolButton, useMenuOpener, useWide } from '../ui';
 import { ChatCastMenu } from './ChatCastMenu';
 import { ChatExport } from './ChatExport';
 import { ChatModelMenu } from './ChatModelMenu';
@@ -17,13 +17,19 @@ import { ReadingDialog } from './ChatReading';
 import { SceneDialog } from './ChatPicture';
 import type { OpenChat } from './useChat';
 
-// Wide screens name the character in the sidebar beside the chat, whose title opens it; the header names only the chat.
 export function ChatHeading({ chat }: { chat: OpenChat }) {
-  const { item, card, shelf, busy, actions } = chat;
-  const wide = useWide();
-  const name = item?.title ?? '새 채팅';
-  if (wide) return <ChatTitle name={name} typing={busy} />;
-  return <ChatTitle name={card?.name ?? NO_CHARACTER} sub={name} typing={busy} onClick={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: null }) : undefined} />;
+  const { item, card, shelf, busy, panel, actions } = chat;
+  const open = panel?.kind === 'character';
+  return (
+    <ChatTitle
+      name={card?.name ?? NO_CHARACTER}
+      sub={item?.title ?? '새 채팅'}
+      typing={busy}
+      face={shelf && card && <Avatar face={card.name} image={shelf.face} size="sm" />}
+      expanded={shelf ? open : undefined}
+      onClick={shelf ? () => (open ? actions.closePanel() : actions.side({ kind: 'character', id: shelf.id, part: null })) : undefined}
+    />
+  );
 }
 
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
@@ -52,6 +58,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         onClick={actions.flipToggles}
       />
       <MoreMenu of="채팅" dot={failed}>
+        {shelf && <MenuItem icon={SquarePen} label="캐릭터 편집" onClick={() => actions.side({ kind: 'character', id: shelf.id, part: null })} />}
         {!wide && <MenuItem icon={MessageSquarePlus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />}
         {item && <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => actions.openDialog('rename')} />}
         <MenuItem icon={UsersRound} label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />

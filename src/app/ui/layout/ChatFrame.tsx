@@ -1,4 +1,4 @@
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { usePanelsBeside } from '../foundation/media';
@@ -170,21 +170,27 @@ type TitleProps = {
   name: string;
   sub?: string;
   typing: boolean;
+  face?: ReactNode;
+  expanded?: boolean;
   onClick?: () => void;
 };
 
-export function ChatTitle({ name, sub, typing, onClick }: TitleProps) {
+export function ChatTitle({ name, sub, typing, face, expanded, onClick }: TitleProps) {
   const lines = (
-    <span className={styles.lines}>
-      <span className={styles.name}>{name}</span>
-      {sub && <span className={styles.sub}>{sub}</span>}
-    </span>
+    <>
+      {face}
+      <span className={styles.lines}>
+        <span className={styles.name}>{name}</span>
+        {sub && <span className={styles.sub}>{sub}</span>}
+      </span>
+      {onClick && <ChevronRight className={styles.chevron} size={16} aria-hidden />}
+    </>
   );
   return (
     <span className={styles.chatTitle}>
       <h1 className={styles.heading}>
         {onClick ? (
-          <button type="button" className={`${styles.box} ${styles.press}`} onClick={onClick}>
+          <button type="button" className={`${styles.box} ${styles.press}`} aria-expanded={expanded} onClick={onClick}>
             {lines}
           </button>
         ) : (
