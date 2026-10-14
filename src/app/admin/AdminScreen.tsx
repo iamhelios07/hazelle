@@ -7,16 +7,15 @@ import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Beside, Callout, NavBar, Screen } from '../ui';
 import { AccountsSection } from './AccountsSection';
-import { FileSection } from './FileSection';
 import { LogSection } from './LogSection';
 import { ReportsSection, type AccountReport } from './ReportsSection';
-import { ShareSection } from './ShareSection';
 import { RestoresDialog, type Operated } from '../common/RestoresDialog';
 import { ServiceSection } from './ServiceSection';
 import { useLoaded } from '../common/useLoaded';
 import { moderates } from './moderation';
 import { useAccounts } from './useAccounts';
-import { UsageSection } from './UsageSection';
+import { ToolsSection } from './ToolsSection';
+import { UsageRow } from './UsageRow';
 
 const WARNINGS: Record<BackupWarning, string> = {
   'backup-stale': '백업이 36시간 넘게 없음',
@@ -42,15 +41,13 @@ export function AdminScreen({ back }: { back: Back | null }) {
     <Screen width="page" top={<NavBar title={PAGES.admin} {...backBar(back)} />}>
       {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
       {service.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: service.reload }}>{service.failure}</Callout>}
-      {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} onNoticed={moderating ? acted : null} />}
-      {shared && <UsageSection />}
       <Beside side={<LogSection key={acts} />}>
-        <AccountsSection loaded={accounts} onActed={actedOnAccount} onRestores={(account) => setRestoring({ ...account, report: null })} />
-        {moderating && <>
-          <ReportsSection onActed={acted} onRestore={(report: AccountReport) => setRestoring({ accountId: report.accountId, username: report.username, report })} />
-          <ShareSection onActed={acted} />
-          <FileSection onActed={acted} />
-        </>}
+        {moderating && <ReportsSection onActed={acted} onRestore={(report: AccountReport) => setRestoring({ accountId: report.accountId, username: report.username, report })} />}
+        <AccountsSection loaded={accounts} onActed={actedOnAccount} onRestores={(account) => setRestoring({ ...account, report: null })}>
+          {shared && <UsageRow />}
+        </AccountsSection>
+        {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} />}
+        {moderating && <ToolsSection onActed={acted} />}
       </Beside>
       {restoring && <RestoresDialog key={restoring.accountId} operated={restoring} onClose={() => setRestoring(null)} onActed={() => actedOnAccount(restoring.accountId)} />}
     </Screen>

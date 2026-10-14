@@ -45,6 +45,13 @@ function detailOf({ action, detail }: LogRow): string | undefined {
   return JSON.stringify(detail);
 }
 
+// An account's row names it by the username in its detail, and 'service' and 'everyone' only restate the action, so
+// the target is printed where it is the row's one name: a share's, a file's or a report's id.
+function codeOf({ target, detail }: LogRow): string | undefined {
+  if (target === 'service' || target === 'everyone') return undefined;
+  return typeof (detail as Record<string, unknown> | null)?.username === 'string' ? undefined : target;
+}
+
 export function LogSection() {
   const pages = usePages(readLog);
   const { rows } = pages;
@@ -55,7 +62,7 @@ export function LogSection() {
       {rows && rows.length > 0 && (
         <List label="기록">
           {rows.map((row) => (
-            <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={row.target} description={detailOf(row)} aside={ago(row.at)} />
+            <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={codeOf(row)} description={detailOf(row)} aside={ago(row.at)} />
           ))}
         </List>
       )}

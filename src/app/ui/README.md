@@ -148,7 +148,6 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `NavGroup` | `NavGroup.module.css` | A set of places in the app, spaced apart from the next set, such as 설정's |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |
 | collections | `Outline` (`OutlineKind`, `OutlineStop`) | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
-| collections | `SettingCard` | `SettingCard.module.css` | One setting as a card of its own among a few side by side: its name and ⓘ, its field, a fact and an error under it |
 | collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name, its ⓘ explanation and a line of facts beside its control, which goes under them on phones; outside a group, a bare row among fields, marked when it differs from its default |
 | collections | `Table` (`TableColumn`, `TableRow`) | `Table.module.css` | Things compared by the same few facts, a row each that opens its thing or holds its controls; a dash where a row has nothing; narrow, a row becomes its first cell over a summary line and the columns kept |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |

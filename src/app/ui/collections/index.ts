@@ -10,7 +10,6 @@ export { List, ListItem } from './List';
 export { NavGroup } from './NavGroup';
 export { NavRow } from './NavRow';
 export { Outline, type OutlineKind, type OutlineStop } from './Outline';
-export { SettingCard } from './SettingCard';
 export { SettingGroup, SettingRow } from './SettingGroup';
 export { Shares } from './Shares';
 export { Swatches, type Swatch } from './Swatches';

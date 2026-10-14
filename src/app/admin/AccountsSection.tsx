@@ -1,5 +1,5 @@
 import { Ban, HardDrive, History, LockOpen, Send } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import type { AccountState } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
 import { liftSuspension, removeAccount, sendNotice, suspend, type AdminAccount, type OwnCap } from '../../runtime/admin';
@@ -21,19 +21,20 @@ const STATES: Record<AccountState, string | null> = { active: null, restoring: '
 const size = (bytes: number | null) => (bytes === null ? UNKNOWN : sizeText(bytes));
 const held = (bytes: number | null, cap: OwnCap) => `${size(bytes)}${cap === 'default' ? '' : ` / ${cap === null ? '한도 없음' : sizeText(cap)}`}`;
 
-// 텍스트 and 이미지 are fill columns: an account's own cap is read beside its size.
+// 텍스트 and 이미지 are fill columns: an account's own cap is read beside its size. They come before the figures, set
+// right, so a left-set column never starts where a right-set one ends.
 const COLUMNS: TableColumn[] = [
   { label: '계정', size: 'fill' },
-  { label: '가입', size: 'figure' },
   { label: '텍스트', size: 'fill' },
-  { label: '디스크', size: 'figure' },
   { label: '이미지', size: 'fill' },
+  { label: '디스크', size: 'figure' },
+  { label: '가입', size: 'figure' },
   { label: '', size: 'button', keep: true },
 ];
 
 type Named = Pick<AdminAccount, 'accountId' | 'username'>;
 
-export function AccountsSection({ loaded, onActed, onRestores }: { loaded: ReturnType<typeof useAccounts>; onActed: (id?: string) => void; onRestores: (account: Named) => void }) {
+export function AccountsSection({ loaded, onActed, onRestores, children }: { loaded: ReturnType<typeof useAccounts>; onActed: (id?: string) => void; onRestores: (account: Named) => void; children?: ReactNode }) {
   const { username: own } = useSession();
   const toast = useToast();
   const { data, failure, reload } = loaded;
@@ -41,6 +42,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
   const [capping, setCapping] = useState<AdminAccount | null>(null);
   const [writing, setWriting] = useState<{ account: AdminAccount; suspend: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const paged = loaded.previous !== null || loaded.next !== null;
 
   async function act(id: string, done: Promise<ApiResult<undefined>>, failed: string) {
     const answer = await done;
@@ -58,11 +60,13 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
   return (
     <Section
       title="계정"
-      note={`${loaded.page}쪽${data ? ` · ${count(data.accounts.length)}명` : ''}`}
+      note={[...(paged ? [`${loaded.page}쪽`] : []), ...(data ? [`${count(data.accounts.length)}명`] : [])].join(' · ')}
       action={<>
         <Button variant="ghost" busy={loaded.busy} onClick={reload}>새로고침</Button>
-        <Button variant="ghost" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>
-        <Button variant="ghost" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
+        {paged && <>
+          <Button variant="ghost" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>
+          <Button variant="ghost" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
+        </>}
       </>}
       help="텍스트는 계정이 저장한 내용의 크기, 디스크는 그 내용이 서버에서 차지하는 크기예요."
     >
@@ -77,7 +81,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
             const tags = [...(others ? [] : ['운영자']), ...(state ? [state] : []), ...(account.suspended ? ['정지됨'] : [])];
             return {
               key: account.accountId,
-              summary: `${monthDay(account.createdAt)} 가입 · 텍스트 ${held(account.bytes, account.bytesCap)} · 디스크 ${size(account.disk)} · 이미지 ${held(account.fileBytes, account.fileBytesCap)}`,
+              summary: `텍스트 ${held(account.bytes, account.bytesCap)} · 이미지 ${held(account.fileBytes, account.fileBytesCap)} · 디스크 ${size(account.disk)} · ${monthDay(account.createdAt)} 가입`,
               cells: [
                 <>
                   {account.username}
@@ -88,10 +92,10 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
                     </Fragment>
                   ))}
                 </>,
-                monthDay(account.createdAt),
                 held(account.bytes, account.bytesCap),
-                size(account.disk),
                 held(account.fileBytes, account.fileBytesCap),
+                size(account.disk),
+                monthDay(account.createdAt),
                 <MoreMenu of={account.username}>
                   {account.state === 'leaving' ? (
                     <MenuItem icon={ACTS.remove.icon} label="탈퇴 마무리" sub="중단된 탈퇴를 완료해요" tone="warn" onClick={() => setRemoving(account)} />
@@ -115,6 +119,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
           })}
         />
       )}
+      {children}
       {capping && (
         <CapsDialog
           account={capping}

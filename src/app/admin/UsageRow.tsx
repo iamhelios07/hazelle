@@ -4,12 +4,12 @@ import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
-import { Button, Callout, Panel, Text } from '../ui';
+import { Button, Callout, Row, Text } from '../ui';
 import { moment } from '../common/time';
 
 // Whole-service totals are intentionally independent of list navigation and account/notice actions. A refresh
 // walks bounded usage pages, retains just their sums and can stop without issuing the next page.
-export function UsageSection() {
+export function UsageRow() {
   const job = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -33,16 +33,16 @@ export function UsageSection() {
   }
 
   return (
-    <Panel
-      title="전체 사용량"
-      action={busy
-        ? <Button variant="secondary" onClick={() => job.current?.abort()}>집계 멈추기</Button>
-        : <Button variant="secondary" onClick={() => void refresh()}>집계</Button>}
-    >
-      {totals
-        ? <Text variant="note">{count(totals.accounts)}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · ${count(totals.unread)}명은 읽지 못해 합계에서 빠짐` : ''}</Text>
-        : <Text variant="note">{busy ? '집계 중…' : '집계 전'}</Text>}
+    <>
+      <Row kind="spread">
+        {totals
+          ? <Text variant="note">전체 사용량 · {count(totals.accounts)}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · ${count(totals.unread)}명은 읽지 못해 합계에서 빠짐` : ''}</Text>
+          : <Text variant="note">전체 사용량 · {busy ? '집계 중…' : '집계 전'}</Text>}
+        {busy
+          ? <Button variant="secondary" size="sm" onClick={() => job.current?.abort()}>집계 멈추기</Button>
+          : <Button variant="secondary" size="sm" onClick={() => void refresh()}>집계</Button>}
+      </Row>
       {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => void refresh() }}>{failure}</Callout>}
-    </Panel>
+    </>
   );
 }
