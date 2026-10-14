@@ -40,6 +40,18 @@ describe('Vertex AI', () => {
     await expect(vertex.exchange!.request(JSON.stringify({ ...key, private_key: '-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----\n' }))).rejects.toThrow('unreadable-key');
   });
 
+  it('joins separately typed values into a key, its project read from the email and its \\n letters made line breaks', async () => {
+    const join = vertex.keyForm!.parts!.join;
+    const typed = { project: '', email: key.client_email, key: key.private_key.replace(/\n/g, '\\n') };
+    expect(join({ ...typed, key: '' })).toBe('');
+    const joined = join(typed);
+    expect(detect(joined)).toMatchObject({ kind: 'key', type: { id: 'vertex' } });
+    expect(vertex.endpointFor!(joined)!.baseUrl).toContain('/projects/test-project/');
+    const [header, claims, signature] = new URLSearchParams((await vertex.exchange!.request(joined)).body!).get('assertion')!.split('.') as [string, string, string];
+    expect(decoded(header)).toEqual({ alg: 'RS256', typ: 'JWT' });
+    expect(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', pair.publicKey, fromBase64url(signature), new TextEncoder().encode(`${header}.${claims}`))).toBe(true);
+  });
+
   it('is found by its key, sends replies to the project the key names, and embeds nothing there', () => {
     expect(detect(secret)).toMatchObject({ kind: 'key', type: { id: 'vertex' } });
     const route = resolveConnection(connection) as Route;

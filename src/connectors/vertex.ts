@@ -6,7 +6,10 @@ import { isRecord } from './values';
 // buys an hour's access token, a reply is asked of the project's global location in the Gemini API's format (refused
 // without the project), and the model list answers only outside a project, at v1beta1.
 
-type ServiceAccount = { projectId: string; keyId: string; privateKey: string; clientEmail: string; tokenUri: string };
+// keyId is absent from a key typed as separate values; the token endpoint finds the key by the account without it.
+type ServiceAccount = { projectId: string; keyId?: string; privateKey: string; clientEmail: string; tokenUri: string };
+
+const TOKEN_URI = 'https://oauth2.googleapis.com/token';
 
 function serviceAccount(secret: string): ServiceAccount | null {
   let raw: unknown;
@@ -16,8 +19,18 @@ function serviceAccount(secret: string): ServiceAccount | null {
     return null;
   }
   if (!isRecord(raw) || raw.type !== 'service_account') return null;
-  const account = { projectId: raw.project_id, keyId: raw.private_key_id, privateKey: raw.private_key, clientEmail: raw.client_email, tokenUri: raw.token_uri };
-  return Object.values(account).every((field) => typeof field === 'string' && field) ? (account as ServiceAccount) : null;
+  const account = { projectId: raw.project_id, privateKey: raw.private_key, clientEmail: raw.client_email, tokenUri: raw.token_uri };
+  if (!Object.values(account).every((field) => typeof field === 'string' && field)) return null;
+  return { ...(account as ServiceAccount), ...(typeof raw.private_key_id === 'string' && raw.private_key_id && { keyId: raw.private_key_id }) };
+}
+
+// A tool that hands the fields out one by one may write the key's line breaks as the two letters \n.
+function joinedAccount(values: Record<string, string>): string {
+  const email = values.email!.trim();
+  const privateKey = values.key!.trim().replace(/\\n/g, '\n');
+  const project = values.project!.trim() || /@([^@.]+)\.iam\.gserviceaccount\.com$/.exec(email)?.[1];
+  if (!email || !privateKey || !project) return '';
+  return JSON.stringify({ type: 'service_account', project_id: project, private_key: privateKey, client_email: email, token_uri: TOKEN_URI });
 }
 
 const base64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -36,7 +49,7 @@ async function signingKey(pem: string): Promise<CryptoKey> {
 async function signed(account: ServiceAccount, now: number): Promise<string> {
   const key = await signingKey(account.privateKey);
   const iat = Math.floor(now / 1000);
-  const body = `${encoded({ alg: 'RS256', typ: 'JWT', kid: account.keyId })}.${encoded({ iss: account.clientEmail, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: account.tokenUri, iat, exp: iat + 3600 })}`;
+  const body = `${encoded({ alg: 'RS256', typ: 'JWT', ...(account.keyId && { kid: account.keyId }) })}.${encoded({ iss: account.clientEmail, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: account.tokenUri, iat, exp: iat + 3600 })}`;
   const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(body));
   return `${body}.${base64url(new Uint8Array(signature))}`;
 }
@@ -47,7 +60,21 @@ export const vertex: ConnectionType = {
   group: 'maker',
   description: '서비스 계정 키(JSON)로 Vertex AI의 Gemini를 사용해요.',
   keyPage: 'https://console.cloud.google.com/iam-admin/serviceaccounts',
-  keyForm: { label: '서비스 계정 키', lines: 6, placeholder: '{ "type": "service_account", … }', accept: '.json,application/json' },
+  keyForm: {
+    label: '서비스 계정 키',
+    lines: 6,
+    placeholder: '{ "type": "service_account", … }',
+    accept: '.json,application/json',
+    parts: {
+      label: '프로젝트 ID, 이메일, 키 따로 입력',
+      fields: [
+        { id: 'project', label: '프로젝트 ID', placeholder: 'my-project', help: '비워 두면 클라이언트 이메일에서 읽어요.' },
+        { id: 'email', label: '클라이언트 이메일', placeholder: 'name@my-project.iam.gserviceaccount.com' },
+        { id: 'key', label: '프라이빗 키', lines: 4, placeholder: '-----BEGIN PRIVATE KEY-----' },
+      ],
+      join: joinedAccount,
+    },
+  },
   detect: { key: /^\{[\s\S]*"type"\s*:\s*"service_account"[\s\S]*\}$/, host: 'aiplatform.googleapis.com' },
   endpointFor(secret): Endpoint | null {
     const account = serviceAccount(secret);

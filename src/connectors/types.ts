@@ -165,6 +165,12 @@ export type ConnectionType = TypeHooks &
     | { endpoint?: never; endpointFor?: never; models: Model[] }
   );
 
+export type KeyParts = {
+  label: string;
+  fields: { id: string; label: string; lines?: number; placeholder: string; help?: string }[];
+  join: (values: Record<string, string>) => string;
+};
+
 type TypeHooks = {
   id: string;
   label: string;
@@ -174,8 +180,9 @@ type TypeHooks = {
   description: string;
   keyPage?: string;
   // The secret where it is no one-line API key: its name on 연결, how many lines its field takes, and the files it can
-  // be read from (an input accept list).
-  keyForm?: { label: string; lines: number; placeholder: string; accept: string };
+  // be read from (an input accept list). parts: the same secret typed as separate values, which some tools hand out
+  // one by one, folded under its label; join makes the secret of them, '' while one it needs is missing.
+  keyForm?: { label: string; lines: number; placeholder: string; accept: string; parts?: KeyParts };
   routes?: Partial<Record<Protocol, string>>;
   // Absent for a type the user connects by signing in: there is no key to paste.
   detect?: { key: RegExp | null; host: string };
