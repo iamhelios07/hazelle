@@ -1,4 +1,4 @@
-import type { PackOwner } from '../../model/library';
+import type { Lore, PackOwner } from '../../model/library';
 import { UNSET, type Host } from '../script-api';
 import { unescapeCbs } from '../cbs/escape';
 import { evaluate, Runaway } from '../cbs/evaluate';
@@ -28,9 +28,12 @@ export type Working = { origin: number | null; role: 'user' | 'char'; data: stri
 // One run's view of the chat, which the Lua API and the block effects read and change. quiet: an editDisplay pass,
 // whose writes are dropped and which reaches nothing outside itself. variables is never written: a run's writes stand
 // over it in written, so a display pass over many messages copies nothing. ranAway: the last cbs() call ran away; the
-// error Lua raises for it reaches the run as another Error, never the Runaway.
+// error Lua raises for it reaches the run as another Error, never the Runaway. chat: the chat's id, which parents its
+// own lorebook's entries; lore: the run's writes to that lorebook, by name.
 export type Run = {
   owner: PackOwner | null;
+  chat: string;
+  lore: Map<string, Omit<Lore, 'folder'>>;
   quiet: boolean;
   snapshot: Snapshot;
   variables: ReadonlyMap<string, string>;

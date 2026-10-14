@@ -4,7 +4,7 @@ import type { Cache } from '../connectors/settings';
 import type { Cost, Usage } from '../connectors/types';
 import type { CacheForecast } from './cache';
 import type { Kind, Stored } from './kinds';
-import type { Mark } from './library';
+import type { LoreFolder, Mark } from './library';
 import type { MemorySettings } from './memory';
 import type { UsageCall } from './usage';
 
@@ -32,6 +32,8 @@ export type Chat = Mark & {
   // 북마크, by message, in the order marked. One whose message is deleted or on no version's line stays stored and reads
   // as absent (app/chat/bookmarks bookmarkRows), so 되돌리기 of a deletion brings it back.
   bookmarks?: Bookmark[];
+  // 채팅 로어북's folders, which only group its lorebook on screen.
+  loreFolders?: LoreFolder[];
 };
 
 // name: only one the user gave.

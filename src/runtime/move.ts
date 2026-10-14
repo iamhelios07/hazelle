@@ -15,6 +15,7 @@ import { chatWrites, saveNewChats } from './chat-log';
 import type { Files } from './files';
 import { projectGreetings, startingGreetings } from './greetings';
 import { defaultMemory } from './memory-read';
+import { importedLore } from './lore';
 import { importModule, setModuleAlways } from './modules';
 import { addPersona } from './personas';
 import { thumbnail } from './picture';
@@ -208,14 +209,17 @@ export async function importRisuChats(store: ObjectStore, character: string | nu
   return failure ?? { ok: true, data: made.map(({ root }) => root.id) };
 }
 
-// A chat Risu bound to no persona, or to one not brought, holds the current persona, as a chat saved here would.
-function chatOf(id: string, character: string | null, card: Card | null, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, current: string | undefined, memory: MemorySettings): ReturnType<typeof chatWrites> {
+// A chat Risu bound to no persona, or to one not brought, holds the current persona, as a chat saved here would. Its
+// lorebook goes before its messages, whose last write a move counts its progress by.
+function chatOf(id: string, character: string | null, card: Card | null, { title, note, persona, greeting, variables, messages, lore, loreFolders }: RisuChat, personaIds: ReadonlyMap<string, string>, current: string | undefined, memory: MemorySettings): ReturnType<typeof chatWrites> {
   // The chat opens on the greeting Risu showed; a blank one shown leaves the chat without one, as Risu showed none.
   // One past the card's greetings opens on its last, as Risu shows it; projectGreetings would take the first.
   const greetings = card && startingGreetings(projectGreetings(card.greetings, card.greetings.map(() => crypto.randomUUID()), Math.min(greeting, Math.max(card.greetings.length - 1, 0))));
   const own = (persona === null ? undefined : personaIds.get(persona)) ?? current;
-  const chat: Chat = { title: title.trim() || null, character, models: {}, memory, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }) };
-  return chatWrites(id, chat, greetings, messages);
+  const { folders, writes } = importedLore(id, lore, loreFolders);
+  const chat: Chat = { title: title.trim() || null, character, models: {}, memory, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }), ...(folders.length > 0 && { loreFolders: folders }) };
+  const { entries, root } = chatWrites(id, chat, greetings, messages);
+  return { entries: [...writes, ...entries], root };
 }
 
 export const risuMatch = (store: ObjectStore, name: string): string | null =>

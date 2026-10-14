@@ -12,4 +12,4 @@ export class ToolStuck extends Error {
 }
 export class ToolLate extends Error {}
 export class ToolStopped extends Error {}
-export const noOutcome = (): ScriptOutcome => ({ value: undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, errors: [], missing: [] });
+export const noOutcome = (): ScriptOutcome => ({ value: undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, lore: [], errors: [], missing: [] });

@@ -77,7 +77,9 @@ describe('object store', () => {
     const first = await store.create('entry', entry, { parent: chat.data.id });
     expect(first.ok && first.data.parent).toBe(chat.data.id);
     expect(await store.create('entry', entry)).toEqual({ ok: false, error: 'bad-input' });
-    expect(await store.create('lore', { name: 'x' } as Lore, { parent: chat.data.id })).toEqual({ ok: false, error: 'bad-input' });
+    const lore: Lore = { name: 'x', keys: [], secondaryKeys: [], content: '', enabled: true, constant: false, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 100, priority: null, position: null, folder: null };
+    expect((await store.create('lore', lore, { parent: chat.data.id })).ok).toBe(true);
+    expect(await store.create('share', { share: 's', key: 'k' }, { parent: chat.data.id })).toEqual({ ok: false, error: 'bad-input' });
     expect(store.children('entry', chat.data.id).map((child) => child.value)).toEqual([entry]);
   });
 

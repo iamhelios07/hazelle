@@ -27,7 +27,6 @@ const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
 
 const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> = {
   'group-chat': (count) => `그룹 채팅 ${count}개`,
-  'chat-lore': (count) => `채팅 로어북 ${count}개`,
   memory: (count) => `Risu 장기 기억 ${count}개`,
   inlay: (count) => `메시지 속 이미지 ${count}개`,
   'chat-folder': (count) => `채팅 폴더 ${count}개`,

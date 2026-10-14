@@ -138,7 +138,7 @@ const backupFile = () =>
     ['map.png', PNG],
     ['ann.png', PNG],
     ['bell.png', PNG],
-    [`coldstorage_${CHAT_KEY}.json`, json({ message: [{ role: 'user', data: 'old', time: 10 }], scriptstate: { $x: { a: 1 } }, localLore: [{ key: 'k' }], hypaV3Data: { summaries: [{}] } })],
+    [`coldstorage_${CHAT_KEY}.json`, json({ message: [{ role: 'user', data: 'old', time: 10 }], scriptstate: { $x: { a: 1 } }, localLore: [{ key: 'places', comment: 'Places', mode: 'folder' }, { key: 'k', comment: 'Key', content: '<char>\n@@end', activationPercent: 40, folder: 'places' }], hypaV3Data: { summaries: [{}] } })],
     [`coldstorage_${CHARACTER_KEY}.json`, json({ character: { chaId: 'sleeper', name: 'Sleeper', firstMessage: 'zzz', chats: [{ name: 'Nap', message: [{ role: 'user', data: 'wake', time: 5 }] }] } })],
     ['database.risudat', database(db)],
   ]);
@@ -258,7 +258,7 @@ describe('readBackup', () => {
       ['sleeper', 'Fav'],
       ['mira', null],
     ]);
-    expect(characters[0]!.chats).toEqual([{ title: 'Nap', note: null, persona: null, greeting: 0, variables: [], inlays: [], messages: [{ role: 'user', text: 'wake', at: 5 }] }]);
+    expect(characters[0]!.chats).toEqual([{ title: 'Nap', note: null, persona: null, greeting: 0, variables: [], inlays: [], lore: [], loreFolders: [], messages: [{ role: 'user', text: 'wake', at: 5 }] }]);
     expect(backup.catalog.unsupported).toEqual([
       { kind: 'group-chat', count: 1 },
       { kind: 'cold-missing', count: 1 },
@@ -294,11 +294,24 @@ describe('readBackup', () => {
           { role: 'user', text: 'hey', at: 1000, bookmark: { name: '시작' } },
           { role: 'assistant', text: 'look {{inlay::abc}}', at: 1000, reasoning: 'hmm', bookmark: {} },
         ],
+        lore: [],
+        loreFolders: [],
       },
-      { title: 'Cold', note: 'n', persona: null, greeting: 0, variables: [['x', '{"a":1}']], inlays: [], messages: [{ role: 'user', text: 'old', at: 10 }] },
+      {
+        title: 'Cold',
+        note: 'n',
+        persona: null,
+        greeting: 0,
+        variables: [['x', '{"a":1}']],
+        inlays: [],
+        messages: [{ role: 'user', text: 'old', at: 10 }],
+        // Unmigrated, as Risu leaves a chat's lorebook.
+        lore: [{ name: 'Key', keys: ['k'], secondaryKeys: [], content: '<char>\n@@end', enabled: true, constant: false, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 100, priority: null, position: null, folder: 0 }],
+        loreFolders: ['Places'],
+      },
     ]);
     expect(card.missed).toEqual(
-      (['chat-lore', 'memory', 'chat-folder', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
+      (['memory', 'chat-folder', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
     );
   });
 

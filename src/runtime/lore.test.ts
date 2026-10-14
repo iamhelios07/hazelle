@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ORDER } from '../engine/import/convert';
 import type { Character } from '../model/library';
-import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from './lore';
+import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, upsertChatLore } from './lore';
 import type { PackOwner } from '../model/library';
 import type { ObjectStore } from './store';
 import { testServer } from './testing';
@@ -79,5 +79,22 @@ describe('lore folders', () => {
     await restoreLoreFolder(store, owner, removal);
     expect(store.get('character', owner.id)?.value.loreFolders).toEqual([{ id: 'sea', name: '바다' }]);
     expect(store.get('lore', inside.id)?.value.folder).toBe('sea');
+  });
+});
+
+describe('upsertChatLore', () => {
+  it("adds an entry of a new name, and one of a known name takes the place of every chat entry of that name, keeping the first's id and folder", async () => {
+    const { store } = await server.account();
+    const chat = await store.create('chat', { title: null, character: null, models: {}, loreFolders: [{ id: 'sea', name: '바다' }] });
+    if (!chat.ok) throw new Error(chat.error);
+    const first = await added(store, chat.data.id, 'sea');
+    await added(store, chat.data.id, null);
+    const entry = { ...first.value, keys: ['등대'], content: '불이 켜졌다', constant: true };
+    expect(await upsertChatLore(store, chat.data.id, entry)).toEqual({ ok: true, data: null });
+    expect(await upsertChatLore(store, chat.data.id, { ...entry, name: '항구' })).toEqual({ ok: true, data: null });
+    expect(store.children('lore', chat.data.id).map(({ id, value }) => [id, value])).toEqual([
+      [first.id, { ...entry, folder: 'sea' }],
+      [expect.any(String), { ...entry, name: '항구', folder: null }],
+    ]);
   });
 });

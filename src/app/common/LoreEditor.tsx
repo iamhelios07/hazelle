@@ -1,7 +1,7 @@
 import { FolderPlus } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
-import type { Lore, LoreFolder, PackOwner } from '../../model/library';
+import type { Lore, LoreFolder, LoreOwner } from '../../model/library';
 import { loreGroups } from '../../model/lore';
 import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from '../../runtime/lore';
 import { useChildren, useStore } from '../session';
@@ -37,7 +37,7 @@ function when({ enabled, constant, keys }: Lore) {
 type Naming = { folder: LoreFolder | null; name: string };
 
 // folders: the owner's loreFolders as stored now.
-export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: LoreFolder[] }) {
+export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: LoreFolder[] }) {
   const store = useStore();
   const toast = useToast();
   const entries = useChildren('lore', owner.id);
@@ -111,7 +111,7 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
     </List>
   );
   return (
-    <Section title="로어북" note={`${entries.length}개`} help="대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.">
+    <Section title="로어북" note={`${entries.length}개`} help={`대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.${owner.kind === 'chat' ? ' 이 채팅에서만 쓰여요.' : ''}`}>
       <Stack gap="related">
         {search.field}
         {listed}

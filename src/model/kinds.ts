@@ -63,7 +63,7 @@ export const KINDS = {
   tooldata: { parent: 'module' },
   toolchat: { parent: 'chat', owner: { field: 'module', kind: 'module' } },
   folder: { parent: null },
-  lore: { parent: ['character', 'module'] },
+  lore: { parent: ['character', 'module', 'chat'] },
   avatar: { parent: 'character', file: true },
   asset: { parent: ['character', 'module'], file: true },
   likeness: { parent: ['character', 'module', 'persona'] },
@@ -180,7 +180,7 @@ const SHAPES = {
   likeness: shape({ portraits: listOf(shape({ ...all(str, 'name', 'look', 'artist', 'source'), aliases: listOf(str), outfits: listOf(shape(all(str, 'name', 'tags'))) })), at: num, receipt: orNull(isRecord) }),
   share: shape({ share: str, key: str }),
   inlay: picture,
-  chat: shape({ title: orNull(str), character: orNull(str), models: isRecord, cast: (value) => value === undefined || listOf(str)(value), bookmarks: (value) => value === undefined || listOf(shape({ message: str }))(value) }),
+  chat: shape({ title: orNull(str), character: orNull(str), models: isRecord, cast: (value) => value === undefined || listOf(str)(value), bookmarks: (value) => value === undefined || listOf(shape({ message: str }))(value), loreFolders: (value) => value === undefined || listOf(shape({ id: str, name: str }))(value) }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   // A batch's marker holds no key: no server object holds its call.

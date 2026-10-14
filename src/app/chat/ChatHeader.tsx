@@ -1,8 +1,8 @@
 import { toolMenu } from './toolMenu';
-import { BookOpen, Bookmark, Brain, DatabaseZap, ImageOff, Keyboard, MessageSquarePlus, Package, Search, SlidersHorizontal, SquarePen, UsersRound } from 'lucide-react';
+import { BookKey, BookOpen, Bookmark, Brain, DatabaseZap, ImageOff, Keyboard, MessageSquarePlus, Package, Search, SlidersHorizontal, SquarePen, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
-import { BOOKMARK, CAST, EXPORT, NO_CHARACTER } from '../common/words';
+import { BOOKMARK, CAST, CHAT_LORE, EXPORT, NO_CHARACTER } from '../common/words';
 import { useDisplay } from '../display';
 import { useRemembering } from '../session';
 import { navigate } from '../shell/router';
@@ -67,6 +67,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <MenuItem icon={Search} label="검색" onClick={actions.openSearch} />
         {item && !chat.displayPending && <MenuItem icon={Bookmark} label={BOOKMARK} onClick={actions.bookmarks} />}
         {item && <MenuItem icon={Brain} label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        {item && <MenuItem icon={BookKey} label={CHAT_LORE} onClick={actions.lore} />}
         {item && <MenuItem icon={DatabaseZap} label="캐시" onClick={actions.cache} />}
         {tools.length > 0 && <>
           <Divider variant="menu" />
