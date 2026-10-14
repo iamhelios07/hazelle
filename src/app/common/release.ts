@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.0',
+    date: '2026-10-14',
+    lines: [
+      '연결 메뉴의 키 바꾸기로 API 키를 새로 넣을 수 있어요.',
+      '설정 › 채팅 기본값에서 로어북 최대 분량을 정할 수 있어요. 넘어서 빠진 항목이 있으면 알려 드려요.',
+      '휴지통에서 영구 삭제하면 더 쓰지 않는 이미지도 지워져서 이미지 용량이 줄어요.',
+      'Risu에서 옮길 때 남은 이미지 공간을 미리 알려 드리고, 넘는 이미지는 빼고 가져와요.',
+      '퍼메가 같은 봇에서 버튼으로 바꾼 값이 반영되지 않던 문제를 고쳤어요.',
+    ],
+  },
+  {
     version: 'v0.1.82',
     date: '2026-10-14',
     lines: [
