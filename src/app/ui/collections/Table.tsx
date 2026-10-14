@@ -19,7 +19,7 @@ export function Table({ label, columns, rows }: { label: string; columns: TableC
     '--table-narrow': columns.filter((column, index) => index === 0 || column.keep).map((_, index) => (index === 0 ? 'minmax(0, 1fr)' : 'auto')).join(' '),
   } as CSSProperties;
   const cell = (column: TableColumn, index: number) =>
-    [styles.cell, column.size === 'figure' && styles.figure, index > 0 && !column.keep && styles.drop].filter(Boolean).join(' ');
+    [column.size === 'button' ? styles.control : styles.cell, column.size === 'figure' && styles.figure, index > 0 && !column.keep && styles.drop].filter(Boolean).join(' ');
   return (
     <div className={styles.table} style={tracks}>
       {/* Hidden from the reader: each cell says its own column's name, which a row read as one button would lose. */}

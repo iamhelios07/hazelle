@@ -46,6 +46,11 @@
   color: var(--color-text-muted);
 }
 
+/* Not .cell: its ellipsis clips, and the ⋯ menu opens out of this cell. */
+.control {
+  display: flex;
+}
+
 .figure {
   text-align: right;
   font-variant-numeric: tabular-nums;
