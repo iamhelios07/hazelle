@@ -519,6 +519,16 @@ describe('renderChat', () => {
     expect(rendered.variables.get('turn')).toBe('next');
   });
 
+  it('reads the greeting with what its buttons wrote, on screen and in the prompt', () => {
+    const messages = [
+      { ...message('g', 'assistant', '{{#if {{equal::{{getvar::K}}::1}}}}Opening one{{/if}}'), after: [['K', '1']] as [string, string][] },
+      message('u1', 'user', '{{getvar::K}}'),
+    ];
+    const over = { card: card({ greetings: ['{{#if {{equal::{{getvar::K}}::1}}}}Opening one{{/if}}'] }), messages, greeting: { index: 0 } };
+    expect(renderChat('prompt', scope(over)).texts).toEqual(['Opening one', '1']);
+    expect(renderChat('display', scope(over)).texts[0]).toBe('Opening one');
+  });
+
   it('rolls a random tag in a message the same on screen as in the prompt', () => {
     const over = { card: card({ greetings: [] }), messages, greeting: null };
     expect(renderChat('display', scope(over)).texts[2]).toBe(renderChat('prompt', scope(over)).texts[2]);

@@ -137,9 +137,11 @@ export function renderChat(
     progressed();
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
-    // CBS still writes.
-    const written = !((index === 0 && scope.greeting !== null) || staged);
-    for (const [name, value] of before) variables.set(name, value);
+    // CBS still writes. Risu reads a greeting afresh with the chat's state, so it reads what its buttons wrote: a bot's
+    // opening picker shows the opening picked. Those writes still stand after its own.
+    const greeting = index === 0 && scope.greeting !== null;
+    const written = !(greeting || staged);
+    for (const [name, value] of greeting ? [...before, ...after] : before) variables.set(name, value);
     variables.log = [];
     const replayed = guarded(index, () => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { index, cbs: cbs(variables) }).text : cbs(variables)(text), text);
     wrote.push(variables.log);
