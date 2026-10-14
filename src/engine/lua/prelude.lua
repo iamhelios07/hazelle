@@ -3,8 +3,15 @@
 
 json = require 'json'
 
+-- Risu leaves require in place, and bots call require('json') for the table above; nothing else is mounted.
+local loaded = { json = json }
+require = function(name)
+  local module = loaded[name]
+  if module == nil then error("module '" .. tostring(name) .. "' not found", 2) end
+  return module
+end
+
 io = nil
-require = nil
 package = nil
 debug = nil
 dofile = nil

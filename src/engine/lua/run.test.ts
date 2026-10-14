@@ -226,13 +226,14 @@ describe('Lua runs', () => {
   it('gives a script no way out of the sandbox', async () => {
     const outcome = await run(
       `function onStart(id)
-        setChatVar(id, 'libs', tostring(io) .. tostring(require) .. tostring(load) .. tostring(debug) .. tostring(package) .. tostring(os.execute) .. tostring(dofile))
+        setChatVar(id, 'libs', tostring(io) .. tostring(load) .. tostring(debug) .. tostring(package) .. tostring(os.execute) .. tostring(dofile))
         setChatVar(id, 'date', type(os.date('%Y')))
         setChatVar(id, 'api', type(getChatVar) .. tostring(pcall(function() return getChatVar.constructor end)))
+        setChatVar(id, 'require', tostring(require('json') == json) .. tostring(pcall(require, 'os')))
       end`,
       { kind: 'start' },
     );
-    expect(new Map(outcome.writes)).toEqual(new Map([['libs', 'nil'.repeat(7)], ['date', 'string'], ['api', 'functionfalse']]));
+    expect(new Map(outcome.writes)).toEqual(new Map([['libs', 'nil'.repeat(6)], ['date', 'string'], ['api', 'functionfalse'], ['require', 'truefalse']]));
   });
 });
 
