@@ -8,7 +8,7 @@ import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
 import { LedgerWait, useLedger } from '../common/useLedger';
-import { UNKNOWN } from '../common/words';
+import { defaultMark, UNKNOWN } from '../common/words';
 import { spent, tally } from '../common/usage';
 import { ago } from '../common/time';
 import { useProfiles, useSettings, useSession } from '../session';
@@ -123,7 +123,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
                   trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title="쓸 설정" {...opener} />}
                 >
                   {sorted.map((profile) => (
-                    <MenuItem key={profile.id} label={profile.value.name} tag={profile.id === settings.profile ? '기본' : undefined} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
+                    <MenuItem key={profile.id} label={profile.value.name} tag={defaultMark(profile.id === settings.profile, profile.value.name)} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
                   ))}
                   <Divider variant="menu" />
                   <MenuItem label="이 모델 전용 설정 만들기" onClick={own} />

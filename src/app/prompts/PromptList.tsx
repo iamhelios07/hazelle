@@ -10,7 +10,7 @@ import { ago } from '../common/time';
 import { useSearch } from '../common/useSearch';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { PAGES, promptName } from '../common/words';
+import { defaultMark, PAGES, promptName } from '../common/words';
 import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, FileButton, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
 import { taskModelWords } from './ModelPane';
 import { usePresetImport } from './PresetImport';
@@ -52,7 +52,7 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   const preset = usePresetImport(onPick);
 
   const use = (id: string) => uses.get(id) ?? EMPTY_USE;
-  const badge = (prompt: Stored<'prompt'>) => (isDefaultPrompt(settings, prompt) ? '기본' : undefined);
+  const badge = (prompt: Stored<'prompt'>) => defaultMark(isDefaultPrompt(settings, prompt), prompt.value.name);
   const tags = (id: string) => (id === inUse ? ['사용 중'] : []);
   // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역. An unused one
   // says nothing, so the few in use stand out in a long list.

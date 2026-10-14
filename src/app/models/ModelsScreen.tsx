@@ -4,7 +4,7 @@ import { modelProfile, profileUsers } from '../../runtime/profiles';
 import { TASK_NAMES } from '../common/prompt-words';
 import { findStarred, RoleCard } from '../common/RolePicker';
 import { useSearch } from '../common/useSearch';
-import { AUX_HELP, DEFAULT_MODELS, follows, MODEL_ROLES, NOT_STARRED, noStarred, PAGES } from '../common/words';
+import { AUX_HELP, DEFAULT_MODELS, defaultMark, follows, MODEL_ROLES, NOT_STARRED, noStarred, PAGES } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -52,7 +52,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
               <ListItem
                 key={profile.id}
                 title={profile.value.name}
-                badge={profile.id === settings.profile ? '기본' : undefined}
+                badge={defaultMark(profile.id === settings.profile, profile.value.name)}
                 description={words.length ? words.join(' · ') : '정한 값 없음'}
                 aside={used ? `모델 ${used}개` : undefined}
                 current={route.kind === 'profile' && route.id === profile.id}

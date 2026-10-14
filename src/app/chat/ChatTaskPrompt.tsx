@@ -1,5 +1,5 @@
 import { ofSort, translationPrompt, illustrationPrompt } from '../../runtime/prompts';
-import { DELETED_PROMPT, follows } from '../common/words';
+import { defaultMark, DELETED_PROMPT, follows } from '../common/words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag, Text } from '../ui';
 import type { OpenChat } from './useChat';
@@ -47,15 +47,10 @@ export function TaskPromptMenu({ task, chosen, heading, onPick, chat }: { task: 
     >
       <MenuHeading>{heading}</MenuHeading>
       <MenuItem label={follows(`기본 ${noun} 프롬프트`)} sub={fallback?.value.name ?? missing} checked={chosen === undefined} onClick={() => onPick(undefined)} />
-      {prompts.map((item) => (
-        <MenuItem
-          key={item.id}
-          label={item.value.name}
-          tag={item.id === settings[setting] ? <Tag tone="accent">기본</Tag> : undefined}
-          checked={item.id === chosen}
-          onClick={() => onPick(item.id)}
-        />
-      ))}
+      {prompts.map((item) => {
+        const mark = defaultMark(item.id === settings[setting], item.value.name);
+        return <MenuItem key={item.id} label={item.value.name} tag={mark && <Tag tone="accent">{mark}</Tag>} checked={item.id === chosen} onClick={() => onPick(item.id)} />;
+      })}
       <Divider variant="menu" />
       {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => chat.actions.side({ kind: 'prompts', id: choice.prompt.id, pane: null })} />}
       <MenuItem label="프롬프트 관리…" onClick={() => chat.actions.side({ kind: 'prompts', id: null, pane: null })} />

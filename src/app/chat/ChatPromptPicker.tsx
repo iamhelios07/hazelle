@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import { useSearch } from '../common/useSearch';
-import { DELETED_PROMPT, follows } from '../common/words';
+import { defaultMark, DELETED_PROMPT, follows } from '../common/words';
 import { useChats, useSession, useSettings, usePrompts } from '../session';
 import { useToast } from '../toast';
 import { Button, ChipButton, Dialog, Empty, hasFinePointer, Icon, List, ListItem, Row } from '../ui';
@@ -79,7 +79,7 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
       <List label="프롬프트">
         {!search.words && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
         {search.found.map((item) => (
-          <ListItem key={item.id} title={item.value.name} badge={isDefaultPrompt(settings, item) ? '기본' : undefined} selected={item.id === own} onClick={() => choose(item.id)} />
+          <ListItem key={item.id} title={item.value.name} badge={defaultMark(isDefaultPrompt(settings, item), item.value.name)} selected={item.id === own} onClick={() => choose(item.id)} />
         ))}
       </List>
     </Dialog>

@@ -21,7 +21,7 @@ import { RetriesRow } from '../common/RetriesRow';
 import { typedText } from '../common/typed';
 import { useSearch } from '../common/useSearch';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, detailLabel, DISCOUNT, RESET, UNSET } from '../common/words';
+import { BIN_KEEPS, defaultMark, detailLabel, DISCOUNT, RESET, UNSET } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -292,6 +292,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     toast.undoable(`'${removed.data.value.name}' 설정을 삭제했어요.`, () => restoreProfile(store, id), note);
   }
 
+  const mark = defaultMark(isDefault, stored.value.name);
   const detailSet =
     DETAIL.filter((field) => shown[field] !== undefined).length + [shown.stop, shown.verbosity, shown.serviceTier, shown.systemAsUser, shown.streaming === false, shown.retries !== undefined].filter(Boolean).length;
 
@@ -302,7 +303,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <NavBar
           title={name}
           rename={{ label: '설정 이름', placeholder: stored.value.name, onChange: rename }}
-          subtitle={isDefault && <Tag tone="accent">기본</Tag>}
+          subtitle={mark && <Tag tone="accent">{mark}</Tag>}
           {...backBar(back)}
           status={status ? SAVE_STATUS[status] : undefined}
           menu={{

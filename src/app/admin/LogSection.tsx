@@ -49,7 +49,7 @@ export function LogSection() {
   const pages = usePages(readLog);
   const { rows } = pages;
   return (
-    <Panel title="기록">
+    <Panel title="기록" empty={!pages.failure && rows?.length === 0}>
       {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">기록이 없어요.</Empty>}
       {rows && rows.length > 0 && (

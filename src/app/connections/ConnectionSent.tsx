@@ -13,13 +13,14 @@ const sent = (usage: ModelUsage) =>
 export function ConnectionSent({ connection, level }: { connection: string; level: 2 | 3 }) {
   const { view, retry } = useLedger();
   const usage = useMemo(() => (view.kind === 'read' ? connectionUsage(view.calls, connection, Date.now()) : null), [view, connection]);
+  const used = usage && WINDOWS.some(([window]) => usage[window].calls) ? usage : null;
 
   return (
-    <Panel title="사용 내역" level={level}>
+    <Panel title="사용 내역" level={level} empty={view.kind === 'read' && used === null}>
       {view.kind !== 'read' ? (
         <LedgerWait view={view} retry={retry} failed="사용 내역을 불러오지 못했어요." />
-      ) : usage && WINDOWS.some(([window]) => usage[window].calls) ? (
-        <Facts items={WINDOWS.map(([window, label]) => ({ label, value: sent(usage[window]) }))} />
+      ) : used ? (
+        <Facts items={WINDOWS.map(([window, label]) => ({ label, value: sent(used[window]) }))} />
       ) : (
         <Empty variant="section">이번 주에 이 연결로 받은 응답이 없어요.</Empty>
       )}

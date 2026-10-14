@@ -19,7 +19,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   const [open, setOpen] = useState<Report | null>(null);
   const { rows } = pages;
   return (
-    <Panel title={NOTICES.received}>
+    <Panel title={NOTICES.received} empty={!pages.failure && rows?.length === 0}>
       {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.received}이 없어요.</Empty>}
       {rows && rows.length > 0 && (

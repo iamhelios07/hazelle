@@ -10,7 +10,7 @@ type Props = {
   help?: string;
   action?: ReactNode;
   seek?: boolean;
-  // Its body is one card (Panel).
+  // A Panel's, whose card may stand beside another's.
   boxed?: boolean;
   children: ReactNode;
 };

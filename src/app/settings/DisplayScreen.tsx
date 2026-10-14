@@ -101,22 +101,28 @@ export function DisplayScreen({ back }: { back: Back | null }) {
           </Section>
         }
       >
-        <SettingGroup label={PAGES.display}>
-          <SettingRow label="테마" control={<ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
-          <SettingRow
-            label="배경"
-            help="봇이 직접 꾸민 부분은 기본 배경에 맞춰져 있어서, 다른 배경에선 어색할 수 있어요."
-            control={<ChoiceGroup label="배경" options={colorChoices('bg', BG)} value={display.bg} onChange={(bg) => changeDisplay({ bg })} />}
-          />
-          <SettingRow label="글자" control={<ChoiceGroup label="글자" options={colorChoices('ink', INK)} value={display.ink} onChange={(ink) => changeDisplay({ ink })} />} />
-          <SettingRow label="대사" control={<ChoiceGroup label="대사" options={colorChoices('dialogue', DIALOGUE)} value={display.dialogue} onChange={(dialogue) => changeDisplay({ dialogue })} />} />
-          <SettingRow label="강조" control={<ChoiceGroup label="강조" options={colorChoices('accent', ACCENT)} value={display.accent} onChange={(accent) => changeDisplay({ accent })} />} />
-          <SettingRow
-            label="이미지 가리기"
-            help="채팅 속 이미지는 눌러서 하나씩 볼 수 있어요."
-            control={<Switch label="이미지 가리기" checked={display.hidePictures} onChange={(hidePictures) => changeDisplay({ hidePictures })} />}
-          />
-        </SettingGroup>
+        <Section title="색">
+          <SettingGroup label="색">
+            <SettingRow label="테마" control={<ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
+            <SettingRow
+              label="배경"
+              help="봇이 직접 꾸민 부분은 기본 배경에 맞춰져 있어서, 다른 배경에선 어색할 수 있어요."
+              control={<ChoiceGroup label="배경" options={colorChoices('bg', BG)} value={display.bg} onChange={(bg) => changeDisplay({ bg })} />}
+            />
+            <SettingRow label="글자" control={<ChoiceGroup label="글자" options={colorChoices('ink', INK)} value={display.ink} onChange={(ink) => changeDisplay({ ink })} />} />
+            <SettingRow label="대사" control={<ChoiceGroup label="대사" options={colorChoices('dialogue', DIALOGUE)} value={display.dialogue} onChange={(dialogue) => changeDisplay({ dialogue })} />} />
+            <SettingRow label="강조" control={<ChoiceGroup label="강조" options={colorChoices('accent', ACCENT)} value={display.accent} onChange={(accent) => changeDisplay({ accent })} />} />
+          </SettingGroup>
+        </Section>
+        <Section title="이미지">
+          <SettingGroup label="이미지">
+            <SettingRow
+              label="이미지 가리기"
+              help="채팅 속 이미지는 눌러서 하나씩 볼 수 있어요."
+              control={<Switch label="이미지 가리기" checked={display.hidePictures} onChange={(hidePictures) => changeDisplay({ hidePictures })} />}
+            />
+          </SettingGroup>
+        </Section>
         <Section title="텍스트">
           <SettingGroup label="텍스트">
             <ReadingRows />
