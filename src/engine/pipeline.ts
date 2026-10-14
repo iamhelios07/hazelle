@@ -1,5 +1,5 @@
 import { cachePoints, type CachePart, type Sent } from './cache-points';
-import { fitChat, wireTokens, type ProviderFit, type Part, type TooLong } from './prompt-budget';
+import { fitChat, type ProviderFit, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
 import type { Block, ConversationPrompt, IllustratePrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
@@ -317,7 +317,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, memor
   };
 
   // The rest of the template stays whole.
-  const fitted = fitChat(template, messages, atDepth, (parts) => wireTokens(fit!, cachePoints(parts).map(({ message }) => message), tokens), fit?.allowance ?? null);
+  const fitted = fitChat(template, messages, atDepth, tokens, fit ?? null);
   return 'kind' in fitted ? fitted : assembled(fitted.parts, fitted.dropped);
 }
 
