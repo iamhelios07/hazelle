@@ -5,6 +5,7 @@ import type { assembleIllustration, assembleMemory, assembleTranslation, Illustr
 import type { ChatScope } from '../engine/render';
 import type { ApiFailure } from './api';
 import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState } from './evaluation-core';
+import { noteProblem } from './diagnostics';
 import { changedTail, sameHistory } from './history-delta';
 import { Heartbeat, moduleWorker } from './worker';
 import workerUrl from './evaluation-worker?worker&url';
@@ -239,6 +240,8 @@ export class Evaluation {
 
   private receive(data: EvaluationUp) {
     if ('pong' in data || 'progress' in data) return this.heart.answered();
+    if ('trouble' in data) return noteProblem(data.trouble);
+    if ('probed' in data) return;
     const active = this.active;
     if ('started' in data) {
       if (active?.id !== data.started) return;

@@ -8,6 +8,7 @@ import { BUILT_VERSION } from '../common/release';
 import { PAGES, UNKNOWN } from '../common/words';
 import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
+import { Diagnostics } from './Diagnostics';
 import { LeaveSection } from './LeaveSection';
 import { NewsSection } from './NewsSection';
 import { NoticesSection } from './NoticesSection';
@@ -74,6 +75,7 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
         <NewsSection seek={section === 'news'} />
         <Panel title="앱 정보">
           <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
+          <Diagnostics />
           <LegalNotice />
         </Panel>
       </Columns>

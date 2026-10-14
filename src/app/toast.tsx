@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ApiFailure } from '../runtime/api';
+import { noteProblem } from '../runtime/diagnostics';
 import { describeFailure } from './common/failure';
 import { SHORTCUTS, typing, useShortcut } from './shortcuts';
 import { Toast, ToastStack, type ToastAction } from './ui';
@@ -44,6 +45,7 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
     let next = 0;
     const add = (message: string, tone: Notice['tone'], { detail, action, from }: Extra & { from?: From } = {}, undo = false) => {
       const key = ++next;
+      if (tone === 'error') noteProblem(detail ? `${message} ${detail}` : message);
       const life = lifeOf(tone, `${message}${detail ?? ''}`, action !== undefined);
       const close = () => setNotices((all) => all.filter((notice) => notice.key !== key));
       const keep = () => setNotices((all) => all.map((notice) => (notice.key === key ? { ...notice, ends: Infinity } : notice)));

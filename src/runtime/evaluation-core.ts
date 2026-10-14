@@ -41,10 +41,20 @@ export type EvaluationResult =
   | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | { sampled: string }
   | null;
-export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true };
+// probe: 문제 진단's check, sent to a worker of its own: whether the tokenizer loads, and what stopped it if not.
+export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true } | { probe: true };
 // started: the job's pass over the chat began, past loading the tokenizer. progress: the pass is still moving
-// (engine/progress).
-export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true } | { started: number } | { progress: true };
+// (engine/progress). trouble: why the tokenizer did not load, for 문제 진단's recent problems (runtime/diagnostics).
+export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true } | { started: number } | { progress: true } | { trouble: string } | { probed: string };
+
+// An error as 문제 진단 reports it. WebKit names the failing file and line only in the stack, so its first lines come too;
+// V8's stack opens with the name and message, said once.
+export function errorText(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const head = `${error.name}: ${error.message}`;
+  const lines = error.stack?.split('\n') ?? [];
+  return [head, ...(lines[0] === head ? lines.slice(1) : lines).slice(0, 3)].join('\n');
+}
 
 export class Evaluator {
   private readonly displays = new Map<string, { revision: number; pass: DisplayPass }>();

@@ -13,7 +13,7 @@ export class CodecWorker {
 
   postMessage(message: CodecDown | EvaluationDown) {
     if ('ping' in message) return this.onmessage?.({ data: { pong: true } });
-    if ('warm' in message) return;
+    if ('warm' in message || 'probe' in message) return;
     if ('forget' in message) return this.evaluator.forget(message.forget);
     if ('input' in message) {
       void this.evaluator.run(structuredClone(message.input), () => this.onmessage?.({ data: { started: message.id } })).then((result) => this.onmessage?.({ data: { id: message.id, result: structuredClone(result) } }), (error: unknown) => this.onmessage?.({ data: { id: message.id, error: String(error) } }));
