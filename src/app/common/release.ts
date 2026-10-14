@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.4',
+    date: '2026-10-15',
+    lines: [
+      "Vertex AI를 프로젝트 ID, 클라이언트 이메일, 프라이빗 키를 따로 넣어서도 연결할 수 있어요. 키 화면에서 '프로젝트 ID, 이메일, 키 따로 입력'을 펼치면 돼요.",
+      '채팅 토글의 선택 토글이 이름 옆 드롭다운으로 바뀌었어요. 오른쪽 패널도 조금 넓어졌어요.',
+      "채팅 토글에서 '프롬프트 토글의 기본값 바꾸기'를 연 뒤 뒤로 가면 다시 채팅 토글로 돌아와요.",
+      '휴대폰 목록의 설정 버튼이 위쪽 로고 옆으로 옮겨졌어요.',
+      "패널을 연 좁은 화면에서 '맨 아래로' 버튼이 메시지 도구와 겹치지 않아요.",
+    ],
+  },
+  {
     version: 'v0.2.3',
     date: '2026-10-15',
     lines: [
