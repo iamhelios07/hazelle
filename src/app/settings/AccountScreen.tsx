@@ -6,13 +6,12 @@ import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
 import { BUILT_VERSION } from '../common/release';
 import { PAGES, UNKNOWN } from '../common/words';
-import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Text } from '../ui';
+import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Stack, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
 import { LeaveSection } from './LeaveSection';
 import { NewsSection } from './NewsSection';
 import { NoticesSection } from './NoticesSection';
-import { ReportSection } from './ReportSection';
 import { SharedLinksSection } from './SharedLinksSection';
 
 // bytes is null while the server could not read it; a meter only where both it and the cap are known.
@@ -55,29 +54,35 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
           }
         />
       </Panel>
+      {/* The account's own data first, then help and the app, then 탈퇴 last. */}
       <Columns min="panel">
-        <Panel title="저장 공간" help="이미지는 삭제해도 사용량이 줄지 않아요.">
-          <Used label="텍스트" bytes={storage.bytes} cap={storage.bytesCap} />
-          <Used label="이미지" bytes={storage.fileBytes} cap={storage.fileBytesCap} />
-          <SettingRow
-            label={PAGES.usage}
-            control={
-              <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'usage' })}>
-                보기
-              </Button>
-            }
-          />
-        </Panel>
+        <Stack gap="section">
+          <Panel title="저장 공간" help="이미지는 삭제해도 사용량이 줄지 않아요.">
+            <Used label="텍스트" bytes={storage.bytes} cap={storage.bytesCap} />
+            <Used label="이미지" bytes={storage.fileBytes} cap={storage.fileBytesCap} />
+            <SettingRow
+              label={PAGES.usage}
+              control={
+                <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'usage' })}>
+                  보기
+                </Button>
+              }
+            />
+          </Panel>
+          <SharedLinksSection />
+        </Stack>
         <BackupSection />
-        <ReportSection />
-        <SharedLinksSection />
-        <NoticesSection seek={section === 'notices'} />
+      </Columns>
+      <Columns min="panel">
+        <Stack gap="section">
+          <NoticesSection seek={section === 'notices'} />
+          <Panel title="앱 정보">
+            <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
+            <Diagnostics />
+            <LegalNotice />
+          </Panel>
+        </Stack>
         <NewsSection seek={section === 'news'} />
-        <Panel title="앱 정보">
-          <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
-          <Diagnostics />
-          <LegalNotice />
-        </Panel>
       </Columns>
       <LeaveSection />
     </Screen>
