@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ACTS, importOf } from '../common/acts';
 import { useCopy } from '../common/useCopy';
-import { Button, Dialog, FileButton, Row, Section, Stack, Text } from '../ui';
+import { Button, Dialog, Disclosure, FileButton, Row, Section, Stack, Text } from '../ui';
 import { INLAY_BOOKMARK, INLAY_EXPORT } from './inlayExport';
 
 // Risu에서 이사: says which Risu files to get and takes them, the text's, for an account user the full backup that holds
@@ -31,22 +31,24 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
           file={pictures}
           onFile={setPictures}
         />
-        <Slot
-          title="메시지 속 이미지"
-          note="Risu 웹에서 F12를 눌러 콘솔에 코드를 붙여 넣으면 risu-inlays.bin을 받아요. 이미 옮긴 채팅에 채울 때는 이 파일만 넣어요."
-          help="콘솔이 붙여 넣기를 막으면 allow pasting을 먼저 입력해요. 북마크로 쓰려면 새 북마크의 URL에 주소를 넣고 Risu 웹에서 눌러요."
-          file={inlays}
-          onFile={setInlays}
-        >
-          <Row kind="toolbar">
-            <Button variant="secondary" size="sm" icon={ACTS.copy.icon} onClick={() => copy(INLAY_EXPORT)}>
-              코드 복사
-            </Button>
-            <Button variant="secondary" size="sm" icon={ACTS.copy.icon} onClick={() => copy(INLAY_BOOKMARK)}>
-              북마크 주소 복사
-            </Button>
-          </Row>
-        </Slot>
+        <Disclosure label="메시지 속 이미지도 옮기기">
+          <Slot
+            title="메시지 속 이미지"
+            note="Risu 웹에서 F12를 눌러 콘솔에 코드를 붙여 넣으면 risu-inlays.bin을 받아요. 이미 옮긴 채팅에 채울 때는 이 파일만 넣어요."
+            help="콘솔이 붙여 넣기를 막으면 allow pasting을 먼저 입력해요. 북마크로 쓰려면 새 북마크의 URL에 주소를 넣고 Risu 웹에서 눌러요."
+            file={inlays}
+            onFile={setInlays}
+          >
+            <Row kind="toolbar">
+              <Button variant="secondary" size="sm" icon={ACTS.copy.icon} onClick={() => copy(INLAY_EXPORT)}>
+                코드 복사
+              </Button>
+              <Button variant="secondary" size="sm" icon={ACTS.copy.icon} onClick={() => copy(INLAY_BOOKMARK)}>
+                북마크 주소 복사
+              </Button>
+            </Row>
+          </Slot>
+        </Disclosure>
       </Stack>
     </Dialog>
   );
