@@ -102,6 +102,7 @@ export async function readInlays(source: BackupSource): Promise<Inlays | null> {
   if (4 + nameLength > source.size || utf8.decode(await ahead.read(4, nameLength)) !== INLAY_SKIPPED) return null;
   const files = await index(ahead, source);
   return {
+    bytes: [...files.values()].reduce((sum, span) => sum + span.length, 0),
     assets: (ids) => ids.map((id) => {
       const span = files.get(`${INLAY}${id}`);
       return { name: id, read: span ? () => span.source.read(span.offset, span.length) : () => Promise.resolve(null) };
@@ -109,14 +110,14 @@ export async function readInlays(source: BackupSource): Promise<Inlays | null> {
   };
 }
 
-// assets: an entry per id, which reads null for one the file lacks.
 // A backup can exceed memory; indexing reads slices, never an arrayBuffer of the whole archive.
 export const fileSource = (file: File): BackupSource => ({
   size: file.size,
   read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
 });
 
-export type Inlays = { assets(ids: string[]): Imported['assets'] };
+// bytes: the file's entries together. assets: an entry per id, which reads null for one the file lacks.
+export type Inlays = { bytes: number; assets(ids: string[]): Imported['assets'] };
 
 const INLAY = 'inlay_';
 const INLAY_SKIPPED = `${INLAY}skipped.json`;
@@ -231,10 +232,10 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
   const modules = list(db.modules).filter(isRecord).map((raw) => risuModule(raw, entry));
   const alwaysModules = list(db.enabledModules).filter((id) => typeof id === 'string');
 
-  const pictures = [...files.keys()].filter(isPicture).length;
+  const pictures = [...files].filter(([name]) => isPicture(name));
   return {
     catalog: {
-      pictures, characters,
+      pictures: pictures.length, pictureBytes: pictures.reduce((sum, [, span]) => sum + span.length, 0), characters,
       personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
       presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
       modules: modules.map(({ name, risu, assets }, key) => ({ key, name, risu, assetCount: assets.length })),

@@ -75,4 +75,19 @@ describe('files on a bad link', () => {
     expect(saved).toEqual({ ok: true, data: [(await sealFile(small)).ref, null] });
     expect(puts).toEqual([`files/${(await sealFile(small)).ref.id}`]);
   });
+
+  it('sends no body past the room left under the picture cap, and leaves it out of the result', async () => {
+    const { store } = await server.account();
+    const [first, second] = [randomBytes(32), randomBytes(32)];
+    const room = (await sealFile(first)).body.length;
+    const puts: string[] = [];
+    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+      if (args[0] === 'PUT') puts.push(args[1]);
+      const result = await api<T>(...args);
+      return args[1] === 'files/missing' && result.ok ? { ok: true as const, data: { ...(result.data as object), room } as T } : result;
+    }, store);
+    const saved = await files.save([first, second]);
+    expect(saved).toEqual({ ok: true, data: [(await sealFile(first)).ref, null] });
+    expect(puts).toEqual([`files/${(await sealFile(first)).ref.id}`]);
+  });
 });

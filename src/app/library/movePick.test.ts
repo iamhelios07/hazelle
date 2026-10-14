@@ -6,6 +6,7 @@ describe('tickable', () => {
   it('leaves out characters and modules already brought and presets the importer refused, and picks the rest', () => {
     const backup: BackupCatalog = {
       pictures: 0,
+      pictureBytes: 0,
       characters: ['a', 'b'].map((id, key) => ({ key, id, name: id, chatCount: 1, assetCount: 0, inlayCount: 0, lastTalk: 1 })),
       personas: [{ key: 0, name: 'n', alias: '' }],
       presets: [{ key: 0, name: 'p', failure: null }, { key: 1, name: 'p', failure: 'no-template' }],

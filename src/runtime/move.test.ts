@@ -66,6 +66,7 @@ function source({ characters, personas = [], presets = [], modules = [], alwaysM
   return {
     catalog: {
       pictures: 0,
+      pictureBytes: 0,
       characters: characters.map((character, key) => ({ key, id: character.id, name: character.card.name, chatCount: character.chats.length, assetCount: character.assets.length, inlayCount: character.chats.reduce((sum, chat) => sum + chat.inlays.length, 0), lastTalk: character.chats.reduce((at, chat) => Math.max(at, chat.messages.at(-1)?.at ?? 0), 0) })),
       personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
       presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
@@ -284,7 +285,7 @@ describe('fillPictures', () => {
   });
 });
 
-const inlayFile = (held: Record<string, Uint8Array<ArrayBuffer>>): Inlays => ({ assets: (ids) => ids.map((id) => ({ name: id, read: async () => held[id] ?? null })) });
+const inlayFile = (held: Record<string, Uint8Array<ArrayBuffer>>): Inlays => ({ bytes: 0, assets: (ids) => ids.map((id) => ({ name: id, read: async () => held[id] ?? null })) });
 const signature = () => new TextEncoder().encode(JSON.stringify({ type: 'signature', data: 'sig' }));
 
 describe('inlays', () => {

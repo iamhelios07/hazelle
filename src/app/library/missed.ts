@@ -41,7 +41,7 @@ export function moduleMissed(unsupported: Unsupported, skipped: number): string[
   return [...unsupported.filter((item) => item.kind !== 'asset').map((item) => UNSUPPORTED[item.kind](item.count)), ...assets(unsupported, skipped)];
 }
 
-export const cardMissed = (report: ImportReport, skipped: number, faceless: boolean): string[] => [...(faceless ? ['이미지: 읽지 못함'] : []), ...moduleMissed(report.unsupported, skipped)];
+export const cardMissed = (report: ImportReport, skipped: number, faceless: boolean): string[] => [...(faceless ? ['이미지: 가져오지 못함'] : []), ...moduleMissed(report.unsupported, skipped)];
 
 export const moveMissed = (items: MoveUnsupported[]): string[] => items.map((item) => MOVE_UNSUPPORTED[item.kind](item.count));
 

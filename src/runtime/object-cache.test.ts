@@ -537,7 +537,7 @@ it('aborts an export when the timeline changes while its final picture is being 
   await store.pull();
   const output = { write: vi.fn(async () => {}), close: vi.fn(async () => {}), abort: vi.fn(async () => {}) };
   const files = {
-    missing: vi.fn(async () => ({ ok: true as const, data: { missing: new Set<string>(), maxBytes: 0 } })),
+    missing: vi.fn(async () => ({ ok: true as const, data: { missing: new Set<string>(), maxBytes: 0, room: null } })),
     read: vi.fn(async () => {
       f.restore(f.snapshot(), 't1');
       await store.pull();

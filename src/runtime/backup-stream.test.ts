@@ -9,7 +9,7 @@ import * as zip from './backup-zip';
 
 const persona = (id: string, rev: number): Stored<'persona'> => ({ id, rev, kind: 'persona', parent: null, value: { name: id, description: '이야기 '.repeat(100), picture: null } });
 
-const missing = async () => ({ ok: true as const, data: { missing: new Set<string>(), maxBytes: 0 } });
+const missing = async () => ({ ok: true as const, data: { missing: new Set<string>(), maxBytes: 0, room: null } });
 
 const PIN = { timeline: 't', epoch: 0 };
 const pins: Pick<ObjectStore, 'pin' | 'pinned' | 'list'> = { pin: async () => ({ ok: true, data: PIN }), pinned: (run) => run(PIN), list: () => [] };
@@ -199,7 +199,7 @@ it('exports without a picture the operator blocked and what names it, and counts
   const source = await pictureObjects();
   const target = destination();
   const read = async () => ({ ok: false as const, error: 'file-blocked' });
-  const blocked = async (ids: string[]) => ({ ok: true as const, data: { missing: new Set(ids), maxBytes: 0 } });
+  const blocked = async (ids: string[]) => ({ ok: true as const, data: { missing: new Set(ids), maxBytes: 0, room: null } });
   expect(await exportBackup(store(source.objects).api, { read, missing: blocked }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 1 } });
   const opened = await backup(target.file());
   expect(opened.objects.map(({ id }) => id)).toEqual(['person', 'character']);

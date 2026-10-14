@@ -117,7 +117,7 @@ class FakeServer {
       });
       return { status: 200, headers: stored, json: { revs, timeline } };
     }
-    if (path === 'files/missing' && method === 'POST') return { status: 200, json: { missing: (json().ids as string[]).filter((id) => !this.files.has(id)) } };
+    if (path === 'files/missing' && method === 'POST') return { status: 200, json: { missing: (json().ids as string[]).filter((id) => !this.files.has(id)), room: null } };
     if (path.startsWith('files/') && method === 'PUT') {
       this.files.set(path.slice('files/'.length), body!);
       return { status: 204 };

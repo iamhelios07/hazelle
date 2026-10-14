@@ -9,9 +9,10 @@ import { broughtFromRisu, fillInlays, modulesFromRisu, moveFromRisu, sortRisuFil
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
+import { sizeText } from '../common/size';
 import { describeUnused } from '../common/unused';
 import { moduleName } from '../common/words';
-import { useFiles, useStore } from '../session';
+import { useFiles, useStanding, useStore } from '../session';
 import { Button, Callout, Checkbox, Dialog, Outcome, Progress, Section, Stack, Text, type ProgressStep } from '../ui';
 import { cardMissed, moduleMissed, moveMissed } from './missed';
 import { hasModule, stepsOf, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
@@ -49,6 +50,7 @@ type Phase =
 export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; aside: number; onClose: () => void }) {
   const store = useStore();
   const files = useFiles();
+  const { storage } = useStanding();
   const [phase, setPhase] = useState<Phase>({ kind: 'reading' });
   const reader = useRef<ImportWorker | null>(null);
   const stop = useRef<AbortController | null>(null);
@@ -131,6 +133,8 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         ...(Object.keys(steps).some((kind) => kind !== 'personas') && { personas: ticks.personas.map(() => false) }),
         ...(steps.characters && { presets: ticks.presets.map(() => false) }),
       };
+      // A retry would stop at once on a full account, so none is offered.
+      if (moved.error === 'storage-full') return setPhase({ kind: 'failed', message: '텍스트 저장 공간이 다 차서 멈췄어요. 그 전까지 가져온 것은 저장됐어요.', again: null });
       setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, inlays, rest) });
     } catch (error) {
       if (reader.current !== source) return;
@@ -212,6 +216,8 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   const { backup, inlays, have, can, ticks } = phase;
   const { catalog } = backup;
   const count = tickCount(ticks);
+  const room = storage.fileBytesCap === null ? null : Math.max(0, storage.fileBytesCap - storage.fileBytes);
+  const pictureBytes = catalog.pictureBytes + (inlays?.bytes ?? 0);
   const tick = (part: keyof Ticks, next: boolean[]) => setPhase({ ...phase, ticks: { ...ticks, [part]: next } });
   return (
     <Dialog
@@ -225,7 +231,8 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       }
     >
       <Stack gap="section">
-        <Text variant="note">{catalog.pictures > 0 ? `이미지 ${catalog.pictures}개가 들어 있어요.` : '이미지가 들어 있지 않아요. 이미지를 뺀 백업이라면 전체 백업을 함께 넣어 주세요.'}</Text>
+        <Text variant="note">{catalog.pictures > 0 ? `이미지 ${catalog.pictures}개(${sizeText(catalog.pictureBytes)})가 들어 있어요.` : '이미지가 들어 있지 않아요. 이미지를 뺀 백업이라면 전체 백업을 함께 넣어 주세요.'}</Text>
+        {room !== null && pictureBytes > room && <Callout tone="warn">{`남은 이미지 공간은 ${sizeText(room)}예요. 넘는 이미지는 빼고 가져와요.`}</Callout>}
         <Picks
           title="캐릭터"
           rows={catalog.characters.map((character) => ({ label: character.name, note: have.characters.has(character.id) ? '이미 있음' : `대화 ${character.chatCount}개` }))}

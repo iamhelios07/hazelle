@@ -51,21 +51,25 @@ export const files = new Hono<AppEnv>();
 
 files.use(requireSession);
 
-// Which of the ids the asking account does not hold, so an import uploads only those, and the largest body a PUT
-// takes, so the client sends none past it: worker.ts refuses one before reading it, which the browser reports as a
-// dropped connection, not as the 413. A blocked id counts as not held: the upload is then refused by name, where
-// 'held' would let an object name a file nobody can read.
+// Which of the ids the asking account does not hold, so an import uploads only those; the largest body a PUT takes,
+// so the client sends none past it: worker.ts refuses one before reading it, which the browser reports as a dropped
+// connection, not as the 413; and the bytes left under the picture cap (null for no cap), so the client sends none
+// past it either, since PUT reads a whole body before its reservation refuses it. A blocked id counts as not held: the
+// upload is then refused by name, where 'held' would let an object name a file nobody can read.
 files.post('/missing', async (c) => {
   const input = await readObject(c);
   const ids = input?.ids;
   if (!Array.isArray(ids) || ids.length > MAX_FILE_IDS || !ids.every((id) => typeof id === 'string' && FILE_ID.test(id))) return fail(c, 400, 'bad-input');
+  const { incarnation } = c.get('account');
   const { results } = await c.env.db.prepare(
     `SELECT asked.value AS id FROM json_each(?2) AS asked
      WHERE NOT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = asked.value AND stored = 1) OR value IN (SELECT id FROM file_blocks)`,
   )
-    .bind(c.get('account').incarnation, JSON.stringify(ids))
+    .bind(incarnation, JSON.stringify(ids))
     .all<{ id: string }>();
-  return c.json({ missing: results.map(({ id }) => id), maxBytes: MAX_FILE_BYTES });
+  const { fileBytes, cap } = (await c.env.db.prepare(`SELECT file_bytes AS fileBytes, ${CAP.fileBytes} AS cap FROM accounts WHERE incarnation = ?1`).bind(incarnation).first<{ fileBytes: number; cap: number | null }>())!;
+  const room = cap === null ? null : Math.max(0, cap - fileBytes);
+  return c.json({ missing: results.map(({ id }) => id), maxBytes: MAX_FILE_BYTES, room });
 });
 
 // A body that does not hash to its id is refused: a block names content across every account and GET's answer is

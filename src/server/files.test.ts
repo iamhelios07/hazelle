@@ -152,6 +152,7 @@ describe('files', () => {
     const jin = await signup();
     const [kept, large] = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
     expect((await put(await idOf(kept), kept, jin.cookie)).status).toBe(204);
+    expect(await (await t.post('files/missing', { ids: [await idOf(large)] }, jin.cookie)).json()).toMatchObject({ room: 2 });
 
     const refused = await put(await idOf(large), large, jin.cookie);
     expect(refused.status).toBe(413);

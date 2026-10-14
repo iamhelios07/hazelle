@@ -4,7 +4,7 @@ import type { ApiResult, api as realApi } from './api';
 import type { ObjectStore } from './store';
 
 type Api = typeof realApi;
-type Missing = { missing: Set<string>; maxBytes: number };
+type Missing = { missing: Set<string>; maxBytes: number; room: number | null };
 
 // runtime/api's SLOWEST_UPLOAD assumes this many uploads sharing one uplink.
 const UPLOADS = 12;
@@ -31,9 +31,14 @@ export class Files {
     if (!asked.ok) return asked;
     const refused = new Set<string>();
     const missing: string[] = [];
+    let room = asked.data.room;
     for (const id of asked.data.missing) {
-      if (bodies.get(id)!.length > asked.data.maxBytes) refused.add(id);
-      else missing.push(id);
+      const size = bodies.get(id)!.length;
+      if (size > asked.data.maxBytes || (room !== null && size > room)) refused.add(id);
+      else {
+        missing.push(id);
+        if (room !== null) room -= size;
+      }
     }
     for (let start = 0; start < missing.length; start += UPLOADS) {
       if (signal?.aborted) return { ok: false, error: 'stopped' };
@@ -50,17 +55,19 @@ export class Files {
     return { ok: true, data: sealed.map(({ ref }) => (refused.has(ref.id) ? null : ref)) };
   }
 
-  // The ids the server holds no readable file for (never stored, or blocked) and the largest sealed body it takes.
+  // The ids the server holds no readable file for (never stored, or blocked), the largest sealed body it takes and the
+  // bytes left under the account's picture cap.
   async missing(ids: string[]): Promise<ApiResult<Missing>> {
     const missing = new Set<string>();
     let maxBytes = 0;
+    let room: number | null = null;
     for (let start = 0; start < ids.length; start += MAX_FILE_IDS) {
-      const asked = await this.store.reaching(() => this.request<{ missing: string[]; maxBytes: number }>('POST', 'files/missing', { ids: ids.slice(start, start + MAX_FILE_IDS) }));
+      const asked = await this.store.reaching(() => this.request<{ missing: string[]; maxBytes: number; room: number | null }>('POST', 'files/missing', { ids: ids.slice(start, start + MAX_FILE_IDS) }));
       if (!asked.ok) return asked;
       for (const id of asked.data.missing) missing.add(id);
-      maxBytes = asked.data.maxBytes;
+      ({ maxBytes, room } = asked.data);
     }
-    return { ok: true, data: { missing, maxBytes } };
+    return { ok: true, data: { missing, maxBytes, room } };
   }
 
   // A body sealed elsewhere, a share's manifest, stored as it is under its hash, as every file is. Its id.

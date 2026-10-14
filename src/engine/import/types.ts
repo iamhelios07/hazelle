@@ -192,9 +192,11 @@ export type RisuCharacter = Omit<Imported, 'avatar' | 'own' | 'bundled'> & {
 export type RisuPersona = { id: string | null; name: string; alias: string; description: string; picture: () => Promise<Picture | null>; module: ImportedModule | null };
 export type RisuPreset = { name: string; result: PresetResult };
 // pictures: the picture entries the files hold, in all; 0 says the account backup was written without its assets.
-// inlayCount: the inlay items a character's chats name, each chat's counted apart, as each chat holds its own.
+// pictureBytes: their size together. inlayCount: the inlay items a character's chats name, each chat's counted apart,
+// as each chat holds its own.
 export type BackupCatalog = {
   pictures: number;
+  pictureBytes: number;
   characters: { key: number; id: string; name: string; chatCount: number; assetCount: number; inlayCount: number; lastTalk: number }[];
   personas: { key: number; name: string; alias: string }[];
   presets: { key: number; name: string; failure: PresetFailure['kind'] | null }[];

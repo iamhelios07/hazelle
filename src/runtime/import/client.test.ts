@@ -27,6 +27,7 @@ function transport(reply?: (request: Request) => { result: Replies[keyof Replies
 const file = () => new File(['{}'], 'card.json');
 const catalog: Replies['backup'] = { ok: true, catalog: {
   pictures: 0,
+  pictureBytes: 0,
   characters: [{ key: 7, id: 'selected', name: 'Selected', chatCount: 2, assetCount: 0, inlayCount: 0, lastTalk: 4 }],
   personas: [], presets: [], modules: [], alwaysModules: [], unsupported: [],
 } };

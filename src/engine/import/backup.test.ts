@@ -166,8 +166,10 @@ describe('readBackup', () => {
     const reference = await readBackup([bin([
       ['padding', new Uint8Array(1)], ['mira.png', picture], ['map.png', PNG], ['ann.png', PNG], ['database.risudat', data],
     ])]);
-    expect(JSON.stringify(result)).toBe(JSON.stringify(reference));
-    expect(result.ok).toBe(true);
+    // The padding entry differs in size between the two, and every entry but the database's counts as a picture.
+    const unsized = (read: unknown) => JSON.stringify(read, (key, value: unknown) => (key === 'pictureBytes' ? undefined : value));
+    expect(unsized(result)).toBe(unsized(reference));
+    expect(result.ok && result.backup.catalog.pictureBytes).toBe(window - 2 - 8 - 'padding'.length + picture.length + 2 * PNG.length);
     expect(read.mock.calls).toEqual([
       [0, window],
       [window - 2, window],
