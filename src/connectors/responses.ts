@@ -122,14 +122,14 @@ export const responses: Codec = {
 
   truncated: (finishReason) => finishReason === 'max_output_tokens',
 
-  // input_tokens already holds the cached part. The format reports no cache writes.
+  // Both cache reads and writes are already included in input_tokens.
   usage(raw) {
     const input = isRecord(raw.input_tokens_details) ? raw.input_tokens_details : {};
     const output = isRecord(raw.output_tokens_details) ? raw.output_tokens_details : {};
     return {
       inputTokens: count(raw.input_tokens),
       cachedInputTokens: count(input.cached_tokens),
-      cacheWriteInputTokens: null,
+      cacheWriteInputTokens: count(input.cache_write_tokens),
       outputTokens: count(raw.output_tokens),
       reasoningTokens: count(output.reasoning_tokens),
     };

@@ -70,6 +70,11 @@ describe('responses request', () => {
 });
 
 describe('responses stream', () => {
+  it('keeps cache writes as input details without adding them to total input', async () => {
+    const { outcome } = await decode(route, sse({ type: 'response.completed', response: { status: 'completed', usage: { input_tokens: 1200, input_tokens_details: { cached_tokens: 800, cache_write_tokens: 300 }, output_tokens: 20 } } }));
+    expect(outcome.usage).toMatchObject({ inputTokens: 1200, cachedInputTokens: 800, cacheWriteInputTokens: 300 });
+  });
+
   const created = { type: 'response.created', response: { id: 'resp_1', object: 'response', status: 'in_progress' } };
 
   it('reads text, the reasoning summary a paragraph per part, and the usage of the completed reply', async () => {
