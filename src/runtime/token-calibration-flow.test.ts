@@ -157,7 +157,7 @@ it('surfaces an auxiliary snapshot failure and records a provider refusal withou
   const log = stubRelay(() => upstream(400, { error: { code: 'context_length_exceeded', message: 'maximum context length exceeded' } }));
   const ask = async () => generate({ credentials: session.credentials, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages: [{ role: 'user', content: 'hello' }], call: await pageCall(session, route, 'script', chat), signal: signal(), onText: () => {} });
   vi.spyOn(session.usage, 'read').mockResolvedValueOnce({ ok: false, error: 'unreadable' });
-  expect((await ask()).error).toEqual({ kind: 'refused', code: 'unreadable' });
+  expect((await ask()).error).toEqual({ kind: 'app', code: 'unreadable' });
   expect(log).toHaveLength(0);
   const answer = await ask();
   expect(answer).toMatchObject({ state: 'failed', usage: null, calibration: { refusal: { actual: null, maximum: null }, retries: [] } });

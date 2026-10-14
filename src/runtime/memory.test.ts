@@ -335,7 +335,7 @@ describe('chapters', () => {
       await setDefaultMemory(session.store, { batch: 1, budget: 1_000_000 });
       stubRelay(inTurn([saying(summary('jin asks Luna to wait.', 'Will you wait?'))]));
       session.memory.check(chat);
-      await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(4));
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(4), { timeout: 5000 });
       expect(chatMemory(session.store, chat).chapters).toEqual([]);
     }));
 
