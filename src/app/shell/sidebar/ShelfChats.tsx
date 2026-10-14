@@ -11,7 +11,7 @@ import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useWritingChats } from '../../session';
 import { Button, Empty, ItemRow, NavRow, SideTitle, Sidebar, Viewport } from '../../ui';
 import { navigate, useRoute } from '../router';
-import { SidebarFooter } from './SidebarFooter';
+import { SettingsButton } from './SettingsButton';
 
 type Props = {
   page: boolean;
@@ -50,7 +50,7 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
           {field}
         </>
       }
-      footer={page && <SidebarFooter />}
+      corner={<SettingsButton />}
     >
       <Viewport keys={found.map(({ id }) => id)} current={openChat}>{(index) => {
         const item = found[index]!;

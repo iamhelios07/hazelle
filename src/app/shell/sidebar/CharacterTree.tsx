@@ -12,7 +12,7 @@ import { useNewCharacter } from '../../library/useCharacterActions';
 import { useLibrary } from '../../session';
 import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, Viewport } from '../../ui';
 import { navigate } from '../router';
-import { SidebarFooter } from './SidebarFooter';
+import { SettingsButton } from './SettingsButton';
 
 // The phone's home page; wide screens leave every character to 캐릭터 둘러보기 and the rail.
 type Props = {
@@ -79,7 +79,7 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
           {search.field}
         </>
       }
-      footer={<SidebarFooter />}
+      corner={<SettingsButton />}
     >
       {empty && <Welcome />}
       {!empty && search.none && <Empty variant="side">{search.none}</Empty>}

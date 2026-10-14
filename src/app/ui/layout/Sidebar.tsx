@@ -10,21 +10,22 @@ type Props = {
   page?: boolean;
   actions: ReactNode;
   children: ReactNode;
-  footer?: ReactNode;
+  // Beside the brand, so only a page shows it.
+  corner?: ReactNode;
 };
 
-export function Sidebar({ page = false, actions, children, footer }: Props) {
+export function Sidebar({ page = false, actions, children, corner }: Props) {
   return (
     <aside className={page ? `${styles.sidebar} ${styles.page}` : styles.sidebar} aria-label="캐릭터 목록">
       {/* Beside the rail, whose mark is the brand, the panel starts with its own rows. */}
       {page && (
         <div className={styles.head}>
           <Brand />
+          {corner}
         </div>
       )}
       <div className={styles.actions}>{actions}</div>
       <div className={styles.list}>{children}</div>
-      {footer && <div className={styles.footer}>{footer}</div>}
     </aside>
   );
 }
