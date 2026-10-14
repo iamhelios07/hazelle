@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } from 'node:fs';
 import { createServer as httpServer, request } from 'node:http';
 import { once } from 'node:events';
 import { Worker } from 'node:worker_threads';
@@ -227,7 +227,8 @@ describe('the server process', () => {
     server.child.kill('SIGUSR2');
     const captured = async () => {
       for (let attempt = 0; attempt < 100; attempt++) {
-        const made = readdirSync(join(data, 'backup'), { withFileTypes: true }).filter((entry) => entry.isDirectory() && entry.name !== 'files');
+        // The handler makes backup/ itself, after the baselines: on a slow machine it may not exist yet.
+        const made = !existsSync(join(data, 'backup')) ? [] : readdirSync(join(data, 'backup'), { withFileTypes: true }).filter((entry) => entry.isDirectory() && entry.name !== 'files');
         if (made.some((entry) => readdirSync(join(data, 'backup', entry.name)).includes('manifest.json'))) return true;
         await new Promise((resolve) => setTimeout(resolve, 50));
       }

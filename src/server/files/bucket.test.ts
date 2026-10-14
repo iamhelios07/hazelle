@@ -53,7 +53,8 @@ describe.each(Object.entries(kinds))('the %s bucket', (_, fresh) => {
     const at = snapshotKey(INCARNATION, '123-abcdef012345');
     await bucket.putFile(at, source);
     await pipeline((await bucket.get(at))!, createWriteStream(target));
-    expect(readFileSync(target)).toEqual(Buffer.from(bytes));
+    // equals, not toEqual: a deep compare walks 2 MiB byte by byte and outlasts the test's timeout on CI.
+    expect(readFileSync(target).equals(bytes)).toBe(true);
     expect((await bucket.archives()).map(({ key }) => key)).toEqual([at]);
     expect(existsSync(join(dir, 'cache'))).toBe(false);
     await bucket.delete(at);
