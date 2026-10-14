@@ -95,6 +95,23 @@ function termRanges(shadow: ShadowRoot, term: string): Range[] {
 // holds inside its quotes (wght@600;700), and the rest of the URL swallowed the bot's next rule.
 export const cleanCss = (css: string, veiled: boolean) => css.replaceAll('.x-risu-', '.').replace(veiled ? ANY_URL : OUTSIDE_URL, 'none');
 
+// A fixed box would be placed and cut by the message that holds it (Story.module.css): a console centred on Risu's
+// screen shrank to a sliver in an otherwise empty message. It stands where it is written instead, and its offsets and
+// transform go with fixed, since they placed it on the screen (top: 50% with translate(-50%, -50%) to centre it).
+const SCREEN_PLACEMENT = ['top', 'right', 'bottom', 'left', 'inset', 'transform', 'translate'];
+function ground(style: CSSStyleDeclaration) {
+  if (style.getPropertyValue('position').trim() !== 'fixed') return;
+  style.setProperty('position', 'relative');
+  for (const property of SCREEN_PLACEMENT) style.removeProperty(property);
+}
+
+function groundRules(rules: CSSRuleList) {
+  for (const rule of rules) {
+    if (rule instanceof CSSStyleRule) ground(rule.style);
+    if ('cssRules' in rule) groundRules((rule as CSSGroupingRule).cssRules);
+  }
+}
+
 let base: CSSStyleSheet | null = null;
 // The sheets a story's root holds besides the app's own.
 export const botSheets = (shadow: ShadowRoot) => shadow.adoptedStyleSheets.filter((sheet) => sheet !== base);
@@ -105,6 +122,7 @@ function sheetFor(css: string, veiled: boolean): CSSStyleSheet {
   if (!sheet) {
     sheet = new CSSStyleSheet();
     sheet.replaceSync(cleanCss(css, veiled));
+    groundRules(sheet.cssRules);
     sheets.set(key, sheet);
     if (sheets.size > 8) sheets.delete(sheets.keys().next().value!);
   }
@@ -150,6 +168,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
   const fragment = DOMPurify.sanitize(html.replace(STYLE_ATTRIBUTE, `$1${SET_ASIDE}`), CONFIG);
   for (const element of fragment.querySelectorAll<HTMLElement | SVGElement>(`[${SET_ASIDE}]`)) {
     element.style.cssText = cleanCss(element.getAttribute(SET_ASIDE)!, veil !== null);
+    ground(element.style);
     element.removeAttribute(SET_ASIDE);
   }
   for (const element of fragment.querySelectorAll('[class]')) element.setAttribute('class', element.getAttribute('class')!.replace(/(^|\s)x-risu-/g, '$1'));

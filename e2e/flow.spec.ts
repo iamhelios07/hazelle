@@ -154,6 +154,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(greeting.locator('#backdrop')).toHaveCSS('background-image', /^url\("blob:/);
     await expect(greeting.locator('#tone')).toHaveCSS('color', 'rgb(0, 128, 0)');
     await expect(greeting.locator('#cover')).toHaveCSS('background-color', 'rgb(200, 0, 0)');
+    await expect(greeting.locator('#cover')).toHaveCSS('position', 'relative');
     const [cover, message] = await Promise.all([greeting.locator('#cover').boundingBox(), greeting.boundingBox()]);
     expect(cover!.y).toBeGreaterThanOrEqual(message!.y);
     expect(cover!.y + cover!.height).toBeLessThanOrEqual(message!.y + message!.height);
