@@ -47,7 +47,7 @@ type OnFallback =
 const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in OnFallback]?: never } & Partial<Record<string, string>> = {
   'bad-username': '아이디는 2~32자의 문자, 숫자, _ . - 로만 만들 수 있어요.',
   'signup-closed': '가입 인원이 다 차서 계정을 만들 수 없어요.',
-  'too-many-signups': '가입 시도가 너무 잦아요. 15분쯤 뒤에 다시 시도해 주세요.',
+  'too-many-signups': '가입 시도가 너무 잦아요. 10분쯤 뒤에 다시 시도해 주세요.',
   // Signup's last step, after the recovery key; the name is set on the step before.
   'username-taken': '이미 사용 중인 아이디예요. 이전 단계에서 다른 아이디를 입력해 주세요.',
   'account-mismatch': '다른 탭에서 다른 계정으로 로그인해서 이 탭의 변경 사항을 저장하지 못했어요. 이 탭에서 다시 로그인해 주세요.',
