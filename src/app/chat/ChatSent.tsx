@@ -66,7 +66,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
         onChange={setView}
       />
       {view === 'parts' ? (
-        <Section level={3} title="보낸 순서대로" note={`약 ${tokens(total)} 토큰 · 추정`}>
+        <Section level={3} title="보낸 순서대로" note={`약 ${tokens(total)} 토큰 · 앱 추정`}>
           <Stack gap="related">
             {prompt.messages.map((message, index) => {
               const part = prompt.parts[index]!;

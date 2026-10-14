@@ -138,10 +138,13 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
 
 function TranslationCall({ receipt }: { receipt: Receipt }) {
   return (
-    <Section level={3} title="번역">
-      <Text variant="note">{`${receipt.modelName} · ${receipt.source}`}</Text>
-      <Facts variant="tiles" items={callFacts(receipt)} />
-    </Section>
+    <>
+      <Section level={3} title="번역">
+        <Text variant="note">{`${receipt.modelName} · ${receipt.source}`}</Text>
+        <Facts variant="tiles" items={callFacts(receipt)} />
+      </Section>
+      <Fitting receipt={receipt} title="번역 토큰 맞추기" />
+    </>
   );
 }
 
@@ -189,6 +192,40 @@ function Call({ receipt }: { receipt: Receipt }) {
         <Empty variant="section">제공자가 사용량을 알려 주지 않았어요.</Empty>
       )}
       <Facts variant="tiles" items={[...(usage ? [] : [{ label: '토큰', value: UNKNOWN, tone: 'muted' as const }]), ...outcomeFacts(receipt)]} />
+      <Fitting receipt={receipt} />
     </>
+  );
+}
+
+const UNMEASURED = { preparation: '요청을 만들기 전에 멈춤', tokenizer: '토큰 수를 세지 못함' } as const;
+const UNLEARNED = { pictures: '이미지가 있어 배우지 않음', incomplete: '끝까지 받지 못해 배우지 않음', 'missing-input': '제공자가 입력 토큰을 알려 주지 않음', empty: '보낸 글이 없음' } as const;
+const SOURCE = { prior: '기본값', model: '이 모델의 기록', chat: '이 채팅의 기록', 'drift-reset': '바뀐 배율을 다시 배우는 중', unavailable: '맞추지 않음' } as const;
+const BOUND = { 'hard-upper': '모델 한도에 여유를 두고', 'hard-centre': '모델 한도 기준', 'user-centre': '설정한 컨텍스트 기준', refusal: '거절된 뒤 줄여서' } as const;
+
+function Fitting({ receipt, title = '토큰 맞추기' }: { receipt: Receipt; title?: string }) {
+  const { tokens: calibration } = useSession();
+  const fit = calibration.call(receipt);
+  // A receipt from before calibration has nothing to show, which is not the same as a call that could not be measured.
+  if (fit.unavailable === 'historical') return null;
+  const learned = fit.source === 'model' || fit.source === 'chat' || fit.source === 'drift-reset';
+  return (
+    <Section level={3} title={title} help="모델마다 토큰을 세는 방식이 달라요. 응답마다 제공자가 알려 준 입력 토큰과 앱이 센 토큰을 비교해 배율을 배우고, 그 배율로 프롬프트를 모델 한도에 맞춰요.">
+      <Facts
+        variant="tiles"
+        items={[
+          fit.denominator === null
+            ? { label: '앱이 센 입력', value: UNKNOWN, tone: 'muted', detail: fit.unavailable ? [UNMEASURED[fit.unavailable]] : undefined }
+            : { label: '앱이 센 입력', value: `약 ${tokens(fit.denominator)}` },
+          fit.ratio === null
+            ? { label: '이번 배율', value: UNKNOWN, tone: 'muted', detail: fit.ineligible ? [UNLEARNED[fit.ineligible]] : undefined }
+            : { label: '이번 배율', value: `×${fit.ratio.toFixed(2)}` },
+          { label: '맞춘 기준', value: SOURCE[fit.source], tone: fit.source === 'unavailable' ? 'muted' : undefined, detail: learned ? [`기록 ${Math.max(1, Math.round(fit.evidence))}개 반영`] : undefined },
+          ...(fit.bound === null && fit.allowance === null
+            ? []
+            : [{ label: '보낼 수 있던 입력', value: fit.allowance === null ? UNKNOWN : `약 ${tokens(fit.allowance)}`, detail: [fit.bound ? BOUND[fit.bound] : '모델 한도를 몰라 줄이지 않음', ...(fit.multiplier === null ? [] : [`배율 ×${fit.multiplier.toFixed(2)} 적용`])] }]),
+          ...(fit.retries.length ? [{ label: '길이 초과로 다시 보냄', value: `${fit.retries.length}번`, tone: 'warn' as const }] : []),
+        ]}
+      />
+    </Section>
   );
 }
