@@ -76,10 +76,10 @@ describe('accounts', () => {
     const signup = (visitor: string, username: string) =>
       t.raw('signup', { method: 'POST', headers: { 'content-type': 'application/json', [VISITOR_HEADER]: visitor }, body: JSON.stringify(signupBody(username)) });
     const statuses = [];
-    for (let i = 0; i < 6; i++) statuses.push((await signup('203.0.113.7', `a${i}`)).status);
-    expect(statuses).toEqual([201, 201, 201, 201, 201, 429]);
+    for (let i = 0; i < 11; i++) statuses.push((await signup('203.0.113.7', `a${i}`)).status);
+    expect(statuses).toEqual([...Array(10).fill(201), 429]);
     expect((await signup('203.0.113.8', 'other')).status).toBe(201);
-    for (let i = 0; i < 6; i++) expect((await signup('127.0.0.1', `c${i}`)).status).toBe(201);
+    for (let i = 0; i < 11; i++) expect((await signup('127.0.0.1', `c${i}`)).status).toBe(201);
   });
 
   it('refuses a username the client did not put in canonical form, and a malformed proof', async () => {

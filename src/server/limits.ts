@@ -81,4 +81,4 @@ export function tokenBucket(count: number, windowMs = 60_000, clock: () => numbe
 // Per visitor on the anonymous share routes: a link's page and its count, its files (a 파일로 받기 reads every picture
 // of a bot, which may be hundreds), and its reports. Requests, not bytes. signups: attempts an hour, so a script cannot
 // fill signup_cap from one address.
-export const visitorLimits = () => ({ reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6), signups: tokenBucket(5, 60 * 60_000) });
+export const visitorLimits = () => ({ reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6), signups: tokenBucket(10, 60 * 60_000) });
