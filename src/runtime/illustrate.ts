@@ -15,6 +15,7 @@ import type { ApiFailure } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
 import { pinned, scopeOf } from './chat-context';
+import { retriesOf } from './connections';
 import { evaluationFailure } from './evaluation';
 import { gather, generate, type ReplyError } from './generate';
 import { modelProfile } from './profiles';
@@ -213,7 +214,7 @@ export class Illustrator {
     if ('kind' in assembled) return assembled;
     const text = gather();
     const call = await pageCall(null);
-    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
+    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(route), answer));
     if (answer.state !== 'done') return { kind: 'failed', receipt };

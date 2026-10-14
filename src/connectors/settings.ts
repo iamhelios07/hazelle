@@ -26,6 +26,9 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   serviceTier?: ServiceTier;
   // 할인 받기 (design §6.7): the connection type's discount lane (ConnectionType discount), where it has one.
   discount?: true;
+  // 실패하면 다시 보내기 for the models using this 묶음, over their connection's (runtime/connections retriesOf). Never
+  // sent: no request builder reads it.
+  retries?: number;
 };
 export type Cache = '5m' | '1h';
 export const VERBOSITY = ['low', 'medium', 'high'] as const;

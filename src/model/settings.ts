@@ -20,6 +20,8 @@ export const EMPTY_SETTINGS: Settings = { models: {} };
 // RisuAI-only bot notice was confirmed, so imports no longer ask first (library/ImportFlow). ledger: how far the one fill
 // of the ledger from the calls made before it went (runtime/usage fill), absent until it starts. looks: the account's
 // own 디스플레이 presets in the user's order; a look's values are names the app reads (app/common/reading savedPresets).
+// retries: the shared 실패하면 다시 보내기, absent for RETRIES; a connection or a 설정 묶음 overrides it (runtime/connections
+// retriesOf).
 export type SavedLook = { id: string; name: string; look: Record<string, string | number> };
 
 export type Settings = {
@@ -39,4 +41,5 @@ export type Settings = {
   importNotice?: true;
   ledger?: 'filled' | { after: string };
   looks?: SavedLook[];
+  retries?: number;
 };

@@ -10,6 +10,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { setTextTranslation, translateSwitches, translatorNotes } from './characters';
 import { appendTranslation, savedElsewhere } from './chat-log';
+import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { gather, generate, resume, type Reply } from './generate';
@@ -63,6 +64,7 @@ export async function translate(
     connection: route.connection.value,
     model: route.model,
     settings: profile.profile.value.settings,
+    retries: retriesOf(store, route.connection.value, profile.profile.value.settings),
     messages: assembled.messages,
     call: await newCall(store, route, target),
     signal,

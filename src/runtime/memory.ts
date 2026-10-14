@@ -12,6 +12,7 @@ import type { MemoryPrompt } from '../model/prompt';
 import type { Stream } from '../model/stream';
 import { EMPTY_SETTINGS } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
+import { retriesOf } from './connections';
 import { evaluationFailure } from './evaluation';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { gather, generate, resume, type Reply } from './generate';
@@ -500,7 +501,7 @@ export class Rememberer {
     const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read), ...(job.chapter && { chapter: job.chapter }) } };
     const text = gather();
     const answer = await this.reads(target.id, async (signal) =>
-      generate({ credentials, connection: route.connection.value, model: route.model, settings, messages, call: await newCall(store, route, target), signal, onText: text.add }),
+      generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call: await newCall(store, route, target), signal, onText: text.add }),
     );
     return this.finish(chat, target.id, target.result, callOf(route), answer, text.value(), job, read);
   }

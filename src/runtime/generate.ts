@@ -39,6 +39,8 @@ export type GenerateInput = {
   connection: Connection;
   model: Starred;
   settings: ModelSettings;
+  // How many times a try that failed for a moment is sent again (connections retriesOf).
+  retries: number;
   messages: ChatMessage[];
   call: StreamCall;
   signal: AbortSignal;
@@ -50,7 +52,7 @@ export type GenerateInput = {
   batching?: { waiting: () => void; cancel: AbortSignal };
 };
 
-export async function generate({ credentials, connection, model, settings, messages, call, signal, onText, inline, batching }: GenerateInput): Promise<Reply> {
+export async function generate({ credentials, connection, model, settings, retries, messages, call, signal, onText, inline, batching }: GenerateInput): Promise<Reply> {
   const started = performance.now();
   let firstText: number | null = null;
   // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
@@ -107,7 +109,7 @@ export async function generate({ credentials, connection, model, settings, messa
     firstText ??= performance.now();
     onText(phase, text);
   };
-  const retry = retryOf(connection);
+  const retry = retryOf(retries);
   if (batches) {
     const { cancel } = batching!;
     const asking: Asking = { route, model, batches, ask: (each) => withCredential(route, each, credential.credential), signal, cancel, onText, inline };

@@ -12,7 +12,7 @@ import type { RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
 import { packsOf } from './chat-context';
 import { chatPersona } from './personas';
-import { refreshStarred } from './connections';
+import { refreshStarred, retriesOf } from './connections';
 import { gather, generate } from './generate';
 import { illustrateWriter } from './illustrate';
 import { shownPicture } from './picture';
@@ -207,7 +207,7 @@ export class Likenesses {
 
     const text = gather();
     const call = await pageCall(null);
-    const answer = await generate({ credentials, connection: writer.route.connection.value, model: writer.route.model, settings: writer.settings, messages: likenessRequest(input), call, signal, onText: text.add }).finally(() => endCall(store, call.id));
+    const answer = await generate({ credentials, connection: writer.route.connection.value, model: writer.route.model, settings: writer.settings, retries: retriesOf(store, writer.route.connection.value, writer.settings), messages: likenessRequest(input), call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(writer.route), answer));
     if (answer.state !== 'done') return { kind: 'failed', receipt };

@@ -113,9 +113,14 @@ export const DISCOUNT = '할인 받기';
 export const DISCOUNT_WAITING = '할인 받는 중이에요. 답이 다 만들어지면 한 번에 보여요.';
 export const DISCOUNT_STOPPING = '멈추는 중이에요. 그사이 답이 다 만들어지면 그 답을 보여요.';
 
-// A reply whose try failed before any of it came, sent again (design §6.7, retry on failure); the connection's count.
+// A reply whose try failed before any of it came, sent again (design §6.7, retry on failure): the shared count, a
+// connection's or a 설정 묶음's.
 export const RETRYING = '응답을 받지 못해서 다시 보내고 있어요.';
 export const RETRY_COUNT = '실패하면 다시 보내기';
+export const RETRY_HELP = '응답이 오기 전에 실패하면 이 횟수만큼 다시 보내요. 키나 요청이 잘못됐을 때는 바로 알려요.';
+
+// The fold that keeps a page's rarely changed settings out of sight, saying how many of them are set.
+export const detailLabel = (set: number) => (set ? `세부 설정 · ${set}개 정함` : '세부 설정');
 
 // A value nobody reported, said as such rather than as a made-up figure.
 export const UNKNOWN = '알 수 없음';

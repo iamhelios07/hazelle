@@ -15,8 +15,8 @@ export type Endpoint = { baseUrl: string; protocol: Protocol };
 // A built-in connection type fixes the endpoint, so baseUrl and protocol are set only on a generic connection.
 // Starred models are kept as catalog snapshots, so pickers and requests need no catalog fetch first.
 // accounts holds exactly one account and turns is null, unless the type is a pool; a pool always has turns.
-// retries: how many times a try that failed for a moment is sent again (registry retryOf), absent for RETRIES; 0 sends
-// each call once.
+// retries: how many times a try that failed for a moment is sent again (runtime/connections retriesOf), absent to follow
+// the account's shared count; 0 sends each call once. A model's 설정 묶음 can override it in turn.
 export type Connection = {
   type: string;
   label: string;

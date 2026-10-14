@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelSettings } from '../connectors/settings';
+import { RETRIES } from '../connectors/registry';
 import type { Connection, Model, Starred } from '../connectors/types';
 import { Credentials } from './credential';
 import { generate, resume } from './generate';
@@ -18,7 +19,7 @@ beforeEach(() => server.account());
 
 const answer = (status: number, body: string, headers: Record<string, string>) => stubRelay(() => new Response(body, { status, headers }));
 
-async function run(connection = openRouter, target: Starred = model, credentials = new Credentials(), settings: ModelSettings = {}) {
+async function run(connection = openRouter, target: Starred = model, credentials = new Credentials(), settings: ModelSettings = {}, retries = RETRIES) {
   const texts: string[] = [];
   const key = await streamKey();
   const reply = await generate({
@@ -26,6 +27,7 @@ async function run(connection = openRouter, target: Starred = model, credentials
     connection,
     model: target,
     settings,
+    retries,
     messages: [{ role: 'user', content: '안녕' }],
     call: { id: crypto.randomUUID(), key: key.private, public: key.public },
     signal: new AbortController().signal,
@@ -54,7 +56,7 @@ describe('generate', () => {
     expect(log[1]!.sent).toEqual(log[0]!.sent);
 
     const once = stubRelay(() => new Response('{}', { status: 429, headers: { 'x-relay': 'upstream', 'retry-after': '0' } }));
-    expect((await run({ ...openRouter, retries: 0 })).reply).toMatchObject({ state: 'failed', tries: 1, error: { kind: 'provider', status: 429 } });
+    expect((await run(openRouter, model, undefined, {}, 0)).reply).toMatchObject({ state: 'failed', tries: 1, error: { kind: 'provider', status: 429 } });
     expect(once).toHaveLength(1);
   });
 
@@ -62,20 +64,20 @@ describe('generate', () => {
     stubRelay(() => new Response('{}', { status: 429, headers: { 'x-relay': 'upstream', 'retry-after': '30' } }));
     const key = await streamKey();
     const call: StreamCall = { id: crypto.randomUUID(), key: key.private, public: key.public, retrying: () => stopStream(call.id) };
-    const reply = await generate({ credentials: new Credentials(), connection: openRouter, model, settings: {}, messages: [{ role: 'user', content: '안녕' }], call, signal: new AbortController().signal, onText: () => {} });
+    const reply = await generate({ credentials: new Credentials(), connection: openRouter, model, settings: {}, retries: RETRIES, messages: [{ role: 'user', content: '안녕' }], call, signal: new AbortController().signal, onText: () => {} });
     expect(reply).toMatchObject({ state: 'cut', cut: 'stopped', error: null });
     expect(await stream({ id: call.id, key: key.private }, null, new AbortController().signal)).toEqual({ kind: 'stopped' });
   });
 
   it('names a refusal the discount lane had no room for, apart from the account’s own rate limit', async () => {
-    const openai: Connection = { ...openRouter, type: 'openai', accounts: [{ id: 'key', secret: 'sk-proj-x' }], retries: 0 };
+    const openai: Connection = { ...openRouter, type: 'openai', accounts: [{ id: 'key', secret: 'sk-proj-x' }] };
     const refusing = (code: string | null) => stubRelay(() => new Response(JSON.stringify({ error: { message: 'Resource unavailable', code } }), { status: 429, headers: { 'x-relay': 'upstream' } }));
     refusing(null);
-    expect((await run(openai, model, undefined, { discount: true })).reply.error).toEqual({ kind: 'refused', code: 'discount-busy' });
+    expect((await run(openai, model, undefined, { discount: true }, 0)).reply.error).toEqual({ kind: 'refused', code: 'discount-busy' });
     refusing('rate_limit_exceeded');
-    expect((await run(openai, model, undefined, { discount: true })).reply.error).toMatchObject({ kind: 'provider', status: 429 });
+    expect((await run(openai, model, undefined, { discount: true }, 0)).reply.error).toMatchObject({ kind: 'provider', status: 429 });
     refusing(null);
-    expect((await run(openai)).reply.error).toMatchObject({ kind: 'provider', status: 429 });
+    expect((await run(openai, model, undefined, {}, 0)).reply.error).toMatchObject({ kind: 'provider', status: 429 });
   });
 
   it('reads an answer with no body as a stream that ended before its end marker', async () => {
@@ -87,7 +89,7 @@ describe('generate', () => {
     answer(401, '{"error":{"message":"No auth credentials found","code":401}}', { 'x-relay': 'upstream' });
     expect((await run()).reply).toMatchObject({ state: 'failed', error: { kind: 'provider', status: 401, detail: 'No auth credentials found' } });
     stubRelay(() => null);
-    expect((await run({ ...openRouter, retries: 0 })).reply).toMatchObject({ state: 'failed', error: { kind: 'relay', code: 'upstream-unreachable' } });
+    expect((await run(openRouter, model, undefined, {}, 0)).reply).toMatchObject({ state: 'failed', error: { kind: 'relay', code: 'upstream-unreachable' } });
     await server.wipe();
     expect((await run()).reply).toMatchObject({ state: 'failed', error: { kind: 'app', code: 'no-session' } });
   });
@@ -194,6 +196,7 @@ describe('a reply through a discount lane’s batch', () => {
       connection: anthropic,
       model: claude,
       settings: { discount: true },
+      retries: RETRIES,
       messages: [{ role: 'user', content: '안녕' }],
       call: { id: crypto.randomUUID(), key: key.private, public: key.public, started: (id) => marked.push(id), retrying: () => retried++ },
       signal: abort.signal,

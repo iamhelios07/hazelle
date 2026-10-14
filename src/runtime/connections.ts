@@ -1,9 +1,11 @@
 import { fitsRole } from '../connectors/assignment';
 import { RETRIES } from '../connectors/registry';
+import type { ModelSettings } from '../connectors/settings';
 import type { Account, Connection, ConnectionType, Model, Starred, Turns } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Stored } from '../model/kinds';
-import { SETTINGS_ID } from '../model/settings';
+import { without } from '../model/fields';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import { firstTurns, groupOf, putBack, removeAccount as withoutAccount, signedIn } from '../model/turns';
 import type { ApiFailure, ApiResult } from './api';
 import { setDefaultModel } from './assignment';
@@ -95,13 +97,17 @@ export async function refreshStarred(store: ObjectStore, id: string, models: Mod
   await store.update('connection', id, (current) => ({ ...current, starred: current.starred.map(fresh) }));
 }
 
+// Most specific first: the model's 설정 묶음, then its connection, then the account's shared count.
+export const retriesOf = (store: ObjectStore, connection: Connection, settings: ModelSettings) =>
+  settings.retries ?? connection.retries ?? store.get('settings', SETTINGS_ID)?.value.retries ?? RETRIES;
+
+// undefined: follow the account's shared count again.
+export const setRetries = (store: ObjectStore, id: string, retries: number | undefined) =>
+  store.update('connection', id, (current) => (retries === undefined ? without(current, 'retries') : { ...current, retries }));
+
 // The default count is kept as none, so it follows the default.
-export const setRetries = (store: ObjectStore, id: string, retries: number) =>
-  store.update('connection', id, (current) => {
-    const next: Connection = { ...current, retries };
-    if (retries === RETRIES) delete next.retries;
-    return next;
-  });
+export const setSharedRetries = (store: ObjectStore, retries: number) =>
+  store.upsert('settings', (current = EMPTY_SETTINGS) => (retries === RETRIES ? without(current, 'retries') : { ...current, retries }));
 
 export const removeConnection = (store: ObjectStore, id: string) => store.take('connection', id);
 

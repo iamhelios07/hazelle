@@ -2,7 +2,7 @@ import type { Cache, Change, ModelSettings, NumberSetting, ServiceTier, Verbosit
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { count } from '../common/typedNumber';
-import { DISCOUNT, UNKNOWN } from '../common/words';
+import { DISCOUNT, RETRY_COUNT, UNKNOWN } from '../common/words';
 
 export const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일', embedding: '임베딩' };
 
@@ -43,7 +43,7 @@ export const settingLabel = (setting: Change['setting']) => (isField(setting) ? 
 
 // In the order the editor shows them; empty when none is.
 export function valueWords(settings: ModelSettings): string[] {
-  const { reasoning, stop, systemAsUser, streaming, cache, verbosity, serviceTier, discount } = settings;
+  const { reasoning, stop, systemAsUser, streaming, cache, verbosity, serviceTier, discount, retries } = settings;
   const number = (field: Field) => {
     const value = settings[field];
     return value === undefined ? [] : [`${NUMBER[field].label} ${count(value)}`];
@@ -51,7 +51,7 @@ export function valueWords(settings: ModelSettings): string[] {
   const thinking = !reasoning
     ? []
     : [`추론 ${reasoning.kind === 'off' ? '끔' : reasoning.kind === 'budget' ? `예산 ${count(reasoning.tokens)}` : reasoning.kind === 'adaptive' ? (reasoning.level === null ? '적응형' : `적응형 · ${levelName(reasoning.level)}`) : levelName(reasoning.level)}`];
-  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...(discount ? [DISCOUNT] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(verbosity ? [`${VERBOSITY_LABEL} ${VERBOSITY_WORDS[verbosity]}`] : []), ...(serviceTier ? [`${SERVICE_TIER_LABEL} ${SERVICE_TIER_WORDS[serviceTier]}`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : [])];
+  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...(discount ? [DISCOUNT] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(verbosity ? [`${VERBOSITY_LABEL} ${VERBOSITY_WORDS[verbosity]}`] : []), ...(serviceTier ? [`${SERVICE_TIER_LABEL} ${SERVICE_TIER_WORDS[serviceTier]}`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : []), ...(retries === undefined ? [] : [`${RETRY_COUNT} ${retries}번`])];
 }
 
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').

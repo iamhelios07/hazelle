@@ -17,10 +17,11 @@ import {
 } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
 import { choices } from '../common/reading';
+import { RetriesRow } from '../common/RetriesRow';
 import { typedText } from '../common/typed';
 import { useSearch } from '../common/useSearch';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, DISCOUNT, RESET, UNSET } from '../common/words';
+import { BIN_KEEPS, detailLabel, DISCOUNT, RESET, UNSET } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -292,7 +293,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   }
 
   const detailSet =
-    DETAIL.filter((field) => shown[field] !== undefined).length + [shown.stop, shown.verbosity, shown.serviceTier, shown.systemAsUser, shown.streaming === false].filter(Boolean).length;
+    DETAIL.filter((field) => shown[field] !== undefined).length + [shown.stop, shown.verbosity, shown.serviceTier, shown.systemAsUser, shown.streaming === false, shown.retries !== undefined].filter(Boolean).length;
 
   return (
     <Screen
@@ -371,7 +372,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         </SettingGroup>
       </Section>
 
-      <Disclosure label={detailSet ? `세부 설정 · ${detailSet}개 정함` : '세부 설정'}>
+      <Disclosure label={detailLabel(detailSet)}>
         <SettingGroup label="세부 설정">
           {DETAIL.map(numberRow)}
           {stopRow}
@@ -379,6 +380,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동은 Anthropic 계정에 우선 처리 용량이 있으면 그 용량부터 사용해요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
           {systemRow}
           {streamingRow}
+          <RetriesRow value={shown.retries} follows="연결 설정대로" onChange={(retries) => change({ retries })} />
         </SettingGroup>
       </Disclosure>
     </Screen>

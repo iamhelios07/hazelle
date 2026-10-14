@@ -11,6 +11,7 @@ import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
 import { cacheKept, wireOf, writePrint } from './cache';
 import { appendReply, appendUserMessage, savedElsewhere, type Said, type Written } from './chat-log';
+import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate, resume, type Reply } from './generate';
@@ -266,7 +267,7 @@ export class Talk {
     this.reading.add(call.id);
     held.calling = call.id;
     const batching = { waiting: () => this.change(held, { ...held.turn, whole: true, batch: true }), cancel: held.cancel.signal };
-    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held), batching });
+    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(this.store, route.connection.value, settings), messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held), batching });
     const sent = await sending;
     if (sent && !sent.ok) {
       held.cancel.abort();

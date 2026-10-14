@@ -1,6 +1,5 @@
 import { Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { RETRY_MOST } from '../../contracts/streams';
 import { bareModel } from '../../connectors/chat-completions';
 import { modelSettings, resolveConnection, RETRIES } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
@@ -12,12 +11,13 @@ import { ACTS } from '../common/acts';
 import { describeCatalogFailure } from '../common/failure';
 import { NameDialog } from '../common/NameDialog';
 import { useSearch } from '../common/useSearch';
-import { RETRY_COUNT } from '../common/words';
-import { useSession } from '../session';
+import { RetriesRow } from '../common/RetriesRow';
+import { detailLabel } from '../common/words';
+import { useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Columns, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingRow, Stack, Stepper, Text, usePane } from '../ui';
+import { Button, Callout, ChoiceGroup, Columns, Disclosure, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingGroup, Stack, Text, usePane } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
@@ -41,6 +41,7 @@ function tags(model: Model): string[] {
 
 export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'connection'>; back: Back }) {
   const { store, catalogs } = useSession();
+  const shared = useSettings().retries;
   const toast = useToast();
   const { id, value: connection } = stored;
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
@@ -166,59 +167,53 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   );
 
   const body = (
-    <Columns min="panel">
-      <Stack gap="group">
-        {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} level={level} /> : <ConnectionMeters connection={connection} level={level} />}
-        <Panel>
-          <SettingRow
-            label={RETRY_COUNT}
-            help="응답이 오기 전에 실패하면 이 횟수만큼 다시 보내요. 키나 요청이 잘못됐을 때는 바로 알려요."
-            control={
-              <Stepper
-                label={RETRY_COUNT}
-                less="한 번 덜 보내기"
-                more="한 번 더 보내기"
-                value={connection.retries ?? RETRIES}
-                min={0}
-                max={RETRY_MOST}
-                onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
-              />
-            }
-          />
+    <>
+      <Columns min="panel">
+        <Stack gap="group">
+          {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} level={level} /> : <ConnectionMeters connection={connection} level={level} />}
+          <ConnectionSent connection={id} level={level} />
+        </Stack>
+        <Panel
+          title="모델"
+          level={level}
+          action={
+            resolved?.codec && (
+              <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => setAdding(true)}>
+                {BY_ID}
+              </Button>
+            )
+          }
+        >
+          <Text variant="note">{[listed, starred.length ? `즐겨찾기 ${starred.length}개` : ''].filter(Boolean).join(' · ')}</Text>
+          <Row kind="toolbar">
+            {search.field}
+            <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
+          </Row>
+          {catalog && !catalog.ok && (
+            <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((count) => count + 1) }}>
+              {describeCatalogFailure(catalog.failure)}
+            </Callout>
+          )}
+          {shown.length > 0 ? (
+            <Stack gap="group">
+              {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
+              {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
+            </Stack>
+          ) : (
+            catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>
+          )}
         </Panel>
-        <ConnectionSent connection={id} level={level} />
-      </Stack>
-      <Panel
-        title="모델"
-        level={level}
-        action={
-          resolved?.codec && (
-            <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => setAdding(true)}>
-              {BY_ID}
-            </Button>
-          )
-        }
-      >
-        <Text variant="note">{[listed, starred.length ? `즐겨찾기 ${starred.length}개` : ''].filter(Boolean).join(' · ')}</Text>
-        <Row kind="toolbar">
-          {search.field}
-          <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
-        </Row>
-        {catalog && !catalog.ok && (
-          <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((count) => count + 1) }}>
-            {describeCatalogFailure(catalog.failure)}
-          </Callout>
-        )}
-        {shown.length > 0 ? (
-          <Stack gap="group">
-            {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
-            {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
-          </Stack>
-        ) : (
-          catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>
-        )}
-      </Panel>
-    </Columns>
+      </Columns>
+      <Disclosure label={detailLabel(connection.retries === undefined ? 0 : 1)}>
+        <SettingGroup label="세부 설정">
+          <RetriesRow
+            value={connection.retries}
+            follows={`공용 설정대로 ${shared ?? RETRIES}번`}
+            onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
+          />
+        </SettingGroup>
+      </Disclosure>
+    </>
   );
 
   return stacked ? (

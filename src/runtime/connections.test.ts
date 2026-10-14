@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { CONNECTION_TYPES } from '../connectors/registry';
+import { CONNECTION_TYPES, RETRIES } from '../connectors/registry';
 import type { Connection, Model } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
-import { addConnection, providerConnection, refreshStarred, setStarred } from './connections';
+import { addConnection, providerConnection, refreshStarred, retriesOf, setSharedRetries, setStarred } from './connections';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
@@ -73,5 +73,16 @@ describe('refreshStarred', () => {
       const rev = store.get('connection', id)!.rev;
       await refreshStarred(store, id, [{ ...listed }]);
       expect(store.get('connection', id)!.rev).toBe(rev);
+    }));
+});
+
+describe('retriesOf', () => {
+  it("takes the model's 설정 묶음 first, then its connection, then the shared count, else the default", () =>
+    server.withSession(async ({ store }) => {
+      expect(retriesOf(store, openRouter, {})).toBe(RETRIES);
+      await setSharedRetries(store, 4);
+      expect(retriesOf(store, openRouter, {})).toBe(4);
+      expect(retriesOf(store, { ...openRouter, retries: 0 }, {})).toBe(0);
+      expect(retriesOf(store, { ...openRouter, retries: 0 }, { retries: 5 })).toBe(5);
     }));
 });

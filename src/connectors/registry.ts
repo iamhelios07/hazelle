@@ -180,8 +180,7 @@ export const RETRYABLE: readonly number[] = [408, 429, 500, 502, 503, 504, 520, 
 export const RETRIES = 2;
 
 // null: each call is sent once.
-export function retryOf(connection: Connection): { times: number; statuses: readonly number[] } | null {
-  const times = connection.retries ?? RETRIES;
+export function retryOf(times: number): { times: number; statuses: readonly number[] } | null {
   return times ? { times, statuses: RETRYABLE } : null;
 }
 

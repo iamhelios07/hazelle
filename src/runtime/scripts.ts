@@ -16,6 +16,7 @@ import { chatModel, embedModel } from './assignment';
 import { countTexts, embedTexts } from './embed';
 import { memoryOwner } from './memory-read';
 import { appendScripted, appendUserMessage, keepCall, type Written } from './chat-log';
+import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { gather, generate } from './generate';
@@ -505,6 +506,7 @@ export class Scripts {
       connection: route.connection.value,
       model: route.model,
       settings: profile.profile.value.settings,
+      retries: retriesOf(store, route.connection.value, profile.profile.value.settings),
       messages,
       call,
       signal: signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal,
