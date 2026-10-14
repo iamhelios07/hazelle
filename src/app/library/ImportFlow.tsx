@@ -21,7 +21,7 @@ import { NO_CHARACTER } from '../common/words';
 import { useFiles, useLibrary, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
-import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Menu, MenuItem, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
+import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Menu, MenuItem, pickFiles, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
 import { characterOutcome, chatOutcome, moduleOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
 import { missedLines, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
@@ -33,8 +33,9 @@ const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin,.js';
 type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed: string[] };
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
 // fill: whether to bring only a card's pictures to the character Risu's move brought under its name. character: which
-// character a file of chats goes to, null for 캐릭터 없이; name is the one the file was with, when it says.
-type Ask = { kind: 'fill'; name: string; answer: (fill: boolean) => void } | { kind: 'character'; file: string; name: string | null; fallback: string | null; answer: (character: string | null) => void };
+// character a file of chats goes to, null for 캐릭터 없이; name is the one the file was with, when it says. cancel, the
+// dialog closed while asking, ends the batch: neither answer, since X is not 새 캐릭터로 가져오기 or 캐릭터 없이.
+type Ask = ({ kind: 'fill'; name: string; answer: (fill: boolean) => void } | { kind: 'character'; file: string; name: string | null; fallback: string | null; answer: (character: string | null) => void }) & { cancel: () => void };
 // Where a file of chats goes: a character's id, null for 캐릭터 없이, undefined where the way in names none.
 type Target = string | null | undefined;
 type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Result[]; ask: Ask | null };
@@ -68,6 +69,8 @@ const DETAIL_FAILURE: Record<string, string> = {
   'tool-uses': '//@uses에는 model, embed, memory만 쓸 수 있어요.',
   'tool-unknown': '알 수 없는 줄이에요.',
 };
+
+class ImportCancelled extends Error {}
 
 const unsaved = (file: string, failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
 
@@ -115,8 +118,6 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const route = useRoute();
   const noticed = useSettings().importNotice === true;
   const [notice, setNotice] = useState<(() => void) | null>(null);
-  const input = useRef<HTMLInputElement>(null);
-  const target = useRef<Target>(undefined);
   const readers = useRef(new Set<ImportWorker>());
   const mounted = useRef(true);
   const [state, setState] = useState<State | null>(null);
@@ -206,11 +207,18 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       if (!mounted.current) return results;
       setState({ busy: { file: file.name, steps: [] }, results, ask: null });
       const progress = (step: ProgressStep) => setState({ busy: { file: file.name, steps: [step] }, results, ask: null });
-      const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'fill', name, answer } }));
-      const choose = (name: string | null, fallback: string | null) => new Promise<string | null>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, fallback, answer } }));
-      results.push(await save(file, place, target, progress, ask, choose));
+      const cancel = (reject: (error: Error) => void) => () => reject(new ImportCancelled());
+      const ask = (name: string) => new Promise<boolean>((answer, reject) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'fill', name, answer, cancel: cancel(reject) } }));
+      const choose = (name: string | null, fallback: string | null) =>
+        new Promise<string | null>((answer, reject) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, fallback, answer, cancel: cancel(reject) } }));
+      try {
+        results.push(await save(file, place, target, progress, ask, choose));
+      } catch (error) {
+        if (!(error instanceof ImportCancelled)) throw error;
+        break;
+      }
     }
-    setState({ busy: null, results, ask: null });
+    setState(results.length > 0 ? { busy: null, results, ask: null } : null);
     return results;
   }
 
@@ -221,10 +229,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   }
 
   function open(to: Target) {
-    asked(() => {
-      target.current = to;
-      input.current?.click();
-    });
+    asked(() => pickFiles(ACCEPT, true, (picked) => void take(picked, to)));
   }
 
   const dragging = useFileDrop((dropped) => asked(() => void take(dropped, undefined)));
@@ -248,18 +253,6 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <input
-        ref={input}
-        type="file"
-        accept={ACCEPT}
-        multiple
-        hidden
-        onChange={(event) => {
-          const files = [...(event.target.files ?? [])];
-          event.target.value = '';
-          void take(files, target.current);
-        }}
-      />
       {notice && (
         <ConfirmDialog
           title="가져오기 전에 확인해 주세요"
@@ -287,7 +280,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       )}
       {moving && <MoveFlow files={moving.files} aside={moving.aside} onClose={() => setMoving(null)} />}
       {state && (
-        <Dialog title={title} onClose={() => state.busy || setState(null)}>
+        <Dialog title={title} onClose={() => (state.ask ? state.ask.cancel() : state.busy || setState(null))}>
           <Stack>
             {state.results.map((result, index) =>
               result.kind === 'failed' ? <Failed key={index} file={result.file} failure={result.failure} /> : result.kind === 'filled' ? <FilledSummary key={index} result={result} /> : <Summary key={index} result={result} />,
