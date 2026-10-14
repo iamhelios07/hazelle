@@ -7,7 +7,7 @@ import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf, Pictures } from '../../model/library';
 import { likenessId } from '../../model/likeness';
-import { editCharacter, setAvatar, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
+import { editCharacter, setAvatar, setCardWrites, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
 import { ACTS } from '../common/acts';
@@ -26,7 +26,7 @@ import type { Frame } from '../common/frame';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
@@ -38,7 +38,7 @@ import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
 type Height = 'peek' | 'most';
-const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), keepThoughts: setKeepThoughts };
+const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), cardWrites: setCardWrites, keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
   statuses.find((each) => each === 'failed') ?? statuses.find((each) => each === 'saving') ?? statuses.find((each) => each !== null) ?? null;
@@ -112,6 +112,8 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const fold = pictures.fold !== false;
   const decor = character.decor !== false;
   const botModels = character.botModels === true;
+  const cardWrites = character.cardWrites === true;
+  const scripted = scriptsOf(packsOf(store, { character: id })).length > 0;
   const keepThoughts = character.keepThoughts === true;
 
   async function changeFace(file: File) {
@@ -333,7 +335,9 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
             help="<Thoughts> 같은 추론 블록을 숨기지 않고 본문에 보여 줘요."
             control={<Switch label="추론을 본문에 표시" checked={keepThoughts} onChange={(on) => flip('keepThoughts', on)} />}
           />
-          {scriptsOf(packsOf(store, { character: id })).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}
+          {scripted && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}
+          {/* An always-on module's script can ask too, so an answer given shows here whatever the character's own packs hold. */}
+          {(scripted || character.cardWrites !== undefined) && <SettingRow label={CARD_WRITES} help={CARD_WRITES_HELP} control={<Switch label={CARD_WRITES} checked={cardWrites} onChange={(on) => flip('cardWrites', on)} />} />}
         </SettingGroup>
         {decor && (
           <Disclosure label="이미지 크기">

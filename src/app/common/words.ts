@@ -19,6 +19,11 @@ export const AUX_HELP = '번역, 장기 기억 정리처럼 대화 밖의 작업
 // 캐릭터 편집's switch for a bot whose script calls a model, and what the card that asks it in the chat says first.
 export const BOT_MODELS = '봇의 모델 호출';
 export const BOT_MODELS_HELP = '봇 스크립트가 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
+// 캐릭터 편집's switch for scripts that rewrite the card, and what the card that asks it in the chat says first.
+export const CARD_WRITES = '스크립트의 카드 수정';
+export const CARD_WRITES_HELP = '스크립트가 이 캐릭터의 배경 HTML을 바꿔 저장해요. 이 캐릭터의 모든 채팅에 남아요.';
+export const CARD_WRITE_CONSENT = { character: '이 봇이 캐릭터 카드를 고치려고 해요', module: '이 모듈이 캐릭터 카드를 고치려고 해요' };
+export const CARD_WRITE_ASK_HELP = '허용하면 이 캐릭터의 배경 HTML이 바뀌어 모든 채팅에 남아요. 이 캐릭터에는 한 번만 물어요. 캐릭터 편집에서 바꿀 수 있어요.';
 export const BOT_STUCK = '봇 스크립트가 끝나지 않아 멈췄어요';
 
 export const TOOL = '도구';

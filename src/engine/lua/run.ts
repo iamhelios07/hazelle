@@ -27,7 +27,7 @@ const TRIGGER_DEPTH = 10;
 
 const UNSUPPORTED = [
   'setChatRole', 'insertChat', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
-  'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage', 'getBackgroundEmbedding', 'setBackgroundEmbedding',
+  'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage',
 ];
 
 type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
@@ -394,6 +394,15 @@ export class Lua {
     act('reloadChat', (run) => void (run.reload = true));
     act('getTokens', (run, value: unknown) => run.host.tokens(text(value)));
     act('sleep', (_run, time: number) => new Promise((resolve) => setTimeout(() => resolve(true), time)));
+    // Risu's backgroundHTML is the character's, never a module's.
+    set('getBackgroundEmbedding', (run) => run.background ?? run.snapshot.scope.card?.background ?? '');
+    act('setBackgroundEmbeddingMain', (run, html: unknown) => {
+      if (typeof html !== 'string') return Promise.resolve(false);
+      return run.host.background(html, run.owner).then((saved) => {
+        if (saved) run.background = html;
+        return saved;
+      });
+    });
     act('LLMMain', model('main'));
     act('axLLMMain', model('aux'));
     // nil when a call is refused or fails, as Risu answers a script it does not let call.

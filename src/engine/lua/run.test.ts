@@ -44,7 +44,7 @@ const SNAPSHOT: Snapshot = {
 
 const host = (over: Partial<Host> = {}): Host & { said: string[] } => {
   const said: string[] = [];
-  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), embed: async () => ({ ok: false, reason: 'no-model' }), tokens: async (text) => text.length, lore: async () => [{ role: 'assistant', text: 'active' }], ...over };
+  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), embed: async () => ({ ok: false, reason: 'no-model' }), tokens: async (text) => text.length, lore: async () => [{ role: 'assistant', text: 'active' }], background: async () => false, ...over };
 };
 
 const lua = await Lua.create({ sliceMs: 300 });
@@ -151,6 +151,20 @@ describe('Lua runs', () => {
     );
     expect(asked).toMatchObject({ errors: [], stop: true });
     expect((await run(`function onInput(id) stopChat(id) end`, { kind: 'input' })).stop).toBe(true);
+  });
+
+  it("reads the card's background, and sees its own save only when the host keeps it", async () => {
+    const code = `onStart = async(function(id)
+      setChatVar(id, 'before', getBackgroundEmbedding(id))
+      setChatVar(id, 'saved', tostring(setBackgroundEmbedding(id, '<style>.b{}</style><!--rules-->')))
+      setChatVar(id, 'after', getBackgroundEmbedding(id))
+    end)`;
+    const card = { ...SNAPSHOT, scope: { ...SNAPSHOT.scope, card: { background: '<style>.a{}</style>' } as Snapshot['scope']['card'] } };
+    const kept: [string, unknown][] = [];
+    const saved = await run(code, { kind: 'start' }, { background: async (html, from) => (kept.push([html, from]), true) }, card);
+    expect(saved.writes).toEqual([['before', '<style>.a{}</style>'], ['saved', 'true'], ['after', '<style>.b{}</style><!--rules-->']]);
+    expect(kept).toEqual([['<style>.b{}</style><!--rules-->', OWNER]]);
+    expect((await run(code, { kind: 'start' }, {}, card)).writes).toEqual([['before', '<style>.a{}</style>'], ['saved', 'false'], ['after', '<style>.a{}</style>']]);
   });
 
   it('chains edit listeners and keeps the value when one returns nothing', async () => {

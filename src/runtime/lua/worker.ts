@@ -28,6 +28,7 @@ const host = (id: number): Host => {
     embed: (...args) => asked((call) => ({ kind: 'embed', id, call, args })),
     tokens: (...args) => asked((call) => ({ kind: 'tokens', id, call, args })),
     lore: (...args) => asked((call) => ({ kind: 'lore', id, call, args })),
+    background: (...args) => asked((call) => ({ kind: 'background', id, call, args })),
   };
 };
 

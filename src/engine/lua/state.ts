@@ -47,6 +47,8 @@ export type Run = {
   ranAway: boolean;
   // The risu-id of the element whose press called this run (CbsContext triggerId); '' for any other run.
   triggerId: string;
+  // The background this run saved, which its later reads see before the snapshot's.
+  background?: string;
 };
 export type Acting = Run & { host: Host; owner: PackOwner };
 

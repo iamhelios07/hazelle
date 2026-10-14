@@ -30,6 +30,7 @@ import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
 import { packsOf, scopeOf } from './chat-context';
+import { setBackground } from './characters';
 import type { Blocked, TurnContext } from './turn-context';
 
 export type Halted = { kind: 'halted' };
@@ -473,6 +474,7 @@ export class Scripts {
       model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, deadline, either(callSignal)),
       embed: (texts, as, from, callSignal) => this.embed(chat, texts, as, from, deadline, either(callSignal)),
       tokens: async (text) => (await countTexts(this.session.store)([text]))[0]!,
+      background: (html, from, callSignal) => this.background(chat, html, from, deadline, either(callSignal)),
       lore: async (reserve) => {
         const context = scope.model?.maxContext ?? null;
         const lore = await this.session.store.evaluation.lore({ asker: 'lore', chat }, scope, crypto.randomUUID(), reserve === null || context === null ? Infinity : context - reserve);
@@ -523,6 +525,15 @@ export class Scripts {
     }
     await keepCall(this.session, chat, receiptOf(callOf(route), answer));
     return answer.state === 'failed' ? refused('failed', answer.error?.kind ?? 'failed') : { success: true, result: text.value() };
+  }
+
+  // The chat's character's card, under that character's one answer (design §6.8).
+  private async background(chat: string, html: string, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<boolean> {
+    const { store } = this.session;
+    const character = live(store.get('chat', chat))?.value.character ?? null;
+    if (character === null || signal?.aborted || !(await this.interactions.mayRewrite(chat, character, from, deadline, signal))) return false;
+    if (signal?.aborted) return false;
+    return (await setBackground(store, character, html)).ok;
   }
 
   // With the account's 임베딩 모델, under the spender's one answer for model calls.

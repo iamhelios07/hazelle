@@ -29,6 +29,7 @@ export type Up =
   | { kind: 'embed'; id: number; call: number; args: Parameters<Host['embed']> }
   | { kind: 'tokens'; id: number; call: number; args: Parameters<Host['tokens']> }
   | { kind: 'lore'; id: number; call: number; args: Parameters<Host['lore']> }
+  | { kind: 'background'; id: number; call: number; args: Parameters<Host['background']> }
   | { kind: 'pong' };
 
 // The engine stops a script's stretch at 5 s by itself; this catches what it cannot count, such as one pattern match
@@ -109,7 +110,7 @@ export class LuaWorker implements LuaRunner {
     const host = this.pending.context(message.id);
     if (!host) return;
     if (message.kind === 'say') return host.say(...message.args);
-    const answering: Promise<unknown> = message.kind === 'ask' ? host.ask(...message.args) : message.kind === 'model' ? host.model(...message.args) : message.kind === 'embed' ? host.embed(...message.args) : message.kind === 'lore' ? host.lore(...message.args) : host.tokens(...message.args);
+    const answering: Promise<unknown> = message.kind === 'ask' ? host.ask(...message.args) : message.kind === 'model' ? host.model(...message.args) : message.kind === 'embed' ? host.embed(...message.args) : message.kind === 'lore' ? host.lore(...message.args) : message.kind === 'background' ? host.background(...message.args) : host.tokens(...message.args);
     const worker = this.worker;
     const answer = (value: unknown) => worker?.postMessage({ kind: 'answer', call: message.call, value } satisfies Down);
     // A call the host failed at answers nothing, as a dismissed question does: unanswered, its run would never end.

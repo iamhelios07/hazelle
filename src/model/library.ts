@@ -31,6 +31,9 @@ export type Character = Mark & {
   decor?: boolean;
   // Whether the bot's Lua may call models, which costs the user. Absent: not asked yet, and the first call asks.
   botModels?: boolean;
+  // Whether the scripts of its chats, its modules' included, may rewrite its card (setBackgroundEmbedding). Asked once
+  // per character, not per script. Absent: not asked yet, and the first write asks.
+  cardWrites?: boolean;
   // Absent fields are the defaults.
   pictures?: Pictures;
   // 상태창 지정: the display scripts, by id in card.regex, whose boxes are the character's status window, shown once

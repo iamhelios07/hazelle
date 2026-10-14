@@ -213,6 +213,18 @@ export function setStatusScript(store: ObjectStore, id: string, script: string, 
   });
 }
 
+export function setCardWrites(store: ObjectStore, id: string, cardWrites: boolean): Promise<ApiResult<Stored<'character'>>> {
+  return store.update('character', id, (current) => (current.deleted === undefined ? { ...current, cardWrites } : null));
+}
+
+// A blank one leaves the card without a background, as an import of a card without one does.
+export function setBackground(store: ObjectStore, id: string, html: string): Promise<ApiResult<Stored<'character'>>> {
+  return store.update('character', id, (current) => {
+    if (current.deleted !== undefined) return null;
+    return { ...current, card: html.trim() ? { ...current.card, background: html } : without(current.card, 'background') };
+  });
+}
+
 export function setKeepThoughts(store: ObjectStore, id: string, keep: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => (keep ? { ...current, keepThoughts: true } : without(current, 'keepThoughts')));
 }

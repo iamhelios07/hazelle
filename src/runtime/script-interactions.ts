@@ -4,9 +4,10 @@ import { Runaway } from '../engine/cbs/evaluate';
 import type { Outcome, Question } from '../engine/script-api';
 import { live, type PackOwner } from '../model/library';
 import { toolId } from '../model/tool';
-import type { ApiFailure } from './api';
+import type { ApiFailure, ApiResult } from './api';
 import { EvaluationStuck } from './evaluation';
 import { LuaStuck } from './lua/client';
+import { setCardWrites } from './characters';
 import { setModels, setTakesMemory } from './pack';
 import { ToolLate, ToolStopped, ToolStuck } from './script-binding';
 import type { ObjectStore } from './store';
@@ -34,7 +35,8 @@ type Note =
 export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
 // Consent is saved on the spender, not the chat's character: 'yes' allows it and 'no' refuses it.
 // A dismissal leaves it to be asked again. memory: a tool's claim on the memory slot, saved on its module.
-export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'memory' } };
+// card: a script would rewrite the chat's character's card, saved on that character whichever script asked.
+export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'memory' } | { kind: 'card' } };
 export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
 export class ScriptInteractions {
@@ -105,17 +107,17 @@ export class ScriptInteractions {
     if (!spender) return false;
     if (spender.value.botModels !== undefined) return spender.value.botModels;
     if (deadline) return false;
-    const key = `${from.kind}:${from.id}`;
-    let deciding = this.consents.get(key);
-    if (!deciding) {
-      deciding = this.ask(chat, { kind: 'model' }, from, signal).then(async (answer) => {
-        if (answer === null) return false;
-        const saved = await setModels(store, from, answer === 'yes');
-        return saved.ok && answer === 'yes';
-      }).finally(() => this.consents.delete(key));
-      this.consents.set(key, deciding);
-    }
-    return deciding;
+    return this.decide(`${from.kind}:${from.id}`, chat, { kind: 'model' }, from, (yes) => setModels(store, from, yes), signal);
+  }
+
+  // Whether a script may rewrite character's card: asked once per character and kept on it, as allowed is.
+  async mayRewrite(chat: string, character: string, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<boolean> {
+    const { store } = this;
+    const stored = live(store.get('character', character));
+    if (!stored) return false;
+    if (stored.value.cardWrites !== undefined) return stored.value.cardWrites;
+    if (deadline) return false;
+    return this.decide(`card:${character}`, chat, { kind: 'card' }, from, (yes) => setCardWrites(store, character, yes), signal);
   }
 
   // The memory claims of the chat's tools that the user has not answered, each asked once per module (design §6.10).
@@ -126,13 +128,22 @@ export class ScriptInteractions {
     for (const { module, tool } of toolsOf(store, stored.value)) {
       const key = `memory:${module}`;
       if (!tool.manifest.uses.includes('memory') || store.get('module', module)?.value.takesMemory !== undefined || this.consents.has(key)) continue;
-      const deciding = this.ask(chat, { kind: 'memory' }, { kind: 'module', id: module }).then(async (answer) => {
+      void this.decide(key, chat, { kind: 'memory' }, { kind: 'module', id: module }, (yes) => setTakesMemory(store, module, yes));
+    }
+  }
+
+  // One question per key at a time, its 'yes' or 'no' saved by save; a dismissal saves nothing and is no.
+  private decide(key: string, chat: string, question: ScriptQuestion['question'], from: PackOwner, save: (yes: boolean) => Promise<ApiResult<unknown>>, signal?: AbortSignal): Promise<boolean> {
+    let deciding = this.consents.get(key);
+    if (!deciding) {
+      deciding = this.ask(chat, question, from, signal).then(async (answer) => {
         if (answer === null) return false;
-        const saved = await setTakesMemory(store, module, answer === 'yes');
+        const saved = await save(answer === 'yes');
         return saved.ok && answer === 'yes';
       }).finally(() => this.consents.delete(key));
       this.consents.set(key, deciding);
     }
+    return deciding;
   }
 
   // A memory claim holds up no run, so it stays until the user answers it.

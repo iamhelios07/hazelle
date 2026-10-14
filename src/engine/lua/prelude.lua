@@ -48,6 +48,10 @@ function log(value)
     logMain(json.encode(value))
 end
 
+function setBackgroundEmbedding(id, data)
+    return setBackgroundEmbeddingMain(id, data):await()
+end
+
 function LLM(id, prompt, useMultimodal, options)
     return json.decode(LLMMain(id, json.encode(prompt)):await())
 end

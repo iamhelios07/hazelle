@@ -147,6 +147,20 @@ describe("a turn with the bot's Lua", () => {
       await vi.waitFor(async () => expect((await fetchApi(calls[1]!.slice('/api/'.length))).status).toBe(404));
     }));
 
+  it("asks once per character before a script rewrites the card's background, and keeps the answer on the character", () =>
+    server.withSession(async (session) => {
+      const { chat } = await chatWith(session, `onButtonClick = async(function(id, data) setBackgroundEmbedding(id, data) end)`);
+      const character = session.store.get('chat', chat)!.value.character!;
+      const pressing = session.scripts.press(chat, { data: '<style>.a{}</style>' });
+      await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ chat, question: { kind: 'card' } }]);
+      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      await pressing;
+      expect(session.store.get('character', character)!.value).toMatchObject({ cardWrites: true, card: { background: '<style>.a{}</style>' } });
+      await session.scripts.press(chat, { data: '<style>.b{}</style>' });
+      expect(session.scripts.snapshot().questions).toEqual([]);
+      expect(session.store.get('character', character)!.value.card.background).toBe('<style>.b{}</style>');
+    }));
+
   it("tells the chat when the server turns its bot's model call away for coming too often", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `onOutput = async(function(id) setChatVar(id, 'made', LLM(id, { { role = 'user', content = 'sum' } }).result) end)`);

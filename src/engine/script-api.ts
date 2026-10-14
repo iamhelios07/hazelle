@@ -23,6 +23,9 @@ export type Host = {
   // The lorebook entries a prompt built now would hold, each as sent, while their tokens fit within the model's
   // context less reserve; all of them when reserve is no number, as Risu's sum then never passes its limit.
   lore(reserve: number | null): Promise<{ role: 'system' | 'user' | 'assistant'; text: string }[]>;
+  // Saves html as the chat's character's background (Risu's backgroundHTML), under the character's one answer; false
+  // when refused or not saved.
+  background(html: string, from: PackOwner, signal?: AbortSignal): Promise<boolean>;
 };
 
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
