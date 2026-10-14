@@ -19,7 +19,7 @@ import { openDatabase, serviceDb } from './db/service-db';
 import { chooseBucket } from './files/choose';
 import type { FrontendOptions } from './frontend-worker';
 import { fail, type Services } from './http';
-import { tokenBucket, visitorLimits } from './limits';
+import { tokenBucket, uploadBudget, visitorLimits } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshModelsDev } from './models-dev';
 import { reconcile } from './reconcile';
@@ -79,7 +79,7 @@ try {
 const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
 const db = serviceDb(raw);
-const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits() };
+const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() };
 const operatorAlerts = alerts(process.env.HAZELLE_ALERT_WEBHOOK || null);
 const local = localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? '');
 const outbound = pinnedOutbound(local);

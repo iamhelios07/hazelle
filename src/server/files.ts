@@ -16,37 +16,6 @@ const BUSY_RETRY_SECONDS = 5;
 // uploaded within this long is never released.
 const CLAIM_SETTLE_MS = 60 * 60 * 1000;
 
-export function uploadSlots(slots: number, waitMs: number) {
-  let free = slots;
-  const waiting: (() => void)[] = [];
-  return {
-    take: () =>
-      new Promise<boolean>((resolve) => {
-        if (free > 0) {
-          free--;
-          return resolve(true);
-        }
-        const enter = () => {
-          clearTimeout(timer);
-          resolve(true);
-        };
-        const timer = setTimeout(() => {
-          waiting.splice(waiting.indexOf(enter), 1);
-          resolve(false);
-        }, waitMs);
-        waiting.push(enter);
-      }),
-    give: () => {
-      const next = waiting.shift();
-      if (next) next();
-      else free++;
-    },
-  };
-}
-
-// One process holds every upload body in its memory until the bytes are on disk, so the count is this module's.
-const uploads = uploadSlots(8, 30_000);
-
 // Each account holds its own copy of a file under its incarnation, so nothing is shared between accounts and removing
 // one account's pictures races no one else. While its account lives, a file goes only through its sweep (below), whose
 // bytes wait out every backup and rewind that could still name it (migration 0010_file_removals).
@@ -86,16 +55,18 @@ files.put('/:id', canWrite, async (c) => {
   const id = c.req.param('id');
   if (!FILE_ID.test(id)) return fail(c, 400, 'bad-input');
   // The body is read before any refusal: one answered while it is still being sent reaches the browser as a dropped
-  // connection, which the client would wait out instead of taking the answer. A body refused for want of a slot is
-  // read and dropped, never held.
-  if (!(await uploads.take())) {
+  // connection, which the client would wait out instead of taking the answer. A body refused for want of room is
+  // read and dropped, never held. Its size is Content-Length: worker.ts refuses a chunked body before the route runs.
+  const size = Number(c.req.header('content-length') ?? 0);
+  const { uploads } = c.env.limits;
+  if (!(await uploads.take(size))) {
     await c.req.raw.body?.pipeTo(new WritableStream());
     return fail(c, 503, 'busy', { retryAfter: BUSY_RETRY_SECONDS });
   }
   try {
     return await publish(c, id);
   } finally {
-    uploads.give();
+    uploads.give(size);
   }
 });
 

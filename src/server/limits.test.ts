@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tokenBucket } from './limits';
+import { tokenBucket, uploadBudget } from './limits';
 
 const setup = (perMinute: number) => {
   let now = 0;
@@ -45,5 +45,24 @@ describe('the token bucket', () => {
     limiter.evict();
     expect(limiter.limit('recent').success).toBe(false);
     expect(burst('idle')).toBe(20);
+  });
+});
+
+describe('uploadBudget', () => {
+  it('holds bodies by their bytes, lets waiters in by arrival order as bytes free, and answers false once the wait runs out', async () => {
+    const budget = uploadBudget(10, 20);
+    expect(await Promise.all([budget.take(6), budget.take(4)])).toEqual([true, true]);
+    const big = budget.take(5);
+    const small = budget.take(1);
+    budget.give(4);
+    let entered = false;
+    void small.then(() => (entered = true));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(entered).toBe(false);
+    budget.give(6);
+    expect(await Promise.all([big, small])).toEqual([true, true]);
+    expect(await budget.take(5)).toBe(false);
+    budget.give(5);
+    expect(await budget.take(5)).toBe(true);
   });
 });

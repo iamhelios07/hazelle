@@ -11,7 +11,7 @@ import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
 import { sha256Hex, type Services } from './http';
-import { tokenBucket, visitorLimits } from './limits';
+import { tokenBucket, uploadBudget, visitorLimits } from './limits';
 import { reconcile } from './reconcile';
 import type { Upstream } from './relay';
 import { streamRegistry } from './stream-registry';
@@ -37,7 +37,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     streams: streamRegistry(streamStore(join(dir, 'streams.sqlite')), outbound),
     outbound,
     localProviders: new Set(),
-    limits: { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits() },
+    limits: { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() },
     backups: backups(dir, 3, alerts('https://alerts.test/hook'), async () => disk.freePercent),
   };
 

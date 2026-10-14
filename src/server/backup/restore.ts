@@ -16,7 +16,7 @@ import { diskBucket } from '../files/disk-bucket';
 import { takeBackFiles } from '../files/claims';
 import type { Services } from '../http';
 import { cancelRestore, leaveAccount, runRestore } from '../lifecycle';
-import { tokenBucket, visitorLimits } from '../limits';
+import { tokenBucket, uploadBudget, visitorLimits } from '../limits';
 import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { alerts } from '../alerts';
@@ -129,7 +129,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
     localProviders: new Set(),
-    limits: { calls: tokenBucket(1), botCalls: tokenBucket(1), visitors: visitorLimits() },
+    limits: { calls: tokenBucket(1), botCalls: tokenBucket(1), visitors: visitorLimits(), uploads: uploadBudget() },
     backups: backups(dataDir, 0, alerts(null)),
   };
   try {

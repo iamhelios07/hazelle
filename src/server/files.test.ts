@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RETENTION_MS } from './db/account-db';
 import type { SqlValue, Statement } from './db/service-db';
-import { fileBlocks, uploadSlots } from './files';
+import { fileBlocks } from './files';
+import { uploadBudget } from './limits';
 import type { Bucket } from './files/bucket';
 import { fakeS3 } from './files/fake-s3';
 import { r2Bucket } from './files/r2-bucket';
@@ -211,18 +212,9 @@ describe('files', () => {
     ]);
   });
 
-  it('lets a taker past the slots wait its turn, and answers false once the wait runs out', async () => {
-    const slots = uploadSlots(2, 20);
-    expect(await Promise.all([slots.take(), slots.take()])).toEqual([true, true]);
-    const third = slots.take();
-    slots.give();
-    expect(await third).toBe(true);
-    expect(await slots.take()).toBe(false);
-    slots.give();
-    expect(await slots.take()).toBe(true);
-  });
-
-  it('holds at most eight upload bodies at once: a ninth is not read until one of them ends', async () => {
+  it('holds upload bodies up to the budget: a ninth is not read until one of them ends', async () => {
+    const { uploads } = t.env.limits;
+    t.env.limits.uploads = uploadBudget(16);
     const jin = await signup();
     const bytes = Array.from({ length: 9 }, (_, index) => new Uint8Array([index, 42]));
     const ids = await Promise.all(bytes.map(idOf));
@@ -255,6 +247,7 @@ describe('files', () => {
     await vi.waitFor(() => expect(ends[waiting]).toBeDefined());
     ends.forEach((end, index) => index !== first && end());
     expect((await Promise.all(replies)).map(({ status }) => status)).toEqual(Array(9).fill(204));
+    t.env.limits.uploads = uploads;
   });
 
   it('answers an upload whose body ends after its account was deleted as every request of a deleted account', async () => {
