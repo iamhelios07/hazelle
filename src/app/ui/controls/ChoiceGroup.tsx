@@ -4,8 +4,8 @@ import { ChipButton } from './ChipButton';
 import styles from './ChoiceGroup.module.css';
 
 // mark: drawn before a chip's label, such as the color it names.
-// fit: a strip while it holds a few short options; more or longer ones, which a strip squeezes to a letter wide each,
-// open as a menu from a chip naming the choice.
+// menu: a chip naming the choice, which opens the options. fit: a strip while it holds a few short options; more or
+// longer ones, which a strip squeezes to a letter wide each, open as a menu.
 const STRIP = { options: 4, letters: 14 };
 
 type Props<T extends string> = {
@@ -14,15 +14,16 @@ type Props<T extends string> = {
   options: { value: T; label: string; sub?: string; mark?: ReactNode }[];
   value: T | null;
   onChange: (value: T) => void;
-  layout?: 'chips' | 'buttons' | 'segmented' | 'list' | 'fit';
+  layout?: 'chips' | 'buttons' | 'segmented' | 'list' | 'menu' | 'fit';
 };
 
 export function ChoiceGroup<T extends string>({ label, showLabel = false, options, value, onChange, layout = 'chips' }: Props<T>) {
   const id = useId();
   if (layout === 'fit') {
-    if (options.length <= STRIP.options && options.map((option) => option.label).join('').length <= STRIP.letters) {
-      return <ChoiceGroup label={label} showLabel={showLabel} options={options} value={value} onChange={onChange} layout="segmented" />;
-    }
+    const strip = options.length <= STRIP.options && options.map((option) => option.label).join('').length <= STRIP.letters;
+    return <ChoiceGroup label={label} showLabel={showLabel} options={options} value={value} onChange={onChange} layout={strip ? 'segmented' : 'menu'} />;
+  }
+  if (layout === 'menu') {
     return (
       <Menu label={label} place="below-end" trigger={(opener) => <ChipButton variant="field" label={options.find((option) => option.value === value)?.label ?? value ?? ''} title={label} {...opener} />}>
         {options.map((option) => (

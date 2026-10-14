@@ -62,7 +62,8 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 - **Nothing here** is `Empty`, a sentence: `{noun}이 없어요.` An empty list of one's own things offers its first step as `Empty action` (the head's own 새 X or X 가져오기). A failure to load is `Callout tone="warn"` with
   다시 시도. Loading is a note ending in `…`.
 - **Controls:** on/off is a `Switch`; one of several is `ChoiceGroup layout="fit"`, a segmented strip for up to
-  four short choices and a menu behind a field `ChipButton` past that; chips are for filters. Explanations go behind ⓘ (`help`), never as visible prose.
+  four short choices and a menu behind a field `ChipButton` past that (`layout="menu"` always, as a prompt's choice
+  toggle beside its name); chips are for filters. Explanations go behind ⓘ (`help`), never as visible prose.
 - **Focus rings are never cut.** The global ring sits `--focus-ring-reach` outside its element, and a box that scrolls or clips cuts whatever passes its padding. So a field (`surface` `field`, `SearchField`) and a row in a `List box` draw the ring inside, and a scrolling box with no padding of its own keeps that reach as padding, given back with a negative margin (`Dialog`'s body, `Sidebar`'s rail, `AskCard`'s choices). A new scrolling box does the same.
 - **Width:** settings pages are `page`, shaped for what each holds (`Panel`, `Columns`, `PickCard`, `Table`); item editors are `form`; a one-step flow (a key, a sign-in) is `narrow`.
 
@@ -112,7 +113,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `Button` (`ButtonSlot`, inside the kit only) | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner; the size a slot decides |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, shaped like a field for a setting, or borderless in the composer; with a leading icon or face |
-| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, a list with a line under each, or (fit) a strip that becomes a menu past four short options, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does; a chip may lead with a mark |
+| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, a list with a line under each, a menu from a field chip, or (fit) a strip that becomes that menu past four short options, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does; a chip may lead with a mark |
 | controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar; `compact` folds it to one line until focus goes inside |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` (`pickFiles`) | — | A `Button` that opens a file picker; `pickFiles` opens one from any press, such as a menu item |
