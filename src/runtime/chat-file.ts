@@ -22,6 +22,7 @@ export type ChatFile = {
   memory: Stored<'memory'> | null;
   illustrations: Stored<'illustration'>[];
   inlays: Stored<'inlay'>[];
+  lore: Stored<'lore'>[];
   pictures: Map<string, Uint8Array<ArrayBuffer>>;
 };
 export type ChatFileError = 'not-chat-file' | 'other-version';
@@ -46,6 +47,7 @@ export async function chatFile({ store, files }: Pick<Session, 'store' | 'files'
   const character = chat.value.character === null ? null : store.get('character', chat.value.character);
   const entries = [...store.children('entry', id)].sort(entryOrder).map((entry, index) => ({ ...row(entry), rev: index + 1 }));
   const memory = storedMemory(store, id);
+  const lore = store.children('lore', id).map(row);
   const pictures: Record<string, string> = {};
   const pictured: Stored<(typeof PICTURED)[number]>[] = [];
   for (const each of PICTURED.flatMap((kind) => store.children(kind, id))) {
@@ -58,11 +60,11 @@ export async function chatFile({ store, files }: Pick<Session, 'store' | 'files'
     }
     pictured.push(row(each));
   }
-  return { ok: true, data: JSON.stringify({ ...FORMAT, character: character && { id: character.id, name: character.value.card.name }, rows: [row(chat), ...entries, ...(memory ? [row(memory)] : []), ...pictured], pictures }) };
+  return { ok: true, data: JSON.stringify({ ...FORMAT, character: character && { id: character.id, name: character.value.card.name }, rows: [row(chat), ...entries, ...(memory ? [row(memory)] : []), ...pictured, ...lore], pictures }) };
 }
 
 // The file comes from outside: every row passes the backup's own check, and one that is not this chat's, or an
-// illustration or inlay whose picture the file lacks, refuses it. A file written before inlays has none.
+// illustration or inlay whose picture the file lacks, refuses it. A file written before inlays or 채팅 로어북 has none.
 export function readChatFile(json: unknown): { ok: true; file: ChatFile } | { ok: false; error: ChatFileError } {
   const refused = { ok: false, error: 'not-chat-file' } as const;
   if (!isRecord(json) || json.format !== FORMAT.format) return refused;
@@ -77,6 +79,7 @@ export function readChatFile(json: unknown): { ok: true; file: ChatFile } | { ok
   const entries: Stored<'entry'>[] = [];
   const illustrations: Stored<'illustration'>[] = [];
   const inlays: Stored<'inlay'>[] = [];
+  const lore: Stored<'lore'>[] = [];
   const bytes = new Map<string, Uint8Array<ArrayBuffer>>();
   let memory: Stored<'memory'> | null = null;
   for (const each of read) {
@@ -84,6 +87,7 @@ export function readChatFile(json: unknown): { ok: true; file: ChatFile } | { ok
     if (each.kind === 'chat') continue;
     if (each.parent !== chat.id) return refused;
     if (each.kind === 'entry') entries.push(row(each as Stored<'entry'>));
+    else if (each.kind === 'lore') lore.push(row(each as Stored<'lore'>));
     else if (each.kind === 'memory' && each.id === memoryId(chat.id) && !memory) memory = row(each as Stored<'memory'>);
     else if (each.kind === 'illustration' || each.kind === 'inlay') {
       const { file } = (each as Stored<(typeof PICTURED)[number]>).value;
@@ -95,5 +99,5 @@ export function readChatFile(json: unknown): { ok: true; file: ChatFile } | { ok
       else inlays.push(row(each as Stored<'inlay'>));
     } else return refused;
   }
-  return { ok: true, file: { character: character && { id: character.id as string, name: character.name as string }, chat, entries, memory, illustrations, inlays, pictures: bytes } };
+  return { ok: true, file: { character: character && { id: character.id as string, name: character.name as string }, chat, entries, memory, illustrations, inlays, lore, pictures: bytes } };
 }

@@ -180,10 +180,12 @@ export type RisuChat = {
   // The ids of Risu's inlay items its messages name (engine/import/risu-character inlayIds).
   inlays: string[];
   messages: RisuMessage[];
+  // Its own lorebook (채팅 로어북); folder indexes loreFolders, as Imported's does.
+  lore: LoreEntry[];
+  loreFolders: string[];
 };
 export const MOVE_UNSUPPORTED_KINDS = [
   'group-chat',
-  'chat-lore',
   'memory',
   'inlay',
   'chat-folder',

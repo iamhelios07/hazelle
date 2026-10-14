@@ -87,6 +87,16 @@ describe("a turn with the bot's Lua", () => {
       expect(prompt.parts.at(-1)).toMatchObject({ from: { kind: 'script' } });
     }));
 
+  it("sends what onStart wrote to the chat's own lorebook with this turn, and keeps it under the chat", () =>
+    server.withSession(async (session) => {
+      const { chat } = await chatWith(session, `function onStart(id) upsertLocalLoreBook(id, 'Gate', 'the gate is shut', { alwaysActive = true }) end`);
+      const log = stubRelay(() => saying('응'));
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      await expect.poll(() => log.length).toBe(1);
+      expect(JSON.stringify(log[0]!.sent.body)).toContain('the gate is shut');
+      expect(session.store.children('lore', chat).map(({ value }) => [value.name, value.content, value.constant])).toEqual([['Gate', 'the gate is shut', true]]);
+    }));
+
   it('ends the turn before any request on stopChat, keeping the message and what was written', () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `function onStart(id) setChatVar(id, 'handled', getChat(id, -1).data) stopChat(id) end`);

@@ -7,6 +7,7 @@ import type { ApiResult } from './api';
 import { markDeleted } from './removal';
 import { saveAssets, type Progress } from './characters';
 import type { Files } from './files';
+import { importedLore } from './lore';
 import type { StoredPrompt } from './prompts';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
@@ -18,13 +19,13 @@ export async function importModule(store: ObjectStore, files: Files, imported: I
   const stored = await saveAssets(files, imported.assets, progress);
   if (!stored.ok) return stored;
   const id = brought?.id ?? crypto.randomUUID();
-  const folders = imported.loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
+  const { folders, writes: lore } = importedLore(id, imported.lore, imported.loreFolders);
   const { name, description, namespace } = imported;
   const module: Module = { ...imported.pack, name, description, namespace, loreFolders: folders, ...(brought && { risu: brought.risu }) };
   const writes: Write[] = [
     { type: 'create', kind: 'module', id, parent: null, value: module },
     ...stored.data.kept.map((asset): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: id, value: asset })),
-    ...imported.lore.map((entry): Write => ({ type: 'create', kind: 'lore', id: crypto.randomUUID(), parent: id, value: { ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id } })),
+    ...lore,
     ...(imported.likeness ? [{ type: 'create' as const, kind: 'likeness' as const, id: likenessId(id), parent: id, value: { ...imported.likeness, receipt: null } }] : []),
   ];
   let done = 0;

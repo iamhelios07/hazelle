@@ -1,6 +1,7 @@
 import { LuaFactory, type LuaEngine } from 'wasmoon';
 import { runBlocks, type Blocks } from './blocks';
 import { ranked } from './similar';
+import { chatLorebook } from '../import/convert';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
 import { add, cbs, read, text, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
@@ -27,7 +28,6 @@ const TRIGGER_DEPTH = 10;
 const UNSUPPORTED = [
   'setChatRole', 'insertChat', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
   'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage', 'getBackgroundEmbedding', 'setBackgroundEmbedding',
-  'upsertLocalLoreBook',
 ];
 
 type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
@@ -66,7 +66,7 @@ export class Lua {
   async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
     const workset = this.hold(owner, 'event', triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
     try {
-      const run: Run & { host: Host } = { owner: null, quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false, triggerId: event.kind === 'call' ? event.id : '' };
+      const run: Run & { host: Host } = { owner: null, chat: owner, lore: new Map(), quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false, triggerId: event.kind === 'call' ? event.id : '' };
       const errors: ScriptError[] = [];
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
@@ -124,6 +124,7 @@ export class Lua {
         removed: snapshot.messages.flatMap((_, index) => (origins.has(index) ? [] : [index])),
         added: run.messages.filter((message) => message.origin === null).map(({ role, data }) => ({ role, text: data })),
         reload: run.reload,
+        lore: [...run.lore.values()],
         errors,
         missing: [...run.missing],
       };
@@ -175,7 +176,7 @@ export class Lua {
           const variables = new Map(session.variables);
           for (const [at, item] of items.entries()) {
             for (const [name, value] of item.variables) variables.set(name, value);
-            const run: Run = { owner: script.owner, quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false, triggerId: '' };
+            const run: Run = { owner: script.owner, chat: owner, lore: new Map(), quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false, triggerId: '' };
             engine.run = run;
             try {
               const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
@@ -360,14 +361,25 @@ export class Lua {
     // Risu's cbs takes no id before its text.
     engine.lua.global.set('cbs', (value: unknown) => (engine.run ? cbs(engine.run, text(value)) : undefined));
     // The entries of that name in the chat's lorebook, the modules' included, as Risu's own lore reads, each content
-    // with its CBS evaluated.
-    set('getLoreBooksMain', (run, search: unknown) =>
-      JSON.stringify(
-        run.snapshot.scope.lore
-          .filter(({ value }) => value.name === text(search))
-          .map(({ value }) => ({ key: value.keys.join(', '), secondkey: value.secondaryKeys.join(', '), comment: value.name, content: cbs(run, value.content), insertorder: value.insertionOrder, alwaysActive: value.constant, selective: value.selective, useRegex: value.useRegex, mode: 'normal' })),
-      ),
-    );
+    // with its CBS evaluated. The chat's own come first, as Risu lists them here, unlike the prompt's order; a write
+    // of this run takes the place of the chat's own of its name.
+    set('getLoreBooksMain', (run, search: unknown) => {
+      const name = text(search);
+      const named = run.snapshot.scope.lore.filter(({ value }) => value.name === name);
+      const written = run.lore.get(name);
+      const own = written ? [written] : named.filter(({ parent }) => parent === run.chat).map(({ value }) => value);
+      return JSON.stringify(
+        [...own, ...named.filter(({ parent }) => parent !== run.chat).map(({ value }) => value)]
+          .map((value) => ({ key: value.keys.join(', '), secondkey: value.secondaryKeys.join(', '), comment: value.name, content: cbs(run, value.content), insertorder: value.insertionOrder, alwaysActive: value.constant, selective: value.selective, useRegex: value.useRegex, mode: 'normal' })),
+      );
+    });
+    // The entry Risu's binding writes, read as the chat's own lorebook is, whose defaults for an option left out are
+    // Risu's (order 100, no keys, off).
+    act('upsertLocalLoreBook', (run, name: unknown, content: unknown, options: unknown) => {
+      const { alwaysActive, insertOrder, key, regex, secondKey } = (options ?? {}) as Record<string, unknown>;
+      const entry = chatLorebook([{ comment: text(name), content: text(content), insertorder: insertOrder, mode: 'normal', key, secondkey: secondKey, alwaysActive, selective: !!secondKey, useRegex: regex }]).lore[0]!;
+      run.lore.set(entry.name, entry);
+    });
     act('loadLoreBooksMain', (run, reserve: unknown) =>
       run.host.lore(typeof reserve === 'number' ? reserve : null).then((entries) => JSON.stringify((entries ?? []).map(({ role, text: data }) => ({ data, role: role === 'assistant' ? 'char' : role })))),
     );

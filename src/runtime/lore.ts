@@ -1,7 +1,9 @@
 import { DEFAULT_ORDER } from '../engine/import/convert';
+import type { LoreEntry } from '../engine/import/types';
 import type { Stored } from '../model/kinds';
-import type { Lore, LoreFolder, PackOwner } from '../model/library';
+import type { Lore, LoreFolder, LoreOwner } from '../model/library';
 import { allWritten, type ApiResult } from './api';
+import type { Write } from './object-writes';
 import type { ObjectStore } from './store';
 
 const newLore = (siblings: Lore[], folder: string | null): Lore => ({
@@ -32,15 +34,36 @@ export const editLore = (store: ObjectStore, id: string, patch: Partial<Lore>): 
 export const removeLore = (store: ObjectStore, id: string) => store.take('lore', id);
 export const restoreLore = (store: ObjectStore, removed: Stored<'lore'>) => store.restore(removed);
 
-function setFolders(store: ObjectStore, { kind, id }: PackOwner, change: (folders: LoreFolder[]) => LoreFolder[]): Promise<ApiResult<unknown>> {
-  return kind === 'character'
-    ? store.update('character', id, (current) => ({ ...current, loreFolders: change(current.loreFolders) }))
-    : store.update('module', id, (current) => ({ ...current, loreFolders: change(current.loreFolders) }));
+// A bot's write to the chat's own lorebook (upsertLocalLoreBook): it takes the place of every entry of its name there,
+// as Risu's does. Unlike Risu's, it keeps the first one's id and folder, so the entry stays where the user put it.
+export function upsertChatLore(store: ObjectStore, chat: string, entry: Omit<Lore, 'folder'>): Promise<ApiResult<null>> {
+  const [first, ...rest] = store.children('lore', chat).filter(({ value }) => value.name === entry.name);
+  return allWritten([
+    first ? store.update('lore', first.id, (current) => ({ ...entry, folder: current.folder })) : store.create('lore', { ...entry, folder: null }, { parent: chat }),
+    ...rest.map(({ id }) => store.take('lore', id)),
+  ]);
 }
 
-export const addLoreFolder = (store: ObjectStore, owner: PackOwner, name: string) => setFolders(store, owner, (folders) => [...folders, { id: crypto.randomUUID(), name }]);
+export function importedLore(owner: string, lore: LoreEntry[], names: string[]): { folders: LoreFolder[]; writes: Write[] } {
+  const folders = names.map((name) => ({ id: crypto.randomUUID(), name }));
+  const writes = lore.map((entry): Write => ({ type: 'create', kind: 'lore', id: crypto.randomUUID(), parent: owner, value: { ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id } }));
+  return { folders, writes };
+}
 
-export const renameLoreFolder = (store: ObjectStore, owner: PackOwner, folder: string, name: string) =>
+function setFolders(store: ObjectStore, { kind, id }: LoreOwner, change: (folders: LoreFolder[]) => LoreFolder[]): Promise<ApiResult<unknown>> {
+  switch (kind) {
+    case 'character':
+      return store.update('character', id, (current) => ({ ...current, loreFolders: change(current.loreFolders) }));
+    case 'module':
+      return store.update('module', id, (current) => ({ ...current, loreFolders: change(current.loreFolders) }));
+    case 'chat':
+      return store.update('chat', id, (current) => ({ ...current, loreFolders: change(current.loreFolders ?? []) }));
+  }
+}
+
+export const addLoreFolder = (store: ObjectStore, owner: LoreOwner, name: string) => setFolders(store, owner, (folders) => [...folders, { id: crypto.randomUUID(), name }]);
+
+export const renameLoreFolder = (store: ObjectStore, owner: LoreOwner, folder: string, name: string) =>
   setFolders(store, owner, (folders) => folders.map((each) => (each.id === folder ? { ...each, name } : each)));
 
 export type RemovedLoreFolder = { folder: LoreFolder; at: number; entries: string[] };
@@ -49,7 +72,7 @@ const place = (store: ObjectStore, entries: string[], folder: string | null) => 
 
 // Its entries move out of every folder as it goes. Both go at once: an entry left naming a gone folder sits in no
 // folder (model/lore loreGroups). null: the folder is gone.
-export function loreFolderRemoval(store: ObjectStore, owner: PackOwner, id: string): RemovedLoreFolder | null {
+export function loreFolderRemoval(store: ObjectStore, owner: LoreOwner, id: string): RemovedLoreFolder | null {
   const folders = store.get(owner.kind, owner.id)?.value.loreFolders ?? [];
   const at = folders.findIndex((each) => each.id === id);
   const folder = folders[at];
@@ -58,8 +81,8 @@ export function loreFolderRemoval(store: ObjectStore, owner: PackOwner, id: stri
   return { folder, at, entries };
 }
 
-export const removeLoreFolder = (store: ObjectStore, owner: PackOwner, { folder, entries }: RemovedLoreFolder) =>
+export const removeLoreFolder = (store: ObjectStore, owner: LoreOwner, { folder, entries }: RemovedLoreFolder) =>
   allWritten([place(store, entries, null), setFolders(store, owner, (folders) => folders.filter((each) => each.id !== folder.id))]);
 
-export const restoreLoreFolder = (store: ObjectStore, owner: PackOwner, { folder, at, entries }: RemovedLoreFolder) =>
+export const restoreLoreFolder = (store: ObjectStore, owner: LoreOwner, { folder, at, entries }: RemovedLoreFolder) =>
   allWritten([setFolders(store, owner, (folders) => folders.toSpliced(at, 0, folder)), place(store, entries, folder.id)]);

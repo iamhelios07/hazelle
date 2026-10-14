@@ -515,6 +515,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       branch,
       bookmark,
       bookmarks: () => flipPanel({ kind: 'bookmarks' }, ({ kind }) => kind === 'bookmarks'),
+      lore: () => flipPanel({ kind: 'lore' }, ({ kind }) => kind === 'lore'),
       showBookmark,
       renameBookmark,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),

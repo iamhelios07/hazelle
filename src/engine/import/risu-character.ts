@@ -1,7 +1,7 @@
 import { splitThoughts } from '../../connectors/thoughts';
 import { isRecord, list } from '../../connectors/values';
 import { assemble, imageType, type Resolve } from './card';
-import { add, convert, counted, record, text, type Json, type Tally } from './convert';
+import { add, chatLorebook, convert, counted, record, text, type Json, type Tally } from './convert';
 import { MOVE_UNSUPPORTED_KINDS, type MoveUnsupported, type MoveUnsupportedKind, type Picture, type RisuCharacter, type RisuChat } from './types';
 
 export type Read = () => Promise<Uint8Array<ArrayBuffer>>;
@@ -107,7 +107,6 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
   for (const [index, message] of messages.entries()) {
     if (index <= cut || message.disabled === true || message.isComment === true) add(missed, 'hidden-message');
   }
-  if (list(chat.localLore).length > 0) add(missed, 'chat-lore');
   if (text(chat.supaMemoryData).trim() || [chat.hypaV2Data, chat.hypaV3Data].some(holdsData)) add(missed, 'memory');
   const marked = new Set(list(chat.bookmarks).filter((id) => typeof id === 'string'));
   const names = record(chat.bookmarkNames);
@@ -120,6 +119,7 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
       key.startsWith('$') && value !== undefined ? [[key.slice(1), typeof value === 'string' ? value : JSON.stringify(value)]] : [],
     ),
     inlays: inlayIds(messageTexts(messages)),
+    ...chatLorebook(list(chat.localLore)),
     messages: messages.map((message) => {
       at = number(message.time) ?? at;
       // Risu keeps a reply's reasoning inside its text as <Thoughts> blocks, and takes them out again before it draws or

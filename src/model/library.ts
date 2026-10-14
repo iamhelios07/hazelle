@@ -1,4 +1,6 @@
 export type PackOwner = { kind: 'character' | 'module'; id: string };
+// A lorebook's owner: a pack's, or a chat's own (채팅 로어북), which owns no scripts, so PackOwner leaves it out.
+export type LoreOwner = { kind: PackOwner['kind'] | 'chat'; id: string };
 import type { FileRef } from '../vault/files';
 import type { Card, LoreEntry, Pack } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from './chat';

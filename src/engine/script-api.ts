@@ -1,5 +1,5 @@
 import type { EmbedPurpose } from '../connectors/types';
-import type { PackOwner } from '../model/library';
+import type { Lore, PackOwner } from '../model/library';
 import type { Trigger } from './import/types';
 
 export type ScriptUnit = Trigger & { owner: PackOwner };
@@ -48,7 +48,8 @@ export type Failure = { message: string } | { runaway: true };
 export type ScriptError = { script: string; from: PackOwner } & Failure;
 
 // index is a message's place in the snapshot. handled: some script had the function the event calls, or a block
-// trigger answered it. missing: the functions called and the block effects met that this app does not have.
+// trigger answered it. missing: the functions called and the block effects met that this app does not have. lore: the
+// entries the run wrote to the chat's own lorebook (upsertLocalLoreBook), each taking the place of those of its name.
 export type Outcome = {
   value: unknown;
   stop: boolean;
@@ -58,6 +59,7 @@ export type Outcome = {
   removed: number[];
   added: { role: 'user' | 'char'; text: string }[];
   reload: boolean;
+  lore: Omit<Lore, 'folder'>[];
   errors: ScriptError[];
   missing: string[];
 };

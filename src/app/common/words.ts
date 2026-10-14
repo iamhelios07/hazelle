@@ -119,6 +119,7 @@ export const RETRYING = '응답을 받지 못해서 다시 보내고 있어요.'
 export const RETRY_COUNT = '실패하면 다시 보내기';
 export const RETRY_HELP = '응답이 오기 전에 실패하면 이 횟수만큼 다시 보내요. 키나 요청이 잘못됐을 때는 바로 알려요.';
 export const LORE_BUDGET_LABEL = '로어북 최대 분량';
+export const CHAT_LORE = '채팅 로어북';
 
 // The mark on the default 설정 묶음 or prompt, left off where its name already says it, as the starter 묶음's 기본 does.
 export const defaultMark = (isDefault: boolean, name: string) => (isDefault && name.trim() !== '기본' ? '기본' : undefined);

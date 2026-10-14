@@ -13,6 +13,7 @@ import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
+import { ChatLore } from './ChatLore';
 import { ChatMemory } from './ChatMemory';
 import { ChatSearch } from './ChatSearch';
 import { ChatStatusPeek } from './ChatStatus';
@@ -75,6 +76,8 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
             id && <ChatMemory id={id} record={panel.record} chat={chat} />
           ) : panel?.kind === 'bookmarks' ? (
             id && <ChatBookmarks id={id} chat={chat} />
+          ) : panel?.kind === 'lore' ? (
+            id && <ChatLore id={id} onClose={actions.closePanel} />
           ) : panel?.kind === 'tool' ? (
             id && <ChatToolPanel key={panel.module} chat={id} module={panel.module} onClose={actions.closePanel} />
           ) : panel ? (

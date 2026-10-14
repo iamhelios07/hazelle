@@ -334,16 +334,20 @@ function lorebook(raws: unknown[], source: LoreSource): { lore: LoreEntry[]; lor
   return { lore, loreFolders };
 }
 
-const nativeLorebook = (entries: unknown[]) => lorebook(entries, RISU_LORE);
+const nativeLorebook = (entries: unknown[]) => lorebook(entries, risuLore(true));
+
+// A Risu chat's own lorebook (localLore), and an entry a bot writes to it. Never migrated: Risu's open-time migration
+// (characterFormatUpdate) runs over globalLore only, and these entries carry no bookVersion.
+export const chatLorebook = (entries: unknown[]) => lorebook(entries, risuLore(false));
 
 // Native module and backup lore share bookVersion: only version 1's activationPercent and old tag syntax migrate.
-const RISU_LORE: LoreSource = {
+const risuLore = (migrates: boolean): LoreSource => ({
   folderId: (raw) => text(raw.key),
   name: (raw) => text(raw.comment),
   entry: (raw) => ({
     keys: split(raw.key),
     secondaryKeys: split(raw.secondkey),
-    content: typeof raw.bookVersion === 'number' && raw.bookVersion >= 2 ? text(raw.content) : migrate(text(raw.content), raw.activationPercent),
+    content: !migrates || (typeof raw.bookVersion === 'number' && raw.bookVersion >= 2) ? text(raw.content) : migrate(text(raw.content), raw.activationPercent),
     // Risu's own lore has no enabled flag.
     enabled: true,
     constant: raw.alwaysActive === true,
@@ -354,7 +358,7 @@ const RISU_LORE: LoreSource = {
     priority: null,
     position: null,
   }),
-};
+});
 
 const BOOK_LORE: LoreSource = {
   folderId: (raw) => keys(raw.keys)[0] ?? '',

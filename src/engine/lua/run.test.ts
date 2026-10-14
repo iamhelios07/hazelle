@@ -202,6 +202,27 @@ describe('Lua runs', () => {
     expect(outcome).toMatchObject({ edits: [{ index: 0, text: 'hello!' }], removed: [1], added: [{ role: 'user', text: 'again' }, { role: 'char', text: 'new' }] });
   });
 
+  it("writes the chat's own lorebook by name with Risu's defaults, and reads its writes back in the same run", async () => {
+    const chat = 'lore-chat';
+    const own = { id: 'own', parent: chat, value: { ...SNAPSHOT.scope.lore[0]!.value, content: 'old' } };
+    const snapshot = { ...SNAPSHOT, scope: { ...SNAPSHOT.scope, lore: [...SNAPSHOT.scope.lore, own] } };
+    const code = `function onStart(id)
+      upsertLocalLoreBook(id, 'Gate', 'first', { alwaysActive = true })
+      upsertLocalLoreBook(id, 'Gate', 'new {{getvar::hp}}', { key = 'a, b', secondKey = 'c', regex = true })
+      upsertLocalLoreBook(id, 'Plain', 'plain')
+      local books = getLoreBooks(id, 'Gate')
+      setChatVar(id, 'gate', #books .. '|' .. books[1].content .. '|' .. books[2].content)
+    end`;
+    const outcome = await lua.run(chat, [{ owner: OWNER, kind: 'lua', name: 'main', code }], snapshot, { kind: 'start' }, host());
+    expect(outcome.errors).toEqual([]);
+    expect(new Map(outcome.writes)).toEqual(new Map([['gate', '2|new 10|hp 10']]));
+    const entry = { secondaryKeys: [], enabled: true, constant: false, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 100, priority: null, position: null, folder: null };
+    expect(outcome.lore).toEqual([
+      { ...entry, name: 'Gate', keys: ['a', 'b'], secondaryKeys: ['c'], content: 'new {{getvar::hp}}', selective: true, useRegex: true },
+      { ...entry, name: 'Plain', keys: [], content: 'plain' },
+    ]);
+  });
+
   it('gives a script no way out of the sandbox', async () => {
     const outcome = await run(
       `function onStart(id)

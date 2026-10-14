@@ -57,7 +57,7 @@ it('sends event history tails in order across edits, truncation, chat switches a
       if (message.kind !== 'run') return;
       this.history = applyTail(this.history, message.input.history);
       histories.push(this.history);
-      queueMicrotask(() => this.onmessage?.({ data: { kind: 'done', id: message.id, result: { value: undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, errors: [], missing: [] } } }));
+      queueMicrotask(() => this.onmessage?.({ data: { kind: 'done', id: message.id, result: { value: undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, lore: [], errors: [], missing: [] } } }));
     }
     terminate() {}
   });

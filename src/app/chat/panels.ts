@@ -4,7 +4,7 @@ import type { CharacterPart } from '../common/characterPart';
 
 // block: the prompt block the editor opens at, absent for its list.
 export type Side = { kind: 'prompts'; id: string | null; pane: 'toggles' | null; block?: string } | { kind: 'character'; id: string; part: CharacterPart | null };
-export type Panel = { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | Side;
+export type Panel = { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | Side;
 
 const isSide = (panel: Panel): panel is Side => panel.kind === 'prompts' || panel.kind === 'character';
 

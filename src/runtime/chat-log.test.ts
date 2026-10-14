@@ -12,6 +12,7 @@ import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
 import { evaluateChat } from './chat-context';
 import { saveToolChat, toolBadges, toolChatData } from './tools/store';
+import { addLore, addLoreFolder } from './lore';
 
 const server = testServer();
 
@@ -362,5 +363,34 @@ describe('importChat', () => {
     const copied = fold(entries)[1]!;
     await selectVersion(store, imported.data.id, copied.id, copied.versions[0]!.id);
     expect(texts(fold(store.children('entry', imported.data.id)))).toEqual(['하나', '둘', '셋']);
+  });
+});
+
+describe('채팅 로어북', () => {
+  it('goes with a chat file and a branch under the copy, in its folders', async () => {
+    const { store, files } = await server.account();
+    const id = crypto.randomUUID();
+    await server.hold(store, id);
+    await startChat(store, id, { title: '등대', character: null, models: {} }, null);
+    const message = crypto.randomUUID();
+    await appendUserMessage(store, id, { id: message, text: '안녕' });
+    await addLoreFolder(store, { kind: 'chat', id }, '장소');
+    const [folder] = store.get('chat', id)!.value.loreFolders!;
+    await addLore(store, id, folder!.id, crypto.randomUUID());
+    const lore = (chat: string) => [store.get('chat', chat)!.value.loreFolders, store.children('lore', chat).map(({ value }) => value)];
+
+    const written = await chatFile({ store, files }, id);
+    if (!written.ok) throw new Error(written.error);
+    const read = readChatFile(JSON.parse(written.data));
+    if (!read.ok) throw new Error(read.error);
+    const imported = await importChat({ store, files }, read.file, null);
+    if (!imported.ok) throw new Error(imported.error);
+    expect(lore(imported.data.id)).toEqual(lore(id));
+
+    const messages = fold(store.children('entry', id));
+    const item: ChatItem = { id, chat: store.get('chat', id)!.value, messages, count: messages.length, title: '등대', preview: '', at: null, order: 0 };
+    const branched = await branchChat(store, item, message);
+    if (!branched.ok) throw new Error(branched.error);
+    expect(lore(branched.data.id)).toEqual(lore(id));
   });
 });

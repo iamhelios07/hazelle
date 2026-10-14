@@ -12,11 +12,12 @@ import { isRecord } from '../connectors/values';
 import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, ScriptUnit, ToolEvent } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Writes } from '../model/chat';
-import type { ApiFailure } from './api';
+import { allWritten, type ApiFailure } from './api';
 import { chatModel, embedModel } from './assignment';
 import { countTexts, embedTexts } from './embed';
 import { memoryOwner } from './memory-read';
 import { appendScripted, appendUserMessage, keepCall, type Written } from './chat-log';
+import { upsertChatLore } from './lore';
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
@@ -421,6 +422,9 @@ export class Scripts {
     const added = adding.length ? { follows: latest ? shown(latest).id : null, messages: adding } : null;
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
     if (!saved.ok) this.interactions.note(chat, { kind: 'unsaved', failure: saved }, from);
+    // State, as variables are, so a stale reply's lands too.
+    const lore = await allWritten(outcome.lore.map((entry) => upsertChatLore(this.session.store, chat, entry)));
+    if (!lore.ok) this.interactions.note(chat, { kind: 'unsaved', failure: lore }, from);
     if (outcome.tool && from?.kind === 'module' && (outcome.tool.data.length || outcome.tool.badges.length)) {
       // A badge stands on the version shown when it lands. A delayed reply job's badges, as its edits, mark only its reply.
       const badges = outcome.tool.badges.flatMap(({ index, text }) => {
@@ -431,7 +435,7 @@ export class Scripts {
       if (!kept.ok) this.interactions.note(chat, { kind: 'unsaved', failure: kept }, from);
     }
     if (outcome.reload) this.session.display.stale(chat);
-    return { outcome, changed: edits.length + removed.length + adding.length > 0 };
+    return { outcome, changed: edits.length + removed.length + adding.length + outcome.lore.length > 0 };
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.

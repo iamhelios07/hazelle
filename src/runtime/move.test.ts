@@ -38,6 +38,8 @@ const luna: RisuCharacter = {
       greeting: 2,
       variables: [['hp', '7']],
       inlays: [],
+      lore: [],
+      loreFolders: [],
       messages: [
         { role: 'user', text: '안녕', at: 1 },
         { role: 'assistant', text: '반가워 [HP 7]', at: 2 },
@@ -267,6 +269,16 @@ describe('importRisuChats', () => {
     expect(imported.data.map((id) => store.get('chat', id)!.value.persona)).toEqual([current.ok && current.data.id, current.ok && current.data.id]);
     await server.hold(store, imported.data[0]!);
     expect(fold(store.children('entry', imported.data[0]!)).map((message) => [shown(message).text, shown(message).staged])).toEqual([['안녕', true], ['반가워 [HP 7]', true]]);
+  });
+
+  it('writes a chat\'s own lorebook under it, its folders on the chat', async () => {
+    const { store } = await server.account();
+    const entry = { name: '등대', keys: ['등대'], secondaryKeys: [], content: '불이 꺼졌다', enabled: true, constant: false, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 100, priority: null, position: null };
+    const imported = await importRisuChats(store, null, [{ ...luna.chats[0]!, lore: [{ ...entry, folder: 0 }], loreFolders: ['장소'] }]);
+    if (!imported.ok) throw new Error(imported.error);
+    const [folder] = store.get('chat', imported.data[0]!)!.value.loreFolders!;
+    expect(folder!.name).toBe('장소');
+    expect(store.children('lore', imported.data[0]!).map(({ value }) => value)).toEqual([{ ...entry, folder: folder!.id }]);
   });
 
   it("marks the messages Risu bookmarked, with the names it gave", async () => {

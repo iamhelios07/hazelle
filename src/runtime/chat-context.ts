@@ -66,6 +66,8 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
   const cast = (chat.cast ?? []).flatMap((member) => live(store.get('character', member)) ?? []);
   // A 등장인물's lorebook and pictures follow the packs', its pictures with no module namespace, as the character's own.
   const owners = [...packs, ...cast.map(({ id }) => ({ id, module: null }))];
+  // The lorebooks in Risu's order: the character's own, the chat's own (채팅 로어북), then the modules', then the cast's.
+  const loreOwners = [...packs.filter(({ module }) => !module), ...(id === null ? [] : [{ id }]), ...packs.filter(({ module }) => module), ...cast];
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
   const route = chatModel(store, chat, 'main');
@@ -78,11 +80,11 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : null,
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
-    lore: owners.flatMap(({ id: owner }) => store.children('lore', owner)),
+    lore: loreOwners.flatMap(({ id: owner }) => store.children('lore', owner)),
     loreBudget: loreBudgetOf(store),
     loreFolders: Object.fromEntries(
-      owners.flatMap(({ id }) => {
-        const folders = (store.get('character', id) ?? store.get('module', id))?.value.loreFolders ?? [];
+      loreOwners.flatMap(({ id }) => {
+        const folders = (store.get('character', id) ?? store.get('module', id) ?? store.get('chat', id))?.value.loreFolders ?? [];
         return folders.length > 0 ? [[id, folders.map(({ name }) => name)]] : [];
       }),
     ),
