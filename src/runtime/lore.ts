@@ -44,7 +44,6 @@ export function upsertChatLore(store: ObjectStore, chat: string, entry: Omit<Lor
   ]);
 }
 
-// An imported lorebook's entries as the owner's children, with its folders under new ids.
 export function importedLore(owner: string, lore: LoreEntry[], names: string[]): { folders: LoreFolder[]; writes: Write[] } {
   const folders = names.map((name) => ({ id: crypto.randomUUID(), name }));
   const writes = lore.map((entry): Write => ({ type: 'create', kind: 'lore', id: crypto.randomUUID(), parent: owner, value: { ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id } }));
