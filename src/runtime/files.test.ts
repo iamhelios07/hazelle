@@ -238,7 +238,7 @@ describe('the sweep', () => {
     const made = await importRisuChats(store, null, [{ title: 't', note: null, persona: null, greeting: 0, variables: [], inlays: [], messages: [{ role: 'user', text: 'hi', at: 1 }] }]);
     const chat = made.ok ? made.data[0]! : '';
     await server.hold(store, chat);
-    expect(await fillPictures(store, files, { kind: 'inlay', parent: chat }, [{ name: 'a', read: async () => png() }])).toMatchObject({ ok: true, data: { skipped: 0 } });
+    expect(await fillPictures(store, files, { kind: 'inlay', parent: chat }, [{ name: 'a', read: async () => png() }])).toMatchObject({ ok: true, data: { unsupported: [] } });
     const later = Date.now() + 2 * 60 * 60 * 1000;
     const settled = vi.spyOn(Date, 'now').mockImplementation(() => later);
     try {

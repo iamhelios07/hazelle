@@ -337,7 +337,7 @@ describe('readBackup', () => {
         risu: 'm1',
         pack: { regex: [{ id: 'regex-0', name: 'ring', find: 'ding', replace: 'dong', stage: 'display', flags: null }] },
         lore: [{ name: 'Bell', keys: ['bell'], content: 'It rings.', constant: true }],
-        unsupported: [{ kind: 'asset', count: 1 }],
+        unsupported: [{ kind: 'missing-asset', count: 1 }],
       },
     ]);
     expect(modules[0]!.assets.map(({ name }) => name)).toEqual(['bell']);

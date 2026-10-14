@@ -1,5 +1,5 @@
 import { writeCharx } from '../engine/import/card';
-import type { Bot, Imported, Profiles } from '../engine/import/types';
+import { type Bot, type Imported, mergeUnsupported, type Profiles, type Unsupported } from '../engine/import/types';
 import { zipWriter } from '../engine/import/zip';
 import { live, type LoreFolder } from '../model/library';
 import { likenessId } from '../model/likeness';
@@ -120,7 +120,7 @@ export async function exportCharacter(store: ObjectStore, files: Files, id: stri
 export async function importCardFile(store: ObjectStore, files: Files, imported: Imported, progress: Progress): Promise<ApiResult<ImportedCharacter>> {
   const here = new Map(store.list('module').flatMap(({ id, value }) => (value.deleted === undefined && value.risu !== undefined ? [[value.risu, id]] : [])));
   const on: string[] = [];
-  let skipped = 0;
+  const unsupported: Unsupported[] = [];
   for (const module of imported.bundled) {
     const found = module.risu === null ? undefined : (here.get(module.risu) ?? live(store.get('module', module.risu))?.id);
     if (found !== undefined) {
@@ -130,8 +130,8 @@ export async function importCardFile(store: ObjectStore, files: Files, imported:
     const saved = await importModule(store, files, module, progress, module.risu === null ? undefined : { id: crypto.randomUUID(), risu: module.risu });
     if (!saved.ok) return saved;
     on.push(saved.data.id);
-    skipped += saved.data.skipped;
+    unsupported.push(saved.data.unsupported);
   }
   const saved = await importCharacter(store, files, imported, imported.avatar, progress, undefined, on);
-  return saved.ok ? { ok: true, data: { ...saved.data, skipped: saved.data.skipped + skipped } } : saved;
+  return saved.ok ? { ok: true, data: { ...saved.data, unsupported: mergeUnsupported(saved.data.unsupported, ...unsupported) } } : saved;
 }

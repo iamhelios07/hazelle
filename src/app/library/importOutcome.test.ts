@@ -9,10 +9,10 @@ it('keeps completed card and module reports as detached text without asset reade
   if (!parsed.ok || !('card' in parsed)) throw new Error('fixture');
   const bytes = new Uint8Array([1, 2, 3]);
   const imported = { ...parsed.card, assets: [{ name: 'picture', read: async () => bytes }] };
-  const card = characterOutcome('card.charx', imported, { id: 'character', skipped: 1, faceless: true });
+  const card = characterOutcome('card.charx', imported, { id: 'character', unsupported: [{ kind: 'not-image', count: 1 }], faceless: true });
   const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: imported.card, lore: [], loreFolders: [], assets: imported.assets, unsupported: [] };
-  const report = moduleOutcome('bell.risum', module, 'module', 0, { at: null, failure: null });
-  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', placed: null, missed: ['이미지: 가져오지 못함', '에셋 1개'], unused: null });
+  const report = moduleOutcome('bell.risum', module, 'module', [], { at: null, failure: null });
+  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', placed: null, missed: ['이미지: 가져오지 못함', '이미지가 아닌 파일 1개'], unused: null });
   expect(report).toEqual({ kind: 'module', file: 'bell.risum', id: 'module', title: '모듈 · Bell', holds: '에셋 1개', placed: { text: '어디에도 켜지 않았어요. 설정 › 모듈에서 켤 수 있어요.', failed: false }, missed: [], unused: null });
   expect(structuredClone([card, report])).toEqual([card, report]);
   imported.card.name = 'Changed';
@@ -23,7 +23,7 @@ it('keeps completed card and module reports as detached text without asset reade
 
 it('says where a module was turned on, and that it was not when that failed', () => {
   const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: { regex: [], triggers: [], toggles: '' }, lore: [], loreFolders: [], assets: [], unsupported: [] };
-  const placed = (at: Placement['at'], failure: string | null = null) => moduleOutcome('bell.risum', module, 'module', 0, { at, failure }).placed;
+  const placed = (at: Placement['at'], failure: string | null = null) => moduleOutcome('bell.risum', module, 'module', [], { at, failure }).placed;
   expect([placed('character'), placed('prompt'), placed('always')].map((each) => each?.text)).toEqual(['이 캐릭터에 켰어요.', '이 프롬프트에 켰어요.', '항상 켰어요.']);
   expect(placed('character', '없어진 캐릭터예요.')).toEqual({ text: '이 캐릭터에 켜지 못했어요. 없어진 캐릭터예요.', failed: true });
 });

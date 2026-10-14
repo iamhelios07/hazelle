@@ -15,7 +15,7 @@ import { count as countText } from '../common/typedNumber';
 import { LORE_BUDGET_LABEL, moduleName } from '../common/words';
 import { useFiles, useStanding, useStore } from '../session';
 import { Button, Callout, Checkbox, Dialog, Outcome, Progress, Section, Stack, Text, type ProgressStep } from '../ui';
-import { cardMissed, moduleMissed, moveMissed } from './missed';
+import { cardMissed, missedLines, moveMissed } from './missed';
 import { hasModule, stepsOf, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
 
 const FAILURE: Record<BackupFailure['kind'], string> = {
@@ -293,12 +293,12 @@ function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
   const chats = moved.characters.reduce((sum, character) => sum + character.chats, 0);
   const missed = [
     ...moved.characters.flatMap((character) => {
-      const lines = [...cardMissed(character.report, character.skipped, character.faceless), ...moveMissed(character.missed)];
+      const lines = [...cardMissed(character.unsupported, character.faceless), ...moveMissed(character.missed)];
       return lines.length ? [{ tone: 'missed' as const, title: character.name, note: lines.join(' · ') }] : [];
     }),
     ...backup.presets.flatMap((preset) => (preset.failure === null ? [] : [{ tone: 'missed' as const, title: preset.name, note: `프롬프트 · ${PRESET_FAILURE[preset.failure]}` }])),
-    ...moved.modules.flatMap(({ name, unsupported, skipped }) => {
-      const lines = moduleMissed(unsupported, skipped);
+    ...moved.modules.flatMap(({ name, unsupported }) => {
+      const lines = missedLines(unsupported);
       return lines.length ? [{ tone: 'missed' as const, title: moduleName(name), note: `모듈 · ${lines.join(' · ')}` }] : [];
     }),
   ];

@@ -82,7 +82,7 @@ describe('importCard', () => {
       'assets/emotion/image/smile.png': png(),
     });
     expect(imported.avatar).toEqual({ bytes: main, type: 'image/png' });
-    expect(counts(imported)).toEqual({ asset: 2 });
+    expect(counts(imported)).toEqual({ 'extra-icon': 1, emotion: 1 });
   });
 
   it('reads a charx’s x-risu-asset files when asked, and counts the ones no file holds', async () => {
@@ -105,7 +105,7 @@ describe('importCard', () => {
       ['Smile.png', smile],
       ['lost', null],
     ]);
-    expect(counts(imported)).toEqual({ asset: 1 });
+    expect(counts(imported)).toEqual({ 'missing-asset': 1 });
   });
 
   it('reads a PNG’s v2 additionalAssets from its asset chunks', async () => {
@@ -248,7 +248,7 @@ describe('importCard', () => {
       },
       lore: [expect.objectContaining({ name: 'Phone', keys: ['phone'], content: 'It rings.', folder: null })],
       loreFolders: [],
-      unsupported: [{ kind: 'asset', count: 1 }],
+      unsupported: [{ kind: 'missing-asset', count: 1 }],
     });
     expect(await Promise.all(assets.map(async ({ name, read }) => [name, [...(await read())!]]))).toEqual([['wall', [1, 2, 3]], ['icon', [4]]]);
   });
@@ -298,7 +298,7 @@ describe('importCard', () => {
       { kind: 'blocks', id: 'trigger-1', name: 'set', on: 'manual', conditions: [], effects: [{ kind: 'set', name: '', operator: null, value: { kind: 'text', text: '' } }] },
     ]);
     expect(imported.report.unsupported).toEqual([
-      { kind: 'asset', count: 1 },
+      { kind: 'emotion', count: 1 },
       { kind: 'background-html', count: 1 },
       { kind: 'additional-text', count: 1 },
       { kind: 'prebuilt-asset-command', count: 1 },

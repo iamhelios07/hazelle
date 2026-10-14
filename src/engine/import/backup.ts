@@ -265,7 +265,7 @@ function risuModule(raw: Json, entry: Entry): ImportedModule {
     const key = Array.isArray(asset) ? text(asset[1]) : '';
     // Any key other than a Risu asset key points outside the backup.
     const read = key.startsWith('assets/') ? entry(key) : null;
-    if (!read) add(tally, 'asset');
+    if (!read) add(tally, 'missing-asset');
     return read ? [{ name: names[index]!, read }] : [];
   });
   return { ...module, assets, unsupported: counted(UNSUPPORTED_KINDS, tally) };

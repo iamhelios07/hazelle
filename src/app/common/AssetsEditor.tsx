@@ -1,3 +1,4 @@
+import { unsupportedCount } from '../../engine/import/types';
 import { ImageUp, type LucideIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { findAsset } from '../../engine/assets';
@@ -47,7 +48,8 @@ export function AssetsEditor({ owner }: { owner: string }) {
     const added = await addAssets(store, files, owner, picked);
     setAdding(false);
     if (!added.ok) return toast.failed(added, `${ASSET}을 추가하지 못했어요.`);
-    if (added.data.skipped) toast.error(`${added.data.skipped}개는 추가하지 못했어요.`, { detail: '이미지가 아니거나 너무 커요.' });
+    const refused = unsupportedCount(added.data.unsupported);
+    if (refused) toast.error(`${refused}개는 추가하지 못했어요.`, { detail: '이미지가 아니거나 너무 커요.' });
   }
 
   const dragging = useFileDrop((dropped) => void add(dropped), 'screen');

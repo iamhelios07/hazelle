@@ -1,4 +1,4 @@
-import type { ImportedModule, Profiles } from '../engine/import/types';
+import type { ImportedModule, Profiles, Unsupported } from '../engine/import/types';
 import { likenessId } from '../model/likeness';
 import type { Stored } from '../model/kinds';
 import type { Module } from '../model/library';
@@ -14,7 +14,7 @@ import type { Write } from './object-writes';
 // A module as the importer read it (design §6.5). Its pictures are stored first; then it is written with its lorebook,
 // assets and 삽화 profiles in one batch, itself last, so a module appears only once whole. brought: the id module files
 // name it by (a move from Risu's, or a charx bundling it) and the id it is saved at, which a move already turned on.
-export async function importModule(store: ObjectStore, files: Files, imported: ImportedModule & { likeness?: Profiles | null }, progress: Progress, brought?: { id: string; risu: string }): Promise<ApiResult<{ id: string; skipped: number }>> {
+export async function importModule(store: ObjectStore, files: Files, imported: ImportedModule & { likeness?: Profiles | null }, progress: Progress, brought?: { id: string; risu: string }): Promise<ApiResult<{ id: string; unsupported: Unsupported }>> {
   const stored = await saveAssets(files, imported.assets, progress);
   if (!stored.ok) return stored;
   const id = brought?.id ?? crypto.randomUUID();
@@ -30,7 +30,7 @@ export async function importModule(store: ObjectStore, files: Files, imported: I
   let done = 0;
   progress({ kind: 'saving', done, total: writes.length });
   const saved = await store.batch(writes, () => progress({ kind: 'saving', done: ++done, total: writes.length }));
-  return saved.ok ? { ok: true, data: { id, skipped: stored.data.skipped } } : saved;
+  return saved.ok ? { ok: true, data: { id, unsupported: stored.data.unsupported } } : saved;
 }
 
 export const modulesOf = (store: Pick<ObjectStore, 'list'>): Stored<'module'>[] =>

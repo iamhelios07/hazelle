@@ -70,7 +70,7 @@ function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   if (!read) return fail('unreadable', 'not a module');
   const tally: Tally = new Map();
   const { assets: names, ...module } = convertModule(read.module, tally);
-  add(tally, 'asset', Math.max(0, names.length - read.assets.length));
+  add(tally, 'missing-asset', Math.max(0, names.length - read.assets.length));
   const assets = read.assets.slice(0, names.length).map((block, index) => ({ name: names[index]!, read: async () => block() }));
   return { ok: true, module: { ...module, assets, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
 }
@@ -81,7 +81,7 @@ function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   // Risu's JSON export of a module, which names its pictures without holding them.
   if (isRecord(raw) && raw.type === 'risuModule') {
     const { assets, ...module } = convertModule(raw, tally);
-    add(tally, 'asset', assets.length);
+    add(tally, 'missing-asset', assets.length);
     return { ok: true, module: { ...module, assets: [], unsupported: counted(UNSUPPORTED_KINDS, tally) } };
   }
   const converted = convert(raw, null, tally);
@@ -95,7 +95,7 @@ const NOT_OWN: Owned = { own: null, bundled: [] };
 function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], holders: Holders, tally: Tally, { own, bundled }: Owned): ImportResult {
   const resolve: Resolve = (uri) => {
     const read = reader(uri, holders);
-    if (!read) add(tally, 'asset');
+    if (!read) add(tally, 'missing-asset');
     return read && (async () => read());
   };
   const modules = bundled.map((module) => ({ ...module, assets: located(module.assets, resolve) }));
@@ -140,12 +140,12 @@ function decode(text: string): Uint8Array<ArrayBuffer> | null {
 
 // CCv3's icon resolution: no icon or ccdefault: is the file's own image (the JPEG in front of a charx's zip),
 // embeded:// (the spec's spelling) a file in the charx, data: an inline image, as Risu's JSON export writes it.
-// An icon that cannot be read is counted as an asset.
+// An icon that cannot be read is counted as a missing asset, one that is not an image as not an image.
 function avatar(uri: string | null, own: Uint8Array<ArrayBuffer> | null, zip: Zip | null, tally: Tally): Imported['avatar'] {
   if (uri === null || uri === 'ccdefault:') return own?.length ? image(own, tally) : null;
   const bytes = uri.startsWith('embeded://') ? zip?.read(uri.slice('embeded://'.length)) : uri.startsWith('data:') ? dataUri(uri) : null;
   if (!bytes) {
-    add(tally, 'asset');
+    add(tally, 'missing-asset');
     return null;
   }
   return image(bytes, tally);
@@ -160,7 +160,7 @@ function dataUri(uri: string): Uint8Array<ArrayBuffer> | null {
 function image(bytes: Uint8Array<ArrayBuffer>, tally: Tally): Imported['avatar'] {
   const type = imageType(bytes);
   if (!type) {
-    add(tally, 'asset');
+    add(tally, 'not-image');
     return null;
   }
   return { bytes, type };

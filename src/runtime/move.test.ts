@@ -215,7 +215,7 @@ describe('moveFromRisu', () => {
     const characters = [{ ...luna, modules: ['risu-bell', 'risu-gone'] }];
     const backup = source({ characters, modules: [bell], alwaysModules: ['risu-bell', 'risu-gone'] });
     const moved = await moveFromRisu(store, files, backup, backup.catalog, null, () => {});
-    expect(moved).toMatchObject({ ok: true, data: { modules: [{ name: bell.name, unsupported: bell.unsupported, skipped: 1 }], characters: [{ risu: 'risu-luna' }] } });
+    expect(moved).toMatchObject({ ok: true, data: { modules: [{ name: bell.name, unsupported: [...bell.unsupported, { kind: 'not-image', count: 1 }] }], characters: [{ risu: 'risu-luna' }] } });
     const [module] = store.list('module');
     expect(module!.value).toMatchObject({ name: 'Bell', risu: 'risu-bell' });
     expect(store.children('asset', module!.id).map(({ value }) => value.name)).toEqual(['ring']);
@@ -237,7 +237,7 @@ describe('moveFromRisu', () => {
     const persona = (name: string): RisuPersona => ({ id: name, name, alias: '', description: '', picture: async () => null, module: embedded(name) });
     const backup = source({ characters: [], personas: [persona('진'), persona('솔')] });
     const moved = await moveFromRisu(store, files, backup, backup.catalog, null, () => {});
-    expect(moved).toMatchObject({ ok: true, data: { personas: 2, modules: [{ name: '진', unsupported: [{ kind: 'mcp', count: 1 }] }, { name: '솔' }] } });
+    expect(moved).toMatchObject({ ok: true, data: { personas: 2, modules: [{ name: '진', unsupported: [{ kind: 'not-image', count: 1 }, { kind: 'mcp', count: 1 }] }, { name: '솔' }] } });
     const modules = new Map(store.list('module').map(({ id, value }) => [value.name, { id, value }]));
     expect(modules.size).toBe(2);
     expect(modules.get('진')!.value).not.toHaveProperty('risu');
@@ -291,7 +291,7 @@ describe('fillPictures', () => {
       { name: 'wave', read: async () => png() },
       { name: 'notes', read: async () => randomBytes(8) },
     ];
-    expect(await fillPictures(store, files, { kind: 'asset', parent: id }, assets)).toMatchObject({ ok: true, data: { kept: [{ name: 'wave' }], skipped: 1 } });
+    expect(await fillPictures(store, files, { kind: 'asset', parent: id }, assets)).toMatchObject({ ok: true, data: { kept: [{ name: 'wave' }], unsupported: [{ kind: 'not-image', count: 1 }] } });
     expect(store.children('asset', id).map(({ value }) => value.name).sort()).toEqual(['smile', 'wave']);
     expect(store.children('asset', id).find(({ value }) => value.name === 'smile')).toEqual(smile);
   });

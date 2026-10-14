@@ -77,8 +77,16 @@ export function convert(raw: unknown, module: Json | null, tally: Tally, nativeL
     spec === 'v3'
       ? listed.filter((asset): asset is Json => isRecord(asset) && asset.type === 'x-risu-asset').map((asset) => ({ name: text(asset.name), uri: text(asset.uri) }))
       : list(risu.additionalAssets).filter(Array.isArray).map(([name, uri]) => ({ name: text(name), uri: text(uri) }));
-  add(tally, 'asset', listed.length - (icon ? 1 : 0) - (spec === 'v3' ? assets.length : 0));
-  if (spec === 'v2') add(tally, 'asset', list(risu.emotions).length + Object.keys(record(risu.vits)).length);
+  for (const asset of listed) {
+    if (asset === icon) continue;
+    const type = isRecord(asset) ? asset.type : undefined;
+    if (type === 'x-risu-asset') continue;
+    add(tally, type === 'icon' ? 'extra-icon' : type === 'emotion' ? 'emotion' : type === 'background' ? 'background' : 'other-asset');
+  }
+  if (spec === 'v2') {
+    add(tally, 'emotion', list(risu.emotions).length);
+    add(tally, 'voice', Object.keys(record(risu.vits)).length);
+  }
   const pack = packOf({ regex: module ? module.regex : risu.customScripts, trigger: module ? module.trigger : risu.triggerscript, background: risu.backgroundHTML, toggles: risu.toggles }, tally);
   if (text(risu.additionalText).trim()) add(tally, 'additional-text');
   if (risu.prebuiltAssetCommand === true) add(tally, 'prebuilt-asset-command');

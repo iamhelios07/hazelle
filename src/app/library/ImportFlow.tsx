@@ -2,7 +2,7 @@ import { importTool, undoToolImport } from '../../runtime/tools/store';
 import { useToast } from '../toast';
 import { Check, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ImportFailure } from '../../engine/import/types';
+import { mergeUnsupported, type ImportFailure } from '../../engine/import/types';
 import { characterTexts, live } from '../../model/library';
 import { EMPTY_SETTINGS } from '../../model/settings';
 import { importCardFile } from '../../runtime/card-file';
@@ -23,7 +23,7 @@ import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
 import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Menu, MenuItem, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
 import { characterOutcome, chatOutcome, moduleOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
-import { assetsMissed, chatMissed, moveMissed } from './missed';
+import { missedLines, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
 import { MoveFlow } from './MoveFlow';
 import { stepOf } from './saving';
@@ -171,7 +171,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         if (!saved.ok) return unsaved(file.name, saved);
         const placed = place && (await setModuleAt(store, place, saved.data.id, true));
         const failure = placed && !placed.ok ? describeFailure(placed) : null;
-        return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.skipped, { at: place?.kind ?? null, failure });
+        return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.unsupported, { at: place?.kind ?? null, failure });
       }
       const { name } = parsed.card.card;
       const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
@@ -179,7 +179,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         progress(stepOf({ kind: 'picture' }));
         const filled = await fillPictures(store, files, { kind: 'asset', parent: match }, parsed.card.assets);
         if (!filled.ok) return unsaved(file.name, filled);
-        return { kind: 'filled', file: file.name, name, kept: filled.data.kept.length, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
+        return { kind: 'filled', file: file.name, name, kept: filled.data.kept.length, missed: missedLines(mergeUnsupported(parsed.card.report.unsupported, filled.data.unsupported)) };
       }
       const saved = await importCardFile(store, files, parsed.card, (step) => progress(stepOf(step)));
       if (!saved.ok) return unsaved(file.name, saved);

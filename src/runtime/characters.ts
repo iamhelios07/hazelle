@@ -1,5 +1,6 @@
 import { blankCard, imageType } from '../engine/import/card';
-import type { Card, Imported, Pack, Picture } from '../engine/import/types';
+import { add, counted, type Tally } from '../engine/import/convert';
+import { UNSUPPORTED_KINDS, type Card, type Imported, type Pack, type Picture, type Unsupported } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { IllustrateSwitches } from '../model/illustration';
 import type { Stored, Values } from '../model/kinds';
@@ -44,20 +45,21 @@ export async function addCharacter(store: ObjectStore, character: Character, { a
   return result.ok ? { ok: true, data: id } : result;
 }
 
-// skipped: assets not kept, as not a picture this app reads or too large to store.
+// unsupported: the assets not kept, counted by why (engine/import types), the parser's own counts apart.
 // Both import entrances use faceless for thumbnail failures and refused uploads, not absent source pictures.
-export type ImportedCharacter = { id: string; skipped: number; faceless: boolean };
+export type ImportedCharacter = { id: string; unsupported: Unsupported; faceless: boolean };
 
 // typeOf: what a kept file is, null for one not kept; an inlay alone also keeps a signature (engine/import inlayType).
-export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress, typeOf: (bytes: Uint8Array) => string | null = imageType): Promise<ApiResult<{ kept: Asset[]; skipped: number }>> {
+export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress, typeOf: (bytes: Uint8Array) => string | null = imageType): Promise<ApiResult<{ kept: Asset[]; unsupported: Unsupported }>> {
   const kept: Asset[] = [];
-  let skipped = 0;
+  const tally: Tally = new Map();
   for (let start = 0; start < assets.length; start += FILE_WINDOW) {
     progress({ kind: 'assets', done: start, total: assets.length });
     const window = await Promise.all(assets.slice(start, start + FILE_WINDOW).map(async ({ name, read }) => ({ name, bytes: await read() })));
     const read = window.flatMap(({ name, bytes }) => {
       const type = bytes && typeOf(bytes);
-      if (!type) skipped++;
+      if (!bytes) add(tally, 'missing-asset');
+      else if (!type) add(tally, 'not-image');
       return type ? [{ name, type, bytes: bytes! }] : [];
     });
     const saved = await files.save(read.map(({ bytes }) => bytes));
@@ -65,11 +67,11 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
     read.forEach(({ name, type, bytes }, index) => {
       const file = saved.data[index];
       if (file) kept.push({ name, type, size: bytes.length, file });
-      else skipped++;
+      else add(tally, 'refused-picture');
     });
   }
   if (assets.length) progress({ kind: 'assets', done: assets.length, total: assets.length });
-  return { ok: true, data: { kept, skipped } };
+  return { ok: true, data: { kept, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
 }
 
 // A picture whose thumbnail cannot be made, and one the server refuses: too large, blocked, or past the account's
@@ -98,16 +100,16 @@ export async function setAvatar(store: ObjectStore, files: Files, id: string, by
 }
 
 // owner: the character or module the pictures join, each named by its file's name without the extension.
-export async function addAssets(store: ObjectStore, files: Files, owner: string, picked: Pick<File, 'name' | 'arrayBuffer'>[]): Promise<ApiResult<{ added: number; skipped: number }>> {
+export async function addAssets(store: ObjectStore, files: Files, owner: string, picked: Pick<File, 'name' | 'arrayBuffer'>[]): Promise<ApiResult<{ added: number; unsupported: Unsupported }>> {
   const assets = picked.map((file) => ({ name: file.name.replace(/\.[^.]+$/, '') || file.name, read: async () => new Uint8Array(await file.arrayBuffer()) }));
   const saved = await saveAssets(files, assets, () => {});
   if (!saved.ok) return saved;
-  const { kept, skipped } = saved.data;
+  const { kept, unsupported } = saved.data;
   if (kept.length) {
     const written = await store.batch(kept.map((asset): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: owner, value: asset })));
     if (!written.ok) return written;
   }
-  return { ok: true, data: { added: kept.length, skipped } };
+  return { ok: true, data: { added: kept.length, unsupported } };
 }
 
 // The name stays, so what the bot's text shows by it becomes the new picture. The old file stays held, as for setAvatar.
@@ -153,14 +155,14 @@ export async function importCharacter(
   }
   const stored = await saveAssets(files, assets, progress);
   if (!stored.ok) return stored;
-  const { kept, skipped } = stored.data;
+  const { kept, unsupported } = stored.data;
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const entries = lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id }));
   const on = brought?.modules ?? modules;
   const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...own?.character, ...(brought && { risu: brought.risu }), ...(on.length > 0 && { modules: on }) };
   const likeness = own?.likeness ? { ...own.likeness, receipt: null } : null;
   const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries, likeness }, progress, brought && { id: brought.id, chats: brought.chats });
-  return added.ok ? { ok: true, data: { id: added.data, skipped, faceless: picture !== null && avatar === null } } : added;
+  return added.ok ? { ok: true, data: { id: added.data, unsupported, faceless: picture !== null && avatar === null } } : added;
 }
 
 // 사본 만들기: chats stay with the original, and so does the alias, which tells the two apart. The copy names the same

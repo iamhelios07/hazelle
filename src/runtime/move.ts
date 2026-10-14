@@ -2,7 +2,7 @@ import { SIGNATURE } from '../engine/assets';
 import { fileSource, inlayType, readInlays, type Inlays } from '../engine/import/backup';
 import { counted } from '../engine/import/convert';
 import { inlayIds } from '../engine/import/risu-character';
-import { MOVE_UNSUPPORTED_KINDS, type BackupCatalog, type Card, type Imported, type ImportReport, type MoveUnsupported, type RisuBackup, type RisuChat } from '../engine/import/types';
+import { mergeUnsupported, MOVE_UNSUPPORTED_KINDS, unsupportedCount, type BackupCatalog, type Card, type Imported, type MoveUnsupported, type RisuBackup, type RisuChat, type Unsupported } from '../engine/import/types';
 import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';
 import type { Asset } from '../model/library';
@@ -24,9 +24,10 @@ import type { Write } from './object-writes';
 
 export type MovePick = Pick<BackupCatalog, 'characters' | 'personas' | 'presets' | 'modules'>;
 export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules' | 'pictures'; done: number; total: number };
-// risu: its Risu chaId. skipped as in runtime/characters ImportedCharacter; faceless also when the picture did not read.
-export type MovedCharacter = { id: string; risu: string; name: string; chats: number; skipped: number; faceless: boolean; report: ImportReport; missed: MoveUnsupported[]; unused: Unused[] };
-export type MovedModule = { name: string; unsupported: ImportReport['unsupported']; skipped: number };
+// risu: its Risu chaId. unsupported: the parser's and the store's counts together (runtime/characters ImportedCharacter);
+// faceless also when the picture did not read.
+export type MovedCharacter = { id: string; risu: string; name: string; chats: number; unsupported: Unsupported; faceless: boolean; missed: MoveUnsupported[]; unused: Unused[] };
+export type MovedModule = { name: string; unsupported: Unsupported };
 // loreBudget: the 로어북 최대 분량 this move set from Risu's; null when it set none.
 export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[]; loreBudget: number | null };
 
@@ -80,7 +81,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     if (persona.module) {
       const imported = await importModule(store, files, persona.module, () => {});
       if (!imported.ok) return imported;
-      movedModules.push({ name: persona.module.name, unsupported: persona.module.unsupported, skipped: imported.data.skipped });
+      movedModules.push({ name: persona.module.name, unsupported: mergeUnsupported(persona.module.unsupported, imported.data.unsupported) });
       modules.push(imported.data.id);
     }
     const saved = await addPersona(store, { name: persona.name, description: persona.description, picture: thumb, ...(persona.alias && { alias: persona.alias }), ...(modules.length > 0 && { modules }) });
@@ -111,7 +112,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     const saved = await importModule(store, files, module, uploading, module.risu === null ? undefined : { id, risu: module.risu });
     if (!saved.ok) return saved;
     picturesDone += module.assets.length;
-    movedModules.push({ name: module.name, unsupported: module.unsupported, skipped: saved.data.skipped });
+    movedModules.push({ name: module.name, unsupported: mergeUnsupported(module.unsupported, saved.data.unsupported) });
     if (module.risu !== null) moduleIds.set(module.risu, saved.data.id);
     if (module.namespace !== null) namespaces.set(module.namespace, saved.data.id);
   }
@@ -171,15 +172,15 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
           const filled = await fillPictures(store, files, { kind: 'inlay', parent: chats[index]!.root.id }, inlays.assets(ids), uploading);
           if (!filled.ok) return filled;
           picturesDone += ids.length;
-          inlaysMissed += filled.data.skipped;
+          inlaysMissed += unsupportedCount(filled.data.unsupported);
         }
         return null;
       },
     });
     if (failure) return failure;
-    const { skipped, faceless } = saved!;
+    const { unsupported, faceless } = saved!;
     const missed = counted(MOVE_UNSUPPORTED_KINDS, new Map([...character.missed.map(({ kind, count }) => [kind, count] as const), ['inlay', inlaysMissed]]));
-    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed, unused: unused(character.card) });
+    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, unsupported: mergeUnsupported(character.report.unsupported, unsupported), faceless, missed, unused: unused(character.card) });
   }
   if (due.length) landed('characters', due.length, due.length);
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules, loreBudget } };
@@ -224,9 +225,9 @@ export const risuMatch = (store: ObjectStore, name: string): string | null =>
 // the chat: the caller holds it, from before reading what it has to after the write.
 export type Holder = { kind: 'asset' | 'inlay'; parent: string };
 
-// Only the names the holder does not have yet, so the same pictures given twice add nothing; skipped as in
-// runtime/characters ImportedCharacter, so a name it had is neither kept nor skipped.
-export async function fillPictures(store: ObjectStore, files: Files, { kind, parent }: Holder, assets: Imported['assets'], progress: Progress = () => {}): Promise<ApiResult<{ kept: Asset[]; skipped: number }>> {
+// Only the names the holder does not have yet, so the same pictures given twice add nothing; unsupported as in
+// runtime/characters ImportedCharacter, so a name it had is neither kept nor counted.
+export async function fillPictures(store: ObjectStore, files: Files, { kind, parent }: Holder, assets: Imported['assets'], progress: Progress = () => {}): Promise<ApiResult<{ kept: Asset[]; unsupported: Unsupported }>> {
   if (!store.get(kind === 'asset' ? 'character' : 'chat', parent)) return { ok: false, error: 'gone' };
   const had = new Set(store.children(kind, parent).map(({ value }) => value.name));
   const saved = await saveAssets(files, assets.filter(({ name }) => !had.has(name)), progress, kind === 'inlay' ? inlayType : undefined);
@@ -269,7 +270,7 @@ export function fillInlays(store: ObjectStore, files: Files, inlays: Inlays, pro
         const saved = await fillPictures(store, files, { kind: 'inlay', parent: chat }, inlays.assets(ids));
         if (!saved.ok) return saved;
         filled.pictures += saved.data.kept.filter(({ type }) => type !== SIGNATURE).length;
-        filled.missed += saved.data.skipped;
+        filled.missed += unsupportedCount(saved.data.unsupported);
         return { ok: true, data: null };
       }, { signal, summarize: false });
       if (!result.ok) return result;

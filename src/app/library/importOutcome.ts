@@ -1,13 +1,13 @@
 import type { ToolManifest } from '../../tool-api/manifest';
 import type { ToolImport } from '../../runtime/tools/store';
-import type { Imported, ImportedModule } from '../../engine/import/types';
+import { mergeUnsupported, unsupportedCount, type Imported, type ImportedModule, type Unsupported } from '../../engine/import/types';
 import { unused } from '../../engine/pipeline';
 import type { ImportedCharacter } from '../../runtime/characters';
 import type { ModulePlace } from '../../runtime/modules';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
 import { ALWAYS, inSettings, NO_CHARACTER, SCRIPTS, TOOL, toolVersion } from '../common/words';
-import { cardMissed, moduleMissed } from './missed';
+import { cardMissed, missedLines } from './missed';
 
 // Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
 // when the file held several.
@@ -17,7 +17,7 @@ export type Placement = { at: ModulePlace['kind'] | null; failure: string | null
 
 const PLACES: Record<ModulePlace['kind'], string> = { character: '이 캐릭터에', prompt: '이 프롬프트에', persona: '이 페르소나에', always: ALWAYS };
 
-export function characterOutcome(file: string, imported: Imported, { id, skipped, faceless }: ImportedCharacter): ImportOutcome {
+export function characterOutcome(file: string, imported: Imported, { id, unsupported, faceless }: ImportedCharacter): ImportOutcome {
   const { card, lore, assets, report } = imported;
   const holds = [
     `첫인사 ${card.greetings.length}개`,
@@ -25,17 +25,17 @@ export function characterOutcome(file: string, imported: Imported, { id, skipped
     card.regex.length > 0 && `${SCRIPTS.regex} ${card.regex.length}개`,
     card.variables.length > 0 && `기본 변수 ${card.variables.length}개`,
     card.toggles.trim() && '토글',
-    assets.length - skipped > 0 && `에셋 ${assets.length - skipped}개`,
+    assets.length - unsupportedCount(unsupported) > 0 && `에셋 ${assets.length - unsupportedCount(unsupported)}개`,
   ].filter(Boolean).join(' · ');
-  return { kind: 'character', file, id, title: card.name, holds, placed: null, missed: cardMissed(report, skipped, faceless), unused: describeUnused(unused(card)) };
+  return { kind: 'character', file, id, title: card.name, holds, placed: null, missed: cardMissed(mergeUnsupported(report.unsupported, unsupported), faceless), unused: describeUnused(unused(card)) };
 }
 
-export function moduleOutcome(file: string, module: ImportedModule, id: string, skipped: number, placement: Placement): ImportOutcome {
+export function moduleOutcome(file: string, module: ImportedModule, id: string, unsupported: Unsupported, placement: Placement): ImportOutcome {
   return {
     kind: 'module', file, id, title: `모듈 · ${module.name}`,
-    holds: packHolds(module.pack, module.lore.length, module.assets.length - skipped),
+    holds: packHolds(module.pack, module.lore.length, module.assets.length - unsupportedCount(unsupported)),
     placed: modulePlacement(placement),
-    missed: moduleMissed(module.unsupported, skipped), unused: null,
+    missed: missedLines(mergeUnsupported(module.unsupported, unsupported)), unused: null,
   };
 }
 

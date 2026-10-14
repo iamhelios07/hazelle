@@ -99,8 +99,17 @@ export type Bot = {
   bundled: (Omit<BundledModule, 'assets' | 'unsupported'> & { assets: Typed[] })[];
 };
 
+// The asset kinds say why a listed asset was not kept. 'refused-picture' is counted where pictures are stored
+// (runtime/characters saveAssets), the rest by the parsers.
 export const UNSUPPORTED_KINDS = [
-  'asset',
+  'extra-icon',
+  'emotion',
+  'background',
+  'voice',
+  'other-asset',
+  'missing-asset',
+  'not-image',
+  'refused-picture',
   'background-html',
   'additional-text',
   'prebuilt-asset-command',
@@ -119,8 +128,17 @@ export type UnsupportedKind = (typeof UNSUPPORTED_KINDS)[number];
 export type ImportReport = {
   format: 'png' | 'charx' | 'json';
   spec: 'v1' | 'v2' | 'v3';
-  unsupported: { kind: UnsupportedKind; count: number }[];
+  unsupported: Unsupported;
 };
+export type Unsupported = { kind: UnsupportedKind; count: number }[];
+
+// Summed by kind, in UNSUPPORTED_KINDS order, zero counts left out.
+export function mergeUnsupported(...lists: Unsupported[]): Unsupported {
+  const totals = new Map<UnsupportedKind, number>();
+  for (const { kind, count } of lists.flat()) totals.set(kind, (totals.get(kind) ?? 0) + count);
+  return UNSUPPORTED_KINDS.flatMap((kind) => (totals.get(kind) ? [{ kind, count: totals.get(kind)! }] : []));
+}
+export const unsupportedCount = (unsupported: Unsupported) => unsupported.reduce((sum, { count }) => sum + count, 0);
 
 // line: the declaration a tool file was refused for, as written.
 export type ImportFailure = { kind: 'unknown-format' | 'encrypted' | 'unreadable'; detail?: string; line?: string };

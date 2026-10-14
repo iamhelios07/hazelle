@@ -64,7 +64,7 @@ describe('importCharacter', () => {
     ];
     const steps: string[] = [];
     const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, image, (step) => steps.push(step.kind));
-    expect(saved).toMatchObject({ ok: true, data: { skipped: 2, faceless: false } });
+    expect(saved).toMatchObject({ ok: true, data: { unsupported: [{ kind: 'missing-asset', count: 1 }, { kind: 'not-image', count: 1 }], faceless: false } });
     const id = saved.ok ? saved.data.id : '';
     const stored = store.children('asset', id).map(({ value }) => value);
     expect(stored.map(({ name, type, size }) => [name, type, size])).toEqual([
@@ -92,7 +92,7 @@ describe('importCharacter', () => {
       { name: 'smile', read: async () => kept },
     ];
     const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, null, () => {});
-    expect(saved).toMatchObject({ ok: true, data: { skipped: 2 } });
+    expect(saved).toMatchObject({ ok: true, data: { unsupported: [{ kind: 'refused-picture', count: 2 }] } });
     expect(store.children('asset', saved.ok ? saved.data.id : '').map(({ value }) => value.name)).toEqual(['smile']);
   });
 
@@ -167,7 +167,7 @@ describe('addAssets', () => {
     const imported = await importCharacter(store, files, { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] }, null, () => {});
     const id = imported.ok ? imported.data.id : '';
     const smile = png();
-    expect(await addAssets(store, files, id, [new File([smile], 'smile.happy.png'), new File([randomBytes(16)], 'notes.txt')])).toEqual({ ok: true, data: { added: 1, skipped: 1 } });
+    expect(await addAssets(store, files, id, [new File([smile], 'smile.happy.png'), new File([randomBytes(16)], 'notes.txt')])).toEqual({ ok: true, data: { added: 1, unsupported: [{ kind: 'not-image', count: 1 }] } });
     const [asset, ...more] = store.children('asset', id);
     expect(more).toEqual([]);
     expect(asset!.value).toMatchObject({ name: 'smile.happy', type: 'image/png', size: smile.length });

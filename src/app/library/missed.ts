@@ -1,9 +1,16 @@
-import type { ImportReport, MoveUnsupported, MoveUnsupportedKind, UnsupportedKind } from '../../engine/import/types';
+import type { MoveUnsupported, MoveUnsupportedKind, Unsupported, UnsupportedKind } from '../../engine/import/types';
 import type { Dropped } from '../../runtime/chat-log';
 import { CAST, COMMAND } from '../common/words';
 
 const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
-  asset: (count) => `에셋 ${count}개`,
+  'extra-icon': (count) => `추가 아이콘 ${count}개`,
+  emotion: (count) => `감정 표현 ${count}개`,
+  background: (count) => `배경 이미지 ${count}개`,
+  voice: (count) => `음성 ${count}개`,
+  'other-asset': (count) => `그 밖의 에셋 ${count}개`,
+  'missing-asset': (count) => `파일에 없는 에셋 ${count}개`,
+  'not-image': (count) => `이미지가 아닌 파일 ${count}개`,
+  'refused-picture': (count) => `올리지 못한 이미지 ${count}개`,
   'background-html': () => '배경 HTML의 스타일 외 내용',
   'additional-text': () => '추가 설명(임베딩)',
   'prebuilt-asset-command': () => '에셋 명령',
@@ -29,19 +36,9 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
   'missing-picture': (count) => `백업에 없는 이미지 ${count}개`,
 };
 
-type Unsupported = ImportReport['unsupported'];
+export const missedLines = (unsupported: Unsupported): string[] => unsupported.map((item) => UNSUPPORTED[item.kind](item.count));
 
-function assets(unsupported: Unsupported, skipped: number): string[] {
-  const count = (unsupported.find((item) => item.kind === 'asset')?.count ?? 0) + skipped;
-  return count ? [UNSUPPORTED.asset(count)] : [];
-}
-export const assetsMissed = (report: ImportReport, skipped: number) => assets(report.unsupported, skipped);
-
-export function moduleMissed(unsupported: Unsupported, skipped: number): string[] {
-  return [...unsupported.filter((item) => item.kind !== 'asset').map((item) => UNSUPPORTED[item.kind](item.count)), ...assets(unsupported, skipped)];
-}
-
-export const cardMissed = (report: ImportReport, skipped: number, faceless: boolean): string[] => [...(faceless ? ['이미지: 가져오지 못함'] : []), ...moduleMissed(report.unsupported, skipped)];
+export const cardMissed = (unsupported: Unsupported, faceless: boolean): string[] => [...(faceless ? ['이미지: 가져오지 못함'] : []), ...missedLines(unsupported)];
 
 export const moveMissed = (items: MoveUnsupported[]): string[] => items.map((item) => MOVE_UNSUPPORTED[item.kind](item.count));
 
