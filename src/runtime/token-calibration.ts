@@ -45,24 +45,27 @@ export function tokenProjection(calibration: CallCalibration, usage: ReportedUsa
   };
 }
 
-function observations(calls: Counted[]): (Observation & { id: string })[] {
-  const observations: (Observation & { id: string })[] = [];
+type Evidence = Omit<Observation, 'input'> & { input: number | null; id: string };
+const learn = (index: Calibration, event: Evidence) => event.input === null ? index.invalidate(event.key, event.chat, event.at) : index.observe({ ...event, input: event.input });
+
+function observations(calls: Counted[]): Evidence[] {
+  const observations: Evidence[] = [];
   for (const { call, chat } of calls) {
     const calibration = call.calibration;
     if (!calibration) continue;
     const add = (measurement: InputMeasurement, input: number | null, id: string) => {
-      if (measurement.kind !== 'measured' || measurement.pictures > 0 || input === null || input <= 0 || measurement.o200k <= 0) return;
+      if (measurement.kind !== 'measured' || measurement.pictures > 0 || (input !== null && input <= 0) || measurement.o200k <= 0) return;
       observations.push({ id, key: measurement.key, chat, at: measurement.at, fingerprint: measurement.fingerprint, input, denominator: measurement.o200k });
     };
     if (calibration.refusal) add(calibration.measurement, calibration.refusal.actual, call.id);
-    if (calibration.eligible) add(calibration.measurement, call.usage?.inputTokens ?? null, call.id);
+    if (calibration.eligible && call.usage?.inputTokens != null) add(calibration.measurement, call.usage.inputTokens, call.id);
     calibration.retries.forEach((retry, index) => add(retry.measurement, retry.actual, `${call.id}:${index}`));
   }
   return observations.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
 }
 
 export class Tokens {
-  private events: (Observation & { id: string })[] = [];
+  private events: Evidence[] = [];
   private index = new Calibration();
   private timeline: string | null = null;
   constructor(private readonly usage: Usage) {}
@@ -77,7 +80,7 @@ export class Tokens {
     // A late sync or timeline restore replays instead of merging nonlinear robust states.
     const prefix = this.events.length <= events.length && this.events.every((event, index) => JSON.stringify(event) === JSON.stringify(events[index]));
     if (!prefix) this.index = new Calibration();
-    for (const event of events.slice(prefix ? this.events.length : 0)) this.index.observe(event);
+    for (const event of events.slice(prefix ? this.events.length : 0)) learn(this.index, event);
     this.events = events;
     const resolved = resolveConnection(route.connection.value);
     if (!resolved) return { ok: false, error: 'calibration-route' };
@@ -97,23 +100,26 @@ export class TokenSnapshot {
   readonly retries: CallCalibration['retries'] = [];
   fit: TokenFit;
   private readonly index = new Calibration();
-  constructor(readonly key: string, private readonly chat: string, private readonly limits: TokenLimits, events: Observation[], estimate: ReturnType<Calibration['estimate']>) {
-    for (const event of events) this.index.observe(event);
+  constructor(readonly key: string, private readonly chat: string, private readonly limits: TokenLimits, events: Evidence[], estimate: ReturnType<Calibration['estimate']>) {
+    for (const event of events) learn(this.index, event);
     this.fit = fitLimits(limits, estimate);
   }
 
   refused(refusal: ContextRefusal, measurement: InputMeasurement): TokenFit | null {
     if (this.retries.length >= 2 || measurement.kind !== 'measured' || measurement.o200k <= 0) return null;
     const previous = Math.min(this.fit.allowance ?? measurement.o200k, measurement.o200k);
+    if (refusal.actual === null && measurement.pictures === 0) this.index.invalidate(this.key, this.chat, measurement.at);
     if (refusal.actual !== null && measurement.pictures === 0) this.index.observe({ key: this.key, chat: this.chat, at: measurement.at, fingerprint: measurement.fingerprint, input: refusal.actual, denominator: measurement.o200k });
     const limits = refusal.maximum === null ? this.limits : { ...this.limits, hard: Math.min(this.limits.hard ?? Infinity, refusal.maximum) };
     const learned = fitLimits(limits, this.index.estimate(this.key, this.chat, Date.now()));
     // With no exact input count, a refusal gives no finite upper ratio. Two geometric cuts halve room each time,
-    // covering up to a fourfold miss; the cap prevents an unbounded loop and a terminal refusal remains truthful.
-    const allowance = Math.min(previous - 1, refusal.actual === null ? Math.floor(previous / 2) : learned.allowance ?? Math.floor(previous / 2));
+    // bracketing a fourfold miss (the global prior upper/centre is about 2.87), not guaranteeing an unknown route.
+    // The cap prevents an unbounded loop and a terminal refusal remains truthful.
+    const shrink = Math.floor(previous / 2);
+    const allowance = Math.min(previous - 1, learned.allowance ?? shrink, refusal.actual === null ? shrink : Infinity);
     if (allowance < 0) return null;
     this.retries.push({ measurement, actual: refusal.actual, maximum: refusal.maximum, allowance, at: Date.now() });
-    this.fit = { ...learned, bound: refusal.actual === null ? 'refusal' : learned.bound, allowance, multiplier: learned.inputLimit === null ? null : learned.inputLimit / Math.max(allowance, 1) };
+    this.fit = { ...learned, bound: allowance === learned.allowance ? learned.bound : 'refusal', allowance, multiplier: learned.inputLimit === null ? null : learned.inputLimit / Math.max(allowance, 1) };
     return this.fit;
   }
 }

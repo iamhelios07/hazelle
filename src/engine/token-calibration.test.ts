@@ -76,3 +76,18 @@ it('fits the smaller native allowance after output reservation and never scales 
   expect(fitLimits({ hard: null, user: null, output: 100 }, estimate).allowance).toBeNull();
   expect(fitLimits({ hard: 1000, user: 2000, output: 100 }, estimate).bound).toBe('hard-upper');
 });
+
+
+it('invalidates learned confidence on a censored refusal without making it an exact observation or changing an unseen prior', () => {
+  const calibration = new Calibration();
+  calibration.invalidate('route', 'chat', 0);
+  expect(calibration.estimate('route', 'chat', 0)).toMatchObject({ source: 'prior', cold: true, evidence: 0 });
+  for (let i = 0; i < 32; i++) calibration.observe(observation(i, 130));
+  const before = calibration.estimate('route', 'chat', 32);
+  calibration.invalidate('route', 'chat', 32);
+  const refused = calibration.estimate('route', 'chat', 32);
+  expect(refused).toMatchObject({ source: 'drift-reset', cold: false, evidence: 0 });
+  expect(refused.upper).toBeGreaterThan(before.upper);
+  calibration.observe(observation(33, 130));
+  expect(calibration.estimate('route', 'chat', 33).evidence).toBeCloseTo(1);
+});

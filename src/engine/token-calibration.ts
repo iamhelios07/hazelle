@@ -101,6 +101,24 @@ export class Calibration {
     }
   }
 
+  invalidate(key: string, chat: string | null, at: number) {
+    const model = this.models.get(key);
+    if (!model) return;
+    model.last = '';
+    if (chat === null) {
+      model.stats = { ...emptyMoments(), at, step: model.step };
+      for (const local of model.chats.values()) local.contribution = { ...emptyMoments(), at, step: model.step };
+      return;
+    }
+    const local = model.chats.get(chat);
+    if (!local) return;
+    // A count-free refusal removes confidence, not an invented ratio or the last valid high-count guard.
+    local.stats = { ...emptyMoments(), at, step: local.stats.step };
+    local.pending = null;
+    local.last = '';
+    local.reset = true;
+  }
+
   estimate(key: string, chat: string | null, at: number): TokenEstimate {
     const model = this.models.get(key);
     if (!model) return { ...centres(posterior(GLOBAL_PRIOR, emptyMoments())), source: 'prior', evidence: 0, cold: true };

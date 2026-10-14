@@ -34,3 +34,15 @@ it('refits from exact refusal counts, or halves room without inventing a count, 
   expect(unknown.refused({ actual: null, maximum: null }, measurement)).toBeNull();
   expect(unknown.retries.map(({ actual }) => actual)).toEqual([null, null]);
 });
+
+
+it('keeps a count-free retry inside the newly widened hard bound after invalidating confidence', () => {
+  const at = Date.now();
+  const event = { id: 'call', key: 'route', chat: 'chat', at, fingerprint: 'old', input: 150, denominator: 100 };
+  const index = new Calibration();
+  index.observe(event);
+  const snapshot = new TokenSnapshot('route', 'chat', { hard: 1000, user: null, output: 100 }, [event], index.estimate('route', 'chat', at));
+  const fit = snapshot.refused({ actual: null, maximum: null }, { ...measurement, at, o200k: 500 });
+  expect(fit).toMatchObject({ source: 'drift-reset', evidence: 0, bound: 'hard-upper' });
+  expect(fit!.allowance).toBeLessThan(250);
+});
