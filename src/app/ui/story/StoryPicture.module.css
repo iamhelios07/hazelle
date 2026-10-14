@@ -10,6 +10,7 @@
 .frame {
   --grown: min(max(100%, var(--picture-grow, 100%)), calc(var(--story-illustration-most) * var(--ratio)));
 
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -58,6 +59,19 @@
   background: var(--color-surface);
   color: var(--color-text-muted);
   font: var(--text-sm) / var(--leading-tight) var(--font-sans);
+  cursor: pointer;
+}
+
+.cover {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-8);
+  padding: var(--space-2) var(--space-8);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: var(--text-xs) / var(--leading-tight) var(--font-sans);
   cursor: pointer;
 }
 

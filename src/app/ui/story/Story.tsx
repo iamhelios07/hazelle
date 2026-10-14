@@ -35,6 +35,8 @@ const OPEN = 'data-open';
 const PICTURES = Symbol('pictures');
 // Named in Story.shadow.css. Holds the source of the picture it stands in for.
 const VEILED = 'data-veiled';
+// Named in Story.shadow.css. Holds the source of the picture tapped open that it covers again.
+const COVER = 'data-cover';
 // Named in Story.shadow.css and in engine/assets.ts (inlayMissing), whose mark stands where a chat's inlay is missing.
 const INLAY_MISSING = 'data-inlay-missing';
 const pictureKey = (picture: Element) => `${picture.getAttribute(PICTURE)}:${picture.querySelector('img')!.getAttribute('src')}`;
@@ -117,6 +119,15 @@ function veilFor(source: string): HTMLButtonElement {
   return button;
 }
 
+function coverFor(source: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute(COVER, source);
+  button.setAttribute('aria-label', '이미지 가리기');
+  button.textContent = '가리기';
+  return button;
+}
+
 // The one mark inlaid left: a paragraph of its own becomes the slot, a mark inside the bot's HTML gives the slot its
 // place; a mark the sanitizer took leaves the slot at the end.
 function placeInlay(fragment: DocumentFragment, mark: string | null) {
@@ -156,6 +167,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
       link.setAttribute('rel', 'noopener noreferrer');
     }
   }
+  const revealed: Element[] = [];
   for (const element of fragment.querySelectorAll('[src], [srcset]')) {
     const source = element.getAttribute('src') ?? '';
     const own = OWN_SOURCE.test(source);
@@ -165,6 +177,8 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
       element.remove();
     } else if (veil && !veil.revealed.has(source)) {
       element.replaceWith(veilFor(source));
+    } else if (veil) {
+      revealed.push(element);
     }
     element.removeAttribute('srcset');
   }
@@ -200,6 +214,8 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
     slot.name = 'cursor';
     at.append(slot);
   }
+  // Last: a control inside a picture's line would cost it its data-picture, and the cursor would go into the control.
+  for (const picture of revealed) picture.after(coverFor(picture.getAttribute('src')!));
   return fragment;
 }
 
@@ -207,8 +223,8 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
 export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlay }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
   const veil = useVeil();
-  // A tapped veil changes only veil.revealed, which no render sees.
-  const [reveals, reveal] = useReducer((count: number) => count + 1, 0);
+  // A veil tapped open or shut changes only veil.revealed, which no render sees.
+  const [veilTaps, tapVeil] = useReducer((count: number) => count + 1, 0);
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
 
@@ -224,7 +240,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     // After the cursor, which would otherwise go into the slot.
     if (placed) placeInlay(fragment, mark);
     root().replaceChildren(fragment);
-  }, [html, cursor, pictures, veil, reveals, whole, placed, mark, math]);
+  }, [html, cursor, pictures, veil, veilTaps, whole, placed, mark, math]);
 
   // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
   useEffect(() => {
@@ -236,7 +252,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     return () => {
       for (const range of ranges) lit.delete(range);
     };
-  }, [html, cursor, pictures, veil, reveals, term, placed, mark, math]);
+  }, [html, cursor, pictures, veil, veilTaps, term, placed, mark, math]);
 
   useLayoutEffect(() => {
     if (!base) (base = new CSSStyleSheet()).replaceSync(shadowCss);
@@ -251,7 +267,15 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
       const veiled = (event.target as Element).closest(`[${VEILED}]`);
       if (veiled && veil) {
         veil.revealed.add(veiled.getAttribute(VEILED)!);
-        reveal();
+        tapVeil();
+        event.preventDefault();
+        return;
+      }
+      // Before the picture's line, which holds it and would fold instead.
+      const cover = (event.target as Element).closest(`[${COVER}]`);
+      if (cover && veil) {
+        veil.revealed.delete(cover.getAttribute(COVER)!);
+        tapVeil();
         event.preventDefault();
         return;
       }

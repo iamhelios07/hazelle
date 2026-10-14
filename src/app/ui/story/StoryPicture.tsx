@@ -15,8 +15,8 @@ type Props = {
 
 export function StoryPicture({ src, label, width, height, status, foot }: Props) {
   const veil = useVeil();
-  // A tapped veil changes only veil.revealed, which no render sees.
-  const [, reveal] = useReducer((count: number) => count + 1, 0);
+  // A veil tapped open or shut changes only veil.revealed, which no render sees.
+  const [, tapVeil] = useReducer((count: number) => count + 1, 0);
   const veiled = veil !== null && src !== undefined && !veil.revealed.has(src);
   return (
     <figure className={styles.picture}>
@@ -29,13 +29,30 @@ export function StoryPicture({ src, label, width, height, status, foot }: Props)
             className={styles.veil}
             onClick={() => {
               veil.revealed.add(src);
-              reveal();
+              tapVeil();
             }}
           >
             이미지 보기
           </button>
         ) : (
-          src && <img className={styles.image} src={src} alt={label} />
+          src && (
+            <>
+              <img className={styles.image} src={src} alt={label} />
+              {veil && (
+                <button
+                  type="button"
+                  className={styles.cover}
+                  aria-label="이미지 가리기"
+                  onClick={() => {
+                    veil.revealed.delete(src);
+                    tapVeil();
+                  }}
+                >
+                  가리기
+                </button>
+              )}
+            </>
+          )
         )}
       </div>
       {foot && <figcaption className={styles.foot}>{foot}</figcaption>}
