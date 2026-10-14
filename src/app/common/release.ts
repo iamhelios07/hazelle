@@ -8,6 +8,18 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.3',
+    date: '2026-10-15',
+    lines: [
+      '채팅마다 로어북을 둘 수 있어요. 채팅 메뉴의 채팅 로어북에서 보고, 봇 스크립트가 적은 항목도 여기 모여요.',
+      '캐릭터 편집 › 로어북에서 이 캐릭터만의 로어북 최대 분량을 정할 수 있어요. 비우면 설정의 공용 값을 따라요.',
+      '첫인사의 언어·설정 패널이 첫 응답 뒤에도 계속 살아 있어요.',
+      '무거운 봇의 스크립트가 더 많이 돌아요. 메시지 끼워 넣기와 잘라내기, 배경 HTML 바꾸기까지 돼요.',
+      'RisuAI가 모듈로 내보낸 charx 파일을 모듈로 가져와요.',
+      '봇 화면의 고정 상자가 메시지 밖으로 튀지 않고 제자리에 그려져요. iPad에서 파일 선택도 고쳤어요.',
+    ],
+  },
+  {
     version: 'v0.2.2',
     date: '2026-10-14',
     lines: [
