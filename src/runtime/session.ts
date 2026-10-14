@@ -54,7 +54,7 @@ export type Session = {
   credentials: Credentials;
   catalogs: Catalogs;
   read: ReadModels;
-  // Every way out of an open vault (잠그기, 로그아웃) unmounts app/shell/Workspace, which calls it.
+  // Every way out of an open vault (잠그기, 로그아웃) and every restore the store hears end it (app/shell/Workspace).
   close: () => void;
   startBackground: () => void;
 };
@@ -62,20 +62,23 @@ export type Session = {
 // Its worker starts, and the VM loads, when a chat's bot first runs Lua, never with the page.
 const luaWorker = (): Promise<LuaRunner> => Promise.resolve(new LuaWorker());
 
-// An open given up while it loads (signal) starts nothing. A cached opening never waits for the network.
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), bindings: { lua?: () => Promise<LuaRunner>; tools?: typeof createTools } = {}): Promise<ApiResult<Session>> {
-  const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
-  if (signal.aborted) {
+// An open given up while it loads (signal) starts nothing. A cached opening never waits for the network. drafts: what
+// was typed, kept by the caller across the sessions of one open vault (app/shell/Workspace).
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), bindings: { lua?: () => Promise<LuaRunner>; tools?: typeof createTools; drafts?: Drafts } = {}): Promise<ApiResult<Session>> {
+  const opening = async () => {
+    const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
+    const pulled = signal.aborted ? { ok: false as const, error: 'stopped' as const } : store.cached ? null : await store.pull({ signal, progress });
+    if (!pulled) return { ok: true as const, data: store };
+    // A store that heard a restore as it opened has ended (ObjectStore.rewind); the next one bootstraps the restored
+    // account once the device copy let go.
+    if (pulled.error === 'timeline-changed') await new Promise((resolve) => store.subscribeRewound(resolve));
     store.close();
-    return { ok: false, error: 'stopped' };
-  }
-  if (!store.cached) {
-    const pulled = await store.pull({ signal, progress });
-    if (pulled) {
-      store.close();
-      return pulled;
-    }
-  }
+    return pulled;
+  };
+  let opened = await opening();
+  if (!opened.ok && opened.error === 'timeline-changed') opened = await opening();
+  if (!opened.ok) return opened;
+  const store = opened.data;
   const files = new Files(api, store);
   const assets = new AssetUrls(store, files);
   // A new account sees its defaults on the first screen; a cached account fills missing defaults after catch-up.
@@ -91,7 +94,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const costs = new Costs(store);
   const usage = new Usage(store);
   const tokens = new Tokens(usage);
-  const drafts = new Drafts();
+  const drafts = bindings.drafts ?? new Drafts();
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
   let runner: Promise<LuaRunner> | null = null;
@@ -165,7 +168,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     memory.close();
     illustrator.close();
     likenesses.close();
-    drafts.close();
     costs.close();
     usage.close();
     tokens.clear();

@@ -22,8 +22,6 @@ export class ObjectIndex {
 
   get(id: string): Held | undefined { return this.live.get(id); }
 
-  values(): IterableIterator<Held> { return this.live.values(); }
-
   ids(kind: string, parent?: string): ReadonlySet<string> | undefined {
     return parent === undefined ? this.byKind.get(kind) : this.byParent.get(parent)?.get(kind);
   }

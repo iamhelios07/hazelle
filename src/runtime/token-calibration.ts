@@ -67,17 +67,13 @@ function observations(calls: Counted[]): Evidence[] {
 export class Tokens {
   private events: Evidence[] = [];
   private index = new Calibration();
-  private timeline: string | null = null;
   constructor(private readonly usage: Usage) {}
 
   async snapshot(route: Route, settings: ModelSettings, limits: TokenLimits, chat: string, signal: AbortSignal): Promise<ApiResult<TokenSnapshot>> {
     const read = await this.usage.read(signal);
     if (!read.ok) { this.clear(); return read; }
-    const timeline = this.usage.calibrationTimeline();
-    if (this.timeline !== timeline) this.clear();
-    this.timeline = timeline;
     const events = observations(this.usage.calibrationRows());
-    // A late sync or timeline restore replays instead of merging nonlinear robust states.
+    // A late sync replays instead of merging nonlinear robust states.
     const prefix = this.events.length <= events.length && this.events.every((event, index) => JSON.stringify(event) === JSON.stringify(events[index]));
     if (!prefix) this.index = new Calibration();
     for (const event of events.slice(prefix ? this.events.length : 0)) learn(this.index, event);
@@ -91,7 +87,7 @@ export class Tokens {
     return { ok: true, data: new TokenSnapshot(key, chat, limits, this.events.filter((event) => event.key === key), this.index.estimate(key, chat, Date.now())) };
   }
 
-  clear() { this.events = []; this.index = new Calibration(); this.timeline = null; }
+  clear() { this.events = []; this.index = new Calibration(); }
   project(calibration: CallCalibration, usage: ReportedUsage | null) { return tokenProjection(calibration, usage); }
   call(call: UsageCall['call']) { return tokenProjection(call.calibration === undefined ? unavailableCalibration('historical') : call.calibration, call.usage); }
 }

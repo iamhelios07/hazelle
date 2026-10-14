@@ -33,8 +33,6 @@ type SummaryWrite = { type: 'restore'; id: string; kind: 'summary'; parent: stri
 // another, the stored one is the verdict: a held entry never writes itself back over another device's.
 type Verdict = { over: number } & ({ state: 'judged'; dependencies: SummaryRead[] } | { state: 'cleared' });
 type Lifecycle = {
-  epoch(): number;
-  ending(): AbortSignal;
   closing: AbortSignal;
   scope(chat: string): Scope | undefined;
   held(): Iterable<string>;
@@ -43,13 +41,13 @@ type Lifecycle = {
   retain(chat: string): ChatLease;
   write(writes: SummaryWrite[], signal?: AbortSignal): Promise<ApiFailure | null>;
   publish(chat: string): void;
-  fail(chat: string, signal: AbortSignal, epoch: number, error: unknown): ApiFailure;
-  failure(error: unknown, epoch: number): ApiFailure;
-  halted(epoch: number): ApiFailure;
+  fail(chat: string, signal: AbortSignal, error: unknown): ApiFailure;
+  failure(error: unknown): ApiFailure;
+  halted(): ApiFailure;
 };
 
 // The only owner of computed chat projections and the summaries derived from them. Storage and chat leases stay
-// outside: a confirmed write never waits for display, and every job is fenced by its timeline and scope signal.
+// outside: a confirmed write never waits for display, and every job is fenced by its scope signal and the store closing.
 export class ChatProjections {
   private readonly projecting = new Map<string, Promise<Projection | null>>();
   private readonly projections = new Map<string, Projection>();
@@ -67,13 +65,9 @@ export class ChatProjections {
     this.evaluation.forget({ asker: 'projection', chat });
   }
 
-  reset() {
-    for (const chat of new Set([...this.projections.keys(), ...this.projecting.keys(), ...this.summarizing.keys(), ...this.verdicts.keys()])) this.release(chat);
-  }
-
   close() {
     this.closed = true;
-    this.reset();
+    for (const chat of new Set([...this.projections.keys(), ...this.projecting.keys(), ...this.summarizing.keys(), ...this.verdicts.keys()])) this.release(chat);
   }
 
   get(chat: string): Projection | null {
@@ -121,15 +115,14 @@ export class ChatProjections {
     if (this.closed || this.life.scope(chat)?.state !== 'loaded') return null;
     const previous = this.projections.get(chat);
     if (previous && previous.shown === this.source.shownMark(chat) && !summaryStale(this.source, chat, previous.summary, this.source.loadedHead(chat)) && (previous.summary.stuck !== undefined) === (this.verdict(chat) !== null)) return previous;
-    const epoch = this.life.epoch();
     const scope = this.life.scope(chat)!;
     const work = (async () => {
       for (;;) {
-        const next = await this.project(chat, AbortSignal.any([scope.signal, this.life.ending(), this.life.closing])).catch((error: unknown) => {
-          this.life.fail(chat, scope.signal, epoch, error);
+        const next = await this.project(chat, AbortSignal.any([scope.signal, this.life.closing])).catch((error: unknown) => {
+          this.life.fail(chat, scope.signal, error);
           throw error;
         });
-        if (this.closed || epoch !== this.life.epoch() || this.life.scope(chat)?.signal !== scope.signal || this.life.scope(chat)?.state !== 'loaded' || this.life.closing.aborted) return null;
+        if (this.closed || this.life.scope(chat)?.signal !== scope.signal || this.life.scope(chat)?.state !== 'loaded' || this.life.closing.aborted) return null;
         if (this.life.scope(chat)?.loading) return this.projections.get(chat) ?? null;
         if (next && (next.shown !== this.source.shownMark(chat) || summaryStale(this.source, chat, next.summary, this.source.loadedHead(chat)))) continue;
         if (next) this.projections.set(chat, next);
@@ -149,35 +142,33 @@ export class ChatProjections {
   // write left it waits for evaluate(chat), and a projection that fails is shown on its chat's scope, never as the
   // write's failure.
   refreshHeld() {
-    const epoch = this.life.epoch();
     for (const chat of this.life.held()) {
       const scope = this.life.scope(chat);
-      if (scope?.state === 'loaded' && !scope.loading) void this.evaluate(chat).catch((error: unknown) => void this.life.failure(error, epoch));
+      if (scope?.state === 'loaded' && !scope.loading) void this.evaluate(chat).catch((error: unknown) => void this.life.failure(error));
     }
   }
 
   async save(chat: string): Promise<ApiFailure | null> {
     const pending = this.summarizing.get(chat);
     if (pending) return pending;
-    const epoch = this.life.epoch();
     const save = async (): Promise<ApiFailure | null> => {
       for (;;) {
-        // The scope's own controller, ended when its last lease is let go, the timeline resets or the store closes: no
+        // The scope's own controller, ended when its last lease is let go or the store ends: no
         // retry of a summary write outlives the chat being held.
         const scope = this.life.scope(chat);
-        if (!scope || scope.signal.aborted) return this.life.halted(epoch);
+        if (!scope || scope.signal.aborted) return this.life.halted();
         if (this.source.loadedHead(chat) < this.source.entryHead(chat)) {
           const failed = await this.life.refresh(chat);
           if (failed) return failed;
         }
         const write = await this.summaryWrite(chat);
-        if (epoch !== this.life.epoch() || this.closed || this.life.scope(chat)?.signal !== scope.signal) return this.life.halted(epoch);
+        if (this.closed || this.life.scope(chat)?.signal !== scope.signal) return this.life.halted();
         if (!write) return null;
         const result = await this.life.write([write], scope.signal);
         if (result) return result;
       }
     };
-    const saving = save().catch((error: unknown) => this.life.failure(error, epoch)).finally(() => { if (this.summarizing.get(chat) === saving) this.summarizing.delete(chat); });
+    const saving = save().catch((error: unknown) => this.life.failure(error)).finally(() => { if (this.summarizing.get(chat) === saving) this.summarizing.delete(chat); });
     this.summarizing.set(chat, saving);
     return saving;
   }
@@ -188,7 +179,6 @@ export class ChatProjections {
   // captured. One not held is a caller's error, as in refreshChat; one whose opening or evaluation failed answers with
   // that failure.
   async saveMany(chats: Iterable<string>, signal?: AbortSignal): Promise<ApiFailure | null> {
-    const epoch = this.life.epoch();
     let passes = 0;
     try {
       for (;;) {
@@ -197,16 +187,16 @@ export class ChatProjections {
           const scope = this.life.scope(chat);
           if (!scope || scope.signal.aborted) {
             // Let go by the caller's stop or after a pass (withChats): halted. Never held: the caller's error.
-            if (passes || signal?.aborted || this.life.closing.aborted) return this.life.halted(epoch);
+            if (passes || signal?.aborted || this.life.closing.aborted) return this.life.halted();
             throw new ScopeUnavailable(chat);
           }
           // A chat whose history cannot be read is passed over, as withChats passes over one that cannot open: its
           // screen says so.
-          const failure = scope.state !== 'loaded' ? scope.error ?? this.life.halted(epoch) : this.source.loadedHead(chat) < this.source.entryHead(chat) ? await this.life.refresh(chat) : null;
+          const failure = scope.state !== 'loaded' ? scope.error ?? this.life.halted() : this.source.loadedHead(chat) < this.source.entryHead(chat) ? await this.life.refresh(chat) : null;
           if (failure?.error === 'unreadable') continue;
           if (failure) return failure;
           const write = await this.summaryWrite(chat);
-          if (epoch !== this.life.epoch() || this.closed || this.life.scope(chat)?.signal !== scope.signal) return this.life.halted(epoch);
+          if (this.closed || this.life.scope(chat)?.signal !== scope.signal) return this.life.halted();
           if (write) writes.push(write);
         }
         if (!writes.length) return null;
@@ -215,7 +205,7 @@ export class ChatProjections {
         passes++;
       }
     } catch (error) {
-      return this.life.failure(error, epoch);
+      return this.life.failure(error);
     }
   }
 

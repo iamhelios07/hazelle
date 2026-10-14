@@ -1,4 +1,4 @@
-import { ToolWrites, toolData } from './tools/store';
+import { ToolWrites } from './tools/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { SETTINGS_ID } from '../model/settings';
@@ -106,7 +106,14 @@ function tab() {
 
 const ids = (store: ObjectStore) => store.list('connection').map(({ id }) => id).toSorted();
 
-it('discards a late projection and summary job from the timeline before a restore', async () => {
+// The store a restore ended, once it let go of the device copy, and the one the session opens after it (app/shell/Workspace).
+async function after(store: ObjectStore, open: () => Promise<ObjectStore>) {
+  await new Promise((resolve) => store.subscribeRewound(resolve));
+  store.close();
+  return open();
+}
+
+it('ends a late projection and summary job with the store a restore ended', async () => {
   const f = await fixture();
   await f.add('a', 'chat', null, { title: null, character: null, models: {} });
   await f.add('a1', 'entry', 'a', { type: 'message', role: 'user', text: 'restored', at: 0, receipt: null });
@@ -135,16 +142,20 @@ it('discards a late projection and summary job from the timeline before a restor
   const saving = store.projections.save('a');
   try {
     f.restore(snapshot, 'restored-timeline');
-    await store.pull();
+    expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
     expect(signal!.aborted).toBe(true);
-    expect(store.projections.get('a')?.summary.preview).toBe('restored');
     finish();
     await refreshing;
     expect(await saving).toEqual({ ok: false, error: 'timeline-changed' });
     expect(seen).not.toContain('obsolete');
-    expect(store.projections.get('a')?.summary.preview).toBe('restored');
-    expect(await store.projections.save('a')).toBeNull();
-    expect(store.get('summary', summaryId('a'))?.value.preview).toBe('restored');
+    const next = await after(store, () => f.open());
+    const held = next.retainChat('a', { summarize: false });
+    expect(await held.ready).toBeNull();
+    expect(next.projections.get('a')?.summary.preview).toBe('restored');
+    expect(await next.projections.save('a')).toBeNull();
+    expect(next.get('summary', summaryId('a'))?.value.preview).toBe('restored');
+    held.release();
+    next.close();
   } finally {
     finish();
     lease.release();
@@ -173,6 +184,20 @@ it('reopens a session with sealed cached objects before any network read', async
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
   expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory,illustration,inlay,toolchat,cacheprint,ledger&known=1&timeline=t0', expect.anything());
+  opened.data.close();
+});
+
+it('opens the session again on the restored account when its opening pull hears a restore', async () => {
+  const f = await fixture();
+  await f.add('kept', 'connection', null, connection);
+  f.fetch.mockImplementationOnce(async () => Response.json({ error: 'cache-reset' }, { status: 409 }));
+  vi.stubGlobal('window', new EventTarget());
+  vi.stubGlobal('document', { visibilityState: 'hidden' });
+  const opened = await openSession('account', f.vault, 'jin', new AbortController().signal, undefined, f.cache);
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  expect(ids(opened.data.store)).toEqual(['kept']);
+  expect(f.fetch.mock.calls.filter(([path]) => path.includes('bootstrap=1'))).toHaveLength(2);
   opened.data.close();
 });
 
@@ -286,11 +311,13 @@ it('drops the cached account instead of merging when server revisions go backwar
   const reopened = await f.open();
   expect(reopened.get('connection', 'connection')).not.toBeNull();
   f.wipe();
-  expect(await reopened.pull()).toBeNull();
-  expect(reopened.list('connection')).toEqual([]);
-  await vi.waitFor(() => expect(f.cache.rows.size).toBe(0));
+  expect(await reopened.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  const next = await after(reopened, () => f.open());
+  expect(f.cache.rows.size).toBe(0);
+  expect(await next.pull()).toBeNull();
+  expect(next.list('connection')).toEqual([]);
   expect(f.cache.states.get('')?.cursor).toBe(0);
-  reopened.close();
+  next.close();
 });
 
 it('forgets the account cache together with its remembered vault on logout', async () => {
@@ -341,7 +368,7 @@ it('discards a cache from before generations instead of reading its rows', async
   store.close();
 });
 
-it('converges on a restore and on its undo: the server rows, the timeline adopted, one reset each', async () => {
+it('ends the store at a restore and at its undo, and the store opened after each holds the server rows', async () => {
   const f = await fixture();
   await f.add('kept', 'connection', null, connection);
   const before = f.snapshot();
@@ -354,26 +381,31 @@ it('converges on a restore and on its undo: the server rows, the timeline adopte
   const checkpoint = f.snapshot();
 
   f.restore(before, 't1');
-  expect(await store.pull()).toBeNull();
-  expect(ids(store)).toEqual(['kept']);
+  expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  const restored = await after(store, () => f.open());
+  expect(told.mock.calls).toEqual([[0]]);
+  expect(f.cache.rows.size).toBe(0);
+  expect(await restored.pull()).toBeNull();
+  expect(ids(restored)).toEqual(['kept']);
   await vi.waitFor(() => expect(f.cache.generation?.timeline).toBe('t1'));
   await f.flush();
   expect([...f.cache.rows.keys()]).toEqual(['kept']);
 
   f.restore(checkpoint, 't2');
-  expect(await store.pull()).toBeNull();
-  expect(ids(store)).toEqual(['kept', 'later']);
-  expect((await store.create('connection', { ...connection, starred: [] })).ok).toBe(true);
-  expect(await store.pull()).toBeNull();
+  expect(await restored.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  const undone = await after(restored, () => f.open());
+  expect(await undone.pull()).toBeNull();
+  expect(ids(undone)).toEqual(['kept', 'later']);
+  expect((await undone.create('connection', { ...connection, starred: [] })).ok).toBe(true);
+  expect(await undone.pull()).toBeNull();
   expect(f.resets()).toBe(2);
-  expect(told.mock.calls).toEqual([[0], [0]]);
   await vi.waitFor(() => expect(f.cache.generation?.timeline).toBe('t2'));
   await f.flush();
   expect([...f.cache.rows.keys()].toSorted()).toEqual([...f.rows.keys()].toSorted());
-  store.close();
+  undone.close();
 });
 
-it('drops a 409 or 503 that answers a write sent before a reset, which neither resets the new timeline nor lands', async () => {
+it('drops and counts a write a restore cut short, whose late 409 or 503 neither lands nor ends the next store', async () => {
   for (const late of [Response.json({ error: 'cache-reset' }, { status: 409 }), Response.json({ error: 'account-restoring', retryAfter: 1 }, { status: 503 })]) {
     const f = await fixture();
     await f.add('kept', 'connection', null, connection);
@@ -388,16 +420,17 @@ it('drops a 409 or 503 that answers a write sent before a reset, which neither r
     await vi.waitFor(() => expect(answer).toBeDefined());
 
     f.restore(f.snapshot(), 't1');
-    expect(await store.pull()).toBeNull();
+    expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+    const next = await after(store, () => f.open(writer.request));
     expect(told.mock.calls).toEqual([[1]]);
     answer(late);
     expect(await writing).toEqual({ ok: false, error: 'timeline-changed' });
     expect(f.resets()).toBe(1);
-    expect(told).toHaveBeenCalledOnce();
-    expect(ids(store)).toEqual(['kept']);
-    expect((await store.create('connection', { ...connection, starred: [] }, { id: 'new' })).ok).toBe(true);
+    expect(await next.pull()).toBeNull();
+    expect(ids(next)).toEqual(['kept']);
+    expect((await next.create('connection', { ...connection, starred: [] }, { id: 'new' })).ok).toBe(true);
     expect([...f.rows.keys()]).toEqual(['kept', 'new']);
-    store.close();
+    next.close();
   }
 });
 
@@ -419,7 +452,7 @@ it('waits out a restore under way for the time the 503 names, then drops and cou
   store.close();
 });
 
-it('answers timeline-changed to a chat opening a reset cut short, and opens the held chat again after it', async () => {
+it('answers timeline-changed to a chat opening a restore cut short, and the next store opens the chat', async () => {
   const f = await fixture();
   await f.add('chat', 'chat', null, { title: null, character: null, models: {} });
   await f.add('old', 'entry', 'chat', { type: 'delete', message: 'old', at: 1 });
@@ -428,43 +461,37 @@ it('answers timeline-changed to a chat opening a reset cut short, and opens the 
   const respond = f.fetch.getMockImplementation()!;
   let resume!: () => void;
   const waiting = new Promise<void>((resolve) => { resume = resolve; });
-  let boot!: () => void;
-  const booting = new Promise<void>((resolve) => { boot = resolve; });
   f.fetch.mockImplementation(async (path, init) => {
     if (path.includes('parent=chat')) await waiting;
-    if (path.includes('bootstrap=1') && !path.includes('timeline=')) await booting;
     return respond(path, init);
   });
   const cut = store.retainChat('chat');
   await vi.waitFor(() => expect(f.fetch.mock.lastCall?.[0]).toContain('parent=chat'));
   f.restore(f.snapshot(), 't1');
-  const pulled = store.pull();
-  await vi.waitFor(() => expect(f.fetch.mock.lastCall?.[0]).toContain('bootstrap=1'));
+  expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
   resume();
   expect(await cut.ready).toEqual({ ok: false, error: 'timeline-changed' });
-  const again = store.retainChat('chat');
-  boot();
-  expect(await pulled).toBeNull();
-  expect(await again.ready).toBeNull();
-  expect(store.children('entry', 'chat').map(({ id }) => id)).toEqual(['old']);
-  again.release();
   cut.release();
-  store.close();
+  const next = await after(store, () => f.open());
+  const again = next.retainChat('chat');
+  expect(await again.ready).toBeNull();
+  expect(next.children('entry', 'chat').map(({ id }) => id)).toEqual(['old']);
+  again.release();
+  next.close();
 });
 
-it('ends a pinned workflow at a switch: a write it makes after the switch is refused before it is sent', async () => {
+it('ends a pinned workflow at a restore: a write it makes after it is refused before it is sent', async () => {
   const f = await fixture();
   await f.add('kept', 'connection', null, connection);
   const store = await f.open();
   await store.pull();
   const result = await store.pinned(async () => {
     f.restore(f.snapshot(), 't1');
-    expect(await store.pull()).toBeNull();
+    expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
     return store.create('connection', { ...connection, starred: [] }, { id: 'late' });
   });
   expect(result).toEqual({ ok: false, error: 'timeline-changed' });
-  expect([...f.rows.keys()]).toEqual(['kept']);
-  expect((await store.create('connection', { ...connection, starred: [] }, { id: 'after' })).ok).toBe(true);
+  expect(f.fetch.mock.calls.filter(([, init]) => init.method === 'POST')).toEqual([]);
   store.close();
 });
 
@@ -504,29 +531,35 @@ it('lets a stale tab’s delayed clear and delayed bootstrap change nothing: bot
   vi.spyOn(f.cache, 'clear').mockImplementation((stated) => clear(stated).catch((error: unknown) => { refused.push('clear'); throw error; }));
   vi.spyOn(f.cache, 'adopt').mockImplementation((stated, timeline) => adopt(stated, timeline).catch((error: unknown) => { refused.push(`adopt ${timeline}`); throw error; }));
 
-  // A restore: the first tab clears and asks for its bootstrap, whose answer (of t1) is held.
+  // A restore: the first tab's store ends and clears the cache; the one opened after it asks for its bootstrap, whose
+  // answer (of t1) is held.
   f.restore(before, 't1');
   const generation = f.cache.generation!.id;
+  expect(await first.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  const firstNext = await after(first, () => f.open(a.request));
+  expect(f.cache.generation?.id).not.toBe(generation);
   a.hold((path) => !path.includes('timeline='));
-  const firstPull = first.pull();
+  const firstPull = firstNext.pull();
   await vi.waitFor(() => expect(a.held()).toBe(1));
-  await vi.waitFor(() => expect(f.cache.generation?.id).not.toBe(generation));
-  // Its undo, which the second tab hears first: its own clear is now a stale tab's, and it bootstraps t2.
+  // Its undo, which the second tab hears first: its own clear is now a stale tab's, and the next store bootstraps t2.
   f.restore(checkpoint, 't2');
-  expect(await second.pull()).toBeNull();
+  expect(await second.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  const secondNext = await after(second, () => f.open(b.request));
+  expect(await secondNext.pull()).toBeNull();
   await vi.waitFor(() => expect(f.cache.generation?.timeline).toBe('t2'));
+  // The first tab's delayed bootstrap cannot adopt t1 in a cache that moved on: that store ends too, and the next reads t2.
   a.release();
-  expect(await firstPull).toBeNull();
-  await vi.waitFor(() => expect(ids(first)).toEqual(['kept', 'later']));
-  expect(await first.pull()).toBeNull();
-  expect(ids(first)).toEqual(['kept', 'later']);
-  expect(ids(second)).toEqual(['kept', 'later']);
+  await firstPull;
+  const firstLast = await after(firstNext, () => f.open(a.request));
+  expect(await firstLast.pull()).toBeNull();
+  expect(ids(firstLast)).toEqual(['kept', 'later']);
+  expect(ids(secondNext)).toEqual(['kept', 'later']);
   expect(f.cache.generation?.timeline).toBe('t2');
   expect(refused).toEqual(['clear', 'adopt t1']);
   await f.flush();
   expect([...f.cache.rows.keys()].toSorted()).toEqual(['kept', 'later']);
-  first.close();
-  second.close();
+  firstLast.close();
+  secondNext.close();
 });
 
 it('aborts an export when the timeline changes while its final picture is being read', async () => {
@@ -555,7 +588,7 @@ it('aborts an export when the timeline changes while its final picture is being 
   }
 });
 
-it('walks the ledger from the device cache and past its cursor, and reads it again whole after a rewind', async () => {
+it('walks the ledger from the device cache and past its cursor, and a store opened after a restore reads it whole', async () => {
   const f = await fixture();
   const call = (id: string) => ({ type: 'call', at: 1, call: { id, connection: 'c', model: 'm', modelName: 'model', source: 'source', usage: null, cost: null }, chat: null, character: null });
   await f.add('first', 'ledger', SETTINGS_ID, call('first'));
@@ -578,11 +611,19 @@ it('walks the ledger from the device cache and past its cursor, and reads it aga
   expect(await calls(reopened)).toEqual(['first', 'second']);
   expect(walks()).toEqual(['0', '1']);
   f.restore({ rows: new Map(), rev: 2 }, 't1');
-  expect(await calls(reopened)).toEqual([]);
-  f.restore(original, 't2');
-  expect(await calls(reopened)).toEqual(['first']);
+  expect(await calls(reopened)).toEqual({ ok: false, error: 'timeline-changed' });
   reopened.close();
-  again.close();
+  const restored = await after(again, () => f.open());
+  const read = new Usage(restored);
+  expect(await calls(read)).toEqual([]);
+  read.close();
+  f.restore(original, 't2');
+  expect(await restored.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  const undone = await after(restored, () => f.open());
+  const readAgain = new Usage(undone);
+  expect(await calls(readAgain)).toEqual(['first']);
+  readAgain.close();
+  undone.close();
 });
 
 it('caches the row the server keeps, never the body a once write sent for a row already there', async () => {
@@ -604,7 +645,7 @@ it('caches the row the server keeps, never the body a once write sent for a row 
   expect(await chats(await f.open())).toEqual(['original']);
 });
 
-it('fences a tool write across the merge pause when the account timeline changes', async () => {
+it('fences a tool write across the merge pause when a restore ends the store', async () => {
   const f = await fixture();
   await f.add('module', 'module', null, { name: 'tool', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: '' });
   const store = await f.open();
@@ -616,13 +657,9 @@ it('fences a tool write across the merge pause when the account timeline changes
     const refused = expect(pending).rejects.toThrow('timeline-changed');
     await vi.advanceTimersByTimeAsync(0);
     f.restore(f.snapshot(), 't1');
-    expect(await store.pull()).toBeNull();
+    expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
     await vi.advanceTimersByTimeAsync(1001);
     await refused;
-    expect(toolData(store, 'module', 'note')).toBeUndefined();
-    const next = writes.write('module', 'note', 'after restore');
-    await vi.advanceTimersByTimeAsync(1001);
-    await next;
-    expect(toolData(store, 'module', 'note')).toBe('after restore');
+    expect(f.fetch.mock.calls.filter(([, init]) => init.method === 'POST')).toEqual([]);
   } finally { writes.close(); store.close(); vi.useRealTimers(); }
 });

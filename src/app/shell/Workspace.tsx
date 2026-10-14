@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { hearServedVersion } from '../../runtime/api';
+import { Drafts } from '../../runtime/drafts';
 import { openSession, type Session } from '../../runtime/session';
 import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
@@ -32,11 +33,16 @@ const NOT_PULLED: PullProgress = { objects: 0, pages: 0, waiting: false };
 const FIRST_LOAD = '처음에만 오래 걸려요.';
 const notWaiting = () => false;
 
-// Said once each time the store hears the account was restored: what the tab shows was loaded again, and the writes
-// the restore dropped are counted.
-function Restored({ store }: { store: Session['store'] }) {
+// Said once in the session opened after the last one heard the account was restored, with the writes the restore
+// dropped. The ref: StrictMode runs a mount's effect twice.
+function Restored({ dropped }: { dropped: number }) {
   const toast = useToast();
-  useEffect(() => store.subscribeRewound((dropped) => toast.show('계정을 복원해서 다시 불러왔어요', dropped ? { detail: `방금 바꾼 내용 ${dropped}개는 저장되지 않았어요` } : {})), [store, toast]);
+  const said = useRef(false);
+  useEffect(() => {
+    if (said.current) return;
+    said.current = true;
+    toast.show('계정을 복원해서 다시 불러왔어요', dropped ? { detail: `방금 바꾼 내용 ${dropped}개는 저장되지 않았어요` } : {});
+  }, []);
   return null;
 }
 
@@ -81,11 +87,15 @@ function News() {
 }
 
 // Everything behind an open vault is one session, opened before the first screen and closed when this unmounts,
-// which 잠그기 and 로그아웃 both do.
+// which 잠그기 and 로그아웃 both do. A restore the store hears ends its session, and the next one opens on the restored
+// account (ObjectStore.rewind); what was typed outlives it.
 export function Workspace({ accountId, vaultKey, username, unreadNotices, ...account }: Unlocked) {
   const [session, setSession] = useState<Session | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [rewound, setRewound] = useState<number | null>(null);
+  const drafts = useMemo(() => new Drafts(), [accountId]);
+  useEffect(() => () => drafts.close(), [drafts]);
   const [progress, setProgress] = useState<PullProgress>(NOT_PULLED);
   const waiting = useSyncExternalStore(session?.store.subscribeWaiting ?? subscribeNothing, session?.store.waiting ?? notWaiting, notWaiting);
   // The notice alone, not the facts, so the counts every write brings render nothing here.
@@ -103,7 +113,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
     setProgress(NOT_PULLED);
     void openSession(accountId, vaultKey, username, abandon.signal, (progress) => {
       if (!abandon.signal.aborted) setProgress(progress);
-    }).then((result) => {
+    }, undefined, { drafts }).then((result) => {
       if (abandon.signal.aborted) return;
       if (!result.ok) return setFailure(describeFailure(result));
       opened = result.data;
@@ -113,12 +123,20 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
       abandon.abort();
       opened?.close();
     };
-  }, [accountId, vaultKey, username, attempt]);
+  }, [accountId, vaultKey, username, drafts, attempt]);
 
   useEffect(() => {
     if (!session) return;
     const timer = setTimeout(() => session.startBackground(), 0);
-    return () => clearTimeout(timer);
+    const unrewound = session.store.subscribeRewound((dropped) => {
+      setRewound(dropped);
+      setSession(null);
+      setAttempt((held) => held + 1);
+    });
+    return () => {
+      clearTimeout(timer);
+      unrewound();
+    };
   }, [session]);
 
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((held) => held + 1)} />;
@@ -133,7 +151,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
       {/* Around the toasts, which show a character's picture that 이미지 가리기 covers. */}
       <DisplayProvider>
         <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
-          <Restored store={session.store} />
+          {rewound !== null && <Restored dropped={rewound} />}
           <Unread unread={unreadNotices} />
           <Stale />
           <News />

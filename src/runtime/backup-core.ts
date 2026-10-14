@@ -162,7 +162,6 @@ export async function exportBackup(
     // as one between the scans does.
     const still = await store.pin(signal);
     if (!still.ok) return still;
-    if (still.data.epoch !== pin.epoch) return { ok: false, error: 'timeline-changed' };
     await zip.end();
     signal.throwIfAborted();
     await output.close();

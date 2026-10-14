@@ -122,10 +122,20 @@ export class Talk {
     // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {
-    this.leave = store.subscribe((changes) => {
+    const left = store.subscribe((changes) => {
       const released = new Set(changes.filter((change) => change.kind === 'scope' && store.scopeState(change.id) === 'unloaded').map((change) => change.id));
       for (const [id, held] of this.sentBy) if (released.has(held.chat)) this.sentBy.delete(id);
     });
+    // A restore ends the store a turn was begun on, and none of the turn's writes can land after it, so it ends every
+    // turn as 멈추기 does, a batch's wait too: a call left running would be billed and never read. close does not: a
+    // call outlives a locked vault, for the next session to read.
+    const unrewound = store.subscribeRewound(() => {
+      for (const held of this.turns.values()) {
+        this.halt(held);
+        held.abort.abort();
+      }
+    });
+    this.leave = () => { left(); unrewound(); };
   }
 
   readonly subscribe = this.changes.subscribe;
@@ -152,25 +162,6 @@ export class Talk {
     if (held.turn.batch) return this.change(held, { ...held.turn, stopping: true });
     held.abort.abort();
     if (held.calling) stopStream(held.calling);
-  }
-
-  // A restore ends the timeline a turn was begun on, and none of the turn's writes can land after it (store pinned), so it
-  // ends the turn as 멈추기 does, a batch's wait too: a call left running would be billed and never read, and every
-  // write of the chat would fail until it ended.
-  private pinned<T>(held: Held, run: () => Promise<T>) {
-    return this.store.pinned(async (pin) => {
-      const ended = this.store.timelineEnd(pin);
-      const end = () => {
-        this.halt(held);
-        held.abort.abort();
-      };
-      ended.addEventListener('abort', end, { once: true });
-      try {
-        return await run();
-      } finally {
-        ended.removeEventListener('abort', end);
-      }
-    });
   }
 
   close() {
@@ -244,7 +235,7 @@ export class Talk {
     const held = this.seat(chat, said, asked);
     try {
       // A turn is one workflow: begun on one timeline, none of its writes lands on the next (store pinned).
-      const ran = await this.pinned(held, () => this.turnOn(held, said, asked, lease, prepare));
+      const ran = await this.store.pinned(() => this.turnOn(held, said, asked, lease, prepare));
       return ran !== null && 'ok' in ran ? { kind: 'unsent', failure: ran } : ran;
     } finally {
       this.unseat(held);
@@ -320,7 +311,7 @@ export class Talk {
     this.reading.add(stream.id);
     held.calling = stream.id;
     try {
-      await this.pinned(held, async () => {
+      await this.store.pinned(async () => {
         if (await lease.ready) return;
         const answer = await resume({ store: this.store, credentials: this.credentials }, stream, held.abort.signal, this.writer(held), this.inline(held), { retrying: this.retrying(held), cancel: held.cancel.signal });
         // Not Date.now(): the call may have ended long before this page read it, and the cache timer counts back from at.

@@ -45,7 +45,7 @@ it('sends notices with a reply, a reason and to everyone, which the account read
 });
 
 it('restores an account to a time on its report: its open device drops to the objects of that time, and the restore reads back with its undo', async () => {
-  const { accountId, store } = await server.operator();
+  const { accountId, store, open } = await server.operator();
   const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
   const now = Date.now();
   server.at(() => now - 3_600_000);
@@ -64,9 +64,11 @@ it('restores an account to a time on its report: its open device drops to the ob
   store.subscribeRewound(rewound);
   const run = await beginRestore(accountId, { report, at });
   expect(run).toEqual({ ok: true, data: { id: expect.any(Number), phase: 'done', verified: true, error: null } });
-  expect(await store.pull()).toBeNull();
-  expect(rewound).toHaveBeenCalledWith(0);
-  expect(store.list('connection')).toEqual([kept.ok && kept.data]);
+  expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+  await vi.waitFor(() => expect(rewound).toHaveBeenCalledWith(0));
+  const reopened = await open();
+  expect(await reopened.pull()).toBeNull();
+  expect(reopened.list('connection')).toEqual([kept.ok && kept.data]);
 
   expect(await readRestores(accountId)).toEqual({ ok: true, data: [{
     id: run.ok && run.data.id, reportId: report, at, undoes: null, targetAt: now - 3_600_000, phase: 'done', verified: true, error: null,

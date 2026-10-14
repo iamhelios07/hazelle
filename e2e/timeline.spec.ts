@@ -303,7 +303,7 @@ test('an edit made offline across a restore is dropped and counted when the tab 
   expect(server.taken.filter(({ timeline, kind }) => timeline === 't1' && kind === 'persona')).toEqual([]);
 });
 
-test('a restore between the two scans of a backup export fails the export and writes no archive', async ({ page }) => {
+test('a restore between the two scans of a backup export ends it with its session and writes no archive', async ({ page }) => {
   const server = await served(page.context());
   // The fallback download, so no native picker opens; a finished export would download through it.
   await page.addInitScript('delete window.showSaveFilePicker');
@@ -319,7 +319,7 @@ test('a restore between the two scans of a backup export fails the export and wr
   await expect.poll(() => server.held(page)).toBe(1);
   server.restore(server.snapshot(), 't1');
   server.release(page);
-  await expect(page.getByText('백업을 만들지 못했어요.')).toBeVisible();
+  await expect(page.getByText('계정을 복원해서 다시 불러왔어요')).toBeVisible();
   await page.waitForTimeout(500);
   expect(downloads).toEqual([]);
 });

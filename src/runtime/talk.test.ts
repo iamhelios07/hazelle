@@ -160,8 +160,11 @@ describe('Talk', () => {
 
       expect(await takeTurn(session, chat, { kind: 'answer' })).toEqual({ kind: 'unsaved', reply: null, failure: { ok: false, error: 'timeline-changed' } });
       expect(refused).toHaveBeenCalledOnce();
-      expect(await session.store.pull()).toBeNull();
-      expect(fold(session.store.children('entry', chat)).map((message) => shown(message).text)).toEqual(['안녕']);
+      // The store ended with the restore, so nothing of the turn reaches the server after it.
+      const later = vi.fn(through);
+      vi.stubGlobal('fetch', later);
+      expect(await session.store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
+      expect(later).not.toHaveBeenCalled();
     }));
 
   it('stops a reply while its try waits to be sent again, and sends nothing more', () =>
@@ -192,7 +195,7 @@ describe('Talk', () => {
       expect(session.store.list('stream')).toEqual([]);
     }));
 
-  it('ends a turn waiting on a batch once a restore ends its timeline, canceling the batch, and the chat saves again', () =>
+  it('ends a turn waiting on a batch once a restore ends its store, canceling the batch', () =>
     server.withSession(async (session) => {
       const log = await batching(session, ['canceling'], null);
       const chat = await chatSaid(session);
@@ -202,9 +205,7 @@ describe('Talk', () => {
       vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url.startsWith('/api/objects?') ? (vi.stubGlobal('fetch', through), Promise.resolve(Response.json({ error: 'cache-reset' }, { status: 409 }))) : through(url, init)));
       void session.store.pull();
       expect(await turning).toEqual({ kind: 'unsaved', reply: null, failure: { ok: false, error: 'timeline-changed' } });
-      expect(log.map(({ sent }) => sent.url)).toContain('https://api.anthropic.com/v1/messages/batches/b1/cancel');
-      await server.hold(session.store, chat);
-      expect((await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '또 안녕' })).ok).toBe(true);
+      await vi.waitFor(() => expect(log.map(({ sent }) => sent.url)).toContain('https://api.anthropic.com/v1/messages/batches/b1/cancel'));
     }));
 
   it('keeps what each call sent, its address and body and never its headers, through an edit and while its chat is held', () =>

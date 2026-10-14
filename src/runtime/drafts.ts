@@ -1,5 +1,5 @@
 import { ChangeSignal } from '../change-signal';
-// Unsent text per chat, kept in page memory until the session closes: it outlives the chat's screen, and a reply that
+// Unsent text per chat, kept in page memory until the vault closes: it outlives the chat's screen and the session, and a reply that
 // fails after its screen is gone still hands its text back. A chat not saved yet has no id to keep it under, so its
 // text is kept per character (draftKey) and moved under the chat's id once it is saved.
 export const draftKey = (chat: string | null, character: string | null) => chat ?? (character ? `new-${character}` : 'new');

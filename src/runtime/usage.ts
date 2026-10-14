@@ -41,7 +41,6 @@ export type Filling = { read: number; of: number } | 'failed' | null;
 export class Usage {
   private readonly rows = new Map<string, Ledger>();
   private cursor = 0;
-  private pin: Pin | null = null;
   private readonly closing = new AbortController();
   private running: Promise<unknown> | null = null;
   private filled: Filling = null;
@@ -52,10 +51,6 @@ export class Usage {
   readonly subscribe = this.changes.subscribe;
 
   readonly filling = () => this.filled;
-
-  calibrationTimeline(): string | null {
-    return this.pin === null ? null : JSON.stringify([this.pin.timeline, this.pin.epoch]);
-  }
 
   calibrationRows(): Counted[] {
     return [...this.rows.values()].flatMap((row) => row.type === 'cost' ? [] : [{ at: row.at, call: row.call, chat: row.chat, character: row.character }]);
@@ -73,12 +68,7 @@ export class Usage {
       await this.running;
       if (stop.aborted) return { ok: false, error: 'stopped' };
     }
-    // A restore moved the account to another timeline as the walk began: the next walk reads that one whole.
-    const walked = async () => {
-      const first = await this.walk(stop);
-      return !first.ok && first.error === 'timeline-changed' ? this.walk(stop) : first;
-    };
-    const running = walked().catch((): ApiResult<Counted[]> => ({ ok: false, error: stop.aborted ? 'stopped' : 'usage-unavailable' }));
+    const running = this.walk(stop).catch((): ApiResult<Counted[]> => ({ ok: false, error: stop.aborted ? 'stopped' : 'usage-unavailable' }));
     this.running = running;
     try { return await running; }
     finally { this.running = null; }
@@ -88,11 +78,6 @@ export class Usage {
     const pinned = await this.store.pin(signal);
     if (!pinned.ok) return pinned;
     const pin = pinned.data;
-    if (this.pin?.timeline !== pin.timeline || this.pin.epoch !== pin.epoch) {
-      this.rows.clear();
-      this.cursor = 0;
-    }
-    this.pin = pin;
     let unreadable = false;
     const walked = await this.store.walk(SETTINGS_ID, 'ledger', (row, value) => {
       if (isValue('ledger', value)) this.rows.set(row.id, value);
@@ -116,7 +101,7 @@ export class Usage {
     const stop = AbortSignal.any([signal, this.closing.signal]);
     let failure: ApiFailure | null;
     try {
-      failure = await this.store.pinned((pin) => this.filledAll(pin, AbortSignal.any([stop, this.store.timelineEnd(pin)])), stop);
+      failure = await this.store.pinned((pin) => this.filledAll(pin, stop), stop);
     } catch {
       failure = { ok: false, error: 'usage-unavailable' };
     }

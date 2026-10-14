@@ -68,8 +68,6 @@ export class PendingWrites {
     return false;
   }
 
-  values(): IterableIterator<Overlay> { return this.overlays.values(); }
-
   readonly count = () => {
     let count = 0;
     for (const unsent of this.unsent) count += unsent();
@@ -129,11 +127,6 @@ export class PendingWrites {
   private marked(overlay: Overlay) {
     const chat = chatOf(overlay);
     if (chat) this.marks.set(chat, ++this.shownCount);
-  }
-
-  reset() {
-    this.overlays.clear();
-    this.marks.clear();
   }
 
   close() { this.overlays.clear(); }

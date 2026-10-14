@@ -1,20 +1,20 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { draftKey, Drafts } from './drafts';
-import type { Session } from './session';
+import { openSession } from './session';
 import { testServer } from './testing';
 
 const server = testServer();
 
-it('ends with its session, so the next account in the same tab finds no text', async () => {
-  const key = draftKey(null, null);
-  let closed: Session;
-  await server.withSession(async (session) => {
-    closed = session;
-    session.drafts.set(key, '남의 글');
-  });
-  expect(closed!.drafts.text(key)).toBe('');
-  await server.wipe();
-  await server.withSession(async (session) => expect(session.drafts.text(key)).toBe(''));
+it('outlives the session it was handed to, which a restore ends', async () => {
+  vi.stubGlobal('window', new EventTarget());
+  vi.stubGlobal('document', { visibilityState: 'hidden' });
+  const { accountId, vaultKey } = await server.account();
+  const drafts = new Drafts();
+  const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { drafts });
+  if (!opened.ok) throw new Error(opened.error);
+  opened.data.drafts.set(draftKey(null, null), '쓰던 말');
+  opened.data.close();
+  expect(drafts.text(draftKey(null, null))).toBe('쓰던 말');
 });
 
 it('puts a failed send back before what was typed since', () => {
