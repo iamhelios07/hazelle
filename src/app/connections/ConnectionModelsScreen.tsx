@@ -1,4 +1,4 @@
-import { Star } from 'lucide-react';
+import { KeyRound, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { bareModel } from '../../connectors/chat-completions';
 import { modelSettings, resolveConnection, RETRIES } from '../../connectors/registry';
@@ -19,6 +19,7 @@ import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Columns, Disclosure, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingGroup, Stack, Text, usePane } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
+import { ConnectionKeyDialog } from './ConnectionKeyDialog';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
 
@@ -49,6 +50,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [filter, setFilter] = useState<Filter>('all');
   const [naming, setNaming] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [keying, setKeying] = useState(false);
   // Under API 연결's cards the connection is a part of that page, not a page of its own.
   const stacked = usePane() === 'stack';
 
@@ -149,6 +151,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     items: (
       <>
         <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming(true)} />
+        {!connection.turns && resolved && <MenuItem icon={KeyRound} label="키 바꾸기" onClick={() => setKeying(true)} />}
         <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} />
       </>
     ),
@@ -162,6 +165,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const dialog = (
     <>
       {naming && <NameDialog title="연결 이름 바꾸기" value={connection.label} onSave={rename} onClose={() => setNaming(false)} />}
+      {keying && resolved && <ConnectionKeyDialog id={id} type={resolved.type} onClose={() => setKeying(false)} />}
       {adding && <NameDialog title={BY_ID} field="모델 ID" value="" hint="목록에 없는 새 모델도 제공자가 쓰는 ID로 추가할 수 있어요." onSave={addById} onClose={() => setAdding(false)} />}
     </>
   );

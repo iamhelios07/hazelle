@@ -4,7 +4,7 @@ import type { Connection, Model } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
-import { addConnection, providerConnection, refreshStarred, retriesOf, setSharedRetries, setStarred } from './connections';
+import { addConnection, changeKey, providerConnection, refreshStarred, retriesOf, setSharedRetries, setStarred } from './connections';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
@@ -44,6 +44,23 @@ describe('addConnection', () => {
       await addConnection(session, openRouter);
       await addConnection(session, openRouter);
       expect(session.store.list('connection').map(({ value }) => value.label).sort()).toEqual(['OpenRouter', 'OpenRouter 2', 'OpenRouter 3']);
+    }));
+});
+
+describe('changeKey', () => {
+  it('keeps the old key when the meters refuse the new one, and otherwise swaps only the secret', () =>
+    server.withSession(async (session) => {
+      const starred = { ...openRouter, starred: [{ id: 'm' }] as never };
+      const saved = await session.store.create('connection', starred);
+      const id = saved.ok ? saved.data.id : '';
+      let key = upstream(401, { error: { message: 'User not found.' } });
+      stubRelay(({ url }) => (url === KEY ? key : upstream(200, openRouterModels)));
+      expect(await changeKey(session, id, 'sk-or-v1-new')).toMatchObject({ kind: 'key' });
+      expect(session.store.get('connection', id)?.value).toEqual(starred);
+
+      key = upstream(200, openRouterKey);
+      expect(await changeKey(session, id, 'sk-or-v1-new')).toBeNull();
+      expect(session.store.get('connection', id)?.value).toEqual({ ...starred, accounts: [{ id: 'key', secret: 'sk-or-v1-new' }] });
     }));
 });
 

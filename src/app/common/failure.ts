@@ -4,7 +4,7 @@ import type { CatalogFailure } from '../../runtime/catalog';
 import type { IllustrateFailure } from '../../runtime/illustrate';
 import type { LikenessFailure } from '../../runtime/likeness';
 import type { MemoryFailure } from '../../runtime/memory';
-import type { AddFailure } from '../../runtime/connections';
+import type { KeyFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
 import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
@@ -189,7 +189,7 @@ export function describeMetersFailure(failure: MetersFailure): string {
   return describeReplyError(failure);
 }
 
-export function describeAddFailure(failure: AddFailure): string {
+export function describeKeyFailure(failure: KeyFailure): string {
   switch (failure.kind) {
     case 'models':
       return describeCatalogFailure(failure.failure);

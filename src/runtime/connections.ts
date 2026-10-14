@@ -24,27 +24,41 @@ export function providerConnection(type: ConnectionType, secret: string, name?: 
 
 // models: the model list did not load. key: the provider refused the key every meters request asked with.
 // stopped: the caller gave up (signal) before the save.
-export type AddFailure =
+export type KeyFailure =
   | { kind: 'models'; failure: CatalogFailure }
   | { kind: 'key'; failure: MetersFailure }
   | { kind: 'save'; failure: ApiFailure }
   | { kind: 'stopped' };
 
-// The model list must load before the connection is saved. A model list
+// The model list must load before a connection or its new key is saved. A model list
 // may be public (OpenRouter's is), so a key every meters request refuses (401) stops the save too. Never one refusal
 // alone: what NanoGPT's subscription usage answers a working key without a subscription is undocumented. Any other
 // trouble with the meters leaves them to their own block on the next screen.
 // Leaving the screen (signal) while these load saves nothing.
-export async function addConnection({ store, catalogs, credentials }: Session, connection: Connection, signal?: AbortSignal): Promise<{ ok: true; id: string } | { ok: false; failure: AddFailure }> {
+async function checkKey({ catalogs, credentials }: Session, connection: Connection, signal?: AbortSignal): Promise<KeyFailure | null> {
   // Asked first, so a pool's pick for the model list reads these same meters.
   const metered = credentials.pool.meters(connection, connection.accounts[0]!, { fresh: true });
   const [catalog, meters] = await Promise.all([catalogs.load(connection, { fresh: true }), metered]);
-  if (signal?.aborted) return { ok: false, failure: { kind: 'stopped' } };
-  if (!catalog.ok) return { ok: false, failure: { kind: 'models', failure: catalog.failure } };
+  if (signal?.aborted) return { kind: 'stopped' };
+  if (!catalog.ok) return { kind: 'models', failure: catalog.failure };
   const refused = meters && !meters.meters.length && meters.failures.length > 0 && meters.failures.every((failure) => failure.kind === 'provider' && failure.status === 401) ? meters.failures[0] : undefined;
-  if (refused) return { ok: false, failure: { kind: 'key', failure: refused } };
-  const saved = await store.create('connection', { ...connection, label: freeLabel(connection.label, store.list('connection')) });
+  return refused ? { kind: 'key', failure: refused } : null;
+}
+
+export async function addConnection(session: Session, connection: Connection, signal?: AbortSignal): Promise<{ ok: true; id: string } | { ok: false; failure: KeyFailure }> {
+  const failure = await checkKey(session, connection, signal);
+  if (failure) return { ok: false, failure };
+  const saved = await session.store.create('connection', { ...connection, label: freeLabel(connection.label, session.store.list('connection')) });
   return saved.ok ? { ok: true, id: saved.data.id } : { ok: false, failure: { kind: 'save', failure: saved } };
+}
+
+// A pool's accounts change by signing in again, never here. The account keeps its id, so nothing that names it changes.
+export async function changeKey(session: Session, id: string, secret: string, signal?: AbortSignal): Promise<KeyFailure | null> {
+  const current = session.store.get('connection', id)!.value;
+  const failure = await checkKey(session, { ...current, accounts: [{ ...current.accounts[0]!, secret }] }, signal);
+  if (failure) return failure;
+  const saved = await session.store.update('connection', id, (latest) => (pooled(latest) ? null : { ...latest, accounts: [{ ...latest.accounts[0]!, secret }] }));
+  return saved.ok ? null : { kind: 'save', failure: saved };
 }
 
 // A second connection of one type would read as the first everywhere its label names it: menus, the list, usage.
