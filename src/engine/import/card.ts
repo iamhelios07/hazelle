@@ -17,6 +17,10 @@ export const blankCard = (name: string): Card => ({
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 });
 
+// Risu exports a module as a card named <name>.module.charx (modules.ts exportModule); a browser that already holds
+// that name adds a count, as in "name.module(2).charx".
+const MODULE_CHARX = /\.module\s*(?:\(\d+\)\s*)?\.charx$/i;
+
 // Dispatch goes by extension only, as in Risu; nothing is sniffed.
 export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const extension = fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase();
@@ -25,6 +29,7 @@ export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>): Im
       case 'png':
         return fromPng(bytes);
       case 'charx':
+        return MODULE_CHARX.test(fileName) ? fromModuleCharx(bytes) : fromCharx(bytes);
       case 'jpg':
       case 'jpeg':
         return fromCharx(bytes);
@@ -50,19 +55,37 @@ function fromPng(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   return converted ? done('png', converted, { bytes: png.image, type: 'image/png' }, { chunks: png.assets }, tally, NOT_OWN) : fail('unreadable', 'not a character card');
 }
 
-function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
+function readCharx(bytes: Uint8Array<ArrayBuffer>, tally: Tally): { zip: Zip; raw: unknown; converted: Converted } | ImportResult {
   const zip = openZip(bytes);
   const card = zip?.read('card.json');
   if (!zip || !card) return fail('unreadable', 'no card.json');
-  const tally: Tally = new Map();
   const moduleBytes = zip.read('module.risum');
   const module = moduleBytes ? (readRisum(moduleBytes)?.module ?? null) : null;
   if (moduleBytes && !module) add(tally, 'module');
   const raw: unknown = JSON.parse(utf8.decode(card));
   const converted = convert(raw, module, tally);
-  if (!converted) return fail('unreadable', 'not a character card');
+  return converted ? { zip, raw, converted } : fail('unreadable', 'not a character card');
+}
+
+function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
+  const tally: Tally = new Map();
+  const charx = readCharx(bytes, tally);
+  if ('ok' in charx) return charx;
+  const { zip, raw, converted } = charx;
   const { read, own, bundled } = readHazelle(record(record(record(raw).data).extensions).hazelle, converted, tally);
   return done('charx', read, avatar(read.icon, zip.prefix, zip, tally), { zip }, tally, { own, bundled });
+}
+
+// Read as Risu reads it back: as a character, then convertCharacterToModule, where the creator notes are the module's
+// description. The card's icon is the carrier's picture, not the module's.
+function fromModuleCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
+  const tally: Tally = new Map();
+  const charx = readCharx(bytes, tally);
+  if ('ok' in charx) return charx;
+  const { card, lore, loreFolders, assets } = charx.converted;
+  const { regex, triggers, background, toggles } = card;
+  const pack = { regex, triggers, ...(background === undefined ? {} : { background }), toggles };
+  return { ok: true, module: { name: card.name, description: card.creatorNotes, namespace: null, risu: null, pack, lore, loreFolders, assets: located(assets, resolver({ zip: charx.zip }, tally)), unsupported: counted(UNSUPPORTED_KINDS, tally) } };
 }
 
 function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
@@ -93,17 +116,19 @@ type Owned = { own: Imported['own']; bundled: ConvertedBundle[] };
 const NOT_OWN: Owned = { own: null, bundled: [] };
 
 function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], holders: Holders, tally: Tally, { own, bundled }: Owned): ImportResult {
-  const resolve: Resolve = (uri) => {
-    const read = reader(uri, holders);
-    if (!read) add(tally, 'missing-asset');
-    return read && (async () => read());
-  };
+  const resolve = resolver(holders, tally);
   const modules = bundled.map((module) => ({ ...module, assets: located(module.assets, resolve) }));
   return { ok: true, card: { ...assemble(format, converted, resolve, tally), avatar, own, bundled: modules } };
 }
 
 // Where an asset's bytes are read from; null for a uri the source does not hold, which the resolver counts.
 export type Resolve = (uri: string) => Imported['assets'][number]['read'] | null;
+
+const resolver = (holders: Holders, tally: Tally): Resolve => (uri) => {
+  const read = reader(uri, holders);
+  if (!read) add(tally, 'missing-asset');
+  return read && (async () => read());
+};
 
 const located = (assets: Converted['assets'], resolve: Resolve): Imported['assets'] =>
   assets.flatMap(({ name, uri }) => {

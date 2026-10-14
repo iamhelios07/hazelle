@@ -253,6 +253,32 @@ describe('importCard', () => {
     expect(await Promise.all(assets.map(async ({ name, read }) => [name, [...(await read())!]]))).toEqual([['wall', [1, 2, 3]], ['icon', [4]]]);
   });
 
+  it('reads a charx Risu exported as a module as that module, under the name a browser numbers', async () => {
+    const card = v3({
+      name: 'Phone',
+      description: '',
+      first_mes: '',
+      creator_notes: 'A phone screen.',
+      assets: [{ type: 'x-risu-asset', uri: 'embeded://assets/other/image/wall.png', name: 'wall', ext: 'png' }],
+      extensions: { risuai: { backgroundHTML: '<style>.phone { color: red }</style>', toggles: 'ring=Ring' } },
+    });
+    const module = writeRisum({ name: 'Phone Module', description: '', regex: [{ comment: 'screen', in: 'a', out: 'b', type: 'editdisplay' }], trigger: [], lorebook: [{ key: 'phone', comment: 'Phone', content: 'It rings.', bookVersion: 2 }] });
+    const result = importCard('Phone.module(2).charx', own(zipSync({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': module, 'assets/other/image/wall.png': new Uint8Array([1, 2]) })));
+    if (!result.ok || !('module' in result)) throw new Error('not a module');
+    const { assets, lore, ...read } = result.module;
+    expect(read).toEqual({
+      name: 'Phone',
+      description: 'A phone screen.',
+      namespace: null,
+      risu: null,
+      pack: { regex: [{ id: 'regex-0', name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }], triggers: [], background: '<style>.phone { color: red }</style>', toggles: 'ring=Ring' },
+      loreFolders: [],
+      unsupported: [],
+    });
+    expect(lore).toMatchObject([{ name: 'Phone', keys: ['phone'], content: 'It rings.' }]);
+    expect(await Promise.all(assets.map(async ({ name, read }) => [name, [...(await read())!]]))).toEqual([['wall', [1, 2]]]);
+  });
+
   it('imports the card alone when module.risum is unreadable', () => {
     const card = v3({ extensions: { risuai: { customScripts: [{ comment: 'card', in: 'a', out: 'b', type: 'editoutput', ableFlag: false, flag: 'i' }] } } });
     const imported = charx({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': new Uint8Array([111, 0, 255, 255, 255, 255]) });
