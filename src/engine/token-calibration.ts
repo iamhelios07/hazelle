@@ -30,7 +30,8 @@ export function posterior(prior: Prior, { w, sum, squares }: Moments): Posterior
 export function centres(p: Posterior) {
   // exp(m) is the median, not expected spend. The Student-t exponential moment is infinite;
   // cost fitting uses a moment-matched lognormal, while the hard bound retains the Student-t tail.
-  return { centre: Math.exp(p.m + p.variance / 2), upper: Math.exp(p.m + studentQuantile(0.99, 2 * p.a) * p.scale) };
+  const tail = studentQuantile(0.99, 2 * p.a) * p.scale;
+  return { centre: Math.exp(p.m + p.variance / 2), lower: Math.exp(p.m - tail), upper: Math.exp(p.m + tail) };
 }
 
 export function fitLimits(limits: TokenLimits, estimate: TokenEstimate): TokenFit {
@@ -132,7 +133,7 @@ export class Calibration {
     const stats = advance(local.stats, local.stats.step, at, 16);
     const p = posterior(this.chatPrior(parent), stats);
     const values = centres(p);
-    return { centre: values.centre, upper: Math.max(values.upper, Math.exp(local.guard)), source: local.reset ? 'drift-reset' : 'chat', evidence: stats.w, cold: false };
+    return { ...values, upper: Math.max(values.upper, Math.exp(local.guard)), source: local.reset ? 'drift-reset' : 'chat', evidence: stats.w, cold: false };
   }
 
   private parent(model: ModelState, local: Local | undefined, at: number): Posterior {

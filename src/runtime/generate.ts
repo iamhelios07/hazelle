@@ -102,6 +102,11 @@ export async function generate({ credentials, connection, model, settings, retri
     const prepared = prepareChat(route, { model, messages, settings: batches ? { ...settings, streaming: false } : settings });
     request = prepared.request;
     if (call.measure) call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), measurement: await call.measure(prepared) };
+    if (call.preflight) {
+      const checked = await call.preflight(settings, signal);
+      if (!checked.ok) return checked.error === 'stopped' ? reply(...STOPPED) : reply({ state: 'failed', cut: null, ...empty }, { kind: 'app', code: checked.error });
+      call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), fit: checked.data };
+    }
     const calibration = call.calibration;
     if (calibration?.fit) {
       if (calibration.measurement.kind !== 'measured') return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'tokenizer' });

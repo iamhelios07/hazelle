@@ -3,6 +3,9 @@ import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { fold, shown, type Receipt } from '../model/chat';
 import { chatModel } from './assignment';
 import { appendUserMessage, startChat } from './chat-log';
+import { Calibration } from '../engine/token-calibration';
+import { generate } from './generate';
+import { newCall, pageCall } from './streams';
 import { tokenLimits } from './chat-context';
 import { FIRST_PROFILE_ID, setProfileSettings } from './profiles';
 import type { Session } from './session';
@@ -71,7 +74,7 @@ it('replays late ledger observations, deduplicates a copied call, separates auxi
   await takeTurn(session, chat, { kind: 'answer' });
   const receipt = shown(fold(session.store.children('entry', chat)).at(-1)!).receipt!;
   const settings = { maxOutput: 16 };
-  const snapshot = () => session.tokens.snapshot(route, settings, tokenLimits(route.model, settings), chat, signal());
+  const snapshot = () => session.tokens.snapshot(route, settings, tokenLimits(route.model, settings), 'conversation', chat, signal());
   const first = await snapshot();
   if (!first.ok) throw new Error(first.error);
   expect(first.data.fit).toMatchObject({ source: 'chat', bound: 'hard-upper' });
@@ -81,10 +84,18 @@ it('replays late ledger observations, deduplicates a copied call, separates auxi
   expect(duplicate.ok && duplicate.data.fit.evidence).toBeCloseTo(mass, 5);
   const measurement = receipt.calibration!.measurement;
   if (measurement.kind !== 'measured') throw new Error('unmeasured');
-  const auxiliary: Receipt = { ...receipt, id: crypto.randomUUID(), calibration: { ...receipt.calibration!, measurement: { ...measurement, key: 'different-translation-route', at: measurement.at - 1000 } } };
+  const translated = await session.tokens.snapshot(route, settings, tokenLimits(route.model, settings), 'translation', chat, signal());
+  if (!translated.ok) throw new Error(translated.error);
+  expect(translated.data.fit.source).toBe('prior');
+  const auxiliary: Receipt = { ...receipt, id: crypto.randomUUID(), calibration: { ...receipt.calibration!, measurement: { ...measurement, key: translated.data.key, at: measurement.at - 1000 } } };
   await session.store.batch([receiptRow(auxiliary, Date.now(), { chat, character: null })]);
   const apart = await snapshot();
   expect(apart.ok && apart.data.fit.evidence).toBeCloseTo(mass, 5);
+  const learned = await session.tokens.snapshot(route, settings, tokenLimits(route.model, settings), 'translation', chat, signal());
+  expect(learned.ok && learned.data.fit.source).toBe('chat');
+  const otherRoute = { ...route, model: { ...route.model, id: 'other-model' } };
+  const other = await session.tokens.snapshot(otherRoute, settings, tokenLimits(otherRoute.model, settings), 'translation', chat, signal());
+  expect(other.ok && other.data.fit.source).toBe('prior');
   const earlier: Receipt = { ...receipt, id: crypto.randomUUID(), calibration: { ...receipt.calibration!, measurement: { ...measurement, fingerprint: 'earlier', at: measurement.at - 500 } } };
   await session.store.batch([receiptRow(earlier, Date.now(), { chat, character: null })]);
   const late = await snapshot();
@@ -119,4 +130,69 @@ it('learns an explicit Anthropic refusal count on its actual route before retryi
   expect(receipt.calibration!.retries[0]!.actual).toBeGreaterThan(1000);
   const read = await session.usage.read(signal());
   expect(read.ok && read.data).toHaveLength(1);
+}));
+
+
+it.each(['translation', 'memory', 'illustration', 'likeness', 'script'] as const)('preflights %s calls before credentials or the network, without trimming task messages', (requestClass) => server.withSession(async (session) => {
+  const { chat, route } = await ready(session, 200);
+  if ('kind' in route) throw new Error(route.kind);
+  const call = requestClass === 'translation' || requestClass === 'memory'
+    ? await newCall(session, route, { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: requestClass === 'translation' ? { kind: 'input', typed: 'hello', language: 'Korean' } : { kind: 'memory', sources: [], print: '' } })
+    : await pageCall(session, route, requestClass, chat);
+  const messages = [{ role: 'user' as const, content: 'oversized '.repeat(500) }];
+  const pick = vi.spyOn(session.credentials.pool, 'pick');
+  const log = stubRelay(() => measuredReply(100));
+  const answer = await generate({ credentials: session.credentials, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages, call, signal: signal(), onText: () => {} });
+  expect(answer.error).toEqual({ kind: 'refused', code: 'context-fit' });
+  expect(answer.calibration.fit?.allowance).toBeLessThan(184);
+  expect(answer.calibration.measurement).toMatchObject({ kind: 'measured', key: expect.stringContaining(requestClass) });
+  expect(messages[0]!.content).toBe('oversized '.repeat(500));
+  expect(pick).not.toHaveBeenCalled();
+  expect(log).toHaveLength(0);
+}));
+
+it('surfaces an auxiliary snapshot failure and records a provider refusal without a shrink-and-retry', () => server.withSession(async (session) => {
+  const { chat, route } = await ready(session);
+  if ('kind' in route) throw new Error(route.kind);
+  const log = stubRelay(() => upstream(400, { error: { code: 'context_length_exceeded', message: 'maximum context length exceeded' } }));
+  const ask = async () => generate({ credentials: session.credentials, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages: [{ role: 'user', content: 'hello' }], call: await pageCall(session, route, 'script', chat), signal: signal(), onText: () => {} });
+  vi.spyOn(session.usage, 'read').mockResolvedValueOnce({ ok: false, error: 'unreadable' });
+  expect((await ask()).error).toEqual({ kind: 'refused', code: 'unreadable' });
+  expect(log).toHaveLength(0);
+  const answer = await ask();
+  expect(answer).toMatchObject({ state: 'failed', usage: null, calibration: { refusal: { actual: null, maximum: null }, retries: [] } });
+  expect(log).toHaveLength(1);
+}));
+
+it('reuses ledger projections and never replays observations for unchanged snapshots', () => server.withSession(async (session) => {
+  const { chat, route } = await ready(session, 2000);
+  if ('kind' in route) throw new Error(route.kind);
+  stubRelay(() => measuredReply(1000));
+  await takeTurn(session, chat, { kind: 'answer' });
+  const snapshot = () => session.tokens.snapshot(route, { maxOutput: 16 }, tokenLimits(route.model, { maxOutput: 16 }), 'conversation', chat, signal());
+  const first = await snapshot();
+  const rows = session.usage.calibrationRows();
+  const read = await session.usage.read(signal());
+  const observe = vi.spyOn(Calibration.prototype, 'observe');
+  const repeated = await snapshot();
+  expect(first.ok && repeated.ok && repeated.data.fit.allowance).toBe(first.ok && first.data.fit.allowance);
+  expect(session.usage.calibrationRows()).toBe(rows);
+  const again = await session.usage.read(signal());
+  expect(read.ok && again.ok && again.data).toBe(read.ok && read.data);
+  expect(observe).not.toHaveBeenCalled();
+}));
+
+
+it('keeps an auxiliary preflight cancellation a stopped cut and reports an unresolved snapshot route', () => server.withSession(async (session) => {
+  const { chat, route } = await ready(session);
+  if ('kind' in route) throw new Error(route.kind);
+  const log = stubRelay(() => measuredReply(100));
+  const stopped = new AbortController();
+  stopped.abort();
+  const call = await pageCall(session, route, 'script', chat);
+  const answer = await generate({ credentials: session.credentials, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages: [{ role: 'user', content: 'hello' }], call, signal: stopped.signal, onText: () => {} });
+  expect(answer).toMatchObject({ state: 'cut', cut: 'stopped', error: null });
+  expect(log).toHaveLength(0);
+  const gone = { ...route, connection: { ...route.connection, value: { ...route.connection.value, type: 'missing-provider' } } };
+  expect(await session.tokens.snapshot(gone, {}, tokenLimits(route.model, {}), 'script', chat, signal())).toEqual({ ok: false, error: 'calibration-route' });
 }));

@@ -43,7 +43,7 @@ export const TRANSLATOR_CHAT: Chat = { title: null, character: null, models: {} 
 // A text of no story, as a new chat would translate it (TRANSLATOR_CHAT, or a character's for its card's texts), but
 // with no persona and no card: a card's text would go along as context of its own translation, every time.
 // The call ends however it went, stopped too: the abort only stops reading, and no reload picks this call up.
-export function translateText(session: Pick<Session, 'store' | 'credentials'>, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
+export function translateText(session: Pick<Session, 'store' | 'credentials' | 'tokens'>, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
   const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language, lane: null };
   const target: CallTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
   return translate(session, input, target, signal, onText).then(async (made) => {
@@ -185,7 +185,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const { route, settings, scope, budget, said, reply } = turn;
   const memory = turn.memory?.kind === 'built-in' ? { ...turn.memory, found: await findRecords(session, chat, scope.messages, signal) } : turn.memory;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const snapshot = await session.tokens.snapshot(route, settings, tokenLimits(route.model, sentSettings(session.store, route)), chat, signal);
+  const snapshot = await session.tokens.snapshot(route, settings, tokenLimits(route.model, sentSettings(session.store, route)), 'conversation', chat, signal);
   if (!snapshot.ok) return { kind: 'unsent', failure: snapshot, ...kept };
   const calibration = snapshot.data;
   const fit = providerFit(route, settings, calibration.fit.allowance);
@@ -195,7 +195,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const sent = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
-  const send = cacheSend({ turn, prompt: sent }, session.credentials.pool.peek(route.connection.value)?.id ?? null);
+  const send = cacheSend({ turn, prompt: sent, calibration }, session.credentials.pool.peek(route.connection.value)?.id ?? null);
   const against = send && forecast(prior(session.store, chat, session.read.chat(chat).snapshot()!.messages, Date.now()), send)?.against;
   const refit: Ask['refit'] = async (refusal, measurement) => {
     const decision = calibration.refused(refusal, measurement);

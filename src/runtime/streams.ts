@@ -1,4 +1,7 @@
 import { unavailableCalibration } from '../model/token-calibration';
+import { tokenLimits, sentSettings } from './chat-context';
+import type { Session } from './session';
+import type { RequestClass } from '../model/token-calibration';
 import { measureInput } from './token-calibration';
 import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
@@ -20,19 +23,32 @@ export type CallTarget = { id: string; chat: string | null; result: string; for:
 // Its marker is written once the server holds the call, never before: a pick-up that found the marker of a call not
 // started yet would read no call and save that as its result. A marker that fails to save only leaves the call to this
 // page; one that lands after its result was saved is removed by the next pick-up.
-export async function newCall(store: ObjectStore, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
+export async function newCall({ store, tokens }: Pick<Session, 'store' | 'tokens'>, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
   const key = await streamKey();
   const at = Date.now();
-  const call: StreamCall = { id, key: key.private, public: key.public, calibration: unavailableCalibration('preparation'), measure: (prepared) => measureInput(store, route.connection.id, purpose.kind === 'reply' ? 'conversation' : purpose.kind === 'input' ? 'translation' : purpose.kind, prepared) };
+  const requestClass = purpose.kind === 'reply' ? 'conversation' : purpose.kind === 'input' ? 'translation' : purpose.kind;
+  const call: StreamCall = { id, key: key.private, public: key.public, ...calibrate({ store, tokens }, route, requestClass, chat) };
   call.started = chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), calibration: call.calibration!, at, result, for: purpose }, { id, parent: chat });
   return call;
 }
 
 // A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
 // reload has no use for (bot: its chat, where the server limits these), or a 삽화 scene (runtime/illustrate).
-export async function pageCall(store: ObjectStore, route: Route, requestClass: 'script' | 'illustration' | 'likeness', bot: string | null): Promise<StreamCall> {
+export async function pageCall(session: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: 'script' | 'illustration' | 'likeness', chat: string | null): Promise<StreamCall> {
   const key = await streamKey();
-  return { id: crypto.randomUUID(), key: key.private, public: key.public, calibration: unavailableCalibration('preparation'), measure: (prepared) => measureInput(store, route.connection.id, requestClass, prepared), ...(bot !== null && { bot }) };
+  return { id: crypto.randomUUID(), key: key.private, public: key.public, ...calibrate(session, route, requestClass, chat), ...(requestClass === 'script' && chat !== null && { bot: chat }) };
+}
+
+// Auxiliary prompts stay caller-owned: no splitting, trimming, or shrink-and-retry after a provider refusal.
+function calibrate({ store, tokens }: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: RequestClass, chat: string | null): Pick<StreamCall, 'calibration' | 'measure' | 'preflight'> {
+  return {
+    calibration: unavailableCalibration('preparation'),
+    measure: (prepared) => measureInput(store, route.connection.id, requestClass, prepared),
+    ...(requestClass !== 'conversation' && { preflight: async (settings, signal) => {
+      const snapshot = await tokens.snapshot(route, settings, tokenLimits(route.model, sentSettings(store, route)), requestClass, chat, signal);
+      return snapshot.ok ? { ok: true, data: snapshot.data.fit } : snapshot;
+    } }),
+  };
 }
 
 // A batch's marker names no server object to drop.

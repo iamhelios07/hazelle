@@ -94,22 +94,23 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const tokens = new Tokens(usage);
   const drafts = bindings.drafts ?? new Drafts();
   const reading = new Set<string>();
-  const translator = new Translator(store, credentials, costs, reading);
+  const translator = new Translator(store, credentials, costs, tokens, reading);
   let runner: Promise<LuaRunner> | null = null;
   // Asked for once the session has closed, it makes none: nothing would be left to end it.
   const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
   const unfound = new UnfoundAssets();
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result), unfound);
   const read = new ReadModels(store, display);
-  const likenesses = new Likenesses({ store, credentials, files, catalogs });
-  const illustrator = new Illustrator({ store, credentials, files, likenesses });
+  const likenesses = new Likenesses({ tokens, store, credentials, files, catalogs });
+  const illustrator = new Illustrator({ tokens, store, credentials, files, likenesses });
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
-  const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, { lua: machine, tools });
+  const scripts: Scripts = new Scripts({ tokens, store, read, credentials, costs, display }, { lua: machine, tools });
   const memory = new Rememberer({ store, read, credentials, costs, scripts, tokens }, reading);
   const talk = new Talk(
     store,
     credentials,
     costs,
+    tokens,
     (chat, reply) => scripts.ending(chat, reply),
     // The bot's onOutput may rewrite the reply, so what reads the reply waits for it. The lease, taken while Talk still
     // holds the chat, keeps it loaded for the continuation or translation however soon the chat is left.

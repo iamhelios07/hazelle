@@ -41,6 +41,8 @@ export type Filling = { read: number; of: number } | 'failed' | null;
 export class Usage {
   private readonly rows = new Map<string, Ledger>();
   private cursor = 0;
+  private countedRows: Counted[] | null = null;
+  private measuredRows: Counted[] | null = null;
   private readonly closing = new AbortController();
   private running: Promise<unknown> | null = null;
   private filled: Filling = null;
@@ -52,13 +54,16 @@ export class Usage {
 
   readonly filling = () => this.filled;
 
-  calibrationRows(): Counted[] {
-    return [...this.rows.values()].flatMap((row) => row.type === 'cost' ? [] : [{ at: row.at, call: row.call, chat: row.chat, character: row.character }]);
+  // Tokens uses this stable identity to skip derivation until the ledger changes.
+  calibrationRows(): readonly Counted[] {
+    return this.measuredRows ??= [...this.rows.values()].flatMap((row) => row.type === 'cost' ? [] : [{ at: row.at, call: row.call, chat: row.chat, character: row.character }]);
   }
 
   close() {
     this.closing.abort();
     this.rows.clear();
+    this.countedRows = null;
+    this.measuredRows = null;
     this.changes.clear();
   }
 
@@ -80,13 +85,16 @@ export class Usage {
     const pin = pinned.data;
     let unreadable = false;
     const walked = await this.store.walk(SETTINGS_ID, 'ledger', (row, value) => {
-      if (isValue('ledger', value)) this.rows.set(row.id, value);
-      else unreadable = true;
+      if (isValue('ledger', value)) {
+        this.rows.set(row.id, value);
+        this.countedRows = null;
+        this.measuredRows = null;
+      } else unreadable = true;
     }, this.cursor, pin, signal);
     if (!walked.ok) return walked;
     if (unreadable) return { ok: false, error: 'unreadable' };
     this.cursor = walked.data;
-    return { ok: true, data: counted(this.rows.values()) };
+    return { ok: true, data: this.countedRows ??= counted(this.rows.values()) };
   }
 
   // Writes the rows of the calls made before the ledger, once per account: every call each chat's log keeps, its 삽화

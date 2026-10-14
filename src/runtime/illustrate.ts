@@ -74,7 +74,7 @@ export type Drawing = { chat: string; version: string } & ({ stage: 'scene' } | 
 export type Illustrating = ReadonlyMap<string, Drawing>;
 
 type Stopped = { kind: 'stopped' };
-type Deps = Pick<Session, 'store' | 'credentials' | 'files' | 'likenesses'>;
+type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'files' | 'likenesses'>;
 
 // The 삽화 prompt's own model, else the chat's 보조, with its 설정 묶음: what writes a scene and a pack's profiles.
 export function illustrateWriter(store: Deps['store'], chat: Chat, prompt: IllustratePrompt): { route: Route; settings: ModelSettings } | RouteFailure | { kind: 'profile-missing'; own: boolean } {
@@ -213,7 +213,7 @@ export class Illustrator {
     });
     if ('kind' in assembled) return assembled;
     const text = gather();
-    const call = await pageCall(store, route, 'illustration', null);
+    const call = await pageCall(this.deps, route, 'illustration', chat);
     const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(route), answer));

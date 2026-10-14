@@ -1,6 +1,8 @@
+export type RequestClass = 'conversation' | 'translation' | 'memory' | 'illustration' | 'likeness' | 'script';
+
 export type EstimateSource = 'prior' | 'model' | 'chat' | 'drift-reset' | 'unavailable';
 
-export type TokenEstimate = { source: EstimateSource; evidence: number; centre: number; upper: number; cold: boolean };
+export type TokenEstimate = { source: EstimateSource; evidence: number; centre: number; lower: number; upper: number; cold: boolean };
 export type TokenLimits = { hard: number | null; user: number | null; output: number };
 export type TokenFit = {
   source: EstimateSource;

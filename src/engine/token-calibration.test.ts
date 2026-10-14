@@ -16,11 +16,14 @@ it('halves evidence with either the observation or wall-time half-life', () => {
 });
 
 it('matches Student-t reference quantiles including fractional degrees and keeps predictive variation', () => {
+  expect(studentQuantile(0.01, 4)).toBeCloseTo(-3.746947387981, 9);
   expect(studentQuantile(0.99, 4)).toBeCloseTo(3.746947387981, 9);
   expect(studentQuantile(0.975, 10)).toBeCloseTo(2.228138851965, 9);
   expect(studentQuantile(0.99, 4.5)).toBeCloseTo(3.52705089, 6);
   const p = posterior(GLOBAL_PRIOR, { w: 10000, sum: 0, squares: 0 });
   expect(centres(p).upper).toBeGreaterThan(Math.exp(p.m + 0.04));
+  expect(centres(p).lower).toBeLessThan(Math.exp(p.m - 0.04));
+  expect(centres(p).lower * centres(p).upper).toBeCloseTo(Math.exp(2 * p.m), 12);
 });
 
 const observation = (at: number, input = 130, chat: string | null = 'chat') => ({ key: 'route', chat, at, input, denominator: 100, fingerprint: String(at) });
@@ -69,7 +72,7 @@ it('guards valid high counts and resets on a consecutive upward drift', () => {
 });
 
 it('fits the smaller native allowance after output reservation and never scales authored output', () => {
-  const estimate = { source: 'chat' as const, evidence: 10, centre: 1.2, upper: 1.5, cold: false };
+  const estimate = { source: 'chat' as const, evidence: 10, centre: 1.2, lower: 0.9, upper: 1.5, cold: false };
   expect(fitLimits({ hard: 1000, user: 900, output: 100 }, estimate)).toMatchObject({ bound: 'hard-upper', allowance: 600, multiplier: 1.5 });
   expect(fitLimits({ hard: 1000, user: 700, output: 100 }, estimate)).toMatchObject({ bound: 'user-centre', allowance: 500, multiplier: 1.2 });
   expect(fitLimits({ hard: null, user: 700, output: 100 }, estimate).allowance).toBe(500);
