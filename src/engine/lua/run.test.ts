@@ -125,6 +125,24 @@ describe('Lua runs', () => {
     expect(new Map(outcome.writes)).toEqual(new Map([['hp', '7'], ['unset', 'null'], ['__bag', '["key","map"]'], ['seen', 'map1']]));
   });
 
+  it("unsets on a nil write, which then reads as the card's default or null", async () => {
+    const card = { variables: [['mood', 'calm']] } as unknown as Snapshot['scope']['card'];
+    const outcome = await run(
+      `function onOutput(id)
+        setChatVar(id, 'mood', 'angry')
+        setChatVar(id, 'mood', nil)
+        setState(id, 'bag', { 'key' })
+        setChatVar(id, '__bag', nil)
+        setChatVar(id, 'seen', getChatVar(id, 'mood') .. '/' .. tostring(getState(id, 'bag')))
+      end`,
+      { kind: 'output' },
+      {},
+      { ...SNAPSHOT, scope: { ...SNAPSHOT.scope, card } },
+    );
+    expect(outcome.errors).toEqual([]);
+    expect(new Map(outcome.writes)).toEqual(new Map([['mood', 'calm'], ['__bag', 'null'], ['seen', 'calm/nil']]));
+  });
+
   it('turns chat writes into edits, removals and additions by the snapshot index', async () => {
     const outcome = await run(
       `function onOutput(id)
@@ -151,6 +169,23 @@ describe('Lua runs', () => {
     );
     expect(asked).toMatchObject({ errors: [], stop: true });
     expect((await run(`function onInput(id) stopChat(id) end`, { kind: 'input' })).stop).toBe(true);
+  });
+
+  it('refuses an unknown axLLM mode without a call, and awaits simpleLLM as a promise', async () => {
+    const model = vi.fn(async (role: 'main' | 'aux') => ({ success: true as const, result: role }));
+    const outcome = await run(
+      `onStart = async(function(id)
+        local bad = axLLM(id, {}, false, { mode = 'vision' })
+        local good = axLLM(id, {}, false, { mode = 'memory', streaming = true })
+        setChatVar(id, 'ax', tostring(bad.success) .. '|' .. bad.result .. '|' .. good.result)
+        setChatVar(id, 'simple', simpleLLM(id, 'hi'):await().result)
+      end)`,
+      { kind: 'start' },
+      { model },
+    );
+    expect(outcome.errors).toEqual([]);
+    expect(new Map(outcome.writes)).toEqual(new Map([['ax', 'false|Error: Invalid axLLM mode: vision|aux'], ['simple', 'main']]));
+    expect(model.mock.calls.map(([role]) => role)).toEqual(['aux', 'main']);
   });
 
   it("reads the card's background, and sees its own save only when the host keeps it", async () => {

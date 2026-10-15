@@ -23,8 +23,12 @@ export type Staleness = 'deleted' | 'changed' | 'records';
 // speaker's name and its text as the prompt renders it.
 export type ChatRead = { shown: Source[]; roles: ('user' | 'assistant')[]; speakers: string[]; texts: string[] };
 
+// A chat whose persona was deleted runs with none until the user picks another; Risu names that user 'User'
+// (util.ts getUserName).
+export const personaName = (persona: { name: string } | null) => persona?.name ?? 'User';
+
 export const speakersOf = ({ messages, persona, card }: { messages: readonly { role: 'user' | 'assistant' }[]; persona: { name: string } | null; card: { name: string } | null }) =>
-  messages.map(({ role }) => (role === 'user' ? (persona?.name ?? 'User') : (card?.name ?? 'Assistant')));
+  messages.map(({ role }) => (role === 'user' ? personaName(persona) : (card?.name ?? 'Assistant')));
 
 // found: the records retrieval ranked nearest the latest message, nearest first (engine/retrieval), none when nothing
 // could be found.
