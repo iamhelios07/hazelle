@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { fold } from '../model/chat';
 import { startChat } from './chat-log';
 import { projectGreetings } from './greetings';
-import { editModule, importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleAt, setModuleDeleted, setPromptModule } from './modules';
-import { addPrompt, chatPrompt, ofSort } from './prompts';
+import { editModule, importModule, modulesOf, pairWithPrompts, setCharacterModule, setModuleAlways, setModuleAt, setModuleDeleted, setPromptModule } from './modules';
+import { addPrompt, chatPrompt, ofSort, savePreset } from './prompts';
+import { convertPreset } from '../engine/import/preset';
 import { answerable, saying, stubRelay, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 import { evaluateChat, packsOf, togglesOf } from './chat-context';
@@ -86,5 +87,23 @@ describe('modules', () => {
     if (!added.ok) throw new Error(added.error);
     await editModule(store, added.data.id, { name: '종', description: '울려요' });
     expect(store.get('module', added.data.id)!.value).toMatchObject({ name: '종', description: '울려요', namespace: 'bell' });
+  });
+
+  it("pairs a preset's prompt with the modules it names, the one already here at import and the one that comes after", async () => {
+    const { store, files } = await server.account();
+    const module = (name: string, namespace: string, risu: string | null) => ({ name, description: '', namespace, risu, pack: { regex: [], triggers: [], toggles: [] }, lore: [], loreFolders: [], assets: [], unsupported: [] });
+    const bell = await importModule(store, files, module('Bell', 'bell', null), () => {});
+    if (!bell.ok) throw new Error(bell.error);
+    const read = convertPreset({ name: '짝', promptTemplate: [], moduleIntergration: 'bell, risu-chime' });
+    if (!read.ok) throw new Error(read.failure.kind);
+    const saved = await savePreset(store, read);
+    if (!saved.ok) throw new Error(saved.error);
+    expect(saved.data.paired).toEqual([bell.data.id]);
+
+    const chime = await importModule(store, files, module('Chime', 'chime', 'risu-chime'), () => {});
+    if (!chime.ok) throw new Error(chime.error);
+    const paired = await pairWithPrompts(store, chime.data.id, { risu: 'risu-chime', namespace: 'chime' });
+    expect(paired.ok && paired.data.map(({ id }) => id)).toEqual([saved.data.id]);
+    expect(store.get('prompt', saved.data.id)!.value).toMatchObject({ companions: ['bell', 'risu-chime'], modules: [bell.data.id, chime.data.id] });
   });
 });

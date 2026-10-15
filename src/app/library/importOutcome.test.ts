@@ -2,7 +2,8 @@ import { readTool } from '../../engine/import/tool';
 import { expect, it } from 'vitest';
 import { importCard } from '../../engine/import/card';
 import type { ImportedModule } from '../../engine/import/types';
-import { characterOutcome, moduleOutcome, toolOutcome, type Placement } from './importOutcome';
+import { convertPreset } from '../../engine/import/preset';
+import { characterOutcome, moduleOutcome, promptOutcome, toolOutcome, type Placement } from './importOutcome';
 
 it('keeps completed card and module reports as detached text without asset readers or source bytes', () => {
   const parsed = importCard('card.json', new TextEncoder().encode(JSON.stringify({ spec: 'chara_card_v3', data: { name: 'Mira', first_mes: 'Hi' } })));
@@ -11,9 +12,9 @@ it('keeps completed card and module reports as detached text without asset reade
   const imported = { ...parsed.card, assets: [{ name: 'picture', read: async () => bytes }] };
   const card = characterOutcome('card.charx', imported, { id: 'character', unsupported: [{ kind: 'not-image', count: 1 }], faceless: true });
   const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: imported.card, lore: [], loreFolders: [], assets: imported.assets, unsupported: [] };
-  const report = moduleOutcome('bell.risum', module, 'module', [], { at: null, failure: null });
-  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', placed: null, missed: ['이미지: 가져오지 못함', '이미지가 아닌 파일 1개'], unused: null });
-  expect(report).toEqual({ kind: 'module', file: 'bell.risum', id: 'module', title: '모듈 · Bell', holds: '에셋 1개', placed: { text: '어디에도 켜지 않았어요. 설정 › 모듈에서 켤 수 있어요.', failed: false }, missed: [], unused: null });
+  const report = moduleOutcome('bell.risum', module, 'module', [], { at: null, failure: null }, { prompts: [], failure: null });
+  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', placed: null, paired: null, missed: ['이미지: 가져오지 못함', '이미지가 아닌 파일 1개'], unused: null });
+  expect(report).toEqual({ kind: 'module', file: 'bell.risum', id: 'module', title: '모듈 · Bell', holds: '에셋 1개', placed: { text: '어디에도 켜지 않았어요. 설정 › 모듈에서 켤 수 있어요.', failed: false }, paired: null, missed: [], unused: null });
   expect(structuredClone([card, report])).toEqual([card, report]);
   imported.card.name = 'Changed';
   imported.assets.length = 0;
@@ -23,7 +24,7 @@ it('keeps completed card and module reports as detached text without asset reade
 
 it('says where a module was turned on, and that it was not when that failed', () => {
   const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: { regex: [], triggers: [], toggles: [] }, lore: [], loreFolders: [], assets: [], unsupported: [] };
-  const placed = (at: Placement['at'], failure: string | null = null) => moduleOutcome('bell.risum', module, 'module', [], { at, failure }).placed;
+  const placed = (at: Placement['at'], failure: string | null = null) => moduleOutcome('bell.risum', module, 'module', [], { at, failure }, { prompts: [], failure: null }).placed;
   expect([placed('character'), placed('prompt'), placed('always')].map((each) => each?.text)).toEqual(['이 캐릭터에 켰어요.', '이 프롬프트에 켰어요.', '항상 켰어요.']);
   expect(placed('character', '없어진 캐릭터예요.')).toEqual({ text: '이 캐릭터에 켜지 못했어요. 없어진 캐릭터예요.', failed: true });
 });
@@ -42,4 +43,12 @@ it('reports a tool import or a version replacement without retaining the code', 
   expect(updated.placed).toBeNull();
   expect(structuredClone(updated)).toEqual(updated);
   expect(updated).not.toHaveProperty('bytes');
+});
+
+it('names the slot a preset placed twice, and the modules its prompt was turned on with', () => {
+  const read = convertPreset({ name: '누렁이', promptTemplate: [{ type: 'description', role: 'system' }, { type: 'chat', rangeStart: 0, rangeEnd: 'end' }, { type: 'description', role: 'system' }] });
+  if (!read.ok) throw new Error(read.failure.kind);
+  const outcome = promptOutcome('nureong.risup', read, 'prompt', ['누렁이모듈']);
+  expect(outcome).toMatchObject({ kind: 'prompt', title: '프롬프트 · 누렁이', holds: '블록 2개', paired: { text: "'누렁이모듈' 모듈을 이 프롬프트에 켰어요.", failed: false } });
+  expect(outcome.missed[0]).toBe('겹친 캐릭터 설명 블록 1개(처음 것만 가져옴)');
 });

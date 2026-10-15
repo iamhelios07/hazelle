@@ -5,7 +5,7 @@ import { openCharacter } from '../../chat/editBeside';
 import { ACTS } from '../../common/acts';
 import { useSearch } from '../../common/useSearch';
 import { IMPORT_CHATS } from '../../common/words';
-import { useImport } from '../../library/ImportFlow';
+import { useImport } from '../../common/importing';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useWritingChats } from '../../session';

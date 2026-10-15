@@ -2,7 +2,7 @@ import { LayoutGrid, MessageSquarePlus, PackageOpen, Settings, UserRoundPlus } f
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { ACTS, importOf, newOf } from '../../common/acts';
-import { useImport } from '../../library/ImportFlow';
+import { useImport } from '../../common/importing';
 import { ShelfFace, shelfName } from '../../library/shelf';
 import { useNewCharacter } from '../../library/useCharacterActions';
 import { NO_CHARACTER, SETTINGS } from '../../common/words';

@@ -1,34 +1,38 @@
 import { importTool, undoToolImport } from '../../runtime/tools/store';
 import { useToast } from '../toast';
-import { Check, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Check, FileText, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { PRESET_EXTENSIONS } from '../../engine/import/preset';
 import { mergeUnsupported, type ImportFailure } from '../../engine/import/types';
 import { characterTexts, live } from '../../model/library';
 import { EMPTY_SETTINGS } from '../../model/settings';
 import { importCardFile } from '../../runtime/card-file';
+import { setDeleted } from '../../runtime/characters';
 import { importChat } from '../../runtime/chat-log';
-import type { ApiFailure } from '../../runtime/api';
+import type { ApiFailure, ApiResult } from '../../runtime/api';
 import { ImportWorker } from '../../runtime/import/client';
 import { ImportReadError, type ChatsRead } from '../../runtime/import/protocol';
-import { importModule, setModuleAt, type ModulePlace } from '../../runtime/modules';
+import { importModule, pairWithPrompts, setModuleAt, setModuleDeleted, type ModulePlace } from '../../runtime/modules';
 import { fillPictures, importRisuChats, risuMatch } from '../../runtime/move';
-import { ofSort } from '../../runtime/prompts';
+import { ofSort, removePrompt, savePreset } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
+import { ImportContext } from '../common/importing';
 import { useSearch } from '../common/useSearch';
-import { NO_CHARACTER } from '../common/words';
+import { moduleName, NO_CHARACTER, promptName } from '../common/words';
 import { useFiles, useLibrary, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
 import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Menu, MenuItem, pickFiles, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
-import { characterOutcome, chatOutcome, moduleOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
+import { characterOutcome, chatOutcome, moduleOutcome, promptOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
 import { missedLines, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
 import { MoveFlow } from './MoveFlow';
 import { stepOf } from './saving';
 
-const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin,.js';
+const PRESETS = PRESET_EXTENSIONS.join(',');
+const ACCEPT = `.png,.charx,.jpg,.jpeg,.json,.risum,.bin,.js,${PRESETS}`;
 
 type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed: string[] };
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
@@ -39,15 +43,8 @@ type Ask = ({ kind: 'fill'; name: string; answer: (fill: boolean) => void } | { 
 // Where a file of chats goes: a character's id, null for 캐릭터 없이, undefined where the way in names none.
 type Target = string | null | undefined;
 type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Result[]; ask: Ask | null };
-
-// bring: a file the app made, a share link's charx, taken as a dropped one; true once a character came of it.
-const ImportContext = createContext<{ pick: () => void; pickChats: (target: string | null) => void; move: () => void; bring: (file: File) => Promise<boolean> } | null>(null);
-
-export function useImport() {
-  const context = useContext(ImportContext);
-  if (!context) throw new Error('useImport outside ImportProvider');
-  return context;
-}
+// 되돌리기 for what one file brought. Its closure holds ids, never the parsed file, which would stay alive with it.
+type Undo = { message: string; run: () => Promise<ApiResult<unknown> | ApiFailure> };
 
 const FAILURE: Record<ImportFailure['kind'], string> = {
   'unknown-format': '가져올 수 없는 형식이에요.',
@@ -55,9 +52,13 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요.',
 };
 
-// Keyed by the failure details of engine/import/tool and of a chat file; a detail missing here reads as 파일을 읽지 못했어요.
+// Keyed by the failure details of engine/import/tool, of a chat file and of a preset (PresetFailure); a detail missing
+// here reads as 파일을 읽지 못했어요.
 const DETAIL_FAILURE: Record<string, string> = {
   'other-version': '이전 버전에서 만든 채팅 파일이라 가져올 수 없어요.',
+  'not-preset': 'Risu 파일이지만 프리셋이 아니에요.',
+  'decrypt-failed': '프리셋을 열지 못했어요. 파일이 깨졌을 수 있어요.',
+  'no-template': '프롬프트 템플릿을 쓰지 않는 프리셋은 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
   'tool-too-large': '도구 파일이 너무 커요.',
   'tool-encoding': 'UTF-8 텍스트 파일이 아니에요.',
   'tool-api': '헤이젤 도구 파일이 아니에요. 맨 위에 //@api 1이 있어야 해요.',
@@ -73,6 +74,16 @@ const DETAIL_FAILURE: Record<string, string> = {
 class ImportCancelled extends Error {}
 
 const unsaved = (file: string, failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
+
+// An import is undone as its kind is deleted, to 휴지통.
+const undoCharacter = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${name}' 캐릭터를 가져왔어요.`, run: () => setDeleted(store, id, Date.now()) });
+const undoModule = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${moduleName(name)}' 모듈을 가져왔어요.`, run: () => setModuleDeleted(store, id, Date.now()) });
+const undoPrompt = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${promptName(name)}' 프롬프트를 가져왔어요.`, run: () => removePrompt(store, id) });
+
+async function undoAll(undos: Undo[]): Promise<{ ok: true } | ApiFailure> {
+  const done = await Promise.all(undos.map(({ run }) => run()));
+  return done.find((result): result is ApiFailure => !result.ok) ?? { ok: true };
+}
 
 function describeImportFailure({ kind, detail, line }: ImportFailure): string {
   const known = detail && DETAIL_FAILURE[detail];
@@ -151,7 +162,8 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     return saved.ok ? chatOutcome(file, saved.data, name, moveMissed(read.missed)) : unsaved(file, saved);
   }
 
-  async function save(file: File, place: ModulePlace | null, target: Target, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>, choose: (name: string | null, fallback: string | null) => Promise<string | null>): Promise<Result> {
+  // offer: its 되돌리기. A new tool offers none: importTool refuses its identity again while the binned one is kept.
+  async function save(file: File, place: ModulePlace | null, target: Target, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>, choose: (name: string | null, fallback: string | null) => Promise<string | null>, offer: (undo: Undo) => void): Promise<Result> {
     const reader = new ImportWorker();
     readers.current.add(reader);
     try {
@@ -164,15 +176,25 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         const previous = saved.data.previous;
         const placed = !previous && place && (await setModuleAt(store, place, saved.data.id, true));
         const outcome = toolOutcome(file.name, parsed.tool.manifest, saved.data, { at: place?.kind ?? null, failure: placed && !placed.ok ? describeFailure(placed) : null });
-        if (previous) toast.undoable(outcome.holds, () => undoToolImport(store, saved.data.id, previous));
+        if (previous) offer({ message: outcome.holds, run: () => undoToolImport(store, saved.data.id, previous) });
         return outcome;
+      }
+      if ('preset' in parsed) {
+        const saved = await savePreset(store, parsed.preset);
+        if (!saved.ok) return unsaved(file.name, saved);
+        offer(undoPrompt(store, saved.data.id, parsed.preset.prompt.name));
+        const modules = saved.data.paired.map((id) => moduleName(store.get('module', id)!.value.name));
+        return promptOutcome(file.name, parsed.preset, saved.data.id, modules);
       }
       if ('module' in parsed) {
         const saved = await importModule(store, files, parsed.module, (step) => progress(stepOf(step)));
         if (!saved.ok) return unsaved(file.name, saved);
+        offer(undoModule(store, saved.data.id, parsed.module.name));
         const placed = place && (await setModuleAt(store, place, saved.data.id, true));
         const failure = placed && !placed.ok ? describeFailure(placed) : null;
-        return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.unsupported, { at: place?.kind ?? null, failure });
+        const paired = await pairWithPrompts(store, saved.data.id, parsed.module);
+        const pairing = paired.ok ? { prompts: paired.data.map((prompt) => promptName(prompt.value.name)), failure: null } : { prompts: [], failure: describeFailure(paired) };
+        return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.unsupported, { at: place?.kind ?? null, failure }, pairing);
       }
       const { name } = parsed.card.card;
       const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
@@ -184,6 +206,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       }
       const saved = await importCardFile(store, files, parsed.card, (step) => progress(stepOf(step)));
       if (!saved.ok) return unsaved(file.name, saved);
+      offer(undoCharacter(store, saved.data.id, name));
       return characterOutcome(file.name, parsed.card, saved.data);
     } catch (error) {
       if (!(error instanceof ImportReadError)) throw error;
@@ -203,6 +226,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     }
     const place = placeOf(store, route);
     const results: Result[] = [];
+    const undos: Undo[] = [];
     for (const file of files) {
       if (!mounted.current) return results;
       setState({ busy: { file: file.name, steps: [] }, results, ask: null });
@@ -212,12 +236,15 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       const choose = (name: string | null, fallback: string | null) =>
         new Promise<string | null>((answer, reject) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, fallback, answer, cancel: cancel(reject) } }));
       try {
-        results.push(await save(file, place, target, progress, ask, choose));
+        results.push(await save(file, place, target, progress, ask, choose, (undo) => undos.push(undo)));
       } catch (error) {
         if (!(error instanceof ImportCancelled)) throw error;
         break;
       }
     }
+    // One 되돌리기 for the whole batch.
+    if (undos.length === 1) toast.undoable(undos[0]!.message, undos[0]!.run);
+    else if (undos.length > 1) toast.undoable(`${undos.length}개를 가져왔어요.`, () => undoAll(undos));
     setState(results.length > 0 ? { busy: null, results, ask: null } : null);
     return results;
   }
@@ -228,8 +255,8 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     else setNotice(() => then);
   }
 
-  function open(to: Target) {
-    asked(() => pickFiles(ACCEPT, true, (picked) => void take(picked, to)));
+  function open(to: Target, accept = ACCEPT) {
+    asked(() => pickFiles(accept, true, (picked) => void take(picked, to)));
   }
 
   const dragging = useFileDrop((dropped) => asked(() => void take(dropped, undefined)));
@@ -237,6 +264,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const done = state?.results.flatMap((result) => result.kind === 'character' ? [result.id] : []) ?? [];
   const chats = state?.results.flatMap((result) => result.kind === 'chat' ? [result.id] : []) ?? [];
   const modules = state?.results.flatMap((result) => result.kind === 'module' ? [result.id] : []) ?? [];
+  const prompts = state?.results.flatMap((result) => result.kind === 'prompt' ? [result.id] : []) ?? [];
   const go = (to: Route) => {
     setState(null);
     navigate(to);
@@ -248,6 +276,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       value={{
         pick: () => open(undefined),
         pickChats: open,
+        pickPrompts: () => open(undefined, PRESETS),
         move: () => asked(() => setAsking(true)),
         bring: (file) => new Promise((done) => asked(() => void take([file], undefined).then((results) => done(results.some((result) => result.kind === 'character'))))),
       }}
@@ -268,7 +297,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           제작자가 RisuAI에서만 쓰도록 배포한 봇은 가져오지 마세요.
         </ConfirmDialog>
       )}
-      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈, 채팅이나 Risu 백업을 가져와요</DropOverlay>}
+      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈, 프롬프트, 채팅이나 Risu 백업을 가져와요</DropOverlay>}
       {asking && (
         <MoveDialog
           onRead={(files) => {
@@ -312,6 +341,15 @@ export function ImportProvider({ children }: { children: ReactNode }) {
                 모듈 보기
               </Button>
             )}
+            {!state.busy && prompts.length === 1 && (
+              <Button
+                variant={done.length === 1 ? 'secondary' : 'primary'}
+                icon={FileText}
+                onClick={() => go({ kind: 'prompt', id: prompts[0]!, pane: null })}
+              >
+                프롬프트 보기
+              </Button>
+            )}
           </Stack>
         </Dialog>
       )}
@@ -323,7 +361,7 @@ function Summary({ result }: { result: ImportOutcome }) {
   return (
     <Section level={3} title={result.title}>
       <Text>{result.holds}</Text>
-      {result.placed && (result.placed.failed ? <Callout tone="warn">{result.placed.text}</Callout> : <Text>{result.placed.text}</Text>)}
+      {[result.placed, result.paired].map((line, index) => line && (line.failed ? <Callout key={index} tone="warn">{line.text}</Callout> : <Text key={index}>{line.text}</Text>))}
       {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
       {result.unused && <Text variant="note">{result.unused}</Text>}
     </Section>

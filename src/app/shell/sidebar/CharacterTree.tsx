@@ -6,7 +6,7 @@ import { ACTS, importOf, newOf } from '../../common/acts';
 import { useSearch } from '../../common/useSearch';
 import { ago } from '../../common/time';
 import { Welcome } from '../../library/HomeScreen';
-import { useImport } from '../../library/ImportFlow';
+import { useImport } from '../../common/importing';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useNewCharacter } from '../../library/useCharacterActions';
 import { useLibrary } from '../../session';

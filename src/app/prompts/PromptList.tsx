@@ -10,9 +10,9 @@ import { useSearch } from '../common/useSearch';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { defaultMark, PAGES, promptName } from '../common/words';
-import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, FileButton, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
+import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
 import { taskModelWords } from './ModelPane';
-import { usePresetImport } from './PresetImport';
+import { useImport } from '../common/importing';
 import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
 import { byLastUse, byPromptName, groupPrompts } from '../common/promptCopies';
 
@@ -45,7 +45,7 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [shown, setShown] = useState<PromptSort>('conversation');
   const [order, setOrder] = useState<Order>('name');
-  const preset = usePresetImport(onPick);
+  const { pickPrompts } = useImport();
 
   const badge = (prompt: Stored<'prompt'>) => defaultMark(isDefaultPrompt(settings, prompt), prompt.value.name);
   const tags = (id: string) => (id === inUse ? ['사용 중'] : []);
@@ -110,9 +110,9 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   );
   const actions = (
     <Row kind="actions">
-      <FileButton accept=".risup,.risupreset" icon={ACTS.import.icon} onFiles={(files) => preset.take(files)}>
+      <Button variant="secondary" icon={ACTS.import.icon} onClick={pickPrompts}>
         Risu 프리셋 가져오기
-      </FileButton>
+      </Button>
       {adding}
     </Row>
   );
@@ -170,7 +170,6 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
           {current.none}
         </Empty>
       )}
-      {preset.view}
     </>
   );
   return frame({ head: { title: PAGES.prompts, actions }, body });

@@ -1,7 +1,7 @@
 import type { ImportedModule, Profiles, Unsupported } from '../engine/import/types';
 import { likenessId } from '../model/likeness';
 import type { Stored } from '../model/kinds';
-import type { Module } from '../model/library';
+import { live, type Module } from '../model/library';
 import { EMPTY_SETTINGS } from '../model/settings';
 import type { ApiResult } from './api';
 import { markDeleted } from './removal';
@@ -58,6 +58,29 @@ export function setCharacterModule(store: ObjectStore, character: string, id: st
 // inside only narrows.
 export function setPromptModule(store: ObjectStore, prompt: StoredPrompt<'conversation'>, id: string, on: boolean): Promise<ApiResult<Stored<'prompt'>>> {
   return store.update('prompt', prompt.id, (current) => (current.task === undefined ? { ...current, modules: switched(current.modules, id, on) } : current));
+}
+
+// A Risu preset names its modules by Risu id or namespace (Risu matches either), the id first. Only live ones: a name no
+// module here answers waits for one imported later (pairWithPrompts). One named twice is on once.
+export function companionModules(store: Pick<ObjectStore, 'list'>, names: string[]): string[] {
+  const modules = modulesOf(store);
+  const named = (name: string) => modules.find(({ value }) => value.risu === name) ?? modules.find(({ value }) => value.namespace === name);
+  return [...new Set(names.flatMap((name) => named(name)?.id ?? []))];
+}
+
+// A module arriving after a Risu preset that named it is turned on for that preset's prompts. Its Risu id is the file's:
+// a module imported on its own does not store one.
+export async function pairWithPrompts(store: ObjectStore, id: string, { risu, namespace }: Pick<ImportedModule, 'risu' | 'namespace'>): Promise<ApiResult<StoredPrompt<'conversation'>[]>> {
+  const due = store.list('prompt').filter((prompt): prompt is StoredPrompt<'conversation'> => {
+    if (!live(prompt) || prompt.value.task !== undefined) return false;
+    const { companions, modules } = prompt.value;
+    return !!companions?.some((name) => name === risu || name === namespace) && !modules?.includes(id);
+  });
+  for (const prompt of due) {
+    const set = await setPromptModule(store, prompt, id, true);
+    if (!set.ok) return set;
+  }
+  return { ok: true, data: due };
 }
 
 export function setPersonaModule(store: ObjectStore, persona: string, id: string, on: boolean): Promise<ApiResult<Stored<'persona'>>> {

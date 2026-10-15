@@ -8,7 +8,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import { chatModel, setPromptModel } from './assignment';
 import { setChatPrompt } from './chat-log';
-import { addDefaults, addPrompt, ILLUSTRATOR_ID, chatPrompt, copyPrompt, importPrompt, removePrompt, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
+import { addDefaults, addPrompt, ILLUSTRATOR_ID, chatPrompt, copyPrompt, removePrompt, savePreset, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import starter from './starter-prompt.risup?inline';
 import { testServer } from './testing';
 
@@ -115,8 +115,10 @@ describe('prompts', () => {
 
   it('copies a prompt as the user’s own, remembering its origin', async () => {
     const { store } = await server.account();
-    const imported = await importPrompt(store, 'starter.risup', bytes);
-    const id = imported.ok ? imported.id : '';
+    const read = await importPreset('starter.risup', bytes);
+    if (!read.ok) throw new Error(read.failure.kind);
+    const imported = await savePreset(store, read);
+    const id = imported.ok ? imported.data.id : '';
     const copied = await copyPrompt(store, id, '핑퐁 (사본)');
     const original = store.get('prompt', id)!.value;
     expect(copied.ok && copied.data.value).toEqual({ ...original, name: '핑퐁 (사본)', origin: { id, name: '🏓 핑퐁 간소화' }, imported: undefined });
