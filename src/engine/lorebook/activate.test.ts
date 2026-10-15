@@ -26,7 +26,7 @@ const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
 });
 const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, message: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
 const run = (entries: LoreEntries, history: HistoryMessage[], more: Partial<LoreTurn> & { settings?: Card['loreSettings']; budget?: number } = {}) =>
-  prepareLore(entries, more.settings ?? NULLS, more.budget ?? 800).activate({ history, turn: history.length, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, ...more });
+  prepareLore(entries, more.settings ?? NULLS, more.budget ?? 800).activate({ history, turn: history.length, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, marks: new Set(['main', 'globalNote']), ...more });
 const order = (activation: Activation) => activation.placed.map(({ id }) => id);
 const ids = (activation: Activation) => order(activation).sort();
 const why = (activation: Activation, id: string) => activation.fired.find((fired) => fired.id === id)?.why;
@@ -179,7 +179,7 @@ describe('activate', () => {
     const history = chat('bell', 'quiet', 'quiet', 'quiet').map((message) => ({ ...message, get text() { reads++; return message.text; } }));
     const entries = [lore('sticky', { keys: ['bell'], content: '@@scan_depth 3\n@@unknown\n@@@keep_activate_after_match\nsticky' })];
     const book = prepareLore(entries, { ...NULLS, scanDepth: 1 }, 800);
-    const input = { history, turn: 3, greeting: null, afterMatch: [], seed: 'send', cost: (_: string, body: string) => body.length };
+    const input = { history, turn: 3, greeting: null, afterMatch: [], seed: 'send', cost: (_: string, body: string) => body.length, marks: new Set<string>() };
     const first = book.activate(input);
     expect(book.sticky).toBe(true);
     expect(first.afterMatch).toEqual(['sticky']);
@@ -270,5 +270,11 @@ describe('activate', () => {
       lost: { kind: 'dropped', cause: 'no-target', tokens: 4 },
       miss: { kind: 'dropped', cause: 'no-target', tokens: 4 },
     });
+  });
+
+  it('drops an @@inject_at entry whose target no text block of the prompt carries', () => {
+    const result = run([lore('main', { constant: true, content: '@@inject_at main\nmain' }), lore('note', { constant: true, content: '@@inject_at globalNote\nnote' })], [], { marks: new Set(['main']) });
+    expect(order(result)).toEqual(['main']);
+    expect(result.fired.find(({ id }) => id === 'note')!.fate).toEqual({ kind: 'dropped', cause: 'no-block', target: 'globalNote', tokens: 4 });
   });
 });
