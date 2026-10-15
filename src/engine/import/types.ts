@@ -202,6 +202,7 @@ export const MOVE_UNSUPPORTED_KINDS = [
   'missing-picture',
   'escape-output',
   'lore-depth',
+  'chat-toggles',
 ] as const;
 export type MoveUnsupportedKind = (typeof MOVE_UNSUPPORTED_KINDS)[number];
 export type MoveUnsupported = { kind: MoveUnsupportedKind; count: number };

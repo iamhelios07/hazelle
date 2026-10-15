@@ -111,6 +111,9 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
     if (index <= cut || message.disabled === true || message.isComment === true) add(missed, 'hidden-message');
   }
   if (text(chat.supaMemoryData).trim() || [chat.hypaV2Data, chat.hypaV3Data].some(holdsData)) add(missed, 'memory');
+  // Risu reads these over the account's toggles whether or not useLocallySetGlobalVariables is still on; that flag only
+  // decides where a new value is written (chatVar.svelte.ts getGlobalChatVar). '' and 'null' read as unset.
+  if (Object.entries(record(chat.GLGlobalVariables)).some(([key, value]) => key.startsWith('toggle_') && value && value !== 'null')) add(missed, 'chat-toggles');
   const marked = new Set(list(chat.bookmarks).filter((id) => typeof id === 'string'));
   const names = record(chat.bookmarkNames);
   return {
