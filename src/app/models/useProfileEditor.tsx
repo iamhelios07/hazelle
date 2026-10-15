@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit, SERVICE_TIERS, VERBOSITY, WHOLE, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
+import type { Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { profileUsers, renameProfile, setProfileSettings, withSettings, type ProfileUser } from '../../runtime/profiles';
 import { choices } from '../common/reading';
@@ -9,7 +10,7 @@ import { typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
 import { detailLabel, DISCOUNT, UNSET } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
-import { ChoiceGroup, Disclosure, NumberInput, PhraseField, Section, SettingGroup, SettingRow, Stack, Switch } from '../ui';
+import { ChoiceGroup, Disclosure, NumberInput, PhraseField, Section, SettingGroup, SettingRow, Switch } from '../ui';
 import { CACHE, changeLine, DETAIL, LEVELS, levelName, MAIN, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
 import { count, readOptional, readTyped } from '../common/typedNumber';
 
@@ -30,9 +31,9 @@ const split = ({ name, ...settings }: Partial<Saved>): { name?: string; settings
 
 // The editing of one 모델 설정: its autosave, drafts and rows. ProfileScreen frames it with the 설정's own header and the
 // models on it; a model's page frames it with the model. One of the two mounts per route, so one autosave queue per 설정.
-// notes: whether a row says which other models leave a value out or cap it; a model's own page says that of itself
-// once, above the rows, and not of the others.
-export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { notes?: boolean } = {}) {
+// model: the page's own model. Its page says once, above the rows, what that model leaves out or caps, so no row notes
+// it of the others; and an empty field shows that model's own number where the catalog gave one.
+export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?: Starred } = {}) {
   const store = useStore();
   const settings = useSettings();
   const connections = useConnections();
@@ -71,7 +72,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { 
   const callable = users.filter((user): user is User & { schema: SettingsSchema } => user.schema !== null);
 
   function noteFor(setting: Change['setting']): string | undefined {
-    if (!notes) return undefined;
+    if (model) return undefined;
     const left = users.filter((user) => user.changes.some((change) => change.setting === setting && change.change === 'left-out')).map((user) => user.model.name);
     const capped = users.flatMap((user) => user.changes.flatMap((change) => (change.setting === setting && change.change === 'capped' ? [`${user.model.name} ${count(change.to)}`] : [])));
     return changeLine(left, capped);
@@ -80,6 +81,8 @@ export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { 
   function numberRow(field: Field): ReactNode {
     const { label, help, unit, unset } = NUMBER[field];
     const value = shown[field];
+    // null: the catalog gave no number, so the field keeps naming where the value comes from.
+    const known = (field === 'maxOutput' ? model?.maxOutput : field === 'context' ? model?.contextLength : null) ?? undefined;
     const draft = typedText(drafts[field], (text) => readNumber(text, field), value, (number) => (number === undefined ? '' : String(number)));
     const typed = draft.trim() === '' ? null : readTyped(draft, whole(field));
     return (
@@ -87,10 +90,21 @@ export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { 
         key={field}
         label={label}
         help={help}
+        sub={value === undefined && known !== undefined ? (unset ?? UNSET) : undefined}
         changed={value !== undefined}
         error={typed && !typed.ok ? typed.error : undefined}
         note={noteFor(field)}
-        control={<NumberInput label={label} value={draft} unit={unit} placeholder={unset ?? UNSET} invalid={typed?.ok === false} onChange={(next) => type(field, next, (number) => ({ [field]: number }))} />}
+        control={
+          <NumberInput
+            label={label}
+            value={draft}
+            unit={unit}
+            placeholder={known === undefined ? (unset ?? UNSET) : count(known)}
+            placeholderTone={known === undefined ? 'hint' : 'value'}
+            invalid={typed?.ok === false}
+            onChange={(next) => type(field, next, (number) => ({ [field]: number }))}
+          />
+        }
       />
     );
   }
@@ -129,14 +143,13 @@ export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { 
         changed={reasoning !== undefined}
         error={typed && !typed.ok ? typed.error : undefined}
         note={noteFor('reasoning')}
-        wide
         control={
-          <Stack gap="related">
+          <>
             <ChoiceGroup layout="fit" label="추론" options={options} value={current} onChange={pick} />
             {reasoning?.kind === 'budget' && (
               <NumberInput label="추론 예산" unit="토큰" value={draft} invalid={!typed?.ok} onChange={(next) => type('budget', next, (tokens) => ({ reasoning: { kind: 'budget', tokens } }))} />
             )}
-          </Stack>
+          </>
         }
       />
     );
@@ -154,7 +167,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { 
         note={noteFor(setting)}
         control={
           <ChoiceGroup<V | 'unset'>
-            layout="segmented"
+            layout="fit"
             label={label}
             options={[{ value: 'unset', label: UNSET }, ...values.map((choice) => ({ value: choice, label: words[choice] }))]}
             value={value ?? 'unset'}
@@ -174,7 +187,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { 
       note={noteFor('cache')}
       control={
         <ChoiceGroup
-          layout="segmented"
+          layout="fit"
           label="캐시"
           options={[{ value: 'off' as const, label: '끔' }, ...choices(CACHE)]}
           value={shown.cache ?? 'off'}
@@ -215,7 +228,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { notes = true }: { 
       changed={shown.systemAsUser !== undefined}
       control={
         <ChoiceGroup
-          layout="segmented"
+          layout="fit"
           label="시스템 메시지 보내는 방식"
           options={[
             { value: 'as-is', label: '시스템 메시지로' },

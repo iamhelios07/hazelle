@@ -120,7 +120,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가; a dot when something behind it needs a look |
 | controls | `Link` | `Link.module.css` | A link to another site |
 | controls | `MarkupArea` (`typeInto`, `markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea; an insert into it that Ctrl+Z takes back; given `expand`, the big editor (`useBigEdit`) from a button beside the text |
-| controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |
+| controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes; an empty field's placeholder as a hint, or as the value in effect in the muted text color |
 | controls | `PickCard` | `PickCard.module.css` | A choice that leads its page, as a card: what it is, what is chosen and where that comes from; opens a menu, or a place; an ⓘ in its corner when given help |
 | controls | `PhraseField` | `PhraseField.module.css` | Phrases as removable chips and a field that adds one on Enter, such as stop phrases |
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |

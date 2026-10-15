@@ -12,6 +12,10 @@
   text-align: end;
 }
 
+.value::placeholder {
+  color: var(--color-text-muted);
+}
+
 .unit {
   composes: note from '../foundation/type.module.css';
 }

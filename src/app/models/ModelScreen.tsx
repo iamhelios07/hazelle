@@ -19,7 +19,7 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Tag } from '../ui';
-import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE, tokens } from './settingWords';
+import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE } from './settingWords';
 import { useProfileEditor } from './useProfileEditor';
 import { count } from '../common/typedNumber';
 
@@ -169,8 +169,6 @@ function ChatModelScreen({ connection, model, back }: Props) {
         <Facts
           variant="row"
           items={[
-            { label: '컨텍스트 길이', value: tokens(model.contextLength) },
-            { label: '응답 최대 길이', value: tokens(model.maxOutput) },
             { label: '입력', value: inputs(model) },
             { label: '모델 ID', value: model.id },
           ]}
@@ -196,11 +194,11 @@ function ChatModelScreen({ connection, model, back }: Props) {
     </Screen>
   );
 
-  return current ? <Editing stored={current} frame={frame} /> : frame(null, null);
+  return current ? <Editing stored={current} model={model} frame={frame} /> : frame(null, null);
 }
 
 // The hook needs a 설정 to edit, so a model whose 설정 is gone renders the frame without it.
-function Editing({ stored, frame }: { stored: Stored<'profile'>; frame: (status: SaveStatus | null, rows: ReactNode) => ReactNode }) {
-  const { status, rows } = useProfileEditor(stored, { notes: false });
+function Editing({ stored, model, frame }: { stored: Stored<'profile'>; model: Starred; frame: (status: SaveStatus | null, rows: ReactNode) => ReactNode }) {
+  const { status, rows } = useProfileEditor(stored, { model });
   return frame(status, rows);
 }
