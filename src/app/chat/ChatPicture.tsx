@@ -10,7 +10,7 @@ import { ACTS } from '../common/acts';
 import { describeIllustrateFailure } from '../common/failure';
 import { timeOfDay } from '../common/time';
 import { Button, Dialog, Failure, IconButton, StoryPicture, Switcher, TextField } from '../ui';
-import type { ChatActions, Reshaping } from './useChat';
+import type { IllustrationActions, Reshaping } from './useChatIllustrations';
 
 // What a message's slot holds: a run under way or failed comes before the picture paged to. A failed run with no scene
 // has no paragraph and goes at the message end.
@@ -36,7 +36,7 @@ type Props = {
   // A scene being written for the message, which another run must wait for.
   running: boolean;
   url: PictureUrl;
-  actions: ChatActions;
+  actions: IllustrationActions;
 };
 
 export function ChatPicture({ slot, message, pictures, onPage, running, url, actions }: Props) {
@@ -119,7 +119,7 @@ const UNREAD: Record<SceneInvalid, (paragraphs: number) => string> = {
 };
 
 // 어떻게 바꿀까요?: the scene as the writer answers it, read back through parseScene before anything is drawn.
-export function SceneDialog({ reshaping, actions }: { reshaping: Reshaping; actions: ChatActions }) {
+export function SceneDialog({ reshaping, actions }: { reshaping: Reshaping; actions: IllustrationActions }) {
   const [text, setText] = useState(() => sceneText(reshaping.scene));
   const [error, setError] = useState<string | undefined>();
   const close = () => actions.reshape(null);
