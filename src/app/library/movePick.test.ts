@@ -11,7 +11,7 @@ describe('tickable', () => {
       personas: [{ key: 0, name: 'n', alias: '' }],
       presets: [{ key: 0, name: 'p', failure: null }, { key: 1, name: 'p', failure: 'no-template' }],
       modules: ['m', 'n'].map((risu, key) => ({ key, name: risu, risu, assetCount: 0 })),
-      alwaysModules: ['m'], loreBudget: null, unsupported: [],
+      alwaysModules: ['m'], loreBudget: null, toggles: {}, unsupported: [],
     };
     const can = tickable(backup, { characters: new Set(['a']), modules: new Set(['m']) });
     expect(can).toEqual({ characters: [false, true], personas: [true], presets: [true, false], modules: [false, true] });

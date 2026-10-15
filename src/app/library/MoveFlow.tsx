@@ -310,6 +310,7 @@ function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
       {backup.unsupported.length > 0 && <Callout tone="warn">백업에서 못 가져온 것: {moveMissed(backup.unsupported).join(' · ')}</Callout>}
       <Text>{`캐릭터 ${moved.characters.length}개 · 대화 ${chats}개 · 페르소나 ${moved.personas}개 · 프롬프트 ${moved.prompts}개 · 모듈 ${moved.modules.length}개`}</Text>
       {moved.loreBudget !== null && <Text variant="note">{`Risu에서 정한 ${LORE_BUDGET_LABEL}(${countText(moved.loreBudget)}토큰)도 가져왔어요.`}</Text>}
+      {moved.toggles > 0 && <Text variant="note">{`Risu에서 쓰던 토글 값 ${moved.toggles}개도 가져왔어요.`}</Text>}
       {missed.length > 0 && (
         <Section level={3} title="가져오지 않은 것">
           <Outcome label="가져오지 않은 것" items={missed} />
