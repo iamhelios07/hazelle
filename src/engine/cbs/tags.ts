@@ -3,6 +3,7 @@ import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture, SIGNATURE 
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
+import type { HistoryMessage } from '../history';
 import { calc } from './math';
 import { calendarDate, clockTime, duration, formatTime } from './time';
 
@@ -302,7 +303,16 @@ define('lastmessageid lastmessageindex', 0, (_, { context }) => (context.message
 define('previouscharchat lastcharmessage', 0, (_, { context }) => lastOf(context, 'assistant'));
 define('previoususerchat lastusermessage', 0, (_, { context }) => lastOf(context, 'user'));
 define('previouschatlog', 1, ([number], { context }) => context.messages[Number(number) + opened(context)]?.text ?? 'Out of range');
-define('history messages', 0, (_, { context }) => serialize(context.messages.map(({ text }) => text)));
+// Each message a JSON object of role, data and time, as Risu's history gives it (cbs.ts), since a bot's Lua reads the
+// role back from it to tell the user's messages apart; with an argument the texts, `role` prefixing each with its role.
+const luaRole = (role: HistoryMessage['role']) => (role === 'user' ? 'user' : 'char');
+define('history messages', 0, ([how], { context }) =>
+  serialize(
+    context.messages.map(({ role, text, time }) =>
+      how === undefined ? JSON.stringify({ role: luaRole(role), data: text, ...(time !== null && { time }) }) : how === 'role' ? `${luaRole(role)}: ${text}` : text,
+    ),
+  ),
+);
 define('userhistory', 0, (_, { context }) => serialize(context.messages.filter(({ role }) => role === 'user').map(({ text }) => text)));
 define('charhistory', 0, (_, { context }) => serialize(context.messages.filter(({ role }) => role === 'assistant').map(({ text }) => text)));
 define('chatindex', 0, (_, { context }) => {

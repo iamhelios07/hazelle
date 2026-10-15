@@ -213,8 +213,14 @@ describe('evaluate', () => {
     );
   });
 
+  it('gives history as message objects with Risu roles, or as texts with an argument', () => {
+    const messages = [message('g', 'assistant', 'a'), { ...message('u', 'user', 'k'), time: 5 }];
+    expect(JSON.parse(run('{{history}}', { messages })).map((each: string) => JSON.parse(each))).toEqual([{ role: 'char', data: 'a' }, { role: 'user', data: 'k', time: 5 }]);
+    expect(run('{{messages::role}}', { messages })).toBe('["char: a","user: k"]');
+  });
+
   it('escapes :: inside an array, and spreads an array into the arguments of the tag around it', () => {
-    expect(run('{{arrayelement::{{history}}::1}}', { messages: [message('g', 'assistant', 'a'), message('u', 'user', 'k::v')] })).toBe('k::v');
+    expect(run('{{arrayelement::{{history::text}}::1}}', { messages: [message('g', 'assistant', 'a'), message('u', 'user', 'k::v')] })).toBe('k::v');
     expect(run('{{equal::{{spread::["x","x"]}}}}')).toBe('1');
   });
 

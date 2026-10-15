@@ -53,7 +53,7 @@ export const COMMANDS: readonly CommandGroup[] = [
       { names: ['previoususerchat', 'lastusermessage'], form: '{{previoususerchat}}', what: '내 마지막 메시지예요.' },
       { names: ['previouschatlog'], form: '{{previouschatlog::번호}}', what: '그 번호의 메시지예요. 인사말 다음 메시지가 0번이에요.' },
       { names: ['lastmessageid', 'lastmessageindex'], form: '{{lastmessageid}}', what: '마지막 메시지의 번호예요. 인사말은 -1번이에요.' },
-      { names: ['history', 'messages'], form: '{{history}}', what: '모든 메시지의 내용을 JSON 배열로 넣어요.' },
+      { names: ['history', 'messages'], form: '{{history}}', what: '모든 메시지를 JSON 배열로 넣어요. 각 항목에 role(user·char)과 data가 들어 있어요. {{history::role}}은 "역할: 내용" 글로, 다른 말을 붙이면 내용만 넣어요.' },
       { names: ['userhistory'], form: '{{userhistory}}', what: '내 메시지들을 JSON 배열로 넣어요.' },
       { names: ['charhistory'], form: '{{charhistory}}', what: '캐릭터 메시지들을 JSON 배열로 넣어요.' },
       { names: ['firstmsgindex'], form: '{{firstmsgindex}}', what: '채팅을 시작한 인사말의 카드 속 번호예요. 0부터 세요.' },
