@@ -23,10 +23,11 @@
 .bubble {
   composes: dropIn from '../foundation/motion.module.css';
   composes: note from '../foundation/type.module.css';
-  position: absolute;
-  top: calc(100% + var(--space-8));
-  left: 0;
-  z-index: var(--layer-menu);
+  position: fixed;
+  top: calc(var(--hint-top) + var(--space-8));
+  left: var(--hint-left);
+  /* On the body, so above the dialog that may hold its ⓘ and below the toast. */
+  z-index: var(--layer-hint);
   width: max-content;
   max-width: min(var(--hint-width), calc(100vw - 2 * var(--menu-edge)));
   padding: var(--space-8) var(--space-12);
@@ -42,5 +43,5 @@
 
 .bubble[data-above] {
   top: auto;
-  bottom: calc(100% + var(--space-8));
+  bottom: calc(var(--hint-bottom) + var(--space-8));
 }

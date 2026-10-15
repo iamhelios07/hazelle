@@ -468,6 +468,7 @@
   --layer-menu: 20;
   --layer-panel: 30;
   --layer-dialog: 40;
+  --layer-hint: 42;
   --layer-toast: 45;
   --layer-drop: 50;
 }
