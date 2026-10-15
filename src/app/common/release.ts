@@ -8,6 +8,20 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.5',
+    date: '2026-10-15',
+    lines: [
+      '채팅 메뉴의 점검(Ctrl+U)에서 보낼 요청과 토큰을 쓰는 곳, 캐시, 변수, 모듈, 스크립트 기록을 한곳에서 볼 수 있어요.',
+      'Risu 프리셋 파일(.risup, .risupreset)을 끌어다 놓거나 파일 선택으로 가져와요. 함께 온 모듈과 짝을 맞추고, 캐릭터·모듈·프롬프트 가져오기는 되돌릴 수 있어요.',
+      '캐릭터 폴더를 세 단계까지 만들 수 있어요. 설정 › 실험실에서 탐색기식 폴더를 켜면 폴더를 카드로 보고 눌러서 들어가고, 카드를 끌어 폴더로 옮길 수 있어요.',
+      '내 메시지에도 번역 버튼이 있어요. 내보내기에서는 번역 없는 메시지를 한 번에 번역할 수 있어요.',
+      '모듈과 캐릭터의 토글을 프롬프트 토글과 같은 화면에서 편집해요. Risu에서 옮길 때 토글 값도 함께 와요.',
+      '알림을 ✕로 닫거나, 휴대폰에서는 옆으로 밀어서 바로 닫을 수 있어요.',
+      '이미지 가리기는 채팅 메뉴 대신 읽기 설정에 있어요. 프롬프트에는 캐릭터 설명 자리를 여러 번 둘 수 있어요.',
+      '봇 스크립트의 =, ≠, ≤, ≥ 비교와 {{history}}가 Risu처럼 동작해요. 폴더 안에서 휴대폰 뒤로 버튼이 둘러보기 맨 위로 가던 것과 기억 정리 뒤 재검사가 빠지던 문제를 고쳤어요.',
+    ],
+  },
+  {
     version: 'v0.2.4',
     date: '2026-10-15',
     lines: [
