@@ -1,26 +1,27 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
 import type { Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { modelUsage } from '../../model/usage';
+import { ROLES, sameModelRef, type Role } from '../../connectors/assignment';
 import { imageOnly } from '../../runtime/assignment';
-import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
+import { addProfile, modelProfile, profileUsers, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
 import { LedgerWait, useLedger } from '../common/useLedger';
-import { defaultMark, MODEL_SETTINGS, UNKNOWN } from '../common/words';
-import { spent, tally } from '../common/usage';
+import type { SaveStatus } from '../common/saveQueue';
+import { SAVE_STATUS } from '../common/useAutosave';
+import { defaultMark, MODEL_ROLES, MODEL_SETTINGS } from '../common/words';
+import { spent } from '../common/usage';
 import { ago } from '../common/time';
-import { useProfiles, useSettings, useSession } from '../session';
+import { useConnections, useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow } from '../ui';
-import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE, tokens, valueWords } from './settingWords';
+import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Tag } from '../ui';
+import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE, tokens } from './settingWords';
+import { useProfileEditor } from './useProfileEditor';
 import { count } from '../common/typedNumber';
-
-// What the catalog said when the model was starred. null is unknown, never 안 됨.
-const can = (value: boolean | null) => (value === null ? UNKNOWN : value ? '됨' : '안 됨');
 
 type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
 
@@ -76,12 +77,15 @@ function ChatModelScreen({ connection, model, back }: Props) {
   const toast = useToast();
   const profiles = useProfiles();
   const settings = useSettings();
+  const connections = useConnections();
   const ledger = useLedger();
   const usage = useMemo(() => (ledger.view.kind === 'read' ? modelUsage(ledger.view.calls, { connection: connection.id, model: model.id }) : null), [ledger.view, connection.id, model.id]);
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
   const sorted = defaultFirst(profiles, settings.profile);
+  const ref = { connection: connection.id, model: model.id };
+  const roles = (Object.keys(ROLES) as Role[]).filter((role) => settings.models[role] && sameModelRef(settings.models[role]!, ref));
 
   // The default is what a model without its own uses, so picking it clears the model's own.
   async function choose(id: string) {
@@ -89,6 +93,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
     if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
   }
 
+  // The new 설정 shows in place: the page stays this model's, and its rows edit the 설정 just made.
   function own() {
     const id = crypto.randomUUID();
     // The model takes the profile only once it exists: a create that fails must leave no model pointing at it.
@@ -97,65 +102,77 @@ function ChatModelScreen({ connection, model, back }: Props) {
       const saved = await setModelProfile(store, connection.id, model.id, id);
       if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
     });
-    navigate({ kind: 'profile', id });
   }
 
-  const words = current && valueWords(current.value.settings);
   const sent = current && (schema ? changeWords(fit(schema, current.value.settings).changes) : NOT_CALLABLE);
+  const sharing = current ? profileUsers(connections, settings.profile, current.id).length - 1 : 0;
 
-  return (
+  const picker = (
+    <Menu
+      place="below-end"
+      label={`${MODEL_SETTINGS} 선택`}
+      trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title={MODEL_SETTINGS} {...opener} />}
+    >
+      {current && <MenuItem tone="muted" label={`'${current.value.name}' 페이지 열기`} onClick={() => navigate({ kind: 'profile', id: current.id })} />}
+      {sorted.map((profile) => (
+        <MenuItem key={profile.id} label={profile.value.name} tag={defaultMark(profile.id === settings.profile, profile.value.name)} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
+      ))}
+      <Divider variant="menu" />
+      <MenuItem label="이 모델 전용 설정 만들기" onClick={own} />
+    </Menu>
+  );
+
+  const frame = (status: SaveStatus | null, rows: ReactNode) => (
     <Screen
       width="form"
-      top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}
-      aside={
-        <SettingGroup label={MODEL_SETTINGS}>
-          <SettingRow
-            label={MODEL_SETTINGS}
-            help="같은 설정을 쓰는 모델은 함께 바뀌어요."
-            sub={current ? (words?.length ? words.join(' · ') : '정한 값 없음') : undefined}
-            error={current ? undefined : '쓰던 설정이 삭제돼서 이 모델을 사용할 수 없어요.'}
-            note={sent || undefined}
-            control={
+      top={
+        <NavBar
+          title={model.name}
+          subtitle={
+            <>
+              {connection.value.label}{' '}
+              {roles.map((role) => (
+                <Tag key={role} tone="accent">
+                  {MODEL_ROLES[role]}
+                </Tag>
+              ))}
+            </>
+          }
+          {...backBar(back)}
+          status={status ? SAVE_STATUS[status] : undefined}
+          menu={{
+            of: '모델',
+            items: (
               <>
-                <Menu
-                  place="below-end"
-                  label="쓸 설정 선택"
-                  trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title="쓸 설정" {...opener} />}
-                >
-                  {sorted.map((profile) => (
-                    <MenuItem key={profile.id} label={profile.value.name} tag={defaultMark(profile.id === settings.profile, profile.value.name)} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
-                  ))}
-                  <Divider variant="menu" />
-                  <MenuItem label="이 모델 전용 설정 만들기" onClick={own} />
-                </Menu>
-                {current && (
-                  <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'profile', id: current.id })}>
-                    열기
-                  </Button>
-                )}
+                <MenuItem label="연결 열기" onClick={() => navigate({ kind: 'connection', id: connection.id })} />
+                <MenuItem label="사용량 열기" onClick={() => navigate({ kind: 'usage' })} />
               </>
-            }
-          />
-        </SettingGroup>
+            ),
+          }}
+        />
       }
     >
+      <Section title={MODEL_SETTINGS} note={sharing > 0 ? `다른 모델 ${sharing}개도 써요` : undefined} action={picker}>
+        {current ? (
+          <>
+            {sent && <Callout tone="warn">{sent}</Callout>}
+            {rows}
+          </>
+        ) : (
+          <Callout tone="warn">{`쓰던 ${MODEL_SETTINGS}이 삭제돼서 이 모델을 사용할 수 없어요. 다른 ${MODEL_SETTINGS}을 선택해 주세요.`}</Callout>
+        )}
+      </Section>
+
       <Section title="모델">
         <Facts
+          variant="row"
           items={[
-            { label: '연결', value: connection.value.label },
-            { label: '모델 ID', value: model.id },
             { label: '컨텍스트 길이', value: tokens(model.contextLength) },
             { label: '응답 최대 길이', value: tokens(model.maxOutput) },
             { label: '입력', value: inputs(model) },
-            { label: '추론', value: can(model.reasoning) },
-            { label: '도구', value: can(model.tools) },
+            { label: '모델 ID', value: model.id },
           ]}
         />
-        <Row kind="actions">
-          <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'connection', id: connection.id })}>
-            연결 열기
-          </Button>
-        </Row>
       </Section>
 
       <Section title="사용량">
@@ -163,12 +180,10 @@ function ChatModelScreen({ connection, model, back }: Props) {
           <LedgerWait view={ledger.view} retry={ledger.retry} failed="사용량을 불러오지 못했어요." />
         ) : usage && usage.last !== null ? (
           <Facts
-            variant="tiles"
+            variant="row"
             items={[
               { label: '응답', value: `${count(usage.calls)}번` },
               { label: '마지막', value: ago(usage.last) },
-              { label: '입력 토큰', value: tally(usage.input, usage.calls) },
-              { label: '출력 토큰', value: tally(usage.output, usage.calls) },
               { label: '비용', value: spent(usage) },
             ]}
           />
@@ -178,4 +193,12 @@ function ChatModelScreen({ connection, model, back }: Props) {
       </Section>
     </Screen>
   );
+
+  return current ? <Editing stored={current} frame={frame} /> : frame(null, null);
+}
+
+// The hook needs a 설정 to edit, so a model whose 설정 is gone renders the frame without it.
+function Editing({ stored, frame }: { stored: Stored<'profile'>; frame: (status: SaveStatus | null, rows: ReactNode) => ReactNode }) {
+  const { status, rows } = useProfileEditor(stored, { notes: false });
+  return frame(status, rows);
 }
