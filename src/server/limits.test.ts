@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tokenBucket, uploadBudget } from './limits';
+import { proofBackoff, tokenBucket, uploadBudget } from './limits';
 
 const setup = (perMinute: number) => {
   let now = 0;
@@ -45,6 +45,55 @@ describe('the token bucket', () => {
     limiter.evict();
     expect(limiter.limit('recent').success).toBe(false);
     expect(burst('idle')).toBe(20);
+  });
+});
+
+describe('credential limits', () => {
+  it('reports the next token time and bounds the request cache by least recent use', () => {
+    let now = 0;
+    const limiter = tokenBucket(30, 60_000, () => now, 2);
+    for (let i = 0; i < 30; i++) limiter.limit('old');
+    expect(limiter.limit('old')).toEqual({ success: false, retryAfter: 2 });
+    now = 1500;
+    expect(limiter.limit('old').retryAfter).toBe(1);
+    now = 2000;
+    expect(limiter.limit('old').success).toBe(true);
+    limiter.limit('new');
+    limiter.limit('newest');
+    expect(limiter.limit('old').success).toBe(true);
+  });
+
+  it('doubles a pair’s backoff to an hour, preserves active locks on eviction, and resets the pair on success', () => {
+    let now = 0;
+    const limiter = proofBackoff(() => now);
+    for (let i = 0; i < 5; i++) expect(limiter.check('visitor', 'jin', false)).toBe(0);
+    for (const minutes of [1, 2, 4, 8, 16, 32, 60, 60]) {
+      expect(limiter.check('visitor', 'jin', true)).toBe(minutes * 60);
+      now += minutes * 60_000 - 1;
+      limiter.evict();
+      expect(limiter.check('visitor', 'jin', false)).toBe(1);
+      now++;
+      expect(limiter.check('visitor', 'jin', false)).toBe(0);
+    }
+    now += 60 * 60_000;
+    expect(limiter.check('visitor', 'jin', true)).toBe(0);
+    for (let i = 0; i < 4; i++) expect(limiter.check('visitor', 'jin', false)).toBe(0);
+    expect(limiter.check('visitor', 'jin', true)).toBe(0);
+  });
+
+  it('bounds visitor state and expires idle failures after a day', () => {
+    let now = 0;
+    const limiter = proofBackoff(() => now, 2);
+    for (let i = 0; i < 5; i++) limiter.check('old', 'jin', false);
+    limiter.check('recent', 'jin', false);
+    limiter.check('newest', 'jin', false);
+    expect(limiter.check('old', 'jin', true)).toBe(0);
+    for (let i = 0; i < 4; i++) limiter.check('recent', 'jin', false);
+    expect(limiter.check('recent', 'jin', true)).toBe(60);
+    now += 24 * 60 * 60_000;
+    limiter.evict();
+    for (let i = 0; i < 4; i++) expect(limiter.check('recent', 'jin', false)).toBe(0);
+    expect(limiter.check('recent', 'jin', true)).toBe(0);
   });
 });
 

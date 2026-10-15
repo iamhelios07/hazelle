@@ -1,9 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import type { RestoreAction } from '../contracts/admin';
-import { VISITOR_HEADER } from '../contracts/http';
 import { CAP } from './caps';
-import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
+import { checkProof, findAccount, hashProof, outsideVisitor, readMethod, readProof } from './credentials';
 import { VISIBLE } from './admin';
 import { fail, ID, readObject, type Account, type AppEnv } from './http';
 import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
@@ -12,9 +11,6 @@ import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
 const ROOM = '(SELECT COUNT(*) FROM accounts) < (SELECT signup_cap FROM service)';
-// This machine's own requests are not counted: loopback (e2e against a local server; the load harness, behind docker's
-// port, names itself loopback) and none named at all (in process). The hosted machine's Caddy names every outside visitor, so neither reaches it from outside.
-const LOCAL = /^(?:127\.|::1$|::ffff:127\.)/;
 
 export const accounts = new Hono<AppEnv>();
 
@@ -23,8 +19,8 @@ export const accounts = new Hono<AppEnv>();
 // recovery key is saved. The account's file is prepared before the batch: a crash between leaves a file with no row,
 // which the hourly reconciliation removes, never a row with no file.
 accounts.post('/signup', async (c) => {
-  const visitor = c.req.header(VISITOR_HEADER);
-  if (visitor && !LOCAL.test(visitor) && !c.env.limits.visitors.signups.limit(visitor).success) return fail(c, 429, 'too-many-signups');
+  const visitor = outsideVisitor(c);
+  if (visitor && !c.env.limits.visitors.signups.limit(visitor).success) return fail(c, 429, 'too-many-signups');
   const body = await readObject(c);
   const accountId = typeof body?.accountId === 'string' && ID.test(body.accountId) ? body.accountId : null;
   const passwordProof = readProof(body?.passwordProof);
@@ -68,19 +64,24 @@ accounts.post('/signup', async (c) => {
 
 // Answers like GET /session, so the client opens the vault without another request.
 accounts.post('/login', async (c) => {
+  const visitor = outsideVisitor(c);
+  if (visitor) {
+    const { success, retryAfter } = c.env.limits.visitors.logins.limit(visitor);
+    if (!success) return fail(c, 429, 'too-many-attempts', { retryAfter });
+  }
   const body = await readObject(c);
   const method = readMethod(body?.method);
   const proof = readProof(body?.proof);
-  if (typeof body?.username !== 'string' || !method || !proof) return fail(c, 400, 'bad-input');
+  if (typeof body?.username !== 'string' || !USERNAME.test(body.username) || !method || !proof) return fail(c, 400, 'bad-input');
   const db = c.env.db;
   const account = await findAccount(db, 'username', body.username);
-  if (!account) return fail(c, 401, 'wrong-login');
-  const wrong = await checkProof(c, account, method, proof);
+  const wrong = await checkProof(c, body.username, account, method, proof);
   if (wrong) return wrong;
+  if (!account) return fail(c, 401, 'wrong-login');
   if (account.state === 'leaving') return fail(c, 403, 'account-leaving');
 
   const started = await startSession(db, account.id);
-  await db.batch([clearFailures(db, account.id), started.insert]);
+  await started.insert.run();
   setSessionCookie(c, started.token);
   const [session, vault] = await Promise.all([describe(c, { ...account, suspended: account.suspended_at !== null, admin: account.admin === 1 }), readVault(db, account.id)]);
   return c.json({ session, vault });
@@ -109,7 +110,7 @@ accounts.delete('/account', requireOwnSession, async (c) => {
   const proof = readProof(body?.proof);
   if (!method || !proof) return fail(c, 400, 'bad-input');
   const { id, incarnation } = c.get('account');
-  const wrong = await checkProof(c, (await findAccount(c.env.db, 'id', id))!, method, proof);
+  const wrong = await checkProof(c, c.get('account').username, await findAccount(c.env.db, 'id', id), method, proof);
   if (wrong) return wrong;
   const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, false);
   if (left !== 'left') return refuseLeft(c, left);
