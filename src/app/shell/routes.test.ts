@@ -90,6 +90,7 @@ describe('routes', () => {
     expect(backTo(up({ kind: 'chat', id: CHAT }, CHARACTER), false)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '채팅 목록' });
     expect(up({ kind: 'chat', id: CHAT }, null)).toEqual({ kind: 'shelf', character: null });
     expect(up({ kind: 'chat', id: CHARACTER })).toEqual(HOME);
+    expect(up({ kind: 'gallery', place: CHARACTER })).toEqual({ kind: 'gallery', place: null });
     expect(shelfOf({ kind: 'chat', id: CHAT }, CHARACTER)).toBe(CHARACTER);
     expect(shelfOf({ kind: 'chat', id: CHAT }, null)).toBeNull();
     expect(shelfOf({ kind: 'chat', id: CHAT })).toBeUndefined();

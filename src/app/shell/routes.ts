@@ -291,7 +291,9 @@ export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
 // use their answer.
 export function up(route: Below, chatShelf?: string | null): Route {
   switch (route.kind) {
+    // The route does not know a folder's parent: ← from inside one goes to the top, browser back a level.
     case 'gallery':
+      return route.place === null ? HOME : { kind: 'gallery', place: null };
     case 'shelf':
       return HOME;
     case 'edit':
