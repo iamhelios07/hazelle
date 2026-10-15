@@ -102,8 +102,8 @@ export type Bot = {
   bundled: TypedModule[];
 };
 
-// The asset kinds say why a listed asset was not kept. 'refused-picture' is counted where pictures are stored
-// (runtime/characters saveAssets), the rest by the parsers.
+// The asset kinds say why a listed asset was not kept. 'refused-picture' and 'refused-video' are counted where assets
+// are stored (runtime/characters saveAssets), the rest by the parsers.
 export const UNSUPPORTED_KINDS = [
   'extra-icon',
   'emotion',
@@ -111,8 +111,9 @@ export const UNSUPPORTED_KINDS = [
   'voice',
   'other-asset',
   'missing-asset',
-  'not-image',
+  'unsupported-file',
   'refused-picture',
+  'refused-video',
   'background-html',
   'additional-text',
   'prebuilt-asset-command',

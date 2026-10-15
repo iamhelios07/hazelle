@@ -166,7 +166,7 @@ function decode(text: string): Uint8Array<ArrayBuffer> | null {
 
 // CCv3's icon resolution: no icon or ccdefault: is the file's own image (the JPEG in front of a charx's zip),
 // embeded:// (the spec's spelling) a file in the charx, data: an inline image, as Risu's JSON export writes it.
-// An icon that cannot be read is counted as a missing asset, one that is not an image as not an image.
+// An icon that cannot be read is counted as a missing asset, one that is not a picture as an unsupported file.
 function avatar(uri: string | null, own: Uint8Array<ArrayBuffer> | null, zip: Zip | null, tally: Tally): Imported['avatar'] {
   if (uri === null || uri === 'ccdefault:') return own?.length ? image(own, tally) : null;
   const bytes = uri.startsWith('embeded://') ? zip?.read(uri.slice('embeded://'.length)) : uri.startsWith('data:') ? dataUri(uri) : null;
@@ -186,7 +186,7 @@ function dataUri(uri: string): Uint8Array<ArrayBuffer> | null {
 function image(bytes: Uint8Array<ArrayBuffer>, tally: Tally): Imported['avatar'] {
   const type = imageType(bytes);
   if (!type) {
-    add(tally, 'not-image');
+    add(tally, 'unsupported-file');
     return null;
   }
   return { bytes, type };
@@ -199,6 +199,21 @@ export function imageType(bytes: Uint8Array): string | null {
   if (ascii(0, 4) === 'GIF8') return 'image/gif';
   if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
   if (ascii(4, 12) === 'ftypavif' || ascii(4, 12) === 'ftypavis') return 'image/avif';
+  return null;
+}
+
+// MP4's major brands for video. An audio-only file names M4A or M4B and stays out, as audio is not kept (user,
+// 2026-10-15: video only).
+const MP4_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'dash', 'mmp4']);
+
+// What a bot's asset may be: a picture, or a video. Avatars, persona pictures and inlays stay pictures (imageType).
+export function assetType(bytes: Uint8Array): string | null {
+  const picture = imageType(bytes);
+  if (picture) return picture;
+  const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  if (ascii(4, 8) === 'ftyp' && MP4_BRANDS.has(ascii(8, 12))) return 'video/mp4';
+  // EBML's header, whose DocType tells WebM from Matroska.
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3 && ascii(4, 64).includes('webm')) return 'video/webm';
   return null;
 }
 

@@ -252,7 +252,7 @@ export function cardSource(card: Card, assets: Json[], extensions: Json, lowLeve
   };
 }
 
-const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif' };
+const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif', 'video/mp4': 'mp4', 'video/webm': 'webm' };
 export const extensionOf = (type: string) => EXTENSIONS[type] ?? 'png';
 
 export type ConvertedModule = Omit<ImportedModule, 'assets' | 'unsupported'> & { assets: string[] };

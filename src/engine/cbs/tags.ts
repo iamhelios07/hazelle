@@ -1,5 +1,5 @@
 import { isRecord } from '../../connectors/values';
-import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture, SIGNATURE } from '../assets';
+import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture, isVideo, SIGNATURE, type BotAsset } from '../assets';
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
@@ -51,12 +51,10 @@ const UNSUPPORTED = new Set([
   // Marked X in risu-compat-spec §d, with their aliases in src/ts/cbs.ts at ca1345fc. The internal-only `__`
   // is left out, since normalizing empties its name.
   'emotionlist',
-  'video',
   'audio',
   'bgm',
   'bg',
   'emotion',
-  'videoimg',
   'assetprompt',
   // risu-alpha prompts have no jailbreak.
   'jb',
@@ -129,18 +127,25 @@ define('lorebook worldinfo', 0, (_, { context }) => serialize(context.lore));
 // Risu's markup, which the display dims until a bot's buttons can run (design §6.4).
 define('button', 2, ([label, trigger]) => `<button class="button-default" risu-trigger="${trigger}">${label}</button>`);
 
-// A bot's pictures show on screen only; the prompt keeps these tags as written, as in Risu (design §6.4). A name that
+// A bot's assets show on screen only; the prompt keeps these tags as written, as in Risu (design §6.4). A name that
 // finds no asset shows nothing, and is told in context.unfound.
-const assetTag = (render: (url: string) => string): Run => ([name], { context, random }) => {
+const assetTag = (render: (url: string, asset: BotAsset) => string): Run => ([name], { context, random }) => {
   if (context.stage !== 'display') return null;
   const asset = findAsset(context.assets, name!, random);
   if (!asset) context.unfound?.add(name!);
-  return asset ? render(assetUrl(asset.id)) : '';
+  return asset ? render(assetUrl(asset.id), asset) : '';
 };
+// Risu's video markup, with the source on the video itself, so resolveAssets and the story's sanitizer see one
+// attribute. Story.tsx keeps a video from playing sound until the reader starts it.
+const video = (url: string) => `<video src="${url}" controls autoplay loop></video>`;
+const mutedVideo = (url: string) => `<video src="${url}" autoplay muted loop></video>`;
 define('raw path', 1, assetTag((url) => url));
 define('img', 1, assetTag((url) => `<img src="${url}">`));
 define('image', 1, assetTag((url) => `<div class="risu-inlay-image"><img src="${url}"></div>\n`));
-define('asset', 1, assetTag((url) => `<img src="${url}">\n`));
+// Risu tells a video by its file's extension; Hazelle by the type the file was kept as.
+define('asset', 1, assetTag((url, { type }) => `${isVideo(type) ? mutedVideo(url) : `<img src="${url}">`}\n`));
+define('video', 1, assetTag(video));
+define('videoimg', 1, assetTag(mutedVideo));
 define('source', 1, ([name], { context: { stage, faces } }) => {
   if (stage !== 'display') return null;
   const face = name!.toLowerCase();

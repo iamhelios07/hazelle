@@ -225,7 +225,7 @@ describe('evaluate', () => {
   });
 
   it("tells which modules are on by namespace, and lists the character's pictures apart from each module's", () => {
-    const assets = [{ id: 'a', name: 'own' }, { id: 'b', name: 'wall', module: 'phone' }, { id: 'c', name: 'loose', module: null }];
+    const assets = [{ id: 'a', name: 'own', type: 'image/png' }, { id: 'b', name: 'wall', type: 'image/png', module: 'phone' }, { id: 'c', name: 'loose', type: 'image/png', module: null }];
     expect(run('{{moduleenabled::phone}}{{moduleenabled::radio}} {{assetlist}} {{moduleassetlist::phone}}|{{moduleassetlist::radio}}', { modules: ['phone'], assets })).toBe('10 ["own"] ["wall"]|');
   });
 

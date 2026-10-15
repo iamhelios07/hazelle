@@ -56,7 +56,8 @@ a {
   color: var(--color-accent);
 }
 
-img {
+img,
+video {
   max-width: 100%;
 }
 
@@ -91,7 +92,7 @@ img {
   }
 }
 
-/* Story.tsx's controls while 이미지 가리기 is on: the stand-in for a picture, and 가리기 beside one tapped open. They
+/* Story.tsx's controls while 이미지 가리기 is on: the stand-in for a picture or video, and 가리기 beside one tapped open. They
    always answer a tap, whatever data-buttons says. */
 [data-veiled] {
   display: inline-flex;

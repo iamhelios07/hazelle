@@ -27,7 +27,8 @@ const OWN = [
 ];
 // A picture's drawn width, which max-width still bounds; its height follows from it.
 const REPLACED: Record<string, string[]> = { img: ['width'], video: ['width', 'height'], svg: ['width', 'height'] };
-const ATTRIBUTES = new Set(['src', 'alt', 'href', 'title', 'colspan', 'rowspan']);
+// A video keeps how the story plays it: Story.tsx has already left autoplay only on a muted one.
+const ATTRIBUTES = new Set(['src', 'alt', 'href', 'title', 'colspan', 'rowspan', 'controls', 'autoplay', 'muted', 'loop', 'playsinline']);
 // What an SVG shape is drawn from; without them it draws nothing.
 const SVG = 'http://www.w3.org/2000/svg';
 const SVG_ATTRIBUTES = new Set(['viewBox', 'preserveAspectRatio', 'd', 'points', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height', 'transform', 'fill', 'stroke', 'stroke-width', 'opacity', 'text-anchor', 'offset', 'stop-color']);

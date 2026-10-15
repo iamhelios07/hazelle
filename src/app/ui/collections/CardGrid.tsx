@@ -48,6 +48,8 @@ export function CardGrid({ label, keys, variant = 'portrait', current, children 
 
 type CardProps = {
   image: string | null;
+  // image is a video's URL: the card shows its first frame.
+  video?: boolean;
   name: string;
   note: string;
   // null while the grid is not picking characters.
@@ -66,7 +68,7 @@ type CardProps = {
   drag?: string;
 };
 
-export function FaceCard({ image, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag }: CardProps) {
+export function FaceCard({ image, video = false, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag }: CardProps) {
   return (
     <div className={styles.cardBox}>
       <button
@@ -81,7 +83,7 @@ export function FaceCard({ image, name, note, selected, current = false, tag, fa
         {...(drag === undefined ? {} : cardDrag(drag))}
       >
         <span className={styles.picture}>
-          <Face image={image} name={name} still={drag !== undefined} />
+          <Face image={image} video={video} name={name} still={drag !== undefined} />
           {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="xs" />}</span>}
         </span>
         <span className={styles.name}>{name}</span>
@@ -125,19 +127,21 @@ export function Portrait({ image, name }: { image: string | null; name: string }
   );
 }
 
-// A card's picture whole, at its own ratio, as a dialog shows it.
-export function Preview({ image, name }: { image: string | null; name: string }) {
+// A card's picture whole, at its own ratio, as a dialog shows it; a video plays muted, its sound one press away.
+export function Preview({ image, video = false, name }: { image: string | null; video?: boolean; name: string }) {
   const veil = useVeil();
-  return <span className={styles.preview}>{image && !veil ? <img className={styles.whole} src={image} alt={name} /> : <Face image={null} name={name} />}</span>;
+  if (!image || veil) return <span className={styles.preview}><Face image={null} name={name} /></span>;
+  return <span className={styles.preview}>{video ? <video className={styles.whole} src={image} aria-label={name} controls autoPlay muted loop playsInline /> : <img className={styles.whole} src={image} alt={name} />}</span>;
 }
 
 const TINTS = [styles.tint1, styles.tint2, styles.tint3, styles.tint4, styles.tint5];
 const tint = (name: string) => TINTS[[...name].reduce((hash, char) => (hash * 31 + char.codePointAt(0)!) >>> 0, 0) % TINTS.length];
 
 // still: the picture does not drag itself, so the card it sits in drags instead (cardDrag).
-function Face({ image, name, still = false }: { image: string | null; name: string; still?: boolean }) {
+function Face({ image, video = false, name, still = false }: { image: string | null; video?: boolean; name: string; still?: boolean }) {
   const veil = useVeil();
-  return image && !veil ? <img className={styles.image} src={image} alt="" draggable={still ? false : undefined} /> : <span className={`${styles.letter} ${tint(name)}`} aria-hidden="true">{[...name][0]}</span>;
+  if (!image || veil) return <span className={`${styles.letter} ${tint(name)}`} aria-hidden="true">{[...name][0]}</span>;
+  return video ? <video className={styles.image} src={image} aria-hidden="true" muted playsInline preload="metadata" draggable={still ? false : undefined} /> : <img className={styles.image} src={image} alt="" draggable={still ? false : undefined} />;
 }
 
 export function SelectionBar({ children }: { children: ReactNode }) {

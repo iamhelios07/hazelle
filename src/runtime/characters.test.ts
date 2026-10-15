@@ -26,6 +26,8 @@ vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 
 // The bytes of a picture as far as the import reads one: a PNG's signature.
 const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
+// An MP4's box header naming its brand.
+const mp4 = () => new Uint8Array([0, 0, 0, 24, ...new TextEncoder().encode('ftypisom'), ...randomBytes(16)]);
 const picture = () => ({ bytes: randomBytes(64), type: 'image/png' });
 const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: blankCard(name), folder: null, loreFolders: [], ...over });
 const none = { avatar: null, assets: [], lore: [], likeness: null };
@@ -66,23 +68,25 @@ describe('importCharacter', () => {
     expect(folderOf).toEqual({ 등대: character.loreFolders[1]!.id, 항구: null });
   });
 
-  it('stores the picture and each asset a picture, once however often it appears, and counts the others', async () => {
+  it('stores the picture and each asset a picture or video, once however often it appears, and counts the others', async () => {
     const { store, files } = await server.account();
-    const [smile, image] = [png(), picture()];
+    const [smile, clip, image] = [png(), mp4(), picture()];
     const assets = [
       { name: 'smile', read: async () => smile },
       { name: 'grin', read: async () => smile },
+      { name: 'clip', read: async () => clip },
       { name: 'notes', read: async () => randomBytes(8) },
       { name: 'lost', read: async () => null },
     ];
     const steps: string[] = [];
     const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, image, (step) => steps.push(step.kind));
-    expect(saved).toMatchObject({ ok: true, data: { unsupported: [{ kind: 'missing-asset', count: 1 }, { kind: 'not-image', count: 1 }], faceless: false } });
+    expect(saved).toMatchObject({ ok: true, data: { unsupported: [{ kind: 'missing-asset', count: 1 }, { kind: 'unsupported-file', count: 1 }], faceless: false } });
     const id = saved.ok ? saved.data.id : '';
     const stored = store.children('asset', id).map(({ value }) => value);
     expect(stored.map(({ name, type, size }) => [name, type, size])).toEqual([
       ['smile', 'image/png', smile.length],
       ['grin', 'image/png', smile.length],
+      ['clip', 'video/mp4', clip.length],
     ]);
     expect(stored[0]!.file).toEqual(stored[1]!.file);
     expect(await files.read(stored[0]!.file)).toEqual({ ok: true, data: smile });
@@ -91,9 +95,9 @@ describe('importCharacter', () => {
     expect(new Set(steps)).toEqual(new Set(['picture', 'assets', 'saving']));
   });
 
-  it('leaves out a picture the operator blocked or one past the picture cap, counted, and keeps the rest of the bot', async () => {
+  it('leaves out a picture the operator blocked or a video past the picture cap, counted, and keeps the rest of the bot', async () => {
     const { store } = await server.account();
-    const [blocked, over, kept] = [png(), png(), png()];
+    const [blocked, over, kept] = [png(), mp4(), png()];
     const refusals = new Map([[(await sealFile(blocked)).ref.id, 'file-blocked'], [(await sealFile(over)).ref.id, 'files-full']]);
     const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
       const error = args[0] === 'PUT' ? refusals.get(args[1].slice('files/'.length)) : undefined;
@@ -105,7 +109,7 @@ describe('importCharacter', () => {
       { name: 'smile', read: async () => kept },
     ];
     const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, null, () => {});
-    expect(saved).toMatchObject({ ok: true, data: { unsupported: [{ kind: 'refused-picture', count: 2 }] } });
+    expect(saved).toMatchObject({ ok: true, data: { unsupported: [{ kind: 'refused-picture', count: 1 }, { kind: 'refused-video', count: 1 }] } });
     expect(store.children('asset', saved.ok ? saved.data.id : '').map(({ value }) => value.name)).toEqual(['smile']);
   });
 
@@ -180,7 +184,7 @@ describe('addAssets', () => {
     const imported = await importCharacter(store, files, { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] }, null, () => {});
     const id = imported.ok ? imported.data.id : '';
     const smile = png();
-    expect(await addAssets(store, files, id, [new File([smile], 'smile.happy.png'), new File([randomBytes(16)], 'notes.txt')])).toEqual({ ok: true, data: { added: 1, unsupported: [{ kind: 'not-image', count: 1 }] } });
+    expect(await addAssets(store, files, id, [new File([smile], 'smile.happy.png'), new File([randomBytes(16)], 'notes.txt')])).toEqual({ ok: true, data: { added: 1, unsupported: [{ kind: 'unsupported-file', count: 1 }] } });
     const [asset, ...more] = store.children('asset', id);
     expect(more).toEqual([]);
     expect(asset!.value).toMatchObject({ name: 'smile.happy', type: 'image/png', size: smile.length });
