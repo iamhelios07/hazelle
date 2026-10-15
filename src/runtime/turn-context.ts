@@ -1,11 +1,21 @@
+import { SETTINGS_ID } from '../model/settings';
+import { chatToggles } from '../model/toggles';
+import type { Toggle } from '../model/prompt';
+import { chatPrompt } from './prompts';
+import { translateSwitches } from './characters';
+import { chatVectors, queryOf } from './retrieval';
+import { scriptsOf, triggersOf } from './scripts';
+import { toolsOf } from './tools/store';
+import { prepareChat } from '../connectors/preparation';
+import { batchLane, resolveConnection, resolveModel } from '../connectors/registry';
 import { providerFit, type TokenSnapshot } from './token-calibration';
 import type { Assembled, PromptInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
-import { chatModel, type RouteFailure } from './assignment';
+import { chatModel, embedModel, type RouteFailure } from './assignment';
 import { wireOf, type CacheSend } from './cache';
-import { asSent, budgetOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
+import { asSent, budgetOf, packsOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
 import { cacheViewOf } from './generate';
 import { memoryFill } from './memory-read';
@@ -126,4 +136,113 @@ export function cacheSend({ turn, prompt, calibration }: Sending, account: strin
   // Prefix composition can differ from the whole request; this remains a lower-bound forecast, not reported eligibility.
   const facts = view.facts && { ...view.facts, minimum: view.facts.minimum === null ? null : Math.ceil(view.facts.minimum / calibration.estimate.lower) };
   return { ...wireOf(turn.route.connection.id, account, view, prompt.parts), facts };
+}
+
+export type PreviewRequest = { url: string; body: string | null };
+
+// No credential is applied: all connectors authenticate through withCredential's headers, including Gemini and
+// Vertex. Imported direct endpoints can still embed one in their URL. Preparation shares sending's cache-point
+// selection with cacheSend; headers never leave this helper.
+export function previewRequest({ turn, prompt }: Sending): PreviewRequest | null {
+  const resolved = resolveConnection(turn.route.connection.value);
+  if (!resolved) return null;
+  const route = resolveModel(resolved, turn.route.model);
+  const asked = { model: turn.route.model, messages: prompt.messages, settings: turn.settings };
+  const { request } = prepareChat(route, { ...asked, settings: batchLane(route, asked) ? { ...asked.settings, streaming: false } : asked.settings });
+  const url = new URL(request.url);
+  let redacted = false;
+  if (url.username || url.password) {
+    url.username = 'REDACTED';
+    url.password = '';
+    redacted = true;
+  }
+  for (const key of url.searchParams.keys()) {
+    if (/^(key|api[_-]?key|access[_-]?token|token|authorization)$/i.test(key)) {
+      url.searchParams.set(key, 'REDACTED');
+      redacted = true;
+    }
+  }
+  const secrets = [...new Set(turn.route.connection.value.accounts.flatMap(({ secret }) => secret ? [secret, encodeURIComponent(secret)] : []))].sort((a, b) => b.length - a.length);
+  const pattern = secrets.length ? new RegExp(secrets.map((secret) => secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g') : null;
+  const address = redacted ? url.href : request.url;
+  return { url: pattern ? address.replace(pattern, 'REDACTED') : address, body: request.body };
+}
+
+export type AfterEnter =
+  | { kind: 'input-translation' }
+  | { kind: 'hook'; stage: 'onInput' | 'editInput' | 'onStart' | 'editRequest'; packs: string[] }
+  | { kind: 'tools'; modules: string[] }
+  | { kind: 'retrieval' };
+
+export function afterEnter({ store }: Reader, chat: string, turn: TurnContext): AfterEnter[] {
+  const result: AfterEnter[] = [];
+  if (turn.said && translateSwitches(store, turn.chat.character).input) result.push({ kind: 'input-translation' });
+  const packs = packsOf(store, turn.chat);
+  const triggers = triggersOf(packs);
+  const scripts = scriptsOf(packs);
+  const hook = (stage: Extract<AfterEnter, { kind: 'hook' }>['stage'], units: typeof triggers) => {
+    if (units.length) result.push({ kind: 'hook', stage, packs: [...new Set(units.map(({ owner }) => owner.id))] });
+  };
+  if (turn.said) {
+    hook('onInput', triggers.filter((trigger) => trigger.kind === 'lua' || trigger.on === 'input'));
+    hook('editInput', scripts);
+  }
+  hook('onStart', triggers.filter((trigger) => trigger.kind === 'lua' || trigger.on === 'start'));
+  const tools = toolsOf(store, turn.chat);
+  if (tools.length) result.push({ kind: 'tools', modules: tools.map(({ module }) => module) });
+  if (turn.memory?.kind === 'built-in') {
+    const route = embedModel(store);
+    const vectors = chatVectors(store, chat);
+    if (!('kind' in route) && vectors?.value.model === route.model.id && Object.keys(vectors.value.items).length && queryOf(turn.scope.messages)) result.push({ kind: 'retrieval' });
+  }
+  hook('editRequest', scripts);
+  return result;
+}
+
+export type PackAttachment = { kind: 'settings' | 'prompt' | 'character' | 'persona'; id: string; own: boolean };
+export type ModuleContribution = {
+  id: string;
+  kind: 'character' | 'module';
+  name: string;
+  attached: PackAttachment[];
+  lore: (NonNullable<Assembled['lore']>[number] & { tokens: number | null; parts: { index: number; tokens: number }[] })[];
+  regex: Record<'input' | 'output' | 'process' | 'display', number>;
+  triggers: { lua: number; blocks: number };
+  toggles: Toggle[];
+  tools: { name: string }[];
+};
+
+export function moduleContributions({ store }: Reader, chat: Chat, preview: Assembled): ModuleContribution[] {
+  const packs = packsOf(store, chat);
+  const character = chat.character === null ? null : store.get('character', chat.character);
+  const prompt = chatPrompt(store, chat);
+  const persona = chatPersona(store, chat);
+  const attachments = [
+    { kind: 'settings' as const, id: SETTINGS_ID, modules: store.get('settings', SETTINGS_ID)?.value.modules ?? [] },
+    ...(prompt.kind === 'prompt' ? [{ kind: 'prompt' as const, id: prompt.prompt.id, modules: prompt.prompt.value.modules ?? [] }] : []),
+    ...(character ? [{ kind: 'character' as const, id: character.id, modules: character.value.modules ?? [] }] : []),
+    ...(persona.kind === 'persona' ? [{ kind: 'persona' as const, id: persona.persona.id, modules: persona.persona.value.modules ?? [] }] : []),
+  ];
+  const tools = toolsOf(store, chat);
+  return packs.map((pack) => {
+    const regex = { input: 0, output: 0, process: 0, display: 0 };
+    for (const script of pack.pack.regex) if (!script.off) regex[script.stage]++;
+    const triggers = { lua: 0, blocks: 0 };
+    for (const trigger of triggersOf([pack])) triggers[trigger.kind]++;
+    return {
+      id: pack.id,
+      kind: pack.module ? 'module' : 'character',
+      name: pack.module ? store.get('module', pack.id)!.value.name : character!.value.card.name,
+      attached: pack.module ? attachments.filter(({ modules }) => modules.includes(pack.id)).map(({ kind, id }) => ({ kind, id, own: false })) : [{ kind: 'character', id: pack.id, own: true }],
+      lore: (preview.lore ?? []).filter(({ id }) => store.get('lore', id)?.parent === pack.id).map((entry) => ({
+        ...entry,
+        tokens: 'tokens' in entry.fate ? entry.fate.tokens : null,
+        parts: preview.parts.flatMap(({ from, tokens }, index) => (from.kind === 'lore' || from.kind === 'depth') && from.id === entry.id ? [{ index, tokens }] : []),
+      })),
+      regex,
+      triggers,
+      toggles: chatToggles(pack.pack.toggles),
+      tools: tools.filter(({ module }) => module === pack.id).map(({ tool }) => ({ name: tool.manifest.displayName })),
+    };
+  });
 }

@@ -4,9 +4,11 @@ import type { Receipt } from '../../model/chat';
 import { isChapter } from '../../engine/memory';
 import type { Chapter, Memory, MemoryRecord } from '../../model/memory';
 import type { Role } from '../../model/prompt';
+import type { HttpRequest } from '../../connectors/types';
 import type { Sent } from '../../runtime/talk';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
-import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
+import { Button, ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Row, Section, Stack, Text } from '../ui';
+import type { Side } from './panels';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
 import { CHAPTER, LORE_BUDGET_LABEL, loreName } from '../common/words';
@@ -34,7 +36,6 @@ export function partName(from: From, role: Role): string {
 
 // Headers, which carry the credential, are never kept (runtime/generate), so there is nothing to redact here.
 export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Receipt }) {
-  const [view, setView] = useState<'parts' | 'body'>('parts');
   // Not "gone": a reply written before this page opened, on another device, or edited is not here either.
   if (!sent) {
     return (
@@ -51,7 +52,21 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
       </>
     );
   }
-  const { request, prompt } = sent;
+  return <RequestView prompt={sent.prompt} title="보낸 순서대로" request={() => sent.request} unbuilt="요청 전에 중단돼서 본문이 없어요." />;
+}
+
+type RequestViewProps = {
+  prompt: Pick<Assembled, 'messages' | 'parts'>;
+  title: string;
+  // Read only while 본문 shows: the wire body of a request not sent yet is built on demand.
+  request: () => Pick<HttpRequest, 'url' | 'body'> | null;
+  unbuilt: string;
+  editor?: (from: From) => Side | null;
+  onEdit?: (side: Side) => void;
+};
+
+export function RequestView({ prompt, title, request, unbuilt, editor, onEdit }: RequestViewProps) {
+  const [view, setView] = useState<'parts' | 'body'>('parts');
   const total = prompt.parts.reduce((sum, part) => sum + part.tokens, 0);
   return (
     <>
@@ -66,30 +81,45 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
         onChange={setView}
       />
       {view === 'parts' ? (
-        <Section level={3} title="보낸 순서대로" note={`약 ${tokens(total)} 토큰 · 앱 추정`}>
+        <Section level={3} title={title} note={`약 ${tokens(total)} 토큰 · 앱 추정`}>
           <Stack gap="related">
             {prompt.messages.map((message, index) => {
               const part = prompt.parts[index]!;
+              const side = editor?.(part.from);
               return (
                 <Disclosure key={index} label={`${partName(part.from, message.role)} · ${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰`}>
-                  <CodeBlock>{message.content}</CodeBlock>
+                  <Stack gap="related">
+                    <CodeBlock>{message.content}</CodeBlock>
+                    {side && onEdit && (
+                      <Row kind="actions">
+                        <Button variant="link" size="sm" onClick={() => onEdit(side)}>
+                          편집
+                        </Button>
+                      </Row>
+                    )}
+                  </Stack>
                 </Disclosure>
               );
             })}
           </Stack>
         </Section>
-      ) : request ? (
-        <>
-          <Section level={3} title="주소">
-            <CodeBlock>{request.url}</CodeBlock>
-          </Section>
-          <Section level={3} title="본문">
-            {request.body && <CodeBlock>{JSON.stringify(JSON.parse(request.body), null, 2)}</CodeBlock>}
-          </Section>
-        </>
       ) : (
-        <Empty variant="section">요청 전에 중단돼서 본문이 없어요.</Empty>
+        <RequestBody request={request()} unbuilt={unbuilt} />
       )}
+    </>
+  );
+}
+
+function RequestBody({ request, unbuilt }: { request: Pick<HttpRequest, 'url' | 'body'> | null; unbuilt: string }) {
+  if (!request) return <Empty variant="section">{unbuilt}</Empty>;
+  return (
+    <>
+      <Section level={3} title="주소">
+        <CodeBlock>{request.url}</CodeBlock>
+      </Section>
+      <Section level={3} title="본문">
+        {request.body && <CodeBlock>{JSON.stringify(JSON.parse(request.body), null, 2)}</CodeBlock>}
+      </Section>
     </>
   );
 }

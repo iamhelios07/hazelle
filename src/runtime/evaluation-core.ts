@@ -4,7 +4,7 @@ import { speakersOf, standing, type Standing } from '../engine/memory';
 import { activeLore, assemble, assembleIllustration, assembleMemory, assembleTranslation, type Assembled, type IllustrationInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
 import type { RegexScript } from '../engine/import/types';
 import { trySample } from '../engine/regex/scripts';
-import { renderChat, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
+import { inspectVariables, renderChat, type VariableInspection, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
 import type { Memory, Source } from '../model/memory';
 import { applyTail, type Tail } from './history-delta';
 import { tokenizer } from './tokenizer';
@@ -20,7 +20,8 @@ export type EvaluationJob =
   | { kind: 'illustration'; input: Omit<IllustrationInput, 'scope' | 'countTokens'> }
   | { kind: 'read'; memory: { memory: Memory; shown: Source[]; budget: number } | null }
   | { kind: 'lore'; seed: string; limit: number }
-  | { kind: 'state'; prefix: string };
+  | { kind: 'state'; prefix: string }
+  | { kind: 'variables'; prefix: string };
 export type LuaResult = LuaText & { version: string };
 export type EvaluationInput =
   | { lane: string; scope: ChatBasis; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
@@ -35,6 +36,7 @@ export type ChatTexts = { texts: string[]; tokens: number[]; standing: Standing 
 export type ToolState = { texts: string[]; variables: [string, string][]; wrote: [string, string][][] };
 export type EvaluationResult =
   | ToolState
+  | VariableInspection
   | DisplayEvaluation
   | DisplayPatch
   | EvaluatedPrompt
@@ -89,6 +91,10 @@ export class Evaluator {
     const messages = applyTail(this.histories.get(lane) ?? [], history);
     this.histories.set(lane, messages);
     const scope: ChatScope = { ...data, messages };
+    if (job.kind === 'variables') {
+      started();
+      return inspectVariables(scope, job.prefix);
+    }
     if (job.kind === 'state') {
       started();
       const { texts, variables, wrote, stopped } = renderChat('prompt', scope);

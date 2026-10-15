@@ -270,3 +270,15 @@ it('logs state read timing over a 1000-message history without asserting a wall-
   console.info(JSON.stringify({ measurement: 'tool-state', fixture: 'synthetic-1000-message-CBS-history', messages: history.messages.length, reads: samples.length, p50Ms: samples[7], p95Ms: samples[14] }));
   evaluation.close();
 });
+
+it('returns provenance only for an explicitly requested variables job', async () => {
+  const evaluation = new Evaluation(none);
+  try {
+    const history = { ...scope, variables: [['n', '0']] as [string, string][], messages: [message('v', '{{addvar::n::1}}')], pending: [['n', '2']] as [string, string][] };
+    const state = await evaluation.state({ asker: 'tool', chat: 'c', tool: 'tool' }, history, 'n');
+    expect(state).not.toHaveProperty('history');
+    const inspected = await evaluation.variables({ asker: 'view', chat: 'c' }, history, 'n');
+    expect(inspected.variables[0]!.history.map(({ writer, value }) => [writer.kind, value])).toEqual([['chat', '0'], ['cbs', '1'], ['pending', '2']]);
+    expect(inspected.variables[0]!.last.value).toBe('2');
+  } finally { evaluation.close(); }
+});

@@ -6,10 +6,11 @@ import type { Memory, MemoryRecord } from '../model/memory';
 import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, unused, type Assembled, type From, type PromptInput } from './pipeline';
+import { assemble, tokenGroups, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, speakersOf, type ChatRead } from './memory';
 import { RETRIEVED_HEADING } from './retrieval';
-import { renderChat } from './render';
+import { inspectVariables, renderChat, VARIABLE_LIMITS } from './render';
+import { Calibration, fitLimits } from './token-calibration';
 
 // The user's own Risu preset "🏓 핑퐁 간소화" (design §4.2), block for block: its wrappers and marks as written,
 // its long texts cut down around the parts that carry CBS.
@@ -619,5 +620,48 @@ describe('tool prompt text', () => {
     const built = assembledOf(assemble({ ...base, tools: [{ module: 'a', name: 'empty', text: '  ' }] }));
     expect(built.messages).toEqual(assembledOf(assemble(base)).messages);
     expect(built.parts.some(({ from }) => from.kind === 'tool')).toBe(false);
+  });
+});
+
+describe('inspect projections', () => {
+  it('groups all source kinds without losing the snapshot fields or dropped messages', () => {
+    const parts: Assembled['parts'] = [
+      { from: { kind: 'block', id: 'a', name: 'same', slot: null }, tokens: 1 },
+      { from: { kind: 'block', id: 'b', name: 'same', slot: null }, tokens: 2 },
+      ...(['description', 'persona', 'memory', 'chat', 'chat'] as const).map((slot) => ({ from: { kind: 'block' as const, id: slot, name: null, slot }, tokens: 3 })),
+      { from: { kind: 'lore', id: 'l', name: 'lore', slot: 'lorebook' }, tokens: 4 },
+      { from: { kind: 'depth', id: 'd', name: 'depth', depth: 1 }, tokens: 5 },
+      { from: { kind: 'tool', name: 'tool' }, tokens: 6 },
+      { from: { kind: 'script' }, tokens: 7 },
+      { from: { kind: 'retrieval' }, tokens: 8 },
+      { from: { kind: 'continue' }, tokens: 9 },
+    ];
+    const estimate = new Calibration().estimate('model', 'chat', 0);
+    const fit = fitLimits({ hard: 1000, user: null, output: 100 }, estimate);
+    const grouped = tokenGroups({ parts, dropped: 4 }, { fit, estimate });
+    expect(grouped).toMatchObject({ total: 57, dropped: 4, fit, estimate });
+    expect(grouped.groups.filter(({ source }) => source.kind === 'block')).toHaveLength(2);
+    expect(grouped.groups.find(({ source }) => source.kind === 'chat')).toEqual({ source: { kind: 'chat' }, tokens: 6, count: 2 });
+    expect(grouped.groups.map(({ source }) => source.kind)).toEqual(['block', 'block', 'description', 'persona', 'memory', 'chat', 'lorebook', 'depth', 'tool', 'script', 'retrieval', 'continue']);
+  });
+
+  it('attributes the canonical replay writes, leaves process-stage writes out, and bounds the whole history', () => {
+    const chat = scope({
+      card: card({ greetings: [], variables: [['n', '0']], regex: [script('input', 'go', '{{addvar::n::1}}'), script('process', '', '{{setvar::n::discard}}')] }),
+      greeting: null,
+      variables: [['n', '1']],
+      messages: [{ ...message('v', 'user', 'go'), before: [['n', '2']], after: [['n', '4']] }],
+      pending: [['n', '5']],
+    });
+    const inspected = inspectVariables(chat);
+    expect(inspected.variables[0]!.history.map(({ writer, value }) => [writer.kind, value])).toEqual([['card', '0'], ['chat', '1'], ['script', '2'], ['cbs', '3'], ['script', '4'], ['pending', '5']]);
+    expect(inspected.variables[0]!.history[3]!.writer).toMatchObject({ kind: 'cbs', version: 'v', index: 0, stage: 'input' });
+    expect(inspected.variables[0]!.last).toMatchObject({ writer: { kind: 'pending' }, value: '5' });
+    expect(renderChat('prompt', chat).variables.get('n')).toBe('5');
+    const many = inspectVariables({ ...chat, pending: Array.from({ length: VARIABLE_LIMITS.writes + 2 }, (_, n) => ['n', String(n)]) });
+    expect(many.variables[0]!.history).toHaveLength(VARIABLE_LIMITS.writes);
+    expect(many.variables[0]!.omitted).toBe(7);
+    const clipped = inspectVariables({ ...chat, pending: [['n', 'x'.repeat(VARIABLE_LIMITS.value + 1)]] });
+    expect(clipped.variables[0]!.last).toMatchObject({ value: 'x'.repeat(VARIABLE_LIMITS.value), truncated: true });
   });
 });

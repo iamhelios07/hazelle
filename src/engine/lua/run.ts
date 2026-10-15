@@ -1,3 +1,4 @@
+import type { PackOwner } from '../../model/library';
 import { LuaFactory, type LuaEngine } from 'wasmoon';
 import { runBlocks, type Blocks } from './blocks';
 import { ranked } from './similar';
@@ -13,7 +14,7 @@ export type Script = Pick<Extract<ScriptUnit, { kind: 'lua' }>, 'kind' | 'name' 
 // variables: the writes since the item before it, over the snapshot's.
 export type DisplayItem = { index: number; text: string; variables: [string, string][] };
 // listening: false for a script whose engine holds no editDisplay listener, which has no part in any pass.
-export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[] };
+export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[]; trace?: HookTrace };
 export type DisplayBatch = Displayed & { from: number; remaining: number };
 type DisplaySession = { revision: number; scripts: Script[]; snapshot: Snapshot; items: DisplayItem[]; variables: Map<string, string>; undo: [string, string | undefined][][]; remaining: number; messages: Working[]; globals: Map<string, string> };
 
@@ -30,7 +31,7 @@ const UNSUPPORTED = [
   'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage',
 ];
 
-type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
+type Engine = { loaded: HookLog | null; log: HookLog | null; lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
 type Lane = 'event' | 'display';
 type Workset = { engines: Map<string, Promise<Engine>>; codes: Set<string>; held: number; retired: boolean };
 
@@ -63,59 +64,88 @@ export class Lua {
 
   // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
   // the event is its own.
-  async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
+  async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome & { trace: HookTrace }> {
     const workset = this.hold(owner, 'event', triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
     try {
-      const run: Run & { host: Host } = { owner: null, chat: owner, lore: new Map(), quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false, triggerId: event.kind === 'call' ? event.id : '' };
+      const trace: HookTrace = { entries: [], omitted: 0 };
+      let active: HookLog | null = null;
+      const run: Run & { host: Host } = { owner: null, chat: owner, lore: new Map(), quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new ObservedWrites((name, value) => { if (active) boundedItem(active, active.writes, [clipped(active, name), clipped(active, value)]); }), messages: working(snapshot), host, stop: false, reload: false, missing: new ObservedMissing((name) => { if (active && !active.missing.includes(name)) boundedItem(active, active.missing, clipped(active, name)); }), ranAway: false, triggerId: event.kind === 'call' ? event.id : '' };
       const errors: ScriptError[] = [];
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
       // depth: how many run trigger effects led here; Risu stops at ten, and a deeper one here is the bot's error.
+      const failed = (script: Script | Blocks, error: Failure) => {
+        const item = { from: script.owner, script: script.name || (script.kind === 'blocks' ? script.on : 'Lua'), ...error };
+        errors.push(item);
+        if (active) boundedItem(active, active.errors, 'message' in item ? { ...item, script: clipped(active, item.script), message: clipped(active, item.message) } : { ...item, script: clipped(active, item.script) });
+      };
       const fire = async (event: Event, depth: number) => {
         for (const script of triggers) {
           if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu') continue;
+          if (script.kind === 'blocks' && (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind)) continue;
+          const outer = active;
+          const entry: HookLog = { stage: event.kind === 'edit' ? event.stage : event.kind === 'call' ? event.name : event.kind === 'button' ? 'button' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`, pack: script.owner, script: script.name, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled: false, truncated: false };
+          entry.stage = clipped(entry, entry.stage);
+          entry.script = clipped(entry, entry.script);
+          const began = performance.now();
+          const before = event.kind === 'edit' ? JSON.stringify(value) : undefined;
+          const stopped = run.stop;
+          active = entry;
           run.owner = script.owner;
-          if (script.kind === 'blocks') {
-            if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
-            handled = true;
-            // The triggers it runs speak for their own packs, and the rest of this one for its own.
-            const call = async (name: string) => {
-              if (depth >= TRIGGER_DEPTH) throw new Error(`triggers ran each other more than ${TRIGGER_DEPTH} deep`);
-              await fire({ kind: 'call', name, id: run.triggerId }, depth + 1);
-              run.owner = script.owner;
-            };
-            await runBlocks(script, run as Acting, call).catch((error: unknown) => errors.push({ from: script.owner, script: script.name || script.on, ...failure(run, error) }));
-            continue;
-          }
-          const engine = await this.engine(workset, script);
-          await this.exclusive(engine, async () => {
-            if (engine.failed !== null) return void errors.push({ from: script.owner, script: script.name, message: engine.failed });
-            engine.run = run;
-            try {
-              if (event.kind === 'edit') {
-                const edited = await this.listeners(engine, event.stage, value, event.meta);
-                if (edited === DEAF) return;
-                value = edited ?? value;
-                handled = true;
-                return;
-              }
-              const name = event.kind === 'call' ? event.name : event.kind === 'button' ? 'onButtonClick' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`;
-              if (event.kind === 'call' && !engine.own.has(name)) return;
-              if (typeof engine.lua.global.get(name) !== 'function') return;
-              handled = true;
-              if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
-            } catch (error) {
-              errors.push({ from: script.owner, script: script.name, ...failure(run, error) });
-            } finally {
-              engine.run = null;
+          try {
+            if (script.kind === 'blocks') {
+              handled = entry.handled = true;
+              // The triggers it runs speak for their own packs, and the rest of this one for its own.
+              const call = async (name: string) => {
+                if (depth >= TRIGGER_DEPTH) throw new Error(`triggers ran each other more than ${TRIGGER_DEPTH} deep`);
+                await fire({ kind: 'call', name, id: run.triggerId }, depth + 1);
+                run.owner = script.owner;
+              };
+              await runBlocks(script, run as Acting, call).catch((error: unknown) => failed(script, failure(run, error)));
+              continue;
             }
-          });
+            const engine = await this.engine(workset, script);
+            await this.exclusive(engine, async () => {
+              if (engine.loaded) { keepTrace(trace, engine.loaded); engine.loaded = null; }
+              if (engine.failed !== null) return void failed(script, { message: engine.failed });
+              engine.run = run;
+              engine.log = entry;
+              try {
+                if (event.kind === 'edit') {
+                  const edited = await this.listeners(engine, event.stage, value, event.meta);
+                  if (edited === DEAF) return;
+                  value = edited ?? value;
+                  handled = entry.handled = true;
+                  return;
+                }
+                const name = event.kind === 'call' ? event.name : event.kind === 'button' ? 'onButtonClick' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`;
+                if (event.kind === 'call' && !engine.own.has(name)) return;
+                if (typeof engine.lua.global.get(name) !== 'function') return;
+                handled = entry.handled = true;
+                if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
+              } catch (error) {
+                failed(script, failure(run, error));
+              } finally {
+                engine.run = null;
+                engine.log = null;
+              }
+            });
+          } finally {
+            entry.duration = performance.now() - began;
+            entry.stopped = !stopped && run.stop;
+            entry.changed = event.kind === 'edit' && before !== JSON.stringify(value);
+            if (entry.handled || entry.errors.length) {
+              keepTrace(trace, entry);
+            }
+            active = outer;
+          }
         }
       };
       await fire(event, 0);
       const kept = run.messages.filter((message) => message.origin !== null);
       const origins = new Set(kept.map((message) => message.origin));
       return {
+        trace,
         value,
         stop: run.stop,
         handled,
@@ -166,32 +196,48 @@ export class Lua {
     const workset = this.hold(owner, 'display', scripts);
     try {
       const errors: ScriptError[] = [];
+      const trace: HookTrace = { entries: [], omitted: 0 };
       const missing = new Set<string>();
       const texts = items.map((item) => item.text);
       const listening = scripts.map(() => true);
       for (const [place, script] of scripts.entries()) {
         const engine = await this.engine(workset, script);
         await this.exclusive(engine, async () => {
+          if (engine.loaded) { keepTrace(trace, engine.loaded); engine.loaded = null; }
           if (engine.failed !== null) return void errors.push({ from: script.owner, script: script.name, message: engine.failed });
           const variables = new Map(session.variables);
           for (const [at, item] of items.entries()) {
             for (const [name, value] of item.variables) variables.set(name, value);
-            const run: Run = { owner: script.owner, chat: owner, lore: new Map(), quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false, triggerId: '' };
+            const entry: HookLog = { stage: 'editDisplay', pack: script.owner, script: script.name, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled: false, truncated: false };
+            entry.script = clipped(entry, entry.script);
+            const began = performance.now();
+            const before = texts[at];
+            const run: Run = { owner: script.owner, chat: owner, lore: new Map(), quiet: true, snapshot, variables, globals, written: new ObservedWrites((name, value) => boundedItem(entry, entry.writes, [clipped(entry, name), clipped(entry, value)])), messages, host: null, stop: false, reload: false, missing: new ObservedMissing((name) => { missing.add(name); if (!entry.missing.includes(name)) boundedItem(entry, entry.missing, clipped(entry, name)); }), ranAway: false, triggerId: '' };
             engine.run = run;
+            engine.log = entry;
             try {
               const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
               if (edited === DEAF) return void (listening[place] = false);
+              entry.handled = true;
               if (typeof edited === 'string') texts[at] = edited;
             } catch (error) {
-              if (!errors.some((known) => known.script === script.name)) errors.push({ from: script.owner, script: script.name, ...failure(run, error) });
+              const item = { from: script.owner, script: script.name, ...failure(run, error) };
+              if (!errors.some((known) => known.script === script.name)) errors.push(item);
+              boundedItem(entry, entry.errors, 'message' in item ? { ...item, script: clipped(entry, item.script), message: clipped(entry, item.message) } : { ...item, script: clipped(entry, item.script) });
             } finally {
+              entry.duration = performance.now() - began;
+              entry.changed = texts[at] !== before;
+              // A display pass runs once per shown message; a quiet run kept here would push the turn's hooks out of
+              // the page log's bound.
+              if (entry.logs.length || entry.errors.length) keepTrace(trace, entry);
               engine.run = null;
+              engine.log = null;
             }
           }
         });
       }
       if (from === 0 && this.displays.get(owner) === session) this.displays.delete(owner);
-      return { texts, listening, errors, missing: [...missing], from, remaining: from };
+      return { texts, listening, errors, missing: [...missing], trace, from, remaining: from };
     } finally {
       this.release(workset);
     }
@@ -288,7 +334,10 @@ export class Lua {
   private async start(script: Script): Promise<Engine> {
     // enableProxy off: an object handed to Lua becomes a table, never a live JS object a script could walk.
     const lua = await this.factory.createEngine({ injectObjects: true, enableProxy: false, functionTimeout: this.sliceMs });
-    const engine: Engine = { lua, own: new Set(), run: null, queue: Promise.resolve(), failed: null };
+    const loaded: HookLog = { stage: 'load', pack: script.owner, script: script.name, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled: true, truncated: false };
+    loaded.script = clipped(loaded, loaded.script);
+    const began = performance.now();
+    const engine: Engine = { loaded: null, log: loaded, lua, own: new Set(), run: null, queue: Promise.resolve(), failed: null };
     this.declare(engine);
     await lua.doString(PRELUDE);
     const before = new Set(globals(lua));
@@ -305,6 +354,9 @@ export class Lua {
       engine.failed = describe(error);
     }
     engine.own = new Set(globals(lua).filter((name) => !before.has(name)));
+    loaded.duration = performance.now() - began;
+    engine.loaded = loaded.logs.length ? loaded : null;
+    engine.log = null;
     return engine;
   }
 
@@ -410,7 +462,9 @@ export class Lua {
     act('similarity', (run, source: unknown, values: unknown) => ranked(run, text(source), Object.values((values ?? {}) as Record<string, unknown>).map(text)));
 
     set('hash', async (_run, value: unknown) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text(value))))].map((byte) => byte.toString(16).padStart(2, '0')).join(''));
-    engine.lua.global.set('logMain', () => {});
+    engine.lua.global.set('logMain', (value: string) => {
+      if (engine.log) boundedItem(engine.log, engine.log.logs, clipped(engine.log, value));
+    });
     for (const name of UNSUPPORTED) set(name, (run) => void run.missing.add(name));
   }
 }
@@ -423,4 +477,50 @@ function globals(lua: LuaEngine): string[] {
   lua.global.set('__name', (name: unknown) => void (typeof name === 'string' && names.push(name)));
   lua.doStringSync('for name, value in pairs(_G) do if type(value) == "function" then __name(name) end end __name = nil');
   return names;
+}
+
+export type HookLog = {
+  stage: string;
+  pack: PackOwner | null;
+  script: string;
+  at: number;
+  duration: number;
+  logs: string[];
+  writes: [string, string][];
+  errors: (Failure & { from: PackOwner | null; script: string })[];
+  missing: string[];
+  stopped: boolean;
+  changed: boolean;
+  handled: boolean;
+  truncated: boolean;
+};
+
+// Both sides of the worker boundary are bounded: each run keeps 100 hooks, each field 16 items of 1024 characters.
+// Scripts separately bounds the page's retained log by serialized size.
+export const HOOK_TRACE_LIMITS = { entries: 100, items: 16, text: 1024 } as const;
+export type HookTrace = { entries: HookLog[]; omitted: number };
+
+function clipped(entry: HookLog, text: string): string {
+  if (text.length > HOOK_TRACE_LIMITS.text) entry.truncated = true;
+  return text.slice(0, HOOK_TRACE_LIMITS.text);
+}
+
+function boundedItem<T>(entry: HookLog, items: T[], item: T) {
+  if (items.length === HOOK_TRACE_LIMITS.items) { items.shift(); entry.truncated = true; }
+  items.push(item);
+}
+
+class ObservedWrites extends Map<string, string> {
+  constructor(private readonly wrote: (name: string, value: string) => void) { super(); }
+  override set(name: string, value: string) { this.wrote(name, value); return super.set(name, value); }
+}
+
+class ObservedMissing extends Set<string> {
+  constructor(private readonly missed: (name: string) => void) { super(); }
+  override add(name: string) { this.missed(name); return super.add(name); }
+}
+
+function keepTrace(trace: HookTrace, entry: HookLog) {
+  trace.entries.push(entry);
+  if (trace.entries.length > HOOK_TRACE_LIMITS.entries) { trace.entries.shift(); trace.omitted++; }
 }

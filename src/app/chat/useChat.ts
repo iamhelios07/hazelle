@@ -20,7 +20,7 @@ import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, 
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
-import { flippedCache, cacheShown, NO_PANELS, opened, type Panel, type Panels } from './panels';
+import { inspectShown, NO_PANELS, opened, type InspectTab, type Panel, type Panels } from './panels';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { pickStarted } from './infoReply';
@@ -95,7 +95,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const draft = useDraft(id, chat.character);
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, answered, reply === 'stay');
   const memory = useChatMemory(id);
-  const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy || displayPending === true);
+  const sendNotes = useSendNotes(id, chat, messages, memory, draft.text, busy || displayPending === true);
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
@@ -291,8 +291,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     opening,
     last,
     busy,
-    cache,
-    leaving,
+    cache: sendNotes.cache,
+    leaving: sendNotes.leaving,
+    sendNotes,
     found,
     search,
     problem,
@@ -300,7 +301,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     pinned,
     branching,
     panel,
-    cacheShown: cacheShown(panels, pairs),
+    inspect: inspectShown(panels, pairs),
     tools,
     bookmarked,
     dialog,
@@ -339,8 +340,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       pickInfo: setInfoPick,
       flipToggles: () => flipPanel({ kind: 'toggles' }, ({ kind }) => kind === 'toggles'),
       memory: (record: string | null) => open({ kind: 'memory', record }),
-      cache: () => setPanels((current) => flippedCache(current, pairs)),
-      closeCache: () => setPanels((current) => ({ ...current, cache: false })),
+      openInspect: (tab: InspectTab) => open({ kind: 'inspect', tab }),
+      switchInspectTab: (tab: InspectTab) => setPanels((current) => current.inspect ? { ...current, inspect: { kind: 'inspect', tab } } : current),
+      closeInspect: () => setPanels((current) => ({ ...current, inspect: null })),
       tool: (module: string) => flipPanel({ kind: 'tool', module }, (current) => current.kind === 'tool' && current.module === module),
       toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scripts.menu(chat, module, item)),
       toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),

@@ -103,15 +103,19 @@ export function renderChat(
   scope: ChatScope,
   take: ReadonlySet<number> = new Set(),
   lua?: LuaDisplay,
+  trace?: VariableTrace,
 ): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; unfound: Set<string> | null; stopped: Runaway | null; finish: ((index: number, text: string) => ReturnType<typeof renderStage>) | null; failures: { input: Map<number, Runaway>; display: Map<number, Runaway> } } {
   const unfound = stage === 'display' ? new Set<string>() : null;
   const context = contexts(scope, stage, null, '', unfound);
   const scripts = new Scripts(scope.packs.flatMap(({ regex }) => regex), scope.messages);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
-  const variables = new Logged();
+  const variables = trace ? new Traced(trace) : new Logged();
   if (lua) variables.changed = new Set();
   // Through set, so the stamp tells one start from another; then cleared, since a pass begins from start.
-  for (const [name, value] of start) variables.set(name, value);
+  trace?.at({ kind: 'card' });
+  for (const [name, value] of scope.card?.variables ?? []) variables.set(name, value);
+  trace?.at({ kind: 'chat' });
+  for (const [name, value] of scope.variables) variables.set(name, value);
   variables.changed?.clear();
   const states = lua ? new VariableTimeline(start) : null;
   variables.record = states;
@@ -137,7 +141,7 @@ export function renderChat(
       return unrun;
     }
   };
-  const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
+  const texts = scope.messages.map(({ id, message, role, text, staged, before = [], after = [] }, index) => {
     states?.begin();
     progressed();
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
@@ -146,11 +150,18 @@ export function renderChat(
     // opening picker shows the opening picked. Those writes still stand after its own.
     const greeting = index === 0 && scope.greeting !== null;
     const written = !(greeting || staged);
-    for (const [name, value] of greeting ? [...before, ...after] : before) variables.set(name, value);
+    trace?.at({ kind: 'script', version: id, message, index, phase: 'before' });
+    for (const [name, value] of before) variables.set(name, value);
+    if (greeting) {
+      trace?.at({ kind: 'script', version: id, message, index, phase: 'after' });
+      for (const [name, value] of after) variables.set(name, value);
+    }
+    trace?.at({ kind: 'cbs', version: id, message, index, stage: greeting ? 'greeting' : staged ? 'staged' : role === 'user' ? 'input' : 'output' });
     variables.log = [];
     const replayed = guarded(index, () => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { index, cbs: cbs(variables) }).text : cbs(variables)(text), text);
     wrote.push(variables.log);
     variables.log = null;
+    trace?.at({ kind: 'script', version: id, message, index, phase: 'after' });
     for (const [name, value] of after) variables.set(name, value);
     past.push(unescapeCbs(replayed));
     if (greeting && later) { drawn.push([]); boxes.push([]); return replayed; }
@@ -176,6 +187,7 @@ export function renderChat(
     return shown.text;
   });
   variables.record = null;
+  trace?.at({ kind: 'pending' });
   for (const [name, value] of scope.pending ?? []) variables.set(name, value);
   if (later) {
     // Its own writes stood in order above; this reading's are dropped.
@@ -265,4 +277,58 @@ class Logged extends Map<string, string> {
     }
     return super.set(name, value);
   }
+}
+
+export type VariableWriter =
+  | { kind: 'card' | 'chat' | 'pending' }
+  // Stored writes retain the version and phase, not whether Lua or a tool made them.
+  | { kind: 'script'; version: string; message: string; index: number; phase: 'before' | 'after' }
+  | { kind: 'cbs'; version: string; message: string; index: number; stage: 'input' | 'output' | 'greeting' | 'staged' };
+export type VariableWrite = { writer: VariableWriter; value: string; truncated: boolean };
+export type InspectedVariable = { name: string; nameTruncated: boolean; last: VariableWrite; history: VariableWrite[]; omitted: number };
+export type VariableInspection = { variables: InspectedVariable[]; omitted: number; stopped: boolean };
+
+// Bounds apply to the whole reply, not per message: 256 variables, 1024 historical writes, 2048 characters per
+// value and 256 per name. Prefix filtering happens before the bound; omitted counts and truncation stay explicit.
+export const VARIABLE_LIMITS = { variables: 256, writes: 1024, value: 2048, name: 256 } as const;
+
+class VariableTrace {
+  private writer: VariableWriter = { kind: 'card' };
+  private readonly variables = new Map<string, InspectedVariable>();
+  private readonly history: { variable: InspectedVariable; write: VariableWrite }[] = [];
+  constructor(private readonly prefix: string) {}
+  at(writer: VariableWriter) { this.writer = writer; }
+  write(name: string, value: string) {
+    if (!name.startsWith(this.prefix)) return;
+    let variable = this.variables.get(name);
+    if (!variable && this.variables.size === VARIABLE_LIMITS.variables) return;
+    const write: VariableWrite = { writer: this.writer, value: value.slice(0, VARIABLE_LIMITS.value), truncated: value.length > VARIABLE_LIMITS.value };
+    if (!variable) {
+      variable = { name: name.slice(0, VARIABLE_LIMITS.name), nameTruncated: name.length > VARIABLE_LIMITS.name, last: write, history: [], omitted: 0 };
+      this.variables.set(name, variable);
+    }
+    variable.last = write;
+    this.history.push({ variable, write });
+    if (this.history.length > VARIABLE_LIMITS.writes) this.history.shift()!.variable.omitted++;
+  }
+  result(variables: ReadonlyMap<string, string>, stopped: boolean): VariableInspection {
+    for (const { variable, write } of this.history) variable.history.push(write);
+    let total = 0;
+    for (const name of variables.keys()) if (name.startsWith(this.prefix)) total++;
+    return { variables: [...this.variables.values()], omitted: total - this.variables.size, stopped };
+  }
+}
+
+class Traced extends Logged {
+  constructor(private readonly trace: VariableTrace) { super(); }
+  override set(name: string, value: string) {
+    this.trace.write(name, value);
+    return super.set(name, value);
+  }
+}
+
+export function inspectVariables(scope: ChatScope, prefix = ''): VariableInspection {
+  const trace = new VariableTrace(prefix);
+  const { variables, stopped } = renderChat('prompt', scope, undefined, undefined, trace);
+  return trace.result(variables, stopped !== null);
 }

@@ -23,6 +23,8 @@ export const SHORTCUTS = {
   cancelEdit: { label: '수정 취소', keys: [{ key: 'Escape' }] },
   // Its handler stays mounted only with a chat open, so elsewhere the key is the browser's find.
   find: { label: '채팅 안 검색', keys: [{ key: 'f', mod: true }] },
+  // Risu's own key for its prompt preview, kept for the hands that move from it.
+  inspect: { label: '점검 열기 · 닫기', keys: [{ key: 'u', mod: true }] },
   findNext: { label: '다음 결과', keys: [{ key: 'Enter', shift: false }] },
   findPrevious: { label: '이전 결과', keys: [{ key: 'Enter', shift: true }] },
   closeFind: { label: '검색 닫기', keys: [{ key: 'Escape' }] },
@@ -36,7 +38,7 @@ type Name = keyof typeof SHORTCUTS;
 // Where each shortcut works, in the order 단축키 lists them.
 export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: readonly Name[] }[] = [
   { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'pictures', 'undoToast'] },
-  { title: '채팅', note: '입력창에서 동작하고, 화살표는 입력창이 비어 있을 때만 동작해요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit', 'find'] },
+  { title: '채팅', note: '입력창에서 동작하고, 화살표는 입력창이 비어 있을 때만 동작해요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit', 'find', 'inspect'] },
   { title: '채팅 검색창', names: ['findNext', 'findPrevious', 'closeFind'] },
   { title: '번역기', note: '원문 칸에서 동작해요.', names: ['translate'] },
   { title: '프롬프트 편집', note: '블록과 토글 변경을 되돌리고, 텍스트 칸 안에서는 입력을 되돌려요.', names: ['undo', 'redo'] },
