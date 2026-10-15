@@ -105,13 +105,15 @@ function ChatModelScreen({ connection, model, back }: Props) {
   }
 
   const sent = current && (schema ? changeWords(fit(schema, current.value.settings).changes) : NOT_CALLABLE);
-  const sharing = current ? profileUsers(connections, settings.profile, current.id).length - 1 : 0;
+  // The chip says how many models the 설정 reaches, since an edit here changes every one of them.
+  const using = current ? profileUsers(connections, settings.profile, current.id).length : 0;
+  const chip = current ? (using > 1 ? `${current.value.name} · 모델 ${using}개` : current.value.name) : '없음';
 
   const picker = (
     <Menu
       place="below-end"
       label={`${MODEL_SETTINGS} 선택`}
-      trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title={MODEL_SETTINGS} {...opener} />}
+      trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={chip} title={MODEL_SETTINGS} {...opener} />}
     >
       {current && <MenuItem tone="muted" label={`'${current.value.name}' 페이지 열기`} onClick={() => navigate({ kind: 'profile', id: current.id })} />}
       {sorted.map((profile) => (
@@ -152,7 +154,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
         />
       }
     >
-      <Section title={MODEL_SETTINGS} note={sharing > 0 ? `다른 모델 ${sharing}개도 써요` : undefined} action={picker}>
+      <Section title={MODEL_SETTINGS} action={picker}>
         {current ? (
           <>
             {sent && <Callout tone="warn">{sent}</Callout>}
