@@ -31,6 +31,8 @@ export const SHORTCUTS = {
   undoToast: { label: '알림에서 되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
   undo: { label: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
   redo: { label: '다시 하기', keys: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
+  // Not Risu's Ctrl+X: in a text field that is cut. Shift held, no other chord here matches it.
+  bigEdit: { label: '크게 편집 열기 · 닫기', keys: [{ key: 'x', mod: true, shift: true }] },
 } as const satisfies Record<string, Shortcut>;
 
 type Name = keyof typeof SHORTCUTS;
@@ -42,6 +44,7 @@ export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: re
   { title: '채팅 검색창', names: ['findNext', 'findPrevious', 'closeFind'] },
   { title: '번역기', note: '원문 칸에서 동작해요.', names: ['translate'] },
   { title: '프롬프트 편집', note: '블록과 토글 변경을 되돌리고, 텍스트 칸 안에서는 입력을 되돌려요.', names: ['undo', 'redo'] },
+  { title: '긴 텍스트 칸', note: '로어북 항목의 내용과 프롬프트 블록의 텍스트 칸에서 동작해요.', names: ['bigEdit'] },
 ];
 
 const TEXT_INPUTS = new Set(['text', 'search', 'password']);

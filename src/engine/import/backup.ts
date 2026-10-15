@@ -4,6 +4,7 @@ import { imageType } from './card';
 import { add, convertModule, counted, record, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
+import { risuPersonaFields } from './persona';
 import { convertPreset } from './preset';
 import { chatInfo, picture, risuCharacter, type Entry, type Read } from './risu-character';
 import {
@@ -225,7 +226,7 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
     const persona = index === selected ? { ...raw, name: db.username, icon: db.userIcon, personaPrompt: db.personaPrompt } : raw;
     const icon = text(persona.icon) && entry(text(persona.icon));
     const module = isRecord(persona.embeddedModule) ? risuModule(persona.embeddedModule, entry) : null;
-    return [{ id: text(persona.id) || null, name: text(persona.name), alias: text(persona.note).trim(), description: text(persona.personaPrompt), picture: icon ? () => picture(icon) : () => Promise.resolve(null), module }];
+    return [{ id: text(persona.id) || null, ...risuPersonaFields(persona), picture: icon ? () => picture(icon) : () => Promise.resolve(null), module }];
   });
 
   const presets = list(db.botPresets).flatMap((raw, index): RisuPreset[] =>

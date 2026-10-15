@@ -1,15 +1,14 @@
 import { add, cardSource, convert, counted, extensionOf, lorebookSource, record, text, type Converted, type Tally } from './convert';
 import { hazelleSource, printOf, readHazelle, readModule, type ConvertedBundle } from './hazelle';
 import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
-import { readPng } from './png';
+import { base64, readPng } from './png';
+import { readPersona } from './persona';
 import { readRisum, writeRisum } from './risum';
 import { writeToggles } from './toggles';
 import { openZip, type Zip } from './zip';
 import { isRecord } from '../../connectors/values';
 
 const utf8 = new TextDecoder();
-// The same one-liner as vault/aead.ts, which the engine may not import.
-const base64 = (text: string) => Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
 const fail = (kind: ImportFailure['kind'], detail?: string): ImportResult => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
 
 export const blankCard = (name: string): Card => ({
@@ -49,7 +48,7 @@ export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>): Im
 function fromPng(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const png = readPng(bytes);
   if (!png) return fail('unreadable', 'not a PNG');
-  if (!png.card) return fail('unreadable', 'the PNG holds no card');
+  if (!png.card) return png.persona === null ? fail('unreadable', 'the PNG holds no card') : readPersona(png.persona, png.image);
   if (png.card.startsWith('rcc||')) return fail('encrypted');
   const tally: Tally = new Map();
   const converted = convert(JSON.parse(utf8.decode(base64(png.card))), null, tally);

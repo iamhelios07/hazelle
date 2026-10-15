@@ -17,7 +17,8 @@ type Props = {
   actions?: ReactNode;
   actionsLayout?: 'full' | 'row';
   // wide: a picker of many, at a fixed height so a search does not resize it, and a sheet from the bottom on a phone.
-  size?: 'normal' | 'wide';
+  // full: nearly the whole screen, all of a phone's; a text edited big (useBigEdit), its body a column to fill.
+  size?: 'normal' | 'wide' | 'full';
   // Above and below the scrolling body, always in view.
   toolbar?: ReactNode;
   footer?: ReactNode;
@@ -41,8 +42,8 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
   // A dialog opened from a button in a head does not take that head's button size.
   return (
     <ButtonSlot value={null}>
-    <div ref={scrim} className={size === 'wide' ? `${styles.scrim} ${styles.sheet}` : styles.scrim}>
-      <div ref={box} className={size === 'wide' ? `${styles.dialog} ${styles.wide}` : styles.dialog} role="dialog" aria-modal="true" aria-label={title} onKeyDown={trap}>
+    <div ref={scrim} className={size === 'normal' ? styles.scrim : `${styles.scrim} ${size === 'wide' ? styles.sheet : styles.bare}`}>
+      <div ref={box} className={size === 'normal' ? styles.dialog : `${styles.dialog} ${styles[size]}`} role="dialog" aria-modal="true" aria-label={title} onKeyDown={trap}>
         <div className={styles.head}>
           <h2 className={styles.title}>{title}</h2>
           <IconButton icon={X} label="닫기" size="sm" onClick={onClose} />

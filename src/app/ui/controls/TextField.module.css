@@ -7,13 +7,13 @@
 .head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-8);
 }
 
 .name {
   display: flex;
   align-items: center;
+  margin-inline-end: auto;
 }
 
 .label {
@@ -37,6 +37,12 @@
   padding: var(--space-12) var(--space-16);
   line-height: var(--leading-relaxed);
   resize: vertical;
+}
+
+.big {
+  composes: area;
+  flex-grow: 1;
+  resize: none;
 }
 
 .hint {

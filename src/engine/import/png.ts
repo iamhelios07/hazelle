@@ -1,12 +1,17 @@
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
-const CARD_KEYS = new Set(['chara', 'ccv3']);
+const TEXT_KEYS = new Set(['chara', 'ccv3', 'persona']);
 const ASSET = 'chara-ext-asset_';
 const decoder = new TextDecoder();
+
+// The same one-liner as vault/aead.ts, which the engine may not import.
+export const base64 = (text: string) => Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
 
 export type Png = {
   // The card's base64 payload. ccv3 wins over chara.
   card: string | null;
-  // The file without the card's tEXt chunks, ending at IEND: the stored avatar is the image alone.
+  // A Risu persona's base64 payload (Risu's exportUserPersona); a card chunk beside it wins.
+  persona: string | null;
+  // The file without the card's or persona's tEXt chunks, ending at IEND: the stored picture is the image alone.
   image: Uint8Array<ArrayBuffer>;
   // The base64 files a card names `__asset:N`, by N: Risu writes each in a chunk `chara-ext-asset_:N` (older
   // cards: `chara-ext-asset_N`).
@@ -31,7 +36,7 @@ export function readPng(bytes: Uint8Array): Png | null {
       const data = chunk.subarray(8, -4);
       const nul = data.indexOf(0);
       const key = nul === -1 ? '' : decoder.decode(data.subarray(0, nul));
-      if (CARD_KEYS.has(key)) {
+      if (TEXT_KEYS.has(key)) {
         text.set(key, decoder.decode(data.subarray(nul + 1)));
         continue;
       }
@@ -41,7 +46,7 @@ export function readPng(bytes: Uint8Array): Png | null {
       }
     }
     kept.push(chunk);
-    if (type === 'IEND') return { card: text.get('ccv3') || text.get('chara') || null, image: concat(kept), assets };
+    if (type === 'IEND') return { card: text.get('ccv3') || text.get('chara') || null, persona: text.get('persona') ?? null, image: concat(kept), assets };
   }
   return null;
 }
