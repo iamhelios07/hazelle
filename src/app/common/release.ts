@@ -8,6 +8,16 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.8',
+    date: '2026-10-15',
+    lines: [
+      '설정에서 모델, 모델 설정, 페르소나를 누르면 옆 서랍 대신 제 페이지로 열려요. 뒤로 가기로 목록에 돌아와요.',
+      '설정 › 채팅 기본값이 번역, 삽화, 장기 기억 목록이 됐어요. 줄마다 스위치로 켜고 끄고, 눌러서 들어가면 공용 값을 바꿔요. 채팅 패널과 같은 줄이에요.',
+      '모델 페이지의 자주 쓰는 설정에 지금 적용되는 값이 보여요. 비워 둔 칸에는 모델의 원래 값이 서요.',
+      '설정 화면의 상자 테두리가 제목 선에 맞춰 서요.',
+    ],
+  },
+  {
     version: 'v0.2.7',
     date: '2026-10-15',
     lines: [
