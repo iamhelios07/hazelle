@@ -19,7 +19,7 @@ import { cardMissed, missedLines, moveMissed } from './missed';
 import { hasModule, stepsOf, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
 
 const FAILURE: Record<BackupFailure['kind'], string> = {
-  encrypted: 'Risu 계정의 전체 백업만으로는 가져올 수 없어요. Risu에서 \'부분 로컬 백업 저장\'으로 받은 파일을 함께 넣어 주세요.',
+  encrypted: 'risuai.xyz의 전체 백업만으로는 가져올 수 없어요. Risu에서 \'부분 로컬 백업 저장\'으로 받은 파일을 함께 넣어 주세요.',
   'no-database': 'Risu 백업이 아니거나 깨진 파일이에요.',
   unreadable: 'Risu 백업이 아니거나 깨진 파일이에요.',
 };

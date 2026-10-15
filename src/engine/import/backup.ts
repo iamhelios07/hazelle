@@ -29,13 +29,12 @@ type Cold = (key: string) => Promise<unknown>;
 // msgpackr; since then, 'RISUSAVE' 00 then blocks of JSON.
 const LEGACY_HEADER = [0, ...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0, 8];
 const BLOCK_HEADER = [...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0];
-// Block types: 1 root (every key but the three below), 2 a character, 4 the presets, 5 the modules; 6 points at a file
-// on the Risu device, which a backup never holds. 0, 9–12 (config, plugins, loadouts, plugin storage, kv) are not read.
+// Block types: 1 root (every key but the three below), 2 a character, 4 the presets, 5 the modules. 0, 9–12 (config,
+// plugins, loadouts, plugin storage, kv) are not read; 6 (a file on the Risu device) is never in a backup.
 const ROOT = 1;
 const CHARACTER = 2;
 const PRESETS = 4;
 const MODULES = 5;
-const REMOTE = 6;
 // coldstorageData.ts:4. The private-use marks are part of the pointer; the bare word is not one.
 const COLD = 'COLDSTORAGE';
 const READ_AHEAD = 4 * 1024 * 1024;
@@ -170,7 +169,6 @@ function readBlocks(bytes: Uint8Array): unknown {
     const start = at + 7 + nameLength;
     at = start + length;
     if (at > bytes.length) throw new Error('the database ends early');
-    if (type === REMOTE) throw new Error('the database points at files on the Risu device');
     if (type !== ROOT && type !== CHARACTER && type !== PRESETS && type !== MODULES) continue;
     const data = bytes.subarray(start, at);
     const value: unknown = JSON.parse(utf8.decode(zipped ? gunzip(data) : data));

@@ -33,8 +33,8 @@ function pack(value: unknown): number[] {
 const database = (db: unknown) => new Uint8Array([0, ...strToU8('RISUSAVE'), 0, 8, ...gzipSync(new Uint8Array(pack(db)))]);
 
 // The block form Risu writes since 2026-10-14: root holds every key but characters, presets and modules; the gzip flag
-// is per block. `extra` blocks are appended as given.
-function blocks(db: Record<string, unknown>, extra: [number, string, Uint8Array][] = []) {
+// is per block.
+function blocks(db: Record<string, unknown>) {
   const block = (type: number, name: string, value: unknown, zipped: boolean) => {
     const text = strToU8(JSON.stringify(value));
     const data = zipped ? gzipSync(text) : text;
@@ -49,7 +49,6 @@ function blocks(db: Record<string, unknown>, extra: [number, string, Uint8Array]
     ...(characters as ({ chaId?: string } | null)[]).flatMap((character, i) => (character ? block(2, character.chaId ?? `c${i}`, character, i % 2 === 0) : [])),
     ...block(12, 'kv:stats', { version: 1, entries: [] }, false),
     ...block(0, 'config', { version: 1 }, false),
-    ...extra.flatMap(([type, name, data]) => [type, 0, strToU8(name).length, ...strToU8(name), ...u32(data.length, true), ...data]),
   ];
   return new Uint8Array([...strToU8('RISUSAVE'), 0, ...list]);
 }
@@ -274,7 +273,7 @@ describe('readBackup', () => {
     expect(await readBackup([bin([['database.risudat', PNG]])])).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
   });
 
-  it('reads the block form of the database as it reads the legacy form, and refuses one that points at the Risu device', async () => {
+  it('reads the block form of the database as it reads the legacy form', async () => {
     // Risu's block writer reads chaId off every character, so a block file never holds the null the legacy fixture does.
     const whole = { ...db, characters: db.characters.filter((character) => character !== null) };
     const legacy = await readBackup([backupFile(database(whole))]);
@@ -284,8 +283,6 @@ describe('readBackup', () => {
     // The character carries lazy readers, which never compare equal; the data they wrap does.
     const plain = async (backup: RisuBackup) => JSON.parse(JSON.stringify(await backup.character(1)));
     expect(await plain(blocked.backup)).toEqual(await plain(legacy.backup));
-    const remote = blocks(db, [[6, 'ghost', json({ v: 1, type: 2, name: 'ghost' })]]);
-    expect(await readBackup([bin([['database.risudat', remote]])])).toEqual({ ok: false, failure: { kind: 'unreadable', detail: 'the database points at files on the Risu device' } });
   });
 
   it('brings characters out of cold storage, in Risu order, as cards with lazy pictures', async () => {

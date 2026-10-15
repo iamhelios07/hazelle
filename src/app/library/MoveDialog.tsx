@@ -24,10 +24,10 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
     >
       <Stack gap="section">
         <Text>Risu 로컬 백업(.bin)에서 캐릭터, 채팅, 페르소나, 프롬프트, 모듈을 가져와요.</Text>
-        <Slot title="백업 파일" note="Risu의 '로컬 백업 저장'으로 받은 파일이에요. Risu 계정을 쓰면 '부분 백업'으로 받아 주세요." file={text} onFile={setText} />
+        <Slot title="백업 파일" note="Risu의 '로컬 백업 저장'으로 받은 파일이에요. risuai.xyz에서 쓰면 '부분 백업'으로 받아 주세요." file={text} onFile={setText} />
         <Slot
           title="이미지가 든 전체 백업"
-          note="Risu 계정을 쓸 때만 넣어요. 고급 설정에서 'Skip Saving Assets on Web Sync'를 끄고 받아야 이미지가 들어 있어요."
+          note="risuai.xyz에서 쓸 때만 넣어요. 고급 설정에서 'Skip Saving Assets on Web Sync'를 끄고 받아야 이미지가 들어 있어요."
           file={pictures}
           onFile={setPictures}
         />
