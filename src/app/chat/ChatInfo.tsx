@@ -50,7 +50,8 @@ type Props = Pick<OpenChat, 'id' | 'messages' | 'infoPick'> & {
 export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClose }: Props) {
   const { talk, costs } = useSession();
   const memory = useChatMemory(chat);
-  const [tab, setTab] = useState<(typeof TABS)[number]['value']>('reply');
+  const [picked, setTab] = useState<(typeof TABS)[number]['value']>('reply');
+  const tab = picked === 'memory' && !onRecord ? 'reply' : picked;
   const replies = messages.filter((message) => message.role === 'assistant');
   const reply = infoReply(replies, infoPick);
   const at = reply ? replies.indexOf(reply) : -1;
