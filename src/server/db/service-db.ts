@@ -29,13 +29,13 @@ export type Db = {
 const EXECUTE = Symbol('execute');
 type Internal = Statement & { [EXECUTE]<T>(): Result<T> };
 
-// Every file this process opens: WAL for readers beside the writer, FULL so an acknowledged commit survives power loss
-// (the lifecycle orders a service write before an account's deletion and relies on it), foreign keys for the cascades
-// the schema declares.
-export function openDatabase(path: string): DatabaseSync {
+// Every file this process opens: WAL for readers beside the writer, FULL by default so an acknowledged commit survives
+// power loss (the lifecycle orders a service write before an account's deletion and relies on it), foreign keys for the
+// cascades the schema declares.
+export function openDatabase(path: string, synchronous: 'FULL' | 'NORMAL' = 'FULL'): DatabaseSync {
   const db = new DatabaseSync(path);
   db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA synchronous = FULL');
+  db.exec(`PRAGMA synchronous = ${synchronous}`);
   db.exec('PRAGMA busy_timeout = 5000');
   db.exec('PRAGMA foreign_keys = ON');
   return db;

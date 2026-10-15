@@ -12,8 +12,8 @@ import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
 const ROOM = '(SELECT COUNT(*) FROM accounts) < (SELECT signup_cap FROM service)';
-// This machine's own requests are not counted: loopback (e2e and load runs against a local server) and none named at
-// all (in process). The hosted machine's Caddy names every outside visitor, so neither reaches it from outside.
+// This machine's own requests are not counted: loopback (e2e against a local server; the load harness, behind docker's
+// port, names itself loopback) and none named at all (in process). The hosted machine's Caddy names every outside visitor, so neither reaches it from outside.
 const LOCAL = /^(?:127\.|::1$|::ffff:127\.)/;
 
 export const accounts = new Hono<AppEnv>();

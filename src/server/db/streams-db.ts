@@ -15,7 +15,10 @@ export type StreamStore = {
 };
 
 export function streamStore(path: string): StreamStore {
-  const db = openDatabase(path);
+  // NORMAL, not FULL: every live reply commits a page every PERSIST_MS on the event loop, and a fsync per commit
+  // stalled every request for hundreds of ms at 100 streams. A power loss drops only the newest commits, the alarm with
+  // its pages, never pages without their alarm: the WAL loses a suffix.
+  const db = openDatabase(path, 'NORMAL');
   try {
     transaction(db, () => {
       db.exec('CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL)');

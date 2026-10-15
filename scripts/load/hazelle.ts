@@ -14,7 +14,9 @@ export class Hazelle {
   constructor(readonly base: string) {}
 
   async request(path: string, { method = 'GET', body, account, timeoutMs = 120_000, type }: Init = {}): Promise<Response> {
-    const headers: Record<string, string> = {};
+    // Through docker's port the server sees the bridge address; naming loopback keeps 50 signups an hour out of the
+    // visitor limit (accounts.ts).
+    const headers: Record<string, string> = { 'x-forwarded-for': '127.0.0.1' };
     if (body !== undefined) headers['content-type'] = type ?? (typeof body === 'string' ? 'application/json' : 'application/octet-stream');
     if (account) Object.assign(headers, { cookie: account.cookie, 'x-account': account.id });
     return fetch(`${this.base}/api/${path}`, { method, headers, body: body as RequestInit['body'], signal: AbortSignal.timeout(timeoutMs) });
