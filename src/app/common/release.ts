@@ -8,6 +8,18 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.7',
+    date: '2026-10-15',
+    lines: [
+      'Risu가 2026년 10월 14일부터 쓰는 새 백업 형식도 이사에서 읽어요. 옛 형식 백업도 그대로 읽어요.',
+      '봇의 CSS가 메시지의 기본 모양을 이겨요. 메시지 안 배치도 Risu와 같아져서, 떠 있는 이미지 옆으로 글이 감기고 칩이 한 줄에 놓여요.',
+      '장기 기억 같은 기능을 공용 설정뿐 아니라 프롬프트, 캐릭터, 채팅에서도 켜고 끌 수 있어요.',
+      '페르소나 편집에서 현재 페르소나로 정하고 채팅을 옮길 수 있어요. 페르소나 설명이 대화에 들어가지 않을 때는 알려 줘요.',
+      'Risu에서 옮길 때 번역가 노트도 가져오고, 헤이젤에 없는 설정은 개수로 알려 줘요.',
+      'CBS와 Lua를 Risu에 더 맞췄어요. 정하지 않은 변수는 null로 읽고, 기록 태그와 로어북 키 검색은 첫인사를 빼요. 프롬프트에 자리가 없는 @@inject_at 항목은 빠짐으로 보여요.',
+    ],
+  },
+  {
     version: 'v0.2.6',
     date: '2026-10-15',
     lines: [
