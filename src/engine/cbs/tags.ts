@@ -315,12 +315,13 @@ define('previouschatlog', 1, ([number], { context }) => context.messages[Number(
 // role back from it to tell the user's messages apart.
 const luaRole = (role: HistoryMessage['role']) => (role === 'user' ? 'user' : 'char');
 const messageObject = ({ role, text, time }: HistoryMessage) => JSON.stringify({ role: luaRole(role), data: text, ...(time !== null && { time }) });
-// Without an argument the greeting leads, as in Risu; with one the texts after it, `role` prefixing each with its role.
-define('history messages', 0, ([how], { context }) =>
+// Without an argument the greeting leads, as in Risu; with any the texts after it, `role` among them prefixing each
+// with its role.
+define('history messages', 0, (args, { context }) =>
   serialize(
-    how === undefined
+    args.length === 0
       ? context.messages.map(messageObject)
-      : afterGreeting(context).map(({ role, text }) => (how === 'role' ? `${luaRole(role)}: ${text}` : text)),
+      : afterGreeting(context).map(({ role, text }) => (args.includes('role') ? `${luaRole(role)}: ${text}` : text)),
   ),
 );
 define('userhistory', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'user').map(messageObject)));
@@ -329,7 +330,8 @@ define('chatindex', 0, (_, { context }) => {
   const index = messageIndex(context);
   return index === null ? null : String(index - opened(context));
 });
-define('firstmsgindex', 0, (_, { context: { greeting } }) => (greeting && greeting.index !== null ? String(greeting.index) : null));
+// Risu's fmIndex: the card's first message -1 and its first alternate greeting 0, one less than card.greetings counts.
+define('firstmsgindex', 0, (_, { context: { greeting } }) => (greeting && greeting.index !== null ? String(greeting.index - 1) : null));
 // Risu names a character's message `char`, which bots compare against.
 define('role', 0, (_, { context }) => {
   const role = currentMessage(context)?.role;
@@ -389,7 +391,7 @@ define('makedict dict object o d', 0, (args) =>
   serialize(Object.fromEntries(args.flatMap((pair) => (pair.includes('=') ? [[pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]] : [])))),
 );
 define('arraylength', 1, ([array]) => String(items(array!).length));
-define('arrayelement', 2, ([array, index]) => items(array!)[Number(index)] ?? '');
+define('arrayelement', 2, ([array, index]) => items(array!).at(Number(index)) ?? '');
 define('dictelement', 2, ([object, key]) => {
   const value = dict(object!)[key!];
   return value === undefined ? '' : asText(value);
