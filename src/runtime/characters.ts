@@ -52,11 +52,12 @@ export async function addCharacter(store: ObjectStore, character: Character, { a
 export type ImportedCharacter = { id: string; unsupported: Unsupported; faceless: boolean };
 
 // typeOf: what a kept file is, null for one not kept; an inlay keeps pictures and a signature only (engine/import inlayType).
+// The next window is read and queued while the one before it uploads, so the link never idles between windows in Files'
+// shared upload slots; at most two windows' bytes are held.
 export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress, typeOf: (bytes: Uint8Array) => string | null = assetType): Promise<ApiResult<{ kept: Asset[]; unsupported: Unsupported }>> {
   const kept: Asset[] = [];
   const tally: Tally = new Map();
-  for (let start = 0; start < assets.length; start += FILE_WINDOW) {
-    progress({ kind: 'assets', done: start, total: assets.length });
+  const saveWindow = async (start: number) => {
     const window = await Promise.all(assets.slice(start, start + FILE_WINDOW).map(async ({ name, read }) => ({ name, bytes: await read() })));
     const read = window.flatMap(({ name, bytes }) => {
       const type = bytes && typeOf(bytes);
@@ -64,13 +65,25 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
       else if (!type) add(tally, 'unsupported-file');
       return type ? [{ name, type, bytes: bytes! }] : [];
     });
-    const saved = await files.save(read.map(({ bytes }) => bytes));
-    if (!saved.ok) return saved;
-    read.forEach(({ name, type, bytes }, index) => {
-      const file = saved.data[index];
-      if (file) kept.push({ name, type, size: bytes.length, file });
-      else add(tally, isVideo(type) ? 'refused-video' : 'refused-picture');
-    });
+    return { read, saved: await files.save(read.map(({ bytes }) => bytes)) };
+  };
+  let ahead = assets.length ? saveWindow(0) : null;
+  try {
+    for (let start = 0; ahead; start += FILE_WINDOW) {
+      progress({ kind: 'assets', done: start, total: assets.length });
+      const current = ahead;
+      ahead = start + FILE_WINDOW < assets.length ? saveWindow(start + FILE_WINDOW) : null;
+      const { read, saved } = await current;
+      if (!saved.ok) return saved;
+      read.forEach(({ name, type, bytes }, index) => {
+        const file = saved.data[index];
+        if (file) kept.push({ name, type, size: bytes.length, file });
+        else add(tally, isVideo(type) ? 'refused-video' : 'refused-picture');
+      });
+    }
+  } finally {
+    // A window still going when an earlier one fails is let finish, so nothing uploads after this returns.
+    await ahead?.catch(() => null);
   }
   if (assets.length) progress({ kind: 'assets', done: assets.length, total: assets.length });
   return { ok: true, data: { kept, unsupported: counted(UNSUPPORTED_KINDS, tally) } };

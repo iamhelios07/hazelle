@@ -2,14 +2,14 @@ import { isRecord } from '../connectors/values';
 import { FILE_ID, MAX_FILE_IDS } from '../contracts/files';
 import { FILE_KINDS } from '../model/kinds';
 import { fileId, openFile, sealFile, type FileRef } from '../vault/files';
-import type { ApiResult, api as realApi } from './api';
+import type { ApiFailure, ApiResult, api as realApi } from './api';
 import type { ObjectStore } from './store';
 
 type Api = typeof realApi;
 type Missing = { missing: Set<string>; maxBytes: number; room: number | null };
 
 // runtime/api's SLOWEST_UPLOAD assumes this many uploads sharing one uplink.
-const UPLOADS = 12;
+const UPLOADS = 24;
 const SWEEP_TRIES = 3;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
@@ -22,6 +22,8 @@ export const namedFile = (value: unknown): string | null => (isRecord(value) && 
 export class Files {
   private sweeping: Promise<void> | null = null;
   private owed = false;
+  private uploading = 0;
+  private readonly queued: (() => void)[] = [];
 
   constructor(
     private readonly request: Api,
@@ -48,19 +50,35 @@ export class Files {
         if (room !== null) room -= size;
       }
     }
-    for (let start = 0; start < missing.length; start += UPLOADS) {
-      if (signal?.aborted) return { ok: false, error: 'stopped' };
-      const puts = await Promise.all(
-        missing.slice(start, start + UPLOADS).map(async (id) => {
+    let failed: ApiFailure | undefined;
+    await Promise.all(
+      missing.map((id) =>
+        this.uploadSlot(async () => {
+          if (failed || signal?.aborted) return;
           const put = await this.store.reaching(() => this.request('PUT', `files/${id}`, bodies.get(id)!), signal);
-          if (!put.ok && REFUSED.has(put.error)) refused.add(id);
-          return put;
+          if (put.ok) return;
+          if (REFUSED.has(put.error)) refused.add(id);
+          else failed ??= put;
         }),
-      );
-      const failed = puts.find((put) => !put.ok && !REFUSED.has(put.error));
-      if (failed && !failed.ok) return failed;
-    }
+      ),
+    );
+    if (signal?.aborted) return { ok: false, error: 'stopped' };
+    if (failed) return failed;
     return { ok: true, data: sealed.map(({ ref }) => (refused.has(ref.id) ? null : ref)) };
+  }
+
+  // Every save shares the UPLOADS slots, and a slot passes to the next upload the moment one ends: a batch never waits
+  // on its slowest upload while the link idles, and saves that overlap (runtime/characters saveAssets) never send more.
+  private async uploadSlot(upload: () => Promise<void>) {
+    if (this.uploading < UPLOADS) this.uploading++;
+    else await new Promise<void>((resolve) => this.queued.push(resolve));
+    try {
+      await upload();
+    } finally {
+      const next = this.queued.shift();
+      if (next) next();
+      else this.uploading--;
+    }
   }
 
   // The ids the server holds no readable file for (never stored, or blocked), the largest sealed body it takes and the

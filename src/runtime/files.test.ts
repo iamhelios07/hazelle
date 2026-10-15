@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
-import { api } from './api';
-import { addAssets, copyCharacter, createCharacter, removeAssets, restoreAssets } from './characters';
+import { api, type ApiResult } from './api';
+import { addAssets, copyCharacter, createCharacter, removeAssets, restoreAssets, saveAssets } from './characters';
 import { Files } from './files';
 import { fillPictures, importRisuChats } from './move';
 import { markDeleted } from './removal';
@@ -27,6 +27,48 @@ describe('files', () => {
     const saved = await files.save([randomBytes(64), randomBytes(64)]);
     const [a, b] = saved.ok ? saved.data : [];
     expect(await files.read({ id: a!.id, key: b!.key })).toEqual({ ok: false, error: 'unreadable' });
+  });
+});
+
+describe('files uploading', () => {
+  // Every id is missing on the server, and every PUT is held until let go one by one or all released.
+  const heldPuts = async () => {
+    const { store } = await server.account();
+    const puts: (() => void)[] = [];
+    let holding = true;
+    const files = new Files(async <T,>(method: string, _path: string, body?: unknown) => {
+      if (method === 'POST') return { ok: true as const, data: { missing: (body as { ids: string[] }).ids, maxBytes: 1 << 30, room: null } as T };
+      return new Promise<ApiResult<T>>((done) => (holding ? puts.push(() => done({ ok: true, data: null as T })) : done({ ok: true, data: null as T })));
+    }, store);
+    const release = () => {
+      holding = false;
+      for (const put of puts) put();
+    };
+    return { files, puts, release };
+  };
+
+  it('starts the next upload as soon as any one ends, never more than 24 at once', async () => {
+    const { files, puts, release } = await heldPuts();
+    const saving = files.save(Array.from({ length: 30 }, () => randomBytes(64)));
+    await vi.waitFor(() => expect(puts).toHaveLength(24));
+    await new Promise((done) => setTimeout(done, 20));
+    expect(puts).toHaveLength(24);
+    puts[5]!();
+    await vi.waitFor(() => expect(puts).toHaveLength(25));
+    release();
+    expect((await saving).ok).toBe(true);
+  });
+
+  it('reads the next window of assets while the one before it still uploads', async () => {
+    const { files, puts, release } = await heldPuts();
+    let reads = 0;
+    const assets = Array.from({ length: 64 }, (_, at) => ({ name: `${at}`, read: async () => (reads++, png()) }));
+    const saving = saveAssets(files, assets, () => {});
+    await vi.waitFor(() => expect(puts).toHaveLength(24));
+    expect(reads).toBe(64);
+    release();
+    const saved = await saving;
+    expect(saved.ok && saved.data.kept.map(({ name }) => name)).toEqual(assets.map(({ name }) => name));
   });
 });
 

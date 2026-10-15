@@ -59,10 +59,10 @@ export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> 
 }
 
 // Headers come only once the whole request body has gone up, so their wait grows with the body at SLOWEST_UPLOAD bytes
-// a second: a slow phone uplink shared by runtime/files' 12 parallel uploads of up to 25 MB each. The answer's body is
+// a second: a slow phone uplink shared by runtime/files' 24 parallel uploads of up to 25 MB each. The answer's body is
 // read with no timer. Never move this into fetchApi: the relay's streams are read through it.
 const HEADERS_WAIT = 15_000;
-const SLOWEST_UPLOAD = 16_384;
+const SLOWEST_UPLOAD = 8_192;
 // For a route whose server work runs inside the request and can outlast HEADERS_WAIT: 탈퇴's store wipe, an operator's
 // account removal or restore. Timed out, such a request reads as 'offline' while the server may still finish it.
 export const SLOW_ROUTE_WAIT = 5 * 60_000;
