@@ -1,6 +1,7 @@
 import type { Persona } from '../../model/persona';
-import { personaFile } from '../../runtime/personas';
-import { download, fileNamed } from '../common/download';
+import { exportPersona } from '../../runtime/personas';
+import { fileNamed } from '../common/download';
+import { runExport } from '../common/exporting';
 import { FileExport } from '../common/FileExport';
 import { useToast } from '../toast';
 
@@ -12,12 +13,11 @@ export function PersonaExport({ persona, onClose }: { persona: Persona; onClose:
   const toast = useToast();
   const file = fileNamed(persona.name, '페르소나', 'png');
 
-  async function save() {
-    const bytes = await personaFile(persona).catch(() => null);
-    if (!bytes) return toast.error('내보내지 못했어요.', { detail: '이미지를 열지 못했어요.' });
-    download(file, new Blob([bytes], { type: 'image/png' }));
-    toast.show(`'${persona.name}' 페르소나를 내보냈어요.`);
-    onClose();
+  function save(show: (label: string | null) => void) {
+    runExport(toast, file, (output) => exportPersona(persona, output), show, () => {
+      toast.show(`'${persona.name}' 페르소나를 내보냈어요.`);
+      onClose();
+    });
   }
 
   const blocked = persona.description ? null : '설명이 비어 있으면 Risu가 받지 않아요. 설명을 채운 뒤 내보내 주세요.';

@@ -10,27 +10,20 @@ type Props = {
   help: string;
   // Why no file can be made, said in place of the 내보내기 that would make one the other app refuses.
   blocked: string | null;
-  onExport: () => Promise<void>;
+  // Runs in the press, so runExport's save picker opens (common/exporting); show is its busy label.
+  onExport: (show: (label: string | null) => void) => void;
   onClose: () => void;
 };
 
 export function FileExport({ format, file, help, blocked, onExport, onClose }: Props) {
-  const [busy, setBusy] = useState(false);
-  async function save() {
-    setBusy(true);
-    try {
-      await onExport();
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [busy, setBusy] = useState<string | null>(null);
   return (
     <Dialog
       title={EXPORT}
       onClose={onClose}
       actions={
-        <Button icon={ACTS.export.icon} busy={busy} disabled={blocked !== null} onClick={() => void save()}>
-          {ACTS.export.label}
+        <Button icon={ACTS.export.icon} busy={busy !== null} disabled={blocked !== null} onClick={() => onExport(setBusy)}>
+          {busy ?? ACTS.export.label}
         </Button>
       }
     >

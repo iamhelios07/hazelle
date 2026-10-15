@@ -1,6 +1,7 @@
 import type { ConversationPrompt } from '../../model/prompt';
-import { presetFile } from '../../runtime/prompts';
-import { download, fileNamed } from '../common/download';
+import { exportPreset } from '../../runtime/prompts';
+import { fileNamed } from '../common/download';
+import { runExport } from '../common/exporting';
 import { FileExport } from '../common/FileExport';
 import { SLOT_NAMES } from '../common/prompt-words';
 import { promptName } from '../common/words';
@@ -17,11 +18,11 @@ export function PresetExport({ prompt, onClose }: { prompt: ConversationPrompt; 
   const name = promptName(prompt.name);
   const file = fileNamed(name, '프롬프트', 'risup');
 
-  async function save() {
-    const { bytes, tools } = await presetFile(store, prompt);
-    download(file, new Blob([bytes]));
-    toast.show(`'${name}' 프롬프트를 내보냈어요.`, tools ? { detail: `${SLOT_NAMES.tool} 블록 ${tools}개는 빼고 내보냈어요.` } : undefined);
-    onClose();
+  function save(show: (label: string | null) => void) {
+    runExport(toast, file, (output) => exportPreset(store, prompt, output), show, ({ tools }) => {
+      toast.show(`'${name}' 프롬프트를 내보냈어요.`, tools ? { detail: `${SLOT_NAMES.tool} 블록 ${tools}개는 빼고 내보냈어요.` } : undefined);
+      onClose();
+    });
   }
 
   return <FileExport format="Risu 프리셋" file={file} help={LEFT} blocked={null} onExport={save} onClose={onClose} />;

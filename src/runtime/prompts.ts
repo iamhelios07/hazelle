@@ -1,4 +1,4 @@
-import { importPreset, writePreset, type PresetRead, type PresetWritten } from '../engine/import/preset';
+import { importPreset, writePreset, type PresetRead } from '../engine/import/preset';
 import { illustratorPrompt } from '../engine/illustrate';
 import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
@@ -9,6 +9,8 @@ import { sortOf, type Block, type ConversationPrompt, type PictureSettings, type
 import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiResult } from './api';
+import type { BackupOutput } from './backup-zip';
+import { writeWhole } from './export-file';
 import { companionModules } from './modules';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
@@ -90,10 +92,12 @@ export async function savePreset(store: ObjectStore, { prompt }: PresetRead): Pr
 }
 
 // Its Risu preset file, naming for Risu's moduleIntergration the live modules on for it that have a namespace, the only
-// identity a module keeps in Risu.
-export function presetFile(store: Pick<ObjectStore, 'get'>, prompt: ConversationPrompt): Promise<PresetWritten> {
+// identity a module keeps in Risu. tools: the 도구 blocks left out.
+export async function exportPreset(store: Pick<ObjectStore, 'get'>, prompt: ConversationPrompt, output: BackupOutput): Promise<ApiResult<{ tools: number }>> {
   const namespaces = (prompt.modules ?? []).flatMap((id) => live(store.get('module', id))?.value.namespace ?? []);
-  return writePreset(prompt, namespaces);
+  const { bytes, tools } = await writePreset(prompt, namespaces);
+  const written = await writeWhole(output, bytes);
+  return written.ok ? { ok: true, data: { tools } } : written;
 }
 
 // An account that has never had a sort's default prompt gets that sort's bundled prompt as its default, once. The

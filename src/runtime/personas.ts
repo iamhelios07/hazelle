@@ -6,6 +6,8 @@ import { live } from '../model/library';
 import type { Persona } from '../model/persona';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import type { BackupOutput } from './backup-zip';
+import { writeWhole } from './export-file';
 import { pngOf, thumbnail } from './picture';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
@@ -76,8 +78,13 @@ export async function addRisuPersona(store: ObjectStore, { name, alias, descript
 
 export const editPersona = (store: ObjectStore, id: string, patch: Partial<Persona>) => store.update('persona', id, (current) => ({ ...current, ...patch }));
 
-// Risu's persona file; its picture redrawn as PNG runs only in a browser.
-export const personaFile = async (persona: Persona) => writePersonaPng(await pngOf(persona.picture), persona);
+// Risu's persona file; its picture redrawn as PNG runs only in a browser. unreadable: the picture did not open.
+export async function exportPersona(persona: Persona, output: BackupOutput): Promise<ApiResult<null>> {
+  const png = await pngOf(persona.picture).catch(() => null);
+  if (png) return writeWhole(output, writePersonaPng(png, persona));
+  await output.abort();
+  return { ok: false, error: 'unreadable' };
+}
 
 // To 휴지통 (model/library Mark). The current persona goes only once another is picked.
 export async function removePersona(store: ObjectStore, id: string): Promise<ApiResult<Stored<'persona'>> | { ok: false; error: 'current' }> {

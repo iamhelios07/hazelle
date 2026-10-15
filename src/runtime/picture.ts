@@ -26,7 +26,8 @@ export async function thumbnail(picture: { bytes: Uint8Array<ArrayBuffer>; type:
   });
 }
 
-// A thumbnail as a PNG, redrawn unless it is one; none is a grey 256×256 square, as Risu's persona file holds then.
+// A thumbnail, which shrink writes as WebP or JPEG, redrawn as a PNG; none is a grey 256×256 square, as Risu's persona
+// file holds then.
 export async function pngOf(thumb: string | null): Promise<Uint8Array<ArrayBuffer>> {
   let canvas: OffscreenCanvas;
   if (thumb === null) {
@@ -36,9 +37,7 @@ export async function pngOf(thumb: string | null): Promise<Uint8Array<ArrayBuffe
     context.fillRect(0, 0, canvas.width, canvas.height);
   } else {
     const type = thumb.slice('data:'.length, thumb.indexOf(';'));
-    const bytes = fromBase64(thumb.slice(thumb.indexOf(',') + 1));
-    if (type === 'image/png') return bytes;
-    const bitmap = await createImageBitmap(new Blob([bytes], { type }));
+    const bitmap = await createImageBitmap(new Blob([fromBase64(thumb.slice(thumb.indexOf(',') + 1))], { type }));
     canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
     bitmap.close();
