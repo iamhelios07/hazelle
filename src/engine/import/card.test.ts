@@ -1,8 +1,9 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { importCard } from './card';
-import { readRisum, unpack, writeRisum } from './risum';
-import type { ImportResult, Imported } from './types';
+import { blankCard, importCard, writeCharx } from './card';
+import { moduleSource } from './hazelle';
+import { readRisum, risumBlock, risumHead, RISUM_END, unpack, writeRisum } from './risum';
+import type { Bot, ImportResult, Imported, Trigger, TypedModule } from './types';
 
 const CRC = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -352,6 +353,28 @@ describe('importCard', () => {
     expect(writeRisum(readRisum(real)!.module)).toEqual(real);
     const module = { name: '전화', regex: [{ comment: '화면', in: '\u0000a', out: '💬', type: 'editdisplay' }] };
     expect(readRisum(writeRisum(module))).toEqual({ module, assets: [] });
+  });
+
+  it('writes a .risum’s pictures as blocks that read back byte for byte, one per listed asset', async () => {
+    const pictures = [Uint8Array.from({ length: 256 }, (_, byte) => byte), new Uint8Array([137, 80, 78, 71])];
+    const module = { name: '배경', assets: pictures.map((_, place) => [`bg${place}`, '', 'png']) };
+    const file = new Uint8Array(await new Blob([risumHead(module), ...pictures.map(risumBlock), RISUM_END]).arrayBuffer());
+    const read = readRisum(file)!;
+    expect(read.module).toEqual(module);
+    expect(read.assets.map((block) => block())).toEqual(pictures);
+  });
+
+  it('writes lowLevelAccess exactly when Risu’s own list holds a Lua trigger, for a module and for a charx', () => {
+    const lua = (off?: true) => ({ id: 'trigger-0', kind: 'lua' as const, name: 'main', code: 'return 1', ...(off && { off }) });
+    const module = (triggers: Trigger[]): TypedModule => ({
+      risu: 'm', name: '전화', description: '', namespace: null, likeness: null, lore: [], loreFolders: [], assets: [], pack: { regex: [], triggers, toggles: [] },
+    });
+    expect(moduleSource(module([lua()])).lowLevelAccess).toBe(true);
+    expect(moduleSource(module([lua(true)]))).not.toHaveProperty('lowLevelAccess');
+    const bot = (bundled: TypedModule[]): Bot => ({ card: blankCard('루나'), lore: [], loreFolders: [], avatar: null, assets: [], own: { character: {}, likeness: null }, bundled });
+    const risuai = (written: Bot) => JSON.parse(new TextDecoder().decode(writeCharx(written).files[0]!.bytes)).data.extensions.risuai;
+    expect(risuai(bot([]))).not.toHaveProperty('lowLevelAccess');
+    expect(risuai(bot([module([lua()])])).lowLevelAccess).toBe(true);
   });
 
   it('fails by kind instead of throwing', () => {
