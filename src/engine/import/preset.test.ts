@@ -33,3 +33,9 @@ it('places a persona, description, memory or author note item that names no role
   ]);
   expect(read.unsupported).toContainEqual({ kind: 'unread-item', count: 1 });
 });
+
+it("reads a slot's role from role2, as current Risu writes it, and from role in older files", () => {
+  const read = convertPreset({ name: 'p', promptTemplate: [{ type: 'description', role2: 'user' }, { type: 'persona', role: 'bot' }] });
+  if (!read.ok) throw new Error(read.failure.kind);
+  expect(read.prompt.blocks.map((block) => 'role' in block && block.role)).toEqual(['user', 'assistant']);
+});
