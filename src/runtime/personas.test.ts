@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setChatPersona, startChat } from './chat-log';
-import { addFirstPersona, addPersona, chatPersona, pinPersona, recordChatPersonas, removePersona, restorePersona, setCurrentPersona } from './personas';
+import { addFirstPersona, addPersona, chatPersona, chatsHolding, pinPersona, rebindChats, recordChatPersonas, removePersona, restorePersona, setCurrentPersona } from './personas';
 import { testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 
@@ -92,5 +92,21 @@ describe('personas', () => {
     await setCurrentPersona(store, rin!);
     await recordChatPersonas(store);
     expect([plain, binned, pinned].map((id) => store.get('chat', id)!.rev)).toEqual(revs);
+  });
+
+  it('moves the live chats holding one persona to another, and back by the same ids, leaving a binned one and one moved there since', async () => {
+    const { store } = await server.account();
+    const [first, second] = await Promise.all([addPersona(store, { name: '진', description: '', picture: null }), addPersona(store, { name: '린', description: '여행자', picture: null })]);
+    const [jin, rin] = [first, second].map((added) => (added.ok ? added.data.id : '')) as [string, string];
+    const make = async (chat: Parameters<typeof store.create<'chat'>>[1]) => { const made = await store.create('chat', chat); return made.ok ? made.data.id : ''; };
+    const chats = await Promise.all([jin, jin, jin, rin].map((persona, at) => make({ title: null, character: null, models: {}, persona, ...(at === 2 && { deleted: 1 }) })));
+    const [one, two] = chats as [string, string];
+
+    const moved = chatsHolding(store, jin);
+    expect(moved.sort()).toEqual([one, two].sort());
+    expect(await rebindChats(store, moved, rin)).toEqual({ ok: true, data: null });
+    expect(chats.map((id) => store.get('chat', id)!.value.persona)).toEqual([rin, rin, jin, rin]);
+    await rebindChats(store, moved, jin);
+    expect(chats.map((id) => store.get('chat', id)!.value.persona)).toEqual([jin, jin, jin, rin]);
   });
 });

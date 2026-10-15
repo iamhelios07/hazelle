@@ -1,11 +1,9 @@
 import { UserRound } from 'lucide-react';
-import { useEffect, useRef } from 'react';
-import { aliased, personaFaces, personaTexts } from '../common/alias';
-import { useSearch } from '../common/useSearch';
-import { usePersonas } from '../session';
+import { aliased } from '../common/alias';
+import { PersonaPickDialog } from '../common/PersonaPickDialog';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { Avatar, Button, CardGrid, Checkbox, ChipButton, Dialog, Empty, FaceCard, hasFinePointer, Hint, Row } from '../ui';
+import { Avatar, Button, Checkbox, ChipButton, Hint, Row } from '../ui';
 import type { PersonaChoice } from '../../runtime/personas';
 import type { ChatSettingsActions } from './useChatSettings';
 
@@ -29,8 +27,6 @@ export function ChatPersonaPicker({ persona, open, onOpen }: { persona: PersonaC
   );
 }
 
-// Mounted only while open, so each opening starts with an empty search. A touch screen gets no focused search, whose
-// keyboard would cover half the faces.
 type DialogProps = {
   persona: PersonaChoice;
   characterName: string | null;
@@ -42,11 +38,6 @@ type DialogProps = {
 
 export function PersonaDialog({ persona, characterName, pinned, onChoose, onPin, onClose }: DialogProps) {
   const toast = useToast();
-  const field = useRef<HTMLInputElement>(null);
-  const search = useSearch(personaFaces(usePersonas()), '페르소나 검색', personaTexts, { ref: field, onEnter: ({ persona }) => choose(persona.id) });
-  useEffect(() => {
-    if (hasFinePointer()) field.current?.focus();
-  }, []);
   const using = persona.kind === 'persona' ? persona.persona.id : null;
 
   function choose(id: string) {
@@ -72,15 +63,5 @@ export function PersonaDialog({ persona, characterName, pinned, onChoose, onPin,
       </Button>
     </>
   );
-  return (
-    <Dialog title="이 채팅의 페르소나" size="wide" onClose={onClose} toolbar={search.field || undefined} footer={footer}>
-      {search.none && <Empty>{search.none}</Empty>}
-      <CardGrid label="페르소나" variant="face" current={using ?? undefined} keys={search.found.map(({ persona: { id } }) => id)}>
-        {(index) => {
-          const { persona: { id, value }, note, faint } = search.found[index]!;
-          return <FaceCard image={value.picture} name={value.name} note={note} faint={faint} selected={null} current={id === using} tag={id === pinned ? '고정' : undefined} onClick={() => choose(id)} />;
-        }}
-      </CardGrid>
-    </Dialog>
-  );
+  return <PersonaPickDialog title="이 채팅의 페르소나" using={using} pinned={pinned} onChoose={choose} onClose={onClose} footer={footer} />;
 }

@@ -1,14 +1,15 @@
 import { ImageUp } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { Persona } from '../../model/persona';
-import { editPersona, removePersona, restorePersona } from '../../runtime/personas';
+import { chatsHolding, editPersona, rebindChats, removePersona, restorePersona, setCurrentPersona } from '../../runtime/personas';
 import { thumbnail } from '../../runtime/picture';
-import { useLibrary, useSettings, useStore } from '../session';
+import { useChats, useLibrary, useSettings, useStore } from '../session';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
 import { ModuleSwitches } from '../common/ModuleSwitches';
+import { PersonaPickDialog } from '../common/PersonaPickDialog';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
@@ -35,6 +36,9 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   const autosave = useAutosave<Persona>(`persona:${id}`, (patch) => editPersona(store, id, patch));
   const [typedName, setTypedName] = useState<string>();
   const [exporting, setExporting] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const chats = useChats();
+  const holding = useMemo(() => chatsHolding(store, id).length, [store, id, chats]);
   const held = { ...stored.value, ...autosave.unsaved };
   const persona = { ...held, name: typedText(typedName, filled, held.name, String) };
 
@@ -53,12 +57,24 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     const removed = await autosave.remove(() => removePersona(store, id));
     if (!removed) return;
     if (!removed.ok) {
-      // 삭제 is hidden on the current persona; 'current' still comes back when another device chose it meanwhile.
-      if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요.');
+      if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요. 다른 페르소나를 현재 페르소나로 정한 뒤 삭제해 주세요.');
       return toast.failed(removed, '삭제하지 못했어요.');
     }
     onRemoved();
     toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => restorePersona(store, id), BIN_KEEPS);
+  }
+
+  const makeCurrent = () => void setCurrentPersona(store, id).then((saved) => saved.ok || toast.failed(saved, '현재 페르소나로 정하지 못했어요.'));
+
+  function moveChats(to: string) {
+    setMoving(false);
+    const target = store.get('persona', to)?.value;
+    if (to === id || !target) return;
+    const ids = chatsHolding(store, id);
+    void rebindChats(store, ids, to).then((saved) => {
+      if (!saved.ok) return toast.failed(saved, '채팅을 옮기지 못했어요.');
+      toast.undoable(`채팅 ${ids.length}개를 '${aliased(target.name, target.alias)}' 페르소나로 옮겼어요.`, () => rebindChats(store, ids, id));
+    });
   }
 
   const pinnedBy = library.characters.filter(({ character }) => character.persona === id).map(({ character }) => character.card.name);
@@ -86,10 +102,13 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     items: (
       <>
         <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />
-        {settings.persona !== id && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />}
+        {settings.persona !== id && <MenuItem label="현재 페르소나로 정하기" sub="새 채팅이 이 페르소나로 시작해요" onClick={makeCurrent} />}
+        {holding > 0 && <MenuItem label="채팅 옮기기" sub={`이 페르소나를 쓰는 채팅 ${holding}개를 다른 페르소나로 옮겨요`} onClick={() => setMoving(true)} />}
+        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />
       </>
     ),
   };
   const exportDialog = exporting && <PersonaExport persona={persona} onClose={() => setExporting(false)} />;
-  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body: <>{body}{exportDialog}</> });
+  const moveDialog = moving && <PersonaPickDialog title="채팅을 옮길 페르소나" using={id} onChoose={moveChats} onClose={() => setMoving(false)} />;
+  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body: <>{body}{exportDialog}{moveDialog}</> });
 }

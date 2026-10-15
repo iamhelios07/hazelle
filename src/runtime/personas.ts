@@ -53,6 +53,18 @@ export async function recordChatPersonas(store: ObjectStore): Promise<void> {
   if (writes.length) await store.batch(writes, undefined, { unheld: true });
 }
 
+export const chatsHolding = (store: Pick<ObjectStore, 'list'>, persona: string): string[] => store.list('chat').flatMap((chat) => (live(chat)?.value.persona === persona ? [chat.id] : []));
+
+// 채팅 옮기기: the chats given move to another persona together, written unheld as recordChatPersonas writes them. Its
+// 되돌리기 moves back the same ids, not every chat holding the persona by then.
+export async function rebindChats(store: ObjectStore, ids: string[], persona: string): Promise<ApiResult<null>> {
+  const writes: Write[] = ids.flatMap((id) => {
+    const chat = live(store.get('chat', id));
+    return chat ? [{ type: 'restore' as const, kind: 'chat' as const, id, parent: null, value: { ...chat.value, persona } }] : [];
+  });
+  return writes.length ? store.batch(writes, undefined, { unheld: true }) : { ok: true, data: null };
+}
+
 // null takes the 고정 off.
 export const pinPersona = (store: ObjectStore, character: string, persona: string | null) =>
   store.update('character', character, (current) => (persona === null ? without(current, 'persona') : { ...current, persona }));
