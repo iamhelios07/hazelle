@@ -35,11 +35,10 @@ export type Fired = { id: string; why: Why; fate: Fate };
 export type LoreEntries = { id: string; value: Omit<LoreEntry, 'folder'> }[];
 
 export type LoreTurn = {
-  // Only the messages before turn are scanned: the after-match replay passes the whole chat for every earlier reply.
+  // The chat's messages before the reply being written, the greeting not among them: Risu never scans the
+  // greeting for keys. Its length + 1 is Risu's chatLength, which @@activate_only_after and @@activate_only_every
+  // compare with, whether the chat has a greeting or not.
   history: HistoryMessage[];
-  // Risu's chatLength, which @@activate_only_after and @@activate_only_every compare with: the messages
-  // before the reply being written, the greeting counted.
-  turn: number;
   // The chat's greeting as an index into Card.greetings, which @@is_greeting counts from 1.
   greeting: number | null;
   // Entries with an after-match decorator that went into an earlier prompt of this chat, as the previous
@@ -125,9 +124,9 @@ export function prepareLore(entries: LoreEntries, settings: Card['loreSettings']
   const books = entries.filter(({ value }) => value.enabled).map((entry) => prepare(entry, settings.fullWordMatching ?? DEFAULTS.fullWordMatching, invalidKeys));
   // A prepared book belongs to one replay; edits/settings changes start another and cannot reuse stale text.
   const scanned = new WeakMap<HistoryMessage, Scanned>();
-  const window = (history: HistoryMessage[], end: number, depth: number) => {
+  const window = (history: HistoryMessage[], depth: number) => {
     const messages: Scanned[] = [];
-    for (let at = Math.max(end - depth, 0); at < end; at++) {
+    for (let at = Math.max(history.length - depth, 0); at < history.length; at++) {
       const message = history[at]!;
       let text = scanned.get(message);
       if (!text) {
@@ -144,16 +143,17 @@ export function prepareLore(entries: LoreEntries, settings: Card['loreSettings']
   };
 }
 
-function activate(books: Book[], settings: Card['loreSettings'], budget: number, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], end: number, depth: number) => Scanned[], { history, turn, greeting, afterMatch: before, seed, cost, marks }: LoreTurn): Activation {
+function activate(books: Book[], settings: Card['loreSettings'], budget: number, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], depth: number) => Scanned[], { history, greeting, afterMatch: before, seed, cost, marks }: LoreTurn): Activation {
   const afterMatch = new Set(before);
   const scanDepth = settings.scanDepth ?? DEFAULTS.scanDepth;
   const recursive = settings.recursive ?? DEFAULTS.recursive;
+  const chatLength = history.length + 1;
 
   const open = ({ id, rules }: Book) =>
     rules.trigger !== 'never' &&
     !(rules.afterMatch === 'dont' && afterMatch.has(id)) &&
-    turn >= rules.onlyAfter &&
-    turn % rules.onlyEvery === 0 &&
+    chatLength >= rules.onlyAfter &&
+    chatLength % rules.onlyEvery === 0 &&
     (rules.greeting === null || (greeting !== null && greeting + 1 === rules.greeting));
   const matched: { book: Book; why: Why }[] = [];
   const active: Book[] = [];
@@ -171,7 +171,7 @@ function activate(books: Book[], settings: Card['loreSettings'], budget: number,
       progressed();
       const { book, evidence } = pending;
       const why = triggered(book, afterMatch, () => {
-        if (first) consume(book.matchers, evidence, window(history, turn, book.rules.scanDepth ?? scanDepth));
+        if (first) consume(book.matchers, evidence, window(history, book.rules.scanDepth ?? scanDepth));
         if (book.rules.searchRecursion) consume(book.matchers, evidence, frontier);
         return evidence;
       });

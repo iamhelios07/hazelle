@@ -460,8 +460,9 @@ function remembered(measure: (text: string) => number): (text: string) => number
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
-function loreInput(scope: ChatScope, history: HistoryMessage[], turn: number, afterMatch: string[], seed: string, cost: LoreTurn['cost'], marks: LoreTurn['marks']): LoreTurn {
-  return { history, turn, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost, marks };
+// end: where the reply being written stands in history, which holds the greeting first when the chat has one.
+function loreInput(scope: ChatScope, history: HistoryMessage[], end: number, afterMatch: string[], seed: string, cost: LoreTurn['cost'], marks: LoreTurn['marks']): LoreTurn {
+  return { history: history.slice(scope.greeting === null ? 0 : 1, end), greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost, marks };
 }
 
 const marksOf = (blocks: Block[]) => new Set(blocks.flatMap((block) => (block.kind === 'text' && block.mark !== null ? [block.mark] : [])));

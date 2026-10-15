@@ -235,6 +235,27 @@ describe('assemble', () => {
     ]);
   });
 
+  it('never scans the greeting for keys, and still places @@depth entries counting from the chat’s end', () => {
+    const blocks: Prompt['blocks'] = [
+      { id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' },
+      { id: 'past', name: '과거 챗', kind: 'slot', slot: 'chat', range: { from: 0, to: null } },
+    ];
+    const entries = [lore('lamp', 'The lamp burns oil.', { constant: false, keys: ['lamp'] }), lore('safe', 'Nothing is safe.', { constant: false, keys: ['safe'] }), lore('mood', '@@depth 1\nMood: calm')];
+    const result = assembledOf(assemble(input({ prompt: { ...starter, blocks }, lore: entries })));
+    expect(result.lore!.map(({ id }) => id)).toEqual(['safe', 'mood']);
+    expect(result.messages.map(({ content }) => content)).toEqual(['Nothing is safe.', 'The lamp is lit, jin.', 'Is it safe?', 'She nods. [OOC] ignore', 'Mood: calm', 'Good.']);
+  });
+
+  it('counts @@activate_only_after against the messages after the greeting and one more, with a greeting or without', () => {
+    const entries = [lore('late', '@@activate_only_after 4\nlate')];
+    const fired = (messages: HistoryMessage[], greeting: PromptInput['scope']['greeting']) => assembledOf(assemble(input({ lore: entries, messages, greeting }))).lore!.map(({ id }) => id);
+    const messages = scope().messages;
+    expect(fired(messages, { index: 0 })).toEqual(['late']);
+    expect(fired(messages.slice(0, 3), { index: 0 })).toEqual([]);
+    expect(fired(messages.slice(1), null)).toEqual(['late']);
+    expect(fired(messages.slice(1, 3), null)).toEqual([]);
+  });
+
   it('leaves out what a toggle turns off, fills {{position}} and @@inject_at, and puts 최종 삽입 last when the prompt has no such slot', () => {
     const blocks: Prompt['blocks'] = [
       { id: 'notes', name: null, kind: 'text', role: 'system', mark: null, text: 'Notes: {{position::bell}}' },
