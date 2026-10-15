@@ -104,7 +104,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form, wide or page (설정's pages, the column beside the settings sidebar). `aside` adds a column beside the body once the screen is wide enough, stacked above it when not. Its title, section titles and box contents share one left line: `SettingGroup` and `List` hang out by `--box-hang`; on `page` nothing hangs, so card edges stand on the title's line |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional tag (the layer a value comes from), note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
-| layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
+| layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow |
 | layout | `SidePeek` (`SidePeeks`) | `SidePeek.module.css` | A tab at the story's right edge whose drawer slides over the story while the pointer rests on the tab, or stays open from a key or tap, such as 상태; `SidePeeks` holds them in ChatFrame's `peek` slot |
 | layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too, and a search under its title |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
