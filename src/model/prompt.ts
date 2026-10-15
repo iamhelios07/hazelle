@@ -9,7 +9,9 @@ export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate';
 // {{slot}} where its content goes.
 export const SLOTS = {
   tool: { wrapped: true, repeats: false, sorts: ['conversation'] },
-  description: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
+  // 캐릭터 설명 repeats because Risu presets put it in two places and open one by a toggle (누렁이's 탈옥조정): with one
+  // place, the other toggle state sends no description at all.
+  description: { wrapped: true, repeats: true, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
   persona: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
   lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
   authorNote: { wrapped: true, repeats: false, sorts: ['conversation'] },

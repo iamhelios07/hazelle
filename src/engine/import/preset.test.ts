@@ -14,6 +14,13 @@ it("keeps a preset's toggle lines in order, one it cannot read as written and co
   expect(read.unsupported).toContainEqual({ kind: 'toggle-line', count: 1 });
 });
 
+it('keeps a description placed twice, as a preset that moves it by a toggle does, and folds a persona placed twice', () => {
+  const read = convertPreset({ name: 'p', promptTemplate: [{ type: 'description' }, { type: 'persona' }, { type: 'chat', rangeStart: 0, rangeEnd: 'end' }, { type: 'description' }, { type: 'persona' }] });
+  if (!read.ok) throw new Error(read.failure.kind);
+  expect(read.prompt.blocks.map((block) => block.kind === 'slot' && block.slot)).toEqual(['description', 'persona', 'chat', 'description']);
+  expect(read.unsupported).toEqual([{ kind: 'repeated-slot', slot: 'persona', count: 1 }, { kind: 'settings', count: 1 }]);
+});
+
 it('places a persona, description, memory or author note item that names no role as a system slot', () => {
   const template = ['persona', 'description', 'memory', 'authornote'].map((type) => ({ type, innerFormat: '' }));
   const read = convertPreset({ name: 'p', promptTemplate: [...template, { type: 'persona', role: 'narrator' }] });
