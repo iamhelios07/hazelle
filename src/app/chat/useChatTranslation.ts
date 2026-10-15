@@ -19,8 +19,10 @@ export function useChatTranslation(chatId: string, chat: Chat, messages: Shown[]
   const sendLanguage = languageLabel(translate.inputLanguage);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const last = messages.at(-1);
-  // 응답 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
-  const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
+  // 응답 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's. Live
+  // until its turn ends, the translator's from its save (Translator.expect).
+  const live = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
+  const awaited = (version: string) => version === live || translating.awaited.has(version);
 
   // A batch (ChatExport) goes on across renders: each message in it reads the chat as it is by then, the
   // translations landed before it among its context.

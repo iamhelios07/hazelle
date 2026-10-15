@@ -81,13 +81,20 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   }
   const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   const live = { live: reply.id, ...(turn.whole && { whole: true as const }), ...(turn.batch && { batch: true as const }), ...(turn.retrying && { retrying: true as const }), ...(turn.stopping && { stopping: true as const }) };
+  // A reply saved while its turn is held stays live until the turn ends, so nothing between its save and Talk's end
+  // shows it settled (Translator.expect).
+  const saved = out.findIndex((message) => message.id === (reply.message ?? reply.id) && message.versions.some((existing) => existing.id === reply.id));
+  if (saved !== -1) {
+    out[saved] = { ...out[saved]!, ...live };
+    return out;
+  }
   if (reply.message === null) {
-    if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: now, versions: [version], selected: 0, ...live });
+    out.push({ id: reply.id, role: 'assistant', at: now, versions: [version], selected: 0, ...live });
     return out;
   }
   const index = out.findIndex((message) => message.id === reply.message);
   const message = out[index];
-  if (!message || message.versions.some((existing) => existing.id === reply.id)) return out;
+  if (!message) return out;
   const slot = reply.replaces === null ? -1 : message.versions.findIndex((existing) => existing.id === reply.replaces);
   const versions = slot === -1 ? [...message.versions, version] : message.versions.with(slot, version);
   out[index] = { ...message, versions, selected: slot === -1 ? versions.length - 1 : slot, ...live };

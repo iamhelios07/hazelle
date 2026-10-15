@@ -68,7 +68,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           translating={translating}
           canTranslate={chat.features.translate}
           canIllustrate={chat.features.illustrate}
-          awaited={awaited === version}
+          awaited={awaited(version)}
           flipped={flipped.has(version)}
           replyNext={message.role === 'user' && messages[index + 1]?.role === 'assistant'}
           character={character}

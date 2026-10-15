@@ -116,8 +116,13 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     // holds the chat, keeps it loaded for the continuation or translation however soon the chat is left.
     (chat, reply) => {
       const lease = store.retainChat(chat);
+      // Here, before Talk ends the turn: the reply goes from live to awaited with no render between.
+      const settle = translator.expect(chat, reply);
       void scripts.ended(chat, reply).finally(() => {
-        void receiveReply(session, chat, reply).finally(lease.release);
+        void receiveReply(session, chat, reply).finally(() => {
+          settle();
+          lease.release();
+        });
         memory.check(chat);
       });
     },

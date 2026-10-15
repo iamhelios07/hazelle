@@ -11,7 +11,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { setTextTranslation, translatorNotes } from './characters';
 import { chatTranslate } from './features';
-import { appendTranslation, savedElsewhere } from './chat-log';
+import { appendTranslation, savedElsewhere, type Written } from './chat-log';
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
@@ -105,13 +105,14 @@ export const sendsNotes = (prompt: TranslatePrompt) => prompt.blocks.some((block
 
 export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }>;
 
-// failed: why the last try at a version did not translate it, kept for the session.
-export type Translating = { live: ReadonlyMap<string, string>; failed: ReadonlyMap<string, TranslatorFailure> };
+// awaited: replies saved here whose 응답 번역 has not started yet (expect). failed: why the last try at a version did not
+// translate it, kept for the session.
+export type Translating = { awaited: ReadonlySet<string>; live: ReadonlyMap<string, string>; failed: ReadonlyMap<string, TranslatorFailure> };
 
 // Unlike replies, several run at once, one per version, and each goes on when its chat is left.
 export class Translator {
   private closed = false;
-  private state: Translating = { live: new Map(), failed: new Map() };
+  private state: Translating = { awaited: new Set(), live: new Map(), failed: new Map() };
   private readonly aborts = new Map<string, AbortController>();
   private readonly changes = new ChangeSignal();
 
@@ -128,8 +129,19 @@ export class Translator {
 
   readonly snapshot = () => this.state;
 
-  private change(version: string, change: { live?: string | null; failed?: TranslatorFailure | null }) {
-    const next = { live: new Map(this.state.live), failed: new Map(this.state.failed) };
+  // A reply saved with 응답 번역 on is awaited from its save, before its turn ends, until its translation starts or
+  // translateReceived passes it over and the returned settle is called.
+  expect(chat: string, reply: Written): () => void {
+    const stored = this.store.get('chat', chat)?.value;
+    if (this.closed || reply.receipt.state === 'failed' || !reply.text.trim() || !stored || !chatTranslate(this.store, stored).replies) return () => {};
+    this.change(reply.id, { awaited: true });
+    return () => { if (this.state.awaited.has(reply.id)) this.change(reply.id, { awaited: false }); };
+  }
+
+  private change(version: string, change: { awaited?: boolean; live?: string | null; failed?: TranslatorFailure | null }) {
+    const next = { awaited: new Set(this.state.awaited), live: new Map(this.state.live), failed: new Map(this.state.failed) };
+    if (change.awaited) next.awaited.add(version);
+    else if (change.awaited === false) next.awaited.delete(version);
     if (change.live === null) next.live.delete(version);
     else if (change.live !== undefined) next.live.set(version, change.live);
     if (change.failed === null) next.failed.delete(version);
@@ -170,7 +182,7 @@ export class Translator {
     const abort = new AbortController();
     this.aborts.set(version, abort);
     this.reading.add(id);
-    this.change(version, { live: '', failed: null });
+    this.change(version, { awaited: false, live: '', failed: null });
     return lease.ready.then(async (failure) => {
       if (failure) {
         this.change(version, { live: null, failed: { kind: 'unsaved', failure } });

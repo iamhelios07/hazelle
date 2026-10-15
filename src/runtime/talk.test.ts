@@ -68,6 +68,13 @@ describe('withTurn', () => {
     expect(withTurn(story, { ...turn, reply: { ...turn.reply, replaces: 'b1' } }, 'c').map(({ id }) => id)).toEqual(['u1', 'b1', 'u2']);
   });
 
+  it('keeps a reply live once it is saved, until its turn ends', () => {
+    const saved = { id: 'r', role: 'assistant' as const, at: 0, versions: [{ id: 'r', seed: 'r', text: 'Hi', receipt: null, edited: false, at: 0 }], selected: 0 };
+    const turn = { chat: 'c', said: null, reply: { id: 'r', message: null, replaces: null, continues: null }, text: 'Hi', reasoning: '' };
+    expect(withTurn([saved], turn, 'c')).toMatchObject([{ id: 'r', live: 'r', versions: saved.versions }]);
+    expect(withTurn([saved], null, 'c')[0]!.live).toBeNull();
+  });
+
   it('marks a reply asked for whole, or waiting on a batch, so the chat shows it when it lands', () => {
     const turn = { chat: 'c', said: null, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
     expect(withTurn([], { ...turn, whole: true }, 'c')[0]).toMatchObject({ live: 'r', whole: true });

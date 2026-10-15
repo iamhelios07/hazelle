@@ -6,7 +6,7 @@ import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { setTranslate, setTranslatorNote } from './characters';
 import { SETTINGS_ID } from '../model/settings';
 import { setDefaultModel, setTaskModel } from './assignment';
-import { translate, translatorOf } from './translate';
+import { translate, translatorOf, type Translating } from './translate';
 import { takeTurn, translateText, TRANSLATOR_CHAT } from './turn';
 import { translationInput } from './chat-context';
 
@@ -45,6 +45,30 @@ describe('Translator', () => {
       expect(screen).not.toHaveBeenCalled();
       await server.hold(session.store, chat);
       expect(shown(fold(session.store.children('entry', chat))[1]!).translation?.text).toBe('안녕, 여행자.');
+    }));
+
+  it('holds a received reply awaited from its save until its translation starts', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      await setTranslate(session.store, null, { replies: true });
+      const chat = crypto.randomUUID();
+      const lease = session.store.retainChat(chat);
+      await lease.ready;
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Hi' });
+      stubRelay(inTurn([saying('Hello, traveler.'), saying('안녕, 여행자.')]));
+      let ended = () => {};
+      vi.spyOn(session.scripts, 'ended').mockImplementation(() => new Promise((resolve) => { ended = () => resolve(); }));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      const reply = shown(fold(session.store.children('entry', chat))[1]!).id;
+      expect(session.translator.snapshot().awaited).toEqual(new Set([reply]));
+      const states: Translating[] = [];
+      const leave = session.translator.subscribe(() => states.push(session.translator.snapshot()));
+      ended();
+      await vi.waitFor(() => expect(session.translator.snapshot().awaited.size).toBe(0));
+      expect(states[0]).toMatchObject({ awaited: new Set(), live: new Map([[reply, '']]) });
+      leave();
+      lease.release();
     }));
 
   it('leaves a reply received before the switch went on to 번역', () =>
