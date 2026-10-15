@@ -1,6 +1,6 @@
 import { add, cardSource, convert, counted, extensionOf, lorebookSource, record, text, type Converted, type Tally } from './convert';
 import { hazelleSource, printOf, readHazelle, readModule, type ConvertedBundle } from './hazelle';
-import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
+import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported, type LoreEntry } from './types';
 import { base64, readPng } from './png';
 import { readPersona } from './persona';
 import { readRisum, writeRisum } from './risum';
@@ -78,7 +78,7 @@ function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
 }
 
 // Read as Risu reads it back: as a character, then convertCharacterToModule, where the creator notes are the module's
-// description. The card's icon is the carrier's picture, not the module's.
+// description and moduleNamespace its namespace. The card's icon is the carrier's picture, not the module's.
 function fromModuleCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const tally: Tally = new Map();
   const charx = readCharx(bytes, tally);
@@ -86,7 +86,25 @@ function fromModuleCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const { card, lore, loreFolders, assets } = charx.converted;
   const { regex, triggers, background, toggles } = card;
   const pack = { regex, triggers, ...(background === undefined ? {} : { background }), toggles };
-  return { ok: true, module: { name: card.name, description: card.creatorNotes, namespace: null, risu: null, pack, lore, loreFolders, assets: located(assets, resolver({ zip: charx.zip }, tally)), unsupported: counted(UNSUPPORTED_KINDS, tally) } };
+  const namespace = text(record(record(record(record(charx.raw).data).extensions).risuai).moduleNamespace).trim() || null;
+  return { ok: true, module: { name: card.name, description: card.creatorNotes, namespace, risu: null, pack, lore: [...lore, ...characterLore(card)], loreFolders, assets: located(assets, resolver({ zip: charx.zip }, tally)), unsupported: counted(UNSUPPORTED_KINDS, tally) } };
+}
+
+// Risu's export moves these @@indicator entries into the card's description, greetings and global note
+// (convertModuleToCharacter), and convertCharacterToModule makes them back (interchangeability.ts:74-117) with these
+// names, order 0 and no keys. The greetings' entry is not always active there either, so it never fires; its content is
+// not migrated, as Risu migrates no module lore.
+function characterLore({ description, greetings, postHistoryInstructions }: Card): LoreEntry[] {
+  const entry = (name: string, content: string, constant: boolean): LoreEntry => ({
+    name, keys: [], secondaryKeys: [], content, enabled: true, constant, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 0, priority: null, position: null, folder: null,
+  });
+  const [first = '', ...alternate] = greetings;
+  const messages = [`<FM>\n${first}\n</FM>`, ...alternate.map((greeting) => `<FM_alt>\n${greeting}\n</FM_alt>`)].join('\n');
+  return [
+    ...(description ? [entry('From Character Description', `@@indicator character_desc\n\n${description}`, true)] : []),
+    ...(greetings.length ? [entry('From First Messages', `@@indicator character_first_message\n\n${messages}`, false)] : []),
+    ...(postHistoryInstructions ? [entry('From Global Note Replacement', `@@indicator replace_global_note\n\n${postHistoryInstructions}`, true)] : []),
+  ];
 }
 
 function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
