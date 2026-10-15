@@ -21,9 +21,11 @@ type Props = {
   onPurge: () => void;
   // The folder path, shown before the note where cards from every folder stand together.
   where?: string;
+  // The card drags onto a folder (실험실 탐색기식 폴더).
+  drag?: boolean;
 };
 
-export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge, where }: Props) {
+export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge, where, drag = false }: Props) {
   const wide = useWide();
   const name = aliased(shelf.character.card.name, shelf.character.alias);
   const handle = useMenuHandle();
@@ -55,6 +57,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       note={busy ?? (binned ? binCardNote(shelf) : where ? `${where} · ${cardNote(shelf)}` : cardNote(shelf))}
       selected={picked}
       menu={shows ? menu : undefined}
+      drag={drag ? shelf.id : undefined}
       {...press}
     />
   );

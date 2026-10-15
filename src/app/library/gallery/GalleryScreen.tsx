@@ -11,13 +11,13 @@ import { BIN, PAGES } from '../../common/words';
 import { useBin, useLibrary } from '../../session';
 import { backBar } from '../../shell/router';
 import { BIN_PLACE, type Back } from '../../shell/routes';
-import { Avatar, Button, CardGrid, ChoiceGroup, Empty, List, NavBar, Row, Screen, Section, Text } from '../../ui';
+import { Avatar, Button, CardGrid, ChoiceGroup, Empty, List, NavBar, Row, Screen, Section, Text, useWide } from '../../ui';
 import { ShelfFace, shelfName } from '../shelf';
 import { binnedCharacter, binnedChat, binnedModule, binnedPersona, binnedProfile, binnedPrompt, useCharacterActions, type Binned } from '../useCharacterActions';
 import { useFolderActions } from '../useFolderActions';
 import { BinnedRow } from './BinnedRow';
 import { CharacterCard } from './CharacterCard';
-import { FolderPath, FolderTile } from './FolderPlace';
+import { FolderPath, FolderTile, type Drop } from './FolderPlace';
 import { FolderTabs, type Filter, type Naming } from './FolderTabs';
 import { MoveBar } from './MoveBar';
 import { PurgeDialog } from './PurgeDialog';
@@ -36,6 +36,7 @@ const isBinEntry = (entry: Entry): entry is BinEntry => 'section' in entry;
 export function GalleryScreen({ place, back }: { place: string | null; back: Back | null }) {
   const { characters, none, folders, deleted, deletedChats, byCharacter, byFolder, loose } = useLibrary();
   const explorer = useLab('folders');
+  const wide = useWide();
   const bin = useBin();
   const characterActions = useCharacterActions();
   const { create, rename, move } = useFolderActions();
@@ -103,6 +104,14 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
     setPicked(null);
   }
 
+  // A dragged card that is one of the pick moves the whole pick. Touch screens move by picking only.
+  const dropInto: Drop | undefined = explorer && wide && !binned ? (to) => (id) => {
+    const ids = picked?.has(id) ? [...picked] : [id];
+    const moving = ids.filter((each) => (byCharacter.get(each)?.character.folder ?? null) !== to);
+    if (moving.length > 0) move(moving, to);
+    if (picked?.has(id)) setPicked(null);
+  } : undefined;
+
   const toggle = (id: string) => {
     if (!picked) return;
     const next = new Set(picked);
@@ -122,11 +131,11 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
           </Button>
         )}
       </Row>
-      {explorer ? <FolderPath here={here} binned={binned} onName={setNaming} /> : <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />}
+      {explorer ? <FolderPath here={here} binned={binned} onName={setNaming} dropInto={dropInto} /> : <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />}
       {binned && <Text variant="note">{`${BIN}에 있는 항목은 ${KEEP_DAYS}일이 지나면 영구 삭제돼요.`}</Text>}
       {folderCards.length + shown.length > 0 && (
         <CardGrid label="캐릭터" keys={[...folderCards.map(({ id }) => id), ...shown.map(({ id }) => id)]}>
-          {(index) => { if (index < folderCards.length) { const card = folderCards[index]!; return <FolderTile key={card.id} folder={card} onName={setNaming} />; } const shelf = shown[index - folderCards.length]!; return (
+          {(index) => { if (index < folderCards.length) { const card = folderCards[index]!; return <FolderTile key={card.id} folder={card} onName={setNaming} dropInto={dropInto} />; } const shelf = shown[index - folderCards.length]!; return (
             <CharacterCard
               key={shelf.id}
               shelf={shelf}
@@ -136,6 +145,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
               onPick={() => toggle(shelf.id)}
               actions={characterActions}
               onPurge={() => setPurging(binnedCharacter(shelf))}
+              drag={dropInto !== undefined}
               where={explorer && search.words && shelf.character.folder ? pathName(pathOf(byFolder, shelf.character.folder)) || undefined : undefined}
             />
           ); }}

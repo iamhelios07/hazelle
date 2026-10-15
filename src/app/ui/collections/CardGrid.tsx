@@ -1,5 +1,6 @@
 import { Check, Folder } from 'lucide-react';
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
+import { cardDrag, useCardDrop } from './cardDrag';
 import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
@@ -61,9 +62,11 @@ type CardProps = {
   expanded?: boolean;
   ref?: Ref<HTMLButtonElement>;
   menu?: ReactNode;
+  // The card can be dragged onto a FolderCard or a PathBar part, carrying this key.
+  drag?: string;
 };
 
-export function FaceCard({ image, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu }: CardProps) {
+export function FaceCard({ image, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag }: CardProps) {
   return (
     <div className={styles.cardBox}>
       <button
@@ -75,9 +78,10 @@ export function FaceCard({ image, name, note, selected, current = false, tag, fa
         aria-haspopup={popup}
         aria-expanded={expanded}
         onClick={onClick}
+        {...(drag === undefined ? {} : cardDrag(drag))}
       >
         <span className={styles.picture}>
-          <Face image={image} name={name} />
+          <Face image={image} name={name} still={drag !== undefined} />
           {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="xs" />}</span>}
         </span>
         <span className={styles.name}>{name}</span>
@@ -94,12 +98,14 @@ export function FaceCard({ image, name, note, selected, current = false, tag, fa
 const TILES = [styles.one, styles.one, styles.two, styles.four, styles.four];
 
 // A folder among the cards: up to four faces of what it holds, or a folder mark when it holds none.
-type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode };
+// onDropCard: a dragged FaceCard's key, let go over this folder.
+type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode; onDropCard?: (key: string) => void };
 
-export function FolderCard({ name, note, faces, onClick, menu }: FolderCardProps) {
+export function FolderCard({ name, note, faces, onClick, menu, onDropCard }: FolderCardProps) {
+  const drop = useCardDrop(onDropCard);
   return (
     <div className={styles.cardBox}>
-      <button type="button" className={styles.card} onClick={onClick}>
+      <button type="button" className={drop.over ? `${styles.card} ${styles.dropping}` : styles.card} onClick={onClick} {...drop.props}>
         <span className={`${styles.picture} ${styles.folder} ${TILES[Math.min(faces.length, 4)]}`}>
           {faces.length === 0 ? <span className={styles.emptyFolder}><Icon icon={Folder} size="lg" /></span> : faces.slice(0, 4).map((face, index) => <span key={index} className={styles.tile}><Face {...face} /></span>)}
         </span>
@@ -128,9 +134,10 @@ export function Preview({ image, name }: { image: string | null; name: string })
 const TINTS = [styles.tint1, styles.tint2, styles.tint3, styles.tint4, styles.tint5];
 const tint = (name: string) => TINTS[[...name].reduce((hash, char) => (hash * 31 + char.codePointAt(0)!) >>> 0, 0) % TINTS.length];
 
-function Face({ image, name }: { image: string | null; name: string }) {
+// still: the picture does not drag itself, so the card it sits in drags instead (cardDrag).
+function Face({ image, name, still = false }: { image: string | null; name: string; still?: boolean }) {
   const veil = useVeil();
-  return image && !veil ? <img className={styles.image} src={image} alt="" /> : <span className={`${styles.letter} ${tint(name)}`} aria-hidden="true">{[...name][0]}</span>;
+  return image && !veil ? <img className={styles.image} src={image} alt="" draggable={still ? false : undefined} /> : <span className={`${styles.letter} ${tint(name)}`} aria-hidden="true">{[...name][0]}</span>;
 }
 
 export function SelectionBar({ children }: { children: ReactNode }) {

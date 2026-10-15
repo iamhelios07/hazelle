@@ -252,3 +252,9 @@
   min-width: 0;
   color: var(--color-text-muted);
 }
+
+.dropping .picture {
+  outline: var(--focus-ring-width) solid var(--color-accent);
+  outline-offset: var(--focus-ring-offset);
+  background: var(--color-accent-bg);
+}

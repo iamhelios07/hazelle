@@ -34,3 +34,10 @@
   color: var(--color-text);
   font-weight: var(--weight-semibold);
 }
+
+.dropping,
+.dropping:hover {
+  outline: var(--border-thick) solid var(--color-accent);
+  background: var(--color-accent-bg);
+  color: var(--color-text);
+}

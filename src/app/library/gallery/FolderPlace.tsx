@@ -20,16 +20,21 @@ type PathProps = {
   here: FolderContents<ChatSummary> | null;
   binned: boolean;
   onName: (naming: Naming) => void;
+  // What a card dragged onto a part does, there to (null: the top); absent where cards do not drag.
+  dropInto?: Drop;
 };
 
+// to: a folder's id, null for out of every folder.
+export type Drop = (to: string | null) => (id: string) => void;
+
 // 실험실 탐색기식 폴더: where 캐릭터 둘러보기 stands, in place of the folder tabs.
-export function FolderPath({ here, binned, onName }: PathProps) {
+export function FolderPath({ here, binned, onName, dropInto }: PathProps) {
   const { byFolder } = useLibrary();
   const inBin = useInBin();
   const path = here ? pathOf(byFolder, here.folder.id) : [];
   const parts = [
-    { key: 'top', name: TOP, onClick: () => go(null) },
-    ...path.map((folder) => ({ key: folder.id, name: folder.value.name, onClick: () => go(folder.id) })),
+    { key: 'top', name: TOP, onClick: () => go(null), onDropCard: dropInto?.(null) },
+    ...path.map((folder) => ({ key: folder.id, name: folder.value.name, onClick: () => go(folder.id), onDropCard: dropInto?.(folder.id) })),
     ...(binned ? [{ key: BIN_PLACE, name: BIN, onClick: () => go(BIN_PLACE) }] : []),
   ];
   return (
@@ -48,7 +53,7 @@ export function FolderPath({ here, binned, onName }: PathProps) {
 }
 
 // A folder's card in 캐릭터 둘러보기, which opens it.
-export function FolderTile({ folder, onName }: { folder: FolderTree; onName: (naming: Naming) => void }) {
+export function FolderTile({ folder, onName, dropInto }: { folder: FolderTree; onName: (naming: Naming) => void; dropInto?: Drop }) {
   const { byFolder } = useLibrary();
   const { remove } = useFolderActions();
   const { characters } = byFolder.get(folder.id)!;
@@ -61,6 +66,7 @@ export function FolderTile({ folder, onName }: { folder: FolderTree; onName: (na
       note={note}
       faces={characters.slice(0, 4).map(({ face, character }) => ({ image: face, name: aliased(character.card.name, character.alias) }))}
       onClick={() => go(folder.id)}
+      onDropCard={dropInto?.(folder.id)}
       menu={
         <MoreMenu of={`${folder.value.name} 폴더`}>
           <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
