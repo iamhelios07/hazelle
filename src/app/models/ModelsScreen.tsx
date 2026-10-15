@@ -10,20 +10,16 @@ import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Beside, Callout, Columns, Empty, List, ListItem, NavBar, Row, Screen, Section, Table, Tag, type TableColumn } from '../ui';
-import { defaultFirst, inputs, tokens, valueWords } from './settingWords';
+import { Beside, Callout, Columns, Empty, List, ListItem, NavBar, PickCard, Row, Screen, Section } from '../ui';
+import { defaultFirst, valueWords } from './settingWords';
 
 const STARRED = '즐겨찾기한 모델';
-const COLUMNS: TableColumn[] = [
-  { label: '모델', size: 'name' },
-  { label: '연결', size: 'fill' },
-  { label: MODEL_SETTINGS, size: 'fill' },
-  { label: '컨텍스트', size: 'fill' },
-  { label: '입력', size: 'fill' },
-];
 
 // The screens never say 묶음.
 const NO_VALUES = '정한 값 없음';
+// The bottom rung of every chat's settings: what a prompt, a character or a chat does not set reads from here.
+const DEFAULTS = '기본값';
+const SETTINGS_HELP = '온도, 추론, 캐시 같은 값이에요. 모델마다 따로 둘 수도 있어요.';
 export function ModelsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
@@ -54,6 +50,8 @@ export function ModelsScreen({ back }: { back: Back | null }) {
   };
   const search = useSearch(models, '즐겨찾기한 모델 검색', ({ connection, model }) => [model.name, model.id, connection.value.label]);
   const sorted = defaultFirst(profiles, settings.profile);
+  const defaultProfile = profiles.find((profile) => profile.id === settings.profile);
+  const defaultWords = defaultProfile ? valueWords(defaultProfile.value.settings) : [];
   const ownModels = prompts.flatMap((prompt) => (prompt.value.task && prompt.value.model ? [{ prompt, task: prompt.value.task, model: prompt.value.model }] : []));
 
   const side = (
@@ -97,54 +95,47 @@ export function ModelsScreen({ back }: { back: Back | null }) {
 
   return (
     <Screen width="page" top={<NavBar title={PAGES.models} {...backBar(back)} />}>
-      <Section title={DEFAULT_MODELS}>
+      <Section title={DEFAULTS}>
         <Columns>
           <RoleCard role="main" help="프롬프트나 채팅에서 정하지 않았을 때 쓰는 모델이에요." own={main} follow={null} connections={connections} onPick={(ref) => ref && pickModel('main', ref)} {...cardOf(main)} />
           <RoleCard role="aux" help={AUX_HELP} own={settings.models.aux} follow={follows(MODEL_ROLES.main)} connections={connections} onPick={(ref) => pickModel('aux', ref)} {...cardOf(settings.models.aux)} />
           <RoleCard role="embed" help="장기 기억이 지금 대화와 관련된 지난 기록을 찾을 때, 도구가 비슷한 내용을 찾을 때 써요. 바꾸면 기록을 다시 준비해요." own={settings.models.embed} follow="정하지 않음" connections={connections} onPick={(ref) => pickModel('embed', ref)} />
+          <PickCard
+            label={MODEL_SETTINGS}
+            value={defaultProfile ? defaultProfile.value.name : '없음'}
+            note={defaultProfile ? (defaultWords.length ? defaultWords.join(' · ') : `${NO_VALUES} · 모델이 권하는 값으로 응답해요`) : undefined}
+            help={SETTINGS_HELP}
+            tone={defaultProfile ? 'default' : 'warn'}
+            onClick={() => navigate(defaultProfile ? { kind: 'profile', id: defaultProfile.id } : { kind: 'models' })}
+          />
         </Columns>
         {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정한 모델이 즐겨찾기에 없어요.`}</Callout>}
       </Section>
       <Beside side={side}>
-        <Section title={STARRED} help={`새로 즐겨찾기한 모델은 기본으로 지정한 ${MODEL_SETTINGS}을 사용해요.`}>
+        <Section title={STARRED}>
           {search.field && <Row kind="toolbar">{search.field}</Row>}
           {search.none ? (
             <Empty variant="section">{search.none}</Empty>
           ) : models.length > 0 ? (
-            <Table
-              label={STARRED}
-              columns={COLUMNS}
-              rows={search.found.map(({ connection, model, choice }) => {
-                // A model that only draws takes no 설정 and holds no conversation, so it has neither (ModelScreen).
-                const draws = imageOnly(model);
+            <List label={STARRED} box>
+              {search.found.map(({ connection, model, choice }) => {
                 const ref = { connection: connection.id, model: model.id };
-                const roles = rolesOf(ref);
-                return {
-                  key: `${connection.id}/${model.id}`,
-                  cells: [
-                    roles.length ? (
-                      <>
-                        {model.name}{' '}
-                        {roles.map((role) => (
-                          <Tag key={role} tone="accent">
-                            {ROLE_TAGS[role]}
-                          </Tag>
-                        ))}
-                      </>
-                    ) : (
-                      model.name
-                    ),
-                    connection.value.label,
-                    draws ? '이미지 모델' : valuesOf(choice),
-                    draws ? null : tokens(model.contextLength),
-                    inputs(model),
-                  ],
-                  summary: connection.value.label,
-                  current: route.kind === 'model' && route.connection === connection.id && route.model === model.id,
-                  onClick: () => navigate({ kind: 'model', ...ref }),
-                };
+                // The row says only what sets a model apart: its roles, and a 모델 설정 other than the default one.
+                // A model that only draws takes no 설정 (ModelScreen).
+                const apart = imageOnly(model) ? '이미지 모델' : choice.kind !== 'profile' ? `${MODEL_SETTINGS} 없음` : choice.profile.id === settings.profile ? undefined : choice.profile.value.name;
+                return (
+                  <ListItem
+                    key={`${connection.id}/${model.id}`}
+                    title={model.name}
+                    tags={rolesOf(ref).map((role) => ROLE_TAGS[role])}
+                    description={connection.value.label}
+                    aside={apart}
+                    current={route.kind === 'model' && route.connection === connection.id && route.model === model.id}
+                    onClick={() => navigate({ kind: 'model', ...ref })}
+                  />
+                );
               })}
-            />
+            </List>
           ) : (
             <Empty variant="section">{noStarred('설정할 수 있어요')}</Empty>
           )}
