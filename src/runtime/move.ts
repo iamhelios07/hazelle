@@ -17,8 +17,7 @@ import { projectGreetings, startingGreetings } from './greetings';
 import { defaultMemory } from './memory-read';
 import { importedLore } from './lore';
 import { importModule, setModuleAlways } from './modules';
-import { addPersona } from './personas';
-import { thumbnail } from './picture';
+import { addRisuPersona } from './personas';
 import { savePreset } from './prompts';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
@@ -77,7 +76,6 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     landed('personas', done, personas.length);
     const persona = await backup.persona(key);
     const picture = await persona.picture();
-    const thumb = picture && (await thumbnail(picture).catch(() => null));
     const modules: string[] = [];
     // Brought without its Risu id: Risu gives every persona's module the same one ('$embedded'), which modulesFromRisu
     // would read as one module moved already. Its pictures are read before the backup is asked for anything else, which
@@ -88,7 +86,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
       movedModules.push({ name: persona.module.name, unsupported: mergeUnsupported(persona.module.unsupported, imported.data.unsupported) });
       modules.push(imported.data.id);
     }
-    const saved = await addPersona(store, { name: persona.name, description: persona.description, picture: thumb, ...(persona.alias && { alias: persona.alias }), ...(modules.length > 0 && { modules }) });
+    const saved = await addRisuPersona(store, persona, picture, modules);
     if (!saved.ok) return saved;
     if (persona.id !== null) personaIds.set(persona.id, saved.data.id);
   }

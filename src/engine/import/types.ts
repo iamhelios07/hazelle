@@ -159,7 +159,9 @@ export type ImportedModule = {
   unsupported: ImportReport['unsupported'];
 };
 
-export type ImportResult = { ok: true; card: Imported } | { ok: true; module: ImportedModule } | { ok: false; failure: ImportFailure };
+// A Risu persona PNG: its picture is the PNG itself.
+export type ImportedPersona = Pick<RisuPersona, 'name' | 'alias' | 'description' | 'picture'>;
+export type ImportResult = { ok: true; card: Imported } | { ok: true; module: ImportedModule } | { ok: true; persona: ImportedPersona } | { ok: false; failure: ImportFailure };
 
 // A Risu local backup, read (design F7; research/risu-backup-spec.md). Pictures stay in the file until a character,
 // persona or module is brought.
