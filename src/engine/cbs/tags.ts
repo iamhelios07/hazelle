@@ -184,7 +184,9 @@ define('addvar', 2, ([name, amount], { context, writes }) => {
 });
 // Unset is a missing name, not the text `null`, which a bot may have set.
 define('setdefaultvar', 2, ([name, value], { context, writes }) => {
-  if (writes && !context.variables.get(name!)) context.variables.set(name!, value!);
+  // A stored `null` is an unset variable too: what a Lua nil write leaves, and what Risu fills (cbs.ts:849).
+  const current = context.variables.get(name!);
+  if (writes && (!current || current === UNSET)) context.variables.set(name!, value!);
   return '';
 });
 define('getglobalvar', 1, ([name], { context }) => readGlobal(context, name!));

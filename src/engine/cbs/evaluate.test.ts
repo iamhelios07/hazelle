@@ -308,10 +308,10 @@ describe('evaluate', () => {
     expect(run('[{{triggerid}}]')).toBe('[null]');
   });
 
-  it('sets a default only on a missing or empty variable, and adds to a value that is not a number from 0', () => {
-    const variables = new Map([['kept', 'null'], ['blank', ''], ['word', 'abc']]);
-    run('{{setdefaultvar::kept::x}}{{setdefaultvar::blank::y}}{{addvar::word::2}}', { ...inMessage, variables });
-    expect(Object.fromEntries(variables)).toEqual({ kept: 'null', blank: 'y', word: '2' });
+  it('sets a default on a missing, empty or null variable only, and adds to a value that is not a number from 0', () => {
+    const variables = new Map([['unset', 'null'], ['blank', ''], ['kept', 'z'], ['word', 'abc']]);
+    run('{{setdefaultvar::unset::x}}{{setdefaultvar::blank::y}}{{setdefaultvar::kept::q}}{{addvar::word::2}}', { ...inMessage, variables });
+    expect(Object.fromEntries(variables)).toEqual({ unset: 'x', blank: 'y', kept: 'z', word: '2' });
   });
 
   it('reads an unset variable as an empty array and as 0 in calc, and a missing element as null', () => {
