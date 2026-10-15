@@ -55,6 +55,11 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
   return <RequestView prompt={sent.prompt} title="보낸 순서대로" request={() => sent.request} unbuilt="요청 전에 중단돼서 본문이 없어요." />;
 }
 
+export function SentResponse({ sent }: { sent: Sent | null }) {
+  if (!sent?.response) return <Empty variant="section">이 응답의 응답 원문이 없어요.</Empty>;
+  return <CodeBlock>{sent.response}</CodeBlock>;
+}
+
 type RequestViewProps = {
   prompt: Pick<Assembled, 'messages' | 'parts'>;
   title: string;

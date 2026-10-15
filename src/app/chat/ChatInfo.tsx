@@ -5,7 +5,7 @@ import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
-import { SentLore, SentMemory, SentRequest } from './ChatSent';
+import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
 import { cost, seconds, speed, tokens } from '../common/receipt';
 import { DISCOUNT, UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
@@ -18,6 +18,7 @@ const TABS = [
   { value: 'lore', label: '로어북' },
   { value: 'memory', label: '기억' },
   { value: 'request', label: '요청 원문' },
+  { value: 'response', label: '응답 원문' },
 ] as const;
 
 function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
@@ -74,9 +75,12 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
   );
 
   let body;
-  const thought = version?.reasoning && (
-    <Section level={3} title="추론">
-      <Text variant="prose">{version.reasoning}</Text>
+  // A continued reply thought in each of its calls; one call that did not say leaves the total unknown.
+  const counts = receipt ? calls(receipt).map((call) => call.usage?.reasoningTokens ?? null) : [];
+  const reasoned = counts.includes(null) ? null : counts.reduce<number>((sum, count) => sum + (count ?? 0), 0);
+  const thought = version && (version.reasoning || reasoned) && (
+    <Section level={3} title="추론" note={reasoned ? `${tokens(reasoned)} 토큰` : undefined}>
+      {version.reasoning ? <Text variant="prose">{version.reasoning}</Text> : <Empty variant="section">모델이 추론 글을 보내지 않았어요.</Empty>}
     </Section>
   );
   if (!version) body = <Empty>응답이 없어요.</Empty>;
@@ -132,6 +136,7 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
         {tab === 'lore' && <SentLore sent={sent} />}
         {tab === 'memory' && onRecord && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
         {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
+        {tab === 'response' && <SentResponse sent={sent} />}
       </>
     );
   }

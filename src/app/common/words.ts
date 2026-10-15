@@ -9,7 +9,7 @@ import { KEEP_DAYS } from '../../model/library';
 // Kept apart on purpose, not variants of one word: 빼기 takes out of a list, 삭제 deletes. 편집 opens an item's
 // editor, 수정 changes a message in place. 다시 생성 asks for another reply, 다시 시도 repeats a failed or stopped
 // one. 컨텍스트 길이 is the model's own, 컨텍스트 한도 the setting. 원문 is what a translation came from, 요청 원문
-// the request a reply was asked with. 사용 중 marks what is in use, 생성 중 a reply being written.
+// the request a reply was asked with, 응답 원문 the provider's answer as it came. 사용 중 marks what is in use, 생성 중 a reply being written.
 
 export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '보조 모델', embed: '임베딩 모델' };
 // A role as a tag on a model's row, where 모델 is the column: the prompts page tags its kinds the same short way.

@@ -23,6 +23,8 @@ export type ReplyError =
 
 // A stop is a cut, never an error. request is the address and body the request was built with, for 요청 원문, and
 // cache what its cache read and wrote; both null when it was refused before it could be built, or picked up after a reload.
+// response: the body the provider answered with, as read, for 응답 원문; null when none was read here, and for a batch's
+// answer.
 // call: the call's id, which its receipt keeps (model/chat Receipt id); a call picked up after a reload has the same.
 // account: the id of the account it was sent with; null when none was picked, or it was picked up after a reload.
 // tries: how many times it was sent (retry on failure); null where that is not known: never sent, or a call whose end
@@ -37,6 +39,7 @@ export type Reply = Omit<Outcome, 'error'> & {
   firstTextMs: number | null;
   totalMs: number;
   request: Pick<HttpRequest, 'url' | 'body'> | null;
+  response: string | null;
   cache: CacheView | null;
 };
 
@@ -67,6 +70,7 @@ export async function generate({ credentials, connection, model, settings, retri
   let account: Account | null = null;
   let tries: number | null = null;
   let protocol = "";
+  let answered: (() => string) | null = null;
   const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => {
     const refusal = error?.kind === 'provider' ? contextRefusal(protocol, error) : null;
     const calibration = completedCalibration(call.calibration ?? unavailableCalibration('preparation'), outcome);
@@ -82,6 +86,7 @@ export async function generate({ credentials, connection, model, settings, retri
       firstTextMs: firstText === null ? null : Math.round(firstText - started),
       totalMs: Math.round(performance.now() - started),
       request: built,
+      response: answered?.() ?? null,
       cache: cached,
     };
   };
@@ -171,9 +176,27 @@ export async function generate({ credentials, connection, model, settings, retri
   const response = await stream(call, withCredential(route, request, credential.credential), signal, retry);
   tries = call.tries ?? null;
   if (!(response instanceof Response)) return failed(response.kind === 'provider' && laneBusy(route, asked, response.status, response.code ?? null) ? { kind: 'refused', code: 'discount-busy' } : response);
-  const outcome = await decodeStream(route, model, response, signal, timed, inline);
+  const read = recorded(response);
+  answered = read.body;
+  const outcome = await decodeStream(route, model, read.response, signal, timed, inline);
   if (outcome.error) credentials.pool.stale(connection, serving);
   return reply(outcome, outcome.error);
+}
+
+// The body passes on unchanged, and a reader's cancel still reaches the provider's call.
+function recorded(response: Response): { response: Response; body: () => string } {
+  if (!response.body) return { response, body: () => '' };
+  const decoder = new TextDecoder();
+  let text = '';
+  const body = response.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        text += decoder.decode(chunk, { stream: true });
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  return { response: new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers }), body: () => text + decoder.decode() };
 }
 
 type Answered = [Omit<Outcome, 'error'>, Reply['error']];
@@ -280,7 +303,7 @@ export async function resume({ store, credentials }: { store: ObjectStore; crede
   const reply = ([outcome, error]: Answered): Reply => {
     const refusal = error?.kind === 'provider' ? contextRefusal(protocol, error) : null;
     const calibration = completedCalibration(value.calibration, outcome);
-    return { ...outcome, ...(refusal && { usage: null, cost: null }), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, cache: null, calibration: refusal ? { ...calibration, eligible: false, refusal } : calibration, contextRefusal: refusal };
+    return { ...outcome, ...(refusal && { usage: null, cost: null }), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, response: null, cache: null, calibration: refusal ? { ...calibration, eligible: false, refusal } : calibration, contextRefusal: refusal };
   };
   const route = routeOf(store, value.call);
   const resolved = 'kind' in route ? null : resolveConnection(route.connection.value);

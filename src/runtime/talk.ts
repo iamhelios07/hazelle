@@ -50,8 +50,8 @@ export type Shown = Message & { live: string | null; whole?: true; batch?: true;
 // itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt.
 export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast };
 
-// It lives in page memory only, until the session closes: the raw request is never stored.
-export type Sent = Pick<Reply, 'request' | 'calibration'> & { prompt: Assembled };
+// It lives in page memory only, until the session closes: the raw request and response are never stored.
+export type Sent = Pick<Reply, 'request' | 'response' | 'calibration'> & { prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
@@ -290,7 +290,7 @@ export class Talk {
     }
     if (this.closed) return null;
     // Kept before the save, whose store change is what shows the reply's 정보.
-    this.sentBy.set(call.id, { chat, sent: { request: answer.request, prompt, calibration: answer.calibration } });
+    this.sentBy.set(call.id, { chat, sent: { request: answer.request, response: answer.response, prompt, calibration: answer.calibration } });
     const written = this.written(held, reply, callOf(route), answer, Date.now(), answer.calibration.retries.length ? undefined : ready.forecast);
     // A receipt's cache is the view's, so one kept means the answer has its view.
     const printing = cacheKept(written.receipt) && writePrint(this.store, chat, call.id, wireOf(route.connection.id, answer.account, answer.cache!, prompt.parts));

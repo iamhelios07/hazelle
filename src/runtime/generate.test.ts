@@ -44,11 +44,12 @@ describe('generate', () => {
     expect(reply).toMatchObject({ state: 'failed', usage: null, contextRefusal: { actual: null, maximum: null }, calibration: { eligible: false, refusal: { actual: null, maximum: null } } });
   });
 
-  it('sends the built request through the server’s stream and streams the reply', async () => {
-    const log = answer(200, 'data: {"choices":[{"delta":{"content":"반가워요"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
+  it('sends the built request through the server’s stream and streams the reply, keeping the body as it came', async () => {
+    const body = 'data: {"choices":[{"delta":{"content":"반가워요"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+    const log = answer(200, body, { 'x-relay': 'upstream' });
     const { reply, text } = await run();
     expect(text).toBe('반가워요');
-    expect(reply).toMatchObject({ state: 'done', error: null, finishReason: 'stop' });
+    expect(reply).toMatchObject({ state: 'done', error: null, finishReason: 'stop', response: body });
     expect(reply.firstTextMs).toBeGreaterThanOrEqual(0);
     expect(log[0]!.sent).toMatchObject({ url: 'https://openrouter.ai/api/v1/chat/completions', method: 'POST', headers: { authorization: 'Bearer sk-or-x' } });
   });
