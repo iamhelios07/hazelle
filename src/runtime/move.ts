@@ -17,7 +17,7 @@ import { projectGreetings, startingGreetings } from './greetings';
 import { defaultMemory } from './memory-read';
 import { importedLore } from './lore';
 import { importModule, setModuleAlways } from './modules';
-import { addRisuPersona } from './personas';
+import { addRisuPersona, setCurrentPersona } from './personas';
 import { savePreset } from './prompts';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
@@ -72,7 +72,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     const set = await setToggle(store, null, key, value);
     if (!set.ok) return set;
   }
-  for (const [done, { key }] of personas.entries()) {
+  for (const [done, { key, selected }] of personas.entries()) {
     landed('personas', done, personas.length);
     const persona = await backup.persona(key);
     const picture = await persona.picture();
@@ -89,6 +89,11 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     const saved = await addRisuPersona(store, persona, picture, modules);
     if (!saved.ok) return saved;
     if (persona.id !== null) personaIds.set(persona.id, saved.data.id);
+    // Risu's choice becomes the current one before the chats below read it: those it bound to no persona used it there.
+    if (selected) {
+      const set = await setCurrentPersona(store, saved.data.id);
+      if (!set.ok) return set;
+    }
   }
   if (personas.length) landed('personas', personas.length, personas.length);
 

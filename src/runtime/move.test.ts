@@ -72,7 +72,7 @@ function source({ characters, personas = [], presets = [], modules = [], alwaysM
       pictures: 0,
       pictureBytes: 0,
       characters: characters.map((character, key) => ({ key, id: character.id, name: character.card.name, chatCount: character.chats.length, assetCount: character.assets.length, inlayCount: character.chats.reduce((sum, chat) => sum + chat.inlays.length, 0), lastTalk: character.chats.reduce((at, chat) => Math.max(at, chat.messages.at(-1)?.at ?? 0), 0) })),
-      personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
+      personas: personas.map(({ name, alias }, key) => ({ key, name, alias, selected: key === 0 })),
       presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
       modules: modules.map(({ name, risu, assets }, key) => ({ key, name, risu, assetCount: assets.length })),
       alwaysModules, loreBudget, toggles, unsupported: [],
@@ -134,6 +134,15 @@ describe('moveFromRisu', () => {
     const backup = source({ characters: [{ ...luna, chats: [{ ...luna.chats[0]!, persona: null }] }] });
     await moveFromRisu(store, files, backup, backup.catalog, null, () => {});
     expect(store.list('chat')[0]!.value.persona).toBe(current.ok && current.data.id);
+  });
+
+  it("makes the persona Risu had selected the current one, which a chat Risu bound to no persona then holds", async () => {
+    const { store, files } = await server.account();
+    const persona = (name: string): RisuPersona => ({ id: name, name, alias: '', description: name, picture: async () => null, module: null });
+    const backup = source({ characters: [{ ...luna, chats: [{ ...luna.chats[0]!, persona: null }] }], personas: [persona('진'), persona('솔')] });
+    await moveFromRisu(store, files, backup, backup.catalog, null, () => {});
+    const jin = store.list('persona').find(({ value }) => value.name === '진')!.id;
+    expect([store.get('settings', SETTINGS_ID)!.value.persona, store.list('chat')[0]!.value.persona]).toEqual([jin, jin]);
   });
 
   it.each(['entry', 'character'] as const)('stages every chat of a character in one batch, publishes the roots with their character, summarizes them in one request from what it wrote, and retries a cut at the %s write leaving no chat without its character', async (cut) => {

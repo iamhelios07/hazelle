@@ -220,13 +220,13 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
 
   // Risu builds one persona from the live values when the list is absent (setDatabase).
   const selected = typeof db.selectedPersona === 'number' ? db.selectedPersona : 0;
-  const personas = (Array.isArray(db.personas) ? db.personas : [{}]).flatMap((raw, index): RisuPersona[] => {
-    if (!isRecord(raw)) return [];
+  const kept = (Array.isArray(db.personas) ? db.personas : [{}]).flatMap((raw, index) => (isRecord(raw) ? [{ raw, selected: index === selected }] : []));
+  const personas = kept.map(({ raw, selected }): RisuPersona => {
     // The selected persona's live copy is the database's top level (spec §5).
-    const persona = index === selected ? { ...raw, name: db.username, icon: db.userIcon, personaPrompt: db.personaPrompt } : raw;
+    const persona = selected ? { ...raw, name: db.username, icon: db.userIcon, personaPrompt: db.personaPrompt } : raw;
     const icon = text(persona.icon) && entry(text(persona.icon));
     const module = isRecord(persona.embeddedModule) ? risuModule(persona.embeddedModule, entry) : null;
-    return [{ id: text(persona.id) || null, ...risuPersonaFields(persona), picture: icon ? () => picture(icon) : () => Promise.resolve(null), module }];
+    return { id: text(persona.id) || null, ...risuPersonaFields(persona), picture: icon ? () => picture(icon) : () => Promise.resolve(null), module };
   });
 
   const presets = list(db.botPresets).flatMap((raw, index): RisuPreset[] =>
@@ -243,7 +243,7 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
   return {
     catalog: {
       pictures: pictures.length, pictureBytes: pictures.reduce((sum, [, span]) => sum + span.length, 0), characters,
-      personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
+      personas: personas.map(({ name, alias }, key) => ({ key, name, alias, selected: kept[key]!.selected })),
       presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
       modules: modules.map(({ name, risu, assets }, key) => ({ key, name, risu, assetCount: assets.length })),
       alwaysModules, loreBudget, toggles, unsupported: counted(MOVE_UNSUPPORTED_KINDS, unsupported),

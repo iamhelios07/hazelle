@@ -225,7 +225,8 @@ export type BackupCatalog = {
   pictures: number;
   pictureBytes: number;
   characters: { key: number; id: string; name: string; chatCount: number; assetCount: number; inlayCount: number; lastTalk: number }[];
-  personas: { key: number; name: string; alias: string }[];
+  // selected: the one Risu had chosen, which its chats bound to no persona use.
+  personas: { key: number; name: string; alias: string; selected: boolean }[];
   presets: { key: number; name: string; failure: PresetFailure['kind'] | null }[];
   modules: { key: number; name: string; risu: string | null; assetCount: number }[];
   // The Risu ids of the modules on in every chat, whether or not the backup holds them.

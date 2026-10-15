@@ -374,6 +374,7 @@ describe('readBackup', () => {
       { id: 'p1', name: 'Ann', alias: '', description: 'live' },
       { id: 'p2', name: 'Bob', alias: 'the rich one', description: 'b' },
     ]);
+    expect(backup.catalog.personas.map(({ selected }) => selected)).toEqual([true, false]);
     expect(personas[0]!.module).toMatchObject({ name: 'Ann', lore: [{ content: 'A red cape.' }], unsupported: [{ kind: 'mcp', count: 1 }, { kind: 'cjs', count: 1 }] });
     expect(personas[1]!.module).toBeNull();
     expect(await personas[0]!.picture()).toEqual({ bytes: PNG, type: 'image/png' });

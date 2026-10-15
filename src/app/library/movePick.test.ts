@@ -8,7 +8,7 @@ describe('tickable', () => {
       pictures: 0,
       pictureBytes: 0,
       characters: ['a', 'b'].map((id, key) => ({ key, id, name: id, chatCount: 1, assetCount: 0, inlayCount: 0, lastTalk: 1 })),
-      personas: [{ key: 0, name: 'n', alias: '' }],
+      personas: [{ key: 0, name: 'n', alias: '', selected: true }],
       presets: [{ key: 0, name: 'p', failure: null }, { key: 1, name: 'p', failure: 'no-template' }],
       modules: ['m', 'n'].map((risu, key) => ({ key, name: risu, risu, assetCount: 0 })),
       alwaysModules: ['m'], loreBudget: null, toggles: {}, unsupported: [],
