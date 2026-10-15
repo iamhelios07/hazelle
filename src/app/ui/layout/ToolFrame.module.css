@@ -3,6 +3,5 @@
   flex-grow: 1;
   width: 100%;
   min-height: var(--tool-frame-min-height);
-  margin-inline: calc(var(--box-hang) * -1);
   border: 0;
 }

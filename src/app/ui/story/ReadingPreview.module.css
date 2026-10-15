@@ -1,7 +1,6 @@
 .preview {
   display: flex;
   flex-direction: column;
-  margin-inline: calc(var(--box-hang) * -1);
   /* No end padding: the last message's foot keeps its height for tools, which already spaces the end. */
   padding: var(--space-16) var(--space-16) 0;
   border: var(--border-thin) solid var(--color-divider);

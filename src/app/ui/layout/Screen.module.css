@@ -1,7 +1,5 @@
 .screen {
   --box-inset: var(--space-16);
-  /* A box's edge hangs out so the words inside it start on the line of the page title and section titles. */
-  --box-hang: var(--box-inset);
 
   min-height: 100dvh;
   max-width: var(--screen-narrow);
@@ -68,11 +66,6 @@
   max-width: var(--page-max-width);
 }
 
-/* A settings page is cards: their edges, not their words, stand on the title's line (user, 2026-10-13). */
-.page {
-  --box-hang: 0px;
-}
-
 .split {
   max-width: var(--screen-split-max-width);
 }
@@ -93,7 +86,7 @@
   .columns {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--screen-aside-width);
-    column-gap: calc(var(--space-32) + 2 * var(--box-hang));
+    column-gap: var(--space-32);
     align-items: start;
   }
 

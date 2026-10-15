@@ -34,7 +34,7 @@
   border-radius: var(--radius-md);
 }
 
-/* Inside a Screen, List hangs by --box-hang and this inset brings the title back onto the reading line. */
+/* In a box the row keeps the box's inset from its edge, as SettingGroup's rows do. */
 .tall {
   gap: var(--space-8);
   min-height: var(--row-min-height);

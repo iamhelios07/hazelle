@@ -42,7 +42,7 @@
   .preview {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--screen-aside-width);
-    column-gap: calc(var(--space-32) + 2 * var(--box-hang));
+    column-gap: var(--space-32);
     align-items: start;
   }
 
