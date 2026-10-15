@@ -24,7 +24,8 @@ backup/files/<sha256>            the pictures every disk generation names, each 
 
 Every SQLite file opens with `journal_mode=WAL`, `synchronous=FULL`, `busy_timeout=5000`, `foreign_keys=ON` (`openDatabase`). FULL
 costs one fsync per commit and buys that an acknowledged commit survives power loss; the lifecycle orders a service write before an
-account's deletion and relies on it.
+account's deletion and relies on it. `streams.sqlite` alone opens with `synchronous=NORMAL`: its page writes come from every live reply on
+the event loop, and a power loss drops only its newest commits.
 
 A file is durable before any row says so. A picture: write `.tmp-<random>`, fsync it, rename, fsync the directory, then the service
 commit that sets `stored = 1`. A snapshot: SQLite's asynchronous online backup makes a temp copy (a whole snapshot), or the live handle
