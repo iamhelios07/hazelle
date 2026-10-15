@@ -3,7 +3,7 @@ import type { CacheBreak, CacheForecast } from '../../model/cache';
 import { tokens } from '../common/receipt';
 import { SendNote } from '../ui';
 import { partName } from './ChatSent';
-import type { OpenChat } from './useChat';
+import type { CacheNotes } from './useSendNotes';
 
 const TITLE = '캐시가 남은 시간';
 export const BROKEN = '깨짐 예상';
@@ -57,7 +57,7 @@ function useNow(until: number | null) {
 
 // 캐시 (design §4.4): the time left on what the chat's last call cached, and a warning when sending now would not read
 // it. Pressed, it opens the chat's 캐시 panel.
-export function ChatCache({ cache, onOpen }: { cache: OpenChat['cache']; onOpen: () => void }) {
+export function ChatCache({ cache, onOpen }: { cache: CacheNotes; onOpen: () => void }) {
   const now = useNow(cache.until);
   if (cache.until === null || now >= cache.until) return null;
   const against = cache.next?.forecast.against;

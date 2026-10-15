@@ -291,8 +291,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     opening,
     last,
     busy,
-    cache: sendNotes.cache,
-    leaving: sendNotes.leaving,
     sendNotes,
     found,
     search,

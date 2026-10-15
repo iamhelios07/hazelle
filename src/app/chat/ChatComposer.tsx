@@ -105,8 +105,8 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
                 응답 받기
               </Button>
             )}
-            {!busy && chat.leaving ? <SendNote label={`메시지 ${chat.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
-            {!busy && <ChatCache cache={chat.cache} onOpen={() => chat.actions.openInspect('cache')} />}
+            {!busy && chat.sendNotes.leaving ? <SendNote label={`메시지 ${chat.sendNotes.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
+            {!busy && <ChatCache cache={chat.sendNotes.cache} onOpen={() => chat.actions.openInspect('cache')} />}
             <SendButton
               streaming={busy}
               disabled={!busy && !draft.text.trim()}

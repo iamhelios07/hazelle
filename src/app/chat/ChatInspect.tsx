@@ -285,9 +285,9 @@ function Scripts({ chat }: { chat: string }) {
     (listener) => scripts.subscribeLog(chat, listener),
     () => scripts.log(chat),
   );
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const packName = (pack: PackOwner | null) => (pack === null ? null : pack.kind === 'module' ? store.get('module', pack.id)?.value.name : store.get('character', pack.id)?.value.card.name) ?? null;
-  const entries = [...log.entries].reverse();
+  const entries = log.entries.map((entry, index) => ({ entry, key: `${entry.at}:${log.omitted + index}` })).reverse();
   return (
     <Section title="실행 기록" help="이 페이지에서 실행된 봇 스크립트와 log() 출력이에요. 새로고침하면 사라져요.">
       {entries.length === 0 ? (
@@ -295,16 +295,16 @@ function Scripts({ chat }: { chat: string }) {
       ) : (
         <Stack gap="related">
           <List label="실행 기록">
-            {entries.map((entry, index) => (
+            {entries.map(({ entry, key }) => (
               <ListItem
-                key={`${entry.at}:${index}`}
+                key={key}
                 title={`${STAGES[entry.stage] ?? entry.stage} · ${entry.script || packName(entry.pack) || 'Lua'}`}
                 badge={entry.errors.length ? '오류' : undefined}
                 tags={hookTags(entry)}
                 aside={`${ago(entry.at)} · ${Math.round(entry.duration)}ms`}
-                expanded={open === index}
-                onClick={() => setOpen(open === index ? null : index)}
-                detail={open === index && <HookDetail entry={entry} />}
+                expanded={open === key}
+                onClick={() => setOpen(open === key ? null : key)}
+                detail={open === key && <HookDetail entry={entry} />}
               />
             ))}
           </List>

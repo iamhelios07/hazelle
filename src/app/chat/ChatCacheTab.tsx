@@ -9,6 +9,7 @@ import { BROKEN, reads, why } from './ChatCache';
 import { partName } from './ChatSent';
 import type { Side } from './panels';
 import type { OpenChat } from './useChat';
+import type { CacheNotes } from './useSendNotes';
 
 const PAGE = 20;
 
@@ -35,7 +36,7 @@ function rows(parts: ForecastPart[]): Row[] {
 
 // 캐시 (design §4.4): what sending the draft now would read, write and leave out of the cache, kept up as the draft, the
 // prompt or a lorebook changes; and what each earlier call read, with why its send expected less.
-export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenChat, 'cache' | 'messages' | 'busy'> & { editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
+export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenChat, 'messages' | 'busy'> & { cache: CacheNotes; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
   const turns = useMemo(() => cacheTurns(messages), [messages]);
   const [more, setMore] = useState(PAGE);
   return (
@@ -65,7 +66,7 @@ export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenCha
   );
 }
 
-type NextProps = { forecast: Forecast; price: NonNullable<OpenChat['cache']['next']>['cost']; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
+type NextProps = { forecast: Forecast; price: NonNullable<CacheNotes['next']>['cost']; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
 
 function Next({ forecast, price, editor, onEdit }: NextProps) {
   const { against, written, tail, removed } = forecast;
