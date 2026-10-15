@@ -3,7 +3,7 @@ import { ACTS, importOf, newOf } from '../common/acts';
 import { useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
-import { useImport } from './ImportFlow';
+import { useImport } from '../common/importing';
 import { useNewCharacter } from './useCharacterActions';
 
 export function Welcome() {

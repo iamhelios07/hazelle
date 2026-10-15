@@ -306,12 +306,13 @@ function variables(value: unknown): [string, string][] {
     });
 }
 
-// Scripts on other stages (edittrans, disabled) never run in risu-alpha and are counted instead.
+// A script Risu keeps switched off, or on a stage risu-alpha does not run (edittrans), is counted instead: RegexScript has
+// no off state to bring the first one in as.
 export function regexScripts(scripts: unknown[], tally: Tally): Unstamped<RegexScript>[] {
   return scripts.filter(isRecord).flatMap((script) => {
     const stage = STAGES.get(script.type);
     if (!stage) {
-      add(tally, 'regex-stage');
+      add(tally, script.type === 'disabled' ? 'regex-off' : 'regex-stage');
       return [];
     }
     return [{ name: text(script.comment), find: text(script.in), replace: text(script.out), stage, flags: (script.ableFlag === true && text(script.flag)) || null }];

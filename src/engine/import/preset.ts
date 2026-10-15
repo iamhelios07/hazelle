@@ -9,13 +9,15 @@ import { readToggles } from './toggles';
 // What a preset holds that the prompt does not take, in the order the summary lists it.
 const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
 export type PresetUnsupportedKind = (typeof UNSUPPORTED)[number];
-export type PresetUnsupported = { kind: PresetUnsupportedKind; count: number };
+type Counted = Exclude<PresetUnsupportedKind, 'repeated-slot'>;
+// A repeated slot is listed once per slot, so the summary can name it.
+export type PresetUnsupported = { kind: Counted; count: number } | { kind: 'repeated-slot'; slot: SlotKind; count: number };
 
 // unreadable: not RPack'd gzip'd MessagePack. not-preset: a Risu container of another type. decrypt-failed:
 // the preset inside does not open. no-template: a legacy preset, which risu-alpha does not assemble.
 export type PresetFailure = { kind: 'unreadable' | 'not-preset' | 'decrypt-failed' | 'no-template' };
-// companions: the modules its moduleIntergration names, each a Risu module id or namespace, in its order.
-export type PresetResult = { ok: true; prompt: ConversationPrompt; unsupported: PresetUnsupported[]; companions: string[] } | { ok: false; failure: PresetFailure };
+export type PresetRead = { prompt: ConversationPrompt; unsupported: PresetUnsupported[] };
+export type PresetResult = ({ ok: true } & PresetRead) | { ok: false; failure: PresetFailure };
 
 const ROLES = new Map<unknown, Role>([
   ['system', 'system'],
@@ -33,7 +35,7 @@ const WRAPPED = new Map<unknown, 'description' | 'persona' | 'authorNote' | 'mem
   ['authornote', 'authorNote'],
   ['memory', 'memory'],
 ]);
-const SKIPPED = new Map<unknown, PresetUnsupportedKind>([
+const SKIPPED = new Map<unknown, Counted>([
   ['jailbreak', 'jailbreak'],
   ['cot', 'cot'],
   ['chatML', 'chatml'],
@@ -49,9 +51,8 @@ const fail = (kind: PresetFailure['kind']): PresetResult => ({ ok: false, failur
 // MessagePack under AES-GCM; presetVersion 0 names the field pres. The key is SHA-256 of a fixed string and the IV
 // is zero: the format hides the preset from casual reading, it does not protect it.
 export async function importPreset(fileName: string, bytes: Uint8Array): Promise<PresetResult> {
-  const name = fileName.toLowerCase();
-  const packed = name.endsWith('.risup');
-  if (!packed && !name.endsWith('.risupreset')) return fail('unreadable');
+  if (!isPresetFile(fileName)) return fail('unreadable');
+  const packed = fileName.toLowerCase().endsWith('.risup');
   let outer: unknown;
   try {
     outer = readMsgpack(gunzip(packed ? unpack(bytes) : bytes));
@@ -76,17 +77,20 @@ export async function importPreset(fileName: string, bytes: Uint8Array): Promise
   return convertPreset(preset);
 }
 
+export const PRESET_EXTENSIONS = ['.risup', '.risupreset'];
+export const isPresetFile = (fileName: string) => PRESET_EXTENSIONS.some((extension) => fileName.toLowerCase().endsWith(extension));
+
 // A Risu preset object, as a .risup holds it and as a backup's botPresets lists it.
 export function convertPreset(preset: unknown): PresetResult {
   if (!isRecord(preset)) return fail('unreadable');
   if (!Array.isArray(preset.promptTemplate)) return fail('no-template');
-  const companions = text(preset.moduleIntergration).split(',').map((name) => name.trim()).filter(Boolean);
-  return { ok: true, ...convert(preset, preset.promptTemplate), companions };
+  return { ok: true, ...convert(preset, preset.promptTemplate) };
 }
 
-function convert(preset: Json, template: unknown[]): { prompt: ConversationPrompt; unsupported: PresetUnsupported[] } {
-  const counts: Tally<PresetUnsupportedKind> = new Map();
-  const count = (kind: PresetUnsupportedKind, amount = 1) => add(counts, kind, amount);
+function convert(preset: Json, template: unknown[]): PresetRead {
+  const counts: Tally<Counted> = new Map();
+  const count = (kind: Counted, amount = 1) => add(counts, kind, amount);
+  const repeated: Tally<SlotKind> = new Map();
   const blocks: Block[] = [];
   const placed = new Set<SlotKind>();
   let authorNote = '';
@@ -111,7 +115,7 @@ function convert(preset: Json, template: unknown[]): { prompt: ConversationPromp
     }
     if (read.kind === 'slot' && !Object.hasOwn(REPEATING, read.slot)) {
       if (placed.has(read.slot)) {
-        count('repeated-slot');
+        add(repeated, read.slot);
         continue;
       }
       placed.add(read.slot);
@@ -131,19 +135,27 @@ function convert(preset: Json, template: unknown[]): { prompt: ConversationPromp
   // Model, generation and prompt settings belong to each model's settings; every preset has them.
   count('settings');
 
+  const companions = text(preset.moduleIntergration).split(',').map((name) => name.trim()).filter(Boolean);
   // Preset model names are not this account's connections, so the prompt's model layer starts empty.
-  return { prompt: { name: text(preset.name), blocks, toggles, authorNote, models: {}, imported: 'risu-preset' }, unsupported: counted(UNSUPPORTED, counts) };
+  return {
+    prompt: { name: text(preset.name), blocks, toggles, authorNote, models: {}, imported: 'risu-preset', ...(companions.length > 0 && { companions }) },
+    unsupported: UNSUPPORTED.flatMap((kind): PresetUnsupported[] => (kind === 'repeated-slot' ? [...repeated].map(([slot, amount]) => ({ kind, slot, count: amount })) : counted([kind], counts))),
+  };
 }
 
 // One template item (compat spec §e, Template assembly). Fields a type does not use, such as a persona
 // item's range, are ignored.
-function block(item: Json): Block | PresetUnsupportedKind {
+function block(item: Json): Block | Counted {
   const skipped = SKIPPED.get(item.type);
   if (skipped) return skipped;
   const named = { id: crypto.randomUUID(), name: text(item.name) || null };
   const role = ROLES.get(item.role);
   const wrapped = WRAPPED.get(item.type);
-  if (wrapped) return role ? { ...named, kind: 'slot', slot: wrapped, role, wrapper: text(item.innerFormat) || null } : 'unread-item';
+  if (wrapped) {
+    // The role on these is an optional override of the bucket's, which is system (compat spec, Template assembly).
+    const placedAs = item.role === undefined ? 'system' : role;
+    return placedAs ? { ...named, kind: 'slot', slot: wrapped, role: placedAs, wrapper: text(item.innerFormat) || null } : 'unread-item';
+  }
   switch (item.type) {
     case 'plain': {
       const mark = MARKS.get(item.type2);

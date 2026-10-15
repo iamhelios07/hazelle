@@ -6,7 +6,7 @@ import { fileNamed } from '../common/download';
 import { SHARE } from '../common/words';
 import { navigate } from '../shell/router';
 import { HOME } from '../shell/routes';
-import { useImport } from './ImportFlow';
+import { useImport } from '../common/importing';
 import { Callout, Progress, Screen } from '../ui';
 import { clearPending, pendingFor } from '../common/sharePending';
 

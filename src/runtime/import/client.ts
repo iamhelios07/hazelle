@@ -1,3 +1,4 @@
+import type { PresetRead } from '../../engine/import/preset';
 import type { ImportedTool } from '../../engine/import/tool';
 import type { BackupResult, Imported, ImportedModule, ImportResult, RisuCharacter, RisuChat } from '../../engine/import/types';
 import { ImportReadError, type AssetRead, type ChatsRead, type Down, type Method, type ModuleData, type Replies, type Request, type Up } from './protocol';
@@ -10,9 +11,9 @@ export class ImportWorker {
   private closed = false;
   private readonly pending = new PendingRequests<Replies[Method]>();
 
-  async card(file: File): Promise<ImportResult | ChatsRead | { ok: true; tool: ImportedTool }> {
+  async card(file: File): Promise<ImportResult | ChatsRead | { ok: true; tool: ImportedTool } | { ok: true; preset: PresetRead }> {
     const result = await this.ask({ kind: 'card', file });
-    if (!result.ok || 'tool' in result || 'chat' in result || 'risuChats' in result) return result;
+    if (!result.ok || 'tool' in result || 'preset' in result || 'chat' in result || 'risuChats' in result) return result;
     if ('module' in result) return { ok: true, module: this.module(result.module) };
     const { avatar, assets, bundled, ...card } = result.card;
     return { ok: true, card: { ...card, avatar: avatar === null ? null : await this.ask({ kind: 'picture', handle: avatar }), assets: this.assets(assets), bundled: bundled.map((module) => this.module(module)) } };

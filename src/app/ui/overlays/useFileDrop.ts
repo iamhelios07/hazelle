@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 let screens = 0;
 
 // dragenter and dragleave fire for every element crossed, so it counts them instead of trusting either one.
-// scope 'screen': a screen's own drop, such as 프롬프트 taking a .risup, which the app's character import would refuse.
+// scope 'screen': a screen's own drop, such as an editor's 에셋 taking pictures, which the app's import would read as cards.
 export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'screen' = 'app'): boolean {
   const [dragging, setDragging] = useState(false);
   const latest = useRef(onDrop);

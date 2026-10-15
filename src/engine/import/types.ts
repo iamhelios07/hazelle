@@ -118,6 +118,7 @@ export const UNSUPPORTED_KINDS = [
   'disable-ui-prompt',
   'cbs-tag',
   'regex-stage',
+  'regex-off',
   'module',
   'toggle-line',
   'mcp',

@@ -1,6 +1,8 @@
+import type { PresetUnsupported } from '../../engine/import/preset';
 import type { MoveUnsupported, MoveUnsupportedKind, Unsupported, UnsupportedKind } from '../../engine/import/types';
 import type { Dropped } from '../../runtime/chat-log';
-import { CAST, COMMAND } from '../common/words';
+import { SLOT_NAMES } from '../common/prompt-words';
+import { CAST, COMMAND, inSettings, SCRIPTS } from '../common/words';
 
 const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   'extra-icon': (count) => `추가 아이콘 ${count}개`,
@@ -18,6 +20,7 @@ const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   'disable-ui-prompt': (count) => `@@disable_ui_prompt ${count}곳`,
   'cbs-tag': (count) => `지원하지 않는 ${COMMAND} ${count}개`,
   'regex-stage': (count) => `지원하지 않는 단계의 정규식 ${count}개`,
+  'regex-off': (count) => `Risu에서 꺼 둔 정규식 ${count}개`,
   module: () => '읽지 못한 모듈',
   'toggle-line': (count) => `읽지 못한 토글 줄 ${count}개(토글에서 고칠 수 있음)`,
   mcp: () => 'MCP 서버 연결',
@@ -36,6 +39,22 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
 };
 
 export const missedLines = (unsupported: Unsupported): string[] => unsupported.map((item) => UNSUPPORTED[item.kind](item.count));
+
+const PRESET_UNSUPPORTED: Record<Exclude<PresetUnsupported['kind'], 'repeated-slot'>, (count: number) => string> = {
+  jailbreak: (count) => `탈옥 블록 ${count}개`,
+  cot: (count) => `추론 유도(CoT) 블록 ${count}개`,
+  chatml: (count) => `ChatML 블록 ${count}개`,
+  'cache-narrowed': (count) => `바꿔서 가져온 캐시 지점 ${count}개(메시지 하나에 두는 지점으로)`,
+  'unread-item': (count) => `읽지 못한 블록 ${count}개`,
+  'toggle-line': UNSUPPORTED['toggle-line'],
+  'preset-text': (count) => `템플릿 밖의 텍스트 ${count}개(Risu에서도 보내지 않던 것)`,
+  regex: (count) => `${SCRIPTS.regex} ${count}개`,
+  variables: (count) => `기본 변수 ${count}개`,
+  settings: () => `모델과 생성 설정(${inSettings('models')}에서 정할 수 있음)`,
+};
+
+export const presetMissed = (unsupported: PresetUnsupported[]): string[] =>
+  unsupported.map((item) => (item.kind === 'repeated-slot' ? `겹친 ${SLOT_NAMES[item.slot]} 블록 ${item.count}개(처음 것만 가져옴)` : PRESET_UNSUPPORTED[item.kind](item.count)));
 
 export const cardMissed = (unsupported: Unsupported, faceless: boolean): string[] => [...(faceless ? ['이미지: 가져오지 못함'] : []), ...missedLines(unsupported)];
 

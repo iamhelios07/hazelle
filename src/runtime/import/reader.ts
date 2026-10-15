@@ -1,6 +1,7 @@
 import { readTool, TOOL_FILE_BYTES } from '../../engine/import/tool';
 import { fileSource, readBackup } from '../../engine/import/backup';
 import { importCard } from '../../engine/import/card';
+import { importPreset, isPresetFile } from '../../engine/import/preset';
 import { risuChatFile } from '../../engine/import/risu-character';
 import { readChatFile } from '../chat-file';
 import type { Imported, ImportedModule, Picture, RisuBackup, RisuChat } from '../../engine/import/types';
@@ -46,6 +47,12 @@ export class ImportReader {
         if (tool && request.file.size > TOOL_FILE_BYTES) return { ok: false, failure: { kind: 'unreadable', detail: 'tool-too-large' } };
         const bytes = new Uint8Array(await request.file.arrayBuffer());
         if (tool) return readTool(bytes);
+        if (isPresetFile(request.file.name)) {
+          const read = await importPreset(request.file.name, bytes);
+          if (read.ok) return { ok: true, preset: { prompt: read.prompt, unsupported: read.unsupported } };
+          // Its other failures go as details, which the app's DETAIL_FAILURE words.
+          return { ok: false, failure: read.failure.kind === 'unreadable' ? { kind: 'unreadable' } : { kind: 'unreadable', detail: read.failure.kind } };
+        }
         const chats = request.file.name.toLowerCase().endsWith('.json') ? chatsOf(bytes) : null;
         if (chats) return chats;
         const result = importCard(request.file.name, bytes);

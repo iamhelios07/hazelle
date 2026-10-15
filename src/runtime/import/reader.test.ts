@@ -1,6 +1,8 @@
 import { gzipSync, strToU8, zipSync } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import type { RisuMessage } from '../../engine/import/types';
+import { fromBase64 } from '../../vault/aead';
+import starter from '../starter-prompt.risup?inline';
 import { MESSAGE_BYTES, MESSAGE_PAGE, type Method, type Replies, type Request } from './protocol';
 import { ImportReader } from './reader';
 
@@ -179,4 +181,11 @@ it('reads .js as a tool without evaluating it and rejects oversized files before
   const whole = vi.spyOn(large, 'arrayBuffer');
   expect(await ask(reader, { kind: 'card', file: large })).toMatchObject({ ok: false, failure: { detail: 'tool-too-large' } });
   expect(whole).not.toHaveBeenCalled();
+});
+
+it('reads a .risup as a preset, whatever the case of its extension, and a cut .risupreset as unreadable', async () => {
+  const reader = new ImportReader();
+  const bytes = fromBase64(starter.slice(starter.indexOf(',') + 1));
+  expect(await ask(reader, { kind: 'card', file: new File([bytes], 'starter.RISUP') })).toMatchObject({ ok: true, preset: { prompt: { name: '🏓 핑퐁 간소화' } } });
+  expect(await ask(reader, { kind: 'card', file: new File([bytes.subarray(0, 100)], 'cut.risupreset') })).toEqual({ ok: false, failure: { kind: 'unreadable' } });
 });

@@ -1,4 +1,4 @@
-import { importPreset, type PresetFailure, type PresetResult, type PresetUnsupported } from '../engine/import/preset';
+import { importPreset, type PresetRead } from '../engine/import/preset';
 import { illustratorPrompt } from '../engine/illustrate';
 import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
@@ -8,7 +8,8 @@ import { live } from '../model/library';
 import { sortOf, type Block, type ConversationPrompt, type PictureSettings, type PictureTags, type Prompt, type PromptOf, type PromptSort, type ToggleLine } from '../model/prompt';
 import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
-import type { ApiFailure, ApiResult } from './api';
+import type { ApiResult } from './api';
+import { companionModules } from './modules';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
@@ -81,15 +82,12 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id
   return store.create('prompt', { name, blocks, toggles: [], authorNote: '', models: {} }, { id });
 }
 
-export type ImportPromptResult = { ok: true; id: string; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure | { kind: 'save'; failure: ApiFailure } };
-
-export async function savePreset(store: ObjectStore, read: PresetResult): Promise<ImportPromptResult> {
-  if (!read.ok) return read;
-  const saved = await store.create('prompt', read.prompt);
-  return saved.ok ? { ok: true, id: saved.data.id, unsupported: read.unsupported } : { ok: false, failure: { kind: 'save', failure: saved } };
+// paired: the modules its preset named that were here, turned on for it.
+export async function savePreset(store: ObjectStore, { prompt }: PresetRead): Promise<ApiResult<{ id: string; paired: string[] }>> {
+  const paired = companionModules(store, prompt.companions ?? []);
+  const saved = await store.create('prompt', paired.length > 0 ? { ...prompt, modules: paired } : prompt);
+  return saved.ok ? { ok: true, data: { id: saved.data.id, paired } } : saved;
 }
-
-export const importPrompt = async (store: ObjectStore, fileName: string, bytes: Uint8Array) => savePreset(store, await importPreset(fileName, bytes));
 
 // An account that has never had a sort's default prompt gets that sort's bundled prompt as its default, once. The
 // session awaits it when it opens; a failure is tried again next time.
@@ -128,12 +126,12 @@ export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: Togg
 export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current): Prompt => ({ ...current, ...patch }));
 
 // A fork that goes its own way, model layer and toggles included. It remembers its origin, and is the user's
-// own rather than an imported preset.
+// own rather than an imported preset, so no module imported later is paired with it.
 export function copyPrompt(store: ObjectStore, id: string, name: string, copy?: string): Promise<ApiResult<Stored<'prompt'>>> {
   const original = store.get('prompt', id)?.value;
   if (!original) return Promise.resolve({ ok: false, error: 'gone' });
   const origin = { id, name: original.name };
-  return store.create('prompt', original.task === undefined ? without({ ...original, name, origin }, 'imported') : { ...original, name, origin }, { id: copy });
+  return store.create('prompt', original.task === undefined ? without(without({ ...original, name, origin }, 'imported'), 'companions') : { ...original, name, origin }, { id: copy });
 }
 
 // To 휴지통 (model/library Mark). A sort's default prompt cannot be deleted until another prompt of its sort is made the

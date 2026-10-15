@@ -331,7 +331,8 @@ describe('importCard', () => {
       { kind: 'depth-prompt', count: 1 },
       { kind: 'disable-ui-prompt', count: 1 },
       { kind: 'cbs-tag', count: 3 },
-      { kind: 'regex-stage', count: 2 },
+      { kind: 'regex-stage', count: 1 },
+      { kind: 'regex-off', count: 1 },
       { kind: 'toggle-line', count: 1 },
     ]);
   });
