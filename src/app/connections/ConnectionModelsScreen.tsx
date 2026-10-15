@@ -200,8 +200,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           )}
           {shown.length > 0 ? (
             <Stack gap="group">
-              {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
-              {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
+              {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)} box>{(index) => row(starredShown[index]!)}</List>}
+              {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)} box>{(index) => row(restShown[index]!)}</List>}
             </Stack>
           ) : (
             catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>

@@ -10,18 +10,19 @@ import styles from './List.module.css';
 const Windowed = createContext(false);
 const Places = createContext(false);
 
-// box: the rows in one box, as SettingGroup's are, for a short list a screen leads with. places: rows that go to
-// another page (설정's pages, a character's parts, the kinds of connection), each with a ›; a list of the user's own
-// things opens them beside it and takes none.
-export function List(props: { label: string; box?: boolean; places?: boolean; children: ReactNode } | { label: string; keys: readonly string[]; children: (index: number) => ReactNode }) {
+// box: the rows in one box, as SettingGroup's are, for a list on a page or a short list a screen leads with. places:
+// rows that go to another page (설정's pages, a character's parts, the kinds of connection), each with a ›; a list of
+// the user's own things opens them beside it and takes none.
+export function List(props: { label: string; box?: boolean; places?: boolean; children: ReactNode } | { label: string; keys: readonly string[]; box?: boolean; children: (index: number) => ReactNode }) {
   if ('keys' in props) {
-    return (
+    const rows = (
       <Windowed value>
         <Viewport keys={props.keys} variant="items" list={props.label}>
           {props.children}
         </Viewport>
       </Windowed>
     );
+    return props.box ? <div className={styles.box}>{rows}</div> : rows;
   }
   return (
     <Places value={props.places ?? false}>

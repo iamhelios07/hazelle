@@ -6,7 +6,7 @@ import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
 import { BUILT_VERSION } from '../common/release';
 import { BIN, PAGES, UNKNOWN } from '../common/words';
-import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Stack, Text } from '../ui';
+import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingGroup, SettingRow, Stack, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
 import { LeaveSection } from './LeaveSection';
@@ -28,32 +28,34 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
   const toast = useToast();
   return (
     <Screen width="page" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
-      <Panel>
+      <Stack gap="group">
         <FaceRow face={<Avatar face={username} tone="you" />}>
           <Text>{username}</Text>
           <Text variant="note">
             {suspended ? '로그인한 계정 · 정지됨' : '로그인한 계정'}
           </Text>
         </FaceRow>
-        <SettingRow
-          label="잠그기"
-          help="다시 열 때 비밀번호가 필요해요."
-          control={
-            <Button variant="secondary" size="sm" onClick={onLock}>
-              잠그기
-            </Button>
-          }
-        />
-        <SettingRow
-          label="로그아웃"
-          help="저장한 내용은 암호화된 채로 서버에 남아요."
-          control={
-            <Button variant="secondary" size="sm" onClick={() => void onLogout().then((failure) => failure && toast.error(failure))}>
-              로그아웃
-            </Button>
-          }
-        />
-      </Panel>
+        <SettingGroup label="계정">
+          <SettingRow
+            label="잠그기"
+            help="다시 열 때 비밀번호가 필요해요."
+            control={
+              <Button variant="secondary" size="sm" onClick={onLock}>
+                잠그기
+              </Button>
+            }
+          />
+          <SettingRow
+            label="로그아웃"
+            help="저장한 내용은 암호화된 채로 서버에 남아요."
+            control={
+              <Button variant="secondary" size="sm" onClick={() => void onLogout().then((failure) => failure && toast.error(failure))}>
+                로그아웃
+              </Button>
+            }
+          />
+        </SettingGroup>
+      </Stack>
       {/* The account's own data first, then help and the app, then 탈퇴 last. */}
       <Columns min="panel">
         <Stack gap="section">
@@ -77,8 +79,10 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
         <Stack gap="section">
           <NoticesSection seek={section === 'notices'} />
           <Panel title="앱 정보">
-            <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
-            <Diagnostics />
+            <SettingGroup label="앱 정보">
+              <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
+              <Diagnostics />
+            </SettingGroup>
             <LegalNotice />
           </Panel>
         </Stack>

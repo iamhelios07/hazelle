@@ -12,5 +12,5 @@
 }
 
 .section {
-  gap: var(--space-24);
+  gap: var(--section-gap, var(--space-24));
 }

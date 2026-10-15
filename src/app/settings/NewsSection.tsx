@@ -30,7 +30,7 @@ export function NewsSection({ seek }: { seek: boolean }) {
 
 function NewsList({ news }: { news: News[] }) {
   return (
-    <List label={TITLE}>
+    <List label={TITLE} box>
       {news.map(({ version, date, lines }) => (
         <ListItem
           key={version}

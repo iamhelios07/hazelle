@@ -35,11 +35,11 @@ export function SharedLinksSection() {
   };
   const links = loaded.data?.shares;
   return (
-    <Panel title={SHARE.list} empty={!loaded.failure && links?.length === 0}>
+    <Panel title={SHARE.list}>
       {loaded.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: loaded.reload }}>{loaded.failure}</Callout>}
       {links && links.length === 0 && <Empty variant="section">{SHARE.list}가 없어요.</Empty>}
       {links && links.length > 0 && (
-        <List label={SHARE.list}>
+        <List label={SHARE.list} box>
           {links.map((link) => (
             <ListItem
               key={link.id}

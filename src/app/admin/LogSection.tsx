@@ -56,11 +56,11 @@ export function LogSection() {
   const pages = usePages(readLog);
   const { rows } = pages;
   return (
-    <Panel title="기록" empty={!pages.failure && rows?.length === 0}>
+    <Panel title="기록">
       {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">기록이 없어요.</Empty>}
       {rows && rows.length > 0 && (
-        <List label="기록">
+        <List label="기록" box>
           {rows.map((row) => (
             <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={codeOf(row)} description={detailOf(row)} aside={ago(row.at)} />
           ))}

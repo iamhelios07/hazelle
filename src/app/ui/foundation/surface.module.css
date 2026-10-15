@@ -1,5 +1,5 @@
 .box {
-  border: var(--border-thin) solid var(--color-divider);
+  border: var(--border-thin) solid var(--box-line, var(--color-divider));
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }

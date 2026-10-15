@@ -17,12 +17,12 @@
 }
 
 .level2 {
-  gap: var(--space-8);
+  gap: var(--space-12);
 }
 
 .level2 .title {
   color: var(--color-text);
-  font-size: var(--text-lg);
+  font-size: var(--section-title, var(--text-lg));
   font-weight: var(--weight-semibold);
 }
 
@@ -36,16 +36,28 @@
   font-weight: var(--weight-medium);
 }
 
-/* A card's head is as tall as the sm button an action puts by the title, so cards side by side (Columns) start on one
+/* A group's head is as tall as the sm button an action puts by the title, so groups side by side (Columns) start on one
    line whether or not either has an action. */
-.boxed > .head {
+.group > .head {
   min-height: var(--control-chip);
   align-items: center;
 }
 
-/* A card's own name at level 3 still names what the card holds, so it is not muted as an inner label is. */
-.boxed.level3 > .head .title {
+/* A group at level 3 is a page's subtitle, standing on a hairline; not muted as an inner label is. content-box keeps
+   the line under the head's min-height, so neighbours' lines meet whether or not either has an action. */
+.group.level3 {
+  gap: var(--space-16);
+}
+
+.group.level3 > .head {
+  box-sizing: content-box;
+  padding-bottom: var(--space-8);
+  border-bottom: var(--border-thin) solid var(--color-divider);
+}
+
+.group.level3 > .head .title {
   color: var(--color-text);
+  font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
 }
 

@@ -12,12 +12,12 @@ type Props = {
   tag?: { label: string; tone?: 'plain' | 'accent' };
   action?: ReactNode;
   seek?: boolean;
-  // A Panel's, whose card may stand beside another's.
-  boxed?: boolean;
+  // A Panel's: a group of a page, which may stand beside another (Columns).
+  group?: boolean;
   children: ReactNode;
 };
 
-export function Section({ title, level = 2, note, help, tag, action, seek = false, boxed = false, children }: Props) {
+export function Section({ title, level = 2, note, help, tag, action, seek = false, group = false, children }: Props) {
   const self = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     if (seek) self.current?.scrollIntoView({ block: 'start' });
@@ -25,7 +25,7 @@ export function Section({ title, level = 2, note, help, tag, action, seek = fals
   const Heading = level === 2 ? 'h2' : 'h3';
   const noted = note && <span className={styles.note}>{note}</span>;
   return (
-    <section ref={self} className={[styles.section, styles[`level${level}`], boxed && styles.boxed].filter(Boolean).join(' ')}>
+    <section ref={self} className={[styles.section, styles[`level${level}`], group && styles.group].filter(Boolean).join(' ')}>
       <div className={styles.head}>
         <span className={styles.name}>
           <Heading className={styles.title}>{title}</Heading>

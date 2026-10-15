@@ -1,9 +1,9 @@
 .section {
-  padding-top: var(--space-24);
+  padding-top: var(--space-32);
   border-top: var(--border-thin) solid var(--color-divider);
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
+  gap: var(--space-32);
 }
 
 .head {
@@ -23,7 +23,7 @@
   word-break: keep-all;
   overflow-wrap: anywhere;
   font-family: var(--font-serif);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   font-weight: var(--weight-bold);
 }
 

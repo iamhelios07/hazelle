@@ -45,6 +45,27 @@
   gap: var(--space-16);
 }
 
+.figures {
+  composes: row;
+}
+
+.figures .item {
+  gap: var(--space-4);
+}
+
+.figures .label {
+  color: var(--color-text-faint);
+}
+
+.figures .value {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.figures .muted .value {
+  color: var(--color-text-faint);
+}
+
 @media (max-width: 599px) {
   .row {
     grid-template-columns: repeat(2, minmax(0, 1fr));

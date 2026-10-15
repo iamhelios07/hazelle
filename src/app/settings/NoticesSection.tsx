@@ -19,11 +19,11 @@ export function NoticesSection({ seek }: { seek: boolean }) {
     if (newest !== undefined) void markNoticesSeen(newest);
   }, [newest]);
   return (
-    <Panel title={NOTICES.from} help="이 알림은 종단 간 암호화되지 않아요." action={<ReportButton />} seek={seek} empty={!pages.failure && rows?.length === 0}>
+    <Panel title={NOTICES.from} help="이 알림은 종단 간 암호화되지 않아요." action={<ReportButton />} seek={seek}>
       {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.from}이 없어요.</Empty>}
       {rows && rows.length > 0 && (
-        <List label={NOTICES.from}>
+        <List label={NOTICES.from} box>
           {rows.map((notice) => (
             <ListItem
               key={notice.id}

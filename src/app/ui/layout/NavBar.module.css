@@ -33,7 +33,7 @@
   word-break: keep-all;
   overflow-wrap: anywhere;
   font-family: var(--font-serif);
-  font-size: var(--text-xl);
+  font-size: var(--text-display);
   font-weight: var(--weight-bold);
 }
 
@@ -62,6 +62,7 @@
 }
 
 .line .title {
+  font-size: var(--text-xl);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

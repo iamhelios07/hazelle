@@ -67,7 +67,7 @@ export function ConnectionAccounts({ id, connection, signIn, level }: { id: stri
           />
         )}
         {timeline.map(({ group, startsAt, endsAt }, index) => (
-          <List key={group.id} label={group.name}>
+          <List key={group.id} label={group.name} box>
             <ListItem
               title={group.name}
               tags={index === 0 ? ['지금 차례'] : []}

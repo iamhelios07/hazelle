@@ -9,7 +9,7 @@ import { RestoresDialog } from '../common/RestoresDialog';
 import { STOP } from '../common/words';
 import { useToast } from '../toast';
 import { useSaves, useSession } from '../session';
-import { Button, Dialog, FileButton, Panel, Progress, SettingRow, type ProgressStep } from '../ui';
+import { Button, Dialog, FileButton, Panel, Progress, SettingGroup, SettingRow, type ProgressStep } from '../ui';
 import { RisuExportRow } from './RisuExportRow';
 
 const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup-crashed', { message: string; detail?: string }> = {
@@ -109,34 +109,36 @@ export function BackupSection() {
 
   return (
     <Panel title="백업">
-      <SettingRow
-        label="전체 백업"
-        help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 API 키를 zip 파일로 내보내요. 암호화되지 않은 파일이니 안전하게 보관해 주세요."
-        control={
-          <Button variant="secondary" size="sm" icon={ACTS.export.icon} disabled={active !== null} onClick={() => void save()}>
-            {ACTS.export.label}
-          </Button>
-        }
-      />
-      <RisuExportRow />
-      <SettingRow
-        label={importOf('백업')}
-        help="새 계정에만 가져올 수 있어요."
-        control={
-          <FileButton accept=".zip" size="sm" icon={ACTS.import.icon} disabled={active !== null} onFiles={([file]) => void load(file!)}>
-            {ACTS.import.label}
-          </FileButton>
-        }
-      />
-      <SettingRow
-        label="이전 시점으로 복원"
-        help={`10분 전부터 6일 전 사이의 기록으로 돌아가요. 하루 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`}
-        control={
-          <Button variant="secondary" size="sm" icon={History} onClick={() => setRestoring(true)}>
-            복원
-          </Button>
-        }
-      />
+      <SettingGroup label="백업">
+        <SettingRow
+          label="전체 백업"
+          help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 API 키를 zip 파일로 내보내요. 암호화되지 않은 파일이니 안전하게 보관해 주세요."
+          control={
+            <Button variant="secondary" size="sm" icon={ACTS.export.icon} disabled={active !== null} onClick={() => void save()}>
+              {ACTS.export.label}
+            </Button>
+          }
+        />
+        <RisuExportRow />
+        <SettingRow
+          label={importOf('백업')}
+          help="새 계정에만 가져올 수 있어요."
+          control={
+            <FileButton accept=".zip" size="sm" icon={ACTS.import.icon} disabled={active !== null} onFiles={([file]) => void load(file!)}>
+              {ACTS.import.label}
+            </FileButton>
+          }
+        />
+        <SettingRow
+          label="이전 시점으로 복원"
+          help={`10분 전부터 6일 전 사이의 기록으로 돌아가요. 하루 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`}
+          control={
+            <Button variant="secondary" size="sm" icon={History} onClick={() => setRestoring(true)}>
+              복원
+            </Button>
+          }
+        />
+      </SettingGroup>
       {restoring && <RestoresDialog operated={null} onClose={() => setRestoring(false)} />}
       {active && (
         <Dialog title={TITLE[active.direction]} onClose={stop} actions={<Button variant="secondary" onClick={stop}>{STOP}</Button>}>

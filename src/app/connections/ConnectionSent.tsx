@@ -18,11 +18,11 @@ export function ConnectionSent({ connection, level }: { connection: string; leve
   const used = usage && WINDOWS.some(([window]) => usage[window].calls) ? usage : null;
 
   return (
-    <Panel title="사용 내역" level={level} empty={view.kind === 'read' && used === null}>
+    <Panel title="사용 내역" level={level}>
       {view.kind !== 'read' ? (
         <LedgerWait view={view} retry={retry} failed="사용 내역을 불러오지 못했어요." />
       ) : used ? (
-        <Facts variant="row" items={WINDOWS.map(([window, label]) => tile(label, used[window]))} />
+        <Facts variant="figures" items={WINDOWS.map(([window, label]) => tile(label, used[window]))} />
       ) : (
         <Empty variant="section">이번 주에 이 연결로 받은 응답이 없어요.</Empty>
       )}

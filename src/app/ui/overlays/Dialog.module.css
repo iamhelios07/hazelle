@@ -10,7 +10,12 @@
   background: var(--color-scrim);
 }
 
+/* A pane, though it renders inside a page's tree: the page's scale (Screen.module.css) does not reach it. */
 .dialog {
+  --section-title: initial;
+  --section-gap: initial;
+  --box-line: initial;
+
   width: var(--dialog-width);
   max-width: 100%;
   max-height: 100%;
