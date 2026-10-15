@@ -6,7 +6,7 @@ import { ScriptSchedule } from './script-schedule';
 import { noOutcome, ToolLate, ToolStopped, type Binding, type LuaRunner } from './script-binding';
 import { live, type PackOwner } from '../model/library';
 import type { ToolUnit } from '../model/tool';
-import type { MemoryFill, PromptInput } from '../engine/pipeline';
+import type { Assembled, MemoryFill, PromptInput } from '../engine/pipeline';
 import { saveToolChat, toolsOf } from './tools/store';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage, EmbedPurpose } from '../connectors/types';
@@ -243,12 +243,17 @@ export class Scripts {
     return Promise.race([started, stopped]);
   }
 
-  // A listener's answer that is no list of messages leaves the request as it was built.
-  async requesting(chat: string, turn: TurnContext, messages: ChatMessage[]): Promise<{ messages: ChatMessage[]; writes: Writes }> {
+  // A listener's answer that is no list of messages leaves the request as it was built. It reads each message's origin
+  // as Risu's memo; what it answers keeps no memo, which nothing past it reads.
+  async requesting(chat: string, turn: TurnContext, { messages, parts }: Pick<Assembled, 'messages' | 'parts'>): Promise<{ messages: ChatMessage[]; writes: Writes }> {
     const scripts = scriptsOf(packsOf(this.session.store, turn.chat));
     if (scripts.length === 0) return { messages, writes: [] };
     return this.schedule.queued(chat, async () => {
-      const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editRequest', value: messages, meta: {} } }, turn.scope, null);
+      const value = messages.map((message, at) => {
+        const { origin } = parts[at]!;
+        return origin === undefined ? message : { ...message, memo: origin };
+      });
+      const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editRequest', value, meta: {} } }, turn.scope, null);
       if (!outcome.handled) return { messages, writes: outcome.writes };
       const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
         if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];

@@ -19,7 +19,9 @@ export function wireTokens(fit: ProviderFit, messages: ChatMessage[], countToken
   return prepared.wire.segments.reduce((total, { text }) => total + countTokens(text), 0);
 }
 
-export function fitChat(template: Part[], messages: ChatMessage[], depths: { depth: number; sent: Sent }[], countTokens: (text: string) => number, fit: ProviderFit | null): { parts: (Sent | CachePart)[]; dropped: number } | TooLong {
+export type ChatSent = Omit<Sent, 'from'>;
+
+export function fitChat(template: Part[], messages: ChatSent[], depths: { depth: number; sent: Sent }[], countTokens: (text: string) => number, fit: ProviderFit | null): { parts: (Sent | CachePart)[]; dropped: number } | TooLong {
   const tokens = remembered(countTokens);
   const partsAt = (dropped: number) => {
     const kept = messages.slice(dropped);
@@ -88,13 +90,13 @@ export function rewritten(prompt: Assembled, messages: ChatMessage[], countToken
   if (typeof dropped !== 'number') return dropped;
   const gone = new Set(chat.slice(0, dropped));
   const kept = sent.filter((_, at) => !gone.has(at));
-  return { ...prompt, messages: kept.map(({ message }) => message), parts: kept.map(({ from, tokens }) => ({ from, tokens })), dropped: prompt.dropped + dropped };
+  return { ...prompt, messages: kept.map(({ message }) => message), parts: kept.map(({ from, tokens, origin }) => ({ from, tokens, ...(origin !== undefined && { origin }) })), dropped: prompt.dropped + dropped };
 }
 
-function range(kept: ChatMessage[], before: Map<number, Sent[]>, { range: { from, to }, from: slot }: ChatPart): Sent[] {
+function range(kept: ChatSent[], before: Map<number, Sent[]>, { range: { from, to }, from: slot }: ChatPart): Sent[] {
   const [start, end] = rangeBounds(kept.length, { from, to });
   const out: Sent[] = [];
-  for (let index = start; index < end; index++) out.push(...(before.get(index) ?? []), { message: kept[index]!, from: slot });
+  for (let index = start; index < end; index++) out.push(...(before.get(index) ?? []), { ...kept[index]!, from: slot });
   return out;
 }
 
@@ -112,7 +114,7 @@ function remembered(countTokens: (text: string) => number): (text: string) => nu
   };
 }
 
-function budgetSize(template: Part[], messages: ChatMessage[], depths: { depth: number; sent: Sent }[], tokens: (text: string) => number): (dropped: number) => number {
+function budgetSize(template: Part[], messages: ChatSent[], depths: { depth: number; sent: Sent }[], tokens: (text: string) => number): (dropped: number) => number {
   const ranges = template.filter((part): part is ChatPart => 'range' in part).map(({ range }) => ({ range, start: 0, end: 0, tokens: 0 }));
   const fixed = template.reduce((sum, part) => sum + ('message' in part ? tokens(part.message.content) : 0), 0);
   const ordered = [...depths].sort((a, b) => a.depth - b.depth);
@@ -138,8 +140,8 @@ function budgetSize(template: Part[], messages: ChatMessage[], depths: { depth: 
       // dropOldest advances cuts in order: both absolute bounds only advance. Each text enters/leaves a slot
       // at most once; nothing outside the tried ranges is tokenized, including when no trimming is needed.
       // Costs themselves need not be monotone: overlapping signed ranges can gain messages as cuts advance.
-      for (let at = held.start; at < Math.min(absoluteStart, held.end); at++) held.tokens -= tokens(messages[at]!.content);
-      for (let at = Math.max(held.end, absoluteStart); at < absoluteEnd; at++) held.tokens += tokens(messages[at]!.content);
+      for (let at = held.start; at < Math.min(absoluteStart, held.end); at++) held.tokens -= tokens(messages[at]!.message.content);
+      for (let at = Math.max(held.end, absoluteStart); at < absoluteEnd; at++) held.tokens += tokens(messages[at]!.message.content);
       held.start = absoluteStart;
       held.end = absoluteEnd;
       if (end <= start) continue;

@@ -28,7 +28,7 @@ it('bounds full request builds independently of the number of discarded messages
       const builds = vi.spyOn(protocol === 'gemini' ? gemini : anthropicMessages, 'chat');
       const counted = vi.fn(countTokens);
       try {
-        const result = mode === 'assemble' ? fitChat(template, messages, [], counted, fit) : rewritten(prompt, prompt.messages, counted, fit);
+        const result = mode === 'assemble' ? fitChat(template, messages.map((message) => ({ message })), [], counted, fit) : rewritten(prompt, prompt.messages, counted, fit);
         expect(builds).toHaveBeenCalledTimes(2);
         expect(new Set(counted.mock.calls.map(([text]) => text)).size).toBe(counted.mock.calls.length);
         expect(result).not.toHaveProperty('kind');
@@ -54,7 +54,7 @@ it('caps corrections when changing system joins defeat successive estimates, and
   // Stand in for boundary-dependent counts: each new system join exceeds the last measured overhead.
   const count = (text: string) => text.startsWith('fixed\n\n') ? 211 : text === 'fixed' ? 1 : 10;
   try {
-    expect(fitChat(template, messages, [], count, fitFor('anthropic-messages', 195))).toEqual({ kind: 'too-long', tokens: 211, budget: 195 });
+    expect(fitChat(template, messages.map((message) => ({ message })), [], count, fitFor('anthropic-messages', 195))).toEqual({ kind: 'too-long', tokens: 211, budget: 195 });
     expect(builds).toHaveBeenCalledTimes(4);
   } finally {
     builds.mockRestore();

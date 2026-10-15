@@ -1,7 +1,9 @@
 import type { ChatMessage } from '../connectors/types';
 import type { From } from './pipeline';
 
-export type Sent = { message: ChatMessage; from: From };
+// origin: the id of the chat message it was made from (HistoryMessage.message), which the bot's Lua reads as Risu's
+// memo; none for any other text.
+export type Sent = { message: ChatMessage; from: From; origin?: string };
 export type CachePart = { cache: true };
 
 // Before the chat and at its end, never at the request's end: a block after the chat changes every turn. A @@depth

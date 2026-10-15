@@ -88,6 +88,25 @@ describe("a turn with the bot's Lua", () => {
       expect(prompt.parts.at(-1)).toMatchObject({ from: { kind: 'script' } });
     }));
 
+  it("hands editRequest each chat message's id as its memo, and sends the model none", () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(
+        session,
+        `listenEdit('editRequest', function(id, value)
+          local seen = {}
+          for _, message in ipairs(value) do seen[#seen + 1] = message.role .. '=' .. (message.memo or '-') end
+          value[#value + 1] = { role = 'system', content = table.concat(seen, ' '), memo = 'kept?' }
+          return value
+        end)`,
+      );
+      const log = stubRelay(() => saying('응'));
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      await expect.poll(() => log.length).toBe(1);
+      const sent = (JSON.parse(log[0]!.sent.body!) as { messages: Record<string, unknown>[] }).messages;
+      expect(sent.at(-1)!.content).toMatch(new RegExp(`^((system|assistant)=- )+assistant=- user=${messages()[1]!.id}$`));
+      expect(sent.every((message) => !('memo' in message))).toBe(true);
+    }));
+
   it("sends what onStart wrote to the chat's own lorebook with this turn, and keeps it under the chat", () =>
     server.withSession(async (session) => {
       const { chat } = await chatWith(session, `function onStart(id) upsertLocalLoreBook(id, 'Gate', 'the gate is shut', { alwaysActive = true }) end`);
