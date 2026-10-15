@@ -26,7 +26,7 @@ const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
 });
 const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, message: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
 const run = (entries: LoreEntries, history: HistoryMessage[], more: Partial<LoreTurn> & { settings?: Card['loreSettings']; budget?: number } = {}) =>
-  prepareLore(entries, more.settings ?? NULLS, more.budget ?? 800).activate({ history, turn: history.length, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, marks: new Set(['main', 'globalNote']), ...more });
+  prepareLore(entries, more.settings ?? NULLS, more.budget ?? 800).activate({ history, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, marks: new Set(['main', 'globalNote']), ...more });
 const order = (activation: Activation) => activation.placed.map(({ id }) => id);
 const ids = (activation: Activation) => order(activation).sort();
 const why = (activation: Activation, id: string) => activation.fired.find((fired) => fired.id === id)?.why;
@@ -179,11 +179,11 @@ describe('activate', () => {
     const history = chat('bell', 'quiet', 'quiet', 'quiet').map((message) => ({ ...message, get text() { reads++; return message.text; } }));
     const entries = [lore('sticky', { keys: ['bell'], content: '@@scan_depth 3\n@@unknown\n@@@keep_activate_after_match\nsticky' })];
     const book = prepareLore(entries, { ...NULLS, scanDepth: 1 }, 800);
-    const input = { history, turn: 3, greeting: null, afterMatch: [], seed: 'send', cost: (_: string, body: string) => body.length, marks: new Set<string>() };
+    const input = { history: history.slice(0, 3), greeting: null, afterMatch: [], seed: 'send', cost: (_: string, body: string) => body.length, marks: new Set<string>() };
     const first = book.activate(input);
     expect(book.sticky).toBe(true);
     expect(first.afterMatch).toEqual(['sticky']);
-    expect(why(book.activate({ ...input, turn: 4, afterMatch: first.afterMatch }), 'sticky')).toEqual({ kind: 'decorator', name: 'keep_activate_after_match' });
+    expect(why(book.activate({ ...input, history, afterMatch: first.afterMatch }), 'sticky')).toEqual({ kind: 'decorator', name: 'keep_activate_after_match' });
     expect(reads).toBe(3);
     expect(book.activate(input).fired).toEqual(first.fired);
     expect(reads).toBe(3);
@@ -196,8 +196,8 @@ describe('activate', () => {
       lore('even', { content: '@@activate\n@@activate_only_every 2\neven' }),
       lore('second', { constant: true, content: '@@is_greeting 2\nsecond' }),
     ];
-    expect(ids(run(entries, [], { turn: 3, greeting: 1 }))).toEqual(['second']);
-    expect(ids(run(entries, [], { turn: 4, greeting: 0 }))).toEqual(['even', 'late']);
+    expect(ids(run(entries, chat('a', 'b'), { greeting: 1 }))).toEqual(['second']);
+    expect(ids(run(entries, chat('a', 'b', 'c'), { greeting: 0 }))).toEqual(['even', 'late']);
   });
 
   it('skips by priority what does not fit the budget, then lists by insertion order, ties last-fired first', () => {
