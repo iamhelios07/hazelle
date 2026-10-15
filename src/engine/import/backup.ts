@@ -25,8 +25,17 @@ import {
 type Span = { source: BackupSource; offset: number; length: number };
 type Cold = (key: string) => Promise<unknown>;
 
-// 00 'RISUSAVE' 00 08, then gzip over msgpackr: the one form a backup's database is written in (spec §2).
-const DATABASE_HEADER = [0, ...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0, 8];
+// The two forms a backup's database is written in (spec §2): until Risu 2026-10-14, 00 'RISUSAVE' 00 08 then gzip over
+// msgpackr; since then, 'RISUSAVE' 00 then blocks of JSON.
+const LEGACY_HEADER = [0, ...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0, 8];
+const BLOCK_HEADER = [...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0];
+// Block types: 1 root (every key but the three below), 2 a character, 4 the presets, 5 the modules; 6 points at a file
+// on the Risu device, which a backup never holds. 0, 9–12 (config, plugins, loadouts, plugin storage, kv) are not read.
+const ROOT = 1;
+const CHARACTER = 2;
+const PRESETS = 4;
+const MODULES = 5;
+const REMOTE = 6;
 // coldstorageData.ts:4. The private-use marks are part of the pointer; the bare word is not one.
 const COLD = 'COLDSTORAGE';
 const READ_AHEAD = 4 * 1024 * 1024;
@@ -140,9 +149,37 @@ export function inlayType(bytes: Uint8Array): string | null {
 
 const u32 = (bytes: Uint8Array, at: number) => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(at, true);
 
+const startsWith = (bytes: Uint8Array, header: number[]) => header.every((byte, i) => bytes[i] === byte);
+
 function decode(bytes: Uint8Array): unknown {
-  if (DATABASE_HEADER.some((byte, i) => bytes[i] !== byte)) throw new Error('not a Risu database');
-  return readMsgpack(gunzip(bytes.subarray(DATABASE_HEADER.length)));
+  if (startsWith(bytes, LEGACY_HEADER)) return readMsgpack(gunzip(bytes.subarray(LEGACY_HEADER.length)));
+  if (startsWith(bytes, BLOCK_HEADER)) return readBlocks(bytes.subarray(BLOCK_HEADER.length));
+  throw new Error('not a Risu database');
+}
+
+// Each block: type u8, gzip flag u8, name length u8, name, data length u32, data (UTF-8 JSON). Characters come one per
+// block, in the file's order, which is Risu's list order.
+function readBlocks(bytes: Uint8Array): unknown {
+  const db: Record<string, unknown> = {};
+  const characters: unknown[] = [];
+  for (let at = 0; at < bytes.length; ) {
+    const type = bytes[at]!;
+    const zipped = bytes[at + 1] === 1;
+    const nameLength = bytes[at + 2]!;
+    const length = u32(bytes, at + 3 + nameLength);
+    const start = at + 7 + nameLength;
+    at = start + length;
+    if (at > bytes.length) throw new Error('the database ends early');
+    if (type === REMOTE) throw new Error('the database points at files on the Risu device');
+    if (type !== ROOT && type !== CHARACTER && type !== PRESETS && type !== MODULES) continue;
+    const data = bytes.subarray(start, at);
+    const value: unknown = JSON.parse(utf8.decode(zipped ? gunzip(data) : data));
+    if (type === CHARACTER) characters.push(value);
+    else if (type === PRESETS) db.botPresets = value;
+    else if (type === MODULES) db.modules = value;
+    else if (isRecord(value)) for (const [key, item] of Object.entries(value)) if (!key.startsWith('__')) db[key] = item;
+  }
+  return { ...db, characters };
 }
 
 const isPicture = (name: string) => name !== 'database.risudat' && name !== 'encryption.risudat' && !name.startsWith('coldstorage_');
