@@ -1,9 +1,9 @@
 import { count, isRecord, list } from '../../connectors/values';
 import type { Portrait, PortraitSource } from '../../model/likeness';
 import { fingerprint } from '../memory';
-import { add, DEFAULT_ORDER, nativeHolds, readTriggers, record, regexScripts, regexSource, stampIds, strings, text, triggerSource, type Converted, type Json, type Tally, type Unstamped } from './convert';
+import { add, convertModule, DEFAULT_ORDER, extensionOf, lorebookSource, nativeHolds, readTriggers, record, regexScripts, regexSource, stampIds, strings, text, triggerSource, type Converted, type ConvertedModule, type Json, type Tally, type Unstamped } from './convert';
 import { readToggles, writeToggles } from './toggles';
-import type { Bot, BundledModule, CharacterOwn, HazelleOwn, LoreEntry, Profiles, RegexScript, Trigger } from './types';
+import type { Bot, BundledModule, CharacterOwn, HazelleOwn, LoreEntry, Profiles, RegexScript, Trigger, TypedModule } from './types';
 
 // A charx this app writes carries in its card's extensions.hazelle what Risu's fields cannot: the scripts turned off,
 // lore entries the native lorebook cannot hold whole, the character's own settings, its 삽화 profiles, and the modules it
@@ -37,6 +37,38 @@ function partition<T, S>(entries: T[], place: (entry: T) => Placed, kept: (entry
   return { risu, kept: own };
 }
 
+// A pack's lists as this app holds them, split into what Risu's own lists hold and what only the extension keeps: the
+// scripts turned off, and the lore entries the native lorebook cannot hold whole. lua: whether Risu's list holds a Lua
+// trigger, which Risu runs only with lowLevelAccess.
+function setApart(regex: RegexScript[], triggers: Trigger[], lore: LoreEntry[]) {
+  const scripts = partition(regex, (script) => (script.off ? 'own' : 'risu'), regexSource);
+  const run = partition(triggers, (trigger) => (trigger.off ? 'own' : 'risu'), triggerSource);
+  const book = partition(lore, (entry) => (!entry.enabled ? 'own' : nativeHolds(entry) ? 'risu' : 'shared'), (entry) => entry);
+  return {
+    regex: scripts.risu.map(regexSource),
+    triggers: run.risu.map(triggerSource),
+    lore: book.risu,
+    lua: run.risu.some((trigger) => trigger.kind === 'lua'),
+    kept: { off: { regex: scripts.kept, triggers: run.kept }, lore: book.kept },
+  };
+}
+
+// setApart's inverse: Risu's lists as read, with the kept entries back at their places.
+function putBack(read: { regex: RegexScript[]; triggers: Trigger[]; lore: LoreEntry[] }, source: Json, tally: Tally) {
+  const off = record(source.off);
+  return {
+    regex: restore(read.regex.map(unstamped), keptOf(off.regex, (entry): Unstamped<RegexScript> | undefined => {
+      const [script] = regexScripts([entry], tally);
+      return script && { ...script, off: true };
+    })),
+    triggers: restore(read.triggers.map(unstamped), keptOf(off.triggers, (entry): Unstamped<Trigger> | undefined => {
+      const [trigger] = readTriggers([entry]);
+      return trigger && { ...trigger, off: true };
+    })),
+    lore: restore(read.lore, keptOf(source.lore, loreEntry)),
+  };
+}
+
 // The character's own pack first, then each bundled module's, as one list each: what module.risum and the card's
 // assets hold, and the extension without its print.
 export function hazelleSource(bot: Bot) {
@@ -47,18 +79,17 @@ export function hazelleSource(bot: Bot) {
     offset += pack.loreFolders.length;
     return pack.lore.map((entry) => (entry.folder === null ? entry : { ...entry, folder: entry.folder + from }));
   });
-  const regex = partition(packs.flatMap(({ pack }) => pack.regex), (script) => (script.off ? 'own' : 'risu'), regexSource);
-  const triggers = partition(packs.flatMap(({ pack }) => pack.triggers), (trigger) => (trigger.off ? 'own' : 'risu'), triggerSource);
-  const book = partition(lore, (entry) => (!entry.enabled ? 'own' : nativeHolds(entry) ? 'risu' : 'shared'), (entry) => entry);
+  const apart = setApart(packs.flatMap(({ pack }) => pack.regex), packs.flatMap(({ pack }) => pack.triggers), lore);
   const { translatorNote, keepThoughts, statusScripts, translations } = bot.own.character;
   const status = statusScripts?.flatMap((id) => {
     const at = bot.card.regex.findIndex((script) => script.id === id);
     return at === -1 ? [] : [at];
   });
   return {
-    regex: regex.risu.map(regexSource),
-    triggers: triggers.risu.map(triggerSource),
-    lore: book.risu,
+    regex: apart.regex,
+    triggers: apart.triggers,
+    lore: apart.lore,
+    lua: apart.lua,
     loreFolders: packs.flatMap((pack) => pack.loreFolders),
     assets: packs.flatMap((pack) => pack.assets),
     extension: {
@@ -70,8 +101,7 @@ export function hazelleSource(bot: Bot) {
         ...(translations && translations.length > 0 && { translations: translations.map(({ source, language, translation }) => ({ source, language, text: translation.text, at: translation.at })) }),
       },
       likeness: bot.own.likeness,
-      off: { regex: regex.kept, triggers: triggers.kept },
-      lore: book.kept,
+      ...apart.kept,
       modules: bot.bundled.map(({ risu, name, description, namespace, pack, likeness, ...module }) => ({
         id: risu,
         name,
@@ -187,24 +217,12 @@ export function readHazelle(raw: unknown, toggles: string, read: Converted, tall
     add(tally, 'hazelle');
     return { read, own: null, bundled: [] };
   }
-  const off = record(source.off);
   const modules = list(source.modules).map(record);
   const sizes = (field: string) => modules.map((module) => count(module[field]) ?? 0);
-  const regex = sections(
-    restore(read.card.regex.map(unstamped), keptOf(off.regex, (entry): Unstamped<RegexScript> | undefined => {
-      const [script] = regexScripts([entry], tally);
-      return script && { ...script, off: true };
-    })),
-    sizes('regex'),
-  );
-  const triggers = sections(
-    restore(read.card.triggers.map(unstamped), keptOf(off.triggers, (entry): Unstamped<Trigger> | undefined => {
-      const [trigger] = readTriggers([entry]);
-      return trigger && { ...trigger, off: true };
-    })),
-    sizes('triggers'),
-  );
-  const lore = sections(restore(read.lore, keptOf(source.lore, loreEntry)), sizes('lore'));
+  const back = putBack({ regex: read.card.regex, triggers: read.card.triggers, lore: read.lore }, source, tally);
+  const regex = sections(back.regex, sizes('regex'));
+  const triggers = sections(back.triggers, sizes('triggers'));
+  const lore = sections(back.lore, sizes('lore'));
   const folderSizes = sizes('loreFolders');
   const folders = sections(read.loreFolders, folderSizes);
   const assets = sections(read.assets, sizes('assets'));
@@ -240,4 +258,43 @@ export function readHazelle(raw: unknown, toggles: string, read: Converted, tall
       };
     }),
   };
+}
+
+// A .risum this app writes carries the same for its one pack in the module JSON's hazelle key: the scripts turned off
+// and the lore entries the native lorebook cannot hold whole. Its print is made as the charx's is, of what convertModule
+// reads from the Risu fields as written; Risu gives a module a new id on import, so the id is not in it.
+const modulePrint = ({ pack, lore, loreFolders, assets }: ConvertedModule) => fingerprint([{ role: 'module', text: JSON.stringify([pack, lore, loreFolders, assets]) }]);
+
+// The module JSON of a .risum, its pictures named in the order their blocks follow. Its tool, 삽화 profiles and model and
+// memory switches have no place in it.
+export function moduleSource({ risu, name, description, namespace, pack, lore, loreFolders, assets }: TypedModule): Json {
+  const apart = setApart(pack.regex, pack.triggers, lore);
+  const source: Json = {
+    name,
+    description,
+    id: risu,
+    ...(namespace !== null && { namespace }),
+    lorebook: lorebookSource(apart.lore, loreFolders),
+    regex: apart.regex,
+    trigger: apart.triggers,
+    ...(pack.background !== undefined && { backgroundEmbedding: pack.background }),
+    customModuleToggle: writeToggles(pack.toggles),
+    assets: assets.map(({ name, type }) => [name, '', extensionOf(type)]),
+    hideIcon: false,
+    ...(apart.lua && { lowLevelAccess: true }),
+  };
+  return { ...source, hazelle: { version: VERSION, ...apart.kept, print: modulePrint(convertModule(source, new Map())) } };
+}
+
+// A module file's JSON as convertModule reads it, with what its hazelle key keeps put back when the print matches.
+export function readModule(raw: Json, tally: Tally): ConvertedModule {
+  const read = convertModule(raw, tally);
+  if (raw.hazelle === undefined) return read;
+  const source = record(raw.hazelle);
+  if (source.version !== VERSION || source.print !== modulePrint(read)) {
+    add(tally, 'hazelle');
+    return read;
+  }
+  const back = putBack({ regex: read.pack.regex, triggers: read.pack.triggers, lore: read.lore }, source, tally);
+  return { ...read, pack: { ...read.pack, ...stampIds(back) }, lore: back.lore };
 }

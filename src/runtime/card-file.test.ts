@@ -8,7 +8,9 @@ import type { Card, LoreEntry } from '../engine/import/types';
 import { likenessId } from '../model/likeness';
 import { randomBytes } from '../vault/aead';
 import { setService } from './admin';
-import { exportCharacter, importCardFile } from './card-file';
+import { readTool } from '../engine/import/tool';
+import { toolId } from '../model/tool';
+import { exportCharacter, exportModule, importCardFile } from './card-file';
 import { importCharacter } from './characters';
 import { importModule, setCharacterModule } from './modules';
 import type { ObjectStore } from './store';
@@ -130,6 +132,7 @@ describe('a character file', () => {
     for (let at = 0; at < file.length; at += 7) unzip.push(file.subarray(at, at + 7), at + 7 >= file.length);
     const cardJson = JSON.parse(new TextDecoder().decode(unzipped.get('card.json')));
     expect(cardJson.spec).toBe('chara_card_v3');
+    expect(cardJson.data.extensions.risuai.lowLevelAccess).toBe(true);
     expect(cardJson.data.assets.map(({ uri }: { uri: string }) => unzipped.get(uri.slice('embeded://'.length)))).toEqual([face, shell, wall]);
     // Its scripts and lorebook, the module's after the character's, without those turned off: 3 folders and 4 entries.
     const { module: risum } = readRisum(unzipped.get('module.risum')!)!;
@@ -156,5 +159,50 @@ describe('a character file', () => {
     const again = await importCardFile(other.store, other.files, read.card, () => {});
     expect(again.ok && other.store.get('character', again.data.id)!.value.modules).toEqual(onAfter);
     expect(other.store.list('module')).toHaveLength(1);
+  });
+});
+
+describe('a module file', () => {
+  it('gives back through its .risum all the module holds but its tool, with its pictures as stored', async () => {
+    const { store, files } = await server.operator();
+    await setService({ signupCap: 2, accountBytesCap: null, accountFileBytesCap: null });
+    const pictures = [png(), png()];
+    const made = await importModule(store, files, {
+      name: '전화', description: '폰 화면', namespace: 'phone', risu: null, unsupported: [],
+      pack: {
+        regex: [{ id: 'regex-0', name: '화면', find: 'x', replace: 'y', stage: 'display', flags: null }, { id: 'regex-1', name: '꺼 둔 것', find: 'a', replace: 'b', stage: 'output', flags: null, off: true }],
+        triggers: [{ id: 'trigger-0', kind: 'lua', name: 'main', code: 'function onOutput() end' }, { id: 'trigger-1', kind: 'lua', name: 'spare', code: 'return 1', off: true }],
+        background: '<style>.phone {}</style>',
+        toggles: [{ key: 'ring', label: '벨', kind: 'check', default: '0' }],
+      },
+      lore: [entry('벨', { folder: 0 }), entry('꺼진', { enabled: false }), entry('앞', { priority: 3, position: 'before_char', keys: ['a, b', 'c'] }), entry('늘', { constant: true })],
+      loreFolders: ['기기'],
+      assets: pictures.map((bytes, place) => ({ name: `wall${place}`, read: async () => bytes })),
+    }, () => {});
+    const id = made.ok ? made.data.id : '';
+    const tool = readTool(new TextEncoder().encode('//@api 1\n//@name dial\n//@author jin'));
+    if (!tool.ok) throw new Error('fixture');
+    const saved = await files.save([tool.tool.bytes]);
+    if (!saved.ok) throw new Error(saved.error);
+    await store.batch([{ type: 'create', kind: 'tool', id: toolId(id), parent: id, value: { manifest: tool.tool.manifest, file: saved.data[0]!, size: tool.tool.bytes.byteLength, settings: {} } }]);
+
+    const chunks: Uint8Array<ArrayBuffer>[] = [];
+    const output = { write: async (chunk: Uint8Array<ArrayBuffer>) => void chunks.push(chunk), close: async () => {}, abort: async () => {} };
+    expect(await exportModule(store, files, id, output, () => {})).toEqual({ ok: true, data: { tools: 1 } });
+    const file = new Uint8Array(await new Blob(chunks).arrayBuffer());
+    const risum = readRisum(file)!;
+    expect(risum.assets.map((block) => block())).toEqual(pictures);
+    expect(list(risum.module.assets)).toHaveLength(pictures.length);
+    expect(risum.module).toMatchObject({ id, namespace: 'phone', lowLevelAccess: true });
+    // Risu's own lists hold what is on: one script, one trigger, the folder and the three entries it reads.
+    expect([list(risum.module.regex).length, list(risum.module.trigger).length, list(risum.module.lorebook).length]).toEqual([1, 1, 4]);
+
+    const read = importCard('전화.risum', file);
+    if (!read.ok || !('module' in read)) throw new Error('not a module');
+    expect(read.module.unsupported).toEqual([]);
+    const other = await server.account('other');
+    const brought = await importModule(other.store, other.files, read.module, () => {});
+    const before = await heldModule(store, files, id);
+    expect(await heldModule(other.store, other.files, brought.ok ? brought.data.id : '')).toEqual(before);
   });
 });

@@ -1,34 +1,43 @@
+import { useState } from 'react';
 import { ToolSection } from './ToolSection';
 import type { Stored } from '../../model/kinds';
 import { likenessId } from '../../model/likeness';
 import { isToggle } from '../../model/prompt';
+import { exportModule } from '../../runtime/card-file';
 import { editModule, setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { holdsLine } from '../common/pack';
 import { AssetsEditor } from '../common/AssetsEditor';
+import { fileNamed } from '../common/download';
+import { runExport } from '../common/exporting';
 import { LoreEditor } from '../common/LoreEditor';
 import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { ALWAYS, BIN_KEEPS, moduleName, promptName } from '../common/words';
-import { useChildren, useLibrary, usePersonas, usePrompts, useSettings, useStore, useStored } from '../session';
+import { ALWAYS, BIN_KEEPS, EXPORT, moduleName, promptName, TOOL } from '../common/words';
+import { useChildren, useFiles, useLibrary, usePersonas, usePrompts, useSettings, useStore, useStored } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Avatar, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
+import { Avatar, Button, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
 import { useModuleParts } from './ModulesScreen';
 
 const ALWAYS_ON = `${ALWAYS} 켜기`;
 const USED_BY = '쓰는 캐릭터';
 const PROMPTS_USING = '쓰는 프롬프트';
 const PERSONAS_USING = '쓰는 페르소나';
+const RISU_FILE = 'Risu 모듈 파일';
+const RISU_FILE_HELP =
+  'RisuAI 설정 › 모듈에서 가져오거나 창에 끌어다 놓으면 열려요. 이미지는 그대로 담겨요. 도구와 삽화 프로필은 빠져요. 꺼 둔 스크립트와 로어북 항목은 Risu에 없고, 우선순위·위치가 있거나 키에 쉼표가 든 항목은 Risu에서 일부만 적용돼요. 헤이젤로 다시 가져오면 모두 그대로 돌아와요. Lua 트리거가 있으면 Risu의 저수준 접근을 켠 채로 내보내요.';
 
 export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>; pane: 'toggles' | null; back: Back }) {
   const store = useStore();
+  const files = useFiles();
   const toast = useToast();
   const wide = useWide();
+  const [exporting, setExporting] = useState<string | null>(null);
   const { id, value } = stored;
   const always = useSettings().modules?.includes(id) ?? false;
   const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
@@ -44,6 +53,16 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
   async function setAlways(on: boolean) {
     const saved = await setModuleAlways(store, id, on);
     if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
+  }
+
+  function exportFile() {
+    runExport(
+      toast,
+      fileNamed(name, moduleName(''), 'risum'),
+      (output, progress) => exportModule(store, files, id, output, progress),
+      setExporting,
+      ({ tools }) => toast.show(`'${moduleName(name)}' 모듈을 내보냈어요.`, tools ? { detail: `${TOOL}는 빼고 내보냈어요.` } : undefined),
+    );
   }
 
   function remove() {
@@ -79,6 +98,17 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
           label={ALWAYS_ON}
           help="켜면 모든 채팅에 적용돼요."
           control={<Switch label={ALWAYS_ON} checked={always} onChange={(on) => void setAlways(on)} />}
+        />
+      </SettingGroup>
+      <SettingGroup label={EXPORT}>
+        <SettingRow
+          label={RISU_FILE}
+          help={RISU_FILE_HELP}
+          control={
+            <Button variant="secondary" size="sm" icon={ACTS.export.icon} busy={exporting !== null} onClick={exportFile}>
+              {exporting ?? EXPORT}
+            </Button>
+          }
         />
       </SettingGroup>
       <ToolSection module={stored} />

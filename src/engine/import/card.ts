@@ -1,5 +1,5 @@
-import { add, cardSource, convert, convertModule, counted, lorebookSource, record, text, type Converted, type Tally } from './convert';
-import { hazelleSource, printOf, readHazelle, type ConvertedBundle } from './hazelle';
+import { add, cardSource, convert, counted, extensionOf, lorebookSource, record, text, type Converted, type Tally } from './convert';
+import { hazelleSource, printOf, readHazelle, readModule, type ConvertedBundle } from './hazelle';
 import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
 import { readPng } from './png';
 import { readRisum, writeRisum } from './risum';
@@ -94,7 +94,7 @@ function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const read = readRisum(bytes);
   if (!read) return fail('unreadable', 'not a module');
   const tally: Tally = new Map();
-  const { assets: names, ...module } = convertModule(read.module, tally);
+  const { assets: names, ...module } = readModule(read.module, tally);
   add(tally, 'missing-asset', Math.max(0, names.length - read.assets.length));
   const assets = read.assets.slice(0, names.length).map((block, index) => ({ name: names[index]!, read: async () => block() }));
   return { ok: true, module: { ...module, assets, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
@@ -105,7 +105,7 @@ function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const raw: unknown = JSON.parse(utf8.decode(bytes));
   // Risu's JSON export of a module, which names its pictures without holding them.
   if (isRecord(raw) && raw.type === 'risuModule') {
-    const { assets, ...module } = convertModule(raw, tally);
+    const { assets, ...module } = readModule(raw, tally);
     add(tally, 'missing-asset', assets.length);
     return { ok: true, module: { ...module, assets: [], unsupported: counted(UNSUPPORTED_KINDS, tally) } };
   }
@@ -203,7 +203,6 @@ export function imageType(bytes: Uint8Array): string | null {
   return null;
 }
 
-const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif' };
 const utf8Out = new TextEncoder();
 
 // The inverse of fromCharx: card.json and module.risum, and the paths the pictures go at, the avatar's first, then the
@@ -211,13 +210,12 @@ const utf8Out = new TextEncoder();
 // name, so no name needs making safe for a path; the card names each. The print is made by reading what is written.
 export function writeCharx(bot: Bot): { files: { path: string; bytes: Uint8Array<ArrayBuffer> }[]; pictures: string[] } {
   const source = hazelleSource(bot);
-  const extension = (type: string) => EXTENSIONS[type] ?? 'png';
-  const icon = bot.avatar === null ? [] : [{ type: 'icon', name: 'main', ext: extension(bot.avatar), uri: `embeded://assets/icon/image/main.${extension(bot.avatar)}` }];
-  const assets = [...icon, ...source.assets.map(({ name, type }, place) => ({ type: 'x-risu-asset', name, ext: extension(type), uri: `embeded://assets/other/image/${place}.${extension(type)}` }))];
+  const icon = bot.avatar === null ? [] : [{ type: 'icon', name: 'main', ext: extensionOf(bot.avatar), uri: `embeded://assets/icon/image/main.${extensionOf(bot.avatar)}` }];
+  const assets = [...icon, ...source.assets.map(({ name, type }, place) => ({ type: 'x-risu-asset', name, ext: extensionOf(type), uri: `embeded://assets/other/image/${place}.${extensionOf(type)}` }))];
   const module = writeRisum({ name: bot.card.name, description: '', regex: source.regex, trigger: source.triggers, lorebook: lorebookSource(source.lore, source.loreFolders) });
-  const plain = utf8Out.encode(JSON.stringify(cardSource(bot.card, assets, {})));
+  const plain = utf8Out.encode(JSON.stringify(cardSource(bot.card, assets, {}, source.lua)));
   const read = convert(JSON.parse(utf8.decode(plain)), readRisum(module)!.module, new Map())!;
-  const card = cardSource(bot.card, assets, { hazelle: { ...source.extension, print: printOf(read, writeToggles(bot.card.toggles)) } });
+  const card = cardSource(bot.card, assets, { hazelle: { ...source.extension, print: printOf(read, writeToggles(bot.card.toggles)) } }, source.lua);
   return {
     files: [{ path: 'card.json', bytes: utf8Out.encode(JSON.stringify(card)) }, { path: 'module.risum', bytes: module }],
     pictures: assets.map(({ uri }) => uri.slice('embeded://'.length)),

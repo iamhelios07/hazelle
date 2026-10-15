@@ -87,9 +87,11 @@ export type Profiles = Omit<Likeness, 'receipt'>;
 export type HazelleOwn = { character: CharacterOwn; likeness: Profiles | null };
 export type BundledModule = ImportedModule & { likeness: Profiles | null };
 
-// A character as the charx writer takes it (engine/import/card writeCharx): pictures by their type, the bytes fetched
-// later in the same order.
+// A character as the charx writer takes it (engine/import/card writeCharx), and a module as the .risum writer does
+// (engine/import/hazelle moduleSource): pictures by their type, the bytes fetched later in the same order.
 type Typed = { name: string; type: string };
+// risu: the id the module goes by in files, its Risu id or else its id here.
+export type TypedModule = Omit<BundledModule, 'assets' | 'unsupported' | 'risu'> & { risu: string; assets: Typed[] };
 export type Bot = {
   card: Card;
   lore: LoreEntry[];
@@ -97,7 +99,7 @@ export type Bot = {
   avatar: string | null;
   assets: Typed[];
   own: HazelleOwn;
-  bundled: (Omit<BundledModule, 'assets' | 'unsupported'> & { assets: Typed[] })[];
+  bundled: TypedModule[];
 };
 
 // The asset kinds say why a listed asset was not kept. 'refused-picture' is counted where pictures are stored
