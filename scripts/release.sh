@@ -23,10 +23,12 @@ git tag "$tag"
 git push origin "$tag"
 scripts/deploy.sh --prepare &
 prepare=$!
-# The run appears a few seconds after the push; tag-triggered runs list the tag as their branch.
+# The run appears a few seconds after the push; tag-triggered runs list the tag as their branch. Matched on the commit
+# too: a tag deleted and made again after a failed build keeps that build's run under the same branch.
+commit=$(git rev-parse "$tag^{commit}")
 run=
 for _ in $(seq 1 12); do
-  run=$(gh run list --workflow=release.yml --branch "$tag" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+  run=$(gh run list --workflow=release.yml --branch "$tag" --commit "$commit" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
   [ -n "$run" ] && break
   sleep 5
 done
