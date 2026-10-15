@@ -1,9 +1,8 @@
 import { toolMenu } from './toolMenu';
-import { BookKey, BookOpen, Bookmark, Brain, DatabaseZap, ImageOff, Keyboard, MessageSquarePlus, Package, Search, SlidersHorizontal, SquarePen, UsersRound } from 'lucide-react';
+import { BookKey, BookOpen, Bookmark, Brain, DatabaseZap, Keyboard, MessageSquarePlus, Package, Search, SlidersHorizontal, SquarePen, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { BOOKMARK, CAST, CHAT_LORE, EXPORT, NO_CHARACTER } from '../common/words';
-import { useDisplay } from '../display';
 import { useRemembering } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
@@ -36,7 +35,6 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const { id, item, shelf, cast, route, toggles, panel, modelMenu, castMenu, actions } = chat;
   const remembering = useRemembering();
-  const { display, changeDisplay } = useDisplay();
   const tools = toolMenu(chat.tools);
   const failed = id !== null && remembering.failed.has(id);
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
@@ -76,7 +74,6 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         </>}
         <Divider variant="menu" />
         <MenuItem icon={BookOpen} label="읽기 설정" onClick={() => actions.openDialog('reading')} />
-        <MenuItem icon={ImageOff} label="이미지 가리기" checked={display.hidePictures} multiple onClick={() => changeDisplay({ hidePictures: !display.hidePictures })} />
         <MenuItem icon={Keyboard} label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>

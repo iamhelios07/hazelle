@@ -1,5 +1,5 @@
 import { useDisplay } from '../display';
-import { ChoiceGroup, SettingRow, Stepper } from '../ui';
+import { ChoiceGroup, SettingRow, Stepper, Switch } from '../ui';
 import { choices, FONT, REPLY, SIZE, SPACING } from './reading';
 
 export function ReadingRows() {
@@ -38,6 +38,17 @@ export function ReplyRow() {
       label="응답이 올 때"
       wide
       control={<ChoiceGroup layout="segmented" label="응답이 올 때" options={choices(REPLY)} value={reading.reply} onChange={(reply) => changeReading({ reply })} />}
+    />
+  );
+}
+
+export function HidePicturesRow() {
+  const { display, changeDisplay } = useDisplay();
+  return (
+    <SettingRow
+      label="이미지 가리기"
+      help="채팅 속 이미지는 눌러서 하나씩 볼 수 있어요."
+      control={<Switch label="이미지 가리기" checked={display.hidePictures} onChange={(hidePictures) => changeDisplay({ hidePictures })} />}
     />
   );
 }

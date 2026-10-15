@@ -4,7 +4,7 @@ import { EMPTY_SETTINGS, type SavedLook } from '../../model/settings';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
-import { ReadingRows, ReplyRow } from '../common/ReadingRows';
+import { HidePicturesRow, ReadingRows, ReplyRow } from '../common/ReadingRows';
 import { choices, describeLook, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
 import { typedText } from '../common/typed';
 import { PAGES } from '../common/words';
@@ -118,11 +118,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
         </Section>
         <Section title="이미지">
           <SettingGroup label="이미지">
-            <SettingRow
-              label="이미지 가리기"
-              help="채팅 속 이미지는 눌러서 하나씩 볼 수 있어요."
-              control={<Switch label="이미지 가리기" checked={display.hidePictures} onChange={(hidePictures) => changeDisplay({ hidePictures })} />}
-            />
+            <HidePicturesRow />
             <PictureMostRow />
           </SettingGroup>
         </Section>
