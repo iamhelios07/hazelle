@@ -58,7 +58,7 @@ export const noteLines = (note: string | undefined) => (note ?? '').split('\n').
 export const NOTE_UNSENT = `번역 프롬프트에 '${TRANSLATOR_NOTE}' 블록을 추가해야 노트가 적용돼요.`;
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
-export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅 기본값', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', translator: '번역기', account: '계정', usage: '사용량', admin: '운영' };
+export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅 기본값', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', labs: '실험실', translator: '번역기', account: '계정', usage: '사용량', admin: '운영' };
 
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집's and a prompt's 모듈 section (항상 켜짐).

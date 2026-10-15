@@ -43,6 +43,7 @@ const AccountScreen = lazy(() => import('../settings/AccountScreen').then(({ Acc
 const ChatSettingsScreen = lazy(() => import('../settings/ChatSettingsScreen').then(({ ChatSettingsScreen }) => ({ default: ChatSettingsScreen })));
 const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ DisplayScreen }) => ({ default: DisplayScreen })));
 const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageScreen }) => ({ default: UsageScreen })));
+const LabsScreen = lazy(() => import('../settings/LabsScreen').then(({ LabsScreen }) => ({ default: LabsScreen })));
 const TranslatorScreen = lazy(() => import('../settings/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
 const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
 
@@ -124,6 +125,8 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
         return <DisplayScreen back={sideBack(at)} />;
       case 'translator':
         return <TranslatorScreen back={sideBack(at)} />;
+      case 'labs':
+        return <LabsScreen back={sideBack(at)} />;
       // Its path can be typed by anyone; the server refuses every call but the operator's.
       case 'admin':
         return <AdminPage back={sideBack(at)} closeSettings={closeSettings} />;

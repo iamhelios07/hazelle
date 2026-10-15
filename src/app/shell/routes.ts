@@ -39,6 +39,7 @@ export type Route =
   | { kind: 'chat-settings' }
   | { kind: 'display' }
   | { kind: 'translator' }
+  | { kind: 'labs' }
   | { kind: 'admin' }
   // 헤이젤로 가져오기 from a share link (library/ShareArrival); its key waits in common/sharePending, never in the path.
   | { kind: 'share'; id: string }
@@ -119,6 +120,7 @@ export function parseRoute(at: string): Route {
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
   if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };
   if (top === 'settings' && id === 'translator' && sub === undefined) return { kind: 'translator' };
+  if (top === 'settings' && id === 'labs' && sub === undefined) return { kind: 'labs' };
   if (top === 'settings' && id === 'admin' && sub === undefined) return { kind: 'admin' };
   return HOME;
 }
@@ -186,6 +188,8 @@ export function href(route: Route): string {
       return '/settings/display';
     case 'translator':
       return '/settings/translator';
+    case 'labs':
+      return '/settings/labs';
     case 'admin':
       return '/settings/admin';
     case 'share':
@@ -220,7 +224,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
   }
 }
 
-export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'translator' | 'account' | 'admin';
+export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'translator' | 'labs' | 'account' | 'admin';
 
 // 'list' for 설정's own list, or null outside 설정. While it is not null, the settings layer stands in for the library.
 export function settingsPage(route: Route): SettingsPage | 'list' | null {
@@ -242,6 +246,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'account':
     case 'display':
     case 'translator':
+    case 'labs':
     case 'admin':
       return route.kind;
     case 'usage':
@@ -303,6 +308,7 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'chat-settings':
     case 'display':
     case 'translator':
+    case 'labs':
     case 'admin':
       return { kind: 'settings' };
     case 'usage':
