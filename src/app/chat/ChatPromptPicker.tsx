@@ -1,7 +1,7 @@
 import { FileText } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
-import { chatPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
+import { chatPrompt, isDefaultPrompt, ofSort, type PromptChoice } from '../../runtime/prompts';
 import { useSearch } from '../common/useSearch';
 import { byLastUse, byPromptName, groupPrompts } from '../common/promptCopies';
 import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
@@ -9,11 +9,10 @@ import { defaultMark, DELETED_PROMPT, follows, promptName } from '../common/word
 import { useSession, useSettings, usePrompts } from '../session';
 import { useToast } from '../toast';
 import { Button, ChipButton, Dialog, Empty, hasFinePointer, Icon, List, ListItem, Row } from '../ui';
-import type { OpenChat } from './useChat';
+import type { ChatSettingsActions } from './useChatSettings';
 
 // Without its own choice it follows the default live, and a deleted one shows as missing, never as another prompt.
-export function ChatPromptPicker({ chat }: { chat: OpenChat }) {
-  const { prompt, dialog, actions } = chat;
+export function ChatPromptPicker({ prompt, open, onOpen }: { prompt: PromptChoice; open: boolean; onOpen: () => void }) {
   const label = prompt.kind === 'prompt' ? prompt.prompt.value.name : prompt.own ? DELETED_PROMPT : '기본 프롬프트 없음';
   return (
     <ChipButton
@@ -23,17 +22,16 @@ export function ChatPromptPicker({ chat }: { chat: OpenChat }) {
       tone={prompt.kind === 'missing' ? 'warn' : 'default'}
       phone="icon"
       popup="dialog"
-      expanded={dialog === 'prompt'}
+      expanded={open}
       ref={null}
-      onClick={() => actions.openDialog('prompt')}
+      onClick={onOpen}
     />
   );
 }
 
 // Mounted only while open, so each opening starts with an empty search. A touch screen gets no focused search, whose
 // keyboard would cover the list.
-export function PromptDialog({ chat }: { chat: OpenChat }) {
-  const { prompt, actions } = chat;
+export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: PromptChoice; onChoose: ChatSettingsActions['setPrompt']; onEdit: (id: string | null) => void; onClose: () => void }) {
   const { store } = useSession();
   const prompts = usePrompts().filter((each) => ofSort(each, 'conversation'));
   const uses = usePromptUse();
@@ -49,12 +47,12 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
   const search = useSearch(prompts.toSorted(byPromptName), '프롬프트 검색', (item) => [promptName(item.value.name)], { ref: field, onEnter: (first) => choose(first.id) });
 
   function choose(value: string | null) {
-    actions.closeDialog();
-    void actions.setOwn('prompt', value).then((saved) => saved.ok || toast.failed(saved));
+    onClose();
+    void onChoose(value).then((saved) => saved.ok || toast.failed(saved));
   }
   function open(id: string | null) {
-    actions.closeDialog();
-    actions.side({ kind: 'prompts', id, pane: null });
+    onClose();
+    onEdit(id);
   }
 
   // A picker shows every copy under its original, since the one to pick is often a copy.
@@ -84,7 +82,7 @@ export function PromptDialog({ chat }: { chat: OpenChat }) {
     </Row>
   );
   return (
-    <Dialog title="이 채팅의 프롬프트" onClose={actions.closeDialog} toolbar={search.field || undefined} footer={footer}>
+    <Dialog title="이 채팅의 프롬프트" onClose={onClose} toolbar={search.field || undefined} footer={footer}>
       {search.none && <Empty>{search.none}</Empty>}
       <List label="프롬프트">
         {!search.words && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}

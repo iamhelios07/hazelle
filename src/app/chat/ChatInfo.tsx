@@ -40,8 +40,13 @@ const callFacts = (receipt: Receipt) => [
   ...outcomeFacts(receipt),
 ];
 
-export function ChatInfo({ chat: open }: { chat: OpenChat }) {
-  const { id: chat, messages, infoPick, actions } = open;
+type Props = Pick<OpenChat, 'id' | 'messages' | 'infoPick'> & {
+  onPick: (id: string) => void;
+  onRecord: (id: string | null) => void;
+  onClose: () => void;
+};
+
+export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClose }: Props) {
   const { talk, costs } = useSession();
   const memory = useChatMemory(chat);
   const [tab, setTab] = useState<(typeof TABS)[number]['value']>('reply');
@@ -61,8 +66,8 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
 
   const stepper = (
     <>
-      <IconButton icon={ChevronLeft} label="이전 응답 정보" size="sm" disabled={at <= 0} onClick={() => actions.pickInfo(replies[at - 1]!.id)} />
-      <IconButton icon={ChevronRight} label="다음 응답 정보" size="sm" disabled={at >= replies.length - 1} onClick={() => actions.pickInfo(replies[at + 1]!.id)} />
+      <IconButton icon={ChevronLeft} label="이전 응답 정보" size="sm" disabled={at <= 0} onClick={() => onPick(replies[at - 1]!.id)} />
+      <IconButton icon={ChevronRight} label="다음 응답 정보" size="sm" disabled={at >= replies.length - 1} onClick={() => onPick(replies[at + 1]!.id)} />
     </>
   );
 
@@ -123,14 +128,14 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
           </>
         )}
         {tab === 'lore' && <SentLore sent={sent} />}
-        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={actions.memory} />}
+        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
         {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
       </>
     );
   }
 
   return (
-    <SidePanel title="응답 정보" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper} onClose={actions.closePanel}>
+    <SidePanel title="응답 정보" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper} onClose={onClose}>
       {body}
     </SidePanel>
   );

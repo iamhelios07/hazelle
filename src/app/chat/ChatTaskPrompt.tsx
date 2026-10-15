@@ -2,11 +2,11 @@ import { ofSort, translationPrompt, illustrationPrompt } from '../../runtime/pro
 import { defaultMark, DELETED_PROMPT, follows } from '../common/words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag, Text } from '../ui';
-import type { OpenChat } from './useChat';
+type NamedCharacter = { name: string } | null;
 
-export const appliesTo = (card: OpenChat['card'], own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '캐릭터별 설정이 없는 모든 채팅에 적용돼요.');
+export const appliesTo = (card: NamedCharacter, own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '캐릭터별 설정이 없는 모든 채팅에 적용돼요.');
 
-export function PerCharacter({ card, own, onChange }: { card: OpenChat['card']; own: boolean; onChange: (own: boolean) => void }) {
+export function PerCharacter({ card, own, onChange }: { card: NamedCharacter; own: boolean; onChange: (own: boolean) => void }) {
   return (
     <>
       {card && (
@@ -28,7 +28,7 @@ const TASKS = {
 
 // Without its own choice the switches follow the task's default prompt live, and a deleted one shows as missing, never
 // as another prompt.
-export function TaskPromptMenu({ task, chosen, heading, onPick, chat }: { task: keyof typeof TASKS; chosen: string | undefined; heading: string; onPick: (prompt: string | undefined) => void; chat: OpenChat }) {
+export function TaskPromptMenu({ task, chosen, heading, onPick, onEdit }: { task: keyof typeof TASKS; chosen: string | undefined; heading: string; onPick: (prompt: string | undefined) => void; onEdit: (id: string | null) => void }) {
   const { noun, setting, choose } = TASKS[task];
   const { store } = useSession();
   const settings = useSettings();
@@ -52,8 +52,8 @@ export function TaskPromptMenu({ task, chosen, heading, onPick, chat }: { task: 
         return <MenuItem key={item.id} label={item.value.name} tag={mark && <Tag tone="accent">{mark}</Tag>} checked={item.id === chosen} onClick={() => onPick(item.id)} />;
       })}
       <Divider variant="menu" />
-      {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => chat.actions.side({ kind: 'prompts', id: choice.prompt.id, pane: null })} />}
-      <MenuItem label="프롬프트 관리…" onClick={() => chat.actions.side({ kind: 'prompts', id: null, pane: null })} />
+      {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => onEdit(choice.prompt.id)} />}
+      <MenuItem label="프롬프트 관리…" onClick={() => onEdit(null)} />
     </Menu>
   );
 }

@@ -4,34 +4,32 @@ import { aliased } from '../common/alias';
 import { useSearch } from '../common/useSearch';
 import { CAST } from '../common/words';
 import { useLibrary } from '../session';
-import { Avatar, Empty, Menu, MenuHeading, MenuItem } from '../ui';
-import type { OpenChat } from './useChat';
+import { Avatar, Empty, Menu, MenuHeading, MenuItem, type MenuHandle } from '../ui';
+type Choices = { cast: string[]; character: string | null; onChange: (ids: string[]) => void };
 
 // No button of its own: it opens from the header's ⋯ (ChatHeaderActions).
-export function ChatCastMenu({ chat }: { chat: OpenChat }) {
-  const { castMenu } = chat;
+export function ChatCastMenu({ handle, ...choices }: Choices & { handle: MenuHandle }) {
   return (
     <Menu
-      handle={castMenu}
+      handle={handle}
       place="below-end"
       size="lg"
       label={CAST}
       trigger={() => null}
     >
-      <CastChoices chat={chat} />
+      <CastChoices {...choices} />
     </Menu>
   );
 }
 
 // Mounted only while the menu is open, so each opening starts with an empty search.
-function CastChoices({ chat }: { chat: OpenChat }) {
-  const { cast, shelf, actions } = chat;
+function CastChoices({ cast, character, onChange }: Choices) {
   const { characters } = useLibrary();
-  const offered = characters.filter(({ id }) => id !== shelf?.id);
+  const offered = characters.filter(({ id }) => id !== character);
   const { field, found, none } = useSearch(offered, '캐릭터 검색', ({ character }) => characterTexts(character));
   const gone = cast.filter((id) => !offered.some((each) => each.id === id));
   const full = cast.length >= CAST_MAX;
-  const flip = (id: string) => actions.setCast(cast.includes(id) ? cast.filter((each) => each !== id) : [...cast, id]);
+  const flip = (id: string) => onChange(cast.includes(id) ? cast.filter((each) => each !== id) : [...cast, id]);
   return (
     <>
       {field}

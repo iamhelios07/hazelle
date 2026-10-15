@@ -8,6 +8,8 @@ import { languageLabel } from '../common/languages';
 import { useSession, useTranslating } from '../session';
 import { useToast } from '../toast';
 
+export type TranslationActions = ReturnType<typeof useChatTranslation>['actions'];
+
 export function useChatTranslation(chatId: string, chat: Chat, messages: Shown[], texts: string[], translate: TranslateSetup) {
   const session = useSession();
   const { store, translator } = session;

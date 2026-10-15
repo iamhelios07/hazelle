@@ -12,9 +12,10 @@ import { ChatCachePanel } from './ChatCachePanel';
 import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
-import { ChatLog } from './ChatLog';
+import { ChatLog, speakers } from './ChatLog';
 import { ChatLore } from './ChatLore';
 import { ChatMemory } from './ChatMemory';
+import { ChatMemoryRecord } from './ChatMemoryRecord';
 import { ChatSearch } from './ChatSearch';
 import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
@@ -52,7 +53,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
   });
   useShortcut('find', () => actions.openSearch());
   const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
-  const cache = chat.cacheShown && <ChatCachePanel chat={chat} />;
+  const cache = chat.cacheShown && <ChatCachePanel cache={chat.cache} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onClose={actions.closeCache} onEdit={actions.side} />;
   const paired = usePanelsBeside() && !!panel && chat.cacheShown;
   useEffect(() => {
     onPaired(paired);
@@ -62,20 +63,31 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
     <>
       <ChatFrame
         back={back ? { label: back.label, onClick: () => navigate(back.to) } : undefined}
-        title={chat.search ? <ChatSearch search={chat.search} actions={actions} /> : <ChatHeading chat={chat} />}
+        title={chat.search ? <ChatSearch search={chat.search} onSearch={actions.searchFor} onStep={actions.stepSearch} onClose={actions.closeSearch} /> : <ChatHeading chat={chat} />}
         actions={<ChatHeaderActions chat={chat} />}
         above={scroll.pill && <Pill label={scroll.pill} live={busy} onClick={actions.follow} />}
         footer={<ChatComposer chat={chat} folded={folded} />}
         panel={
           panel?.kind === 'toggles' ? (
-            <ChatToggles chat={chat} />
+            <ChatToggles card={chat.card} toggles={chat.toggles} toggleOwner={chat.toggleOwner} onFlip={actions.flip} onWrite={actions.writeToggle} onReset={actions.resetToggles} onEditPrompt={prompt.kind === 'prompt' ? () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles', fromToggles: true }) : undefined} onClose={actions.closePanel} />
           ) : panel?.kind === 'info' ? (
-            <ChatInfo chat={chat} />
+            <ChatInfo id={id} messages={chat.messages} infoPick={chat.infoPick} onPick={actions.pickInfo} onRecord={actions.memory} onClose={actions.closePanel} />
           ) : panel?.kind === 'memory' ? (
             // The panel opens only from a saved chat.
-            id && <ChatMemory id={id} record={panel.record} chat={chat} />
+            id && <ChatMemory
+              id={id}
+              record={panel.record}
+              item={chat.item}
+              messages={chat.messages}
+              busy={busy}
+              onClose={actions.closePanel}
+              onTool={actions.tool}
+              onEditPrompt={prompt.kind === 'prompt' ? () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null }) : undefined}
+              onRecord={actions.memory}
+              renderRecord={(record) => <ChatMemoryRecord {...record} actions={actions} />}
+            />
           ) : panel?.kind === 'bookmarks' ? (
-            id && <ChatBookmarks id={id} chat={chat} />
+            id && <ChatBookmarks id={id} item={chat.item} messages={chat.messages} texts={chat.texts} names={speakers(chat)} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
           ) : panel?.kind === 'lore' ? (
             id && <ChatLore id={id} onClose={actions.closePanel} />
           ) : panel?.kind === 'tool' ? (
@@ -89,7 +101,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
         beside={panel && cache}
         peek={
           <SidePeeks>
-            {chat.peeking && <ChatStatusPeek chat={chat} />}
+            {chat.peeking && <ChatStatusPeek status={chat.status} held={chat.held} decor={chat.decor} onHold={actions.hold} onPress={actions.press} onUnmark={(script) => actions.markStatus(script, false)} />}
           </SidePeeks>
         }
         reading={reading}

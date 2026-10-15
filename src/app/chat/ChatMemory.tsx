@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
 import { embedModel } from '../../runtime/assignment';
 import { memoryOwner, memorySetup } from '../../runtime/memory-read';
@@ -14,7 +14,7 @@ import { CHAPTER, inSettings, MODEL_ROLES, RESET } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, MenuItem, MoreMenu, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
-import { ChatMemoryRecord, MemoryRow } from './ChatMemoryRecord';
+import { MemoryRow, type ChatMemoryRecord } from './ChatMemoryRecord';
 import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
 
@@ -40,7 +40,17 @@ function useView(id: string, busy: boolean, inputs: unknown[]): MemoryView | nul
 
 // 장기 기억 (design §6.2). Without memoryView's answer nothing is said about what is sent: no status, no tokens, no missing
 // slot.
-export function ChatMemory({ id, record, chat }: { id: string; record: string | null; chat: OpenChat }) {
+type Props = Pick<OpenChat, 'item' | 'messages' | 'busy'> & {
+  id: string;
+  record: string | null;
+  onClose: () => void;
+  onTool: (id: string) => void;
+  onEditPrompt: (() => void) | undefined;
+  onRecord: (id: string | null) => void;
+  renderRecord: (record: Omit<ComponentProps<typeof ChatMemoryRecord>, 'actions'>) => ReactNode;
+};
+
+export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, onEditPrompt, onRecord, renderRecord }: Props) {
   const session = useSession();
   const { store } = session;
   const toast = useToast();
@@ -48,7 +58,6 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const settings = useSettings();
   const prompts = usePrompts();
   const { running, failed, chapterFailed, indexing, indexFailed } = useRemembering();
-  const { item, messages, prompt, busy, actions } = chat;
   const [messagePositions] = useState(() => new MessagePositions());
   const positions = messagePositions.read(messages);
   // The panel opens only from a saved chat, whose item is there.
@@ -67,7 +76,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   });
 
   const opened = record === null ? undefined : [...memory.records, ...memory.chapters].find((each) => each.id === record);
-  if (opened) return <ChatMemoryRecord chat={id} item={opened} memory={memory} view={view} positions={positions} actions={actions} />;
+  if (opened) return renderRecord({ chat: id, item: opened, memory, view, positions });
 
   async function revert() {
     if (!(await save.flush())) return;
@@ -90,11 +99,11 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   );
 
   return (
-    <SidePanel title="장기 기억" actions={holder ? undefined : more} onClose={actions.closePanel}>
+    <SidePanel title="장기 기억" actions={holder ? undefined : more} onClose={onClose}>
       {holder && (
         <Row kind="spread">
           <Text>{`${holder.tool.manifest.displayName} 도구가 장기 기억을 맡고 있어요.`}</Text>
-          {holder.tool.manifest.page && <Button variant="secondary" size="sm" onClick={() => actions.tool(holder.module)}>도구 열기</Button>}
+          {holder.tool.manifest.page && <Button variant="secondary" size="sm" onClick={() => onTool(holder.module)}>도구 열기</Button>}
         </Row>
       )}
       {writing ? (
@@ -120,7 +129,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
       {owner?.kind === 'built-in' && !embeds && <Text variant="note">{`${MODEL_ROLES.embed}을 고르면 지금 대화와 관련된 지난 기록을 찾아 넣어요. ${inSettings('models')}에서 고를 수 있어요.`}</Text>}
       {!owner && <Text variant="note">이 채팅은 장기 기억을 쓰지 않아요.</Text>}
       {owner && view && !view.slot && (
-        <Callout tone="warn" action={prompt.kind === 'prompt' ? { label: '프롬프트 열기', onClick: () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null }) } : undefined}>
+        <Callout tone="warn" action={onEditPrompt ? { label: '프롬프트 열기', onClick: onEditPrompt } : undefined}>
           프롬프트에 장기 기억 블록이 없어서 기억을 보내지 않아요.
         </Callout>
       )}
@@ -155,7 +164,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         {memory.records.length ? (
           <List label="기록">
             {rows.map((each) => (
-              <MemoryRow key={each.id} item={each} view={view} positions={positions} onOpen={() => actions.memory(each.id)} />
+              <MemoryRow key={each.id} item={each} view={view} positions={positions} onOpen={() => onRecord(each.id)} />
             ))}
           </List>
         ) : (

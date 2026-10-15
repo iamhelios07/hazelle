@@ -3,12 +3,15 @@ import { useState } from 'react';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { follows } from '../common/words';
 import { Button, Menu, Row, Stack, Text, TextField, ToolButton, useMenuClose } from '../ui';
-import type { OpenChat } from './useChat';
+import type { PromptChoice } from '../../runtime/prompts';
+import type { ChatSettingsActions } from './useChatSettings';
+
+type Props = { id: string | null; note: string | undefined; prompt: PromptChoice; onSave: ChatSettingsActions['setNote'] };
 
 // '' is the chat's own choice of no note; following the prompt's default again is a separate choice, never an
 // emptied box.
-export function ChatNote({ chat }: { chat: OpenChat }) {
-  const { note } = chat;
+export function ChatNote(props: Props) {
+  const { note } = props;
   return (
     <Menu
       kind="dialog"
@@ -26,30 +29,29 @@ export function ChatNote({ chat }: { chat: OpenChat }) {
         />
       )}
     >
-      <NoteEditor chat={chat} />
+      <NoteEditor {...props} />
     </Menu>
   );
 }
 
 // Mounted only while the box is open, so it starts from what is saved.
-function NoteEditor({ chat }: { chat: OpenChat }) {
-  const { id, note, prompt, actions } = chat;
+function NoteEditor({ id, note, prompt, onSave }: Props) {
   const close = useMenuClose();
   const fallback = prompt.kind === 'prompt' ? prompt.prompt.value.authorNote : null;
   // An unsaved chat holds the note itself until its first send, so only a saved one goes through autosave.
-  const autosave = useAutosave<{ note: string | null }>(`note:${id}`, (patch) => actions.setOwn('note', patch.note as string | null));
+  const autosave = useAutosave<{ note: string | null }>(`note:${id}`, (patch) => onSave(patch.note as string | null));
   // A save still on its way from the box opened before is newer than what is stored.
   const [text, setText] = useState(('note' in autosave.unsaved ? autosave.unsaved.note : note) ?? fallback ?? '');
 
   function change(value: string) {
     setText(value);
-    if (!id) return void actions.setOwn('note', value);
+    if (!id) return void onSave(value);
     autosave.change({ note: value });
   }
 
   function follow() {
     setText(fallback ?? '');
-    if (!id) return void actions.setOwn('note', null);
+    if (!id) return void onSave(null);
     void autosave.save({ note: null });
   }
 

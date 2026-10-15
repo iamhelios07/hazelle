@@ -97,7 +97,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const storyText = paragraph === null ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraph) : withMarks(text, new Set([paragraph]));
   const html = useMemo(() => shownHtml(storyText, decor), [storyText, decor.bot, decor.url]);
   const running = drawing !== null && drawing.stage !== 'failed';
-  const picture = slot && <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} actions={actions} />;
+  const picture = slot && <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />;
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.

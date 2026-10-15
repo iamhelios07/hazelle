@@ -36,18 +36,17 @@ function rows(parts: ForecastPart[]): Row[] {
 
 // 캐시 (design §4.4): what sending the draft now would read, write and leave out of the cache, kept up as the draft, the
 // prompt or a lorebook changes; and what each earlier call read, with why its send expected less.
-export function ChatCachePanel({ chat }: { chat: OpenChat }) {
-  const { cache, messages, busy, prompt, shelf, actions } = chat;
+export function ChatCachePanel({ cache, messages, busy, prompt, character, onClose, onEdit }: Pick<OpenChat, 'cache' | 'messages' | 'busy' | 'prompt'> & { character: string | null; onClose: () => void; onEdit: (side: Side) => void }) {
   const { store } = useSession();
   const conversation = prompt.kind === 'prompt' ? { id: prompt.prompt.id, blocks: prompt.prompt.value.blocks } : null;
-  const editor = (from: From) => editorOf(from, conversation, shelf?.id ?? null, (lore) => store.get('lore', lore)?.parent ?? null);
+  const editor = (from: From) => editorOf(from, conversation, character, (lore) => store.get('lore', lore)?.parent ?? null);
   const turns = useMemo(() => cacheTurns(messages), [messages]);
   const [more, setMore] = useState(PAGE);
   return (
-    <SidePanel title="캐시" onClose={actions.closeCache}>
+    <SidePanel title="캐시" onClose={onClose}>
       <Stack gap="section">
         <Section title="다음 전송 예상" help="지금 보내면 어떻게 될지 입력과 프롬프트로 미리 계산해요. 토큰 수는 추정이에요.">
-          {busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty> : cache.next ? <Next forecast={cache.next.forecast} price={cache.next.cost} editor={editor} onEdit={actions.side} /> : cache.next === null && <Empty variant="section">계산할 캐시가 없어요.</Empty>}
+          {busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty> : cache.next ? <Next forecast={cache.next.forecast} price={cache.next.cost} editor={editor} onEdit={onEdit} /> : cache.next === null && <Empty variant="section">계산할 캐시가 없어요.</Empty>}
         </Section>
         <Section title="지난 요청">
           {turns.length ? (
