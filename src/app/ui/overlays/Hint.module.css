@@ -45,3 +45,10 @@
   top: auto;
   bottom: calc(var(--hint-bottom) + var(--space-8));
 }
+
+/* Its own line, its words on the text's left edge past the link's padding. */
+.door {
+  display: block;
+  margin-block-start: var(--space-4);
+  margin-inline-start: calc(-1 * var(--space-4));
+}

@@ -1,14 +1,14 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Ref } from 'react';
 import { Icon } from '../foundation/Icon';
-import { Hint } from '../overlays/Hint';
+import { Hint, type Help } from '../overlays/Hint';
 import styles from './PickCard.module.css';
 
 type Props = {
   label: string;
   value: string;
   note?: string;
-  help?: string;
+  help?: Help;
   // warn: the value names something missing.
   tone?: 'default' | 'warn';
   // A menu's opener (from Menu's trigger), or none for a card that opens a place.

@@ -4,7 +4,7 @@ import { Button } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
 import { Avatar } from '../foundation/Avatar';
 import { isComposing } from '../foundation/keys';
-import { Hint } from '../overlays/Hint';
+import { Hint, type Help } from '../overlays/Hint';
 import styles from './AskCard.module.css';
 
 export type AskAnswer = { kind: 'line' } | { kind: 'choices'; choices: { label: string; value: string | null; primary?: boolean }[] };
@@ -12,7 +12,7 @@ export type AskAnswer = { kind: 'line' } | { kind: 'choices'; choices: { label: 
 type Props = {
   from: { name: string; face: string | null };
   text?: string;
-  help?: string;
+  help?: Help;
   answer: AskAnswer;
   // null: put away unanswered, which the × does.
   onAnswer: (value: string | null) => void;

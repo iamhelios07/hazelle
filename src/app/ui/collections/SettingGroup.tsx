@@ -1,5 +1,5 @@
 import { createContext, useContext, useId, type ReactNode } from 'react';
-import { Hint } from '../overlays/Hint';
+import { Hint, type Help } from '../overlays/Hint';
 import styles from './SettingGroup.module.css';
 
 // A row in a group is one of its ruled rows; a row outside one stands bare among fields with no inset of its own.
@@ -19,7 +19,7 @@ type RowProps = {
   sentence?: ReactNode;
   changed?: boolean;
   // What the reader who does not know it needs, behind an ⓘ. A label it only restates is left out.
-  help?: string;
+  help?: Help;
   sub?: ReactNode;
   control: ReactNode;
   // A small button after the label, such as a pin.

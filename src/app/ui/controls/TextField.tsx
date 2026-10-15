@@ -1,6 +1,6 @@
 import { useId, type ChangeEvent, type ReactNode } from 'react';
 import type { Chord } from '../foundation/keys';
-import { Hint } from '../overlays/Hint';
+import { Hint, type Help } from '../overlays/Hint';
 import styles from './TextField.module.css';
 import { useBigEdit } from './useBigEdit';
 
@@ -22,7 +22,7 @@ type Props = {
   onChange: (value: string) => void;
   placeholder?: string;
   hint?: string;
-  help?: string;
+  help?: Help;
   error?: string;
   lines?: number;
   readOnly?: boolean;

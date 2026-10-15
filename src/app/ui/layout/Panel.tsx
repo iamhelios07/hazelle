@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
+import type { Help } from '../overlays/Hint';
 import styles from './Panel.module.css';
 import { Section } from './Section';
 
 type Props = {
   title?: string;
   level?: 2 | 3;
-  help?: string;
+  help?: Help;
   // By the title: a button (sm) or a control that acts on the whole card, such as its Switch.
   action?: ReactNode;
   seek?: boolean;

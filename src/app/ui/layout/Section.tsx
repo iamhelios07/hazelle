@@ -1,13 +1,15 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { ButtonSlot } from '../controls/Button';
-import { Hint } from '../overlays/Hint';
+import { Tag } from '../foundation/Tag';
+import { Hint, type Help } from '../overlays/Hint';
 import styles from './Section.module.css';
 
 type Props = {
   title: string;
   level?: 2 | 3;
   note?: string;
-  help?: string;
+  help?: Help;
+  tag?: { label: string; tone?: 'plain' | 'accent' };
   action?: ReactNode;
   seek?: boolean;
   // A Panel's, whose card may stand beside another's.
@@ -15,7 +17,7 @@ type Props = {
   children: ReactNode;
 };
 
-export function Section({ title, level = 2, note, help, action, seek = false, boxed = false, children }: Props) {
+export function Section({ title, level = 2, note, help, tag, action, seek = false, boxed = false, children }: Props) {
   const self = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     if (seek) self.current?.scrollIntoView({ block: 'start' });
@@ -27,6 +29,11 @@ export function Section({ title, level = 2, note, help, action, seek = false, bo
       <div className={styles.head}>
         <span className={styles.name}>
           <Heading className={styles.title}>{title}</Heading>
+          {tag && (
+            <span className={styles.tag}>
+              <Tag tone={tag.tone}>{tag.label}</Tag>
+            </span>
+          )}
           {help && <Hint label={title}>{help}</Hint>}
         </span>
         {action ? (
