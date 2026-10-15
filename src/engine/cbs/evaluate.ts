@@ -37,7 +37,7 @@ export type CbsContext = {
   // The 보조 모델's id, as {{axmodel}} reads it; null when the chat resolves none.
   axModel: string | null;
   // The risu-id of the bot's element whose press runs the trigger this text is evaluated in; '' outside such a run, and
-  // when the element has none. Risu reads `null`.
+  // when the element has none.
   triggerId: string;
   // The window's size, as Risu reads window.innerWidth: null in the prompt, and when the display does not know it.
   screen: { width: number; height: number } | null;

@@ -1,4 +1,5 @@
 import { isRecord } from '../../connectors/values';
+import { UNSET } from '../script-api';
 import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture, isVideo, SIGNATURE, type BotAsset } from '../assets';
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
@@ -70,12 +71,11 @@ export const bool = (value: boolean) => (value ? '1' : '0');
 // The one truthiness, for #when, #if and the logic tags. Risu's and/or/not take only `1`.
 export const truthy = (value: string) => value === '1' || value === 'true';
 
-// An unset variable reads as empty, so addvar counts from 0. Risu reads the string `null`.
-export const readVar = (context: CbsContext, name: string) => context.variables.get(name) ?? '';
-export const readToggle = (context: CbsContext, key: string) => context.toggle(key) ?? '';
+export const readVar = (context: CbsContext, name: string) => context.variables.get(name) ?? UNSET;
+export const readToggle = (context: CbsContext, key: string) => context.toggle(key) ?? UNSET;
 // risu-alpha keeps no global variables: a toggle reads as `toggle_<key>`, and every other name is unset.
 export const TOGGLE_GLOBAL = 'toggle_';
-const readGlobal = (context: CbsContext, name: string) => (name.startsWith(TOGGLE_GLOBAL) ? readToggle(context, name.slice(TOGGLE_GLOBAL.length)) : '');
+const readGlobal = (context: CbsContext, name: string) => (name.startsWith(TOGGLE_GLOBAL) ? readToggle(context, name.slice(TOGGLE_GLOBAL.length)) : UNSET);
 
 const messageIndex = (context: CbsContext) => ('message' in context.source ? context.source.message : null);
 // A bot reads the greeting as message -1 and the first message after it as 0, so a message's number is its index
@@ -99,10 +99,12 @@ function json(text: string): unknown {
     return undefined;
   }
 }
-// An array argument: a JSON array, or items separated by `§`.
+// An array argument: a JSON array, or items separated by `§`. An unset variable is an empty array, where Risu's
+// holds one item, `null`.
 export function items(text: string): string[] {
   if (text === '') return [];
   const value = json(text);
+  if (value === null) return [];
   return Array.isArray(value) ? value.map(asText) : text.split('§');
 }
 function dict(text: string): Record<string, unknown> {
@@ -175,12 +177,14 @@ define('setvar', 2, ([name, value], { context, writes }) => {
   if (writes) context.variables.set(name!, value!);
   return '';
 });
+// Counting from 0 when the value is not a number, where Risu's gives NaN.
 define('addvar', 2, ([name, amount], { context, writes }) => {
-  if (writes) context.variables.set(name!, String(Number(readVar(context, name!)) + Number(amount)));
+  if (writes) context.variables.set(name!, String(asNumber(readVar(context, name!)) + Number(amount)));
   return '';
 });
+// Unset is a missing name, not the text `null`, which a bot may have set.
 define('setdefaultvar', 2, ([name, value], { context, writes }) => {
-  if (writes && readVar(context, name!) === '') context.variables.set(name!, value!);
+  if (writes && !context.variables.get(name!)) context.variables.set(name!, value!);
   return '';
 });
 define('getglobalvar', 1, ([name], { context }) => readGlobal(context, name!));
@@ -210,10 +214,11 @@ define('any', 1, (args) => bool(variadic(args).some(truthy)));
 define('iserror', 1, ([text]) => bool(/^error:/i.test(text!)));
 
 // A value that is not a number counts as 0.
-const variableNumber = (context: CbsContext) => (token: string) => {
-  const value = Number(token.startsWith('$') ? readVar(context, token.slice(1)) : readGlobal(context, token.slice(1)));
+function asNumber(text: string): number {
+  const value = Number(text);
   return Number.isNaN(value) ? 0 : value;
-};
+}
+const variableNumber = (context: CbsContext) => (token: string) => asNumber(token.startsWith('$') ? readVar(context, token.slice(1)) : readGlobal(context, token.slice(1)));
 define('calc', 1, ([expression], { context }) => {
   const value = calc(expression!, variableNumber(context));
   return value === null ? null : String(value);
@@ -391,15 +396,16 @@ define('makedict dict object o d', 0, (args) =>
   serialize(Object.fromEntries(args.flatMap((pair) => (pair.includes('=') ? [[pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]] : [])))),
 );
 define('arraylength', 1, ([array]) => String(items(array!).length));
-define('arrayelement', 2, ([array, index]) => items(array!).at(Number(index)) ?? '');
+define('arrayelement', 2, ([array, index]) => items(array!).at(Number(index)) ?? UNSET);
 define('dictelement', 2, ([object, key]) => {
   const value = dict(object!)[key!];
-  return value === undefined ? '' : asText(value);
+  return value === undefined ? UNSET : asText(value);
 });
 define('element ele', 1, ([root, ...path]) => {
   let value = json(root!);
   for (const key of path) value = Array.isArray(value) ? value[Number(key)] : isRecord(value) ? value[key] : undefined;
-  return value === undefined ? '' : asText(value);
+  // A step that finds 0, false or empty text gives it; Risu's gives `null` for those too.
+  return value === undefined ? UNSET : asText(value);
 });
 // These return the changed array or dict, not the item removed as JS's shift and pop do, so a setvar can keep it.
 define('objectassert', 3, ([object, key, value]) => {
@@ -443,11 +449,19 @@ define('blank none', 0, () => '');
 define('risu', 0, () => '');
 // A backslash and an n, not a line break; with a count, that many.
 define('cbr', 0, ([count = '1']) => (Number(count) > MOST ? null : '\\n'.repeat(Number(count))));
-define('bo', 0, () => escapeCbs('{{'));
-define('bc', 0, () => escapeCbs('}}'));
-define('decbo', 0, () => escapeCbs('{'));
-define('decbc', 0, () => escapeCbs('}'));
-for (const char of '()<>:;') define(char, 0, () => escapeCbs(char));
+define('bo ddecbo doubledisplayescapedcurlybracketopen', 0, () => escapeCbs('{{'));
+define('bc ddecbc doubledisplayescapedcurlybracketclose', 0, () => escapeCbs('}}'));
+define('decbo displayescapedcurlybracketopen', 0, () => escapeCbs('{'));
+define('decbc displayescapedcurlybracketclose', 0, () => escapeCbs('}'));
+const ESCAPE_NAMES: Record<string, string> = {
+  '(': 'displayescapedbracketopen debo',
+  ')': 'displayescapedbracketclose debc',
+  '<': 'displayescapedanglebracketopen deabo',
+  '>': 'displayescapedanglebracketclose deabc',
+  ':': 'displayescapedcolon dec',
+  ';': 'displayescapedsemicolon',
+};
+for (const [char, names] of Object.entries(ESCAPE_NAMES)) define(`${char} ${names}`, 0, () => escapeCbs(char));
 define('comment', 1, ([text], { context }) => (context.stage === 'display' ? text! : ''));
 // The lorebook track scans the entry's raw text, so the key still chains entries.
 define('hiddenkey', 1, () => '');
@@ -494,4 +508,4 @@ define('metadata', 1, ([key], { context: { model } }) => {
   if (name === 'imateapot') return '🫖';
   return RISU_METADATA.has(name) ? null : `Error: ${name} is not a valid metadata key.`;
 });
-define('triggerid', 0, (_, { context }) => context.triggerId);
+define('triggerid', 0, (_, { context }) => context.triggerId || UNSET);

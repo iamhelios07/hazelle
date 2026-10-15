@@ -375,7 +375,7 @@ describe('block triggers', () => {
     const script: Script = { owner: OWNER, kind: 'lua', name: 'main', code: `function blocks(id) setChatVar(id, 'lua', cbs('[{{triggerid}}]')) end` };
     const press = async (id: string) => (await lua.run(String(owner++), [pressed, script], SNAPSHOT, { kind: 'call', name: 'blocks', id }, host())).writes;
     expect(await press('north')).toEqual([['door', '[north]'], ['lua', '[north]']]);
-    expect(await press('')).toEqual([['door', '[]'], ['lua', '[]']]);
+    expect(await press('')).toEqual([['door', '[null]'], ['lua', '[null]']]);
   });
 
   it('take the branch of a v2 if that holds, reading operands as texts or as variable names', async () => {
