@@ -1,9 +1,11 @@
+import type { Picture, RisuPersona } from '../engine/import/types';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { Persona } from '../model/persona';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import { thumbnail } from './picture';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
@@ -64,6 +66,12 @@ export async function addFirstPersona(store: ObjectStore, username: string): Pro
 }
 
 export const addPersona = (store: ObjectStore, persona: Persona, id?: string) => store.create('persona', persona, { id });
+
+// From a Risu backup (runtime/move) or a Risu persona PNG. A picture that does not shrink leaves it without one.
+export async function addRisuPersona(store: ObjectStore, { name, alias, description }: Pick<RisuPersona, 'name' | 'alias' | 'description'>, picture: Picture | null, modules: string[] = []) {
+  const thumb = picture && (await thumbnail(picture).catch(() => null));
+  return addPersona(store, { name, description, picture: thumb, ...(alias && { alias }), ...(modules.length > 0 && { modules }) });
+}
 
 export const editPersona = (store: ObjectStore, id: string, patch: Partial<Persona>) => store.update('persona', id, (current) => ({ ...current, ...patch }));
 

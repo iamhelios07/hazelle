@@ -6,6 +6,8 @@ import { isToggle } from '../../model/prompt';
 import { unused } from '../../engine/pipeline';
 import type { ImportedCharacter } from '../../runtime/characters';
 import type { ModulePlace } from '../../runtime/modules';
+import type { Stored } from '../../model/kinds';
+import { aliased } from '../common/alias';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
 import { ALWAYS, inSettings, NO_CHARACTER, promptName, SCRIPTS, TOOL, toolVersion } from '../common/words';
@@ -14,7 +16,7 @@ import { cardMissed, missedLines, presetMissed } from './missed';
 // Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
 // when the file held several. paired: the prompts a module, or the modules a prompt, was turned on with because a Risu
 // preset named the module.
-export type ImportOutcome = { file: string; title: string; holds: string; placed: Line | null; paired: Line | null; missed: string[]; unused: string | null } & ({ kind: 'character' | 'module' | 'prompt'; id: string } | { kind: 'chat'; id: string | null });
+export type ImportOutcome = { file: string; title: string; holds: string; placed: Line | null; paired: Line | null; missed: string[]; unused: string | null } & ({ kind: 'character' | 'module' | 'prompt' | 'persona'; id: string } | { kind: 'chat'; id: string | null });
 type Line = { text: string; failed: boolean };
 // at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
 export type Placement = { at: ModulePlace['kind'] | null; failure: string | null };
@@ -65,6 +67,11 @@ export function promptOutcome(file: string, { prompt, unsupported }: PresetRead,
     paired: modules.length > 0 ? { text: `${quoted(modules)} 모듈을 이 프롬프트에 켰어요.`, failed: false } : null,
     missed: presetMissed(unsupported), unused: null,
   };
+}
+
+export function personaOutcome(file: string, { id, value }: Stored<'persona'>): ImportOutcome {
+  const holds = ['설명', value.alias && '별명', value.picture !== null && '이미지'].filter(Boolean).join(' · ');
+  return { kind: 'persona', file, id, title: `페르소나 · ${aliased(value.name, value.alias)}`, holds, placed: null, paired: null, missed: cardMissed([], value.picture === null), unused: null };
 }
 
 const modulePlacement = ({ at, failure }: Placement): ImportOutcome['placed'] => at === null
