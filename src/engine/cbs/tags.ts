@@ -399,7 +399,7 @@ define('makedict dict object o d', 0, (args) =>
 );
 define('arraylength', 1, ([array]) => String(items(array!).length));
 define('arrayelement', 2, ([array, index]) => items(array!).at(Number(index)) ?? UNSET);
-define('dictelement', 2, ([object, key]) => {
+define('dictelement objectelement', 2, ([object, key]) => {
   const value = dict(object!)[key!];
   return value === undefined ? UNSET : asText(value);
 });
@@ -450,7 +450,7 @@ define('blank none', 0, () => '');
 // Ruled 2026-10-10: Risu draws its own logo here; Hazelle draws nothing.
 define('risu', 0, () => '');
 // A backslash and an n, not a line break; with a count, that many.
-define('cbr', 0, ([count = '1']) => (Number(count) > MOST ? null : '\\n'.repeat(Number(count))));
+define('cbr cnl cnewline', 0, ([count = '1']) => (Number(count) > MOST ? null : '\\n'.repeat(Number(count))));
 define('bo ddecbo doubledisplayescapedcurlybracketopen', 0, () => escapeCbs('{{'));
 define('bc ddecbc doubledisplayescapedcurlybracketclose', 0, () => escapeCbs('}}'));
 define('decbo displayescapedcurlybracketopen', 0, () => escapeCbs('{'));

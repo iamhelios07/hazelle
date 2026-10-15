@@ -10,10 +10,10 @@
 ::after {
   box-sizing: border-box;
 }
+/* Block flow, as Risu's message root (a span whose blocks break out), since bots lay out for it: a float wraps text,
+   inline-block chips sit in a row, a centered box keeps its width. A flex column broke all three. */
 :host {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-12);
+  display: block;
   font-family: var(--prose-font);
   font-size: var(--prose-size);
   line-height: var(--prose-leading);
@@ -24,9 +24,13 @@
 /* The story where the bot says nothing: any rule of the bot's sheet (Story.tsx) beats these, whatever its specificity,
    since an unlayered rule outranks a layered one. Anonymous, so a bot's sheet cannot name the layer and join it. */
 @layer {
-  :host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, pre, hr, table),
+  :host > *,
   :host > :is(blockquote, ul, ol) p {
     margin: 0;
+  }
+
+  :host > * + * {
+    margin-top: var(--space-12);
   }
 
   :host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table) em {
@@ -34,8 +38,13 @@
     color: var(--color-prose-action);
   }
 
-  :host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table) mark[risu-mark] {
+  /* A quote mark is never the browser's highlight, inside a bot's box too; its color is the prose's only. */
+  mark[risu-mark] {
     background: none;
+    color: inherit;
+  }
+
+  :host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table) mark[risu-mark] {
     color: var(--color-prose-dialogue);
   }
 

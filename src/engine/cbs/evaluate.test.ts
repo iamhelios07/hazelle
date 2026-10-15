@@ -258,6 +258,7 @@ describe('evaluate', () => {
     const text = `{{roll::${huge}d6}} {{rollp::10001d6}} {{dice::2d${huge}}} {{cbr::1e9}} {{arrayassert::[]::1e9::x}} {{range::[0,1,0]}} {{range::[20000]}}`;
     expect(run(text)).toBe(text);
     expect(run('{{cbr::2}}{{arrayassert::[]::1::x}}')).toBe('\\n\\n["","x"]');
+    expect(run('{{cnl}}{{cnewline::2}}')).toBe('\\n\\n\\n');
   });
 
   it('encodes and decodes with xor, crypt and u, each way round', () => {
@@ -317,6 +318,7 @@ describe('evaluate', () => {
   it('reads an unset variable as an empty array and as 0 in calc, and a missing element as null', () => {
     expect(run('{{arraylength::{{getvar::bag}}}} {{arraypush::{{getvar::bag}}::a}} {{? {{getvar::n}}+1}} {{#when::{{getvar::n}}::is::null}}unset{{/when}}')).toBe('0 ["a"] 1 unset');
     expect(run('{{dictelement::{"a":1}::b}} {{element::{"a":[0]}::a::0}} {{element::{"a":[0]}::a::1}}')).toBe('null 0 null');
+    expect(run('{{objectelement::{"a":1}::a}}')).toBe('1');
   });
 
   it("gives Risu's long escape names the character of their short form", () => {
