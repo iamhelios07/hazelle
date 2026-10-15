@@ -10,10 +10,10 @@ it('keeps completed card and module reports as detached text without asset reade
   if (!parsed.ok || !('card' in parsed)) throw new Error('fixture');
   const bytes = new Uint8Array([1, 2, 3]);
   const imported = { ...parsed.card, assets: [{ name: 'picture', read: async () => bytes }] };
-  const card = characterOutcome('card.charx', imported, { id: 'character', unsupported: [{ kind: 'not-image', count: 1 }], faceless: true });
+  const card = characterOutcome('card.charx', imported, { id: 'character', unsupported: [{ kind: 'unsupported-file', count: 1 }], faceless: true });
   const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: imported.card, lore: [], loreFolders: [], assets: imported.assets, unsupported: [] };
   const report = moduleOutcome('bell.risum', module, 'module', [], { at: null, failure: null }, { prompts: [], failure: null });
-  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', placed: null, paired: null, missed: ['이미지: 가져오지 못함', '이미지가 아닌 파일 1개'], unused: null });
+  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', placed: null, paired: null, missed: ['이미지: 가져오지 못함', '지원하지 않는 형식의 파일 1개'], unused: null });
   expect(report).toEqual({ kind: 'module', file: 'bell.risum', id: 'module', title: '모듈 · Bell', holds: '에셋 1개', placed: { text: '어디에도 켜지 않았어요. 설정 › 모듈에서 켤 수 있어요.', failed: false }, paired: null, missed: [], unused: null });
   expect(structuredClone([card, report])).toEqual([card, report]);
   imported.card.name = 'Changed';

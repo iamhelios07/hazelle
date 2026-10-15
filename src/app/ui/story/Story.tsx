@@ -33,9 +33,9 @@ const NAMED = '[risu-trigger], [risu-btn]';
 const PICTURE = 'data-picture';
 const OPEN = 'data-open';
 const PICTURES = Symbol('pictures');
-// Named in Story.shadow.css. Holds the source of the picture it stands in for.
+// Named in Story.shadow.css. Holds the source of the picture or video it stands in for.
 const VEILED = 'data-veiled';
-// Named in Story.shadow.css. Holds the source of the picture tapped open that it covers again.
+// Named in Story.shadow.css. Holds the source of the picture or video tapped open that it covers again.
 const COVER = 'data-cover';
 // Named in Story.shadow.css and in engine/assets.ts (inlayMissing), whose mark stands where a chat's inlay is missing.
 const INLAY_MISSING = 'data-inlay-missing';
@@ -129,22 +129,27 @@ function sheetFor(css: string, veiled: boolean): CSSStyleSheet {
   return sheet;
 }
 
-function veilFor(source: string): HTMLButtonElement {
+type Veiled = '이미지' | '영상';
+
+function veilFor(source: string, what: Veiled): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute(VEILED, source);
-  button.textContent = '이미지 보기';
+  button.textContent = `${what} 보기`;
   return button;
 }
 
-function coverFor(source: string): HTMLButtonElement {
+function coverFor(source: string, what: Veiled): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute(COVER, source);
-  button.setAttribute('aria-label', '이미지 가리기');
+  button.setAttribute('aria-label', `${what} 가리기`);
   button.textContent = '가리기';
   return button;
 }
+
+// The app's own source a video plays: its src, else its first source child's.
+const videoSource = (video: Element) => [video, ...video.querySelectorAll('source')].map((element) => element.getAttribute('src') ?? '').find((source) => OWN_SOURCE.test(source)) ?? null;
 
 // The one mark inlaid left: a paragraph of its own becomes the slot, a mark inside the bot's HTML gives the slot its
 // place; a mark the sanitizer took leaves the slot at the end.
@@ -186,20 +191,47 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
       link.setAttribute('rel', 'noopener noreferrer');
     }
   }
-  const revealed: Element[] = [];
+  const revealed: { element: Element; source: string; what: Veiled }[] = [];
+  // A video is veiled whole: one tapped open keeps the sources inside it.
+  const opened = new Set<Element>();
+  if (veil) {
+    for (const video of fragment.querySelectorAll('video')) {
+      const source = videoSource(video);
+      if (source === null) continue;
+      if (!veil.revealed.has(source)) video.replaceWith(veilFor(source, '영상'));
+      else {
+        opened.add(video);
+        revealed.push({ element: video, source, what: '영상' });
+      }
+    }
+  }
+  const inOpened = (element: Element) => {
+    const video = element.closest('video');
+    return video !== null && opened.has(video);
+  };
   for (const element of fragment.querySelectorAll('[src], [srcset]')) {
     const source = element.getAttribute('src') ?? '';
     const own = OWN_SOURCE.test(source);
     if (element.tagName !== 'IMG') {
-      if (!own || veil) element.removeAttribute('src');
+      if (!own || (veil && !inOpened(element))) element.removeAttribute('src');
     } else if (!own) {
       element.remove();
     } else if (veil && !veil.revealed.has(source)) {
-      element.replaceWith(veilFor(source));
+      element.replaceWith(veilFor(source, '이미지'));
     } else if (veil) {
-      revealed.push(element);
+      revealed.push({ element, source, what: '이미지' });
     }
     element.removeAttribute('srcset');
+  }
+  // Sound starts only from the reader's own press (user, 2026-10-15): what would play aloud by itself waits for its
+  // controls. A muted one may play; muted is set as the property too, since the attribute is only its default.
+  for (const media of fragment.querySelectorAll<HTMLMediaElement>('video[autoplay], audio[autoplay]')) {
+    if (media.hasAttribute('muted')) {
+      media.muted = true;
+    } else {
+      media.removeAttribute('autoplay');
+      media.controls = true;
+    }
   }
   // The other ways HTML draws a picture, none of which a veil opens: SVG's image and feImage, a video's poster, the
   // old background attribute. An SVG href to its own #part is not a picture.
@@ -234,7 +266,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
     at.append(slot);
   }
   // Last: a control inside a picture's line would cost it its data-picture, and the cursor would go into the control.
-  for (const picture of revealed) picture.after(coverFor(picture.getAttribute('src')!));
+  for (const { element, source, what } of revealed) element.after(coverFor(source, what));
   return fragment;
 }
 

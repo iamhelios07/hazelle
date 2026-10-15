@@ -1,6 +1,9 @@
-// A bot's own picture (design §6.4). module: the namespace of the module it came with, null for a module that has none;
+// A bot's own picture or video (design §6.4). module: the namespace of the module it came with, null for a module that has none;
 // absent for the character's own.
-export type BotAsset = { id: string; name: string; module?: string | null };
+export type BotAsset = { id: string; name: string; type: string; module?: string | null };
+
+// A kept asset is a picture or a video (engine/import assetType).
+export const isVideo = (type: string) => type.startsWith('video/');
 
 // A stored picture by its kind and id: a bot's asset, a chat's inlay, or a 삽화 (illustration), which only an export names
 // this way.
@@ -33,12 +36,12 @@ const bare = (name: string) => name.replace(EXTENSIONS, '').trim().replace(/[\s_
 
 // As Risu finds one: the name in any case, one of several that share it by the tag's own roll; else the name nearest
 // within NEAR edits, its extension and separators aside.
-export function findAsset(assets: readonly BotAsset[], name: string, random: () => number): BotAsset | null {
+export function findAsset<A extends { name: string }>(assets: readonly A[], name: string, random: () => number): A | null {
   const wanted = name.toLowerCase();
   const same = assets.filter((asset) => asset.name.toLowerCase() === wanted);
   if (same.length) return same[Math.floor(random() * same.length)]!;
   const target = bare(wanted);
-  let nearest: BotAsset | null = null;
+  let nearest: A | null = null;
   let best = NEAR + 1;
   for (const asset of assets) {
     const distance = edits(target, bare(asset.name.toLowerCase()));

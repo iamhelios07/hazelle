@@ -99,7 +99,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     axModel: 'kind' in aux ? null : aux.model.id,
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    assets: owners.flatMap(({ id: owner, module }) => store.children('asset', owner).map(({ id, value }) => ({ id, name: value.name, ...(module && { module: module.namespace }) }))),
+    assets: owners.flatMap(({ id: owner, module }) => store.children('asset', owner).map(({ id, value }) => ({ id, name: value.name, type: value.type, ...(module && { module: module.namespace }) }))),
     // Held only while the chat is loaded; a chat not saved yet has none.
     inlays: id !== null && store.scopeState(id) === 'loaded' ? store.children('inlay', id).map(({ id, value }) => ({ id, name: value.name, type: value.type })) : [],
     modules: packs.flatMap(({ module }) => module?.namespace ?? []),

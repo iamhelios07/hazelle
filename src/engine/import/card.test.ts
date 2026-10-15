@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { blankCard, importCard, writeCharx } from './card';
+import { assetType, blankCard, importCard, writeCharx } from './card';
 import { moduleSource } from './hazelle';
 import { readRisum, risumBlock, risumHead, RISUM_END, unpack, writeRisum } from './risum';
 import type { Bot, ImportResult, Imported, Trigger, TypedModule } from './types';
@@ -384,6 +384,22 @@ describe('importCard', () => {
     expect(importCard('Mira.png', own(strToU8('not a png')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.json', own(strToU8('{')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.charx', own(strToU8('PK')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
+  });
+});
+
+describe('assetType', () => {
+  it('keeps pictures, MP4 and WebM video, and nothing else, audio in an MP4 or Matroska included', () => {
+    const header = (...parts: (string | number[])[]) => new Uint8Array(parts.flatMap((part) => (typeof part === 'string' ? [...strToU8(part)] : part)));
+    const ebml = [0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x84];
+    expect([
+      header([137], 'PNG\r\n\x1a\n'),
+      header([0, 0, 0, 32], 'ftypisom'),
+      header([0, 0, 0, 32], 'ftypavif'),
+      header([0, 0, 0, 32], 'ftypM4A '),
+      header(ebml, 'webm'),
+      header(ebml, 'matroska'),
+      header('ID3'),
+    ].map(assetType)).toEqual(['image/png', 'video/mp4', 'image/avif', null, 'video/webm', null, null]);
   });
 });
 

@@ -1,4 +1,5 @@
-import { blankCard, imageType } from '../engine/import/card';
+import { assetType, blankCard, imageType } from '../engine/import/card';
+import { isVideo } from '../engine/assets';
 import { add, counted, type Tally } from '../engine/import/convert';
 import { UNSUPPORTED_KINDS, type Card, type Imported, type Pack, type Picture, type Unsupported } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
@@ -50,8 +51,8 @@ export async function addCharacter(store: ObjectStore, character: Character, { a
 // Both import entrances use faceless for thumbnail failures and refused uploads, not absent source pictures.
 export type ImportedCharacter = { id: string; unsupported: Unsupported; faceless: boolean };
 
-// typeOf: what a kept file is, null for one not kept; an inlay alone also keeps a signature (engine/import inlayType).
-export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress, typeOf: (bytes: Uint8Array) => string | null = imageType): Promise<ApiResult<{ kept: Asset[]; unsupported: Unsupported }>> {
+// typeOf: what a kept file is, null for one not kept; an inlay keeps pictures and a signature only (engine/import inlayType).
+export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress, typeOf: (bytes: Uint8Array) => string | null = assetType): Promise<ApiResult<{ kept: Asset[]; unsupported: Unsupported }>> {
   const kept: Asset[] = [];
   const tally: Tally = new Map();
   for (let start = 0; start < assets.length; start += FILE_WINDOW) {
@@ -60,7 +61,7 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
     const read = window.flatMap(({ name, bytes }) => {
       const type = bytes && typeOf(bytes);
       if (!bytes) add(tally, 'missing-asset');
-      else if (!type) add(tally, 'not-image');
+      else if (!type) add(tally, 'unsupported-file');
       return type ? [{ name, type, bytes: bytes! }] : [];
     });
     const saved = await files.save(read.map(({ bytes }) => bytes));
@@ -68,7 +69,7 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
     read.forEach(({ name, type, bytes }, index) => {
       const file = saved.data[index];
       if (file) kept.push({ name, type, size: bytes.length, file });
-      else add(tally, 'refused-picture');
+      else add(tally, isVideo(type) ? 'refused-video' : 'refused-picture');
     });
   }
   if (assets.length) progress({ kind: 'assets', done: assets.length, total: assets.length });
@@ -100,7 +101,7 @@ export async function setAvatar(store: ObjectStore, files: Files, id: string, by
   return held ? store.update('avatar', held.id, () => saved.data) : store.create('avatar', saved.data, { parent: id });
 }
 
-// owner: the character or module the pictures join, each named by its file's name without the extension.
+// owner: the character or module the files join, each named by its file's name without the extension.
 export async function addAssets(store: ObjectStore, files: Files, owner: string, picked: Pick<File, 'name' | 'arrayBuffer'>[]): Promise<ApiResult<{ added: number; unsupported: Unsupported }>> {
   const assets = picked.map((file) => ({ name: file.name.replace(/\.[^.]+$/, '') || file.name, read: async () => new Uint8Array(await file.arrayBuffer()) }));
   const saved = await saveAssets(files, assets, () => {});
@@ -113,9 +114,9 @@ export async function addAssets(store: ObjectStore, files: Files, owner: string,
   return { ok: true, data: { added: kept.length, unsupported } };
 }
 
-// The name stays, so what the bot's text shows by it becomes the new picture. The old file stays held, as for setAvatar.
+// The name stays, so what the bot's text shows by it becomes the new file. The old file stays held, as for setAvatar.
 export async function replaceAsset(store: ObjectStore, files: Files, id: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<Stored<'asset'>>> {
-  const type = imageType(bytes);
+  const type = assetType(bytes);
   if (!type) return { ok: false, error: 'picture-unreadable' };
   const saved = await files.save([bytes]);
   if (!saved.ok) return saved;
