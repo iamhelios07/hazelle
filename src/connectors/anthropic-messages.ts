@@ -10,7 +10,10 @@ const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const supported = (entry: unknown) => (isRecord(entry) && typeof entry.supported === 'boolean' ? entry.supported : null);
 
 // A level alone sets effort and leaves thinking to the model's default, which is off on some models
-// (Opus 4.7, 4.8) and adaptive on others (Opus 5 on); adaptive asks for thinking outright.
+// (Opus 4.7, 4.8) and adaptive on others (Opus 5 on); adaptive asks for thinking outright. From Opus 4.7 on, thinking
+// comes back as empty text unless display asks for its summary; display changes what is shown, not what is billed.
+// Copilot takes it: VS Code's Copilot Chat sends the same (microsoft/vscode, extensions/copilot/src/platform/endpoint/
+// node/messagesApi.ts); not yet seen on a live Copilot call here.
 function reasoningFields(reasoning: Reasoning | undefined) {
   switch (reasoning?.kind) {
     case undefined:
@@ -22,7 +25,7 @@ function reasoningFields(reasoning: Reasoning | undefined) {
     case 'level':
       return { output_config: { effort: reasoning.level } };
     case 'adaptive':
-      return { thinking: { type: 'adaptive' }, ...(reasoning.level === null ? {} : { output_config: { effort: reasoning.level } }) };
+      return { thinking: { type: 'adaptive', display: 'summarized' }, ...(reasoning.level === null ? {} : { output_config: { effort: reasoning.level } }) };
   }
 }
 

@@ -103,7 +103,7 @@ describe('what a request carries', () => {
         { role: 'user', content: '안녕' },
       ],
       temperature: 1,
-      thinking: { type: 'adaptive' },
+      thinking: { type: 'adaptive', display: 'summarized' },
       output_config: { effort: 'high' },
       stream: true,
     });
