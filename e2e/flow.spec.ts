@@ -128,7 +128,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     // A native save dialog does not emit Playwright's download event; this flow exercises the disk-backed OPFS path.
     await page.evaluate(() => Object.defineProperty(globalThis, 'showSaveFilePicker', { value: undefined, configurable: true }));
     const saved = page.waitForEvent('download');
-    await page.getByRole('button', { name: '내보내기', exact: true }).click();
+    await page.getByRole('group', { name: '전체 백업' }).getByRole('button', { name: '내보내기', exact: true }).click();
     const file = await (await saved).path();
     const objects = strFromU8(unzipSync(readFileSync(file))['objects.jsonl']!);
     expect(objects).toContain(DESCRIPTION);

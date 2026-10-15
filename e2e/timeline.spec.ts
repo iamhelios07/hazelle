@@ -315,7 +315,7 @@ test('a restore between the two scans of a backup export ends it with its sessio
   server.hold(page, (url) => url.pathname === '/api/objects' && url.searchParams.has('metadata') && !url.searchParams.has('parent'));
   await page.keyboard.press('Control+,');
   await settingsPage(page, '계정');
-  await page.getByRole('button', { name: '내보내기', exact: true }).click();
+  await page.getByRole('group', { name: '전체 백업' }).getByRole('button', { name: '내보내기', exact: true }).click();
   await expect.poll(() => server.held(page)).toBe(1);
   server.restore(server.snapshot(), 't1');
   server.release(page);
