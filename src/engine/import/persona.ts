@@ -3,7 +3,10 @@ import { text } from './convert';
 import { base64 } from './png';
 import type { ImportResult } from './types';
 
-// Risu's importUserPersona takes a persona only with a name and a prompt. Its note is read as a backup's (engine/import/backup).
+// A Risu persona record, from a backup's list or a persona PNG.
+export const risuPersonaFields = (raw: Record<string, unknown>) => ({ name: text(raw.name), alias: text(raw.note).trim(), description: text(raw.personaPrompt) });
+
+// Risu's importUserPersona takes a persona only with a name and a prompt.
 export function readPersona(payload: string, image: Uint8Array<ArrayBuffer>): ImportResult {
   let raw: unknown;
   try {
@@ -12,8 +15,7 @@ export function readPersona(payload: string, image: Uint8Array<ArrayBuffer>): Im
     return { ok: false, failure: { kind: 'unreadable', detail: 'persona-unreadable' } };
   }
   if (!isRecord(raw)) return { ok: false, failure: { kind: 'unreadable', detail: 'persona-unreadable' } };
-  const name = text(raw.name);
-  const description = text(raw.personaPrompt);
-  if (!name || !description) return { ok: false, failure: { kind: 'unreadable', detail: 'persona-incomplete' } };
-  return { ok: true, persona: { name, alias: text(raw.note).trim(), description, picture: async () => ({ bytes: image, type: 'image/png' }) } };
+  const fields = risuPersonaFields(raw);
+  if (!fields.name || !fields.description) return { ok: false, failure: { kind: 'unreadable', detail: 'persona-incomplete' } };
+  return { ok: true, persona: { ...fields, picture: async () => ({ bytes: image, type: 'image/png' }) } };
 }
