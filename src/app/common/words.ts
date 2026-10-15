@@ -1,6 +1,7 @@
 import type { LeftOut } from '../../runtime/risu-export';
 import type { Role } from '../../connectors/assignment';
 import type { RegexScript } from '../../engine/import/types';
+import type { Feature } from '../../model/features';
 import { KEEP_DAYS } from '../../model/library';
 
 // Sentences stay in their screen and are built from these; the phrases these replaced are refused by lint
@@ -86,6 +87,9 @@ export const opens = (place: string) => `${place} 열기`;
 // screens; user 2026-10-15).
 export const SCOPE = { default: '기본값', chat: '이 채팅만', character: '이 캐릭터만' } as const;
 export const scopeTag = (scope: keyof typeof SCOPE) => ({ label: SCOPE[scope], tone: scope === 'default' ? 'plain' : 'accent' }) as const;
+
+export const FEATURES_TITLE = '기능';
+export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억' };
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;

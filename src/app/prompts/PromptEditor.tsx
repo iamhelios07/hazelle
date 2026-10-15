@@ -6,6 +6,7 @@ import { isToggle, slotsOf, sortOf, type Block, type PromptSort, type TextBlock,
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
+import { FeatureSwitches } from '../common/FeatureSwitches';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { NO_PERSONA_SLOT } from '../common/prompt-words';
 import type { Frame } from '../common/frame';
@@ -330,7 +331,12 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
           drill={!split}
         />
       </Section>
-      {ofSort(stored, 'conversation') && <ModuleSwitches owner={{ kind: 'prompt', prompt: stored }} own={stored.value.modules ?? []} />}
+      {ofSort(stored, 'conversation') && (
+        <>
+          <ModuleSwitches owner={{ kind: 'prompt', prompt: stored }} own={stored.value.modules ?? []} />
+          <FeatureSwitches owner={{ kind: 'prompt', id: stored.id }} own={stored.value.features} />
+        </>
+      )}
     </>
   );
 

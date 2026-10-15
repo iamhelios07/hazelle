@@ -7,7 +7,7 @@ import type { TooLong } from '../engine/prompt-budget';
 import { fold, shown, type Chat } from '../model/chat';
 import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
-import { illustrateSwitches, translateSwitches } from './characters';
+import { chatIllustrate, chatTranslate } from './features';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { Halted } from './scripts';
@@ -59,7 +59,7 @@ export function translateText(session: Pick<Session, 'store' | 'credentials' | '
 async function translateReceived(session: Pick<Session, 'store' | 'read' | 'translator'>, chat: string, reply: Written) {
   if (reply.receipt.state === 'failed') return;
   const view = await displayed(session, chat);
-  if (!view || !translateSwitches(session.store, view.chat.character).replies) return;
+  if (!view || !chatTranslate(session.store, view.chat).replies) return;
   const index = view.messages.findIndex((message) => message.id === (reply.message ?? reply.id));
   if (index === -1) return;
   const version = shown(view.messages[index]!);
@@ -114,7 +114,7 @@ export async function receiveReply(session: Session, chat: string, reply: Writte
 // ran, after any continuation, never the cut one it continued.
 function illustrateReceived(session: Pick<Session, 'store' | 'illustrator'>, chat: string, reply: Written) {
   const stored = live(session.store.get('chat', chat));
-  if (reply.receipt.state === 'failed' || !stored || !illustrateSwitches(session.store, stored.value.character).auto) return;
+  if (reply.receipt.state === 'failed' || !stored || !chatIllustrate(session.store, stored.value).auto) return;
   const message = fold(session.store.children('entry', chat)).find(({ id }) => id === (reply.message ?? reply.id));
   const version = message && shown(message);
   if (version?.text.trim()) session.illustrator.draw(chat, message!.id, version.id, { auto: true });
@@ -174,7 +174,7 @@ async function gatheredTurn(session: Pick<Session, 'store' | 'read'>, chat: stri
 }
 
 async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => Promise<TurnContext | Blocked | Unevaluated | null>): Promise<Ask | Halted | TurnFailure> {
-  const translated = gathered.said && translateSwitches(session.store, gathered.chat.character).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
+  const translated = gathered.said && chatTranslate(session.store, gathered.chat).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
   if ('kind' in translated) return translated;
   const started = await session.scripts.starting(chat, translated, again, signal);
   if ('kind' in started) return started;

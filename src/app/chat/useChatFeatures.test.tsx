@@ -100,7 +100,7 @@ it('keeps illustration failures acknowledged across reopening and does not draw 
   drawings = new Map([['message', failed]]);
   let illustration: ReturnType<typeof useChatIllustrations>;
   function Probe({ id }: { id: string | null }) {
-    illustration = useChatIllustrations('chat', id, null);
+    illustration = useChatIllustrations('chat', id, { title: null, character: null, models: {} });
     return null;
   }
   const root = probeRoot();

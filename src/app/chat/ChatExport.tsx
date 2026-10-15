@@ -38,8 +38,9 @@ type Props = Pick<OpenChat, 'messages' | 'view' | 'placed' | 'pictures' | 'flipp
   characterName: string | null;
   names: ReturnType<typeof speakers>;
   replyLanguage: string;
-  // Saves the translation to the chat, as the message's own 번역 tool does.
-  onTranslate: (message: Shown) => Promise<TranslatorFailure | null>;
+  // Saves the translation to the chat, as the message's own 번역 tool does. Absent while 번역's 기능 is off, which offers
+  // no translating here either.
+  onTranslate?: (message: Shown) => Promise<TranslatorFailure | null>;
   onClose: () => void;
 };
 
@@ -71,7 +72,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
 
   // One at a time, so each reads the ones before it as translated; the first failure ends it, since the next ones
   // would mostly fail the same way.
-  async function translateMissing() {
+  async function translateMissing(translate: (message: Shown) => Promise<TranslatorFailure | null>) {
     const queue = missing;
     stopping.current = false;
     setUnbatched(null);
@@ -79,7 +80,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
     try {
       for (const [at, message] of queue.entries()) {
         if (stopping.current) break;
-        const failure = await onTranslate(message);
+        const failure = await translate(message);
         if (failure) {
           setUnbatched(failure);
           break;
@@ -161,7 +162,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
             <SettingRow label="처음" control={<NumberInput label="처음" unit="번째" value={range.from} invalid={!typed('from')} onChange={(text) => typeRange('from', text)} />} />
             <SettingRow label="끝" note={`메시지 ${messages.length}개`} control={<NumberInput label="끝" unit="번째" value={range.to} invalid={!typed('to')} onChange={(text) => typeRange('to', text)} />} />
             {translated && <SettingRow label="메시지" control={<ChoiceGroup layout="segmented" label="메시지" options={TEXTS} value={choices.text} onChange={(text) => change({ text })} />} />}
-            {(batch || missing.length > 0) && (
+            {onTranslate && (batch || missing.length > 0) && (
               <SettingRow
                 label="번역 없는 메시지"
                 note={batch ? `${batch.done}/${batch.total}개 번역함` : `${missing.length}개`}
@@ -171,7 +172,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
                       {STOP}
                     </Button>
                   ) : (
-                    <Button variant="secondary" size="sm" onClick={() => void translateMissing()}>
+                    <Button variant="secondary" size="sm" onClick={() => void translateMissing(onTranslate)}>
                       {`${withRo(languageLabel(replyLanguage))} 번역`}
                     </Button>
                   )

@@ -3,6 +3,7 @@ import type { Assignment, ModelRef } from '../connectors/assignment';
 import type { Cache } from '../connectors/settings';
 import type { Cost, Usage } from '../connectors/types';
 import type { CacheForecast } from './cache';
+import type { FeatureSwitches } from './features';
 import type { Kind, Stored } from './kinds';
 import type { LoreFolder, Mark } from './library';
 import type { MemorySettings } from './memory';
@@ -34,6 +35,8 @@ export type Chat = Mark & {
   bookmarks?: Bookmark[];
   // 채팅 로어북's folders, which only group its lorebook on screen.
   loreFolders?: LoreFolder[];
+  // 기능, over its character's (runtime/features).
+  features?: FeatureSwitches;
 };
 
 // name: only one the user gave.

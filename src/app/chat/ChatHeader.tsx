@@ -1,12 +1,13 @@
 import { toolMenu } from './toolMenu';
-import { BookKey, BookOpen, Bookmark, Brain, Keyboard, MessageSquarePlus, Package, ScanSearch, Search, SlidersHorizontal, SquarePen, UsersRound } from 'lucide-react';
+import { BookKey, BookOpen, Bookmark, Brain, Keyboard, MessageSquarePlus, Package, ScanSearch, Search, SlidersHorizontal, SquarePen, ToggleRight, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
+import { FeatureSwitches } from '../common/FeatureSwitches';
 import { NameDialog } from '../common/NameDialog';
-import { BOOKMARK, CAST, CHAT_LORE, EXPORT, NO_CHARACTER } from '../common/words';
+import { BOOKMARK, CAST, CHAT_LORE, EXPORT, FEATURE_NAMES, FEATURES_TITLE, NO_CHARACTER } from '../common/words';
 import { useRemembering } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
-import { Avatar, ChatTitle, Divider, MenuItem, MoreMenu, ToolButton, useMenuOpener, useWide } from '../ui';
+import { Avatar, ChatTitle, Divider, Menu, MenuItem, MoreMenu, ToolButton, useMenuHandle, useMenuOpener, useWide } from '../ui';
 import { ChatCastMenu } from './ChatCastMenu';
 import { ChatExport } from './ChatExport';
 import { speakers } from './ChatLog';
@@ -33,13 +34,15 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
 }
 
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
-  const { id, item, shelf, cast, route, toggles, panel, modelMenu, castMenu, actions } = chat;
+  const { id, item, shelf, cast, route, toggles, panel, features, modelMenu, castMenu, actions } = chat;
   const remembering = useRemembering();
   const tools = toolMenu(chat.tools);
-  const failed = id !== null && remembering.failed.has(id);
+  const failed = features.memory && id !== null && remembering.failed.has(id);
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
   const wide = useWide();
   const openCast = useMenuOpener(castMenu);
+  const featuresMenu = useMenuHandle();
+  const openFeatures = useMenuOpener(featuresMenu);
   const label = 'kind' in route ? '모델 선택' : route.model.name;
   const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
   return (
@@ -47,6 +50,11 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
       <ChatPromptPicker prompt={chat.prompt} open={chat.dialog === 'prompt'} onOpen={() => actions.openDialog('prompt')} />
       <ChatCastMenu handle={castMenu} cast={cast} character={shelf?.id ?? null} onChange={actions.setCast} />
       <ChatModelMenu handle={modelMenu} current={current} label={label} onPick={actions.pickModel} />
+      {item && (
+        <Menu kind="dialog" size="form" handle={featuresMenu} place="below-end" label={FEATURES_TITLE} trigger={() => null}>
+          <FeatureSwitches owner={{ kind: 'chat', id: item.id }} own={item.chat.features} />
+        </Menu>
+      )}
       <ToolButton
         icon={SlidersHorizontal}
         label="토글"
@@ -65,7 +73,8 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <Divider variant="menu" />
         <MenuItem icon={Search} label="검색" onClick={actions.openSearch} />
         {item && !chat.displayPending && <MenuItem icon={Bookmark} label={BOOKMARK} onClick={actions.bookmarks} />}
-        {item && <MenuItem icon={Brain} label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        {item && features.memory && <MenuItem icon={Brain} label={FEATURE_NAMES.memory} sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        {item && <MenuItem icon={ToggleRight} label={FEATURES_TITLE} onClick={openFeatures.onClick} />}
         {item && <MenuItem icon={BookKey} label={CHAT_LORE} onClick={actions.lore} />}
         {item && <MenuItem icon={ScanSearch} label="점검" onClick={() => actions.openInspect('request')} />}
         {tools.length > 0 && <>
@@ -103,7 +112,7 @@ export function ChatDialogs({ chat }: { chat: OpenChat }) {
   );
   if (dialog === 'prompt') return <PromptDialog prompt={chat.prompt} onChoose={actions.setPrompt} onEdit={(id) => actions.side({ kind: 'prompts', id, pane: null })} onClose={actions.closeDialog} />;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
-  if (dialog === 'export' && item) return <ChatExport item={item} messages={chat.messages} view={chat.view} placed={chat.placed} pictures={chat.pictures} flipped={chat.flipped} busy={chat.busy} bot={chat.decor.bot} characterName={chat.card?.name ?? null} names={speakers(chat)} replyLanguage={chat.translate.replyLanguage} onTranslate={actions.translate} onClose={actions.closeDialog} />;
+  if (dialog === 'export' && item) return <ChatExport item={item} messages={chat.messages} view={chat.view} placed={chat.placed} pictures={chat.pictures} flipped={chat.flipped} busy={chat.busy} bot={chat.decor.bot} characterName={chat.card?.name ?? null} names={speakers(chat)} replyLanguage={chat.translate.replyLanguage} onTranslate={chat.features.translate ? actions.translate : undefined} onClose={actions.closeDialog} />;
   if (dialog === 'rename' && item) {
     return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 표시돼요." onSave={actions.rename} onClose={actions.closeDialog} />;
   }

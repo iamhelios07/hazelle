@@ -2,7 +2,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { chatToggles } from '../model/toggles';
 import type { Toggle } from '../model/prompt';
 import { chatPrompt } from './prompts';
-import { translateSwitches } from './characters';
+import { chatTranslate } from './features';
 import { chatVectors, queryOf } from './retrieval';
 import { scriptsOf, triggersOf } from './scripts';
 import { toolsOf } from './tools/store';
@@ -177,7 +177,7 @@ export type AfterEnter =
 
 export function afterEnter({ store }: Reader, chat: string, turn: TurnContext): AfterEnter[] {
   const result: AfterEnter[] = [];
-  if (turn.said && translateSwitches(store, turn.chat.character).input) result.push({ kind: 'input-translation' });
+  if (turn.said && chatTranslate(store, turn.chat).input) result.push({ kind: 'input-translation' });
   const packs = packsOf(store, turn.chat);
   const triggers = triggersOf(packs);
   const scripts = scriptsOf(packs);

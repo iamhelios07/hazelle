@@ -4,7 +4,8 @@ import { holdsPersona, unused } from '../../engine/pipeline';
 import type { Card } from '../../engine/import/types';
 import { shown, type ChatItem, type ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
-import { resetToggles, setToggle, translateSwitches } from '../../runtime/characters';
+import { resetToggles, setToggle } from '../../runtime/characters';
+import { chatTranslate, featuresOf } from '../../runtime/features';
 import { removeChat, renameChat, restoreChat } from '../../runtime/chat-log';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
@@ -20,7 +21,7 @@ import { NO_PERSONA_SLOT } from '../common/prompt-words';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
 import { BIN_KEEPS, LORE_BUDGET_LABEL, PAGES } from '../common/words';
-import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useTurn } from '../session';
+import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
@@ -68,7 +69,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
   const scripted = triggersOf(packsOf(store, chat)).length > 0;
-  const translate = translateSwitches(store, chat.character);
+  // Subscribed for featuresOf and chatTranslate, which read the settings and the chat's prompt from the store.
+  useSettings();
+  useStored('prompt', prompt.kind === 'prompt' ? prompt.prompt.id : null);
+  const features = featuresOf(store, chat);
+  const translate = chatTranslate(store, chat);
   const { unstarted, pickGreeting, starting } = useNewChat(chatId, item === null, chat, shelf, translate.replyLanguage);
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
@@ -83,7 +88,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const bot = shelf?.character.decor !== false;
   const url = useAssetUrl();
   const { actions: translationActions, ...translation } = useChatTranslation(chatId, chat, messages, texts, translate);
-  const { actions: illustrationActions, ...illustration } = useChatIllustrations(chatId, id, chat.character);
+  const { actions: illustrationActions, ...illustration } = useChatIllustrations(chatId, id, chat);
   const toolData = useChildren('toolchat', id);
   const badges = useMemo(() => badgesByVersion(toolData, tools), [toolData, tools]);
   const messageTools = useMemo(() => toolActions(tools), [tools]);
@@ -123,7 +128,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   useEffect(() => {
     if (id) session.memory.check(id);
-  }, [id]);
+  }, [id, features.memory]);
+  useEffect(() => {
+    if (!features.memory) setPanels((current) => (current.panel?.kind === 'memory' ? { ...current, panel: null } : current));
+  }, [features.memory]);
 
   // Only a reply this page asked for has what it sent (runtime/talk sent), so it is told the moment that reply lands.
   const lastReply = messages.findLast((message) => message.role === 'assistant');
@@ -286,6 +294,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     decor: { bot, css: bot ? resolveAssets(css, url) : '', url, buttons: scripted ? ('live' as const) : ('inert' as const) },
     ...status,
     infoPick,
+    features,
     translate,
     ...translation,
     ...illustration,

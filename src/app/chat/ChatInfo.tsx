@@ -42,7 +42,8 @@ const callFacts = (receipt: Receipt) => [
 
 type Props = Pick<OpenChat, 'id' | 'messages' | 'infoPick'> & {
   onPick: (id: string) => void;
-  onRecord: (id: string | null) => void;
+  // Absent while 장기 기억's 기능 is off, which leaves out the 기억 tab that opens its panel.
+  onRecord?: (id: string | null) => void;
   onClose: () => void;
 };
 
@@ -101,7 +102,7 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
     body = (
       <>
         <Tabs label="응답 정보">
-          {TABS.map((each) => (
+          {TABS.filter((each) => each.value !== 'memory' || onRecord).map((each) => (
             <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => setTab(each.value)} />
           ))}
         </Tabs>
@@ -128,7 +129,7 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
           </>
         )}
         {tab === 'lore' && <SentLore sent={sent} />}
-        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
+        {tab === 'memory' && onRecord && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
         {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
       </>
     );

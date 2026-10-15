@@ -36,13 +36,15 @@ type Props = {
   // A scene being written for the message, which another run must wait for.
   running: boolean;
   url: PictureUrl;
+  // 삽화's 기능: off, a picture stays and is drawn again no more.
+  draws: boolean;
   onDraw: IllustrationActions['draw'];
   onDismiss: IllustrationActions['dismissIllustration'];
   onReshape: IllustrationActions['reshape'];
   onDrop: IllustrationActions['dropPicture'];
 };
 
-export function ChatPicture({ slot, message, pictures, onPage, running, url, onDraw, onDismiss, onReshape, onDrop }: Props) {
+export function ChatPicture({ slot, message, pictures, onPage, running, url, draws, onDraw, onDismiss, onReshape, onDrop }: Props) {
   if (slot.kind === 'drawing') {
     const { width, height } = SIZES[slot.scene.shape];
     return <StoryPicture src={undefined} label={LABEL} width={width} height={height} status="그리는 중" />;
@@ -57,7 +59,7 @@ export function ChatPicture({ slot, message, pictures, onPage, running, url, onD
             <Button variant="secondary" size="sm" onClick={() => onDismiss(message.id)}>
               닫기
             </Button>
-            {drawing.failure.kind === 'costs' ? (
+            {!draws ? null : drawing.failure.kind === 'costs' ? (
               <Button size="sm" onClick={() => onDraw(message.id, drawing.version, drawing.scene, true)}>
                 그래도 만들기
               </Button>
@@ -106,8 +108,12 @@ export function ChatPicture({ slot, message, pictures, onPage, running, url, onD
               onPick={(index) => onPage(pictures[index]!.id)}
             />
           )}
-          <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={again} />
-          <IconButton icon={SlidersHorizontal} size="xs" label="어떻게 바꿀까요?" onClick={() => onReshape({ message: message.id, version, scene, paragraphs: paragraphsOf(text).length })} />
+          {draws && (
+            <>
+              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={again} />
+              <IconButton icon={SlidersHorizontal} size="xs" label="어떻게 바꿀까요?" onClick={() => onReshape({ message: message.id, version, scene, paragraphs: paragraphsOf(text).length })} />
+            </>
+          )}
           <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => onDrop(picture)} />
         </>
       }

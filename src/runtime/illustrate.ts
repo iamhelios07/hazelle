@@ -13,7 +13,7 @@ import { live } from '../model/library';
 import type { IllustratePrompt } from '../model/prompt';
 import type { ApiFailure } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
-import { illustrateSwitches } from './characters';
+import { chatIllustrate } from './features';
 import { pinned, scopeOf } from './chat-context';
 import { retriesOf } from './connections';
 import { evaluationFailure } from './evaluation';
@@ -163,7 +163,7 @@ export class Illustrator {
     const selected = messages[index]?.versions.findIndex(({ id }) => id === version) ?? -1;
     if (!stored || selected === -1) return { kind: 'gone' };
     const text = messages[index]!.versions[selected]!.text;
-    const switches = illustrateSwitches(store, stored.value.character);
+    const switches = chatIllustrate(store, stored.value);
     const route = imageRoute(store, switches.model);
     if ('kind' in route) return route;
     // A given scene draws with the tags and settings of the prompt chosen now, as a written one does.

@@ -1,6 +1,6 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Square, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Square, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -19,6 +19,7 @@ import { AssetsEditor } from '../common/AssetsEditor';
 import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
 import { scriptHolds } from '../common/pack';
+import { featureHolds, FeatureSwitches } from '../common/FeatureSwitches';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
@@ -28,7 +29,7 @@ import type { Frame } from '../common/frame';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, opens, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, FEATURES_TITLE, inSettings, NOTE_PLACEHOLDER, opens, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
@@ -52,6 +53,7 @@ const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
   instructions: { label: '지시문', icon: ScrollText },
   lore: { label: '로어북', icon: BookOpen },
   modules: { label: PAGES.modules, icon: Package },
+  features: { label: FEATURES_TITLE, icon: ToggleRight },
   scripts: { label: SCRIPTS.part, icon: Braces },
   toggles: { label: '토글', icon: SlidersHorizontal },
   assets: { label: '에셋', icon: Images },
@@ -60,7 +62,7 @@ const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
 };
 const GROUPS: CharacterPart[][] = [
   ['profile', 'character', 'greetings'],
-  ['instructions', 'lore', 'modules', 'scripts', 'toggles'],
+  ['instructions', 'lore', 'modules', 'features', 'scripts', 'toggles'],
   ['assets', 'illustration', 'display'],
 ];
 const LIST = '캐릭터 항목';
@@ -319,6 +321,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     ),
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
+    features: <FeatureSwitches owner={{ kind: 'character', id }} own={character.features} />,
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
     toggles: <PackToggles owner={{ kind: 'character', id }} lines={card.toggles} />,
     assets: <AssetsEditor owner={id} />,
@@ -358,6 +361,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     greetings: `${text.greetings.length}개`,
     lore: `${lore.length}개`,
     modules: `${modules.filter((module) => always.includes(module.id) || ownModules.includes(module.id)).length}개 켜짐`,
+    features: featureHolds(character.features),
     scripts: scriptHolds(card) || undefined,
     toggles: `${card.toggles.filter(isToggle).length}개`,
     assets: `${assets.length}개`,

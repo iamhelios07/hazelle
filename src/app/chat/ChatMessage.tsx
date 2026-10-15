@@ -39,6 +39,9 @@ type Props = {
   hosted: (Box & { id: string })[];
   offered: { id: string; name: string; marked: boolean }[];
   translating: Translating;
+  // 번역's and 삽화's 기능: off, the message offers neither.
+  canTranslate: boolean;
+  canIllustrate: boolean;
   awaited: boolean;
   flipped: boolean;
   replyNext: boolean;
@@ -74,7 +77,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -99,7 +102,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const storyText = paragraph === null ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraph) : withMarks(text, new Set([paragraph]));
   const html = useMemo(() => shownHtml(storyText, decor), [storyText, decor.bot, decor.url]);
   const running = drawing !== null && drawing.stage !== 'failed';
-  const picture = slot && <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />;
+  const picture = slot && <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} draws={canIllustrate} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />;
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
@@ -213,11 +216,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     pending ? (
       <Marker reason="translation" label="번역 기다리는 중" />
     ) : untranslated ? (
-      <Marker reason="translation" label={`번역하지 못했어요. ${describeTranslateFailure(untranslated)}`} action={again} />
+      <Marker reason="translation" label={`번역하지 못했어요. ${describeTranslateFailure(untranslated)}`} action={canTranslate ? again : undefined} />
     ) : translatingText === null && !flipped && translation?.receipt?.state === 'cut' ? (
-      <Marker reason="translation" label="번역 잘림" action={again} />
+      <Marker reason="translation" label="번역 잘림" action={canTranslate ? again : undefined} />
     ) : null;
-  const translateTool = !sentTranslated && !empty && !failed && (
+  const translateTool = canTranslate && !sentTranslated && !empty && !failed && (
     <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => void actions.translate(message)} />
   );
   const flip = () => actions.flipTranslation(message);
@@ -304,7 +307,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {bookmarked && <IconButton icon={Bookmark} size="xs" label={BOOKMARK} pressed onClick={() => actions.bookmark(message.id)} />}
       {!failed ? (
         <MoreMenu of="메시지" size="xs" place="end">
-          {!mine && !empty && (
+          {canIllustrate && !mine && !empty && (
             <MenuItem
               label="삽화"
               disabled={running}

@@ -14,7 +14,7 @@ import { without } from '../model/fields';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route } from './assignment';
-import { translateSwitches } from './characters';
+import { chatTranslate } from './features';
 import { greetingOf } from './greetings';
 import { chatPersona } from './personas';
 import { modelProfile } from './profiles';
@@ -177,7 +177,7 @@ export function promptBudget(store: Reader['store'], chat: Chat): number | null 
 }
 
 // A chat's messages as a request sends them: under 반전 모드, each with its shown version's translation as its text.
-export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) => (translateSwitches(store, chat.character).reverse ? messages.map(reversed) : messages);
+export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) => (chatTranslate(store, chat).reverse ? messages.map(reversed) : messages);
 
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
 export const evaluateChat = async (reader: { store: Reader['store'] & Pick<ObjectStore, 'evaluation'> }, id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, signal?: AbortSignal): Promise<Display> =>
@@ -223,7 +223,7 @@ export function statusBoxes(shown: Display, messages: Shown[], scripts: readonly
 
 // A reply goes into the switches' replyLanguage and the user's message into their inputLanguage.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
-  const switches = translateSwitches(reader.store, chat.character);
+  const switches = chatTranslate(reader.store, chat);
   const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
   return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request, language, lane: { asker: 'translation', chat: id } };
 }

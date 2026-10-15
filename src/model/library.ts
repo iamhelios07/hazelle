@@ -4,6 +4,7 @@ export type LoreOwner = { kind: PackOwner['kind'] | 'chat'; id: string };
 import type { FileRef } from '../vault/files';
 import type { Card, LoreEntry, Pack } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from './chat';
+import type { FeatureSwitches } from './features';
 import type { IllustrateSwitches } from './illustration';
 import type { Stored } from './kinds';
 import type { ToggleValues } from './prompt';
@@ -50,6 +51,8 @@ export type Character = Mark & {
   risu?: string;
   // The modules on in its chats, in the order they were turned on (design §6.5). One that is gone reads as off.
   modules?: string[];
+  // 기능 in its chats, over its chats' prompt's (runtime/features).
+  features?: FeatureSwitches;
 };
 
 // Its lorebook and assets are its children, as a character's are.

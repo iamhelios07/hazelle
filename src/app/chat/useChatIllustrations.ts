@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { shown } from '../../model/chat';
+import { shown, type Chat } from '../../model/chat';
 import type { IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
-import { illustrateSwitches, setIllustrate, setOwnIllustrate } from '../../runtime/characters';
+import { setIllustrate, setOwnIllustrate } from '../../runtime/characters';
+import { chatIllustrate } from '../../runtime/features';
 import { removeIllustration, restoreIllustration, type Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import { describeIllustrateFailure } from '../common/failure';
@@ -27,10 +28,11 @@ function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap
 export type Reshaping = { message: string; version: string; scene: Scene; paragraphs: number };
 export type IllustrationActions = ReturnType<typeof useChatIllustrations>['actions'];
 
-export function useChatIllustrations(chatId: string, id: string | null, character: string | null) {
+export function useChatIllustrations(chatId: string, id: string | null, chat: Chat) {
+  const { character } = chat;
   const { store, illustrator } = useSession();
   const toast = useToast();
-  const illustrate = illustrateSwitches(store, character);
+  const illustrate = chatIllustrate(store, chat);
   const illustrations = useChildren('illustration', id);
   const pictures = useMemo(() => picturesByVersion(illustrations), [illustrations]);
   const illustrating = useIllustrating();

@@ -1,5 +1,6 @@
 import type { Assignment } from '../connectors/assignment';
 import type { TranslateSwitches } from './chat';
+import type { FeatureSwitches } from './features';
 import type { IllustrateSwitches } from './illustration';
 import type { MemorySettings } from './memory';
 import type { ToggleValues } from './prompt';
@@ -23,7 +24,7 @@ export const EMPTY_SETTINGS: Settings = { models: {} };
 // retries: the shared 실패하면 다시 보내기, absent for RETRIES; a connection or a 설정 묶음 overrides it (runtime/connections
 // retriesOf). loreBudget: 로어북 최대 분량, the most tokens every chat's lorebook entries may take, absent for LORE_BUDGET
 // (runtime/chat-context loreBudgetOf). labs: the 실험실 switches turned on, by entry id (app/common/labs); an id with no
-// entry is ignored.
+// entry is ignored. features: 기능, the ladder's farthest layer (runtime/features).
 export type SavedLook = { id: string; name: string; look: Record<string, string | number> };
 
 export type Settings = {
@@ -48,4 +49,5 @@ export type Settings = {
   retries?: number;
   loreBudget?: number;
   labs?: string[];
+  features?: FeatureSwitches;
 };

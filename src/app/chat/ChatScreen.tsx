@@ -76,7 +76,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
           panel?.kind === 'toggles' ? (
             <ChatToggles card={chat.card} toggles={chat.toggles} toggleOwner={chat.toggleOwner} onFlip={actions.flip} onWrite={actions.writeToggle} onReset={actions.resetToggles} onEditPrompt={prompt.kind === 'prompt' ? () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles', fromToggles: true }) : undefined} onClose={actions.closePanel} />
           ) : panel?.kind === 'info' ? (
-            <ChatInfo id={id} messages={chat.messages} infoPick={chat.infoPick} onPick={actions.pickInfo} onRecord={actions.memory} onClose={actions.closePanel} />
+            <ChatInfo id={id} messages={chat.messages} infoPick={chat.infoPick} onPick={actions.pickInfo} onRecord={chat.features.memory ? actions.memory : undefined} onClose={actions.closePanel} />
           ) : panel?.kind === 'memory' ? (
             // The panel opens only from a saved chat.
             id && <ChatMemory

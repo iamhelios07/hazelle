@@ -1,4 +1,4 @@
-import { DEFAULT_MODELS, LORE_BUDGET_LABEL, MODEL_ROLES, MODEL_SETTINGS, RETRY_COUNT, SCRIPTS, TRANSLATOR_NOTE } from '../../common/words';
+import { DEFAULT_MODELS, FEATURE_NAMES, FEATURES_TITLE, LORE_BUDGET_LABEL, MODEL_ROLES, MODEL_SETTINGS, RETRY_COUNT, SCRIPTS, TRANSLATOR_NOTE } from '../../common/words';
 import { LABS } from '../../common/labs';
 import type { SettingsPage } from '../routes';
 
@@ -7,7 +7,7 @@ import type { SettingsPage } from '../routes';
 export const TERMS: Record<SettingsPage, string[]> = {
   models: [DEFAULT_MODELS, MODEL_ROLES.main, MODEL_ROLES.aux, MODEL_ROLES.embed, '즐겨찾기한 모델', MODEL_SETTINGS, '프롬프트에서 정한 모델'],
   connections: ['새 연결', '모델', '계정 추가', '사용량과 한도', RETRY_COUNT, '사용 내역'],
-  chat: ['장기 기억', '기록 최대 분량', '임베딩 모델로 찾는 기록', '원문으로 보낼 최근 대화', '한 번에 정리할 분량', '번역', TRANSLATOR_NOTE, RETRY_COUNT, LORE_BUDGET_LABEL],
+  chat: [FEATURES_TITLE, FEATURE_NAMES.illustrate, '장기 기억', '기록 최대 분량', '임베딩 모델로 찾는 기록', '원문으로 보낼 최근 대화', '한 번에 정리할 분량', '번역', TRANSLATOR_NOTE, RETRY_COUNT, LORE_BUDGET_LABEL],
   translator: [TRANSLATOR_NOTE],
   labs: LABS.map(({ name }) => name),
   prompts: ['기본 프롬프트', 'Risu 프리셋 가져오기', '새 프롬프트'],

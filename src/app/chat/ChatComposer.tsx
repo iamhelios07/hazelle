@@ -83,7 +83,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
           <>
             <ChatPersonaPicker persona={chat.persona} open={chat.dialog === 'persona'} onOpen={() => actions.openDialog('persona')} />
             <ChatNote id={chat.id} note={chat.note} prompt={chat.prompt} onSave={actions.setNote} />
-            <ChatTranslate
+            {chat.features.translate && <ChatTranslate
               translate={translate}
               translation={chat.translation}
               card={chat.card}
@@ -92,8 +92,8 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
               onOwnChange={actions.setOwnTranslate}
               onEditPrompt={editPrompt}
               onEditCharacter={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: 'instructions' }) : undefined}
-            />
-            <ChatIllustrate illustrate={chat.illustrate} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} onEditPrompt={editPrompt} />
+            />}
+            {chat.features.illustrate && <ChatIllustrate illustrate={chat.illustrate} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} onEditPrompt={editPrompt} />}
             <ChatComposerTools tools={chat.composerTools} onOpen={actions.tool} />
             <ChatPinnedToggles toggles={chat.toggles} onFlip={actions.flip} />
           </>

@@ -9,7 +9,8 @@ import type { TranslatePrompt } from '../model/prompt';
 import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
-import { setTextTranslation, translateSwitches, translatorNotes } from './characters';
+import { setTextTranslation, translatorNotes } from './characters';
+import { chatTranslate } from './features';
 import { appendTranslation, savedElsewhere } from './chat-log';
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
@@ -92,7 +93,7 @@ function translated(call: Stream['call'], answer: Reply, text: string, language:
 }
 
 export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt: TranslatePrompt; route: Route } | { ok: false; failure: RouteFailure | { kind: 'prompt-missing'; own: boolean } } {
-  const prompt = translationPrompt(store, translateSwitches(store, chat.character).prompt);
+  const prompt = translationPrompt(store, chatTranslate(store, chat).prompt);
   if (prompt.kind === 'missing') return { ok: false, failure: { kind: 'prompt-missing', own: prompt.own } };
   const route = taskModel(store, chat, prompt.prompt.value.model);
   return 'kind' in route ? { ok: false, failure: route } : { ok: true, prompt: prompt.prompt.value, route };

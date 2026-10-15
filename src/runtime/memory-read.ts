@@ -4,6 +4,7 @@ import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Memory, type MemorySettings, type Source } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ToolUnit } from '../model/tool';
+import { featuresOf } from './features';
 import type { ObjectStore } from './store';
 import { toolsOf } from './tools/store';
 
@@ -23,14 +24,15 @@ export const chatMemory = (store: Pick<ObjectStore, 'children'>, chat: string): 
 export const sourcesOf = (messages: Message[]): Source[] => messages.map((message) => ({ message: message.id, version: shown(message).id }));
 
 // Who fills the chat's memory slot (design §6.10): the first tool in pack order whose module the user let take it, else
-// the built-in memory while it is on; null while memory is off. A claim not answered yet leaves the built-in memory on.
+// the built-in memory while it and 장기 기억's 기능 are on; null otherwise. A tool's claim does not read 기능: it is its
+// module's own, switched with the module. A claim not answered yet leaves the built-in memory on.
 export type MemoryOwner = { kind: 'built-in'; setup: MemorySetup } | { kind: 'tool'; unit: ToolUnit } | null;
 
 export function memoryOwner(store: ObjectStore, chat: Chat): MemoryOwner {
   const unit = toolsOf(store, chat).find(({ module, tool }) => tool.manifest.uses.includes('memory') && store.get('module', module)?.value.takesMemory === true);
   if (unit) return { kind: 'tool', unit };
   const setup = memorySetup(store, chat);
-  return setup.on ? { kind: 'built-in', setup } : null;
+  return setup.on && featuresOf(store, chat).memory ? { kind: 'built-in', setup } : null;
 }
 
 // The slot as a turn is gathered. A tool's text comes with the turn's prompt event (runtime/scripts prompting); until

@@ -282,8 +282,9 @@ function setOwnScoped<S extends Scoped>(store: ObjectStore, character: string, s
   return store.update('character', character, (current) => (own ? { ...current, [OWN[scope]]: copy } : without(current, OWN[scope])));
 }
 
-// The switches in effect for a chat of character. input is off under reverse, whatever is stored, since 반전 모드 sends
-// what the user typed. prompt absent follows the account's default translation prompt.
+// The switches as set for a chat of character; a chat reads them through 기능 (runtime/features chatTranslate). input
+// is off under reverse, whatever is stored, since 반전 모드 sends what the user typed. prompt absent follows the
+// account's default translation prompt.
 export type TranslateSetup = typeof TRANSLATE_DEFAULTS & Pick<TranslateSwitches, 'prompt'> & { own: boolean };
 
 export function translateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): TranslateSetup {
@@ -296,7 +297,7 @@ export const setTranslate = (store: ObjectStore, character: string | null, chang
 
 export const setOwnTranslate = (store: ObjectStore, character: string, own: boolean) => setOwnScoped(store, character, 'translate', own);
 
-// Absent auto and spend are off.
+// Absent auto and spend are off. A chat reads them through 기능 (runtime/features chatIllustrate).
 export type IllustrateSetup = Omit<IllustrateSwitches, 'auto' | 'spend'> & { auto: boolean; spend: boolean; own: boolean };
 
 export function illustrateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): IllustrateSetup {

@@ -1,5 +1,6 @@
 import type { Assignment, ModelRef } from '../connectors/assignment';
 import type { Mark } from './library';
+import type { FeatureSwitches } from './features';
 
 export type Role = 'system' | 'user' | 'assistant';
 
@@ -86,6 +87,8 @@ export type ConversationPrompt = {
   // The modules its Risu preset named (moduleIntergration), each a Risu module id or namespace, so a module imported
   // after it is turned on for it too. Absent on a prompt made before it was kept.
   companions?: string[];
+  // 기능 in its chats, over the 공용 ones (runtime/features).
+  features?: FeatureSwitches;
 };
 
 // model: the one place a translation's model is chosen; without one, the chat's 보조 모델. Its text blocks carry no mark,
