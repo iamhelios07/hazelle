@@ -175,7 +175,7 @@ describe('a module file', () => {
         background: '<style>.phone {}</style>',
         toggles: [{ key: 'ring', label: '벨', kind: 'check', default: '0' }],
       },
-      lore: [entry('벨', { folder: 0 }), entry('꺼진', { enabled: false }), entry('앞', { priority: 3, position: 'before_char', keys: ['a, b', 'c'] }), entry('늘', { constant: true })],
+      lore: [entry('벨', { folder: 0 }), entry('꺼진', { enabled: false, folder: 0 }), entry('앞', { priority: 3, position: 'before_char', keys: ['a, b', 'c'] }), entry('늘', { constant: true })],
       loreFolders: ['기기'],
       assets: pictures.map((bytes, place) => ({ name: `wall${place}`, read: async () => bytes })),
     }, () => {});
