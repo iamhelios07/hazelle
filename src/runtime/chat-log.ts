@@ -378,12 +378,13 @@ export const appendCost = (store: ObjectStore, chat: string, { id, replyId }: Re
 // An edit is a new version in the place of the one shown, keeping its receipt. translation: the
 // edited translation of a version that has one, which keeps the receipt of the call that made it; a blank one leaves
 // the new version without a translation.
-export function editMessage(store: ObjectStore, chat: string, message: Message, text: string, translation: string | null) {
+// id: the new version's, when the caller must know it before the save lands.
+export function editMessage(store: ObjectStore, chat: string, message: Message, text: string, translation: string | null, id?: string) {
   const current = shown(message);
   const at = Date.now();
   const outdated = translation === current.translation?.text && (text !== current.text || translationOutdated(current));
   const kept = translation?.trim() && current.translation && { translation: { ...current.translation, text: translation, at: outdated ? current.translation.at : at } };
-  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...(current.greeting !== undefined && { greeting: current.greeting }), ...kept });
+  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...(current.greeting !== undefined && { greeting: current.greeting }), ...kept }, id);
 }
 
 // id: the call's, so a call another device saved too is known as saved (runtime/streams).

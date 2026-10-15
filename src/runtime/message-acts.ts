@@ -18,8 +18,8 @@ const tellAt = ({ scripts }: Acting, chat: string, message: string, kind: Hazell
   if (at) scripts.changed(chat, { ...at, kind });
 };
 
-export async function editShown(session: Acting, chat: string, message: Message, text: string, translation: string | null) {
-  return told(await editMessage(session.store, chat, message, text, translation), () => tellAt(session, chat, message.id, 'edit'));
+export async function editShown(session: Acting, chat: string, message: Message, text: string, translation: string | null, id?: string) {
+  return told(await editMessage(session.store, chat, message, text, translation, id), () => tellAt(session, chat, message.id, 'edit'));
 }
 
 export async function pickVersion(session: Acting, chat: string, message: Message, index: number) {

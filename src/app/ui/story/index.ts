@@ -4,6 +4,7 @@ export { MarginPictures } from './MarginPictures';
 export { ReadingPreview, type PreviewRow } from './ReadingPreview';
 export { StatusBox } from './StatusBox';
 export { StoryPicture } from './StoryPicture';
+export { SelectionButton, type SelectionEnd } from './SelectionButton';
 export { inlaid } from './inlay';
 export { LogExport, type LogRow } from './LogExport';
 export { snapshotPage, type Snapshot } from './snapshot';

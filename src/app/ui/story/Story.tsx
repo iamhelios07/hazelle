@@ -4,6 +4,7 @@ import { useRowState } from '../collections/row-memory';
 import { scrollbarKind } from '../foundation/scrollbar';
 import { useVeil, type Veil } from '../foundation/veil';
 import { inlaid } from './inlay';
+import type { SelectionEnd } from './SelectionButton';
 import { useMath } from './math';
 import styles from './Story.module.css';
 import shadowCss from './Story.shadow.css?inline';
@@ -276,9 +277,9 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
 
 const BLOCK = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th, div';
 
-// What is selected in a story: the selected text of its first block and, when it runs on, of its last; null when the
-// selection begins or ends outside it. By block, since a range's text runs blocks together.
-export function storySelection(story: HTMLElement): string[] | null {
+// What is selected in a story: the selected text of its first block and, when it runs on, of its last, and where it
+// ends; null when the selection begins or ends outside it. By block, since a range's text runs blocks together.
+export function storySelection(story: HTMLElement): { pieces: string[]; end: SelectionEnd } | null {
   const root = story.firstElementChild?.shadowRoot;
   const selection = document.getSelection();
   if (!root || !selection || !('getComposedRanges' in selection)) return null;
@@ -291,9 +292,14 @@ export function storySelection(story: HTMLElement): string[] | null {
     part.setEnd(end, endOffset);
     return part.toString();
   };
+  const whole = document.createRange();
+  whole.setStart(range.startContainer, range.startOffset);
+  whole.setEnd(range.endContainer, range.endOffset);
+  const line = [...whole.getClientRects()].at(-1) ?? whole.getBoundingClientRect();
+  const end = { x: line.right, top: line.top, bottom: line.bottom };
   const [first, last] = [block(range.startContainer), block(range.endContainer)];
-  if (first === last) return [text(range.startContainer, range.startOffset, range.endContainer, range.endOffset)];
-  return [text(range.startContainer, range.startOffset, first, first.childNodes.length), text(last, 0, range.endContainer, range.endOffset)];
+  if (first === last) return { pieces: [whole.toString()], end };
+  return { pieces: [text(range.startContainer, range.startOffset, first, first.childNodes.length), text(last, 0, range.endContainer, range.endOffset)], end };
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.

@@ -16,7 +16,7 @@ import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, Story, StoryMessage, storySelection, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotsOf } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
 import type { ToolActions } from './toolMenu';
@@ -24,6 +24,7 @@ import type { ChatActions } from './useChat';
 import type { Editing, EditPart } from './useMessageEdit';
 import { seenText } from './search';
 import { useReveal } from './useReveal';
+import { useSelectedPart } from './useSelectedPart';
 
 type Props = {
   message: Shown;
@@ -144,15 +145,15 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     }
   };
 
-  // The paragraphs selected in the story, when the text drawn holds them too; the whole message otherwise.
-  const selectedPart = () => {
-    const pieces = story.current && storySelection(story.current);
+  // The paragraphs selected, when the text drawn holds them too.
+  const findPart = (pieces: string[]) => {
     const side: EditPart['side'] = translation && !flipped ? 'translation' : 'text';
     const source = side === 'text' ? version.text : translation!.text;
-    const found = pieces && partOf(source, pieces);
+    const found = partOf(source, pieces);
     const drawn = found && partOf(storyText, linesOf(source, found).split('\n'));
     return found && drawn ? { ...found, side, shown: drawn } : null;
   };
+  const selected = useSelectedPart(story, findPart, editing === null && !live && !message.unstored && !opening && !failed && !empty);
 
   let body = null;
   if (editing !== null && !part) {
@@ -246,7 +247,12 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     );
   }
 
-  const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => void actions.translate(message) };
+  // What the message translates is shown as it comes, so a flip to the original ends.
+  const translateHere = () => {
+    if (flipped) actions.flipTranslation(message);
+    void actions.translate(message);
+  };
+  const again = { label: '다시 번역', disabled: translatingText !== null, onClick: translateHere };
   const translationMark =
     pending ? (
       <Marker reason="translation" label="번역 기다리는 중" />
@@ -260,9 +266,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const translateTool = translation ? (
     <IconButton icon={Languages} size="xs" label={sentTranslated ? '보낸 메시지 보기' : '원문 보기'} pressed={flipped} onClick={() => actions.flipTranslation(message)} />
   ) : (
-    canTranslate && !empty && !failed && <IconButton icon={Languages} size="xs" label="번역" disabled={translatingText !== null} onClick={() => void actions.translate(message)} />
+    canTranslate && !empty && !failed && <IconButton icon={Languages} size="xs" label="번역" disabled={translatingText !== null} onClick={translateHere} />
   );
-  const translateAgain = canTranslate && translation && !sentTranslated && <MenuItem label="다시 번역" disabled={translatingText !== null} onClick={() => void actions.translate(message)} />;
+  const translateAgain = canTranslate && translation && !sentTranslated && <MenuItem label="다시 번역" disabled={translatingText !== null} onClick={translateHere} />;
   // The language it went out in, not the setting now.
   const mark = !translation || editing !== null ? undefined : sentTranslated ? `${withRo(languageLabel(translation.sentIn!))} 보냄` : flipped ? '원문' : '번역';
 
@@ -273,6 +279,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const [back, forward] = SHORTCUTS.swipe.keys;
   const after = (
     <>
+      {selected && <SelectionButton icon={SquarePen} label="수정" at={selected.end} onPress={() => actions.edit(message, selected.part)} />}
       {editing === null && translationMark}
       {drawing?.writing && <Marker reason="illustration" label="장면 정하는 중" />}
       {cut && (
@@ -350,7 +357,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="xs" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}
-      {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message, selectedPart())} />}
+      {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message, selected?.part ?? null)} />}
       {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
       {bookmarked && <IconButton icon={Bookmark} size="xs" label={BOOKMARK} pressed onClick={() => actions.bookmark(message.id)} />}
       {!failed ? (

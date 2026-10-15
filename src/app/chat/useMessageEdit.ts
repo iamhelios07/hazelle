@@ -10,7 +10,8 @@ import { useToast } from '../toast';
 export type EditPart = Part & { side: 'text' | 'translation'; shown: Part; value: string };
 export type Editing = { id: string; text: string; translation: string | null; part?: EditPart };
 
-export function useMessageEdit(id: string | null, messages: Shown[], regenerate: (message: Shown) => void) {
+// edited: from the version edited to the one the edit makes.
+export function useMessageEdit(id: string | null, messages: Shown[], regenerate: (message: Shown) => void, edited: (from: string, to: string) => void) {
   const session = useSession();
   const toast = useToast();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -19,7 +20,9 @@ export function useMessageEdit(id: string | null, messages: Shown[], regenerate:
     if (!id || !editing) return;
     const { text, translation, part } = editing;
     const [nextText, nextTranslation] = !part ? [text, translation] : part.side === 'text' ? [withPart(text, part, part.value), translation] : [text, withPart(translation!, part, part.value)];
-    void editShown(session, id, message, nextText, nextTranslation).then((saved) => saved.ok || toast.failed(saved));
+    const version = crypto.randomUUID();
+    edited(shown(message).id, version);
+    void editShown(session, id, message, nextText, nextTranslation, version).then((saved) => saved.ok || toast.failed(saved));
     setEditing(null);
     const next = messages[messages.findIndex(({ id: each }) => each === message.id) + 1];
     if (andReply && next?.role === 'assistant') regenerate(next);

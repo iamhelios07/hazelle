@@ -43,6 +43,11 @@ export function useChatTranslation(chatId: string, chat: Chat, messages: Shown[]
     setFlipped(next);
   }
 
+  // An edit's version shows the side its version showed.
+  function carryFlip(from: string, to: string) {
+    setFlipped((current) => (current.has(from) ? new Set([...current, to]) : current));
+  }
+
   function setSwitches(change: Partial<TranslateSwitches>) {
     void setTranslate(store, chat.character, change).then((saved) => saved.ok || toast.failed(saved));
   }
@@ -56,6 +61,7 @@ export function useChatTranslation(chatId: string, chat: Chat, messages: Shown[]
     actions: {
       translate: translateMessage,
       flipTranslation,
+      carryFlip,
       setTranslate: setSwitches,
       setOwnTranslate: setOwnSwitches,
     },
