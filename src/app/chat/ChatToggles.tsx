@@ -85,13 +85,15 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
 
   return (
     <SidePanel title="토글" onClose={onClose}>
-      {all.length > 0 && (
+      {all.length === 0 ? (
+        <Empty variant="section">{card ? '이 채팅의 프롬프트와 캐릭터 카드에는 토글이 없어요.' : '이 채팅의 프롬프트에는 토글이 없어요.'}</Empty>
+      ) : (
         <Section
           level={3}
           title="설정"
           tag={scope ? scopeTag(scope) : undefined}
           note={toggles.changed ? `변경 ${toggles.changed}개` : undefined}
-          help={card ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.` : '여기서 바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
+          help={card ? `바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.` : '바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
           action={
             toggles.changed > 0 && (
               <Button variant="link" onClick={onReset}>
@@ -100,6 +102,21 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
             )
           }
         >
+          {search.field && (
+            <Row kind="toolbar">
+              {search.field}
+              <Tabs label="보기">
+                <Tab label="전체" count={all.length} current={filter === 'all'} onClick={() => show('all')} />
+                <Tab label="변경" count={toggles.changed} current={filter === 'changed'} onClick={() => show('changed')} />
+              </Tabs>
+            </Row>
+          )}
+          {visible.map((section, index) => (
+            <Section key={index} level={3} title={`${FROM[section.from]} · ${section.name}`} note={String(section.rows.length)}>
+              {laying ? section.items.map(item) : section.shown.map(row)}
+            </Section>
+          ))}
+          {visible.length === 0 && <Empty variant="section">{search.none ?? '변경한 토글이 없어요.'}</Empty>}
           {onEditPrompt && toggles.sections[0]?.from === 'prompt' && (
             <Row kind="actions">
               <Button variant="link" size="xs" onClick={onEditPrompt}>
@@ -108,25 +125,6 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
             </Row>
           )}
         </Section>
-      )}
-      {search.field && (
-        <Row kind="toolbar">
-          {search.field}
-          <Tabs label="보기">
-            <Tab label="전체" count={all.length} current={filter === 'all'} onClick={() => show('all')} />
-            <Tab label="변경" count={toggles.changed} current={filter === 'changed'} onClick={() => show('changed')} />
-          </Tabs>
-        </Row>
-      )}
-      {visible.map((section, index) => (
-        <Section key={index} level={3} title={`${FROM[section.from]} · ${section.name}`} note={String(section.rows.length)}>
-          {laying ? section.items.map(item) : section.shown.map(row)}
-        </Section>
-      ))}
-      {all.length === 0 ? (
-        <Empty variant="section">{card ? '이 채팅의 프롬프트와 캐릭터 카드에는 토글이 없어요.' : '이 채팅의 프롬프트에는 토글이 없어요.'}</Empty>
-      ) : (
-        visible.length === 0 && <Empty variant="section">{search.none ?? '변경한 토글이 없어요.'}</Empty>
       )}
     </SidePanel>
   );
