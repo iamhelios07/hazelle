@@ -2,10 +2,10 @@ import { ImageIcon } from 'lucide-react';
 import { sameModelRef } from '../../connectors/assignment';
 import { drawingModels, type ImageRoute } from '../../runtime/illustrate';
 import { newOf } from '../common/acts';
-import { follows, NOT_STARRED } from '../common/words';
+import { follows, NOT_STARRED, scopeTag } from '../common/words';
 import { useConnections } from '../session';
 import { navigate } from '../shell/router';
-import { Button, ChipButton, Menu, MenuHeading, MenuItem, SettingRow, Stack, Switch, ToolButton } from '../ui';
+import { Button, ChipButton, Menu, MenuHeading, MenuItem, Section, SettingRow, Stack, Switch, ToolButton } from '../ui';
 import { appliesTo, PerCharacter, TaskPromptMenu } from './ChatTaskPrompt';
 import type { IllustrateSetup } from '../../runtime/characters';
 import type { IllustrationActions } from './useChatIllustrations';
@@ -28,36 +28,38 @@ export function ChatIllustrate({ illustrate, card, onChange, onOwnChange, onEdit
       label="삽화"
       trigger={(opener) => <ToolButton icon={ImageIcon} label="삽화" phone="icon" detail={illustrate.auto ? '자동 삽화 켜짐' : undefined} mark={illustrate.auto ? { kind: 'dot' } : undefined} {...opener} />}
     >
-      <Stack gap="related">
-        <SettingRow
-          label="자동 삽화"
-          help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 이미지 연결의 사용량이 들어요."
-          control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => onChange({ auto })} />}
-        />
-        <SettingRow
-          label="무료가 아니어도 만들기"
-          help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 묻지 않고 만들어요. 이때는 비용이 들어요."
-          control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
-        />
-        <SettingRow
-          label="이미지 모델"
-          sub={routes.length ? undefined : '이미지를 만들 모델이 없어요'}
-          control={
-            routes.length ? (
-              <ImageModelMenu routes={routes} illustrate={illustrate} card={card} onPick={onChange} />
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => navigate({ kind: 'add-connection' })}>
-                {newOf('연결')}
-              </Button>
-            )
-          }
-        />
-        <SettingRow
-          label="삽화 프롬프트"
-          control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
-        />
-        <PerCharacter card={card} own={illustrate.own} onChange={onOwnChange} />
-      </Stack>
+      <Section level={3} title="삽화" tag={scopeTag(card && illustrate.own ? 'character' : 'default')}>
+        <Stack gap="related">
+          <SettingRow
+            label="자동 삽화"
+            help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 이미지 연결의 사용량이 들어요."
+            control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => onChange({ auto })} />}
+          />
+          <SettingRow
+            label="무료가 아니어도 만들기"
+            help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 묻지 않고 만들어요. 이때는 비용이 들어요."
+            control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
+          />
+          <SettingRow
+            label="이미지 모델"
+            sub={routes.length ? undefined : '이미지를 만들 모델이 없어요'}
+            control={
+              routes.length ? (
+                <ImageModelMenu routes={routes} illustrate={illustrate} card={card} onPick={onChange} />
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => navigate({ kind: 'add-connection' })}>
+                  {newOf('연결')}
+                </Button>
+              )
+            }
+          />
+          <SettingRow
+            label="삽화 프롬프트"
+            control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
+          />
+          <PerCharacter card={card} own={illustrate.own} onChange={onOwnChange} />
+        </Stack>
+      </Section>
     </Menu>
   );
 }

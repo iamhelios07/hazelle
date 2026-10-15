@@ -82,6 +82,11 @@ export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES
 // A hint's door to the place it names: the thing itself, or a settings page by inSettings when it lands on the page.
 export const opens = (place: string) => `${place} 열기`;
 
+// The only words for a layer's state, a tag beside the title of a panel that overrides a shared value (design, Secondary
+// screens; user 2026-10-15).
+export const SCOPE = { default: '기본값', chat: '이 채팅만', character: '이 캐릭터만' } as const;
+export const scopeTag = (scope: keyof typeof SCOPE) => ({ label: SCOPE[scope], tone: scope === 'default' ? 'plain' : 'accent' }) as const;
+
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;
 

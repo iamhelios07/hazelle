@@ -5,9 +5,9 @@ import { pinToggle } from '../../runtime/characters';
 import { ToggleChoice } from '../common/ToggleChoice';
 import { useAutosave } from '../common/useAutosave';
 import { useSearch } from '../common/useSearch';
-import { PAGES, RESET } from '../common/words';
+import { PAGES, RESET, scopeTag } from '../common/words';
 import { useSettings, useStore } from '../session';
-import { Button, Disclosure, Divider, Empty, IconButton, Row, Section, SettingRow, SidePanel, Stack, Switch, Tab, Tabs, Text, TextField } from '../ui';
+import { Button, Disclosure, Divider, Empty, IconButton, Row, Section, SettingRow, SidePanel, Switch, Tab, Tabs, Text, TextField } from '../ui';
 import { shownRows, toggleSaveKey, type ToggleItem, type ToggleNote, type ToggleRow, type ToggleSection } from './toggles';
 import type { OpenChat } from './useChat';
 
@@ -34,6 +34,8 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
   const search = useSearch(all, '토글 검색', (row) => [row.toggle.label]);
   const found = new Set(search.found);
   const laying = filter === 'all' && !search.words;
+  // 캐릭터 없이's values hold for every chat without a character, which no layer word names.
+  const scope = toggles.changed === 0 ? 'default' : card ? 'character' : null;
   const visible = toggles.sections
     .map((section) => ({ ...section, shown: shownRows(section.rows, found, filter === 'changed', first) }))
     .filter((section) => section.shown.length > 0);
@@ -82,32 +84,31 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
     );
 
   return (
-    <SidePanel
-      title="토글"
-      onClose={onClose}
-      footer={
-        <>
-          {toggles.changed ? `변경 ${toggles.changed}개` : '모두 기본값'}
-          <Button variant="link" size="sm" disabled={toggles.changed === 0} onClick={onReset}>
-            {RESET}
-          </Button>
-        </>
-      }
-    >
-      <Stack gap="related">
-        <Text variant="note">
-          {card
-            ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.`
-            : '여기서 바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
-        </Text>
-        {onEditPrompt && toggles.sections[0]?.from === 'prompt' && (
-          <Row kind="actions">
-            <Button variant="link" size="xs" onClick={onEditPrompt}>
-              프롬프트 토글의 기본값 바꾸기
-            </Button>
-          </Row>
-        )}
-      </Stack>
+    <SidePanel title="토글" onClose={onClose}>
+      {all.length > 0 && (
+        <Section
+          level={3}
+          title="설정"
+          tag={scope ? scopeTag(scope) : undefined}
+          note={toggles.changed ? `변경 ${toggles.changed}개` : undefined}
+          help={card ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.` : '여기서 바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
+          action={
+            toggles.changed > 0 && (
+              <Button variant="link" onClick={onReset}>
+                {RESET}
+              </Button>
+            )
+          }
+        >
+          {onEditPrompt && toggles.sections[0]?.from === 'prompt' && (
+            <Row kind="actions">
+              <Button variant="link" size="xs" onClick={onEditPrompt}>
+                프롬프트 토글의 기본값 바꾸기
+              </Button>
+            </Row>
+          )}
+        </Section>
+      )}
       {search.field && (
         <Row kind="toolbar">
           {search.field}

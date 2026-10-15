@@ -12,7 +12,7 @@ import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, follows, inSettings, MODEL_ROLES, opens, PAGES, RESET, taskModelHelp } from '../common/words';
+import { CHAPTER, follows, inSettings, MODEL_ROLES, opens, PAGES, RESET, scopeTag, taskModelHelp } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
@@ -187,7 +187,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
       {!holder && <Section
         level={3}
         title="설정"
-        note={setup.own ? '이 채팅만' : '기본값'}
+        tag={scopeTag(setup.own ? 'chat' : 'default')}
         help={{ text: '여기서 바꾸면 이 채팅에만 적용돼요.', open: { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) } }}
         action={
           setup.own && (

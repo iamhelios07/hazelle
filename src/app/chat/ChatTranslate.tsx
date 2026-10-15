@@ -3,10 +3,10 @@ import { translationPrompt } from '../../runtime/prompts';
 import { sendsNotes, type translatorOf } from '../../runtime/translate';
 import { describeTranslateFailure } from '../common/failure';
 import { IntoLanguage } from '../common/IntoLanguage';
-import { inSettings, NOTE_UNSENT, noteLines, opens, PAGES, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
+import { inSettings, NOTE_UNSENT, noteLines, opens, PAGES, scopeTag, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
 import { useSession, useSettings } from '../session';
 import { navigate } from '../shell/router';
-import { Button, Divider, Menu, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
+import { Button, Divider, Menu, Section, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
 import { appliesTo, PerCharacter, TaskPromptMenu } from './ChatTaskPrompt';
 import type { TranslateSetup } from '../../runtime/characters';
 import type { TranslationActions } from './useChatTranslation';
@@ -35,43 +35,45 @@ export function ChatTranslate({ translate, translation, card, note, onChange, on
       label="번역"
       trigger={(opener) => <ToolButton icon={Languages} label="번역" phone="icon" detail={on ? `${on} 켜짐` : undefined} mark={on ? { kind: 'dot' } : undefined} {...opener} />}
     >
-      <Stack gap="related">
-        <SettingRow
-          label="응답 번역"
-          sentence={<IntoLanguage before="응답을" after="번역해서 보기" label="응답 번역 언어" value={translate.replyLanguage} opens="up" onPick={(replyLanguage) => onChange({ replyLanguage })} />}
-          control={<Switch label="응답 번역" checked={translate.replies} onChange={(replies) => onChange({ replies })} />}
-        />
-        <SettingRow
-          label="내 메시지 번역"
-          sentence={<IntoLanguage before="내 메시지를" after="번역해서 보내기" label="내 메시지 번역 언어" value={translate.inputLanguage} opens="up" onPick={(inputLanguage) => onChange({ inputLanguage })} />}
-          sub={translate.reverse ? '반전 모드에서는 원문으로 보내요' : undefined}
-          control={<Switch label="내 메시지 번역" checked={translate.input} disabled={translate.reverse} onChange={(input) => onChange({ input })} />}
-        />
-        <SettingRow
-          label="반전 모드"
-          help="모델에게도 화면에 보이는 내용을 보내요."
-          control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => onChange({ reverse })} />}
-        />
-        <Divider variant="menu" />
-        <NoteRow note={note} translation={translation} onEdit={onEditCharacter} />
-        <SettingRow
-          label="번역 프롬프트"
-          control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
-        />
-        <SettingRow
-          label="번역 모델"
-          help={{
-            text: taskModelHelp('번역'),
-            open: prompt.kind === 'prompt' ? { label: opens('번역 프롬프트'), onClick: () => onEditPrompt(prompt.prompt.id) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
-          }}
-          control={
-            <Text variant="note">
-              {translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}
-            </Text>
-          }
-        />
-        <PerCharacter card={card} own={translate.own} onChange={onOwnChange} />
-      </Stack>
+      <Section level={3} title="번역" tag={scopeTag(card && translate.own ? 'character' : 'default')}>
+        <Stack gap="related">
+          <SettingRow
+            label="응답 번역"
+            sentence={<IntoLanguage before="응답을" after="번역해서 보기" label="응답 번역 언어" value={translate.replyLanguage} opens="up" onPick={(replyLanguage) => onChange({ replyLanguage })} />}
+            control={<Switch label="응답 번역" checked={translate.replies} onChange={(replies) => onChange({ replies })} />}
+          />
+          <SettingRow
+            label="내 메시지 번역"
+            sentence={<IntoLanguage before="내 메시지를" after="번역해서 보내기" label="내 메시지 번역 언어" value={translate.inputLanguage} opens="up" onPick={(inputLanguage) => onChange({ inputLanguage })} />}
+            sub={translate.reverse ? '반전 모드에서는 원문으로 보내요' : undefined}
+            control={<Switch label="내 메시지 번역" checked={translate.input} disabled={translate.reverse} onChange={(input) => onChange({ input })} />}
+          />
+          <SettingRow
+            label="반전 모드"
+            help="모델에게도 화면에 보이는 내용을 보내요."
+            control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => onChange({ reverse })} />}
+          />
+          <Divider variant="menu" />
+          <NoteRow note={note} translation={translation} onEdit={onEditCharacter} />
+          <SettingRow
+            label="번역 프롬프트"
+            control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
+          />
+          <SettingRow
+            label="번역 모델"
+            help={{
+              text: taskModelHelp('번역'),
+              open: prompt.kind === 'prompt' ? { label: opens('번역 프롬프트'), onClick: () => onEditPrompt(prompt.prompt.id) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
+            }}
+            control={
+              <Text variant="note">
+                {translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}
+              </Text>
+            }
+          />
+          <PerCharacter card={card} own={translate.own} onChange={onOwnChange} />
+        </Stack>
+      </Section>
     </Menu>
   );
 }
