@@ -8,6 +8,16 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.10',
+    date: '2026-10-16',
+    lines: [
+      '메시지 글을 선택하면 끝에 수정 버튼이 떠요. 누르면 선택한 문단만 그 자리에서 고쳐요.',
+      '번역된 메시지의 번역 버튼으로 원문과 번역을 바꿔 봐요. 다시 번역은 ⋯ 메뉴로 옮겼어요. 원문만 고친 메시지에는 다시 번역이 떠요.',
+      '응답이 끝나는 순간 답장이 깜빡이고, 올려 읽던 화면이 맨 아래로 끌려가던 문제를 고쳤어요.',
+      '응답을 받는 중에 끌어다 놓은 파일도 가져오고, 큰 .risum 모듈도 가져와요. 에셋은 묶음마다 기다리지 않고 이어서 올려요.',
+    ],
+  },
+  {
     version: 'v0.2.9',
     date: '2026-10-15',
     lines: [
