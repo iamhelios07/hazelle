@@ -8,6 +8,18 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.6',
+    date: '2026-10-15',
+    lines: [
+      'Risu로 가져갈 수 있게 내보내요. 모듈은 .risum, 대화 프롬프트는 Risu 프리셋(.risup), 페르소나는 Risu 페르소나 PNG로 받아요. 채팅은 Risu 채팅 파일로, 설정 › 계정 › 백업에서는 모든 캐릭터를 zip 하나로 받아요.',
+      'Risu 페르소나 PNG를 끌어다 놓으면 페르소나로 가져와요.',
+      '로어북 항목과 프롬프트 블록의 칸 모서리에 있는 크게 편집으로 넓게 열어 쓸 수 있어요.',
+      '모듈과 캐릭터의 영상(MP4, WebM)도 가져와요. 봇이 영상을 보여 주고, 소리 나는 영상은 재생을 눌러야 시작해요. 전에 빠진 영상은 다시 가져오면 들어와요.',
+      '로그인과 모델 호출에 남용을 막는 한도를 더했어요.',
+      '최신 Risu 프리셋의 역할을 제대로 읽고, API 연결과 프롬프트 화면의 여백을 다듬었어요.',
+    ],
+  },
+  {
     version: 'v0.2.5',
     date: '2026-10-15',
     lines: [
