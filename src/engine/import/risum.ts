@@ -1,4 +1,5 @@
 import { isRecord } from '../../connectors/values';
+import type { FileSource } from './source';
 
 // RPack's decode table, ported under AGPL-3.0: bytes 256-511 of src/ts/rpack/rpack_map.bin in
 // github.com/kwaroran/RisuAI at ca1345fca1b65f2f4eac976510b7753e290eaa98. It must equal
@@ -34,31 +35,47 @@ const ASSET = 1;
 
 // A .risum as exportModuleLegacy writes it (src/ts/process/modules.ts): magic, version, a u32le length, then the
 // RPack'd JSON {type: 'risuModule', module}; then one block per entry of module.assets, in its order (a mark byte, a
-// u32le length, the RPack'd file), and a zero byte. assets reads each block only when asked, so a module of thousands
-// of pictures is never unpacked at once; a file cut short keeps the blocks that are whole.
-export function readRisum(bytes: Uint8Array): { module: Record<string, unknown>; assets: (() => Uint8Array<ArrayBuffer>)[] } | null {
-  if (bytes.length < HEADER || bytes[0] !== MAGIC || bytes[1] !== VERSION) return null;
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const length = view.getUint32(2, true);
-  if (HEADER + length > bytes.length) return null;
-  const json = new TextDecoder().decode(unpack(bytes.subarray(HEADER, HEADER + length)));
+// u32le length, the RPack'd file), and a zero byte. Only the JSON and each block's head are read up front; a picture is
+// read from the file when asked, so a module of gigabytes never sits in memory. A file cut short keeps the blocks that
+// are whole.
+export async function readRisum(source: FileSource): Promise<{ module: Record<string, unknown>; assets: (() => Promise<Uint8Array<ArrayBuffer>>)[] } | null> {
+  if (source.size < HEADER) return null;
+  const length = jsonLength(await source.read(0, HEADER));
+  if (length === null || HEADER + length > source.size) return null;
+  const module = moduleOf(await source.read(HEADER, length));
+  if (!module) return null;
+  const assets: (() => Promise<Uint8Array<ArrayBuffer>>)[] = [];
+  for (let at = HEADER + length; at + 5 <= source.size; ) {
+    const head = await source.read(at, 5);
+    if (head[0] !== ASSET) break;
+    const start = at + 5;
+    const end = start + new DataView(head.buffer, head.byteOffset, 5).getUint32(1, true);
+    if (end > source.size) break;
+    assets.push(async () => unpack(await source.read(start, end - start)));
+    at = end;
+  }
+  return { module, assets };
+}
+
+// The module of a .risum held in memory, as a charx's module.risum is; its blocks are not read.
+export function readRisumModule(bytes: Uint8Array): Record<string, unknown> | null {
+  const length = jsonLength(bytes);
+  return length === null || HEADER + length > bytes.length ? null : moduleOf(bytes.subarray(HEADER, HEADER + length));
+}
+
+function jsonLength(head: Uint8Array): number | null {
+  if (head.length < HEADER || head[0] !== MAGIC || head[1] !== VERSION) return null;
+  return new DataView(head.buffer, head.byteOffset, HEADER).getUint32(2, true);
+}
+
+function moduleOf(packed: Uint8Array): Record<string, unknown> | null {
   let main: unknown;
   try {
-    main = JSON.parse(json);
+    main = JSON.parse(new TextDecoder().decode(unpack(packed)));
   } catch {
     return null;
   }
-  if (!isRecord(main) || main.type !== 'risuModule' || !isRecord(main.module)) return null;
-  const assets: (() => Uint8Array<ArrayBuffer>)[] = [];
-  let at = HEADER + length;
-  while (bytes[at] === ASSET && at + 5 <= bytes.length) {
-    const start = at + 5;
-    const end = start + view.getUint32(at + 1, true);
-    if (end > bytes.length) break;
-    assets.push(() => new Uint8Array(unpack(bytes.subarray(start, end))));
-    at = end;
-  }
-  return { module: main.module, assets };
+  return isRecord(main) && main.type === 'risuModule' && isRecord(main.module) ? main.module : null;
 }
 
 // A .risum goes out in three parts, as exportModuleLegacy writes one: the head (magic, version, length, the JSON spaced

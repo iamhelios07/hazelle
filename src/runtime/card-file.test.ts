@@ -2,8 +2,9 @@ import { Unzip, UnzipInflate } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import { list } from '../connectors/values';
 import { blockConditions, blockEffects } from '../engine/import/blocks';
-import { blankCard, importCard } from '../engine/import/card';
-import { readRisum } from '../engine/import/risum';
+import { blankCard, importCard, importRisum } from '../engine/import/card';
+import { readRisum, readRisumModule } from '../engine/import/risum';
+import { fileSource } from '../engine/import/source';
 import type { Card, LoreEntry } from '../engine/import/types';
 import { likenessId } from '../model/likeness';
 import { randomBytes } from '../vault/aead';
@@ -135,7 +136,7 @@ describe('a character file', () => {
     expect(cardJson.data.extensions.risuai.lowLevelAccess).toBe(true);
     expect(cardJson.data.assets.map(({ uri }: { uri: string }) => unzipped.get(uri.slice('embeded://'.length)))).toEqual([face, shell, wall]);
     // Its scripts and lorebook, the module's after the character's, without those turned off: 3 folders and 4 entries.
-    const { module: risum } = readRisum(unzipped.get('module.risum')!)!;
+    const risum = readRisumModule(unzipped.get('module.risum')!)!;
     expect([list(risum.regex).length, list(risum.trigger).length, list(risum.lorebook).length]).toEqual([2, 2, 7]);
 
     const read = importCard('루나.charx', file);
@@ -189,16 +190,16 @@ describe('a module file', () => {
     const chunks: Uint8Array<ArrayBuffer>[] = [];
     const output = { write: async (chunk: Uint8Array<ArrayBuffer>) => void chunks.push(chunk), close: async () => {}, abort: async () => {} };
     expect(await exportModule(store, files, id, output, () => {})).toEqual({ ok: true, data: { tools: 1 } });
-    const file = new Uint8Array(await new Blob(chunks).arrayBuffer());
-    const risum = readRisum(file)!;
-    expect(risum.assets.map((block) => block())).toEqual(pictures);
+    const file = new File(chunks, '전화.risum');
+    const risum = (await readRisum(fileSource(file)))!;
+    expect(await Promise.all(risum.assets.map((block) => block()))).toEqual(pictures);
     expect(list(risum.module.assets)).toHaveLength(pictures.length);
     expect(risum.module).toMatchObject({ id, namespace: 'phone', lowLevelAccess: true });
     // Risu's own lists hold what is on: one script, one trigger, the folder and the three entries it reads.
     expect([list(risum.module.regex).length, list(risum.module.trigger).length, list(risum.module.lorebook).length]).toEqual([1, 1, 4]);
 
-    const read = importCard('전화.risum', file);
-    if (!read.ok || !('module' in read)) throw new Error('not a module');
+    const read = await importRisum(fileSource(file));
+    if (!read.ok) throw new Error('not a module');
     expect(read.module.unsupported).toEqual([]);
     const other = await server.account('other');
     const brought = await importModule(other.store, other.files, read.module, () => {});

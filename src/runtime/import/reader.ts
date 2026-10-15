@@ -1,8 +1,9 @@
 import { readTool, TOOL_FILE_BYTES } from '../../engine/import/tool';
-import { fileSource, readBackup } from '../../engine/import/backup';
-import { importCard } from '../../engine/import/card';
+import { readBackup } from '../../engine/import/backup';
+import { importCard, importRisum } from '../../engine/import/card';
 import { importPreset, isPresetFile } from '../../engine/import/preset';
 import { risuChatFile } from '../../engine/import/risu-character';
+import { fileSource } from '../../engine/import/source';
 import { readChatFile } from '../chat-file';
 import type { Imported, ImportedModule, Picture, RisuBackup, RisuChat } from '../../engine/import/types';
 import { MESSAGE_BYTES, MESSAGE_PAGE, type AssetRead, type CardData, type Method, type ModuleData, type Replies, type Request } from './protocol';
@@ -43,6 +44,10 @@ export class ImportReader {
       case 'card': {
         this.clear();
         this.backup = null;
+        if (request.file.name.toLowerCase().endsWith('.risum')) {
+          const result = await importRisum(fileSource(request.file));
+          return result.ok ? { ok: true, module: this.module(result.module) } : result;
+        }
         const tool = request.file.name.toLowerCase().endsWith('.js');
         if (tool && request.file.size > TOOL_FILE_BYTES) return { ok: false, failure: { kind: 'unreadable', detail: 'tool-too-large' } };
         const bytes = new Uint8Array(await request.file.arrayBuffer());

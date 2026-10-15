@@ -1,8 +1,9 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { assetType, blankCard, importCard, writeCharx } from './card';
+import { assetType, blankCard, importCard, importRisum, writeCharx } from './card';
 import { moduleSource } from './hazelle';
-import { readRisum, risumBlock, risumHead, RISUM_END, unpack, writeRisum } from './risum';
+import { fileSource } from './source';
+import { readRisum, readRisumModule, risumBlock, risumHead, RISUM_END, unpack, writeRisum } from './risum';
 import type { Bot, ImportResult, Imported, Trigger, TypedModule } from './types';
 
 const CRC = Array.from({ length: 256 }, (_, n) => {
@@ -243,8 +244,8 @@ describe('importCard', () => {
       customModuleToggle: 'ring=Ring',
       assets: [['wall', '', 'png'], ['icon', '', 'png'], ['lost', '', 'png']],
     };
-    const result = importCard('Phone.risum', risum(module, [new Uint8Array([1, 2, 3]), new Uint8Array([4])]));
-    if (!result.ok || !('module' in result)) throw new Error('not a module');
+    const result = await importRisum(fileSource(new File([risum(module, [new Uint8Array([1, 2, 3]), new Uint8Array([4])])], 'Phone.risum')));
+    if (!result.ok) throw new Error('not a module');
     const { assets, ...read } = result.module;
     expect(read).toEqual({
       name: 'Phone',
@@ -364,18 +365,17 @@ describe('importCard', () => {
 
   it('writes a module.risum byte for byte as Risu wrote the real one, and reads back what it wrote', () => {
     const real = Uint8Array.from(atob(RISU_MODULE.join('')), (char) => char.charCodeAt(0));
-    expect(writeRisum(readRisum(real)!.module)).toEqual(real);
+    expect(writeRisum(readRisumModule(real)!)).toEqual(real);
     const module = { name: '전화', regex: [{ comment: '화면', in: '\u0000a', out: '💬', type: 'editdisplay' }] };
-    expect(readRisum(writeRisum(module))).toEqual({ module, assets: [] });
+    expect(readRisumModule(writeRisum(module))).toEqual(module);
   });
 
   it('writes a .risum’s pictures as blocks that read back byte for byte, one per listed asset', async () => {
     const pictures = [Uint8Array.from({ length: 256 }, (_, byte) => byte), new Uint8Array([137, 80, 78, 71])];
     const module = { name: '배경', assets: pictures.map((_, place) => [`bg${place}`, '', 'png']) };
-    const file = new Uint8Array(await new Blob([risumHead(module), ...pictures.map(risumBlock), RISUM_END]).arrayBuffer());
-    const read = readRisum(file)!;
+    const read = (await readRisum(fileSource(new File([risumHead(module), ...pictures.map(risumBlock), RISUM_END], '배경.risum'))))!;
     expect(read.module).toEqual(module);
-    expect(read.assets.map((block) => block())).toEqual(pictures);
+    expect(await Promise.all(read.assets.map((block) => block()))).toEqual(pictures);
   });
 
   it('writes lowLevelAccess exactly when Risu’s own list holds a Lua trigger, for a module and for a charx', () => {
@@ -391,10 +391,10 @@ describe('importCard', () => {
     expect(risuai(bot([module([lua()])])).lowLevelAccess).toBe(true);
   });
 
-  it('fails by kind instead of throwing', () => {
+  it('fails by kind instead of throwing', async () => {
     expect(importCard('Mira.png', png(tEXt('chara', 'rcc||rccv1||abc||def||ghi')))).toEqual({ ok: false, failure: { kind: 'encrypted' } });
     expect(importCard('Mira.webp', new Uint8Array())).toEqual({ ok: false, failure: { kind: 'unknown-format' } });
-    expect(importCard('Mira.risum', new Uint8Array([111, 0]))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
+    expect(await importRisum(fileSource(new File([new Uint8Array([111, 0])], 'Mira.risum')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.png', own(strToU8('not a png')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.json', own(strToU8('{')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.charx', own(strToU8('PK')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });

@@ -167,9 +167,6 @@ export type ImportedModule = {
 export type ImportedPersona = Pick<RisuPersona, 'name' | 'alias' | 'description' | 'picture'>;
 export type ImportResult = { ok: true; card: Imported } | { ok: true; module: ImportedModule } | { ok: true; persona: ImportedPersona } | { ok: false; failure: ImportFailure };
 
-// A Risu local backup, read (design F7; research/risu-backup-spec.md). Pictures stay in the file until a character,
-// persona or module is brought.
-export type BackupSource = { size: number; read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>> };
 export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string };
 
 // Text as Risu stored it, already past the bot's input and output scripts.

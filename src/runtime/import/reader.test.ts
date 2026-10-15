@@ -1,5 +1,6 @@
 import { gzipSync, strToU8, zipSync } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
+import { risumBlock, risumHead, RISUM_END } from '../../engine/import/risum';
 import type { RisuMessage } from '../../engine/import/types';
 import { fromBase64 } from '../../vault/aead';
 import starter from '../starter-prompt.risup?inline';
@@ -180,6 +181,16 @@ it('reads .js as a tool without evaluating it and rejects oversized files before
   const large = new File([new Uint8Array(8 * 1024 * 1024 + 1)], 'large.js');
   const whole = vi.spyOn(large, 'arrayBuffer');
   expect(await ask(reader, { kind: 'card', file: large })).toMatchObject({ ok: false, failure: { detail: 'tool-too-large' } });
+  expect(whole).not.toHaveBeenCalled();
+});
+
+it('reads a .risum from slices of the file, never the whole of it', async () => {
+  const reader = new ImportReader();
+  const file = new File([risumHead({ name: '배경', assets: [['bg', '', 'png']] }), risumBlock(PNG), RISUM_END], '배경.risum');
+  const whole = vi.spyOn(file, 'arrayBuffer');
+  const read = await ask(reader, { kind: 'card', file });
+  if (!read.ok || !('module' in read)) throw new Error('not a module');
+  expect(await ask(reader, { kind: 'asset', handle: read.module.assets[0]!.handle })).toEqual(PNG);
   expect(whole).not.toHaveBeenCalled();
 });
 

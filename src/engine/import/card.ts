@@ -1,15 +1,16 @@
 import { add, cardSource, convert, counted, extensionOf, lorebookSource, record, text, type Converted, type Tally } from './convert';
 import { hazelleSource, printOf, readHazelle, readModule, type ConvertedBundle } from './hazelle';
-import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported, type LoreEntry } from './types';
+import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportedModule, type ImportReport, type ImportResult, type Imported, type LoreEntry } from './types';
 import { base64, readPng } from './png';
 import { readPersona } from './persona';
-import { readRisum, writeRisum } from './risum';
+import { readRisum, readRisumModule, writeRisum } from './risum';
+import type { FileSource } from './source';
 import { writeToggles } from './toggles';
 import { openZip, type Zip } from './zip';
 import { isRecord } from '../../connectors/values';
 
 const utf8 = new TextDecoder();
-const fail = (kind: ImportFailure['kind'], detail?: string): ImportResult => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
+const fail = (kind: ImportFailure['kind'], detail?: string): { ok: false; failure: ImportFailure } => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
 
 export const blankCard = (name: string): Card => ({
   name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '',
@@ -35,8 +36,6 @@ export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>): Im
         return fromCharx(bytes);
       case 'json':
         return fromJson(bytes);
-      case 'risum':
-        return fromRisum(bytes);
       default:
         return fail('unknown-format');
     }
@@ -60,7 +59,7 @@ function readCharx(bytes: Uint8Array<ArrayBuffer>, tally: Tally): { zip: Zip; ra
   const card = zip?.read('card.json');
   if (!zip || !card) return fail('unreadable', 'no card.json');
   const moduleBytes = zip.read('module.risum');
-  const module = moduleBytes ? (readRisum(moduleBytes)?.module ?? null) : null;
+  const module = moduleBytes ? readRisumModule(moduleBytes) : null;
   if (moduleBytes && !module) add(tally, 'module');
   const raw: unknown = JSON.parse(utf8.decode(card));
   const converted = convert(raw, module, tally);
@@ -107,14 +106,19 @@ function characterLore({ description, greetings, postHistoryInstructions }: Card
   ];
 }
 
-function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
-  const read = readRisum(bytes);
-  if (!read) return fail('unreadable', 'not a module');
-  const tally: Tally = new Map();
-  const { assets: names, ...module } = readModule(read.module, tally);
-  add(tally, 'missing-asset', Math.max(0, names.length - read.assets.length));
-  const assets = read.assets.slice(0, names.length).map((block, index) => ({ name: names[index]!, read: async () => block() }));
-  return { ok: true, module: { ...module, assets, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
+// A .risum is read apart from importCard, from slices of the file: a module of pictures runs to gigabytes.
+export async function importRisum(source: FileSource): Promise<{ ok: true; module: ImportedModule } | { ok: false; failure: ImportFailure }> {
+  try {
+    const read = await readRisum(source);
+    if (!read) return fail('unreadable', 'not a module');
+    const tally: Tally = new Map();
+    const { assets: names, ...module } = readModule(read.module, tally);
+    add(tally, 'missing-asset', Math.max(0, names.length - read.assets.length));
+    const assets = read.assets.slice(0, names.length).map((block, index) => ({ name: names[index]!, read: block }));
+    return { ok: true, module: { ...module, assets, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
+  } catch (error) {
+    return fail('unreadable', error instanceof Error ? error.message : String(error));
+  }
 }
 
 function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
@@ -246,7 +250,7 @@ export function writeCharx(bot: Bot): { files: { path: string; bytes: Uint8Array
   const assets = [...icon, ...source.assets.map(({ name, type }, place) => ({ type: 'x-risu-asset', name, ext: extensionOf(type), uri: `embeded://assets/other/image/${place}.${extensionOf(type)}` }))];
   const module = writeRisum({ name: bot.card.name, description: '', regex: source.regex, trigger: source.triggers, lorebook: lorebookSource(source.lore, source.loreFolders) });
   const plain = utf8Out.encode(JSON.stringify(cardSource(bot.card, assets, {}, source.lua)));
-  const read = convert(JSON.parse(utf8.decode(plain)), readRisum(module)!.module, new Map())!;
+  const read = convert(JSON.parse(utf8.decode(plain)), readRisumModule(module)!, new Map())!;
   const card = cardSource(bot.card, assets, { hazelle: { ...source.extension, print: printOf(read, writeToggles(bot.card.toggles)) } }, source.lua);
   return {
     files: [{ path: 'card.json', bytes: utf8Out.encode(JSON.stringify(card)) }, { path: 'module.risum', bytes: module }],

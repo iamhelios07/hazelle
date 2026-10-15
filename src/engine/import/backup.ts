@@ -5,6 +5,7 @@ import { add, convertModule, counted, record, text, type Json, type Tally } from
 import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
 import { risuPersonaFields } from './persona';
+import type { FileSource } from './source';
 import { convertPreset } from './preset';
 import { chatInfo, picture, risuCharacter, type Entry, type Read } from './risu-character';
 import {
@@ -13,7 +14,6 @@ import {
   type BackupFailure,
   type BackupCatalog,
   type BackupResult,
-  type BackupSource,
   type Imported,
   type ImportedModule,
   type MoveUnsupportedKind,
@@ -22,7 +22,7 @@ import {
   type RisuPreset,
 } from './types';
 
-type Span = { source: BackupSource; offset: number; length: number };
+type Span = { source: FileSource; offset: number; length: number };
 type Cold = (key: string) => Promise<unknown>;
 
 // The two forms a backup's database is written in (spec §2): until Risu 2026-10-14, 00 'RISUSAVE' 00 08 then gzip over
@@ -53,7 +53,7 @@ const fail = (kind: BackupFailure['kind'], detail?: string): BackupResult => ({ 
 // looked up in all of them, that one first. So an account's full backup, whose database is locked with Risu's server key
 // but whose pictures are plain, supplies the pictures beside the partial backup that supplies the text. Only the database
 // and cold metadata are read here; histories are normalized only for a selected character, pictures only when asked.
-export async function readBackup(sources: BackupSource[]): Promise<BackupResult> {
+export async function readBackup(sources: FileSource[]): Promise<BackupResult> {
   try {
     const indexed = await Promise.all(sources.map((source) => index(readAhead(source), source)));
     const main = indexed.findIndex((files) => files.has('database.risudat') && !files.has('encryption.risudat'));
@@ -69,7 +69,7 @@ export async function readBackup(sources: BackupSource[]): Promise<BackupResult>
   }
 }
 
-function readAhead(source: BackupSource): BackupSource {
+function readAhead(source: FileSource): FileSource {
   let start = 0;
   let bytes = new Uint8Array(0);
   return {
@@ -88,7 +88,7 @@ function readAhead(source: BackupSource): BackupSource {
 // Records of u32 name length, name, u32 data length, data, little-endian, with nothing around them (spec §1).
 // A span reads from the file it was indexed in, through raw: the read-ahead window serves one read at a time, and
 // entries are read several at once.
-async function index(source: BackupSource, raw: BackupSource): Promise<Map<string, Span>> {
+async function index(source: FileSource, raw: FileSource): Promise<Map<string, Span>> {
   const files = new Map<string, Span>();
   const take = (offset: number, length: number) => {
     if (offset + length > source.size) throw new Error('the file ends early');
@@ -108,7 +108,7 @@ async function index(source: BackupSource, raw: BackupSource): Promise<Map<strin
 // The file the export run on the Risu page writes (app/library/inlayExport), in the backup's layout: inlay_<id> for
 // each picture and Gemini signature (its stored item as JSON), and first of all inlay_skipped.json, naming the video and
 // audio items left out, which marks the file as this export. null: another file.
-export async function readInlays(source: BackupSource): Promise<Inlays | null> {
+export async function readInlays(source: FileSource): Promise<Inlays | null> {
   const ahead = readAhead(source);
   if (source.size < 4) return null;
   const nameLength = u32(await ahead.read(0, 4), 0);
@@ -122,12 +122,6 @@ export async function readInlays(source: BackupSource): Promise<Inlays | null> {
     }),
   };
 }
-
-// A backup can exceed memory; indexing reads slices, never an arrayBuffer of the whole archive.
-export const fileSource = (file: File): BackupSource => ({
-  size: file.size,
-  read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
-});
 
 // bytes: the file's entries together. assets: an entry per id, which reads null for one the file lacks.
 export type Inlays = { bytes: number; assets(ids: string[]): Imported['assets'] };

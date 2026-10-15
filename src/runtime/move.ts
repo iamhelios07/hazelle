@@ -1,5 +1,6 @@
 import { SIGNATURE } from '../engine/assets';
-import { fileSource, inlayType, readInlays, type Inlays } from '../engine/import/backup';
+import { inlayType, readInlays, type Inlays } from '../engine/import/backup';
+import { fileSource } from '../engine/import/source';
 import { counted } from '../engine/import/convert';
 import { inlayIds } from '../engine/import/risu-character';
 import { mergeUnsupported, MOVE_UNSUPPORTED_KINDS, unsupportedCount, type BackupCatalog, type Card, type Imported, type MoveUnsupported, type RisuBackup, type RisuChat, type Unsupported } from '../engine/import/types';
