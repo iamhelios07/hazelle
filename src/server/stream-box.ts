@@ -1,6 +1,7 @@
 import { RELAY_HEADER, type ServerError } from '../contracts/http';
 import { HELLO, HEAD, DATA, END, PING, WAIT, retryWait, type Retry } from '../contracts/streams';
-import { forward, type Upstream } from './relay';
+import type { RelayAllowance } from './limits';
+import { forward, RelayTrafficLimit, type Upstream } from './relay';
 
 // A stream that closes with no end frame was lost: the process restarted with the call gone.
 type Reason = { reason: 'done' | 'stopped' | 'limit' } | { reason: 'network'; detail: string };
@@ -129,6 +130,7 @@ export class StreamBox {
     private readonly storage: BoxStorage,
     private readonly upstream: Upstream,
     private readonly idle: () => void,
+    private readonly allowance: RelayAllowance,
   ) {}
 
   async start({ id, key, request, retry }: { id: string; key: unknown; request: unknown; retry?: Retry }, signal: AbortSignal): Promise<Response> {
@@ -207,7 +209,7 @@ export class StreamBox {
       let tries = 0;
       for (;;) {
         tries++;
-        response = await forward(this.upstream, envelope, signal);
+        response = await forward(this.upstream, envelope, signal, this.allowance);
         const wait = retry && tries <= retry.times && !signal.aborted && (await passing(response, retry.statuses)) ? retryWait(tries, response.headers.get('retry-after'), Date.now()) : null;
         if (wait === null) break;
         await response.body?.cancel();
@@ -229,7 +231,7 @@ export class StreamBox {
         else gathering ??= setTimeout(flush, GATHER_MS);
       }
     } catch (error) {
-      end = limited ? { reason: 'limit' } : signal.aborted ? { reason: 'stopped' } : { reason: 'network', detail: error instanceof Error ? error.message : String(error) };
+      end = limited || error instanceof RelayTrafficLimit || signal.reason instanceof RelayTrafficLimit ? { reason: 'limit' } : signal.aborted ? { reason: 'stopped' } : { reason: 'network', detail: error instanceof Error ? error.message : String(error) };
     } finally {
       clearTimeout(limit);
     }
@@ -336,9 +338,21 @@ export class StreamBox {
     }
     const first = hello;
     let seq = Math.max(1, from);
+    const send = (reader: ReadableStreamDefaultController<Uint8Array>, bytes: Uint8Array) => {
+      // Replays are traffic too. Close without END on exhaustion: the client reports a lost/cut reply, and unlike
+      // an errored body it does not reconnect forever. The stored frames remain readable after the daily reset.
+      if (!this.allowance.take(bytes.byteLength)) {
+        this.call?.abort(new RelayTrafficLimit());
+        done();
+        reader.close();
+        return false;
+      }
+      reader.enqueue(bytes);
+      return true;
+    };
     const body = new ReadableStream<Uint8Array>(
       {
-        start: (reader) => reader.enqueue(first),
+        start: (reader) => { send(reader, first); },
         pull: async (reader) => {
           // A pull starts once the frame before it was taken, so quiet counts from here: a page written meanwhile
           // wakes the wait below with nothing to send.
@@ -358,7 +372,7 @@ export class StreamBox {
               if (seq < this.persisted || !running) {
                 const pages = await this.storage.list({ start: frameKey(seq), end: FRAMES_END, limit: PAGE });
                 for (const [key, bytes] of pages) {
-                  reader.enqueue(bytes);
+                  if (!send(reader, bytes)) return;
                   seq = seqOf(key) + 1;
                 }
                 if (pages.size) return;
@@ -369,7 +383,7 @@ export class StreamBox {
               }
               const held = this.pending.length - (seq - this.persisted);
               if (held > 0) {
-                for (const { bytes } of this.pending.slice(-held)) reader.enqueue(bytes);
+                for (const { bytes } of this.pending.slice(-held)) if (!send(reader, bytes)) return;
                 seq += held;
                 return;
               }
@@ -385,7 +399,10 @@ export class StreamBox {
                   }, pingAt - Date.now());
               });
               clearTimeout(ping);
-              if (!woken) return reader.enqueue(frame(PING, 0, new Uint8Array()));
+              if (!woken) {
+                send(reader, frame(PING, 0, new Uint8Array()));
+                return;
+              }
             }
           } catch (error) {
             done();

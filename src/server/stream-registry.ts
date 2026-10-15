@@ -1,4 +1,5 @@
 import type { Retry } from '../contracts/streams';
+import type { RelayBudget } from './limits';
 import type { Upstream } from './relay';
 import { StreamBox } from './stream-box';
 import type { StreamStore } from './db/streams-db';
@@ -20,14 +21,17 @@ export type Streams = {
   close(): void;
 };
 
-export function streamRegistry(store: StreamStore, upstream: Upstream): Streams {
+export function streamRegistry(store: StreamStore, upstream: Upstream, budget: RelayBudget): Streams {
   const boxes = new Map<string, StreamBox>();
   const box = (name: string) => {
     const found = boxes.get(name);
     if (found) return found;
-    const made: StreamBox = new StreamBox(store.storage(name), upstream, () => {
-      if (boxes.get(name) === made) boxes.delete(name);
-    });
+    const made: StreamBox = new StreamBox(
+      store.storage(name),
+      upstream,
+      () => { if (boxes.get(name) === made) boxes.delete(name); },
+      budget.account(name.split(':')[0]!),
+    );
     boxes.set(name, made);
     return made;
   };

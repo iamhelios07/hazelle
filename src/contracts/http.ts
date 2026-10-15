@@ -56,4 +56,4 @@ export type ServerError =
   | 'username-taken'
   | 'wrong-login';
 // The relay's own refusals, answered marked RELAY_HEADER: error (server/relay).
-export type RelayError = 'bad-envelope' | 'not-https' | 'not-public' | 'upstream-unreachable' | 'upstream-redirect';
+export type RelayError = 'bad-envelope' | 'not-https' | 'not-public' | 'upstream-unreachable' | 'upstream-redirect' | 'upstream-not-api' | 'relay-traffic-limit' | 'relay-host-limit';

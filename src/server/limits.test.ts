@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tokenBucket, uploadBudget } from './limits';
+import { relayBudget, tokenBucket, uploadBudget } from './limits';
 
 const setup = (perMinute: number) => {
   let now = 0;
@@ -73,5 +73,33 @@ describe('uploadBudget', () => {
     const small = budget.take(2);
     expect(await big).toBe(false);
     expect(await Promise.race([small, new Promise((resolve) => setTimeout(() => resolve('late'), 10))])).toBe(true);
+  });
+});
+
+describe('relayBudget', () => {
+  it('shares a byte budget across calls, isolates accounts and renews existing handles at UTC midnight', () => {
+    let now = 86_399_999;
+    const budget = relayBudget(10, 2, () => now);
+    const first = budget.account('a');
+    expect(first.take(6)).toBe(true);
+    expect(budget.account('a').take(5)).toBe(false);
+    expect(first.take(0)).toBe(false);
+    expect(budget.account('b').take(10)).toBe(true);
+    now++;
+    expect(first.take(10)).toBe(true);
+    expect(first.take(1)).toBe(false);
+  });
+
+  it('counts canonical hostnames, not paths or ports, and forgets the host set on the next day', () => {
+    let now = 0;
+    const budget = relayBudget(100, 1, () => now);
+    const a = budget.account('a');
+    expect(a.visit(new URL('https://EXAMPLE.com/a'))).toBe(true);
+    expect(a.visit(new URL('https://example.com.:8443/b'))).toBe(true);
+    expect(a.visit(new URL('https://other.test/'))).toBe(false);
+    expect(budget.account('b').visit(new URL('https://other.test/'))).toBe(true);
+    now = 86_400_000;
+    expect(a.visit(new URL('https://other.test/'))).toBe(true);
+    expect(a.visit(new URL('https://example.com/'))).toBe(false);
   });
 });

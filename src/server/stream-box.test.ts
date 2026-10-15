@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Retry } from '../contracts/streams';
 import type { Upstream } from './relay';
+import { relayBudget } from './limits';
 import { StreamBox } from './stream-box';
 import { streamStore } from './db/streams-db';
 
@@ -48,7 +49,7 @@ it('reads the provider no faster than its pages are stored', async () => {
     return put(key, value);
   };
   const { counted, upstream } = endless();
-  const box = new StreamBox(held, upstream, () => {});
+  const box = new StreamBox(held, upstream, () => {}, relayBudget().account('test'));
   await start(box);
   await new Promise((resolve) => setTimeout(resolve, 200));
   expect(counted.pulled).toBeLessThanOrEqual(PAGE_BYTES / CHUNK + 1);
@@ -80,7 +81,7 @@ async function frames(body: ReadableStream<Uint8Array>) {
 
 it('ends a call whose answer passes the byte bound, with what came before it sent', async () => {
   const { upstream } = endless();
-  const response = await start(new StreamBox(storage(), upstream, () => {}));
+  const response = await start(new StreamBox(storage(), upstream, () => {}, relayBudget().account('test')));
   const { seen, bytes } = await frames(response.body!);
   expect(seen.at(-1)![0]).toBe(3);
   expect(bytes / 2 ** 20).toBeGreaterThan(32);
@@ -101,7 +102,7 @@ it('stores a short reply as one page, which a read from inside it still ends', a
         },
       }),
     );
-  const box = new StreamBox(held, upstream, () => {});
+  const box = new StreamBox(held, upstream, () => {}, relayBudget().account('test'));
   const live = await frames((await start(box)).body!);
   expect(live.seen.length).toBeGreaterThan(4);
   expect(live.seen.at(-1)![0]).toBe(3);
@@ -126,7 +127,7 @@ it('ends its readers with an error, aborts the call and tries no write, END incl
     signal.addEventListener('abort', () => (aborted = true));
     return new Response(new ReadableStream({ pull: (body) => (signal.aborted ? body.error(signal.reason) : body.enqueue(new Uint8Array(CHUNK))) }, { highWaterMark: 0 }));
   };
-  const box = new StreamBox(held, upstream, () => {});
+  const box = new StreamBox(held, upstream, () => {}, relayBudget().account('test'));
   const reading = frames((await start(box)).body!);
   await expect(reading).rejects.toThrow('stream write failed');
   await box.ended;
@@ -141,7 +142,7 @@ it.each([true, false])('stops counting a reader whose client left (before its re
   const held = storage();
   await held.reserve({ key: 'f:0000000000', value: new Uint8Array(9) }, Date.now() + 60_000);
   let idle = 0;
-  const box = new StreamBox(held, endless().upstream, () => idle++);
+  const box = new StreamBox(held, endless().upstream, () => idle++, relayBudget().account('test'));
   const request = new AbortController();
   if (before) request.abort();
   expect((await box.read(0, request.signal)).status).toBe(200);
@@ -189,7 +190,7 @@ it('pings a reader of a silent call, with no seq of its own and nothing stored',
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
   const held = storage();
   const { upstream, writer } = silent();
-  const box = new StreamBox(held, upstream, () => {});
+  const box = new StreamBox(held, upstream, () => {}, relayBudget().account('test'));
   const next = framer((await start(box)).body!);
   const seen = [await next(), await next()];
   for (let i = 0; i < 3; i++) {
@@ -214,7 +215,7 @@ it('leaves no ping timer behind a reader whose client left, and the box still go
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
   let idle = 0;
   const { upstream, writer } = silent();
-  const box = new StreamBox(storage(), upstream, () => idle++);
+  const box = new StreamBox(storage(), upstream, () => idle++, relayBudget().account('test'));
   const first = framer((await start(box)).body!);
   await first();
   await first();
@@ -271,7 +272,7 @@ function sequence({ seen }: { seen: [number, number][] }) {
 it('sends a try refused for a moment again, the same request after the wait asked for, and passes on only the last', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
   const { sent, upstream } = tried(refusal(529), refusal(429, { 'retry-after': '7' }), new Response('data: {}\n\n'));
-  const box = new StreamBox(storage(), upstream, () => {});
+  const box = new StreamBox(storage(), upstream, () => {}, relayBudget().account('test'));
   const reading = frames((await start(box, RETRY)).body!);
   for (let tick = 0; tick < 40 && box.running; tick++) await vi.advanceTimersByTimeAsync(500);
   await vi.advanceTimersByTimeAsync(2000);
@@ -283,7 +284,7 @@ it('sends a try refused for a moment again, the same request after the wait aske
 it('sends a try whose address was not reached again, and no more than its times', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
   const { sent, upstream } = tried(null, refusal(429), refusal(429));
-  const box = new StreamBox(storage(), upstream, () => {});
+  const box = new StreamBox(storage(), upstream, () => {}, relayBudget().account('test'));
   const reading = frames((await start(box, RETRY)).body!);
   for (let tick = 0; tick < 40 && box.running; tick++) await vi.advanceTimersByTimeAsync(500);
   await vi.advanceTimersByTimeAsync(2000);
@@ -294,7 +295,7 @@ it('sends a try whose address was not reached again, and no more than its times'
 it('passes on at once an answer its statuses do not name, a reply past its head, and every answer of a call without retry', async () => {
   for (const [answer, retry] of [[refusal(400), RETRY], [refusal(429), undefined], [new Response(new ReadableStream({ pull: (body) => body.error(new Error('reset')) })), RETRY]] as const) {
     const { sent, upstream } = tried(answer);
-    const { seen } = await frames((await start(new StreamBox(storage(), upstream, () => {}), retry)).body!);
+    const { seen } = await frames((await start(new StreamBox(storage(), upstream, () => {}, relayBudget().account('test')), retry)).body!);
     expect(seen.map(([type]) => type)).not.toContain(5);
     expect(sent).toHaveLength(1);
   }
@@ -302,7 +303,7 @@ it('passes on at once an answer its statuses do not name, a reply past its head,
 
 it('ends a call stopped while a try waits to be sent again, with no head and nothing more sent', async () => {
   const { sent, upstream } = tried(refusal(429, { 'retry-after': '30' }), refusal(429));
-  const box = new StreamBox(storage(), upstream, () => {});
+  const box = new StreamBox(storage(), upstream, () => {}, relayBudget().account('test'));
   const next = framer((await start(box, RETRY)).body!);
   expect([await next(), await next()]).toEqual([[0, 0], [5, 1]]);
   box.stop();

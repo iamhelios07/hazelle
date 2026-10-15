@@ -19,7 +19,7 @@ import { openDatabase, serviceDb } from './db/service-db';
 import { chooseBucket } from './files/choose';
 import type { FrontendOptions } from './frontend-worker';
 import { fail, type Services } from './http';
-import { tokenBucket, uploadBudget, visitorLimits } from './limits';
+import { RELAY_DAILY, relayBudget, tokenBucket, uploadBudget, visitorLimits } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshModelsDev } from './models-dev';
 import { reconcile } from './reconcile';
@@ -79,7 +79,13 @@ try {
 const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
 const db = serviceDb(raw);
-const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() };
+const limits = {
+  relay: relayBudget(
+    wholeFrom('HAZELLE_RELAY_DAILY_BYTES', RELAY_DAILY.bytes, 1, Number.MAX_SAFE_INTEGER),
+    wholeFrom('HAZELLE_RELAY_DAILY_HOSTS', RELAY_DAILY.hosts, 1, 100_000),
+  ),
+  calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget(),
+};
 const operatorAlerts = alerts(process.env.HAZELLE_ALERT_WEBHOOK || null);
 const local = localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? '');
 const outbound = pinnedOutbound(local);
@@ -87,7 +93,7 @@ const services: Services = {
   db,
   files,
   stores: accountRegistry(dataDir, db, serviceReads(db), Date.now, files),
-  streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), outbound),
+  streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), outbound, limits.relay),
   outbound,
   localProviders: local,
   limits,

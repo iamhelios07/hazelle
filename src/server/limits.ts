@@ -1,8 +1,54 @@
+import { createHmac, randomBytes } from 'node:crypto';
+
 // A token bucket per key, in process: calls (240 a minute per account), bot calls (20 a minute per account:chat) and
 // visitors (visitorLimits). The caller picks the key.
 
 export type Limiter = { limit(key: string): { success: boolean } };
 export type UploadBudget = { take(size: number): Promise<boolean>; give(size: number): void };
+
+export type RelayAllowance = { visit(url: URL): boolean; take(bytes: number): boolean };
+export type RelayBudget = { account(id: string): RelayAllowance };
+export const RELAY_DAILY = { bytes: 4_000_000_000, hosts: 30 };
+
+// Enforcement only: never expose, log or persist these counters or destination fingerprints. A new UTC day (or
+// process) forgets them. Handles read the current day even when a detached call crosses midnight.
+export function relayBudget(bytes = RELAY_DAILY.bytes, hosts = RELAY_DAILY.hosts, clock: () => number = Date.now): RelayBudget {
+  let day = -1;
+  let secret = randomBytes(32);
+  const accounts = new Map<string, { bytes: number; hosts: Set<string> }>();
+  const current = (id: string) => {
+    const today = Math.floor(clock() / 86_400_000);
+    if (today !== day) {
+      accounts.clear();
+      secret = randomBytes(32);
+      day = today;
+    }
+    let held = accounts.get(id);
+    if (!held) {
+      held = { bytes: 0, hosts: new Set() };
+      accounts.set(id, held);
+    }
+    return held;
+  };
+  return {
+    account: (id) => ({
+      visit: (url) => {
+        const held = current(id);
+        const host = createHmac('sha256', secret).update(url.hostname.replace(/\.$/, '')).digest('hex');
+        if (held.hosts.has(host)) return true;
+        if (held.hosts.size >= hosts) return false;
+        held.hosts.add(host);
+        return true;
+      },
+      take: (size) => {
+        const held = current(id);
+        const fits = held.bytes < bytes && size <= bytes - held.bytes;
+        held.bytes = Math.min(bytes, held.bytes + size);
+        return fits;
+      },
+    }),
+  };
+}
 
 // One process holds every upload body in its memory until the bytes are on disk, so what it holds at once is bounded
 // by their bytes, not their count: a picture of ~100 KB never waits, and only bodies near MAX_FILE_BYTES share the
