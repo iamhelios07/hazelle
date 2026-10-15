@@ -83,6 +83,21 @@ export function editPortrait(store: ObjectStore, owner: string, name: string, ed
   });
 }
 
+// Both answer what was there, for 되돌리기 (restoreLikeness). A portrait goes until 다시 만들기, since the pack still has
+// its profiles; the whole pack's are made again by the next 삽화 that needs them.
+export async function removePortrait(store: ObjectStore, owner: string, name: string): Promise<ApiResult<Stored<'likeness'>>> {
+  const before = store.get('likeness', likenessId(owner));
+  if (!before) return { ok: false, error: 'gone' };
+  const removed = await store.update('likeness', before.id, (current) =>
+    current.portraits.some((portrait) => portrait.name === name) ? { ...current, portraits: current.portraits.filter((portrait) => portrait.name !== name) } : null,
+  );
+  return removed.ok ? { ok: true, data: before } : removed;
+}
+
+export const removeLikeness = (store: ObjectStore, owner: string) => store.take('likeness', likenessId(owner));
+
+export const restoreLikeness = (store: ObjectStore, before: Stored<'likeness'>) => store.restore(before);
+
 // One build per pack at a time: a draw that needs a pack being built waits for that build.
 export class Likenesses {
   private closed = false;

@@ -10,7 +10,7 @@ import { placeMark } from '../model/illustration';
 import { takeTurn } from './turn';
 import { removeIllustration, restoreIllustration } from './illustrate';
 import { likenessId } from '../model/likeness';
-import { editPortrait } from './likeness';
+import { editPortrait, removeLikeness, removePortrait, restoreLikeness } from './likeness';
 import { addPersona } from './personas';
 
 const { PAINTER } = vi.hoisted(() => {
@@ -306,5 +306,21 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       await vi.waitFor(() => expect(session.likenesses.snapshot().size).toBe(0));
       expect(profileCalls()).toHaveLength(2);
       expect(session.store.get('likeness', likenessId(owner))!.value.portraits[0]!.outfits[0]!.tags).toBe('maid uniform');
+    }));
+
+  it('a removed portrait stays gone on the next draw, the whole profiles are made again, and 되돌리기 writes back what was there', () =>
+    server.withSession(async (session) => {
+      const { owner, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
+      await draw();
+      const removed = await removePortrait(session.store, owner, 'Ari');
+      expect(session.store.get('likeness', likenessId(owner))!.value.portraits).toEqual([]);
+      await draw();
+      expect(profileCalls()).toHaveLength(1);
+      expect((await restoreLikeness(session.store, removed.ok ? removed.data : expect.fail())).ok).toBe(true);
+      expect(session.store.get('likeness', likenessId(owner))!.value.portraits[0]).toMatchObject({ name: 'Ari' });
+      expect((await removeLikeness(session.store, owner)).ok).toBe(true);
+      expect(session.store.get('likeness', likenessId(owner))).toBeNull();
+      await draw();
+      expect(profileCalls()).toHaveLength(2);
     }));
 });
