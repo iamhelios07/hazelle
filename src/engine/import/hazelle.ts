@@ -2,6 +2,7 @@ import { count, isRecord, list } from '../../connectors/values';
 import type { Portrait, PortraitSource } from '../../model/likeness';
 import { fingerprint } from '../memory';
 import { add, DEFAULT_ORDER, nativeHolds, readTriggers, record, regexScripts, regexSource, stampIds, strings, text, triggerSource, type Converted, type Json, type Tally, type Unstamped } from './convert';
+import { readToggles, writeToggles } from './toggles';
 import type { Bot, BundledModule, CharacterOwn, HazelleOwn, LoreEntry, Profiles, RegexScript, Trigger } from './types';
 
 // A charx this app writes carries in its card's extensions.hazelle what Risu's fields cannot: the scripts turned off,
@@ -20,8 +21,10 @@ type Placed = 'risu' | 'shared' | 'own';
 type Located = { name: string; uri: string };
 export type ConvertedBundle = Omit<BundledModule, 'assets'> & { assets: Located[] };
 
-export const printOf = ({ card, lore, loreFolders, assets }: Converted) =>
-  fingerprint([{ role: 'charx', text: JSON.stringify([card, lore, loreFolders, assets.map(({ name }) => name)]) }]);
+// toggles: the card's toggle text as card.json holds it. The card read keeps its toggles as lines, but the print takes
+// the text it took before they were, so a charx written then still matches.
+export const printOf = ({ card, lore, loreFolders, assets }: Converted, toggles: string) =>
+  fingerprint([{ role: 'charx', text: JSON.stringify([{ ...card, toggles }, lore, loreFolders, assets.map(({ name }) => name)]) }]);
 
 function partition<T, S>(entries: T[], place: (entry: T) => Placed, kept: (entry: T) => S): { risu: T[]; kept: Kept<S>[] } {
   const risu: T[] = [];
@@ -74,7 +77,7 @@ export function hazelleSource(bot: Bot) {
         name,
         description,
         namespace,
-        toggles: pack.toggles,
+        toggles: writeToggles(pack.toggles),
         ...(pack.background !== undefined && { background: pack.background }),
         likeness,
         regex: pack.regex.length,
@@ -176,11 +179,11 @@ function unstamped<S extends { id: string }>(script: S): Unstamped<S> {
   return rest as Unstamped<S>;
 }
 
-// raw: the card's extensions.hazelle, absent from any file but this app's own charx.
-export function readHazelle(raw: unknown, read: Converted, tally: Tally): { read: Converted; own: HazelleOwn | null; bundled: ConvertedBundle[] } {
+// raw: the card's extensions.hazelle, absent from any file but this app's own charx. toggles: as printOf takes them.
+export function readHazelle(raw: unknown, toggles: string, read: Converted, tally: Tally): { read: Converted; own: HazelleOwn | null; bundled: ConvertedBundle[] } {
   if (raw === undefined) return { read, own: null, bundled: [] };
   const source = record(raw);
-  if (source.version !== VERSION || source.print !== printOf(read)) {
+  if (source.version !== VERSION || source.print !== printOf(read, toggles)) {
     add(tally, 'hazelle');
     return { read, own: null, bundled: [] };
   }
@@ -230,7 +233,7 @@ export function readHazelle(raw: unknown, read: Converted, tally: Tally): { read
         description: text(module.description),
         namespace: text(module.namespace) || null,
         risu: text(module.id) || null,
-        pack: { ...pack, ...(background && { background }), toggles: text(module.toggles) },
+        pack: { ...pack, ...(background && { background }), toggles: readToggles(text(module.toggles)) },
         ...owned,
         unsupported: [],
         likeness: profiles(module.likeness),

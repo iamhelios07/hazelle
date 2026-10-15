@@ -148,7 +148,7 @@ describe('branchChat', () => {
     expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']], [['door', 'open']]], ['narration', true, undefined, undefined, undefined]]);
 
     const module = crypto.randomUUID();
-    await store.create('module', { name: '기억', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: '' }, { id: module });
+    await store.create('module', { name: '기억', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: [] }, { id: module });
     const narration = folded()[1]!;
     await saveToolChat(store, module, source, [['index', { node: said }]], [{ message: said, version: shown(folded()[0]!).id, text: '요약됨' }, { message: narration.id, version: shown(narration).id, text: '마지막' }]);
 

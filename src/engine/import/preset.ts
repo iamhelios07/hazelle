@@ -120,8 +120,8 @@ function convert(preset: Json, template: unknown[]): { prompt: ConversationPromp
     blocks.push(read);
   }
 
-  const { lines: toggles, unread } = readToggles(text(preset.customPromptTemplateToggle));
-  count('toggle-line', unread);
+  const toggles = readToggles(text(preset.customPromptTemplateToggle));
+  count('toggle-line', toggles.filter((line) => line.kind === 'unread').length);
   // A template preset sends none of these texts (compat spec, legacy-only buckets); its jailbreak goes only
   // through a jailbreak item, counted above.
   count('preset-text', [preset.mainPrompt, preset.jailbreak, preset.globalNote].filter((value) => text(value).trim()).length);

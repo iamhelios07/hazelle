@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { blankCard } from '../engine/import/card';
 import { memoryId } from '../model/memory';
 import { startChat } from './chat-log';
 import { testServer } from './testing';
@@ -64,6 +65,16 @@ describe('upgradeValue', () => {
     expect(upgradeValue('character', { card: { regex: [], triggers: [trigger] } })).toEqual({ card: { regex: [], triggers: [{ ...trigger, effects }] } });
     expect(upgradeValue('module', { regex: [], triggers: [trigger] })).toEqual({ regex: [], triggers: [{ ...trigger, effects }] });
     expect(upgradeValue('module', { regex: [], triggers: [{ ...trigger, effects: [trigger.effects[1]] }] })).toBeNull();
+  });
+
+  it("reads a character's and a module's toggles kept as Risu's text into lines on the backup's reader, an unread line kept", () => {
+    const text = 'ring=벨\n모드 고르기';
+    const lines = [{ key: 'ring', label: '벨', kind: 'check', default: '0' }, { kind: 'unread', text: '모드 고르기' }];
+    const module = { name: 'Bell', description: '', namespace: null, regex: [], triggers: [], toggles: text, loreFolders: [] };
+    const character = { card: { ...blankCard('루나'), toggles: text }, folder: null, loreFolders: [] };
+    const row = (kind: string, value: unknown) => readRow({ id: 'x', kind, parent: null, rev: 1, value })?.value;
+    expect(row('module', module)).toEqual({ ...module, toggles: lines });
+    expect(row('character', character)).toEqual({ ...character, card: { ...character.card, toggles: lines } });
   });
 
   it('leaves a current character or module alone, so the write-back touches only old ones', () => {

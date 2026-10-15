@@ -136,8 +136,10 @@ const ENTRIES = {
 const picture = shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) });
 const toggle = shape({ key: str, label: str, kind: str });
 const mark = shape({ label: str });
-// A layout line has no key (model/prompt ToggleMark).
-const toggleLine: Check = (value) => isRecord(value) && (value.kind === 'groupEnd' || (value.kind === 'divider' || value.kind === 'caption' || value.kind === 'group' ? mark : toggle)(value));
+const unread = shape({ text: str });
+// A layout line and an unread one have no key (model/prompt ToggleMark, UnreadLine).
+const toggleLine: Check = (value) =>
+  isRecord(value) && (value.kind === 'groupEnd' || (value.kind === 'divider' || value.kind === 'caption' || value.kind === 'group' ? mark : value.kind === 'unread' ? unread : toggle)(value));
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(toggleLine) });
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
 const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate', model: (value) => value === undefined || isRecord(value) });
@@ -146,7 +148,8 @@ const SHAPES = {
   character: shape({
     card: shape({
       ...all(str, 'name', 'description', 'personality', 'scenario', 'exampleDialogue', 'systemPrompt', 'postHistoryInstructions'),
-      ...all(str, 'creatorNotes', 'creator', 'version', 'toggles'),
+      ...all(str, 'creatorNotes', 'creator', 'version'),
+      toggles: listOf(toggleLine),
       nickname: orNull(str),
       greetings: listOf(str),
       tags: listOf(str),
@@ -160,7 +163,7 @@ const SHAPES = {
     folder: orNull(str),
     loreFolders: listOf(shape({ id: str, name: str })),
   }),
-  module: shape({ name: str, description: str, namespace: orNull(str), regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: str, loreFolders: listOf(shape({ id: str, name: str })) }),
+  module: shape({ name: str, description: str, namespace: orNull(str), regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: listOf(toggleLine), loreFolders: listOf(shape({ id: str, name: str })) }),
   tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model' || value === 'embed' || value === 'memory'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
   tooldata: shape({ key: str, value: (value) => value !== undefined }),
   toolchat: shape({ module: str, key: orNull(str), value: (value) => value !== undefined }),

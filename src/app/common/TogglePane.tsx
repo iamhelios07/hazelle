@@ -1,17 +1,21 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useState } from 'react';
-import { isToggle, type Toggle, type ToggleLine, type ToggleMark } from '../../model/prompt';
-import { ACTS, newOf } from '../common/acts';
-import { NameDialog } from '../common/NameDialog';
-import { ToggleChoice } from '../common/ToggleChoice';
+import { readToggles } from '../../engine/import/toggles';
+import { isToggle, type Toggle, type ToggleLine, type ToggleMark, type UnreadLine } from '../../model/prompt';
+import { ACTS, newOf } from './acts';
+import { NameDialog } from './NameDialog';
+import { ToggleChoice } from './ToggleChoice';
+import { keyProblem, LINE_WORDS } from './toggleWords';
 import { Button, Checkbox, ChoiceGroup, Dialog, Empty, Menu, MenuItem, MoreMenu, Row, Section, SettingGroup, SettingRow, Switch, TextField } from '../ui';
-import { keyProblem, LINE_WORDS } from './edits';
 
 type Props = {
   lines: readonly ToggleLine[];
-  uses: (key: string) => number;
+  // How many conditions changing a key rewrites with it; null for an owner whose text it leaves as it is (a pack's
+  // lorebook and scripts), which the pane says rather than count none.
+  uses: ((key: string) => number) | null;
   onAdd: (line: ToggleLine) => void;
-  onEdit: (before: ToggleLine, after: ToggleLine, at: number, what: 'label' | 'default') => void;
+  // line: an unread line fixed, the whole line read again.
+  onEdit: (before: ToggleLine, after: ToggleLine, at: number, what: 'label' | 'default' | 'line') => void;
   onMove: (line: ToggleLine, from: number, to: number) => void;
   onRekey: (toggle: Toggle, to: string) => void;
   onRemove: (at: number) => void;
@@ -21,12 +25,19 @@ type Props = {
 };
 
 type Labeled = Exclude<ToggleMark['kind'], 'groupEnd'>;
-type Editing = { at: number; field: 'label' | 'key' | 'default' } | { add: Labeled };
+type Field = 'label' | 'key' | 'default' | 'line';
+type Editing = { at: number; field: Field } | { add: Labeled };
 
 const FIELD: Record<Labeled, string> = { divider: '이름', caption: '내용', group: '이름' };
 
 const subOf = (line: ToggleLine) =>
-  isToggle(line) ? `${line.key} · ${LINE_WORDS[line.kind]}${line.kind === 'text' && line.lines ? ' · 여러 줄' : ''}` : line.kind !== 'groupEnd' && line.label ? LINE_WORDS[line.kind] : undefined;
+  isToggle(line)
+    ? `${line.key} · ${LINE_WORDS[line.kind]}${line.kind === 'text' && line.lines ? ' · 여러 줄' : ''}`
+    : line.kind === 'unread'
+      ? line.text
+      : line.kind !== 'groupEnd' && line.label
+        ? LINE_WORDS[line.kind]
+        : undefined;
 
 export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemove, adding, onAdding }: Props) {
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -42,13 +53,26 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
     );
   }
 
-  function dialog(line: ToggleLine, at: number, field: 'label' | 'key' | 'default') {
+  function dialog(line: ToggleLine, at: number, field: Field) {
+    if (field === 'line' && line.kind === 'unread') {
+      return (
+        <LineDialog
+          line={line}
+          lines={lines}
+          onClose={close}
+          onSave={(read) => {
+            close();
+            onEdit(line, read, at, 'line');
+          }}
+        />
+      );
+    }
     if (field === 'key' && isToggle(line)) {
       return (
         <KeyDialog
           toggle={line}
           lines={lines}
-          uses={uses(line.key)}
+          uses={uses && uses(line.key)}
           onClose={close}
           onSave={(key) => {
             close();
@@ -71,7 +95,7 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
         />
       );
     }
-    if (field !== 'label' || line.kind === 'groupEnd') return null;
+    if (field !== 'label' || line.kind === 'groupEnd' || line.kind === 'unread') return null;
     return (
       <NameDialog
         title={line.kind === 'caption' ? '내용 바꾸기' : ACTS.rename.label}
@@ -112,15 +136,21 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
           {lines.map((line, at) => (
             <SettingRow
               key={isToggle(line) ? line.key : `${line.kind}${at}`}
-              label={isToggle(line) || (line.kind !== 'groupEnd' && line.label) ? line.label : LINE_WORDS[line.kind]}
+              label={isToggle(line) || (line.kind !== 'groupEnd' && line.kind !== 'unread' && line.label) ? line.label : LINE_WORDS[line.kind]}
               sub={subOf(line)}
               control={
                 <Row kind="toolbar">
                   {control(line, at)}
                   <MoreMenu of={isToggle(line) ? `'${line.label}'` : LINE_WORDS[line.kind]}>
-                    {line.kind !== 'groupEnd' && <MenuItem icon={ACTS.rename.icon} label={line.kind === 'caption' ? '내용 바꾸기' : ACTS.rename.label} onClick={() => setEditing({ at, field: 'label' })} />}
+                    {line.kind !== 'groupEnd' && (
+                      <MenuItem
+                        icon={ACTS.rename.icon}
+                        label={line.kind === 'caption' || line.kind === 'unread' ? '내용 바꾸기' : ACTS.rename.label}
+                        onClick={() => setEditing({ at, field: line.kind === 'unread' ? 'line' : 'label' })}
+                      />
+                    )}
                     {line.kind === 'text' && <MenuItem label="기본값 바꾸기" onClick={() => setEditing({ at, field: 'default' })} />}
-                    {isToggle(line) && <MenuItem label="키 바꾸기" sub="조건에 쓴 키도 바뀌어요" onClick={() => setEditing({ at, field: 'key' })} />}
+                    {isToggle(line) && <MenuItem label="키 바꾸기" sub={uses ? '조건에 쓴 키도 바뀌어요' : undefined} onClick={() => setEditing({ at, field: 'key' })} />}
                     {at > 0 && <MenuItem icon={ArrowUp} label="위로 옮기기" onClick={() => onMove(line, at, at - 1)} />}
                     {at < lines.length - 1 && <MenuItem icon={ArrowDown} label="아래로 옮기기" onClick={() => onMove(line, at, at + 1)} />}
                     <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onRemove(at)} />
@@ -159,7 +189,7 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
   );
 }
 
-function KeyDialog({ toggle, lines, uses, onClose, onSave }: { toggle: Toggle; lines: readonly ToggleLine[]; uses: number; onClose: () => void; onSave: (key: string) => void }) {
+function KeyDialog({ toggle, lines, uses, onClose, onSave }: { toggle: Toggle; lines: readonly ToggleLine[]; uses: number | null; onClose: () => void; onSave: (key: string) => void }) {
   const [key, setKey] = useState(toggle.key);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -184,8 +214,31 @@ function KeyDialog({ toggle, lines, uses, onClose, onSave }: { toggle: Toggle; l
         value={key}
         onChange={setKey}
         error={error ?? undefined}
-        hint={uses ? `조건 ${uses}곳도 바뀌어요.` : '이 키를 쓰는 조건이 없어요.'}
+        hint={uses === null ? '이 키를 쓴 곳은 그대로예요.' : uses ? `조건 ${uses}곳도 바뀌어요.` : '이 키를 쓰는 조건이 없어요.'}
       />
+    </Dialog>
+  );
+}
+
+// The line is read as an import reads it; one that still reads as nothing stays unread with what was typed.
+function LineDialog({ line, lines, onClose, onSave }: { line: UnreadLine; lines: readonly ToggleLine[]; onClose: () => void; onSave: (read: ToggleLine) => void }) {
+  const [text, setText] = useState(line.text);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <Dialog
+      title="내용 바꾸기"
+      onClose={onClose}
+      onSubmit={() => {
+        const [read] = readToggles(text);
+        if (!read) return setError('줄을 적어 주세요.');
+        const problem = isToggle(read) && keyProblem(read.key, lines, null);
+        if (problem) return setError(problem);
+        onSave(read);
+      }}
+      actionsLayout="full"
+      actions={<Button type="submit">저장</Button>}
+    >
+      <TextField label="줄" kind="key" value={text} onChange={setText} help="Risu의 토글 형식은 키=이름=종류=선택지예요." error={error ?? undefined} />
     </Dialog>
   );
 }

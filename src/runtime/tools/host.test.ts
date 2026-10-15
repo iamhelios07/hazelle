@@ -116,7 +116,7 @@ it('refuses undeclared spending and forged event contexts, and isolates module s
     const frame = transport.frames[0]!;
     frame.emit({ kind: 'call', call: 900, event: 9999, method: 'model', args: ['aux', []] });
     await vi.waitFor(() => expect(frame.host.sent).toContainEqual(expect.objectContaining({ kind: 'answer', call: 900, ok: false })));
-    const other = await session.store.create('module', { name: 'other', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: '' });
+    const other = await session.store.create('module', { name: 'other', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: [] });
     if (!other.ok) throw new Error('fixture');
     await setToolData(session.store, other.data.id, 'secret', 'private');
     expect(await frame.api!.storage.get('secret')).toBeUndefined();

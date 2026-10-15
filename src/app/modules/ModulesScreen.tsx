@@ -68,7 +68,7 @@ export function ModulesScreen({ back, onImport }: { back: Back | null; onImport:
         </>,
       ],
       summary: holdsLine(parts[index]!),
-      onClick: () => navigate({ kind: 'module', id }),
+      onClick: () => navigate({ kind: 'module', id, pane: null }),
     };
   });
   return (

@@ -22,7 +22,7 @@ it('keeps completed card and module reports as detached text without asset reade
 });
 
 it('says where a module was turned on, and that it was not when that failed', () => {
-  const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: { regex: [], triggers: [], toggles: '' }, lore: [], loreFolders: [], assets: [], unsupported: [] };
+  const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: { regex: [], triggers: [], toggles: [] }, lore: [], loreFolders: [], assets: [], unsupported: [] };
   const placed = (at: Placement['at'], failure: string | null = null) => moduleOutcome('bell.risum', module, 'module', [], { at, failure }).placed;
   expect([placed('character'), placed('prompt'), placed('always')].map((each) => each?.text)).toEqual(['이 캐릭터에 켰어요.', '이 프롬프트에 켰어요.', '항상 켰어요.']);
   expect(placed('character', '없어진 캐릭터예요.')).toEqual({ text: '이 캐릭터에 켜지 못했어요. 없어진 캐릭터예요.', failed: true });

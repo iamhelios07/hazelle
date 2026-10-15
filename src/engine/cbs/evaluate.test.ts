@@ -20,7 +20,7 @@ const card = (over: Partial<Card> = {}): Card => ({
   version: '',
   tags: [],
   variables: [],
-  toggles: '',
+  toggles: [],
   utility: false,
   bias: [],
   regex: [],

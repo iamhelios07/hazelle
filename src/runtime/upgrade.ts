@@ -3,6 +3,7 @@ import { CONNECTION_TYPES } from '../connectors/registry';
 import { isRecord } from '../connectors/values';
 import { reparsed, type BlockEffect } from '../engine/import/blocks';
 import { stampIds } from '../engine/import/convert';
+import { readToggles } from '../engine/import/toggles';
 import { without } from '../model/fields';
 import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
 import { firstTurns } from '../model/turns';
@@ -50,13 +51,13 @@ function upgradeConnection(value: Record<string, unknown>) {
 // gives.
 function upgradeCharacter(value: Record<string, unknown>) {
   let upgraded: Record<string, unknown> | null = null;
-  for (const step of [dropTranslate, translationsByText, cardScriptIds, statusIds, dropKeepStatus, cardEffects]) upgraded = step(upgraded ?? value) ?? upgraded;
+  for (const step of [dropTranslate, translationsByText, cardScriptIds, statusIds, dropKeepStatus, cardEffects, cardToggles]) upgraded = step(upgraded ?? value) ?? upgraded;
   return upgraded;
 }
 
 function upgradeModule(value: Record<string, unknown>) {
   let upgraded: Record<string, unknown> | null = null;
-  for (const step of [scriptIds, effectsRead]) upgraded = step(upgraded ?? value) ?? upgraded;
+  for (const step of [scriptIds, effectsRead, togglesRead]) upgraded = step(upgraded ?? value) ?? upgraded;
   return upgraded;
 }
 
@@ -103,6 +104,16 @@ function effectsRead(pack: Record<string, unknown>) {
 
 function cardEffects(value: Record<string, unknown>) {
   const card = isRecord(value.card) ? effectsRead(value.card) : null;
+  return card && { ...value, card };
+}
+
+// Until 2026-10-15 a pack kept its toggles as Risu's text, read on every use.
+function togglesRead(pack: Record<string, unknown>) {
+  return typeof pack.toggles === 'string' ? { ...pack, toggles: readToggles(pack.toggles) } : null;
+}
+
+function cardToggles(value: Record<string, unknown>) {
+  const card = isRecord(value.card) ? togglesRead(value.card) : null;
   return card && { ...value, card };
 }
 

@@ -1,4 +1,3 @@
-import { readToggles } from '../../engine/import/toggles';
 import type { Pack } from '../../engine/import/types';
 import { isToggle } from '../../model/prompt';
 import { SCRIPTS, TOOL } from './words';
@@ -16,7 +15,7 @@ export const packParts = (pack: Pack, lore: number, assets: number, tool = false
   lore,
   regex: pack.regex.length,
   triggers: pack.triggers.length,
-  toggles: readToggles(pack.toggles).lines.filter(isToggle).length,
+  toggles: pack.toggles.filter(isToggle).length,
   assets,
   style: !!pack.background,
 });

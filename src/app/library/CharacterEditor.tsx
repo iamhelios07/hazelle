@@ -1,12 +1,13 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Square, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf, Pictures } from '../../model/library';
 import { likenessId } from '../../model/likeness';
+import { isToggle } from '../../model/prompt';
 import { editCharacter, setAvatar, setCardWrites, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
@@ -19,6 +20,7 @@ import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
 import { scriptHolds } from '../common/pack';
 import { ModuleSwitches } from '../common/ModuleSwitches';
+import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import type { CharacterPart } from '../common/characterPart';
@@ -51,13 +53,14 @@ const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
   lore: { label: '로어북', icon: BookOpen },
   modules: { label: PAGES.modules, icon: Package },
   scripts: { label: SCRIPTS.part, icon: Braces },
+  toggles: { label: '토글', icon: SlidersHorizontal },
   assets: { label: '에셋', icon: Images },
   illustration: { label: '삽화', icon: Palette },
   display: { label: '표시', icon: Eye },
 };
 const GROUPS: CharacterPart[][] = [
   ['profile', 'character', 'greetings'],
-  ['instructions', 'lore', 'modules', 'scripts'],
+  ['instructions', 'lore', 'modules', 'scripts', 'toggles'],
   ['assets', 'illustration', 'display'],
 ];
 const LIST = '캐릭터 항목';
@@ -317,6 +320,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
+    toggles: <PackToggles owner={{ kind: 'character', id }} lines={card.toggles} />,
     assets: <AssetsEditor owner={id} />,
     illustration: <PortraitsEditor owner={id} />,
     display: (
@@ -355,6 +359,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     lore: `${lore.length}개`,
     modules: `${modules.filter((module) => always.includes(module.id) || ownModules.includes(module.id)).length}개 켜짐`,
     scripts: scriptHolds(card) || undefined,
+    toggles: `${card.toggles.filter(isToggle).length}개`,
     assets: `${assets.length}개`,
     illustration: likeness ? `${likeness.value.portraits.length}명` : undefined,
   };

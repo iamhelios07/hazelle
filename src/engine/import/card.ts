@@ -1,8 +1,9 @@
-import { add, cardSource, convert, convertModule, counted, lorebookSource, record, type Converted, type Tally } from './convert';
+import { add, cardSource, convert, convertModule, counted, lorebookSource, record, text, type Converted, type Tally } from './convert';
 import { hazelleSource, printOf, readHazelle, type ConvertedBundle } from './hazelle';
 import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
 import { readPng } from './png';
 import { readRisum, writeRisum } from './risum';
+import { writeToggles } from './toggles';
 import { openZip, type Zip } from './zip';
 import { isRecord } from '../../connectors/values';
 
@@ -13,7 +14,7 @@ const fail = (kind: ImportFailure['kind'], detail?: string): ImportResult => ({ 
 
 export const blankCard = (name: string): Card => ({
   name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '',
-  creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [],
+  creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: [], utility: false, bias: [], regex: [], triggers: [],
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 });
 
@@ -72,7 +73,8 @@ function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const charx = readCharx(bytes, tally);
   if ('ok' in charx) return charx;
   const { zip, raw, converted } = charx;
-  const { read, own, bundled } = readHazelle(record(record(record(raw).data).extensions).hazelle, converted, tally);
+  const extensions = record(record(record(raw).data).extensions);
+  const { read, own, bundled } = readHazelle(extensions.hazelle, text(record(extensions.risuai).toggles), converted, tally);
   return done('charx', read, avatar(read.icon, zip.prefix, zip, tally), { zip }, tally, { own, bundled });
 }
 
@@ -215,7 +217,7 @@ export function writeCharx(bot: Bot): { files: { path: string; bytes: Uint8Array
   const module = writeRisum({ name: bot.card.name, description: '', regex: source.regex, trigger: source.triggers, lorebook: lorebookSource(source.lore, source.loreFolders) });
   const plain = utf8Out.encode(JSON.stringify(cardSource(bot.card, assets, {})));
   const read = convert(JSON.parse(utf8.decode(plain)), readRisum(module)!.module, new Map())!;
-  const card = cardSource(bot.card, assets, { hazelle: { ...source.extension, print: printOf(read) } });
+  const card = cardSource(bot.card, assets, { hazelle: { ...source.extension, print: printOf(read, writeToggles(bot.card.toggles)) } });
   return {
     files: [{ path: 'card.json', bytes: utf8Out.encode(JSON.stringify(card)) }, { path: 'module.risum', bytes: module }],
     pictures: assets.map(({ uri }) => uri.slice('embeded://'.length)),

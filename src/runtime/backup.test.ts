@@ -48,7 +48,7 @@ const card: Card = {
   version: '',
   tags: [],
   variables: [],
-  toggles: '',
+  toggles: [],
   utility: false,
   bias: [],
   regex: [],

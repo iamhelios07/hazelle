@@ -1,5 +1,6 @@
 import { TOGGLE_GLOBAL } from '../../engine/cbs/tags';
-import { isToggle, SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle, type ToggleLine } from '../../model/prompt';
+import { SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
+import { rekeyed } from '../../model/toggles';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockSource } from './blocks';
 import { renameToggle, toggleUses } from './rekey';
@@ -47,13 +48,6 @@ export function newBlock(kind: NewBlock): Block {
 export const placedOnce = (blocks: readonly Block[], slot: SlotKind): Block | undefined =>
   SLOTS[slot].repeats ? undefined : blocks.find((each) => each.kind === 'slot' && each.slot === slot);
 
-export function moved<T>(items: readonly T[], from: number, to: number): T[] {
-  const next = [...items];
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item!);
-  return next;
-}
-
 // A mark is on one text at most, so marking a text takes it off the one that had it (taken).
 export function withMark(blocks: readonly Block[], id: string, mark: TextBlock['mark']): { blocks: Block[]; taken: string | null } {
   let taken: string | null = null;
@@ -83,23 +77,8 @@ export const countUses = (draft: Draft, key: string) =>
 
 // Changing a key rewrites its conditions; changing only the label never touches them.
 export function rekey(draft: Draft, from: string, to: string): PromptPatch {
-  return { ...rewrite(draft, (text) => renameToggle(text, from, to)), toggles: draft.toggles.map((line) => (isToggle(line) && line.key === from ? { ...line, key: to } : line)) };
+  return { ...rewrite(draft, (text) => renameToggle(text, from, to)), toggles: rekeyed(draft.toggles, from, to) };
 }
-
-export const keyInUse = (lines: readonly ToggleLine[], key: string) => lines.some((line) => isToggle(line) && line.key === key);
-
-// A key stands inside {{#when::toggle::KEY}}, so it holds none of CBS's own marks.
-export function keyProblem(key: string, lines: readonly ToggleLine[], own: string | null): string | null {
-  if (!key) return '키를 적어 주세요.';
-  if (/[\s:{}]/.test(key)) return '공백과 :, {, }는 쓸 수 없어요.';
-  if (key !== own && keyInUse(lines, key)) return '다른 토글이 쓰고 있는 키예요.';
-  return null;
-}
-
-export const LINE_WORDS = { check: '켜고 끄기', choice: '선택', text: '텍스트', divider: '구분선', caption: '설명', group: '그룹 시작', groupEnd: '그룹 끝' } as const;
-
-export const lineTitle = (line: ToggleLine) =>
-  isToggle(line) ? `'${line.label}' 토글` : line.kind === 'groupEnd' || !line.label ? LINE_WORDS[line.kind] : `'${line.label}' ${LINE_WORDS[line.kind]}`;
 
 // Selected text becomes the first branch, not replaced by it.
 // select: the placeholder to type over next, the first branch's or, after a selection, the second's.

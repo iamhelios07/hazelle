@@ -8,6 +8,7 @@ import type { ScriptOutcome } from './lua/event';
 import { gatherTurn, wouldSend } from './turn-context';
 import type { LuaRunner } from './script-binding';
 import { describe, expect, it, vi } from 'vitest';
+import type { ToggleLine } from '../model/prompt';
 import { fetchApi } from './api';
 import type { Trigger } from '../engine/import/types';
 import { Lua } from '../engine/lua/run';
@@ -28,7 +29,7 @@ import { takeTurn } from './turn';
 
 const server = testServer();
 
-async function chatWith(session: Session, script: string | Trigger[], toggles = '') {
+async function chatWith(session: Session, script: string | Trigger[], toggles: ToggleLine[] = []) {
   await answerable(session);
   const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', id: 'trigger-0', name: 'main', code: script }] : script;
   const card = { ...blankCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers, toggles };
@@ -46,7 +47,7 @@ async function chatWith(session: Session, script: string | Trigger[], toggles = 
 describe('triggersOf', () => {
   it('leaves out a trigger turned off and a Lua one with no code', () => {
     const lua = (id: string, code: string, off?: true): Trigger => ({ kind: 'lua', id, name: id, code, ...(off && { off }) });
-    expect(triggersOf([{ id: 'c', module: null, pack: { regex: [], triggers: [lua('a', 'x()'), lua('b', ' \n'), lua('c', 'y()', true)], toggles: '' } }]).map(({ id }) => id)).toEqual(['a']);
+    expect(triggersOf([{ id: 'c', module: null, pack: { regex: [], triggers: [lua('a', 'x()'), lua('b', ' \n'), lua('c', 'y()', true)], toggles: [] } }]).map(({ id }) => id)).toEqual(['a']);
   });
 });
 
@@ -301,7 +302,7 @@ describe("the display with the bot's Lua", () => {
 
   it('passes a message again when a toggle its listener reads changes', () =>
     server.withSession(async (session) => {
-      const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value .. ' <' .. getGlobalVar(id, 'toggle_hard') .. '>' end)`, 'hard=어렵게');
+      const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value .. ' <' .. getGlobalVar(id, 'toggle_hard') .. '>' end)`, [{ key: 'hard', label: '어렵게', kind: 'check', default: '0' }]);
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
       const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
       const leave = screen.subscribe(() => {});
@@ -734,7 +735,7 @@ describe('tool events through Scripts', () => {
 
   it('asks module Lua on its own behalf even with no character, and remembers it in another chat', () => server.withSession(async (session) => {
     await answerable(session);
-    const added = await importModule(session.store, session.files, { name: 'module', description: '', namespace: null, risu: null, pack: { regex: [], toggles: '', triggers: [{ kind: 'lua', id: 'lua', name: 'model', code: 'askModel = async(function(id) LLM(id, {{role="user", content="summarize"}}) end)' }] }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
+    const added = await importModule(session.store, session.files, { name: 'module', description: '', namespace: null, risu: null, pack: { regex: [], toggles: [], triggers: [{ kind: 'lua', id: 'lua', name: 'model', code: 'askModel = async(function(id) LLM(id, {{role="user", content="summarize"}}) end)' }] }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
     if (!added.ok) throw new Error(added.error);
     await setModuleAlways(session.store, added.data.id, true);
     const log = stubRelay(() => saying('summary'));

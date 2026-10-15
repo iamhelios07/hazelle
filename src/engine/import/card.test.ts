@@ -138,7 +138,7 @@ describe('importCard', () => {
 
   it('imports a card without extensions', () => {
     const imported = json(v2({ character_version: 2 }));
-    expect(imported.card).toMatchObject({ version: '2', regex: [], variables: [], toggles: '', utility: false, bias: [] });
+    expect(imported.card).toMatchObject({ version: '2', regex: [], variables: [], toggles: [], utility: false, bias: [] });
     expect(imported.card.loreSettings).toEqual({ scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null });
     expect(imported.lore).toEqual([]);
   });
@@ -244,7 +244,7 @@ describe('importCard', () => {
         regex: [{ id: 'regex-0', name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }],
         triggers: [{ kind: 'lua', id: 'trigger-0', name: 'tap', code: 'function tap() end' }],
         background: '<style>.phone { color: red }</style>',
-        toggles: 'ring=Ring',
+        toggles: [{ key: 'ring', label: 'Ring', kind: 'check', default: '0' }],
       },
       lore: [expect.objectContaining({ name: 'Phone', keys: ['phone'], content: 'It rings.', folder: null })],
       loreFolders: [],
@@ -271,7 +271,7 @@ describe('importCard', () => {
       description: 'A phone screen.',
       namespace: null,
       risu: null,
-      pack: { regex: [{ id: 'regex-0', name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }], triggers: [], background: '<style>.phone { color: red }</style>', toggles: 'ring=Ring' },
+      pack: { regex: [{ id: 'regex-0', name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }], triggers: [], background: '<style>.phone { color: red }</style>', toggles: [{ key: 'ring', label: 'Ring', kind: 'check', default: '0' }] },
       loreFolders: [],
       unsupported: [],
     });

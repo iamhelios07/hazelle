@@ -66,7 +66,7 @@ const card = (over: Partial<Card> = {}): Card => ({
   version: '',
   tags: [],
   variables: [['count', '0']],
-  toggles: '',
+  toggles: [],
   utility: false,
   bias: [],
   regex: [],

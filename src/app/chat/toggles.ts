@@ -21,7 +21,7 @@ export function toggleRows({ declared, sources, value }: ChatToggleSet): ToggleR
   );
   const sections = sources
     .map(({ from, name, lines }) => {
-      const kept = lines.flatMap<ToggleRow | ToggleMark>((line) => (isToggle(line) ? (rows.get(line) ?? []) : [line]));
+      const kept = lines.flatMap<ToggleRow | ToggleMark>((line) => (isToggle(line) ? (rows.get(line) ?? []) : line.kind === 'unread' ? [] : [line]));
       return { from, name, rows: kept.filter((line): line is ToggleRow => 'toggle' in line), items: laidOut(kept) };
     })
     .filter((section) => section.rows.length > 0);
