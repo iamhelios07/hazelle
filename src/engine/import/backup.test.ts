@@ -114,6 +114,7 @@ const db = {
   ],
   enabledModules: ['m1'],
   loreBookToken: 150000,
+  globalChatVariables: { toggle_tagger: '1', toggle_style: '2', toggle_count: 3, hp: '7' },
   personas: [
     { id: 'p1', name: 'old', personaPrompt: 'stale', icon: '', embeddedModule: { id: '$embedded', name: 'Ann', description: '', lorebook: [{ key: 'cape', secondkey: '', insertorder: 10, comment: 'Cape', content: 'A red cape.', mode: 'normal', alwaysActive: true, selective: false }], mcp: { url: 'https://mcp.example' }, cjs: 'run()' } },
     { id: 'p2', name: 'Bob', personaPrompt: 'b', icon: 'assets/bob.png', note: ' the rich one ' },
@@ -239,6 +240,10 @@ describe('readBackup', () => {
     expect((await read()).catalog.loreBudget).toBe(150000);
     const left = await readBackup([bin([['database.risudat', database({ ...db, loreBookToken: 800 })]])]);
     expect(left.ok && left.backup.catalog.loreBudget).toBeNull();
+  });
+
+  it('carries the toggle values by key, and no other global variable', async () => {
+    expect((await read()).catalog.toggles).toEqual({ tagger: '1', style: '2' });
   });
 
   it('refuses an encrypted, database-less or undecodable backup', async () => {

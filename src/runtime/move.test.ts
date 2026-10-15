@@ -3,10 +3,11 @@ import type { Inlays } from '../engine/import/backup';
 import { convertPreset } from '../engine/import/preset';
 import type { Card, ImportedModule, RisuBackup, RisuCharacter, RisuPersona, RisuPreset } from '../engine/import/types';
 import { fold, shown } from '../model/chat';
+import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api } from './api';
-import { importCharacter } from './characters';
+import { importCharacter, setToggle } from './characters';
 import { loreBudgetOf, setLoreBudget } from './chat-context';
 import { Files } from './files';
 import { MEMORY_DEFAULTS } from './memory-read';
@@ -65,7 +66,7 @@ const bell: ImportedModule = {
   unsupported: [],
 };
 
-function source({ characters, personas = [], presets = [], modules = [], alwaysModules = [], loreBudget = null }: { characters: RisuCharacter[]; personas?: RisuPersona[]; presets?: RisuPreset[]; modules?: ImportedModule[]; alwaysModules?: string[]; loreBudget?: number | null }): RisuBackup {
+function source({ characters, personas = [], presets = [], modules = [], alwaysModules = [], loreBudget = null, toggles = {} }: { characters: RisuCharacter[]; personas?: RisuPersona[]; presets?: RisuPreset[]; modules?: ImportedModule[]; alwaysModules?: string[]; loreBudget?: number | null; toggles?: Record<string, string> }): RisuBackup {
   return {
     catalog: {
       pictures: 0,
@@ -74,7 +75,7 @@ function source({ characters, personas = [], presets = [], modules = [], alwaysM
       personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
       presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
       modules: modules.map(({ name, risu, assets }, key) => ({ key, name, risu, assetCount: assets.length })),
-      alwaysModules, loreBudget, unsupported: [],
+      alwaysModules, loreBudget, toggles, unsupported: [],
     },
     character: vi.fn(async (key) => characters[key]!),
     persona: async (key) => personas[key]!,
@@ -110,7 +111,7 @@ describe('moveFromRisu', () => {
     expect(shown(messages[0]!).greeting).toBe(2);
     expect(risuMatch(store, '루나')).toBe(id);
 
-    expect(await moveFromRisu(store, files, backup, { ...pick, personas: [] }, null, () => {})).toEqual({ ok: true, data: { characters: [], personas: 0, prompts: 0, modules: [], loreBudget: null } });
+    expect(await moveFromRisu(store, files, backup, { ...pick, personas: [] }, null, () => {})).toEqual({ ok: true, data: { characters: [], personas: 0, prompts: 0, modules: [], loreBudget: null, toggles: 0 } });
     expect(backup.character).toHaveBeenCalledExactlyOnceWith(0);
     expect(store.list('character')).toHaveLength(1);
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
@@ -200,6 +201,17 @@ describe('moveFromRisu', () => {
     const again = source({ characters: [], loreBudget: 9_000 });
     expect(await moveFromRisu(store, files, again, again.catalog, null, () => {})).toMatchObject({ ok: true, data: { loreBudget: null } });
     expect(loreBudgetOf(store)).toBe(3_000);
+  });
+
+  it("gives every character it brings Risu's toggle values, and 캐릭터 없이 only the keys it holds none for", async () => {
+    const { store, files } = await server.account();
+    await setToggle(store, null, 'tagger', '0');
+    const backup = source({ characters: [luna], toggles: { tagger: '1', style: '2' } });
+    const moved = await moveFromRisu(store, files, backup, backup.catalog, null, () => {});
+    expect(moved).toMatchObject({ ok: true, data: { toggles: 2 } });
+    expect(store.get('character', moved.ok ? moved.data.characters[0]!.id : '')!.value.toggles).toEqual({ tagger: '1', style: '2' });
+    expect(store.get('settings', SETTINGS_ID)!.value.toggles).toEqual({ tagger: '0', style: '2' });
+    expect(await moveFromRisu(store, files, backup, backup.catalog, null, () => {})).toMatchObject({ ok: true, data: { toggles: 0 } });
   });
 
   it('writes what was talked in last last, so the lists open on it', async () => {

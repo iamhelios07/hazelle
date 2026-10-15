@@ -2,6 +2,7 @@ import type { PresetFailure, PresetResult } from './preset';
 import type { BlockCondition, BlockEffect } from './blocks';
 import type { Character } from '../../model/library';
 import type { Likeness } from '../../model/likeness';
+import type { ToggleValues } from '../../model/prompt';
 
 export type Card = {
   name: string;
@@ -225,6 +226,8 @@ export type BackupCatalog = {
   alwaysModules: string[];
   // The account's lorebook token budget as the user set it in Risu; null when left at Risu's default.
   loreBudget: number | null;
+  // Risu's toggle values, one per key for the whole account (globalChatVariables toggle_<key>), the prefix dropped.
+  toggles: ToggleValues;
   unsupported: MoveUnsupported[];
 };
 // Catalog rows carry no history or asset readers. Keys identify source positions even when Risu ids repeat.
