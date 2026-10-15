@@ -204,7 +204,8 @@ describe('evaluate', () => {
   it('numbers messages as Risu does: the greeting -1 and the message after it 0, or from 0 with no greeting', () => {
     const messages = [message('g', 'assistant', 'Hello'), message('u', 'user', 'hi'), message('a', 'assistant', 'yo')];
     const tags = '{{chatindex}} {{isfirstmsg}} {{firstmsgindex}} {{role}} {{previouscharchat}} {{previoususerchat}} {{lastmessageid}} {{previouschatlog::-1}} {{previouschatlog::0}}';
-    expect(run(tags, { messages, greeting: { index: 1 }, source: { message: 2 } })).toBe('1 0 1 char Hello hi 1 Hello hi');
+    expect(run(tags, { messages, greeting: { index: 1 }, source: { message: 2 } })).toBe('1 0 0 char Hello hi 1 Hello hi');
+    expect(run('{{firstmsgindex}}', { messages, greeting: { index: 0 } })).toBe('-1');
     expect(run('{{chatindex}} {{isfirstmsg}} {{role}}', { messages, source: { message: 0 } })).toBe('-1 1 char');
     expect(run('{{chatindex}} {{isfirstmsg}}', { messages })).toBe('{{chatindex}} 0');
     const plain = messages.slice(1);
@@ -217,6 +218,7 @@ describe('evaluate', () => {
     const messages = [message('g', 'assistant', 'a'), { ...message('u', 'user', 'k'), time: 5 }];
     expect(JSON.parse(run('{{history}}', { messages })).map((each: string) => JSON.parse(each))).toEqual([{ role: 'char', data: 'a' }, { role: 'user', data: 'k', time: 5 }]);
     expect(run('{{messages::role}}', { messages })).toBe('["user: k"]');
+    expect(run('{{history::text::role}}', { messages })).toBe('["user: k"]');
   });
 
   it('leaves the greeting out of userhistory, charhistory and messageunixtimearray, as Risu does', () => {
@@ -231,6 +233,10 @@ describe('evaluate', () => {
   it('escapes :: inside an array, and spreads an array into the arguments of the tag around it', () => {
     expect(run('{{arrayelement::{{history::text}}::0}}', { messages: [message('g', 'assistant', 'a'), message('u', 'user', 'k::v')] })).toBe('k::v');
     expect(run('{{equal::{{spread::["x","x"]}}}}')).toBe('1');
+  });
+
+  it('counts a negative arrayelement index from the end, as Risu does', () => {
+    expect(run('{{arrayelement::["a","b","c"]::-1}}|{{arrayelement::["a"]::-2}}')).toBe('c|');
   });
 
   it("tells which modules are on by namespace, and lists the character's pictures apart from each module's", () => {
