@@ -327,10 +327,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
 
   const tools = live || message.unstored ? undefined : part ? (
     <>
-      <Button variant="ghost" size="xs" onClick={actions.cancelEdit}>
+      <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
         취소
       </Button>
-      <Button size="xs" onClick={() => actions.saveEdit(message, false)}>
+      <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
         저장
       </Button>
     </>
