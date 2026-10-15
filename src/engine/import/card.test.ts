@@ -271,7 +271,7 @@ describe('importCard', () => {
       first_mes: '',
       creator_notes: 'A phone screen.',
       assets: [{ type: 'x-risu-asset', uri: 'embeded://assets/other/image/wall.png', name: 'wall', ext: 'png' }],
-      extensions: { risuai: { backgroundHTML: '<style>.phone { color: red }</style>', toggles: 'ring=Ring' } },
+      extensions: { risuai: { backgroundHTML: '<style>.phone { color: red }</style>', toggles: 'ring=Ring', moduleNamespace: ' phone ' } },
     });
     const module = writeRisum({ name: 'Phone Module', description: '', regex: [{ comment: 'screen', in: 'a', out: 'b', type: 'editdisplay' }], trigger: [], lorebook: [{ key: 'phone', comment: 'Phone', content: 'It rings.', bookVersion: 2 }] });
     const result = importCard('Phone.module(2).charx', own(zipSync({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': module, 'assets/other/image/wall.png': new Uint8Array([1, 2]) })));
@@ -280,7 +280,7 @@ describe('importCard', () => {
     expect(read).toEqual({
       name: 'Phone',
       description: 'A phone screen.',
-      namespace: null,
+      namespace: 'phone',
       risu: null,
       pack: { regex: [{ id: 'regex-0', name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }], triggers: [], background: '<style>.phone { color: red }</style>', toggles: [{ key: 'ring', label: 'Ring', kind: 'check', default: '0' }] },
       loreFolders: [],
@@ -288,6 +288,20 @@ describe('importCard', () => {
     });
     expect(lore).toMatchObject([{ name: 'Phone', keys: ['phone'], content: 'It rings.' }]);
     expect(await Promise.all(assets.map(async ({ name, read }) => [name, [...(await read())!]]))).toEqual([['wall', [1, 2]]]);
+  });
+
+  it("brings back as lore what Risu's module export moved into the card's description, greetings and global note", () => {
+    const card = v3({ name: 'Realm', description: 'The realm.', first_mes: 'Hello.', alternate_greetings: ['Hi.'], post_history_instructions: 'Stay terse.' });
+    const module = writeRisum({ name: 'Realm', lorebook: [{ key: 'gate', comment: 'Gate', content: 'A gate.', bookVersion: 2 }] });
+    const result = importCard('Realm.module.charx', own(zipSync({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': module })));
+    if (!result.ok || !('module' in result)) throw new Error('not a module');
+    const entry = { keys: [], secondaryKeys: [], enabled: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 0, priority: null, position: null, folder: null };
+    expect(result.module.lore.slice(1)).toEqual([
+      { ...entry, name: 'From Character Description', content: '@@indicator character_desc\n\nThe realm.', constant: true },
+      { ...entry, name: 'From First Messages', content: '@@indicator character_first_message\n\n<FM>\nHello.\n</FM>\n<FM_alt>\nHi.\n</FM_alt>', constant: false },
+      { ...entry, name: 'From Global Note Replacement', content: '@@indicator replace_global_note\n\nStay terse.', constant: true },
+    ]);
+    expect(result.module.lore[0]).toMatchObject({ name: 'Gate' });
   });
 
   it('imports the card alone when module.risum is unreadable', () => {
