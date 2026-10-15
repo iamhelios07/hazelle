@@ -39,6 +39,7 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
   'missing-picture': (count) => `백업에 없는 이미지 ${count}개`,
   'escape-output': () => `출력 이스케이프(응답 속 ${COMMAND}도 실행됨)`,
   'lore-depth': () => 'Risu에서 바꾼 로어북 검색 깊이(헤이젤은 5로 고정)',
+  'chat-toggles': (count) => `채팅별 토글 값이 있는 채팅 ${count}개`,
 };
 
 export const missedLines = (unsupported: Unsupported): string[] => unsupported.map((item) => UNSUPPORTED[item.kind](item.count));
