@@ -33,7 +33,8 @@ export type DisplayEvaluation = { display: Display; work: DisplayWork | null };
 export type Counted<T> = T | { kind: 'tokenizer' };
 export type EvaluatedPrompt = Counted<ReturnType<typeof assemble>>;
 export type ChatTexts = { texts: string[]; tokens: number[]; standing: Standing | null };
-export type ToolState = { texts: string[]; variables: [string, string][]; wrote: [string, string][][] };
+// staged: each message past its input or output stage (renderChat), which a Risu chat file holds.
+export type ToolState = { texts: string[]; staged: string[]; variables: [string, string][]; wrote: [string, string][][] };
 export type EvaluationResult =
   | ToolState
   | VariableInspection
@@ -97,9 +98,9 @@ export class Evaluator {
     }
     if (job.kind === 'state') {
       started();
-      const { texts, variables, wrote, stopped } = renderChat('prompt', scope);
+      const { texts, staged, variables, wrote, stopped } = renderChat('prompt', scope);
       if (stopped) return { kind: 'runaway' };
-      return { texts, variables: [...variables].filter(([key]) => key.startsWith(job.prefix)), wrote };
+      return { texts, staged, variables: [...variables].filter(([key]) => key.startsWith(job.prefix)), wrote };
     }
     if (job.kind !== 'display') {
       const countTokens = await tokenizer().catch(() => null);

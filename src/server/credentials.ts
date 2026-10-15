@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import type { AccountState } from '../contracts/admin';
+import { VISITOR_HEADER } from '../contracts/http';
 import type { Db } from './db/service-db';
 import { fail, sha256Hex, type AppEnv } from './http';
 
@@ -10,7 +11,6 @@ export type StoredAccount = {
   login_hash: string;
   admin: number;
   recovery_hash: string;
-  locked_until: number | null;
   suspended_at: number | null;
   incarnation: string;
   state: AccountState;
@@ -18,8 +18,6 @@ export type StoredAccount = {
 
 // 256 bits in base64: what the client derives from the password or the recovery key.
 const PROOF = /^[A-Za-z0-9+/]{43}=$/;
-const FREE_FAILURES = 5;
-const MAX_LOCK_MINUTES = 60;
 
 export function readProof(value: unknown): string | null {
   return typeof value === 'string' && PROOF.test(value) ? value : null;
@@ -35,7 +33,7 @@ export const hashProof = sha256Hex;
 export function findAccount(db: Db, column: 'id' | 'username', value: string) {
   return db
     .prepare(
-      `SELECT a.id, a.username, a.login_hash, v.recovery_hash, a.locked_until, a.suspended_at, a.incarnation, a.state,
+      `SELECT a.id, a.username, a.login_hash, v.recovery_hash, a.suspended_at, a.incarnation, a.state,
          a.id = (SELECT operator_account FROM installation) AS admin
        FROM accounts a JOIN vaults v ON v.account_id = a.id WHERE a.${column} = ?`,
     )
@@ -43,29 +41,23 @@ export function findAccount(db: Db, column: 'id' | 'username', value: string) {
     .first<StoredAccount>();
 }
 
-// The failed-login lock covers both methods and the password change.
-export async function checkProof(c: Context<AppEnv>, account: StoredAccount, method: Method, proof: string): Promise<Response | null> {
-  const db = c.env.db;
-  const now = Date.now();
-  if (account.locked_until !== null && account.locked_until > now) {
-    return fail(c, 429, 'too-many-attempts', { retryAfter: Math.ceil((account.locked_until - now) / 1000) });
-  }
-  if (sameText(await hashProof(proof), method === 'password' ? account.login_hash : account.recovery_hash)) return null;
+// This machine's own requests are not counted: loopback (e2e against a local server; the load harness, behind docker's
+// port, names itself loopback) and none named at all (in process). The hosted machine's Caddy names every outside visitor, so neither reaches it from outside.
+const LOCAL = /^(?:127\.|::1$|::ffff:127\.)/;
 
-  // Incremented in SQL, not read-modify-write, so parallel guesses cannot keep resetting the count.
-  const { failed_logins } = (await db
-    .prepare('UPDATE accounts SET failed_logins = failed_logins + 1 WHERE id = ? RETURNING failed_logins')
-    .bind(account.id)
-    .first<{ failed_logins: number }>())!;
-  if (failed_logins >= FREE_FAILURES) {
-    const minutes = Math.min(2 ** (failed_logins - FREE_FAILURES), MAX_LOCK_MINUTES);
-    await db.prepare('UPDATE accounts SET locked_until = ? WHERE id = ?').bind(now + minutes * 60_000, account.id).run();
-  }
-  return fail(c, 401, 'wrong-login');
+export function outsideVisitor(c: Context<AppEnv>): string | null {
+  const visitor = c.req.header(VISITOR_HEADER);
+  return visitor && !LOCAL.test(visitor) ? visitor : null;
 }
 
-export function clearFailures(db: Db, accountId: string) {
-  return db.prepare('UPDATE accounts SET failed_logins = 0, locked_until = NULL WHERE id = ?').bind(accountId);
+// Password change and deletion share the login's visitor+username key, not a session key a new login could bypass.
+export async function checkProof(c: Context<AppEnv>, username: string, account: StoredAccount | null, method: Method, proof: string): Promise<Response | null> {
+  const hash = await hashProof(proof);
+  const valid = account !== null && sameText(hash, method === 'password' ? account.login_hash : account.recovery_hash);
+  const visitor = outsideVisitor(c);
+  const retryAfter = visitor ? c.env.limits.visitors.proofs.check(visitor, username, valid) : 0;
+  if (retryAfter) return fail(c, 429, 'too-many-attempts', { retryAfter });
+  return valid ? null : fail(c, 401, 'wrong-login');
 }
 
 function sameText(a: string, b: string): boolean {

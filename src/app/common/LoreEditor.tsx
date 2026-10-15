@@ -6,6 +6,7 @@ import { loreGroups } from '../../model/lore';
 import { loreBudgetOf } from '../../runtime/chat-context';
 import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, setCharacterLoreBudget } from '../../runtime/lore';
 import { useChildren, useStore, useStored } from '../session';
+import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
 import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
 import { ACTS, addOf } from './acts';
@@ -239,7 +240,7 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
         {toggle('useRegex', '정규식 사용', '키워드를 /패턴/ 또는 /패턴/플래그 형식의 정규식으로 인식해요.')}
         {toggle('caseSensitive', '대소문자 구분')}
       </SettingGroup>
-      <TextField label="내용" lines={8} value={shown.content} onChange={(content) => change({ content })} help="@@로 시작하는 줄은 삽입 방식을 정하는 명령이에요. 예: @@depth 0" />
+      <TextField label="내용" lines={8} expand={SHORTCUTS.bigEdit.keys} value={shown.content} onChange={(content) => change({ content })} help="@@로 시작하는 줄은 삽입 방식을 정하는 명령이에요. 예: @@depth 0" />
       <SettingGroup label="삽입">
         {toggle('enabled', '켬')}
         {toggle('constant', '항상 삽입', '키워드와 상관없이 넣어요.')}

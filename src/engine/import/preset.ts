@@ -1,10 +1,11 @@
+import { gzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
 import { add, counted, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
-import { readMsgpack } from './msgpack';
-import { unpack } from './risum';
-import { readToggles } from './toggles';
+import { readMsgpack, writeMsgpack } from './msgpack';
+import { pack, unpack } from './risum';
+import { readToggles, writeToggles } from './toggles';
 
 // What a preset holds that the prompt does not take, in the order the summary lists it.
 const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
@@ -46,6 +47,9 @@ const REPEATING: Record<Repeating, true> = { chat: true, description: true };
 
 const fail = (kind: PresetFailure['kind']): PresetResult => ({ ok: false, failure: { kind } });
 
+const presetKey = async (usage: 'encrypt' | 'decrypt') => crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode('risupreset')), 'AES-GCM', false, [usage]);
+const SEAL = { name: 'AES-GCM', iv: new Uint8Array(12) };
+
 // Risu's preset container (compat spec, out-of-scope formats), told apart by extension as Risu does: a .risup is
 // RPack over gzip, a .risupreset gzip alone. Inside is MessagePack {type: 'preset', preset}, where preset is
 // MessagePack under AES-GCM; presetVersion 0 names the field pres. The key is SHA-256 of a fixed string and the IV
@@ -63,8 +67,7 @@ export async function importPreset(fileName: string, bytes: Uint8Array): Promise
   if (!isRecord(outer) || outer.type !== 'preset' || !(sealed instanceof Uint8Array)) return fail('not-preset');
   let opened: ArrayBuffer;
   try {
-    const key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode('risupreset')), 'AES-GCM', false, ['decrypt']);
-    opened = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(12) }, key, sealed.slice());
+    opened = await crypto.subtle.decrypt(SEAL, await presetKey('decrypt'), sealed.slice());
   } catch {
     return fail('decrypt-failed');
   }
@@ -75,6 +78,61 @@ export async function importPreset(fileName: string, bytes: Uint8Array): Promise
     return fail('unreadable');
   }
   return convertPreset(preset);
+}
+
+// Ruling 9 (user, 2026-10-15): Risu's setPreset reads each of these as `preset.x ?? current`, so null keeps the user's
+// own model, sampler and API settings on selection; left out, Risu's preset template default would replace them.
+// Never add a field setPreset reads without ?? (repetition_penalty, min_p, top_a, localStopStrings): null would be
+// stored as is. top_p resets to 1 whatever is written (export spec §3).
+const KEPT_IN_RISU = [
+  'apiType', 'aiModel', 'subModel', 'currentPluginProvider', 'temperature', 'maxContext', 'maxResponse', 'frequencyPenalty', 'PresensePenalty', 'top_k', 'bias',
+  'textgenWebUIStreamURL', 'textgenWebUIBlockingURL', 'forceReplaceUrl', 'koboldURL', 'proxyKey', 'proxyRequestModel', 'openrouterRequestModel', 'ooba', 'ainconfig', 'NAISettings',
+  'localNetworkMode', 'localNetworkTimeoutSec',
+];
+const ROLES_OUT = new Map([...ROLES].map(([risu, role]) => [role, risu]));
+const WRAPPED_OUT = new Map<SlotKind, unknown>([...WRAPPED].map(([risu, slot]) => [slot, risu]));
+
+// tools: the 도구 slots left out, which Risu has no item for.
+export type PresetWritten = { bytes: Uint8Array<ArrayBuffer>; tools: number };
+
+// A .risup as Risu's downloadPreset writes it, the container importPreset reads. namespaces: those of the modules on
+// for the prompt, which go to moduleIntergration after the companions its own preset named.
+export async function writePreset(prompt: ConversationPrompt, namespaces: readonly string[]): Promise<PresetWritten> {
+  const { preset, tools } = botPreset(prompt, namespaces);
+  const sealed = new Uint8Array(await crypto.subtle.encrypt(SEAL, await presetKey('encrypt'), writeMsgpack(preset)));
+  return { bytes: pack(gzipSync(writeMsgpack({ presetVersion: 2, type: 'preset', preset: sealed }))), tools };
+}
+
+export function botPreset(prompt: ConversationPrompt, namespaces: readonly string[]): { preset: Json; tools: number } {
+  const promptTemplate: Json[] = [];
+  let tools = 0;
+  for (const block of prompt.blocks) {
+    const item = templateItem(block, prompt.authorNote);
+    if (item) promptTemplate.push(item);
+    else tools++;
+    if (block.cache) promptTemplate.push({ type: 'cache', name: '', depth: 1, role: 'all' });
+  }
+  const integration = [...new Set([...(prompt.companions ?? []), ...namespaces])].join(',');
+  return {
+    preset: { ...Object.fromEntries(KEPT_IN_RISU.map((field) => [field, null])), name: prompt.name, promptTemplate, customPromptTemplateToggle: writeToggles(prompt.toggles), moduleIntergration: integration },
+    tools,
+  };
+}
+
+// The inverse of block(): a wrapped item's role goes in role2, where current Risu reads it.
+function templateItem(block: Block, authorNote: string): Json | null {
+  const name = block.name ?? undefined;
+  if (block.kind === 'text') return { type: 'plain', type2: block.mark ?? 'normal', text: block.text, role: ROLES_OUT.get(block.role), name };
+  switch (block.slot) {
+    case 'lorebook':
+    case 'postEverything':
+      return { type: block.slot, name };
+    case 'chat':
+      return { type: 'chat', rangeStart: block.range.from, rangeEnd: block.range.to ?? 'end', name };
+  }
+  const type = WRAPPED_OUT.get(block.slot);
+  if (type === undefined) return null;
+  return { type, innerFormat: block.wrapper ?? undefined, role2: ROLES_OUT.get(block.role), name, ...(type === 'authornote' && { defaultText: authorNote }) };
 }
 
 export const PRESET_EXTENSIONS = ['.risup', '.risupreset'];

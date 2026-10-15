@@ -1,3 +1,4 @@
+import { fileStem } from '../../engine/file-name';
 import type { BackupOutput } from '../../runtime/backup';
 
 const TEMPORARY = 'risu-alpha-backup-downloads';
@@ -12,9 +13,7 @@ function clickDownload(filename: string, url: string) {
   link.click();
 }
 
-// What no file system takes in a name.
-const UNSAFE = /[\\/:*?"<>|\p{Cc}]/gu;
-export const fileNamed = (name: string, fallback: string, extension: string) => `${name.replace(UNSAFE, '').trim() || fallback}.${extension}`;
+export const fileNamed = (name: string, fallback: string, extension: string) => `${fileStem(name, fallback)}.${extension}`;
 
 export function download(filename: string, file: Blob): void {
   const url = URL.createObjectURL(file);
@@ -22,13 +21,12 @@ export function download(filename: string, file: Blob): void {
   URL.revokeObjectURL(url);
 }
 
-// Call in the click handler, before any await: a picker requires the original user activation. Every file written this
-// way is a zip, whatever its extension (.zip, .charx).
+// Call in the click handler, before any await: a picker requires the original user activation.
 export function downloadOutput(filename: string): Promise<BackupOutput> {
   const picker = (window as Window & { showSaveFilePicker?: (options: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
   if (picker) {
     const extension = filename.slice(filename.lastIndexOf('.'));
-    return picker.call(window, { suggestedName: filename, types: [{ description: extension.slice(1).toUpperCase(), accept: { 'application/zip': [extension] } }] })
+    return picker.call(window, { suggestedName: filename, types: [{ description: extension.slice(1).toUpperCase(), accept: { 'application/octet-stream': [extension] } }] })
       .then((handle) => handle.createWritable())
       .then((stream) => ({ write: (chunk) => stream.write(chunk), close: () => stream.close(), abort: () => stream.abort() }));
   }
@@ -42,7 +40,7 @@ function memoryOutput(filename: string): BackupOutput {
   return {
     write: async (chunk) => { parts.push(new Blob([chunk])); },
     close: async () => {
-      download(filename, new Blob(parts, { type: 'application/zip' }));
+      download(filename, new Blob(parts, { type: 'application/octet-stream' }));
       parts = [];
     },
     abort: async () => { parts = []; },

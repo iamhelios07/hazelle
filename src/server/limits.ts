@@ -100,7 +100,7 @@ const IDLE_MS = 10 * 60 * 1000;
 
 // count per windowMs, refilled evenly. clock is monotonic (performance.now()): a wall-clock jump would refill or starve
 // every bucket at once.
-export function tokenBucket(count: number, windowMs = 60_000, clock: () => number = () => performance.now()): Limiter & { evict(): void } {
+export function tokenBucket(count: number, windowMs = 60_000, clock: () => number = () => performance.now(), maxKeys = Infinity) {
   // Idle this long, a bucket is full again anyway, so dropping it changes no answer.
   const idleMs = Math.max(IDLE_MS, windowMs);
   const buckets = new Map<string, { tokens: number; at: number }>();
@@ -112,14 +112,69 @@ export function tokenBucket(count: number, windowMs = 60_000, clock: () => numbe
   };
   return {
     evict,
-    limit: (key) => {
+    limit: (key: string) => {
       const now = clock();
       if (now - evicted >= idleMs) evict();
       const bucket = buckets.get(key);
       const tokens = bucket ? Math.min(count, bucket.tokens + ((now - bucket.at) * count) / windowMs) : count;
       const success = tokens >= 1;
-      buckets.set(key, { tokens: success ? tokens - 1 : tokens, at: now });
-      return { success };
+      remember(buckets, key, { tokens: success ? tokens - 1 : tokens, at: now }, maxKeys);
+      return { success, retryAfter: success ? 0 : Math.ceil(((1 - tokens) * windowMs) / count / 1000) };
+    },
+  };
+}
+
+function remember<T>(entries: Map<string, T>, key: string, value: T, maxKeys: number) {
+  // At capacity forget the oldest key, never refuse all new visitors: a shared overflow lock would recreate the DoS.
+  entries.delete(key);
+  if (entries.size >= maxKeys) entries.delete(entries.keys().next().value!);
+  entries.set(key, value);
+}
+
+const LOGIN_VISITORS = 10_000;
+const FAILURE_IDLE_MS = 24 * 60 * 60_000;
+type Failures = { count: number; until: number; at: number };
+
+// No account-wide state: a stranger must never lock out the owner's address. IPs stay in memory only.
+export function proofBackoff(clock: () => number = () => performance.now(), maxVisitors = LOGIN_VISITORS) {
+  const visitors = new Map<string, { total: Failures; accounts: Map<string, Failures> }>();
+  let evicted = clock();
+  const evict = () => {
+    const now = clock();
+    evicted = now;
+    for (const [key, visitor] of visitors) {
+      if (now - visitor.total.at >= FAILURE_IDLE_MS) visitors.delete(key);
+      else for (const [username, failures] of visitor.accounts) if (now - failures.at >= FAILURE_IDLE_MS) visitor.accounts.delete(username);
+    }
+  };
+  const failed = (previous: Failures | undefined, free: number, now: number): Failures => {
+    const count = Math.min((previous && now - previous.at < FAILURE_IDLE_MS ? previous.count : 0) + 1, free + 6);
+    return { count, until: count < free ? now : now + Math.min(2 ** (count - free), 60) * 60_000, at: now };
+  };
+  return {
+    evict,
+    // Check and record together, with no await between them: concurrent proofs cannot pass a stale count.
+    check(visitor: string, username: string, valid: boolean): number {
+      const now = clock();
+      if (now - evicted >= FAILURE_IDLE_MS) evict();
+      let state = visitors.get(visitor);
+      if (state && now - state.total.at >= FAILURE_IDLE_MS) {
+        visitors.delete(visitor);
+        state = undefined;
+      }
+      const pair = state?.accounts.get(username);
+      const until = Math.max(state?.total.until ?? 0, pair?.until ?? 0);
+      if (until > now) return Math.ceil((until - now) / 1000);
+      if (valid) {
+        // An attacker's own account cannot reset their spraying budget.
+        state?.accounts.delete(username);
+      } else {
+        state ??= { total: { count: 0, until: 0, at: now }, accounts: new Map() };
+        state.total = failed(state.total, 20, now);
+        remember(state.accounts, username, failed(pair, 5, now), 32);
+        remember(visitors, visitor, state, maxVisitors);
+      }
+      return 0;
     },
   };
 }
@@ -127,4 +182,7 @@ export function tokenBucket(count: number, windowMs = 60_000, clock: () => numbe
 // Per visitor on the anonymous share routes: a link's page and its count, its files (a 파일로 받기 reads every picture
 // of a bot, which may be hundreds), and its reports. Requests, not bytes. signups: attempts an hour, so a script cannot
 // fill signup_cap from one address.
-export const visitorLimits = () => ({ reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6), signups: tokenBucket(10, 60 * 60_000) });
+export const visitorLimits = () => ({
+  reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6), signups: tokenBucket(10, 60 * 60_000),
+  logins: tokenBucket(30, 60_000, () => performance.now(), LOGIN_VISITORS), proofs: proofBackoff(),
+});

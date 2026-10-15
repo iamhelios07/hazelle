@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ACCOUNT_HEADER, VISITOR_HEADER } from '../contracts/http';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -21,6 +22,24 @@ describe('password change', () => {
     const loggedIn = await login('password', change.passwordProof);
     expect(((await loggedIn.json()) as { vault: unknown }).vault).toEqual({ passwordWrap: 'bmV3IHdyYXA=', recoveryWrap: body.recoveryWrap });
     expect((await login('recovery', body.recoveryProof)).status).toBe(200);
+  });
+
+  it('keys authenticated proof failures by visitor and account, sharing backoff with login but not another address', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await t.post('signup', body));
+    const change = (visitor: string, value: string) => t.raw('vault/password', {
+      method: 'PUT', headers: { 'content-type': 'application/json', cookie, [ACCOUNT_HEADER]: body.accountId, [VISITOR_HEADER]: visitor },
+      body: JSON.stringify({ method: 'recovery', proof: value, passwordProof: proof('new password'), passwordWrap: 'bmV3IHdyYXA=' }),
+    });
+    for (let i = 0; i < 5; i++) expect((await change('203.0.113.30', proof('wrong'))).status).toBe(401);
+    expect((await change('203.0.113.30', body.recoveryProof)).status).toBe(429);
+    const login = await t.raw('login', {
+      method: 'POST', headers: { 'content-type': 'application/json', [VISITOR_HEADER]: '203.0.113.30' },
+      body: JSON.stringify({ username: body.username, method: 'password', proof: body.passwordProof }),
+    });
+    expect(login.status).toBe(429);
+    expect(await login.json()).toEqual({ error: 'too-many-attempts', retryAfter: 60 });
+    expect((await change('203.0.113.31', body.recoveryProof)).status).toBe(204);
   });
 
   it('needs the current password or recovery key, not only a session', async () => {

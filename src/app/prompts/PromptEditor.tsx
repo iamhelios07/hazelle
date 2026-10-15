@@ -42,6 +42,7 @@ import {
 import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPane';
 import { chatWarning } from './ranges';
 import { PicturePane } from './PicturePane';
+import { PresetExport } from './PresetExport';
 import { TogglePane } from '../common/TogglePane';
 import { lineTitle } from '../common/toggleWords';
 import { EMPTY_USE, usePromptUse } from '../common/usePromptUse';
@@ -109,6 +110,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   const [drilled, setDrilled] = useState(pane === TOGGLES || openAt !== undefined);
   const [reordering, setReordering] = useState(false);
   const [addingToggle, setAddingToggle] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const open = pane === TOGGLES ? TOGGLES : picked === MODEL || picked === PICTURE || draft.blocks.some((block) => block.id === picked) ? picked : firstText();
   const index = draft.blocks.findIndex((block) => block.id === open);
   const block = draft.blocks[index];
@@ -419,6 +421,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
       items: (
         <>
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
+          {ofSort(stored, 'conversation') && <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />}
           {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
           {!isDefault && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void erase()} />}
         </>
@@ -426,6 +429,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
     },
   };
 
-  if (split) return frame({ head, side: outline, body: page, open });
-  return frame({ head, body: <Stack gap="section">{outline}</Stack>, open });
+  const exportDialog = exporting && ofSort(stored, 'conversation') && <PresetExport prompt={{ ...stored.value, ...save.unsaved }} onClose={() => setExporting(false)} />;
+  if (split) return frame({ head, side: outline, body: <>{page}{exportDialog}</>, open });
+  return frame({ head, body: <Stack gap="section">{outline}{exportDialog}</Stack>, open });
 }

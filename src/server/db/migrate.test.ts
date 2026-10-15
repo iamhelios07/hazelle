@@ -89,10 +89,32 @@ describe('the migration runner', () => {
     migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
     db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('u', 'jin', 'h', 1, 'i', 't');
       INSERT INTO account_files (incarnation, id, size, stored, created_at) VALUES ('i', 'f', 3, 1, 42)`);
-    expect(migrate(db, 'migrations').applied).toEqual(['0010_file_removals.sql']);
+    expect(migrate(db, 'migrations').applied).toContain('0010_file_removals.sql');
     expect(db.prepare('SELECT claimed_at FROM account_files').get()).toEqual({ claimed_at: 42 });
     db.exec("INSERT INTO file_removals (incarnation, id, size, created_at, released_at, due_at) VALUES ('i', 'g', 1, 1, 2, 3); DELETE FROM account_files; DELETE FROM accounts");
     expect(db.prepare('SELECT COUNT(*) AS n FROM file_removals').get()).toEqual({ n: 0 });
+  });
+
+  it('removes account-wide login locks from existing accounts without changing credentials or sessions', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON');
+    const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0011');
+    migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
+    db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline, failed_logins, locked_until)
+      VALUES ('u', 'jin', 'password', 1, 'i', 't', 12, 9999999999999);
+      INSERT INTO vaults (account_id, password_wrap, recovery_wrap, recovery_hash, created_at, updated_at)
+      VALUES ('u', 'pw', 'rw', 'recovery', 1, 1);
+      INSERT INTO sessions (token_hash, account_id, expires_at) VALUES ('token', 'u', 9999999999999)`);
+    const { failed_logins: failures, locked_until: lock, ...account } = db.prepare('SELECT * FROM accounts').get()!;
+    expect([failures, lock]).toEqual([12, 9999999999999]);
+    const vault = db.prepare('SELECT * FROM vaults').get();
+    const session = db.prepare('SELECT * FROM sessions').get();
+    expect(migrate(db, 'migrations').applied).toEqual(['0011_visitor_login_limits.sql']);
+    expect(db.prepare('SELECT * FROM accounts').get()).toEqual(account);
+    expect(db.prepare('SELECT * FROM vaults').get()).toEqual(vault);
+    expect(db.prepare('SELECT * FROM sessions').get()).toEqual(session);
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    db.close();
   });
 
   it('upgrades a populated database with the files it lacks, each whole or not at all', () => {

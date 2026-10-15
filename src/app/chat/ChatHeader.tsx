@@ -56,7 +56,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         expanded={panel?.kind === 'toggles'}
         onClick={actions.flipToggles}
       />
-      <MoreMenu of="채팅" dot={failed}>
+      <MoreMenu of="채팅" size="xs" dot={failed}>
         {shelf && <MenuItem icon={SquarePen} label="캐릭터 편집" onClick={() => actions.side({ kind: 'character', id: shelf.id, part: null })} />}
         {!wide && <MenuItem icon={MessageSquarePlus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />}
         {item && <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => actions.openDialog('rename')} />}

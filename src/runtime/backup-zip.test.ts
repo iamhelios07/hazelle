@@ -63,3 +63,24 @@ it('does not complete a buffered destination stopped while its last page was wri
   expect(close).not.toHaveBeenCalled();
   await output.abort();
 });
+
+it('reads back an archive past 4 GiB, its names flagged UTF-8', async () => {
+  const chunks: Uint8Array[] = [];
+  const signal = new AbortController().signal;
+  const zip = new BackupZip({ write: async (bytes) => void chunks.push(bytes), close: async () => {}, abort: async () => {} }, signal);
+  // The archive as if 4 GiB stood before it: the offsets it records are past 32 bits without writing them.
+  const before = 2 ** 32 + 7;
+  (zip as unknown as { offset: number }).offset = before;
+  await (await zip.entry('a.txt', false))(strToU8('a'), true);
+  await (await zip.entry('루나.json', true))(strToU8('바다'), true);
+  await zip.end();
+  const real = new Blob(chunks as BlobPart[]);
+  const file = { size: before + real.size, slice: (start: number, end: number) => real.slice(start - before, end - before) } as unknown as Blob;
+  const entries = await indexZip(file, signal);
+  expect(strFromU8(await readEntry(file, entries.get('a.txt')!, signal))).toBe('a');
+  const korean = entries.get('루나.json')!;
+  expect(korean.offset).toBeGreaterThan(2 ** 32);
+  expect(strFromU8(await readEntry(file, korean, signal))).toBe('바다');
+  const header = new DataView(await file.slice(korean.offset, korean.offset + 8).arrayBuffer());
+  expect(header.getUint16(6, true) & 0x800).toBe(0x800);
+});

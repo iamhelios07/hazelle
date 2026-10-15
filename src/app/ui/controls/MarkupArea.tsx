@@ -1,6 +1,8 @@
 import { useId, useMemo, type Ref } from 'react';
+import type { Chord } from '../foundation/keys';
 import { markup, type Piece } from './markup';
 import styles from './MarkupArea.module.css';
+import { useBigEdit } from './useBigEdit';
 import { tagWeights } from './weights';
 
 type Props = {
@@ -11,6 +13,8 @@ type Props = {
   variant?: 'page' | 'field';
   // prompt: CBS, slots and <tags>; tags: image tags colored by their weight.
   kind?: 'prompt' | 'tags';
+  // The keys for its big editor, which a button beside the text opens too.
+  expand?: readonly Chord[];
   ref?: Ref<HTMLTextAreaElement>;
 };
 
@@ -40,28 +44,49 @@ export function typeInto(area: HTMLTextAreaElement, [start, end]: [number, numbe
   document.execCommand('insertText', false, text);
 }
 
+type FrameProps = Pick<Props, 'value' | 'onChange' | 'placeholder' | 'kind' | 'ref'> & { id?: string; label?: string; big?: boolean };
+
 // The colors are drawn on a layer behind a transparent textarea, so the layer must set the text exactly as the
 // textarea does: it never changes weight, size, spacing or font (a heading is brighter, not bolder), or the caret
 // drifts from the letters. The layer is in the flow and the textarea covers it, so the box grows with the text.
-export function MarkupArea({ label, value, onChange, placeholder, variant = 'page', kind = 'prompt', ref }: Props) {
-  const id = useId();
+function Frame({ value, onChange, placeholder, kind, ref, id, label, big }: FrameProps) {
   // A last empty line has no height in the layer until something is on it.
   const pieces = useMemo(() => spansOf(kind, value === '' || value.endsWith('\n') ? `${value}\u200b` : value), [kind, value]);
   return (
-    <div className={variant === 'field' ? styles.field : undefined}>
-      <label className={styles.label} htmlFor={id}>
-        {label}
-      </label>
-      <div className={styles.frame}>
-        <div className={styles.layer} aria-hidden>
-          {pieces.map((piece, index) => (
-            <span key={index} className={piece.className}>
-              {piece.text}
-            </span>
-          ))}
-        </div>
-        <textarea id={id} ref={ref} className={styles.input} value={value} placeholder={placeholder} spellCheck={false} onChange={(event) => onChange(event.target.value)} />
+    <div className={big ? `${styles.frame} ${styles.big}` : styles.frame}>
+      <div className={styles.layer} aria-hidden>
+        {pieces.map((piece, index) => (
+          <span key={index} className={piece.className}>
+            {piece.text}
+          </span>
+        ))}
       </div>
+      <textarea id={id} ref={ref} aria-label={label} data-autofocus={big || undefined} className={styles.input} value={value} placeholder={placeholder} spellCheck={false} onChange={(event) => onChange(event.target.value)} />
     </div>
+  );
+}
+
+export function MarkupArea({ label, value, onChange, placeholder, variant = 'page', kind = 'prompt', expand, ref }: Props) {
+  const id = useId();
+  const shared = { value, onChange, placeholder, kind };
+  const big = useBigEdit(expand, label, () => <Frame {...shared} label={label} big />);
+  const frame = <Frame {...shared} id={id} ref={ref} />;
+  return (
+    <>
+      <div className={variant === 'field' ? styles.field : undefined} {...big.wrap}>
+        <label className={styles.label} htmlFor={id}>
+          {label}
+        </label>
+        {big.button ? (
+          <div className={styles.beside}>
+            {frame}
+            {big.button}
+          </div>
+        ) : (
+          frame
+        )}
+      </div>
+      {big.dialog}
+    </>
   );
 }

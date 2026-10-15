@@ -15,6 +15,7 @@ import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, CHANGE_IMAGE, UNREADABLE_IMAGE } from '../common/words';
 import { useToast } from '../toast';
 import { Avatar, FaceRow, Facts, FileButton, MenuItem, TextField } from '../ui';
+import { PersonaExport } from './PersonaExport';
 
 type Props = {
   stored: Stored<'persona'>;
@@ -33,6 +34,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   const { id } = stored;
   const autosave = useAutosave<Persona>(`persona:${id}`, (patch) => editPersona(store, id, patch));
   const [typedName, setTypedName] = useState<string>();
+  const [exporting, setExporting] = useState(false);
   const held = { ...stored.value, ...autosave.unsaved };
   const persona = { ...held, name: typedText(typedName, filled, held.name, String) };
 
@@ -79,6 +81,15 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       <PortraitsEditor owner={id} />
     </>
   );
-  const menu = settings.persona === id ? undefined : { of: '페르소나', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} /> };
-  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body });
+  const menu = {
+    of: '페르소나',
+    items: (
+      <>
+        <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />
+        {settings.persona !== id && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />}
+      </>
+    ),
+  };
+  const exportDialog = exporting && <PersonaExport persona={persona} onClose={() => setExporting(false)} />;
+  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body: <>{body}{exportDialog}</> });
 }

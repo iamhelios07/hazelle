@@ -1,3 +1,5 @@
+import { crc32 } from './zip';
+
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 const TEXT_KEYS = new Set(['chara', 'ccv3', 'persona']);
 const ASSET = 'chara-ext-asset_';
@@ -49,6 +51,22 @@ export function readPng(bytes: Uint8Array): Png | null {
     if (type === 'IEND') return { card: text.get('ccv3') || text.get('chara') || null, persona: text.get('persona') ?? null, image: concat(kept), assets };
   }
   return null;
+}
+
+const IEND = 12;
+
+// The PNG with a tEXt chunk key = value before its IEND, which must be its last 12 bytes, as a canvas writes it. Both
+// are Latin-1, as tEXt is; a base64 value always is.
+export function withText(png: Uint8Array, key: string, value: string): Uint8Array<ArrayBuffer> {
+  const end = png.length - IEND;
+  if (end < SIGNATURE.length || String.fromCharCode(...png.subarray(end + 4, end + 8)) !== 'IEND') throw new TypeError('the PNG does not end in IEND');
+  const data = Uint8Array.from(`tEXt${key}\0${value}`, (char) => char.charCodeAt(0));
+  const chunk = new Uint8Array(data.length + 8);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.length - 4);
+  chunk.set(data, 4);
+  view.setUint32(chunk.length - 4, crc32(data));
+  return concat([png.subarray(0, end), chunk, png.subarray(end)]);
 }
 
 function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {

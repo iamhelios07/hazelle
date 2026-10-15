@@ -7,7 +7,7 @@ import { FILE_ID } from '../contracts/files';
 import { ACCOUNT_USAGE_HEADERS, VISITOR_HEADER } from '../contracts/http';
 import { COVER_LENGTH, MAX_SHARE_FILES, MAX_SHARE_LINK, SHARE_CONSENT, SHARE_ID, type ShareCover, type ShareState } from '../contracts/shares';
 import { fileKey } from './files/bucket';
-import { fail, isRecord, readObject, refused as refuseStore, type AppEnv, type Services } from './http';
+import { fail, isRecord, readObject, refused as refuseStore, type AppEnv } from './http';
 import { canWrite, currentAccount, requireSession } from './session';
 
 // A share is sealed content an account publishes under one link (migrations/0003_shares.sql). The server holds the
@@ -26,7 +26,7 @@ const FRESH = { 'cache-control': 'no-store' };
 const HELD = '(s.held_at IS NOT NULL OR EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = s.incarnation AND accounts.suspended_at IS NOT NULL))';
 const LIVE = `s.cut_at IS NULL AND s.removed_at IS NULL AND NOT ${HELD}`;
 
-type Visits = keyof Services['limits']['visitors'];
+type Visits = 'reads' | 'files' | 'reports';
 // The anonymous routes count per visitor, as the public listener saw them (VISITOR_HEADER). A request that did not
 // come through it, as in tests, counts as one visitor.
 const visits = (kind: Visits) =>
