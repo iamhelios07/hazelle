@@ -1,5 +1,5 @@
-/* Inside a message's shadow root, before the bot's CSS. The story's type and colors sit on the host, so the prose
-   and a bot's boxes inherit them unless the bot sets its own; the marks are the prose's only. */
+/* Inside a message's shadow root. The story's type and colors sit on the host, so the prose and a bot's boxes inherit
+   them unless the bot sets its own; the marks are the prose's only. */
 
 @import '../foundation/scrollbar.css';
 
@@ -21,44 +21,54 @@
   text-wrap: pretty;
 }
 
-:host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, pre, hr, table),
-:host > :is(blockquote, ul, ol) p {
-  margin: 0;
-}
+/* The story where the bot says nothing: any rule of the bot's sheet (Story.tsx) beats these, whatever its specificity,
+   since an unlayered rule outranks a layered one. Anonymous, so a bot's sheet cannot name the layer and join it. */
+@layer {
+  :host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, pre, hr, table),
+  :host > :is(blockquote, ul, ol) p {
+    margin: 0;
+  }
 
-:host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table) em {
-  font-style: normal;
-  color: var(--color-prose-action);
-}
+  :host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table) em {
+    font-style: normal;
+    color: var(--color-prose-action);
+  }
 
-:host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table) mark[risu-mark] {
-  background: none;
-  color: var(--color-prose-dialogue);
-}
+  :host > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table) mark[risu-mark] {
+    background: none;
+    color: var(--color-prose-dialogue);
+  }
 
-:host > blockquote {
-  padding-left: var(--space-12);
-  border-left: var(--border-thick) solid var(--color-border);
-}
+  :host > blockquote {
+    padding-left: var(--space-12);
+    border-left: var(--border-thick) solid var(--color-border);
+  }
 
-:host > hr {
-  width: 100%;
-  border: 0;
-  border-top: var(--border-thin) solid var(--color-border);
-}
+  :host > hr {
+    width: 100%;
+    border: 0;
+    border-top: var(--border-thin) solid var(--color-border);
+  }
 
-code,
-pre {
-  font-family: var(--font-mono);
-}
+  code,
+  pre {
+    font-family: var(--font-mono);
+  }
 
-a {
-  color: var(--color-accent);
-}
+  a {
+    color: var(--color-accent);
+  }
 
-img,
-video {
-  max-width: 100%;
+  img,
+  video {
+    max-width: 100%;
+  }
+
+  /* A bot's CSS that sizes pictures wins, as it does in its own boxes (design.md §6.4). */
+  [data-picture] > img {
+    display: block;
+    max-height: var(--story-picture-most);
+  }
 }
 
 /* Story.tsx registers it: the chat search's term in every mounted message. */
@@ -68,17 +78,11 @@ video {
 
 /* A line that is only a picture, as a bot draws its character's tall portrait, shows its top until it is pointed at (a
    moment later, so a pointer the story scrolls under opens nothing) or tapped. The line is cut, not the picture, so a
-   small one is never stretched; the picture itself is only shrunk to the most it may be. The pictures in a bot's own
-   boxes keep the bot's sizes. */
+   small one is never stretched; the picture itself is only shrunk to the most it may be (in the layer above). */
 [data-picture] {
   max-height: var(--story-picture-peek);
   overflow: hidden;
   transition: max-height var(--duration-instant) allow-discrete;
-}
-
-[data-picture] > img {
-  display: block;
-  max-height: var(--story-picture-most);
 }
 
 [data-picture][data-open] {
