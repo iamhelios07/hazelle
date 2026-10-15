@@ -8,6 +8,8 @@ export type BackupOutput = {
 };
 
 const MAX32 = 0xffffffff;
+// A data descriptor follows each entry, and names are UTF-8, so Windows shows a Korean name as written.
+const FLAGS = 0x8 | 0x800;
 const CHUNK = 64 * 1024;
 // Codec output includes tiny fragments (and empty deflate flushes). A worker crosses to the host only with a bounded
 // page, so awaiting a slow destination still bounds memory without one IPC/write per message.
@@ -69,7 +71,7 @@ export class BackupZip {
     const header = new Uint8Array(30 + encoded.length + 20);
     put32(header, 0, 0x04034b50);
     put16(header, 4, 45);
-    put16(header, 6, 8);
+    put16(header, 6, FLAGS);
     put16(header, 8, deflate ? 8 : 0);
     put16(header, 12, 33);
     put32(header, 18, MAX32);
@@ -118,7 +120,7 @@ export class BackupZip {
       put32(header, 0, 0x02014b50);
       put16(header, 4, 45);
       put16(header, 6, 45);
-      put16(header, 8, 8);
+      put16(header, 8, FLAGS);
       put16(header, 10, entry.method);
       put16(header, 14, 33);
       put32(header, 16, entry.crc);

@@ -1,3 +1,4 @@
+import { fileStem } from '../../engine/file-name';
 import type { BackupOutput } from '../../runtime/backup';
 
 const TEMPORARY = 'risu-alpha-backup-downloads';
@@ -12,9 +13,7 @@ function clickDownload(filename: string, url: string) {
   link.click();
 }
 
-// What no file system takes in a name.
-const UNSAFE = /[\\/:*?"<>|\p{Cc}]/gu;
-export const fileNamed = (name: string, fallback: string, extension: string) => `${name.replace(UNSAFE, '').trim() || fallback}.${extension}`;
+export const fileNamed = (name: string, fallback: string, extension: string) => `${fileStem(name, fallback)}.${extension}`;
 
 export function download(filename: string, file: Blob): void {
   const url = URL.createObjectURL(file);

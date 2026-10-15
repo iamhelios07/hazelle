@@ -10,6 +10,7 @@ import { STOP } from '../common/words';
 import { useToast } from '../toast';
 import { useSaves, useSession } from '../session';
 import { Button, Dialog, FileButton, Panel, Progress, SettingRow, type ProgressStep } from '../ui';
+import { RisuExportRow } from './RisuExportRow';
 
 const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup-crashed', { message: string; detail?: string }> = {
   'not-backup': { message: '헤이젤 백업 파일이 아니거나 손상된 파일이에요.' },
@@ -117,6 +118,7 @@ export function BackupSection() {
           </Button>
         }
       />
+      <RisuExportRow />
       <SettingRow
         label={importOf('백업')}
         help="새 계정에만 가져올 수 있어요."

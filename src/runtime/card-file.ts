@@ -1,5 +1,5 @@
 import { writeCharx } from '../engine/import/card';
-import { type Bot, type Imported, mergeUnsupported, type Profiles, type Unsupported } from '../engine/import/types';
+import { type Bot, type Imported, type LoreEntry, mergeUnsupported, type Profiles, type Unsupported } from '../engine/import/types';
 import { zipWriter } from '../engine/import/zip';
 import { live, type LoreFolder } from '../model/library';
 import { likenessId } from '../model/likeness';
@@ -22,12 +22,19 @@ const profilesOf = (store: ObjectStore, owner: string): Profiles | null => {
   return likeness ? { portraits: likeness.portraits, at: likeness.at } : null;
 };
 
-function owned(store: ObjectStore, owner: string, folders: LoreFolder[]) {
+// A lorebook as a file holds it: each entry's folder by its place among the folders.
+export function lorebookOf(store: ObjectStore, owner: string, folders: LoreFolder[]): { lore: LoreEntry[]; loreFolders: string[] } {
   const ids = folders.map(({ id }) => id);
-  const pictures = store.children('asset', owner).map(({ value }) => value);
   return {
     lore: store.children('lore', owner).map(({ value }) => ({ ...value, folder: value.folder === null || !ids.includes(value.folder) ? null : ids.indexOf(value.folder) })),
     loreFolders: folders.map(({ name }) => name),
+  };
+}
+
+function owned(store: ObjectStore, owner: string, folders: LoreFolder[]) {
+  const pictures = store.children('asset', owner).map(({ value }) => value);
+  return {
+    ...lorebookOf(store, owner, folders),
     assets: pictures.map(({ name, type }) => ({ name, type })),
     files: pictures.map(({ file }) => file),
     likeness: profilesOf(store, owner),

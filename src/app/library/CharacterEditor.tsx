@@ -11,7 +11,7 @@ import { isToggle } from '../../model/prompt';
 import { editCharacter, setAvatar, setCardWrites, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
-import { ACTS } from '../common/acts';
+import { ACTS, exportOf } from '../common/acts';
 import { aliased } from '../common/alias';
 import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
@@ -28,7 +28,7 @@ import type { Frame } from '../common/frame';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
@@ -96,7 +96,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const ownModules = character.modules ?? [];
-  const { busy, copy, exportFile, remove, sharing, share, stopSharing } = useCharacterActions();
+  const { busy, copy, exportFile, exportChats, remove, sharing, share, stopSharing } = useCharacterActions();
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
   const { display } = useDisplay();
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
@@ -374,6 +374,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       <>
         <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={busy !== null} onClick={() => void copy(shelf)} />
         <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} disabled={busy !== null} onClick={() => exportFile(shelf)} />
+        <MenuItem icon={ACTS.export.icon} label={exportOf(RISU_CHAT_FILE)} disabled={busy !== null} onClick={() => exportChats(shelf)} />
         <MenuItem icon={Link2} label={SHARE.act} disabled={busy !== null} onClick={() => share(shelf)} />
         <MenuItem
           icon={ACTS.remove.icon}

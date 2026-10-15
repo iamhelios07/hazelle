@@ -5,9 +5,10 @@ import type { CharacterShelf, Removable } from '../../model/library';
 import { exportCharacter } from '../../runtime/card-file';
 import { copyCharacter, createCharacter, setDeleted } from '../../runtime/characters';
 import { markDeleted, purgeNow } from '../../runtime/removal';
+import { exportRisuChats } from '../../runtime/risu-export';
 import { newOf } from '../common/acts';
 import { downloadOutput, fileNamed } from '../common/download';
-import { BIN_KEEPS, moduleName, promptName, TOOL } from '../common/words';
+import { BIN_KEEPS, moduleName, promptName, RISU_CHAT_FILE, risuLeftOut, TOOL } from '../common/words';
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -78,6 +79,24 @@ export function useCharacterActions() {
     })();
   }
 
+  // Risu's risuAllChats file of the character's chats, streamed to disk chat by chat.
+  function exportChats({ id, character }: Shelf) {
+    const destination = downloadOutput(fileNamed(`${character.card.name}_all_chats`, '채팅', 'json'));
+    setBusy({ id, label: '내보내는 중' });
+    void (async () => {
+      try {
+        const made = await exportRisuChats({ store }, id, await destination, ({ done, total }) => setBusy({ id, label: `내보내는 중 · ${done} / ${total}` }));
+        if (made.ok) toast.show(`'${character.card.name}'의 ${RISU_CHAT_FILE}을 내보냈어요.`, risuLeftOut(made.data) ? { detail: risuLeftOut(made.data) } : undefined);
+        else if (made.error === 'export-write') toast.error('파일을 저장하지 못했어요.', { detail: '저장 공간을 확인한 뒤 다시 시도해 주세요.' });
+        else toast.failed(made, '내보내지 못했어요.');
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('파일을 저장하지 못했어요.');
+      } finally {
+        setBusy(null);
+      }
+    })();
+  }
+
   function remove(shelf: Shelf) {
     const { id, character } = shelf;
     void setDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
@@ -97,5 +116,5 @@ export function useCharacterActions() {
     else toast.failed(removed, '일부를 삭제하지 못했어요.');
   }
 
-  return { busy, copy, exportFile, remove, restore, purge, sharing, share: setSharing, stopSharing: () => setSharing(null) };
+  return { busy, copy, exportFile, exportChats, remove, restore, purge, sharing, share: setSharing, stopSharing: () => setSharing(null) };
 }
