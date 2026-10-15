@@ -25,8 +25,9 @@ it('marks a paragraph on its own line after it, none past the end, and takes the
   expect(withoutMarks(withMarks(text, new Set([0, 1])), new Set([1]))).toBe(`One.\n\n  Two.\n${placeMark(1)}\nThree.`);
 });
 
-it('counts one more picture per rung the text reaches, without its tags, and never more than its paragraphs', () => {
-  const text = '<div class="box">0123456789</div>\nabcdefghij';
-  expect([pictureCount([], text), pictureCount([20], text), pictureCount([21], text)]).toEqual([1, 2, 1]);
-  expect(pictureCount([1, 2, 3], text)).toBe(2);
+it('counts the pictures of the highest rung the text reaches, without its tags, and never more than its paragraphs', () => {
+  const text = '<div class="box">0123456789</div>\nabcdefghij\nklmnopqrst';
+  const ladder = [{ from: 20, count: 2 }, { from: 30, count: 3 }, { from: 31, count: 5 }];
+  expect([pictureCount([], text), pictureCount(ladder, text), pictureCount(ladder.slice(1), text), pictureCount(ladder.slice(2), text)]).toEqual([1, 3, 3, 1]);
+  expect(pictureCount([{ from: 1, count: 5 }], text)).toBe(3);
 });

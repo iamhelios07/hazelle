@@ -87,7 +87,7 @@ describe('Illustrator', () => {
   it('writes as many scenes as the reply’s length earns in one call, and draws each in turn', () =>
     server.withSession(async (session) => {
       const chat = await painted(session);
-      await setIllustrate(session.store, null, { auto: true, spend: true, ladder: [REPLY.length - 20, REPLY.length * 2] });
+      await setIllustrate(session.store, null, { auto: true, spend: true, ladder: [{ from: REPLY.length - 20, count: 2 }, { from: REPLY.length * 2, count: 5 }] });
       const scenes = [scene, { ...scene, after: 2, shape: 'square' }, { ...scene, after: 3 }, { ...scene, after: 1 }];
       const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scenes)), picture(), picture()]));
       await takeTurn(session, chat, { kind: 'answer' });

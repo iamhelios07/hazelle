@@ -3,7 +3,7 @@ import { isVideo } from '../engine/assets';
 import { add, counted, type Tally } from '../engine/import/convert';
 import { UNSUPPORTED_KINDS, type Card, type Imported, type Pack, type Picture, type Unsupported } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
-import type { IllustrateSwitches } from '../model/illustration';
+import type { IllustrateSwitches, Rung } from '../model/illustration';
 import type { Stored, Values } from '../model/kinds';
 import { holds, nest, withInside, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
 import { likenessId, type Likeness } from '../model/likeness';
@@ -298,7 +298,7 @@ export const setTranslate = (store: ObjectStore, character: string | null, chang
 export const setOwnTranslate = (store: ObjectStore, character: string, own: boolean) => setOwnScoped(store, character, 'translate', own);
 
 // Absent auto and spend are off; an absent ladder draws one picture. A chat reads them through 기능 (runtime/features chatIllustrate).
-export type IllustrateSetup = Omit<IllustrateSwitches, 'auto' | 'spend' | 'ladder'> & { auto: boolean; spend: boolean; ladder: number[]; own: boolean };
+export type IllustrateSetup = Omit<IllustrateSwitches, 'auto' | 'spend' | 'ladder'> & { auto: boolean; spend: boolean; ladder: Rung[]; own: boolean };
 
 export function illustrateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): IllustrateSetup {
   const { switches, own } = scoped(store, character, 'illustrate');

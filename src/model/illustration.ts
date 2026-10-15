@@ -36,9 +36,12 @@ export type Illustration = {
 // Shared by every chat, or a character's own (Character.ownIllustrate). auto: draw after each reply received, off by default since every
 // picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
 // absent for the first one starred. Absent fields are read through runtime/characters illustrateSwitches.
-// spend: draw a picture not known to be free (runtime/illustrate costs) without asking each time. ladder: lengths in
-// characters, each higher than the one before; a reply at least as long as one gets one more picture (pictureCount).
-export type IllustrateSwitches = { auto?: boolean; spend?: boolean; prompt?: string; model?: ModelRef; ladder?: number[] };
+// spend: draw a picture not known to be free (runtime/illustrate costs) without asking each time. ladder: the rungs of
+// pictureCount, each with a longer length and more pictures than the one before.
+export type IllustrateSwitches = { auto?: boolean; spend?: boolean; prompt?: string; model?: ModelRef; ladder?: Rung[] };
+
+// A reply at least from characters long gets count pictures.
+export type Rung = { from: number; count: number };
 
 // The one rule of what a paragraph is, which the scene writer reads numbered and the chat places pictures by: each
 // line of the stored text with words outside its tags, since roleplay prose often breaks paragraphs with a single
@@ -48,10 +51,11 @@ export const paragraphsOf = (text: string): string[] => text.split('\n').filter(
 
 // A reply's length is its paragraphs' characters without their tags, so a bot's markup never adds pictures. Each
 // picture follows a paragraph of its own, so there are never more than paragraphs.
-export function pictureCount(ladder: readonly number[], text: string): number {
+// One picture below the first rung.
+export function pictureCount(ladder: readonly Rung[], text: string): number {
   const paragraphs = paragraphsOf(text);
   const length = paragraphs.join('').replace(/<[^>]*>/g, '').length;
-  return Math.min(1 + ladder.filter((rung) => length >= rung).length, paragraphs.length);
+  return Math.min(ladder.findLast(({ from }) => length >= from)?.count ?? 1, paragraphs.length);
 }
 
 // The paragraph a picture comes after in text as it stands now; null when an edit left fewer paragraphs, and the

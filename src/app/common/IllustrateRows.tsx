@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { sameModelRef } from '../../connectors/assignment';
-import type { IllustrateSwitches } from '../../model/illustration';
+import type { IllustrateSwitches, Rung } from '../../model/illustration';
 import type { IllustrateSetup } from '../../runtime/characters';
 import { drawingModels, type ImageRoute } from '../../runtime/illustrate';
 import { useConnections } from '../session';
@@ -59,36 +59,53 @@ export function IllustrateRows({ illustrate, card, opens, onChange, onEditPrompt
 // A new rung's length past the last one's.
 const RUNG = 3000;
 
-// What a rung's field holds, or why it cannot be saved: each above the one before it.
-function readRung(text: string, before: number | null): { ok: true; value: number } | { ok: false; error: string } {
-  const typed = readTyped(text, true);
-  if (!typed.ok) return typed;
-  if (typed.value < 1) return { ok: false, error: '1 이상을 입력해 주세요.' };
-  return before !== null && typed.value <= before ? { ok: false, error: '앞 단계보다 커야 해요.' } : typed;
+type Draft = { from: string; count: string };
+type Read = { ok: true; rung: Rung } | { ok: false; error: string };
+
+// What a rung's fields hold, or why it cannot be saved: a longer length and more pictures than the rung before, or
+// than the one picture every reply gets.
+function readRung({ from, count }: Draft, before: Rung | null): Read {
+  const least = { from: (before?.from ?? 0) + 1, count: (before?.count ?? 1) + 1 };
+  const length = readTyped(from, true);
+  if (!length.ok) return length;
+  if (length.value < least.from) return { ok: false, error: `${least.from.toLocaleString('ko-KR')}자 이상을 입력해 주세요.` };
+  const pictures = readTyped(count, true);
+  if (!pictures.ok) return pictures;
+  if (pictures.value < least.count) return { ok: false, error: `${least.count}장 이상을 입력해 주세요.` };
+  return { ok: true, rung: { from: length.value, count: pictures.value } };
 }
 
-// 삽화 수: one picture, and one more for each rung a reply's length reaches (model/illustration pictureCount). The
-// ladder is saved only while every rung reads.
-function PictureLadder({ ladder, onChange }: { ladder: number[]; onChange: (ladder: number[]) => void }) {
-  const [drafts, setDrafts] = useState<string[] | null>(null);
-  const texts = drafts ?? ladder.map(String);
-  const read = texts.reduce<ReturnType<typeof readRung>[]>((done, text) => {
-    const before = done.at(-1);
-    return [...done, readRung(text, before?.ok ? before.value : null)];
-  }, []);
-  const type = (at: number, text: string) => {
-    const next = texts.with(at, text);
+// Each read against the last rung that reads.
+function readAll(drafts: Draft[]): Read[] {
+  const read: Read[] = [];
+  let before: Rung | null = null;
+  for (const draft of drafts) {
+    const rung = readRung(draft, before);
+    if (rung.ok) before = rung.rung;
+    read.push(rung);
+  }
+  return read;
+}
+
+const draftOf = ({ from, count }: Rung): Draft => ({ from: String(from), count: String(count) });
+
+// 삽화 수 (model/illustration pictureCount): one picture, and each rung's count from its length on. The ladder is saved
+// only while every rung reads.
+function PictureLadder({ ladder, onChange }: { ladder: Rung[]; onChange: (ladder: Rung[]) => void }) {
+  const [drafts, setDrafts] = useState<Draft[] | null>(null);
+  const shown = drafts ?? ladder.map(draftOf);
+  const read = readAll(shown);
+  const type = (at: number, change: Partial<Draft>) => {
+    const next = shown.with(at, { ...shown[at]!, ...change });
     setDrafts(next);
-    const values = next.reduce<number[] | null>((done, each) => {
-      const rung = done && readRung(each, done.at(-1) ?? null);
-      return rung?.ok ? [...done!, rung.value] : null;
-    }, []);
-    if (values) onChange(values);
+    const rungs = readAll(next);
+    if (rungs.every((rung) => rung.ok)) onChange(rungs.map((rung) => (rung as Extract<Read, { ok: true }>).rung));
   };
-  const save = (next: number[]) => {
+  const save = (next: Rung[]) => {
     setDrafts(null);
     onChange(next);
   };
+  const last = ladder.at(-1);
   return (
     <>
       <SettingRow
@@ -96,26 +113,27 @@ function PictureLadder({ ladder, onChange }: { ladder: number[]; onChange: (ladd
         help="응답이 길면 삽화를 더 만들어요. 글자 수는 태그를 빼고 세어요."
         sub={ladder.length ? undefined : '응답마다 1장'}
         control={
-          <Button variant="ghost" size="sm" icon={ACTS.create.icon} onClick={() => save([...ladder, (ladder.at(-1) ?? 0) + RUNG])}>
+          <Button variant="ghost" size="sm" icon={ACTS.create.icon} onClick={() => save([...ladder, { from: (last?.from ?? 0) + RUNG, count: (last?.count ?? 1) + 1 }])}>
             {addOf('단계')}
           </Button>
         }
       />
-      {texts.map((text, at) => {
+      {shown.map((draft, at) => {
         const rung = read[at]!;
-        const label = `${at + 2}장 기준 글자 수`;
+        const name = `${at + 1}단계`;
         return (
           <SettingRow
             key={at}
-            label={label}
+            label={name}
             sentence={
               <>
-                <NumberInput label={label} value={text} unit="자" invalid={!rung.ok} onChange={(typed) => type(at, typed)} />
-                {` 이상이면 ${at + 2}장`}
+                <NumberInput label={`${name} 글자 수`} value={draft.from} unit="자" invalid={!rung.ok} onChange={(from) => type(at, { from })} />
+                {' 이상이면 '}
+                <NumberInput label={`${name} 장 수`} value={draft.count} unit="장" invalid={!rung.ok} onChange={(count) => type(at, { count })} />
               </>
             }
             error={rung.ok ? undefined : rung.error}
-            control={<IconButton icon={ACTS.remove.icon} size="xs" label={`${at + 2}장 단계 ${ACTS.remove.label}`} onClick={() => save(ladder.toSpliced(at, 1))} />}
+            control={<IconButton icon={ACTS.remove.icon} size="xs" label={`${name} ${ACTS.remove.label}`} onClick={() => save(ladder.toSpliced(at, 1))} />}
           />
         );
       })}
