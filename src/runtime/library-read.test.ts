@@ -38,7 +38,7 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   expect(ids(before.byFolder.get('f')!.characters)).toEqual(['a', 'b']);
   expect(ids(before.byFolder.get('f')!.direct)).toEqual(['b']);
   expect(ids(before.byFolder.get('k')!.characters)).toEqual(['a']);
-  expect(before.byFolder.get('k')!.top).toBe(before.byFolder.get('f')!.folder);
+  expect(before.byFolder.get('k')!.up).toBe(before.byFolder.get('f')!.folder);
   expect(ids(before.loose)).toEqual(['c', 'd']);
   expect(before.byCharacter.get('g')?.character.deleted).toBe(1);
   expect(before.byCharacter.has('p')).toBe(false);
@@ -67,7 +67,7 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   items.delete('f');
   announce('folder', 'f');
   const orphaned = read.library.snapshot();
-  expect(orphaned.byFolder.get('k')!.top).toBe(orphaned.byFolder.get('k')!.folder);
+  expect(orphaned.byFolder.get('k')!.up).toBeNull();
   expect(ids(orphaned.byFolder.get('k')!.characters)).toEqual(['a', 'c']);
   expect(ids(orphaned.loose)).toEqual(['b', 'd']);
   items.set('a', character('a', 'k', 90, { deleted: 3 }));

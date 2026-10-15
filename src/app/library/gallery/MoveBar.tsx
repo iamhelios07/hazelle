@@ -1,3 +1,4 @@
+import { pathName, pathOf, withInside } from '../../../model/library';
 import { useLibrary } from '../../session';
 import { Button, Divider, Menu, MenuItem, SelectionBar } from '../../ui';
 
@@ -9,7 +10,7 @@ type Props = {
 };
 
 export function MoveBar({ count, onCancel, onMove }: Props) {
-  const { folders } = useLibrary();
+  const { folders, byFolder } = useLibrary();
   return (
     <SelectionBar>
       <span>{count ? `${count}명 선택됨` : '옮길 캐릭터를 선택하세요'}</span>
@@ -25,10 +26,9 @@ export function MoveBar({ count, onCancel, onMove }: Props) {
           </Button>
         )}
       >
-        {folders.flatMap((candidate) => [
-          <MenuItem key={candidate.id} label={candidate.value.name} onClick={() => onMove(candidate.id)} />,
-          ...candidate.children.map((child) => <MenuItem key={child.id} label={`${candidate.value.name} › ${child.value.name}`} onClick={() => onMove(child.id)} />),
-        ])}
+        {folders.flatMap(withInside).map(({ id }) => (
+          <MenuItem key={id} label={pathName(pathOf(byFolder, id))} onClick={() => onMove(id)} />
+        ))}
         <Divider variant="menu" />
         <MenuItem label="폴더에서 빼기" onClick={() => onMove(null)} />
       </Menu>

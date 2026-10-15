@@ -114,9 +114,10 @@ export const characterTexts = ({ card, alias }: Character) => [card.name, card.n
 
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 
-// Two levels deep: a subfolder's parent is the top folder it sits in, and top folders have
+// Up to FOLDER_DEPTH levels deep: a subfolder's parent is the folder it sits in, and top folders have
 // none. It lives in the sealed body, not the object's parent, so the server never sees the tree.
 export type Folder = { name: string; parent?: string };
+export const FOLDER_DEPTH = 3;
 export type FolderTree = Stored<'folder'> & { children: FolderTree[] };
 
 // thumb: a small copy that syncs with the objects, so lists need no file fetch.
@@ -163,7 +164,7 @@ export function shelve<C extends ChatLike>(
   };
 }
 
-// A subfolder whose top folder is gone (removed on another device meanwhile) stands at the top instead of vanishing.
+// A subfolder whose parent is gone (removed on another device meanwhile) stands at the top instead of vanishing.
 export function nest(folders: Stored<'folder'>[]): FolderTree[] {
   const sorted = [...folders].sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
   const ids = new Set(sorted.map((folder) => folder.id));
@@ -175,36 +176,43 @@ export function nest(folders: Stored<'folder'>[]): FolderTree[] {
     if (group) group.push(folder);
     else children.set(parent, [folder]);
   }
-  return sorted
-    .filter(({ value }) => value.parent === undefined || !ids.has(value.parent))
-    .map((top) => ({ ...top, children: (children.get(top.id) ?? []).map((child) => ({ ...child, children: [] })) }));
+  const grow = (folder: Stored<'folder'>): FolderTree => ({ ...folder, children: (children.get(folder.id) ?? []).map(grow) });
+  return sorted.filter(({ value }) => value.parent === undefined || !ids.has(value.parent)).map(grow);
 }
 
-const heldFolders = (folder: FolderTree) => [folder.id, ...folder.children.map((child) => child.id)];
-export const holds = (folder: FolderTree, character: Character) => character.folder !== null && heldFolders(folder).includes(character.folder);
+export const withInside = (folder: FolderTree): FolderTree[] => [folder, ...folder.children.flatMap(withInside)];
+export const holds = (folder: FolderTree, character: Character) => character.folder !== null && withInside(folder).some(({ id }) => id === character.folder);
 
 // What a folder holds (holds): direct are the characters in the folder itself, characters those in its subfolders too.
-export type FolderContents<C> = { folder: FolderTree; top: FolderTree; direct: CharacterShelf<C>[]; characters: CharacterShelf<C>[] };
+// up: the folder it sits in.
+export type FolderContents<C> = { folder: FolderTree; up: FolderTree | null; direct: CharacterShelf<C>[]; characters: CharacterShelf<C>[] };
+
+// The folders from the top down to id, itself last.
+export function pathOf<C>(byFolder: ReadonlyMap<string, FolderContents<C>>, id: string): FolderTree[] {
+  const path: FolderTree[] = [];
+  for (let at = byFolder.get(id); at; at = at.up ? byFolder.get(at.up.id) : undefined) path.unshift(at.folder);
+  return path;
+}
+
+export const pathName = (path: FolderTree[]) => path.map(({ value }) => value.name).join(' › ');
 
 // A character whose folder the tree does not show (removed on another device meanwhile) sits in no folder.
 export function indexFolders<C>(characters: CharacterShelf<C>[], folders: FolderTree[]): { byFolder: Map<string, FolderContents<C>>; loose: CharacterShelf<C>[] } {
   const byFolder = new Map<string, FolderContents<C>>();
   const holders = new Map<string, FolderContents<C>[]>();
-  const file = (folder: FolderTree, top: FolderTree) => {
-    const contents: FolderContents<C> = { folder, top, direct: [], characters: [] };
+  const file = (folder: FolderTree, up: FolderTree | null) => {
+    const contents: FolderContents<C> = { folder, up, direct: [], characters: [] };
     byFolder.set(folder.id, contents);
-    for (const id of heldFolders(folder)) {
+    for (const { id } of withInside(folder)) {
       const group = holders.get(id);
       if (group) group.push(contents);
       else holders.set(id, [contents]);
     }
+    for (const child of folder.children) file(child, folder);
   };
-  for (const top of folders) {
-    file(top, top);
-    for (const child of top.children) file(child, top);
-  }
+  for (const top of folders) file(top, null);
   const loose: CharacterShelf<C>[] = [];
-  // Walk the library order once so a top folder's direct and nested characters stay interleaved by recency.
+  // Walk the library order once so a folder's direct and nested characters stay interleaved by recency.
   for (const shelf of characters) {
     const own = shelf.character.folder === null ? undefined : byFolder.get(shelf.character.folder);
     if (!own) {

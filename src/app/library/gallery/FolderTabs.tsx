@@ -1,5 +1,5 @@
 import { FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
-import type { FolderTree } from '../../../model/library';
+import { FOLDER_DEPTH, pathOf, type FolderTree } from '../../../model/library';
 import { ACTS, newOf } from '../../common/acts';
 import { BIN } from '../../common/words';
 import { useBin, useLibrary } from '../../session';
@@ -22,7 +22,8 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
   const { characters, folders, deleted, deletedChats, byFolder } = useLibrary();
   const bin = useBin();
   const { remove } = useFolderActions();
-  const top = folder && byFolder.get(folder.id)!.top;
+  const path = folder ? pathOf(byFolder, folder.id) : [];
+  const top = path[0] ?? null;
   const binned = filter === 'deleted';
   const inBin = deleted.length + deletedChats.length + bin.modules.length + bin.prompts.length + bin.personas.length + bin.profiles.length;
 
@@ -46,19 +47,19 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
         {folder && (
           <MoreMenu of={`${folder.value.name} 폴더`}>
             <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
-            {folder === top && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
+            {path.length < FOLDER_DEPTH && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
             <MenuItem icon={ACTS.remove.icon} label="폴더 삭제" tone="warn" onClick={() => drop(folder)} />
           </MoreMenu>
         )}
       </Row>
-      {top && top.children.length > 0 && (
-        <Tabs label={`${top.value.name} 안의 폴더`}>
-          <Tab label={`${top.value.name} 전체`} current={filter === top.id} onClick={() => onFilter(top.id)} />
-          {top.children.map((child) => (
-            <Tab key={child.id} label={child.value.name} count={byFolder.get(child.id)!.characters.length} current={filter === child.id} onClick={() => onFilter(child.id)} />
+      {path.map((above, level) => above.children.length > 0 && (
+        <Tabs key={above.id} label={`${above.value.name} 안의 폴더`}>
+          <Tab label={`${above.value.name} 전체`} current={filter === above.id} onClick={() => onFilter(above.id)} />
+          {above.children.map((child) => (
+            <Tab key={child.id} label={child.value.name} count={byFolder.get(child.id)!.characters.length} current={child === path[level + 1]} onClick={() => onFilter(child.id)} />
           ))}
         </Tabs>
-      )}
+      ))}
     </Stack>
   );
 }

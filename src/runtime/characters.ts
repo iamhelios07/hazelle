@@ -4,7 +4,7 @@ import { UNSUPPORTED_KINDS, type Card, type Imported, type Pack, type Picture, t
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { IllustrateSwitches } from '../model/illustration';
 import type { Stored, Values } from '../model/kinds';
-import { holds, nest, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
+import { holds, nest, withInside, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
 import { likenessId, type Likeness } from '../model/likeness';
 import type { ToggleValues } from '../model/prompt';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
@@ -348,19 +348,19 @@ export const createFolder = (store: ObjectStore, name: string, parent: string | 
 
 export const renameFolder = (store: ObjectStore, id: string, name: string) => store.update('folder', id, (current) => ({ ...current, name }));
 
-// What removeFolder writes and restoreFolder undoes, and up, the top folder the characters move to (null: out of every
-// folder).
+// What removeFolder writes and restoreFolder undoes, and up, the folder the removed one sat in, where the characters
+// move to (null: out of every folder).
 export type RemovedFolder = { folders: Stored<'folder'>[]; placements: Placement[]; up: Stored<'folder'> | null };
 
 // A folder goes with the folders inside it, and its characters, those in 휴지통 too, move up a level. Both go at once:
 // a character left naming a gone folder sits in no folder (model/library indexFolders). null: the folder is gone.
 export function folderRemoval(store: ObjectStore, id: string): RemovedFolder | null {
-  const tree = nest(store.list('folder'));
-  const target = tree.flatMap((top) => [top, ...top.children]).find((folder) => folder.id === id);
+  const every = nest(store.list('folder')).flatMap(withInside);
+  const target = every.find((folder) => folder.id === id);
   if (!target) return null;
-  const up = tree.find((top) => top.children.includes(target)) ?? null;
+  const up = every.find((folder) => folder.children.includes(target)) ?? null;
   const placements = store.list('character').filter(({ value }) => holds(target, value)).map(({ id, value }) => ({ id, folder: value.folder }));
-  return { folders: [target, ...target.children], placements, up };
+  return { folders: withInside(target), placements, up };
 }
 
 export const removeFolder = (store: ObjectStore, { folders, placements, up }: RemovedFolder) =>
