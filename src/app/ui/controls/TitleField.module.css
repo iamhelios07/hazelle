@@ -14,7 +14,11 @@
   transition: border-color var(--duration-fast);
 }
 
-.compact {
+.page {
+  font-size: var(--text-display);
+}
+
+.line {
   height: var(--control-xs);
   text-overflow: ellipsis;
 }

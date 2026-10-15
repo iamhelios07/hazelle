@@ -6,16 +6,16 @@ type Props = {
   value: string;
   placeholder: string;
   onChange: (value: string) => void;
-  // Fits a one-line head with a subtitle under it.
-  compact?: boolean;
+  // The head it renames: a page's title, or a one-line head with a subtitle under it; else a title inside a pane.
+  place?: 'page' | 'line';
   ref?: Ref<HTMLInputElement>;
 };
 
-export function TitleField({ label, value, placeholder, onChange, compact = false, ref }: Props) {
+export function TitleField({ label, value, placeholder, onChange, place, ref }: Props) {
   return (
     <input
       ref={ref}
-      className={compact ? `${styles.field} ${styles.compact}` : styles.field}
+      className={place ? `${styles.field} ${styles[place]}` : styles.field}
       aria-label={label}
       value={value}
       placeholder={placeholder}

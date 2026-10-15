@@ -45,7 +45,7 @@ export function NavBar({ title, rename, subtitle, status, backLabel, onBack, nam
         <span className={styles.titles} />
       ) : (
         <div className={styles.titles}>
-          <h1 className={styles.title}>{rename ? <TitleField label={rename.label} value={title} placeholder={rename.placeholder} onChange={rename.onChange} compact={line} /> : title}</h1>
+          <h1 className={styles.title}>{rename ? <TitleField label={rename.label} value={title} placeholder={rename.placeholder} onChange={rename.onChange} place={line ? 'line' : 'page'} /> : title}</h1>
           {subtitle && <div className={styles.subtitle}>{subtitle}</div>}
         </div>
       )}
