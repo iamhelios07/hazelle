@@ -203,7 +203,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await landed;
     await page.goto(chat);
     const last = messages.nth(2);
-    await expect(last).toContainText('[bell:]');
+    await expect(last).toContainText('[bell:null]');
     await last.getByRole('button', { name: '벨 울리기', exact: true }).click();
     await expect(page.getByText('따르릉', { exact: true })).toBeVisible();
     await expect(last).toContainText('[bell:2]');
