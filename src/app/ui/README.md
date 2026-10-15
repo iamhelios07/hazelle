@@ -119,7 +119,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `FileButton` (`pickFiles`) | — | A `Button` that opens a file picker; `pickFiles` opens one from any press, such as a menu item |
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가; a dot when something behind it needs a look |
 | controls | `Link` | `Link.module.css` | A link to another site |
-| controls | `MarkupArea` (`typeInto`, `markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea; an insert into it that Ctrl+Z takes back |
+| controls | `MarkupArea` (`typeInto`, `markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea; an insert into it that Ctrl+Z takes back; given `expand`, the big editor (`useBigEdit`) from a button beside the text |
 | controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |
 | controls | `PickCard` | `PickCard.module.css` | A choice that leads its page, as a card: what it is, what is chosen and where that comes from; opens a menu, or a place; an ⓘ in its corner when given help |
 | controls | `PhraseField` | `PhraseField.module.css` | Phrases as removable chips and a field that adds one on Enter, such as stop phrases |
@@ -129,10 +129,11 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `SendNote` | `SendNote.module.css` | A few words beside `SendButton` about what sending now does (the prompt cache's time left); a `warning` adds its words, which phones leave to its icon, and its reason behind an ⓘ; with `onClick` the note is a button that opens where the reason is told, and keeps no ⓘ |
 | controls | `Stepper` | `Stepper.module.css` | A whole number stepped one at a time between two bounds, such as the story's text size |
 | controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once, dimmed while it has no effect |
-| controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error, and an ⓘ explanation by its label; read-only on a quieter ground; text taken as typed (a key, an address, a script's code) in the mono face |
+| controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error, and an ⓘ explanation by its label; read-only on a quieter ground; text taken as typed (a key, an address, a script's code) in the mono face; given `expand`, a text area's big editor (`useBigEdit`) from a button by its label |
 | controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
+| controls | `useBigEdit.tsx` (inside the kit only) | `useBigEdit.module.css` | A text area edited big: a quiet button and the caller's keys open the same control over most of the screen (a `full` `Dialog`), bound to the same value with nothing to save; the keys close it, and the caret goes back to the field |
 | collections | `Viewport` (`ROWS_RESIZED`, `Seek`) | `Viewport.module.css` | A keyed, measured window of rows within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focus, row state and jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts, the whole named above the bar when given |
@@ -156,7 +157,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
 | overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap |
 | overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
-| overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
+| overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; `wide`, a picker at a fixed height, a sheet on a phone; `full`, nearly the whole screen, all of a phone's; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped, each dropped folder's included; a screen's own drop over the app's |
 | overlays | `MoreMenu` | — | The ⋯ that opens what is done to a thing as a whole, in a screen's head (`NavBar` `menu`) or a row, named '{of} 메뉴' |

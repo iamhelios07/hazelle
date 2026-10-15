@@ -57,6 +57,7 @@ export class ImportReader {
         if (chats) return chats;
         const result = importCard(request.file.name, bytes);
         if (!result.ok) return result;
+        if ('persona' in result) return { ok: true, persona: { ...result.persona, picture: this.picture(result.persona.picture) } };
         return 'card' in result ? { ok: true, card: this.card(result.card) } : { ok: true, module: this.module(result.module) };
       }
       case 'character': {
