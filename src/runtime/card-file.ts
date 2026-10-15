@@ -1,7 +1,9 @@
 import { writeCharx } from '../engine/import/card';
-import { type Bot, type Imported, type LoreEntry, mergeUnsupported, type Profiles, type Unsupported } from '../engine/import/types';
+import { moduleSource } from '../engine/import/hazelle';
+import { risumBlock, risumHead, RISUM_END } from '../engine/import/risum';
+import { type Bot, type Imported, type LoreEntry, mergeUnsupported, type Profiles, type TypedModule, type Unsupported } from '../engine/import/types';
 import { zipWriter } from '../engine/import/zip';
-import { live, type LoreFolder } from '../model/library';
+import { live, type LoreFolder, type Module } from '../model/library';
 import { likenessId } from '../model/likeness';
 import type { ApiResult } from './api';
 import type { BackupOutput } from './backup-zip';
@@ -41,6 +43,15 @@ function owned(store: ObjectStore, owner: string, folders: LoreFolder[]) {
   };
 }
 
+const moduleOf = (store: ObjectStore, id: string, { risu, name, description, namespace, loreFolders, regex, triggers, background, toggles }: Module): TypedModule & { files: FileRef[] } => ({
+  risu: risu ?? id,
+  name,
+  description,
+  namespace,
+  pack: { regex, triggers, ...(background !== undefined && { background }), toggles },
+  ...owned(store, id, loreFolders),
+});
+
 // What a charx holds: card.json and module.risum, and each picture's path in it with the stored file it is read from.
 // The one writer of a character as a file: 내보내기 writes it out, and a share link seals it as its manifest
 // (runtime/share), from which 파일로 받기 writes the same file again.
@@ -62,8 +73,7 @@ export function charxContent(store: ObjectStore, id: string): ApiResult<CharxCon
       tools++;
       return [];
     }
-    const { risu, name, description, namespace, loreFolders, regex, triggers, background, toggles } = stored.value;
-    return [{ risu: risu ?? module, name, description, namespace, pack: { regex, triggers, ...(background !== undefined && { background }), toggles }, ...owned(store, module, loreFolders) }];
+    return [moduleOf(store, module, stored.value)];
   });
   const avatar = store.children('avatar', id)[0]?.value ?? null;
   const { translatorNote, keepThoughts, statusScripts, translations } = character;
@@ -81,29 +91,29 @@ export function charxContent(store: ObjectStore, id: string): ApiResult<CharxCon
   return { ok: true, data: { entries, pictures: pictures.map((path, index) => ({ path, ref: refs[index]! })), tools } };
 }
 
-// The charx's zip, its pictures read in order PICTURE_WINDOW at a time. A picture that cannot be read stops it: the card
-// already names it.
-export async function writeCharxFile(
-  { entries, pictures }: CharxContent,
-  read: (ref: FileRef) => Promise<ApiResult<Uint8Array<ArrayBuffer>>>,
+type Read = (ref: FileRef) => Promise<ApiResult<Uint8Array<ArrayBuffer>>>;
+
+// The file written whole and closed, or aborted. Each picture is read in order PICTURE_WINDOW at a time and handed to
+// put in that order; one that cannot be read stops it, as the file already names it.
+async function writeFile(
   output: BackupOutput,
+  pictures: FileRef[],
+  read: Read,
   progress: (step: ExportStep) => void,
+  parts: { head: () => Promise<void>; put: (bytes: Uint8Array<ArrayBuffer>, index: number) => Promise<void>; end: () => Promise<void> },
 ): Promise<ApiResult<null>> {
-  const zip = zipWriter((bytes) => output.write(bytes));
   let complete = false;
   try {
-    for (const { path, bytes } of entries) await zip.add(path, bytes, true);
+    await parts.head();
     for (let start = 0; start < pictures.length; start += PICTURE_WINDOW) {
       progress({ done: start, total: pictures.length });
-      const batch = pictures.slice(start, start + PICTURE_WINDOW);
-      const got = await Promise.all(batch.map(({ ref }) => read(ref)));
+      const got = await Promise.all(pictures.slice(start, start + PICTURE_WINDOW).map(read));
       for (const [index, bytes] of got.entries()) {
         if (!bytes.ok) return bytes;
-        // Pictures are compressed already.
-        await zip.add(batch[index]!.path, bytes.data);
+        await parts.put(bytes.data, start + index);
       }
     }
-    await zip.end();
+    await parts.end();
     await output.close();
     complete = true;
     return { ok: true, data: null };
@@ -112,6 +122,32 @@ export async function writeCharxFile(
   } finally {
     if (!complete) await output.abort();
   }
+}
+
+export function writeCharxFile({ entries, pictures }: CharxContent, read: Read, output: BackupOutput, progress: (step: ExportStep) => void): Promise<ApiResult<null>> {
+  const zip = zipWriter((bytes) => output.write(bytes));
+  return writeFile(output, pictures.map(({ ref }) => ref), read, progress, {
+    head: async () => {
+      for (const { path, bytes } of entries) await zip.add(path, bytes, true);
+    },
+    // Pictures are compressed already.
+    put: (bytes, index) => zip.add(pictures[index]!.path, bytes),
+    end: () => zip.end(),
+  });
+}
+
+// 내보내기 of a module: a .risum that Risu and this app both read (engine/import/hazelle moduleSource), its pictures as
+// stored, never recompressed. A tool it holds stays here, as Risu cannot run it, and is counted.
+export async function exportModule(store: ObjectStore, files: Files, id: string, output: BackupOutput, progress: (step: ExportStep) => void): Promise<ApiResult<{ tools: number }>> {
+  const stored = live(store.get('module', id));
+  if (!stored) return { ok: false, error: 'gone' };
+  const { files: pictures, ...module } = moduleOf(store, id, stored.value);
+  const written = await writeFile(output, pictures, (ref) => files.read(ref), progress, {
+    head: () => output.write(risumHead(moduleSource(module))),
+    put: (bytes) => output.write(risumBlock(bytes)),
+    end: () => output.write(RISUM_END),
+  });
+  return written.ok ? { ok: true, data: { tools: store.children('tool', id).length } } : written;
 }
 
 // 내보내기.

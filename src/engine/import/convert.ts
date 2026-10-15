@@ -205,7 +205,9 @@ export const nativeHolds = (entry: LoreEntry) =>
   entry.enabled && entry.priority === null && entry.position === null && [entry.keys, entry.secondaryKeys].every((keys) => split(keys.join(',')).join('\0') === keys.join('\0'));
 
 // assets: the card's icon and x-risu-asset entries. The scripts and lorebook are not in it: they go in module.risum.
-export function cardSource(card: Card, assets: Json[], extensions: Json): Json {
+// lowLevelAccess: the ruling is that a bot whose Lua triggers Risu runs is written with it on (Risu checks it before a
+// trigger calls a model or the network), as the user already answered for it here.
+export function cardSource(card: Card, assets: Json[], extensions: Json, lowLevelAccess: boolean): Json {
   const [first = '', ...alternate] = card.greetings;
   const { scanDepth, tokenBudget, recursive, fullWordMatching } = card.loreSettings;
   return {
@@ -241,6 +243,7 @@ export function cardSource(card: Card, assets: Json[], extensions: Json): Json {
           defaultVariables: card.variables.map(([key, value]) => `${key}=${value}`).join('\n'),
           toggles: writeToggles(card.toggles),
           ...(card.background !== undefined && { backgroundHTML: card.background }),
+          ...(lowLevelAccess && { lowLevelAccess: true }),
         },
         ...extensions,
       },
@@ -249,9 +252,14 @@ export function cardSource(card: Card, assets: Json[], extensions: Json): Json {
   };
 }
 
+const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif' };
+export const extensionOf = (type: string) => EXTENSIONS[type] ?? 'png';
+
+export type ConvertedModule = Omit<ImportedModule, 'assets' | 'unsupported'> & { assets: string[] };
+
 // A Risu module as RisuModule holds it (src/ts/process/modules.ts), without its pictures. Its lowLevelAccess is not
 // kept: what its scripts may do is the user's answer, as for a card (design §6.8).
-export function convertModule(raw: Json, tally: Tally): Omit<ImportedModule, 'assets' | 'unsupported'> & { assets: string[] } {
+export function convertModule(raw: Json, tally: Tally): ConvertedModule {
   const pack = packOf({ regex: raw.regex, trigger: raw.trigger, background: raw.backgroundEmbedding, toggles: raw.customModuleToggle }, tally);
   const { lore, loreFolders } = nativeLorebook(list(raw.lorebook));
   countTags([...pack.regex.flatMap((script) => [script.find, script.replace]), pack.background ?? '', ...lore.map((entry) => entry.content)], tally);
