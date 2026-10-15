@@ -16,21 +16,6 @@
   overflow-y: auto;
 }
 
-.drawer .listPane {
-  flex-grow: 1;
-  width: auto;
-  min-width: 0;
-  border-right: none;
-}
-
-.drawer .detailPane {
-  flex-grow: 0;
-  flex-shrink: 0;
-  width: var(--detail-pane-width);
-  border-left: var(--border-thin) solid var(--color-divider);
-  background: var(--color-sidebar);
-}
-
 .stack {
   flex-direction: column;
   overflow-y: auto;

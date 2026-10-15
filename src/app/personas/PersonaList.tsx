@@ -11,12 +11,11 @@ import { Button, CardGrid, Empty, FaceCard, Row } from '../ui';
 
 type Props = {
   onPick: (id: string) => void;
-  current?: string;
   frame: Frame;
 };
 
 // Picking here opens a persona to edit; it changes no chat and not the current persona.
-export function PersonaList({ onPick, current, frame }: Props) {
+export function PersonaList({ onPick, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
@@ -43,10 +42,10 @@ export function PersonaList({ onPick, current, frame }: Props) {
     <>
       {search.field && <Row kind="toolbar">{search.field}</Row>}
       {search.none && <Empty>{search.none}</Empty>}
-      <CardGrid label="페르소나" variant="face" current={current} keys={search.found.map(({ persona }) => persona.id)}>
+      <CardGrid label="페르소나" variant="face" keys={search.found.map(({ persona }) => persona.id)}>
         {(index) => {
           const { persona: { id, value }, note, faint } = search.found[index]!;
-          return <FaceCard image={value.picture} name={value.name} note={note} faint={faint} selected={null} current={current === id} tag={settings.persona === id ? '현재' : undefined} onClick={() => onPick(id)} />;
+          return <FaceCard image={value.picture} name={value.name} note={note} faint={faint} selected={null} tag={settings.persona === id ? '현재' : undefined} onClick={() => onPick(id)} />;
         }}
       </CardGrid>
     </>

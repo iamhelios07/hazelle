@@ -68,10 +68,8 @@
   max-width: var(--page-max-width);
 }
 
-/* A settings page is cards, and so is the drawer beside it: their edges, not their words, stand on the title's line
-   (user, 2026-10-13). */
-.page,
-.drawer {
+/* A settings page is cards: their edges, not their words, stand on the title's line (user, 2026-10-13). */
+.page {
   --box-hang: 0px;
 }
 

@@ -7,7 +7,7 @@ import { findStarred, RoleCard } from '../common/RolePicker';
 import { useSearch } from '../common/useSearch';
 import { AUX_HELP, DEFAULT_MODELS, defaultMark, follows, MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, noStarred, PAGES, ROLE_TAGS } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
-import { backBar, navigate, useRoute } from '../shell/router';
+import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Beside, Callout, Columns, Empty, List, ListItem, NavBar, PickCard, Row, Screen, Section } from '../ui';
@@ -23,7 +23,6 @@ const SETTINGS_HELP = '온도, 추론, 캐시 같은 값이에요. 모델마다 
 export function ModelsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
-  const route = useRoute();
   const profiles = useProfiles();
   const connections = useConnections();
   const settings = useSettings();
@@ -68,7 +67,6 @@ export function ModelsScreen({ back }: { back: Back | null }) {
                 badge={defaultMark(profile.id === settings.profile, profile.value.name)}
                 description={words.length ? words.join(' · ') : NO_VALUES}
                 aside={used ? `모델 ${used}개` : undefined}
-                current={route.kind === 'profile' && route.id === profile.id}
                 onClick={() => navigate({ kind: 'profile', id: profile.id })}
               />
             );
@@ -130,7 +128,6 @@ export function ModelsScreen({ back }: { back: Back | null }) {
                     tags={rolesOf(ref).map((role) => ROLE_TAGS[role])}
                     description={connection.value.label}
                     aside={apart}
-                    current={route.kind === 'model' && route.connection === connection.id && route.model === model.id}
                     onClick={() => navigate({ kind: 'model', ...ref })}
                   />
                 );

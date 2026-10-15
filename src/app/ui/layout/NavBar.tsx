@@ -31,8 +31,7 @@ export function NavBar({ title, rename, subtitle, status, backLabel, onBack, nam
         {backLabel}
       </Button>
     ) : (
-      pane !== 'detail' &&
-      pane !== 'drawer' && (
+      pane !== 'detail' && (
         <span className={styles.back}>
           <IconButton icon={close ? X : ChevronLeft} label={backLabel} onClick={onBack} />
         </span>
@@ -61,8 +60,6 @@ export function NavBar({ title, rename, subtitle, status, backLabel, onBack, nam
         </span>
       )}
       {menu && <MoreMenu of={menu.of}>{menu.items}</MoreMenu>}
-      {/* A drawer beside its page closes back to the page. */}
-      {onBack && pane === 'drawer' && <IconButton icon={X} label="닫기" onClick={onBack} />}
     </div>
   );
 }

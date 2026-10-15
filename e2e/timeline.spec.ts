@@ -297,7 +297,6 @@ test('an edit made offline across a restore is dropped and counted when the tab 
   await expect(page.getByText('계정을 복원해서 다시 불러왔어요')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('방금 바꾼 내용 1개는 저장되지 않았어요')).toBeVisible();
   // The persona is shown again as the restore left it.
-  await page.getByRole('button', { name: /^e2e/ }).click();
   await expect(alias).toHaveValue('');
   await page.waitForTimeout(1000);
   expect(server.taken.filter(({ timeline, kind }) => timeline === 't1' && kind === 'persona')).toEqual([]);

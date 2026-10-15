@@ -206,20 +206,12 @@ export function href(route: Route): string {
 
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
-// null outside the connection, persona, module and 모델 screens.
-// A module's editor is a page of its own, never beside the list.
-export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'models'> | null {
+// null outside API 연결's screens: every other item 설정 lists is a page of its own, never beside its list.
+export function listOf(route: Route): Kind<'connections' | 'add-connection'> | null {
   switch (route.kind) {
     case 'connections':
     case 'connection':
       return { kind: 'connections' };
-    case 'personas':
-    case 'persona':
-      return { kind: 'personas' };
-    case 'models':
-    case 'profile':
-    case 'model':
-      return { kind: 'models' };
     case 'add-connection':
     case 'connect':
     case 'connect-direct':

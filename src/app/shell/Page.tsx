@@ -55,9 +55,8 @@ const absentItem = <K extends ItemKind>(kind: K, stored: Stored<K> | null): K | 
   stored && isBinned(stored.value) ? `deleted-${kind}` : kind;
 
 
-// models and personas open a picked item in a drawer beside the page, only while one is picked; API 연결 stacks the
-// picked connection under its list.
-const VARIANTS = { connections: 'stack', 'add-connection': 'list', personas: 'drawer', models: 'drawer' } as const;
+// API 연결 stacks the picked connection under its list. Every other item 설정 lists opens as a page of its own.
+const VARIANTS = { connections: 'stack', 'add-connection': 'list' } as const;
 
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
@@ -139,9 +138,9 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
   if (!list) return <ScreenLoad>{screen(route)}</ScreenLoad>;
   const detail = route.kind === list.kind ? null : screen(route);
   const variant = VARIANTS[list.kind];
-  const pane = detail ?? (list.kind === 'connections' ? <Landing /> : list.kind === 'add-connection' ? <Empty variant="pane">연결할 제공자를 선택해 주세요.</Empty> : null);
+  const pane = detail ?? (list.kind === 'connections' ? <Landing /> : <Empty variant="pane">연결할 제공자를 선택해 주세요.</Empty>);
   // One boundary for the pair, so a first visit shows one loader, and one inside for the detail alone.
-  if (split) return <ScreenLoad><ListDetail variant={variant} list={screen(list)} detail={pane && <ScreenLoad>{pane}</ScreenLoad>} /></ScreenLoad>;
+  if (split) return <ScreenLoad><ListDetail variant={variant} list={screen(list)} detail={<ScreenLoad>{pane}</ScreenLoad>} /></ScreenLoad>;
   return <ScreenLoad>{detail ?? screen(list)}</ScreenLoad>;
 }
 
