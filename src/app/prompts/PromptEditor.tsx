@@ -238,8 +238,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   const erase = async () => {
     const removed = await save.remove(() => removePrompt(store, stored.id));
     if (!removed) return;
-    // 삭제 is hidden on the default; 'default' still comes back when another device made it the default meanwhile.
-    if (!removed.ok) return removed.error === 'default' ? toast.error(`${words.default}는 삭제할 수 없어요.`) : toast.failed(removed, '삭제하지 못했어요.');
+    if (!removed.ok) return removed.error === 'default' ? toast.error(`${words.default}는 삭제할 수 없어요. 다른 프롬프트를 기본으로 정한 뒤 삭제해 주세요.`) : toast.failed(removed, '삭제하지 못했어요.');
     onErased();
     toast.undoable(`'${promptName(removed.data.value.name)}' 프롬프트를 삭제했어요.`, () => restorePrompt(store, stored.id), BIN_KEEPS);
   };
@@ -423,7 +422,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
           {ofSort(stored, 'conversation') && <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />}
           {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
-          {!isDefault && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void erase()} />}
+          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void erase()} />
         </>
       ),
     },
