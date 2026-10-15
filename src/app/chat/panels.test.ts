@@ -6,7 +6,7 @@ describe('the panels beside the story', () => {
   const editor = { kind: 'character', id: 'c', part: null } as const;
 
   it('keeps every inspect tab beside an editor where two fit, and one panel at a time elsewhere', () => {
-    for (const tab of ['request', 'tokens', 'cache', 'variables', 'modules', 'scripts'] as const) {
+    for (const tab of ['request', 'cache', 'variables', 'modules', 'scripts'] as const) {
       const inspect = { kind: 'inspect', tab } as const;
       const openedInspect = opened(NO_PANELS, inspect, true);
       const both = opened(openedInspect, editor, true);

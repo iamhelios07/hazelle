@@ -52,8 +52,9 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
     actions.toggleStatus();
   });
   useShortcut('find', () => actions.openSearch());
+  useShortcut('inspect', () => (chat.inspect ? actions.closeInspect() : chat.id === null ? false : actions.openInspect('request')));
   const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
-  const inspect = chat.inspect && <ChatInspect tab={chat.inspect.tab} notes={chat.sendNotes} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onClose={actions.closeInspect} onEdit={actions.side} />;
+  const inspect = chat.inspect && chat.id !== null && <ChatInspect chat={chat.id} tab={chat.inspect.tab} notes={chat.sendNotes} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onTab={actions.switchInspectTab} onClose={actions.closeInspect} onEdit={actions.side} />;
   const paired = usePanelsBeside() && !!panel && !!chat.inspect;
   useEffect(() => {
     onPaired(paired);
