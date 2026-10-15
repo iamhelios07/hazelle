@@ -8,7 +8,7 @@ import { Toast, ToastStack, type ToastAction } from './ui';
 type Action = { label: string; onClick: () => void };
 type Extra = { detail?: string; action?: Action };
 type From = { name: string; face: string | null };
-type Notice = { key: number; message: string; detail?: string; tone: 'plain' | 'error'; action?: ToastAction; said?: { from: From; keep: () => void; close: () => void }; undo: boolean; life: number; ends: number };
+type Notice = { key: number; message: string; detail?: string; tone: 'plain' | 'error'; action?: ToastAction; said?: { from: From; keep: () => void }; close: () => void; undo: boolean; life: number; ends: number };
 
 export type Toasts = {
   show: (message: string, extra?: Extra) => void;
@@ -35,7 +35,7 @@ const ToastContext = createContext<Toasts | null>(null);
 
 export type Standing = { message: string; detail: string };
 
-// Pointing at the stack opens it and stops every notice's time, which runs on from where it stopped.
+// A mouse pointing at the stack opens it and stops every notice's time, which runs on from where it stopped.
 // standing: a notice in front of them for as long as the caller passes it, with no time of its own.
 export function ToastProvider({ standing, children }: { standing: Standing | null; children: ReactNode }) {
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -53,7 +53,7 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       // A notice with nothing to press, said again while it is up, stays one notice. One with an action or a speaker is
       // never merged: each carries its own 되돌리기 or words.
       const repeats = (notice: Notice) => !action && !from && !notice.action && !notice.said && notice.message === message && notice.detail === detail && notice.tone === tone;
-      setNotices((all) => all.some(repeats) ? all : [{ key, message, detail, tone, action: pressed, said: from && { from, keep, close }, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
+      setNotices((all) => all.some(repeats) ? all : [{ key, message, detail, tone, action: pressed, said: from && { from, keep }, close, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
       return close;
     };
     const failed: Toasts['failed'] = (failure, prefix) => {
@@ -70,6 +70,8 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
   }, []);
 
   useEffect(() => {
+    // The stack leaves with its last notice, so no pointer leave or blur comes to end a hold.
+    if (notices.length === 0 && !standing) setHeld(false);
     if (held || notices.length === 0) return;
     const now = Date.now();
     const soonest = Math.min(...notices.map(({ ends }) => ends));
@@ -77,7 +79,7 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
     if (soonest === Infinity) return;
     const timer = setTimeout(() => setNotices((all) => all.filter(({ ends }) => ends > Date.now())), Math.max(0, soonest - now));
     return () => clearTimeout(timer);
-  }, [held, notices]);
+  }, [held, notices, standing]);
 
   const hold = (on: boolean) => {
     if (on === held) return;
@@ -102,11 +104,13 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       <ToastStack
         items={[
           ...(standing ? [{ key: 'standing', toast: <Toast message={standing.message} detail={standing.detail} tone="plain" life={0} paused={held} /> }] : []),
-          ...notices.map(({ key, message, detail, tone, action, said, life }) => ({
+          ...notices.map(({ key, message, detail, tone, action, said, close, life }) => ({
             key,
-            toast: <Toast message={message} detail={detail} tone={tone} action={action} from={said?.from} onKeep={said?.keep} onClose={said?.close} life={life} paused={held} />,
+            toast: <Toast message={message} detail={detail} tone={tone} action={action} from={said?.from} onKeep={said?.keep} onClose={close} life={life} paused={held} />,
+            onClose: close,
           })),
         ]}
+        held={held}
         onHold={hold}
       />
     </ToastContext.Provider>

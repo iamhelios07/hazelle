@@ -31,6 +31,17 @@
   transform: translateY(calc(var(--toward) * (var(--lift) + var(--index) * var(--space-8))));
 }
 
+/* Sideways moves are the notice's own (Swiped); a vertical one still scrolls a long notice's words. */
+.swiped {
+  touch-action: pan-y;
+  transition: transform var(--duration-fast) var(--ease-enter);
+}
+
+.sliding {
+  transform: translateX(var(--shift));
+  transition: none;
+}
+
 .behind {
   height: var(--front);
   overflow: hidden;

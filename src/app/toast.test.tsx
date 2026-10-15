@@ -4,10 +4,12 @@ import { ToastProvider, useOwnUndo, useToast, type Toasts } from './toast';
 import { probeRoot } from './common/probe';
 
 let shown: unknown[] = [];
+let hold: (held: boolean) => void = () => {};
 vi.mock('./ui', () => ({
   Toast: () => null,
-  ToastStack: ({ items }: { items: unknown[] }) => {
+  ToastStack: ({ items, onHold }: { items: unknown[]; onHold: (held: boolean) => void }) => {
     shown = items;
+    hold = onHold;
     return null;
   },
 }));
@@ -66,6 +68,30 @@ it('says a 되돌리기 whose restore failed, with the one prefix', async () => 
     expect(props()).toEqual([expect.objectContaining({ message: '되돌리지 못했어요.', detail: expect.any(String) })]);
   } finally {
     await act(() => root.unmount());
+    vi.unstubAllGlobals();
+  }
+});
+
+it('runs a notice down after the last one held left from under the pointer', async () => {
+  vi.useFakeTimers();
+  let toasts: Toasts;
+  function Probe() {
+    toasts = useToast();
+    return null;
+  }
+  const press = () => (shown as { toast: { props: { action: { onClick: () => void } } } }[])[0]!.toast.props.action.onClick();
+  const root = probeRoot();
+  try {
+    await act(() => root.render(<ToastProvider standing={null}><Probe /></ToastProvider>));
+    await act(() => void toasts!.undoable('삭제했어요', () => {}));
+    await act(() => hold(true));
+    await act(() => press());
+    await act(() => void toasts!.undoable('삭제했어요', () => {}));
+    await act(() => vi.advanceTimersByTime(11_000));
+    expect(shown).toHaveLength(0);
+  } finally {
+    await act(() => root.unmount());
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   }
 });

@@ -110,9 +110,36 @@
 }
 
 .band {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
   padding: var(--space-8) var(--space-16);
   background: var(--color-warn);
   font-weight: var(--weight-semibold);
+}
+
+/* On a phone a notice is slid away (ToastStack); only one that stays until closed shows its ×. */
+.close {
+  display: none;
+  flex-shrink: 0;
+}
+
+.band button {
+  color: var(--color-text);
+}
+
+@media (hover: hover) {
+  .close {
+    display: block;
+  }
+
+  .band {
+    padding: var(--space-4) var(--space-8) var(--space-4) var(--space-16);
+  }
+}
+
+.kept .close {
+  display: block;
 }
 
 .error .from {

@@ -14,9 +14,11 @@ type Props = {
   detail?: string;
   tone: 'plain' | 'error';
   action?: ToastAction;
-  // Open, the notice has a × (onClose), and onKeep tells that its time must not take it away.
+  // Someone's long words, once opened, stay: onKeep tells that their time must not take them away.
   from?: { name: string; face: string | null };
   onKeep?: () => void;
+  // The × that puts it away, shown where a pointer can hover; on a phone a notice that stays shows it too, and the
+  // others are slid away (ToastStack).
   onClose?: () => void;
   // How long it stays, in ms: a notice with an action draws it as a shrinking line, which stops while paused.
   life: number;
@@ -26,9 +28,14 @@ type Props = {
 export function Toast({ message, detail, tone, action, from, onKeep, onClose, life, paused }: Props) {
   const error = tone === 'error';
   const [open, setOpen] = useState(false);
+  const close = onClose && (
+    <span className={styles.close}>
+      <IconButton icon={X} size="xs" label="닫기" onClick={onClose} />
+    </span>
+  );
   return (
     <div
-      className={[styles.toast, error && styles.error, paused && styles.paused].filter(Boolean).join(' ')}
+      className={[styles.toast, error && styles.error, paused && styles.paused, open && styles.kept].filter(Boolean).join(' ')}
       role={error ? 'alert' : 'status'}
       style={{ '--life': `${life}ms` } as CSSProperties}
     >
@@ -36,10 +43,15 @@ export function Toast({ message, detail, tone, action, from, onKeep, onClose, li
         <div className={styles.from}>
           <Avatar face={from.name} image={from.face} size="sm" />
           <span className={styles.name}>{from.name}</span>
-          {open && <IconButton icon={X} size="xs" label="닫기" onClick={() => onClose?.()} />}
+          {close}
         </div>
       ) : (
-        error && <div className={styles.band}>{message}</div>
+        error && (
+          <div className={styles.band}>
+            <span className={styles.text}>{message}</span>
+            {close}
+          </div>
+        )
       )}
       {(!error || detail || action || from) && (
         <div className={styles.row}>
@@ -66,6 +78,7 @@ export function Toast({ message, detail, tone, action, from, onKeep, onClose, li
               </Button>
             </span>
           )}
+          {!from && !error && close}
         </div>
       )}
       {action && <div className={styles.time} />}
