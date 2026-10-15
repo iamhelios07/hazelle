@@ -351,7 +351,7 @@ describe('assemble', () => {
         const result = assembledOf(assemble({ ...base, budget, fit: providerFit(budget) }));
         expect(result.dropped).toBe(cut.dropped);
         expect(result.messages).toEqual(expected.map(({ message }) => message));
-        expect(result.parts).toEqual(expected.map(({ message, from }) => ({ from, tokens: message.content.length })));
+        expect(result.parts.map(({ from, tokens }) => ({ from, tokens }))).toEqual(expected.map(({ message, from }) => ({ from, tokens: message.content.length })));
         expect(result.parts.reduce((sum, { tokens }) => sum + tokens, 0)).toBe(cut.tokens);
       }
     }
@@ -587,6 +587,15 @@ describe('holdsPersona', () => {
     expect(holdsPersona([description('{{slot}}\n{{userpersona}}')])).toBe(true);
     expect(holdsPersona(starter.blocks.filter((block) => block.kind !== 'slot' || block.slot !== 'persona'))).toBe(false);
     expect(holdsPersona([text('{{personality}} {{charpersona}}')])).toBe(false);
+  });
+});
+
+describe("a request's origins", () => {
+  it('name the message each chat message came from, and none for the greeting or any other text', () => {
+    const inChat = ({ from }: Assembled['parts'][number]) => from.kind === 'block' && from.slot === 'chat';
+    const { parts } = assembledOf(assemble(input()));
+    expect(parts.filter(inChat).map(({ origin }) => origin ?? null)).toEqual([null, 'u1', 'a1', 'u2']);
+    expect(parts.filter((part) => !inChat(part)).some(({ origin }) => origin !== undefined)).toBe(false);
   });
 });
 

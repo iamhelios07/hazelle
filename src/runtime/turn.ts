@@ -191,7 +191,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const fit = providerFit(route, settings, calibration.fit.allowance);
   const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
-  const requested = await session.scripts.requesting(chat, turn, prompt.messages);
+  const requested = await session.scripts.requesting(chat, turn, prompt);
   const sent = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];

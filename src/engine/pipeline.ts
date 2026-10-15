@@ -1,6 +1,6 @@
 import type { TokenEstimate, TokenFit } from '../model/token-calibration';
 import { cachePoints, type CachePart, type Sent } from './cache-points';
-import { fitChat, type ProviderFit, type Part, type TooLong } from './prompt-budget';
+import { fitChat, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
 import type { Block, ConversationPrompt, IllustratePrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
@@ -58,10 +58,10 @@ export type From =
   | { kind: 'script' }
   | { kind: 'tool'; name: string };
 
-// parts[i] says where messages[i] came from and what it counts in o200k_base, an estimate for any other
+// parts[i] says where messages[i] came from (origin as Sent's) and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
 
 // The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
 // Claude models refuse with 400.
@@ -303,17 +303,23 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, memor
 
   const messages = chat.texts
     .slice(covered)
-    .map((text, offset) => ({ role: scope.messages[covered + offset]!.role, content: text.trim() }))
-    .filter(({ content }) => content !== '');
+    .map((text, offset): ChatSent => {
+      const at = covered + offset;
+      const message = { role: scope.messages[at]!.role, content: text.trim() };
+      // The greeting has none: Risu sends it as no message of its chat, and bots find it as the assistant message with
+      // no memo.
+      return at === 0 && scope.greeting !== null ? { message } : { message, origin: scope.messages[at]!.message };
+    })
+    .filter(({ message }) => message.content !== '');
   const atDepth: { depth: number; sent: Sent }[] = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: { kind: 'depth', id: entry.id, name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
-  const lastUser = messages.findLastIndex(({ role }) => role === 'user');
+  const lastUser = messages.findLastIndex(({ message }) => message.role === 'user');
   const retrieved = found && lastUser !== -1 ? found : null;
   if (retrieved) atDepth.push({ depth: messages.length - lastUser, sent: { message: { role: 'user', content: retrieved.text }, from: { kind: 'retrieval' } } });
   const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
       messages: sent.map(({ message }) => message),
-      parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
+      parts: sent.map(({ message, from, origin }) => ({ from, tokens: tokens(message.content), ...(origin !== undefined && { origin }) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
