@@ -98,9 +98,10 @@ export type ReceiptError =
   | { kind: 'pool'; group: string };
 
 // A version as the reader reads it, beside its text, which is what the model is sent and never this.
-// A reply's is translated from its displayed text; a message sent translated keeps here what the user typed, and its
-// text is the translation sent. receipt: the call that translated, null when the user wrote it in an edit. sentIn: the
-// language a message sent translated went out in, as the English name its prompt read; a reply's translation has none.
+// A version's is translated from its displayed text; a message sent translated keeps here what the user typed, and
+// its text is the translation sent. receipt: the call that translated, null when the user wrote it in an edit. sentIn:
+// the language a message sent translated went out in, as the English name its prompt read, and the one mark of such a
+// message: any other translation, a user message's translated after it was sent among them, has none.
 export type Translation = { text: string; receipt: Receipt | null; at: number; sentIn?: string };
 
 // Shared by every chat, or a character's own (Character.ownTranslate): replies translates each chat's latest reply, reverse (반전 모드) sends the

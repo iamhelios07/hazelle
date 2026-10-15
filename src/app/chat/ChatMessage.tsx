@@ -81,6 +81,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const mine = message.role === 'user';
   const live = message.live === version.id;
   const translation = version.translation ?? null;
+  // A message sent translated keeps what the user typed as its translation; another translation offers a new one.
+  const sentTranslated = translation?.sentIn !== undefined;
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
   const text = seenText(original, translation?.text ?? null, translatingText, flipped);
@@ -122,7 +124,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         second={
           editing.translation === null
             ? undefined
-            : mine
+            : sentTranslated
               ? { firstLabel: '보낸 메시지', label: '원문', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
               : { firstLabel: '원문', label: '번역', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
         }
@@ -215,7 +217,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     ) : translatingText === null && !flipped && translation?.receipt?.state === 'cut' ? (
       <Marker reason="translation" label="번역 잘림" action={again} />
     ) : null;
-  const translateTool = !mine && !empty && !failed && (
+  const translateTool = !sentTranslated && !empty && !failed && (
     <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => actions.translate(message)} />
   );
   const flip = () => actions.flipTranslation(message);
@@ -223,8 +225,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const mark =
     !translation || editing !== null
       ? undefined
-      : mine
-        ? { label: translation.sentIn ? `${withRo(languageLabel(translation.sentIn))} 보냄` : '번역해 보냄', action: flipped ? '원문 보기' : '보낸 메시지 보기', onClick: flip }
+      : sentTranslated
+        ? { label: `${withRo(languageLabel(translation.sentIn!))} 보냄`, action: flipped ? '원문 보기' : '보낸 메시지 보기', onClick: flip }
         : { label: flipped ? '원문' : '번역', action: flipped ? '번역 보기' : '원문 보기', onClick: flip };
 
   const count = message.versions.length;
