@@ -43,11 +43,11 @@ vaults.put('/password', async (c) => {
   if (!method || !proof || !passwordProof || !passwordWrap) return fail(c, 400, 'bad-input');
   const db = c.env.db;
   const id = c.get('account').id;
-  const refused = await checkProof(c, (await findAccount(db, 'id', id))!, method, proof);
+  const refused = await checkProof(c, c.get('account').username, await findAccount(db, 'id', id), method, proof);
   if (refused) return refused;
 
   await db.batch([
-    db.prepare('UPDATE accounts SET login_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?').bind(await hashProof(passwordProof), id),
+    db.prepare('UPDATE accounts SET login_hash = ? WHERE id = ?').bind(await hashProof(passwordProof), id),
     db.prepare('UPDATE vaults SET password_wrap = ?, updated_at = ? WHERE account_id = ?').bind(passwordWrap, Date.now(), id),
   ]);
   return c.body(null, 204);

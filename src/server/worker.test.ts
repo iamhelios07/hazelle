@@ -105,18 +105,52 @@ describe('accounts', () => {
     expect((await post('login', { username: 'nobody', method: 'password', proof: body.passwordProof })).status).toBe(401);
   });
 
-  it('locks the account after five wrong proofs, even against the right one', async () => {
+  it('throttles concurrent guesses from one visitor without locking out the owner’s password or recovery key', async () => {
     const body = signupBody();
     await post('signup', body);
-    for (let i = 0; i < 5; i++) {
-      expect((await post('login', { username: 'jin', method: 'password', proof: proof('wrong') })).status).toBe(401);
-    }
-    const locked = await post('login', { username: 'jin', method: 'password', proof: body.passwordProof });
+    const login = (visitor: string, method: string, value: string) => t.raw('login', {
+      method: 'POST', headers: { 'content-type': 'application/json', [VISITOR_HEADER]: visitor },
+      body: JSON.stringify({ username: 'jin', method, proof: value }),
+    });
+    const guesses = await Promise.all(Array.from({ length: 10 }, () => login('203.0.113.20', 'password', proof('wrong'))));
+    expect(guesses.map(({ status }) => status).sort()).toEqual([...Array(5).fill(401), ...Array(5).fill(429)]);
+    const locked = await login('203.0.113.20', 'recovery', body.recoveryProof);
     expect(locked.status).toBe(429);
-    const answer = (await locked.json()) as { error: string; retryAfter: number };
-    expect(answer.error).toBe('too-many-attempts');
-    expect(answer.retryAfter).toBeGreaterThan(0);
-    expect(answer.retryAfter).toBeLessThanOrEqual(60);
+    expect(await locked.json()).toEqual({ error: 'too-many-attempts', retryAfter: 60 });
+    expect((await login('203.0.113.21', 'password', body.passwordProof)).status).toBe(200);
+    expect((await login('203.0.113.21', 'recovery', body.recoveryProof)).status).toBe(200);
+    expect((await login('203.0.113.20', 'password', body.passwordProof)).status).toBe(429);
+  });
+
+  it('backs off a visitor spraying unknown usernames, even across successful logins', async () => {
+    const body = signupBody();
+    await post('signup', body);
+    const login = (username: string) => t.raw('login', {
+      method: 'POST', headers: { 'content-type': 'application/json', [VISITOR_HEADER]: '203.0.113.22' },
+      body: JSON.stringify({ username, method: 'password', proof: body.passwordProof }),
+    });
+    for (let i = 0; i < 19; i++) expect((await login(`unknown${i}`)).status).toBe(401);
+    expect((await login('jin')).status).toBe(200);
+    expect((await login('last-unknown')).status).toBe(401);
+    expect(await (await login('jin')).json()).toEqual({ error: 'too-many-attempts', retryAfter: 60 });
+  });
+
+  it('bounds all login requests before parsing, while exempting loopback and in-process visitors', async () => {
+    const login = (visitor?: string) => t.raw('login', {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(visitor ? { [VISITOR_HEADER]: visitor } : {}) }, body: '{}',
+    });
+    for (let i = 0; i < 30; i++) expect((await login('203.0.113.23')).status).toBe(400);
+    const limited = await login('203.0.113.23');
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toEqual({ error: 'too-many-attempts', retryAfter: 2 });
+    for (let i = 0; i < 31; i++) {
+      expect((await login('::ffff:127.0.0.1')).status).toBe(400);
+      expect((await login()).status).toBe(400);
+    }
+    const body = signupBody();
+    await post('signup', body);
+    for (let i = 0; i < 6; i++) expect((await post('login', { username: 'jin', method: 'password', proof: proof('wrong') })).status).toBe(401);
+    expect((await post('login', { username: 'jin', method: 'password', proof: body.passwordProof })).status).toBe(200);
   });
 
   it('logs out by deleting the session', async () => {
