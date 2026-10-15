@@ -15,6 +15,10 @@ export class ImportWorker {
     const result = await this.ask({ kind: 'card', file });
     if (!result.ok || 'tool' in result || 'preset' in result || 'chat' in result || 'risuChats' in result) return result;
     if ('module' in result) return { ok: true, module: this.module(result.module) };
+    if ('persona' in result) {
+      const { picture, ...persona } = result.persona;
+      return { ok: true, persona: { ...persona, picture: () => this.ask({ kind: 'picture', handle: picture }) } };
+    }
     const { avatar, assets, bundled, ...card } = result.card;
     return { ok: true, card: { ...card, avatar: avatar === null ? null : await this.ask({ kind: 'picture', handle: avatar }), assets: this.assets(assets), bundled: bundled.map((module) => this.module(module)) } };
   }

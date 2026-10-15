@@ -1,6 +1,6 @@
 import { importTool, undoToolImport } from '../../runtime/tools/store';
 import { useToast } from '../toast';
-import { Check, FileText, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
+import { Check, FileText, MessageSquare, MessageSquarePlus, Package, UserRound } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { PRESET_EXTENSIONS } from '../../engine/import/preset';
 import { mergeUnsupported, type ImportFailure } from '../../engine/import/types';
@@ -14,6 +14,7 @@ import { ImportWorker } from '../../runtime/import/client';
 import { ImportReadError, type ChatsRead } from '../../runtime/import/protocol';
 import { importModule, pairWithPrompts, setModuleAt, setModuleDeleted, type ModulePlace } from '../../runtime/modules';
 import { fillPictures, importRisuChats, risuMatch } from '../../runtime/move';
+import { addRisuPersona, removePersona } from '../../runtime/personas';
 import { ofSort, removePrompt, savePreset } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import { aliased } from '../common/alias';
@@ -25,7 +26,7 @@ import { useFiles, useLibrary, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
 import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Menu, MenuItem, pickFiles, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
-import { characterOutcome, chatOutcome, moduleOutcome, promptOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
+import { characterOutcome, chatOutcome, moduleOutcome, personaOutcome, promptOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
 import { missedLines, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
 import { MoveFlow } from './MoveFlow';
@@ -52,8 +53,8 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요.',
 };
 
-// Keyed by the failure details of engine/import/tool, of a chat file and of a preset (PresetFailure); a detail missing
-// here reads as 파일을 읽지 못했어요.
+// Keyed by the failure details of engine/import/tool, of a chat file, of a preset (PresetFailure) and of a persona PNG
+// (engine/import/persona); a detail missing here reads as 파일을 읽지 못했어요.
 const DETAIL_FAILURE: Record<string, string> = {
   'other-version': '이전 버전에서 만든 채팅 파일이라 가져올 수 없어요.',
   'not-preset': 'Risu 파일이지만 프리셋이 아니에요.',
@@ -69,6 +70,8 @@ const DETAIL_FAILURE: Record<string, string> = {
   'tool-composer': '입력창 줄을 읽지 못했어요.',
   'tool-uses': '//@uses에는 model, embed, memory만 쓸 수 있어요.',
   'tool-unknown': '알 수 없는 줄이에요.',
+  'persona-unreadable': 'Risu 페르소나 PNG지만 내용을 읽지 못했어요.',
+  'persona-incomplete': '이름이나 설명이 빠진 페르소나라 가져올 수 없어요.',
 };
 
 class ImportCancelled extends Error {}
@@ -79,6 +82,7 @@ const unsaved = (file: string, failure: ApiFailure): Result => ({ kind: 'failed'
 const undoCharacter = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${name}' 캐릭터를 가져왔어요.`, run: () => setDeleted(store, id, Date.now()) });
 const undoModule = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${moduleName(name)}' 모듈을 가져왔어요.`, run: () => setModuleDeleted(store, id, Date.now()) });
 const undoPrompt = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${promptName(name)}' 프롬프트를 가져왔어요.`, run: () => removePrompt(store, id) });
+const undoPersona = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${name}' 페르소나를 가져왔어요.`, run: () => removePersona(store, id) });
 
 async function undoAll(undos: Undo[]): Promise<{ ok: true } | ApiFailure> {
   const done = await Promise.all(undos.map(({ run }) => run()));
@@ -196,6 +200,12 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         const pairing = paired.ok ? { prompts: paired.data.map((prompt) => promptName(prompt.value.name)), failure: null } : { prompts: [], failure: describeFailure(paired) };
         return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.unsupported, { at: place?.kind ?? null, failure }, pairing);
       }
+      if ('persona' in parsed) {
+        const saved = await addRisuPersona(store, parsed.persona, await parsed.persona.picture());
+        if (!saved.ok) return unsaved(file.name, saved);
+        offer(undoPersona(store, saved.data.id, aliased(parsed.persona.name, parsed.persona.alias)));
+        return personaOutcome(file.name, saved.data);
+      }
       const { name } = parsed.card.card;
       const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
       if (match !== null && (await ask(name))) {
@@ -265,6 +275,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const chats = state?.results.flatMap((result) => result.kind === 'chat' ? [result.id] : []) ?? [];
   const modules = state?.results.flatMap((result) => result.kind === 'module' ? [result.id] : []) ?? [];
   const prompts = state?.results.flatMap((result) => result.kind === 'prompt' ? [result.id] : []) ?? [];
+  const personas = state?.results.flatMap((result) => result.kind === 'persona' ? [result.id] : []) ?? [];
   const go = (to: Route) => {
     setState(null);
     navigate(to);
@@ -297,7 +308,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           제작자가 RisuAI에서만 쓰도록 배포한 봇은 가져오지 마세요.
         </ConfirmDialog>
       )}
-      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈, 프롬프트, 채팅이나 Risu 백업을 가져와요</DropOverlay>}
+      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈, 프롬프트, 페르소나, 채팅이나 Risu 백업을 가져와요</DropOverlay>}
       {asking && (
         <MoveDialog
           onRead={(files) => {
@@ -348,6 +359,15 @@ export function ImportProvider({ children }: { children: ReactNode }) {
                 onClick={() => go({ kind: 'prompt', id: prompts[0]!, pane: null })}
               >
                 프롬프트 보기
+              </Button>
+            )}
+            {!state.busy && personas.length === 1 && (
+              <Button
+                variant={done.length === 1 ? 'secondary' : 'primary'}
+                icon={UserRound}
+                onClick={() => go({ kind: 'persona', id: personas[0]! })}
+              >
+                페르소나 보기
               </Button>
             )}
           </Stack>

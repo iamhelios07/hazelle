@@ -63,6 +63,16 @@ describe('importCard', () => {
     expect(ok(importCard('Mira.png', file)).avatar).toEqual({ bytes: png(software), type: 'image/png' });
   });
 
+  it('reads a Risu persona PNG, unless a card chunk is beside it, and fails one without its prompt', async () => {
+    const persona = tEXt('persona', cardText({ name: '진', personaPrompt: '여행자', note: ' 부자 ' }));
+    const read = importCard('jin_export.png', png(persona));
+    if (!read.ok || !('persona' in read)) throw new Error(`import failed: ${JSON.stringify(read)}`);
+    expect(read.persona).toMatchObject({ name: '진', alias: '부자', description: '여행자' });
+    expect(await read.persona.picture()).toEqual({ bytes: png(), type: 'image/png' });
+    expect(ok(importCard('Mira.png', png(persona, tEXt('ccv3', cardText(v3({})))))).card.name).toBe('Mira');
+    expect(importCard('jin_export.png', png(tEXt('persona', cardText({ name: '진' }))))).toEqual({ ok: false, failure: { kind: 'unreadable', detail: 'persona-incomplete' } });
+  });
+
   it('takes the icon named main from a charx', () => {
     const main = png(tEXt('Title', 'main'));
     const imported = charx({
