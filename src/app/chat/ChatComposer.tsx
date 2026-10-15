@@ -50,7 +50,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
       const mine = messages.findLast((message) => message.role === 'user');
       if (mine) {
         event.preventDefault();
-        actions.edit(mine);
+        actions.edit(mine, null);
       }
     } else if (step !== -1 && last?.role === 'assistant') {
       event.preventDefault();

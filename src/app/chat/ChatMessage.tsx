@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from '
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
-import { firstLine, shown, type Message } from '../../model/chat';
+import { firstLine, shown, translationOutdated, type Message } from '../../model/chat';
 import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { runs, type Drawing } from '../../runtime/illustrate';
@@ -16,10 +16,12 @@ import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, Story, StoryMessage, storySelection, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotsOf } from './ChatPicture';
+import { linesOf, markPart, PART_MARK, partOf } from './editPart';
 import type { ToolActions } from './toolMenu';
 import type { ChatActions } from './useChat';
+import type { Editing, EditPart } from './useMessageEdit';
 import { seenText } from './search';
 import { useReveal } from './useReveal';
 
@@ -55,7 +57,7 @@ type Props = {
   // to regenerate, edit or delete.
   opening: boolean;
   busy: boolean;
-  editing: { text: string; translation: string | null } | null;
+  editing: Editing | null;
   pinned: boolean;
   bookmarked: boolean;
   // One of the messages a memory record was made from, marked as StoryMessage's found; the collection seeks the first.
@@ -100,7 +102,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   // A translation never goes through the display, so it takes its marks here, by the same paragraphs.
   const originalShown = text === original;
   const storyText = !paragraphs.size ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraphs) : withMarks(text, paragraphs);
-  const html = useMemo(() => shownHtml(storyText, decor), [storyText, decor.bot, decor.url]);
+  const part = editing?.part ?? null;
+  const drawnText = part ? markPart(storyText, part.shown) : storyText;
+  const html = useMemo(() => shownHtml(drawnText, decor), [drawnText, decor.bot, decor.url]);
+  const story = useRef<HTMLDivElement>(null);
   const running = drawing !== null && runs(drawing);
   const page = (paragraph: number) => (picture: string | null) =>
     setPages((current) => {
@@ -139,8 +144,18 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     }
   };
 
+  // The paragraphs selected in the story, when the text drawn holds them too; the whole message otherwise.
+  const selectedPart = () => {
+    const pieces = story.current && storySelection(story.current);
+    const side: EditPart['side'] = translation && !flipped ? 'translation' : 'text';
+    const source = side === 'text' ? version.text : translation!.text;
+    const found = pieces && partOf(source, pieces);
+    const drawn = found && partOf(storyText, linesOf(source, found).split('\n'));
+    return found && drawn ? { ...found, side, shown: drawn } : null;
+  };
+
   let body = null;
-  if (editing !== null) {
+  if (editing !== null && !part) {
     body = (
       <EditBox
         value={editing.text}
@@ -221,7 +236,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             term={term}
             tone={pending ? 'faded' : 'plain'}
             cursor={live || reveal.revealing || (translatingText !== null && !flipped)}
-            inlays={inlays}
+            inlays={part ? [...inlays, { mark: PART_MARK, node: <EditBox value={part.value} onChange={actions.changePart} onKeyDown={editKeys} /> }] : inlays}
+            ref={story}
           />
         )}
         {!empty && beside && shownPictures.length > 0 && <MarginPictures anchors={anchors}>{shownPictures}</MarginPictures>}
@@ -238,18 +254,17 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       <Marker reason="translation" label={`번역하지 못했어요. ${describeTranslateFailure(untranslated)}`} action={canTranslate ? again : undefined} />
     ) : translatingText === null && !flipped && translation?.receipt?.state === 'cut' ? (
       <Marker reason="translation" label="번역 잘림" action={canTranslate ? again : undefined} />
+    ) : translatingText === null && !sentTranslated && translationOutdated(version) ? (
+      <Marker reason="translation" label="원문 수정됨" action={canTranslate ? again : undefined} />
     ) : null;
-  const translateTool = canTranslate && !sentTranslated && !empty && !failed && (
-    <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => void actions.translate(message)} />
+  const translateTool = translation ? (
+    <IconButton icon={Languages} size="xs" label={sentTranslated ? '보낸 메시지 보기' : '원문 보기'} pressed={flipped} onClick={() => actions.flipTranslation(message)} />
+  ) : (
+    canTranslate && !empty && !failed && <IconButton icon={Languages} size="xs" label="번역" disabled={translatingText !== null} onClick={() => void actions.translate(message)} />
   );
-  const flip = () => actions.flipTranslation(message);
+  const translateAgain = canTranslate && translation && !sentTranslated && <MenuItem label="다시 번역" disabled={translatingText !== null} onClick={() => void actions.translate(message)} />;
   // The language it went out in, not the setting now.
-  const mark =
-    !translation || editing !== null
-      ? undefined
-      : sentTranslated
-        ? { label: `${withRo(languageLabel(translation.sentIn!))} 보냄`, action: flipped ? '원문 보기' : '보낸 메시지 보기', onClick: flip }
-        : { label: flipped ? '원문' : '번역', action: flipped ? '번역 보기' : '원문 보기', onClick: flip };
+  const mark = !translation || editing !== null ? undefined : sentTranslated ? `${withRo(languageLabel(translation.sentIn!))} 보냄` : flipped ? '원문' : '번역';
 
   const count = message.versions.length;
   // No call writes a greeting: its versions go round.
@@ -310,22 +325,37 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       </Menu>
     ) : null;
 
-  const tools = live || message.unstored || editing !== null ? undefined : opening ? (
+  const tools = live || message.unstored ? undefined : part ? (
+    <>
+      <Button variant="ghost" size="xs" onClick={actions.cancelEdit}>
+        취소
+      </Button>
+      <Button size="xs" onClick={() => actions.saveEdit(message, false)}>
+        저장
+      </Button>
+    </>
+  ) : editing !== null ? undefined : opening ? (
     <>
       {translateTool}
       {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
       {statusTool}
+      {translateAgain && (
+        <MoreMenu of="메시지" size="xs" place="end">
+          {translateAgain}
+        </MoreMenu>
+      )}
     </>
   ) : (
     <>
       {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="xs" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}
-      {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message)} />}
+      {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message, selectedPart())} />}
       {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
       {bookmarked && <IconButton icon={Bookmark} size="xs" label={BOOKMARK} pressed onClick={() => actions.bookmark(message.id)} />}
       {!failed ? (
         <MoreMenu of="메시지" size="xs" place="end">
+          {translateAgain}
           {canIllustrate && !mine && !empty && (
             <MenuItem
               label="삽화"

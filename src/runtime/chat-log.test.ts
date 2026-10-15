@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { calls, fold, foldTree, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
+import { calls, fold, foldTree, shown, translationOutdated, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatPrint } from './cache';
@@ -281,6 +281,23 @@ describe('branchChat', () => {
     expect(memory.chapters.map(({ id, sources }) => [id, sources])).toEqual([['kept', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);
     expect(memory.state.map(({ field, value, record }) => [field, value, record])).toEqual([['mood', 'calm', 'before'], ['name', 'Jin', null], ['place', 'home', 'before']]);
     expect(memory.threads.map(({ text, opened }) => [text, opened])).toEqual([['The user’s own', null], ['A vow', 'before']]);
+  });
+});
+
+describe('editMessage', () => {
+  it('leaves the translation outdated when only the text changed, until the translation changes too', async () => {
+    const { store } = await server.account();
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: '', character: null, models: {}, note: '', prompt: crypto.randomUUID() }, projectGreetings(['하나'], [crypto.randomUUID()], 0));
+    const said = crypto.randomUUID();
+    await appendUserMessage(store, chat, { id: said, text: '안녕' });
+    await appendTranslation(store, chat, said, { text: 'Hello', receipt: null, at: 1 }, crypto.randomUUID());
+    const edit = async (text: string, translation: string) => {
+      await editMessage(store, chat, fold(store.children('entry', chat)).find((message) => message.id === said)!, text, translation);
+      return translationOutdated(shown(fold(store.children('entry', chat)).find((message) => message.id === said)!));
+    };
+    expect([await edit('안녕하세요', 'Hello'), await edit('안녕하세요', 'Hello'), await edit('안녕하세요', 'Hello there'), await edit('안녕하세요', 'Hello there')]).toEqual([true, true, false, false]);
   });
 });
 

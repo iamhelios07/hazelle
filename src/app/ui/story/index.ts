@@ -1,4 +1,4 @@
-export { READER_RESIZED, Story, type BotButton } from './Story';
+export { READER_RESIZED, Story, storySelection, type BotButton } from './Story';
 export { Failure, Marker, StoryMessage, Switcher, Waiting } from './StoryMessage';
 export { MarginPictures } from './MarginPictures';
 export { ReadingPreview, type PreviewRow } from './ReadingPreview';

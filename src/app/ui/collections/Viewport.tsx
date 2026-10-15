@@ -203,12 +203,15 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
       const scrolled = frame.scrollTop;
       const top = scrolled - offsetIn(root.current!, frame);
       const anchor = held.current === null ? -1 : keys.indexOf(held.current);
-      const crossed = reading.current?.row.dataset.key === key && reading.current.element.isConnected ? reading.current : null;
+      const crossed = reading.current?.row.dataset.key === key ? reading.current : null;
+      // A story drawn again, as when a message flips to its original, replaced what was read: the element at its place
+      // stands in for it.
+      const read = crossed && (crossed.element.isConnected ? crossed.element : at(crossed.row, crossed.path));
       // The browser cannot anchor across unmounted rows. Correct rows wholly above the reading position, and in the row
       // across it, by how far what was read moved.
       const correction = anchor >= 0 ? (index < anchor ? delta : 0)
         : position + height - delta <= top ? delta
-        : position < top && crossed ? inside(crossed) - crossed.inside : 0;
+        : position < top && crossed && read ? inside({ row: crossed.row, element: read }) - crossed.inside : 0;
       // The root takes its height before the render that sets it, so the correction is not clamped to the old one; and
       // from the position read before, so a clamp to the new one is not counted twice.
       root.current!.style.height = `${rootHeight()}px`;
@@ -269,20 +272,28 @@ function Measured({ item, revision, offset, last, memory, onMeasure, onFocus, on
 
 // inside: from the row's top, which moves with every correction and render, while the element moves in it only as
 // what is above it in the row grows.
-type Reading = { row: HTMLElement; element: Element; inside: number };
-const inside = ({ row, element }: Omit<Reading, 'inside'>) => element.getBoundingClientRect().top - row.getBoundingClientRect().top;
+// path: the element's index among its parent's children, from the row down.
+type Reading = { row: HTMLElement; element: Element; path: number[]; inside: number };
+const inside = ({ row, element }: Pick<Reading, 'row' | 'element'>) => element.getBoundingClientRect().top - row.getBoundingClientRect().top;
+const childrenOf = (parent: Element) => [...(parent.shadowRoot ?? parent).children];
+const at = (row: Element, path: number[]) => path.reduce<Element | undefined>((parent, index) => parent && childrenOf(parent)[index], row) ?? null;
 
 // The row across the top of the view and, inside it and its story's shadow root, the first element in flow reaching
 // below that line: what the reader is reading. An overlay such as the found mark spans the row and never moves.
 function across(root: HTMLElement, frame: HTMLElement): Reading | null {
   const line = frame === document.scrollingElement ? 0 : frame.getBoundingClientRect().top;
   const below = (element: Element) => element.getBoundingClientRect().bottom > line;
-  const reaching = (parent: Element) => [...(parent.shadowRoot ?? parent).children].find((child) => below(child) && !/absolute|fixed/.test(getComputedStyle(child).position));
+  const reaching = (parent: Element) => childrenOf(parent).findIndex((child) => below(child) && !/absolute|fixed/.test(getComputedStyle(child).position));
   const row = [...root.children].find(below) as HTMLElement | undefined;
   if (!row || row.getBoundingClientRect().top >= line) return null;
   let element: Element = row;
-  for (let next = reaching(element); next; next = next.getBoundingClientRect().top < line ? reaching(next) : undefined) element = next;
-  return { row, element, inside: inside({ row, element }) };
+  const path: number[] = [];
+  for (let index = reaching(element); index !== -1; ) {
+    element = childrenOf(element)[index]!;
+    path.push(index);
+    index = element.getBoundingClientRect().top < line ? reaching(element) : -1;
+  }
+  return { row, element, path, inside: inside({ row, element }) };
 }
 
 const MOVES = ['wheel', 'touchstart', 'pointerdown', 'keydown'];

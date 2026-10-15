@@ -2,17 +2,24 @@ import { useState } from 'react';
 import { shown } from '../../model/chat';
 import { deleteMessage, editShown, undeleteMessage } from '../../runtime/message-acts';
 import type { Shown } from '../../runtime/talk';
+import { linesOf, withPart, type Part } from './editPart';
 import { useSession } from '../session';
 import { useToast } from '../toast';
+
+// A part: the lines of the side the message shows, edited where they stand; shown is where they are drawn.
+export type EditPart = Part & { side: 'text' | 'translation'; shown: Part; value: string };
+export type Editing = { id: string; text: string; translation: string | null; part?: EditPart };
 
 export function useMessageEdit(id: string | null, messages: Shown[], regenerate: (message: Shown) => void) {
   const session = useSession();
   const toast = useToast();
-  const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
 
   function saveEdit(message: Shown, andReply: boolean) {
     if (!id || !editing) return;
-    void editShown(session, id, message, editing.text, editing.translation).then((saved) => saved.ok || toast.failed(saved));
+    const { text, translation, part } = editing;
+    const [nextText, nextTranslation] = !part ? [text, translation] : part.side === 'text' ? [withPart(text, part, part.value), translation] : [text, withPart(translation!, part, part.value)];
+    void editShown(session, id, message, nextText, nextTranslation).then((saved) => saved.ok || toast.failed(saved));
     setEditing(null);
     const next = messages[messages.findIndex(({ id: each }) => each === message.id) + 1];
     if (andReply && next?.role === 'assistant') regenerate(next);
@@ -27,11 +34,13 @@ export function useMessageEdit(id: string | null, messages: Shown[], regenerate:
   return {
     editing,
     actions: {
-      edit: (message: Shown) => {
+      edit: (message: Shown, part: Omit<EditPart, 'value'> | null) => {
         const version = shown(message);
-        setEditing({ id: message.id, text: version.text, translation: version.translation?.text ?? null });
+        const [text, translation] = [version.text, version.translation?.text ?? null];
+        setEditing({ id: message.id, text, translation, ...(part && { part: { ...part, value: linesOf(part.side === 'text' ? text : translation!, part) } }) });
       },
       changeEdit: (change: { text: string } | { translation: string }) => setEditing((current) => current && { ...current, ...change }),
+      changePart: (value: string) => setEditing((current) => current?.part ? { ...current, part: { ...current.part, value } } : current),
       cancelEdit: () => setEditing(null),
       saveEdit,
       remove,

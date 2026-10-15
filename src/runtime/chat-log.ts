@@ -1,7 +1,7 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
-import { CAST_MAX, foldTree, shown, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
+import { CAST_MAX, foldTree, shown, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import type { Illustration } from '../model/illustration';
 import { live, type Asset, type Lore } from '../model/library';
@@ -381,7 +381,8 @@ export const appendCost = (store: ObjectStore, chat: string, { id, replyId }: Re
 export function editMessage(store: ObjectStore, chat: string, message: Message, text: string, translation: string | null) {
   const current = shown(message);
   const at = Date.now();
-  const kept = translation?.trim() && current.translation && { translation: { ...current.translation, text: translation, at } };
+  const outdated = translation === current.translation?.text && (text !== current.text || translationOutdated(current));
+  const kept = translation?.trim() && current.translation && { translation: { ...current.translation, text: translation, at: outdated ? current.translation.at : at } };
   return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...(current.greeting !== undefined && { greeting: current.greeting }), ...kept });
 }
 

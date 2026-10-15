@@ -16,7 +16,8 @@ type Props = {
   name: string;
   time: string;
   mine: boolean;
-  mark?: { label: string; action: string; onClick: () => void };
+  // Which text the message shows, such as 번역; the tools switch it.
+  mark?: string;
   // Short words tools put on the message, in one look whatever the tool; two show, and the rest count as +N.
   badges?: string[];
   children: ReactNode;
@@ -60,11 +61,7 @@ export function StoryMessage({ avatar, name, time, mine, mark, badges = [], chil
       <div className={styles.main}>
         <div className={styles.head}>
           <span className={mine ? styles.me : styles.name}>{name}</span>
-          {mark && (
-            <button type="button" className={styles.mark} aria-label={`${mark.label} · ${mark.action}`} title={mark.action} onClick={mark.onClick}>
-              {mark.label}
-            </button>
-          )}
+          {mark && <span className={styles.mark}>{mark}</span>}
           {badges.slice(0, BADGES_SHOWN).map((badge, index) => <span key={index} className={styles.badge}>{badge}</span>)}
           {badges.length > BADGES_SHOWN && <span className={styles.badge} title={badges.slice(BADGES_SHOWN).join(' · ')}>{`+${badges.length - BADGES_SHOWN}`}</span>}
           <span className={styles.time}>{time}</span>

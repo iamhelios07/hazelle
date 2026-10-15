@@ -46,7 +46,7 @@ export type Rung = { from: number; count: number };
 // The one rule of what a paragraph is, which the scene writer reads numbered and the chat places pictures by: each
 // line of the stored text with words outside its tags, since roleplay prose often breaks paragraphs with a single
 // newline. A line of tags alone (a bot's <GT-SEP/>) shows nothing to put a picture after.
-const isParagraph = (line: string) => line.replace(/<[^>]*>/g, '').trim() !== '';
+export const isParagraph = (line: string) => line.replace(/<[^>]*>/g, '').trim() !== '';
 export const paragraphsOf = (text: string): string[] => text.split('\n').filter(isParagraph).map((line) => line.trim());
 
 // A reply's length is its paragraphs' characters without their tags, so a bot's markup never adds pictures. Each

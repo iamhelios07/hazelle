@@ -506,6 +506,9 @@ export const foldTree = (entries: Stored<'entry'>[]) => folded(entries).tree();
 
 export const shown = (message: Message): Version => message.versions[message.selected]!;
 
+// An edit that changed the text and left the translation keeps the translation's time (runtime/chat-log editMessage).
+export const translationOutdated = (version: Version) => version.edited && version.translation !== undefined && version.translation.at < version.at;
+
 export const calls = (receipt: Receipt): Receipt[] => [...(receipt.continues ? calls(receipt.continues) : []), receipt];
 
 const lines = (text: string) =>

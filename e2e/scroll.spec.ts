@@ -49,3 +49,27 @@ for (const reply of ['stay', 'follow']) {
     expect(errors).toEqual([]);
   });
 }
+
+test('a story drawn again, as a message flipped to its original, keeps the paragraph at the top of the view in place', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto(`${url}e2e/fixtures/redraw.html`);
+  const frame = page.locator('main > div').filter({ has: page.locator('[data-key]') });
+  await page.locator('[data-key="long"]').waitFor();
+  const place = () => frame.evaluate((element) => {
+    const paragraph = element.querySelector('[data-key="long"] div[data-buttons]')!.shadowRoot!.querySelector('[data-i="20"]')!;
+    return paragraph.getBoundingClientRect().top - element.getBoundingClientRect().top;
+  });
+  const frames = () => page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  await frame.evaluate((element) => {
+    const paragraph = element.querySelector('[data-key="long"] div[data-buttons]')!.shadowRoot!.querySelector('[data-i="20"]')!;
+    element.scrollTop += paragraph.getBoundingClientRect().top - element.getBoundingClientRect().top - 10;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await frames();
+  const before = await place();
+  for (let round = 0; round < 2; round++) {
+    await page.getByRole('button', { name: 'Flip', exact: true }).click();
+    await frames();
+    expect(Math.abs((await place()) - before)).toBeLessThanOrEqual(1);
+  }
+});

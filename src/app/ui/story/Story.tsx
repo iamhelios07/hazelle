@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify';
-import { useEffect, useLayoutEffect, useReducer, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, type ReactNode, type Ref } from 'react';
 import { useRowState } from '../collections/row-memory';
 import { scrollbarKind } from '../foundation/scrollbar';
 import { useVeil, type Veil } from '../foundation/veil';
@@ -26,6 +26,8 @@ type Props = {
   whole?: boolean;
   // The message's 삽화, each put where its mark stands in html (inlaid), or at the end for a mark null.
   inlays?: { mark: string | null; node: ReactNode }[];
+  // The element storySelection reads.
+  ref?: Ref<HTMLDivElement>;
 };
 
 const NAMED = '[risu-trigger], [risu-btn]';
@@ -272,8 +274,30 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
   return fragment;
 }
 
+const BLOCK = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th, div';
+
+// What is selected in a story: the selected text of its first block and, when it runs on, of its last; null when the
+// selection begins or ends outside it. By block, since a range's text runs blocks together.
+export function storySelection(story: HTMLElement): string[] | null {
+  const root = story.firstElementChild?.shadowRoot;
+  const selection = document.getSelection();
+  if (!root || !selection || !('getComposedRanges' in selection)) return null;
+  const [range] = selection.getComposedRanges({ shadowRoots: [root] });
+  if (!range || range.collapsed || !root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
+  const block = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest(BLOCK) ?? root;
+  const text = (start: Node, startOffset: number, end: Node, endOffset: number) => {
+    const part = document.createRange();
+    part.setStart(start, startOffset);
+    part.setEnd(end, endOffset);
+    return part.toString();
+  };
+  const [first, last] = [block(range.startContainer), block(range.endContainer)];
+  if (first === last) return [text(range.startContainer, range.startOffset, range.endContainer, range.endOffset)];
+  return [text(range.startContainer, range.startOffset, first, first.childNodes.length), text(last, 0, range.endContainer, range.endOffset)];
+}
+
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
-export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [] }: Props) {
+export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [], ref }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
   const veil = useVeil();
   // A veil tapped open or shut changes only veil.revealed, which no render sees.
@@ -365,7 +389,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
   }, [onPress, pictures, veil]);
 
   return (
-    <div className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
+    <div ref={ref} className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
       <div ref={host} data-buttons={buttons} data-scrollbars={scrollbarKind()}>
         {cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}
         {inlays.map(({ node }, index) => (

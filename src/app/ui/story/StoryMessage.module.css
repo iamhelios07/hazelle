@@ -96,9 +96,6 @@
   color: var(--color-text-muted);
   font-size: var(--text-xs);
   white-space: nowrap;
-  transition:
-    background-color var(--duration-fast),
-    color var(--duration-fast);
 }
 
 .badge {
@@ -222,11 +219,6 @@
 @media (hover: hover) {
   .message:hover .time {
     opacity: 1;
-  }
-
-  .mark:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-text);
   }
 }
 
