@@ -263,6 +263,24 @@ describe('readBackup', () => {
     expect(left.ok && left.backup.catalog.loreBudget).toBeNull();
   });
 
+  it("counts a lore scan depth changed from Risu's 5, which this app does not take", async () => {
+    const depth = async (loreBookDepth: number) => {
+      const result = await readBackup([bin([['database.risudat', database({ ...db, loreBookDepth })]])]);
+      return result.ok && result.backup.catalog.unsupported.some(({ kind }) => kind === 'lore-depth');
+    };
+    expect([await depth(10), await depth(5)]).toEqual([true, false]);
+  });
+
+  it("carries a character's 번역가의 노트 and counts its 출력 이스케이프", async () => {
+    const noted = { ...mira, translatorNote: 'Master -> 주인님\n', escapeOutput: true };
+    const result = await readBackup([backupFile(database({ ...db, characters: db.characters.map((char) => (char === mira ? noted : char)) }))]);
+    if (!result.ok) throw new Error(result.failure.kind);
+    const [card, plain] = await Promise.all([result.backup.character(1), (await read()).character(1)]);
+    expect(card.own).toEqual({ character: { translatorNote: 'Master -> 주인님\n' }, likeness: null });
+    expect(card.missed).toContainEqual({ kind: 'escape-output', count: 1 });
+    expect([plain.own, plain.missed.some(({ kind }) => kind === 'escape-output')]).toEqual([null, false]);
+  });
+
   it('carries the toggle values by key, and no other global variable', async () => {
     expect((await read()).catalog.toggles).toEqual({ tagger: '1', style: '2' });
   });

@@ -76,9 +76,12 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
     return [risuChat(chat, note, fmIndex, missed)];
   });
   add(missed, 'chat-folder', list(char.chatFolders).length);
+  if (char.escapeOutput === true) add(missed, 'escape-output');
+  const note = text(char.translatorNote);
 
   return {
     ...imported,
+    own: note.trim() ? { character: { translatorNote: note }, likeness: null } : null,
     id: text(char.chaId),
     avatar: image ? () => picture(image) : () => Promise.resolve(null),
     folder,

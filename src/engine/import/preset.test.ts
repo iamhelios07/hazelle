@@ -25,6 +25,20 @@ it('keeps a description placed twice, as a preset that moves it by a toggle does
   expect(read.unsupported).toEqual([{ kind: 'repeated-slot', slot: 'persona', count: 1 }, { kind: 'settings', count: 1 }]);
 });
 
+it('counts the prompt settings this app has no setting for, each only off its Risu default', () => {
+  const kept = { type: 'chat', rangeStart: 0, rangeEnd: 'end', chatAsOriginalOnSystem: true };
+  const settings = (promptSettings: object, template: object[] = []) => {
+    const read = convertPreset({ name: 'p', promptTemplate: template, promptSettings });
+    if (!read.ok) throw new Error(read.failure.kind);
+    return read.unsupported.find(({ kind }) => kind === 'prompt-settings')?.count ?? 0;
+  };
+  const defaults = { assistantPrefill: '', postEndInnerFormat: '', sendChatAsSystem: false, sendName: false, utilOverride: false, customChainOfThought: false, maxThoughtTagDepth: -1 };
+  expect(settings(defaults)).toBe(0);
+  expect(settings({ ...defaults, customChainOfThought: true, trimStartNewChat: true, assistantPrefill: 'x' })).toBe(0);
+  expect(settings({ ...defaults, postEndInnerFormat: 'end', sendName: true, utilOverride: true, maxThoughtTagDepth: 2 })).toBe(4);
+  expect([settings({ sendChatAsSystem: true }, [kept]), settings({ sendChatAsSystem: true }, [kept, { ...kept, chatAsOriginalOnSystem: false }])]).toEqual([0, 1]);
+});
+
 it('places a persona, description, memory or author note item that names no role as a system slot', () => {
   const template = ['persona', 'description', 'memory', 'authornote'].map((type) => ({ type, innerFormat: '' }));
   const read = convertPreset({ name: 'p', promptTemplate: [...template, { type: 'persona', role: 'narrator' }] });

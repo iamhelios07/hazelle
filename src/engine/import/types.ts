@@ -74,7 +74,8 @@ export type Imported = {
   // The bot's own pictures, read one at a time when they are stored; read answers null for one the file lacks.
   assets: { name: string; read: () => Promise<Uint8Array<ArrayBuffer> | null> }[];
   report: ImportReport;
-  // What a Hazelle charx carries beyond Risu's fields (engine/import/hazelle); null for any other file.
+  // What a Hazelle charx carries beyond Risu's fields (engine/import/hazelle); null for any other file. A moved Risu
+  // character's own 번역가의 노트, which no card carries, rides here too (engine/import/risu-character).
   own: HazelleOwn | null;
   // The modules a Hazelle charx was exported with, on for the character.
   bundled: BundledModule[];
@@ -199,11 +200,13 @@ export const MOVE_UNSUPPORTED_KINDS = [
   'hidden-message',
   'cold-missing',
   'missing-picture',
+  'escape-output',
+  'lore-depth',
 ] as const;
 export type MoveUnsupportedKind = (typeof MOVE_UNSUPPORTED_KINDS)[number];
 export type MoveUnsupported = { kind: MoveUnsupportedKind; count: number };
 
-export type RisuCharacter = Omit<Imported, 'avatar' | 'own' | 'bundled'> & {
+export type RisuCharacter = Omit<Imported, 'avatar' | 'bundled'> & {
   // Risu's chaId.
   id: string;
   avatar: () => Promise<Picture | null>;
