@@ -6,7 +6,7 @@ import { chatLorebook } from '../import/convert';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
 import { add, cbs, read, text, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
-import { UNSET, type Host, type ModelMessage, type Event, type Outcome, type ScriptError, type Failure, type EditStage, type ScriptUnit } from '../script-api';
+import { listens, UNSET, type Host, type ModelMessage, type Event, type Outcome, type ScriptError, type Failure, type EditStage, type ScriptUnit } from '../script-api';
 
 // name is for error messages only.
 export type Script = Pick<Extract<ScriptUnit, { kind: 'lua' }>, 'kind' | 'name' | 'code' | 'owner'>;
@@ -82,7 +82,7 @@ export class Lua {
       const fire = async (event: Event, depth: number) => {
         for (const script of triggers) {
           if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu') continue;
-          if (script.kind === 'blocks' && (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind)) continue;
+          if (!listens(script, event)) continue;
           const outer = active;
           const entry: HookLog = { stage: event.kind === 'edit' ? event.stage : event.kind === 'call' ? event.name : event.kind === 'button' ? 'button' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`, pack: script.owner, script: script.name, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled: false, truncated: false };
           entry.stage = clipped(entry, entry.stage);

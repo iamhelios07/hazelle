@@ -10,6 +10,7 @@ import { prepareChat } from '../connectors/preparation';
 import { batchLane, resolveConnection, resolveModel } from '../connectors/registry';
 import { providerFit, type TokenSnapshot } from './token-calibration';
 import type { Assembled, PromptInput } from '../engine/pipeline';
+import { listens } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
@@ -184,10 +185,10 @@ export function afterEnter({ store }: Reader, chat: string, turn: TurnContext): 
     if (units.length) result.push({ kind: 'hook', stage, packs: [...new Set(units.map(({ owner }) => owner.id))] });
   };
   if (turn.said) {
-    hook('onInput', triggers.filter((trigger) => trigger.kind === 'lua' || trigger.on === 'input'));
+    hook('onInput', triggers.filter((trigger) => listens(trigger, { kind: 'input' })));
     hook('editInput', scripts);
   }
-  hook('onStart', triggers.filter((trigger) => trigger.kind === 'lua' || trigger.on === 'start'));
+  hook('onStart', triggers.filter((trigger) => listens(trigger, { kind: 'start' })));
   const tools = toolsOf(store, turn.chat);
   if (tools.length) result.push({ kind: 'tools', modules: tools.map(({ module }) => module) });
   if (turn.memory?.kind === 'built-in') {

@@ -45,6 +45,11 @@ export type Event =
   | { kind: 'call'; name: string; id: string }
   | { kind: 'edit'; stage: EditStage; value: unknown; meta: Record<string, unknown> };
 
+// Every Lua script hears every event and answers what it holds a function for; a block trigger runs for its own
+// event, and for a call by its name whatever its event.
+export const listens = (trigger: { kind: 'lua' } | Pick<Extract<ScriptUnit, { kind: 'blocks' }>, 'kind' | 'name' | 'on'>, event: Event) =>
+  trigger.kind === 'lua' || (event.kind === 'call' ? trigger.name === event.name : (event.kind === 'start' || event.kind === 'input' || event.kind === 'output') && trigger.on === event.kind);
+
 // runaway: the CBS the script evaluated ran away (cbs/evaluate Runaway), which the app words as its other runaway
 // notices; the message is only what the script itself sees.
 export type Failure = { message: string } | { runaway: true };
