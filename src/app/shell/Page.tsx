@@ -145,8 +145,8 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
   return <ScreenLoad>{detail ?? screen(list)}</ScreenLoad>;
 }
 
-// API 연결 opens on its connection: the 대화 모델's, else the first. The pane stays empty only while there is none. Replaced
-// before paint, so the empty pane never shows and 뒤로 does not land on it again.
+// API 연결 opens on its connection: the 대화 모델's, else the first, replaced before paint so 뒤로 does not land here again.
+// With none, the list's own empty state speaks, and nothing stands under it.
 function Landing() {
   const { models: { main } } = useSettings();
   const connections = useConnections();
@@ -154,7 +154,7 @@ function Landing() {
     const id = (main && findStarred(main, connections) ? main.connection : undefined) ?? connections[0]?.id;
     if (id) navigate({ kind: 'connection', id }, { replace: true });
   }, [main, connections]);
-  return <Empty variant="pane">연결을 선택해 주세요.</Empty>;
+  return null;
 }
 
 function HomePage() {

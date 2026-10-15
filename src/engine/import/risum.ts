@@ -61,12 +61,34 @@ export function readRisum(bytes: Uint8Array): { module: Record<string, unknown>;
   return { module: main.module, assets };
 }
 
-// A .risum without pictures, laid out as exportModuleLegacy writes one, its JSON spaced as Risu's is.
-export function writeRisum(module: Record<string, unknown>): Uint8Array<ArrayBuffer> {
+// A .risum goes out in three parts, as exportModuleLegacy writes one: the head (magic, version, length, the JSON spaced
+// as Risu's is), one block per entry of module.assets, and the end. Risu fails the whole import on a block no entry
+// names, so the caller writes exactly as many blocks as module.assets lists, in its order. Each block is made on its
+// own, so a module of hundreds of megabytes never sits whole in memory.
+export function risumHead(module: Record<string, unknown>): Uint8Array<ArrayBuffer> {
   const main = pack(new TextEncoder().encode(JSON.stringify({ module, type: 'risuModule' }, null, 2)));
-  const bytes = new Uint8Array(HEADER + main.length + 1);
+  const bytes = new Uint8Array(HEADER + main.length);
   bytes.set([MAGIC, VERSION]);
   new DataView(bytes.buffer).setUint32(2, main.length, true);
   bytes.set(main, HEADER);
+  return bytes;
+}
+
+export function risumBlock(file: Uint8Array): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(5 + file.length);
+  bytes[0] = ASSET;
+  new DataView(bytes.buffer).setUint32(1, file.length, true);
+  bytes.set(pack(file), 5);
+  return bytes;
+}
+
+export const RISUM_END = Uint8Array.of(0);
+
+// A .risum without pictures, as a charx's module.risum is.
+export function writeRisum(module: Record<string, unknown>): Uint8Array<ArrayBuffer> {
+  const head = risumHead(module);
+  const bytes = new Uint8Array(head.length + RISUM_END.length);
+  bytes.set(head);
+  bytes.set(RISUM_END, head.length);
   return bytes;
 }

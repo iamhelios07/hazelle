@@ -6,7 +6,8 @@ import { exportCharacter } from '../../runtime/card-file';
 import { copyCharacter, createCharacter, setDeleted } from '../../runtime/characters';
 import { markDeleted, purgeNow } from '../../runtime/removal';
 import { newOf } from '../common/acts';
-import { downloadOutput, fileNamed } from '../common/download';
+import { fileNamed } from '../common/download';
+import { runExport } from '../common/exporting';
 import { BIN_KEEPS, moduleName, promptName, TOOL } from '../common/words';
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
@@ -59,23 +60,14 @@ export function useCharacterActions() {
     navigate({ kind: 'edit', character: copied.data });
   }
 
-  // The save picker opens before any await, inside the press that asked for it.
   function exportFile({ id, character }: Shelf) {
-    const destination = downloadOutput(fileNamed(character.card.name, '캐릭터', 'charx'));
-    setBusy({ id, label: '내보내는 중' });
-    void (async () => {
-      try {
-        const made = await exportCharacter(store, files, id, await destination, ({ done, total }) => setBusy({ id, label: `내보내는 중 · ${done} / ${total}` }));
-        if (made.ok) toast.show(`'${character.card.name}' 캐릭터를 내보냈어요.`, made.data.tools ? { detail: `${TOOL}가 든 모듈 ${made.data.tools}개는 빼고 내보냈어요.` } : undefined);
-        else if (made.error === 'export-write') toast.error('파일을 저장하지 못했어요.', { detail: '저장 공간을 확인한 뒤 다시 시도해 주세요.' });
-        else if (made.error === 'unreadable') toast.error('내보내지 못했어요.', { detail: '열리지 않는 이미지가 있어요.' });
-        else toast.failed(made, '내보내지 못했어요.');
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('파일을 저장하지 못했어요.');
-      } finally {
-        setBusy(null);
-      }
-    })();
+    runExport(
+      toast,
+      fileNamed(character.card.name, '캐릭터', 'charx'),
+      (output, progress) => exportCharacter(store, files, id, output, progress),
+      (label) => setBusy(label === null ? null : { id, label }),
+      ({ tools }) => toast.show(`'${character.card.name}' 캐릭터를 내보냈어요.`, tools ? { detail: `${TOOL}가 든 모듈 ${tools}개는 빼고 내보냈어요.` } : undefined),
+    );
   }
 
   function remove(shelf: Shelf) {
