@@ -2,12 +2,10 @@ import { retrievalRoom } from '../../engine/retrieval';
 import type { MemorySettings } from '../../model/memory';
 import { defaultMemory } from '../../runtime/memory-read';
 import { setDefaultMemory } from '../../runtime/memory';
-import { MemoryFields } from '../common/MemoryFields';
+import { MemoryFields, MemorySplit } from '../common/MemoryFields';
 import { count } from '../common/typedNumber';
 import { useAutosave } from '../common/useAutosave';
-import { MODEL_ROLES } from '../common/words';
 import { useSettings, useStore } from '../session';
-import { Breakdown } from '../ui';
 
 const amount = (tokens: number) => `${count(tokens)} 토큰`;
 
@@ -18,19 +16,18 @@ export function MemoryDefaults() {
   const save = useAutosave<MemorySettings>('memory-defaults', (patch) => setDefaultMemory(store, patch));
   const value = { ...defaultMemory(store), ...save.unsaved };
   const found = retrievalRoom(value.budget);
-  const sum = value.budget + found + value.window;
+  const sum = value.budget + found + value.batch + value.window;
   return (
     <MemoryFields value={value} onChange={save.change} help="새 채팅이 기억을 쓸지예요. 채팅마다 장기 기억 패널에서 바꿀 수 있어요.">
       {/* Off, a request fills no memory slot, so this split is not what it sends. */}
       {value.on && (
-        <Breakdown
+        <MemorySplit
           total={{ label: '요청마다 보내는 기록과 대화', value: `최대 ${amount(sum)}` }}
-          shares={[value.budget / sum, found / sum, value.window / sum]}
-          parts={[
-            { label: '기록 최대 분량', value: amount(value.budget), mark: 'accent' },
-            { label: `${MODEL_ROLES.embed}로 찾는 기록`, value: `최대 ${amount(found)}`, mark: 'outline' },
-            { label: '원문으로 보낼 최근 대화', value: amount(value.window), mark: 'plain' },
-          ]}
+          whole={sum}
+          records={{ tokens: value.budget, value: `최대 ${amount(value.budget)}` }}
+          found={{ tokens: found, value: `최대 ${amount(found)}` }}
+          waiting={{ tokens: value.batch, value: `최대 ${amount(value.batch)}` }}
+          recent={{ tokens: value.window, value: amount(value.window) }}
         />
       )}
     </MemoryFields>

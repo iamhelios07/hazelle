@@ -357,13 +357,22 @@ export function windowStart(tokens: number[], window: number): number {
   return at;
 }
 
+const summed = (counts: number[]) => counts.reduce((sum, count) => sum + count, 0);
+
+// The messages a request sends as written, past those memory covers (covered): the ones before the window, which wait
+// for the next summary (from covered to end), and the window's. A record can reach into the window once the window
+// grows, so the window's sent part starts at covered then. waiting and recent count tokens.
+export function rawParts(tokens: number[], covered: number, window: number): { end: number; waiting: number; recent: number } {
+  const end = Math.max(windowStart(tokens, window), covered);
+  return { end, waiting: summed(tokens.slice(covered, end)), recent: summed(tokens.slice(end)) };
+}
+
 // The messages the next summary reads, from the first one memory does not cover, never into the window: about batch
 // tokens of them (one whole message at least) once those outside the window reach batch, or earlier the ones the next
 // request drops (dropped). null: nothing to summarize yet.
 export function nextSpan(tokens: number[], covered: number, { window, batch }: { window: number; batch: number }, dropped: number): { from: number; to: number } | null {
-  const end = windowStart(tokens, window);
-  if (end <= covered) return null;
-  const waiting = tokens.slice(covered, end).reduce((sum, count) => sum + count, 0);
+  const { end, waiting } = rawParts(tokens, covered, window);
+  if (end === covered) return null;
   if (waiting < batch && dropped === 0) return null;
   let to = covered + 1;
   let sum = tokens[covered]!;

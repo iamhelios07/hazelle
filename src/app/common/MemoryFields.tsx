@@ -3,7 +3,7 @@ import type { MemorySettings } from '../../model/memory';
 import { typedText } from './typed';
 import { readTyped } from './typedNumber';
 import { MODEL_ROLES } from './words';
-import { Disclosure, NumberInput, SettingGroup, SettingRow, Switch } from '../ui';
+import { Breakdown, Disclosure, NumberInput, SettingGroup, SettingRow, Switch } from '../ui';
 
 type Count = 'budget' | 'window' | 'batch';
 
@@ -19,6 +19,21 @@ const readCount = (draft: string) => {
   const typed = readTyped(draft, true);
   return typed.ok && typed.value >= 1 ? typed.value : null;
 };
+
+type Part = { tokens: number; value: string };
+
+// The chat part of a request, in the order the chat reads: records, the ones an embedding model finds, the messages
+// waiting for the next summary, the window. found: a chat knows it only once a request is made. whole: what the bar
+// stands for, each part's share taken of it.
+export function MemorySplit({ total, whole, records, found, waiting, recent }: { total?: { label: string; value: string }; whole: number; records: Part; found?: Part; waiting: Part; recent: Part }) {
+  const parts = [
+    { ...records, label: '기록', mark: 'accent' as const },
+    ...(found ? [{ ...found, label: `${MODEL_ROLES.embed}로 찾는 기록`, mark: 'outline' as const }] : []),
+    { ...waiting, label: '정리를 기다리는 대화', mark: 'striped' as const },
+    { ...recent, label: COUNTS.window.label, mark: 'plain' as const },
+  ];
+  return <Breakdown total={total} shares={parts.map((part) => part.tokens / whole)} parts={parts.map(({ label, value, mark }) => ({ label, value, mark }))} />;
+}
 
 const MEMORY_HELP = '오래된 대화를 기록으로 정리해서 모델에게 보내요.';
 
