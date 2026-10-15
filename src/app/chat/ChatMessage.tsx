@@ -208,7 +208,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     );
   }
 
-  const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => actions.translate(message) };
+  const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => void actions.translate(message) };
   const translationMark =
     pending ? (
       <Marker reason="translation" label="번역 기다리는 중" />
@@ -218,7 +218,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       <Marker reason="translation" label="번역 잘림" action={again} />
     ) : null;
   const translateTool = !sentTranslated && !empty && !failed && (
-    <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => actions.translate(message)} />
+    <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => void actions.translate(message)} />
   );
   const flip = () => actions.flipTranslation(message);
   // The language it went out in, not the setting now.

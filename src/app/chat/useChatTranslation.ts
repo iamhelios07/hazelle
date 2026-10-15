@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { shown, type Chat, type TranslateSwitches } from '../../model/chat';
 import { setOwnTranslate, setTranslate, type TranslateSetup } from '../../runtime/characters';
 import { translationInput } from '../../runtime/chat-context';
 import type { Shown } from '../../runtime/talk';
-import { translatorOf } from '../../runtime/translate';
+import { translatorOf, type TranslatorFailure } from '../../runtime/translate';
 import { languageLabel } from '../common/languages';
 import { useSession, useTranslating } from '../session';
 import { useToast } from '../toast';
@@ -22,8 +22,18 @@ export function useChatTranslation(chatId: string, chat: Chat, messages: Shown[]
   // 응답 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
 
-  function translateMessage(message: Shown) {
-    translator.translate(chatId, shown(message), translationInput(session, chatId, chat, messages, { kind: 'message', index: messages.indexOf(message) }));
+  // A batch (ChatExport) goes on across renders: each message in it reads the chat as it is by then, the
+  // translations landed before it among its context.
+  const latest = useRef({ chat, messages });
+  latest.current = { chat, messages };
+
+  // Answers why it did not translate, once it has settled.
+  async function translateMessage(message: Shown): Promise<TranslatorFailure | null> {
+    const { chat, messages } = latest.current;
+    const index = messages.findIndex(({ id }) => id === message.id);
+    const version = shown(messages[index]!);
+    await translator.translate(chatId, version, translationInput(session, chatId, chat, messages, { kind: 'message', index }));
+    return translator.snapshot().failed.get(version.id) ?? null;
   }
 
   function flipTranslation(message: Shown) {

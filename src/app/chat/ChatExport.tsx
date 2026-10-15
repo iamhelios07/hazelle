@@ -1,19 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { pictureRef } from '../../engine/assets';
 import type { ChatItem } from '../../model/chat';
 import { assetDataUrls } from '../../runtime/assets';
 import { chatFile } from '../../runtime/chat-file';
+import type { Shown } from '../../runtime/talk';
+import type { TranslatorFailure } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
 import { download, fileNamed } from '../common/download';
+import { describeTranslateFailure } from '../common/failure';
+import { languageLabel, withRo } from '../common/languages';
 import { sizeText } from '../common/size';
 import { useCopyHtml } from '../common/useCopy';
-import { ARCA_LOG, CHAT_FILE, EXPORT } from '../common/words';
+import { ARCA_LOG, CHAT_FILE, EXPORT, STOP } from '../common/words';
 import { useDisplay } from '../display';
 import { useFiles, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Progress, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
 import type { speakers } from './ChatLog';
-import { logDraft, resolveLog, type LogChoices, type LogText } from './exportLog';
+import { logDraft, resolveLog, untranslated, type LogChoices, type LogText } from './exportLog';
 import type { OpenChat } from './useChat';
 
 // A chat up to SHORT messages goes whole by default; a longer one from its last LATEST.
@@ -31,10 +35,13 @@ type Props = Pick<OpenChat, 'messages' | 'view' | 'placed' | 'pictures' | 'flipp
   bot: boolean;
   characterName: string | null;
   names: ReturnType<typeof speakers>;
+  replyLanguage: string;
+  // Saves the translation to the chat, as the message's own 번역 tool does.
+  onTranslate: (message: Shown) => Promise<TranslatorFailure | null>;
   onClose: () => void;
 };
 
-export function ChatExport({ item, messages, view, placed, pictures, flipped, busy, bot, characterName, names, onClose }: Props) {
+export function ChatExport({ item, messages, view, placed, pictures, flipped, busy, bot, characterName, names, replyLanguage, onTranslate, onClose }: Props) {
   const store = useStore();
   const files = useFiles();
   const toast = useToast();
@@ -48,6 +55,39 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
   const waiting = busy ? '응답 중' : view.pass ? '채팅을 불러오는 중' : null;
   const translated = messages.some((message) => message.versions.some((version) => version.translation));
   const change = (next: Partial<LogChoices>) => setChoices({ ...choices, ...next });
+  const missing = choices.text === 'original' || waiting ? [] : untranslated(messages, view, choices);
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
+  const [unbatched, setUnbatched] = useState<TranslatorFailure | null>(null);
+  // A batch ends with its dialog, after the message being translated.
+  const stopping = useRef(false);
+  useEffect(
+    () => () => {
+      stopping.current = true;
+    },
+    [],
+  );
+
+  // One at a time, so each reads the ones before it as translated; the first failure ends it, since the next ones
+  // would mostly fail the same way.
+  async function translateMissing() {
+    const queue = missing;
+    stopping.current = false;
+    setUnbatched(null);
+    setBatch({ done: 0, total: queue.length });
+    try {
+      for (const [at, message] of queue.entries()) {
+        if (stopping.current) break;
+        const failure = await onTranslate(message);
+        if (failure) {
+          setUnbatched(failure);
+          break;
+        }
+        setBatch({ done: at + 1, total: queue.length });
+      }
+    } finally {
+      setBatch(null);
+    }
+  }
 
   useEffect(() => {
     setPrepared(null);
@@ -106,6 +146,24 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
             <SettingRow label="처음" control={<NumberInput label="처음" unit="번째" value={range.from} invalid={!typed('from')} onChange={(text) => typeRange('from', text)} />} />
             <SettingRow label="끝" note={`메시지 ${messages.length}개`} control={<NumberInput label="끝" unit="번째" value={range.to} invalid={!typed('to')} onChange={(text) => typeRange('to', text)} />} />
             {translated && <SettingRow label="메시지" control={<ChoiceGroup layout="segmented" label="메시지" options={TEXTS} value={choices.text} onChange={(text) => change({ text })} />} />}
+            {(batch || missing.length > 0) && (
+              <SettingRow
+                label="번역 없는 메시지"
+                note={batch ? `${batch.done}/${batch.total}개 번역함` : `${missing.length}개`}
+                control={
+                  batch ? (
+                    <Button variant="secondary" size="sm" onClick={() => (stopping.current = true)}>
+                      {STOP}
+                    </Button>
+                  ) : (
+                    <Button variant="secondary" size="sm" onClick={() => void translateMissing()}>
+                      {`${withRo(languageLabel(replyLanguage))} 번역`}
+                    </Button>
+                  )
+                }
+              />
+            )}
+            {unbatched && <Callout tone="warn">{`번역하지 못했어요. ${describeTranslateFailure(unbatched)}`}</Callout>}
             <SettingRow label="이미지 포함" control={<Switch label="이미지 포함" checked={choices.pictures} onChange={(pictures) => change({ pictures })} />} />
             <SettingRow label="내 이름 가리기" control={<Switch label="내 이름 가리기" checked={choices.hideMe} onChange={(hideMe) => change({ hideMe })} />} />
             {waiting ? (

@@ -17,6 +17,12 @@ export type LogDraft = { rows: LogRow[]; css: string; pictures: Map<string, { ki
 
 const ME_HIDDEN = '나';
 
+const unlogged = (message: Shown) => message.live !== null || shown(message).receipt?.state === 'failed';
+
+// What a translated log would show untranslated in the range: the messages it holds with a text and no translation.
+export const untranslated = (messages: Shown[], view: Display, { from, to }: Pick<LogChoices, 'from' | 'to'>) =>
+  messages.slice(from - 1, to).filter((message, offset) => !unlogged(message) && !shown(message).translation && view.texts[from - 1 + offset]!.trim());
+
 // The pictures the chat shows besides its display: by index, the shown text with its 삽화 marks, and by version its 삽화,
 // oldest first (useChat).
 export type Illustrated = { placed: ReadonlyMap<number, string>; pictures: ReadonlyMap<string, Stored<'illustration'>[]> };
@@ -30,7 +36,7 @@ export function logDraft(messages: Shown[], view: Display, { placed, pictures: d
   for (let index = Math.max(from, 1) - 1; index < Math.min(to, messages.length); index++) {
     const message = messages[index]!;
     const version = shown(message);
-    if (message.live !== null || version.receipt?.state === 'failed') continue;
+    if (unlogged(message)) continue;
     const original = view.texts[index]!;
     const translation = version.translation?.text ?? null;
     const own = { text: original, original: true };

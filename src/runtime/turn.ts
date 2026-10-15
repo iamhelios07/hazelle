@@ -65,7 +65,7 @@ async function translateReceived(session: Pick<Session, 'store' | 'read' | 'tran
   const version = shown(view.messages[index]!);
   // Another version, already translated, may have been switched to while onOutput ran.
   if (version.translation || !view.display.texts[index]!.trim()) return;
-  session.translator.translate(chat, version, { ...translationInput(session, chat, view.chat, view.messages, { kind: 'message', index }), lane: { asker: 'auto-translation', chat } });
+  void session.translator.translate(chat, version, { ...translationInput(session, chat, view.chat, view.messages, { kind: 'message', index }), lane: { asker: 'auto-translation', chat } });
 }
 
 const displayed = (session: Pick<Session, 'read'>, chat: string) =>

@@ -4,7 +4,7 @@ import type { Receipt, Version } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import { placeMark } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
-import { logDraft, resolveLog, type LogText } from './exportLog';
+import { logDraft, resolveLog, untranslated, type LogText } from './exportLog';
 
 const picture = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const failed = { state: 'failed' } as Receipt;
@@ -54,4 +54,9 @@ it('puts a version’s newest 삽화 in its text where the chat places it, and i
   expect(boxed.rows[0]!.stories[0]).toBe('<div>\nOne\n<img src="illustration:22222222-2222-4222-8222-222222222222">\nTwo\n</div>');
   const both = shownAs('both');
   expect([both.rows[0]!.stories.join('').split('illustration:').length - 1, both.pictures.get('illustration:22222222-2222-4222-8222-222222222222')?.kind]).toEqual([1, 'illustration']);
+});
+
+it('offers to translate only what a translated log would show untranslated', () => {
+  expect(untranslated(messages, view, { from: 1, to: 5 }).map(({ id }) => id)).toEqual(['b']);
+  expect(untranslated(messages, view, { from: 3, to: 5 })).toEqual([]);
 });

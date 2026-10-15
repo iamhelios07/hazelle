@@ -140,10 +140,11 @@ export class Translator {
   // chat: its id, saved or not yet; a chat not saved when the translation ends shows only its character's greetings,
   // so the translation is that greeting's, kept on the character.
   // closed: a reply stopped by a lock is still saved, and its follow-up must not start a call.
-  translate(chat: string, { id: version, text: original }: Version, input: TranslateInput) {
-    if (this.closed || this.aborts.has(version)) return;
+  // Settles once the translation is saved or has failed; one already running for the version is not waited for.
+  translate(chat: string, { id: version, text: original }: Version, input: TranslateInput): Promise<void> {
+    if (this.closed || this.aborts.has(version)) return Promise.resolve();
     const target: CallTarget = { id: crypto.randomUUID(), chat: this.store.get('chat', chat) ? chat : null, result: crypto.randomUUID(), for: { kind: 'translation', version } };
-    this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials, tokens: this.tokens }, input, target, signal, onText), (made) =>
+    return this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials, tokens: this.tokens }, input, target, signal, onText), (made) =>
       this.store.get('chat', chat)
         ? appendTranslation(this.store, chat, version, made.translation, target.result)
         : setTextTranslation(this.store, input.chat.character!, original, made.language!, made.translation).then(async (saved) => {
@@ -156,20 +157,20 @@ export class Translator {
   resume(stream: Stored<'stream'>, version: string) {
     const chat = stream.parent!;
     if (this.closed || this.aborts.has(version)) return;
-    this.run(chat, version, { id: stream.id, result: stream.value.result }, (signal, onText) => resumeTranslation({ store: this.store, credentials: this.credentials }, stream, signal, onText), (made) =>
+    void this.run(chat, version, { id: stream.id, result: stream.value.result }, (signal, onText) => resumeTranslation({ store: this.store, credentials: this.credentials }, stream, signal, onText), (made) =>
       appendTranslation(this.store, chat, version, made.translation, stream.value.result),
     );
   }
 
   // A failed call ends with its marker, since nothing would make it go otherwise; one stopped by close() keeps it
   // for the next load.
-  private run(chat: string, version: string, { id, result }: { id: string; result: string }, make: (signal: AbortSignal, onText: (text: string) => void) => Promise<Translated>, save: (made: Extract<Translated, { ok: true }>) => Promise<ApiResult<unknown>>) {
+  private run(chat: string, version: string, { id, result }: { id: string; result: string }, make: (signal: AbortSignal, onText: (text: string) => void) => Promise<Translated>, save: (made: Extract<Translated, { ok: true }>) => Promise<ApiResult<unknown>>): Promise<void> {
     const lease = this.store.retainChat(chat);
     const abort = new AbortController();
     this.aborts.set(version, abort);
     this.reading.add(id);
     this.change(version, { live: '', failed: null });
-    void lease.ready.then(async (failure) => {
+    return lease.ready.then(async (failure) => {
       if (failure) {
         this.change(version, { live: null, failed: { kind: 'unsaved', failure } });
         return null;
