@@ -81,6 +81,8 @@ const messageIndex = (context: CbsContext) => ('message' in context.source ? con
 // A bot reads the greeting as message -1 and the first message after it as 0, so a message's number is its index
 // less this.
 const opened = (context: CbsContext) => (context.greeting === null ? 0 : 1);
+// Risu's chat.message, which never holds the greeting: Risu keeps it on the character.
+const afterGreeting = (context: CbsContext) => context.messages.slice(opened(context));
 const currentMessage = (context: CbsContext) => {
   const index = messageIndex(context);
   return index === null ? undefined : context.messages[index];
@@ -296,7 +298,8 @@ define('messageidleduration', 0, (_, { context }) => {
   const time = currentMessage(context)?.time ?? null;
   return before === null || time === null ? null : duration(time - before);
 });
-define('messageunixtimearray', 0, (_, { context }) => serialize(context.messages.map(({ time }) => (time === null ? null : Math.floor(time / 1000)))));
+// Milliseconds as strings and "0" for an unknown time, as Risu gives them, unlike the seconds of {{unixtime}}.
+define('messageunixtimearray', 0, (_, { context }) => serialize(afterGreeting(context).map(({ time }) => String(time ?? 0))));
 
 // Chat tags read stored text, tags and all: risu-alpha never bakes a message.
 const lastOf = (context: CbsContext, role: 'user' | 'assistant') => {
@@ -309,17 +312,19 @@ define('previouscharchat lastcharmessage', 0, (_, { context }) => lastOf(context
 define('previoususerchat lastusermessage', 0, (_, { context }) => lastOf(context, 'user'));
 define('previouschatlog', 1, ([number], { context }) => context.messages[Number(number) + opened(context)]?.text ?? 'Out of range');
 // Each message a JSON object of role, data and time, as Risu's history gives it (cbs.ts), since a bot's Lua reads the
-// role back from it to tell the user's messages apart; with an argument the texts, `role` prefixing each with its role.
+// role back from it to tell the user's messages apart.
 const luaRole = (role: HistoryMessage['role']) => (role === 'user' ? 'user' : 'char');
+const messageObject = ({ role, text, time }: HistoryMessage) => JSON.stringify({ role: luaRole(role), data: text, ...(time !== null && { time }) });
+// Without an argument the greeting leads, as in Risu; with one the texts after it, `role` prefixing each with its role.
 define('history messages', 0, ([how], { context }) =>
   serialize(
-    context.messages.map(({ role, text, time }) =>
-      how === undefined ? JSON.stringify({ role: luaRole(role), data: text, ...(time !== null && { time }) }) : how === 'role' ? `${luaRole(role)}: ${text}` : text,
-    ),
+    how === undefined
+      ? context.messages.map(messageObject)
+      : afterGreeting(context).map(({ role, text }) => (how === 'role' ? `${luaRole(role)}: ${text}` : text)),
   ),
 );
-define('userhistory', 0, (_, { context }) => serialize(context.messages.filter(({ role }) => role === 'user').map(({ text }) => text)));
-define('charhistory', 0, (_, { context }) => serialize(context.messages.filter(({ role }) => role === 'assistant').map(({ text }) => text)));
+define('userhistory', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'user').map(messageObject)));
+define('charhistory', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'assistant').map(messageObject)));
 define('chatindex', 0, (_, { context }) => {
   const index = messageIndex(context);
   return index === null ? null : String(index - opened(context));
