@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, GitBranch, X } from 'lucide-react';
 import type { Ref } from 'react';
 import { ACTS, addOf, newOf } from '../common/acts';
+import { SHORTCUTS } from '../shortcuts';
 import type { Block, ChatRange, ChatSlot, PromptSort, RecentSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
 import { Button, ChoiceGroup, Divider, Empty, Hint, MarkupArea, Menu, MenuHeading, MenuItem, MoreMenu, Row, Section, SettingRow, Stack, Stepper, Switch, Tag, Text, TitleField } from '../ui';
 import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, SLOT, type CacheMark } from './blocks';
@@ -105,6 +106,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         <MarkupArea
           ref={textRef}
           label="내용"
+          expand={SHORTCUTS.bigEdit.keys}
           value={block.text}
           placeholder={block.mark === 'globalNote' ? `비워 두면 카드에 '대화 뒤 지시문'이 있을 때만 보내요.` : '모델에게 보낼 내용'}
           onChange={(text) => onChange({ ...block, text })}
@@ -129,7 +131,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
       )}
       {block.kind === 'slot' && block.slot === 'authorNote' && authorNote !== null && (
         <Section title="기본 노트" level={3} help="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
-          <MarkupArea label="기본 노트" variant="field" value={authorNote} onChange={onAuthorNote} />
+          <MarkupArea label="기본 노트" variant="field" expand={SHORTCUTS.bigEdit.keys} value={authorNote} onChange={onAuthorNote} />
         </Section>
       )}
       {'wrapper' in block &&
