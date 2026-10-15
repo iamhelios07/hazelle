@@ -8,7 +8,7 @@ const CHAT = 'a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d';
 // Keyed by kind, so a new kind of route does not compile until it has an example here.
 const EXAMPLES = {
   home: [{ kind: 'home' }],
-  gallery: [{ kind: 'gallery' }],
+  gallery: [{ kind: 'gallery', place: null }, { kind: 'gallery', place: CHARACTER }, { kind: 'gallery', place: 'bin' }],
   shelf: [
     { kind: 'shelf', character: CHARACTER },
     { kind: 'shelf', character: null },

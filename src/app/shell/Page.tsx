@@ -73,7 +73,7 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'home':
         return <HomePage />;
       case 'gallery':
-        return <GalleryScreen back={sideBack(at)} />;
+        return <GalleryScreen place={at.place} back={sideBack(at)} />;
       case 'shelf':
       case 'edit':
         return <CharacterPage at={at} wide={wide} />;
@@ -160,7 +160,7 @@ function Landing() {
 function HomePage() {
   const { read } = useSession();
   const populated = useSyncExternalStore(read.library.subscribe, () => read.library.snapshot().characters.length > 0);
-  return populated ? <GalleryScreen back={null} /> : <HomeScreen />;
+  return populated ? <GalleryScreen place={null} back={null} /> : <HomeScreen />;
 }
 
 function CharacterPage({ at, wide }: { at: At<'shelf' | 'edit'>; wide: boolean }) {

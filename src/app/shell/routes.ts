@@ -9,7 +9,7 @@ export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
 // These paths are what a reload, a bookmark and the browser's back button land on, so an existing one never changes.
 export type Route =
   | { kind: 'home' }
-  | { kind: 'gallery' }
+  | { kind: 'gallery'; place: string | null }
   // character null is 캐릭터 없이.
   | { kind: 'shelf'; character: string | null }
   | { kind: 'edit'; character: string }
@@ -46,6 +46,8 @@ export type Route =
   | { kind: 'settings' };
 
 export const HOME: Route = { kind: 'home' };
+// 캐릭터 둘러보기's place: a folder's id, BIN_PLACE for 휴지통, or null for the top (실험실 탐색기식 폴더 only).
+export const BIN_PLACE = 'bin';
 
 type Kind<K extends Route['kind']> = Extract<Route, { kind: K }>;
 export type Below = Exclude<Route, Kind<'home'>>;
@@ -68,7 +70,10 @@ export function parseRoute(at: string): Route {
   }
   if (rest.length > 0) return HOME;
   if (top === 'characters') {
-    if (id === undefined) return { kind: 'gallery' };
+    if (id === undefined) {
+      const place = params.get('in');
+      return { kind: 'gallery', place: place !== null && (place === BIN_PLACE || ID.test(place)) ? place : null };
+    }
     if (id === NONE) return sub === undefined ? { kind: 'shelf', character: null } : HOME;
     if (!ID.test(id)) return HOME;
     if (sub === undefined) return { kind: 'shelf', character: id };
@@ -139,7 +144,7 @@ export function href(route: Route): string {
     case 'home':
       return '/';
     case 'gallery':
-      return '/characters';
+      return route.place === null ? '/characters' : `/characters?in=${route.place}`;
     case 'shelf':
       return `/characters/${route.character ?? NONE}`;
     case 'edit':

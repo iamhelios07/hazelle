@@ -2,20 +2,22 @@ import { FolderInput } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Stored } from '../../../model/kinds';
-import { characterTexts, KEEP_DAYS, type CharacterShelf, type Shelf } from '../../../model/library';
+import { characterTexts, KEEP_DAYS, pathName, pathOf, type CharacterShelf, type Shelf } from '../../../model/library';
+import { useLab } from '../../common/labs';
 import { NameDialog } from '../../common/NameDialog';
 import { TASK_NAMES } from '../../common/prompt-words';
 import { useSearch } from '../../common/useSearch';
 import { BIN, PAGES } from '../../common/words';
 import { useBin, useLibrary } from '../../session';
 import { backBar } from '../../shell/router';
-import type { Back } from '../../shell/routes';
+import { BIN_PLACE, type Back } from '../../shell/routes';
 import { Avatar, Button, CardGrid, ChoiceGroup, Empty, List, NavBar, Row, Screen, Section, Text } from '../../ui';
 import { ShelfFace, shelfName } from '../shelf';
 import { binnedCharacter, binnedChat, binnedModule, binnedPersona, binnedProfile, binnedPrompt, useCharacterActions, type Binned } from '../useCharacterActions';
 import { useFolderActions } from '../useFolderActions';
 import { BinnedRow } from './BinnedRow';
 import { CharacterCard } from './CharacterCard';
+import { FolderPath, FolderTile } from './FolderPlace';
 import { FolderTabs, type Filter, type Naming } from './FolderTabs';
 import { MoveBar } from './MoveBar';
 import { PurgeDialog } from './PurgeDialog';
@@ -30,22 +32,26 @@ type BinEntry = { section: string; key: string; texts: string[]; render: () => R
 type Entry = CharacterShelf<ChatSummary> | BinEntry;
 const isBinEntry = (entry: Entry): entry is BinEntry => 'section' in entry;
 
-export function GalleryScreen({ back }: { back: Back | null }) {
-  const { characters, none, deleted, deletedChats, byCharacter, byFolder, loose } = useLibrary();
+// place: where 실험실 탐색기식 폴더 stands (shell/routes BIN_PLACE); the folder tabs keep their own filter.
+export function GalleryScreen({ place, back }: { place: string | null; back: Back | null }) {
+  const { characters, none, folders, deleted, deletedChats, byCharacter, byFolder, loose } = useLibrary();
+  const explorer = useLab('folders');
   const bin = useBin();
   const characterActions = useCharacterActions();
   const { create, rename, move } = useFolderActions();
   const [filter, setFilter] = useState<Filter>('all');
   const [order, setOrder] = useState<'recent' | 'name'>('recent');
   // The characters picked to move, or null while not picking.
-  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const [picking, setPicked] = useState<Set<string> | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
   const [purging, setPurging] = useState<Binned | null>(null);
 
   const contents = byFolder.get(filter);
   const folder = contents?.folder ?? null;
-  const binned = filter === 'deleted';
-  const candidates = binned ? deleted : filter === 'all' ? characters : filter === 'loose' ? loose : contents?.characters ?? [];
+  // A folder gone meanwhile, on another device or by a stale link, leaves the explorer at the top.
+  const here = explorer && place !== null ? (byFolder.get(place) ?? null) : null;
+  const binned = explorer ? place === BIN_PLACE : filter === 'deleted';
+  const candidates = binned ? deleted : explorer || filter === 'all' ? characters : filter === 'loose' ? loose : contents?.characters ?? [];
   // shelve lists only the deleted chats of a character not deleted, or of none.
   const shelfOf = ({ chat }: ChatSummary): Shelf<ChatSummary> => (chat.character === null ? none : byCharacter.get(chat.character)!);
   const busy = (id: string) => (characterActions.busy?.id === id ? characterActions.busy.label : null);
@@ -68,12 +74,16 @@ export function GalleryScreen({ back }: { back: Back | null }) {
       ]
     : [];
   const search = useSearch<Entry>([...candidates, ...binEntries], binned ? `${BIN} 검색` : '캐릭터 검색', (entry) => (isBinEntry(entry) ? entry.texts : characterTexts(entry.character)));
-  const shown = search.found.filter((entry): entry is CharacterShelf<ChatSummary> => !isBinEntry(entry));
+  // The explorer lists one folder's own characters, and every folder's while searching.
+  const placed = explorer && !binned && !search.words ? new Set<Entry>(here ? here.direct : loose) : null;
+  const shown = search.found.filter((entry): entry is CharacterShelf<ChatSummary> => !isBinEntry(entry) && (!placed || placed.has(entry)));
+  const folderCards = placed ? (here ? here.folder.children : folders) : [];
   if (order === 'name') shown.sort((a, b) => byName(a.character.card.name, b.character.card.name));
   const found = search.found.filter(isBinEntry);
   const listed = ['채팅', PAGES.modules, PAGES.prompts, PAGES.personas, MODEL_SETTINGS].map((title) => [title, found.filter(({ section }) => section === title)] as const).filter(([, items]) => items.length > 0);
 
-  // 휴지통 cannot be moved, so going there stops picking.
+  // 휴지통 cannot be moved: there no pick shows, and the folder tabs drop it on the way in.
+  const picked = binned ? null : picking;
   const choose = (next: Filter) => {
     if (next === 'deleted') setPicked(null);
     setFilter(next);
@@ -112,11 +122,11 @@ export function GalleryScreen({ back }: { back: Back | null }) {
           </Button>
         )}
       </Row>
-      <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />
+      {explorer ? <FolderPath here={here} binned={binned} onName={setNaming} /> : <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />}
       {binned && <Text variant="note">{`${BIN}에 있는 항목은 ${KEEP_DAYS}일이 지나면 영구 삭제돼요.`}</Text>}
-      {shown.length > 0 && (
-        <CardGrid label="캐릭터" keys={shown.map(({ id }) => id)}>
-          {(index) => { const shelf = shown[index]!; return (
+      {folderCards.length + shown.length > 0 && (
+        <CardGrid label="캐릭터" keys={[...folderCards.map(({ id }) => id), ...shown.map(({ id }) => id)]}>
+          {(index) => { if (index < folderCards.length) { const card = folderCards[index]!; return <FolderTile key={card.id} folder={card} onName={setNaming} />; } const shelf = shown[index - folderCards.length]!; return (
             <CharacterCard
               key={shelf.id}
               shelf={shelf}
@@ -126,6 +136,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
               onPick={() => toggle(shelf.id)}
               actions={characterActions}
               onPurge={() => setPurging(binnedCharacter(shelf))}
+              where={explorer && search.words && shelf.character.folder ? pathName(pathOf(byFolder, shelf.character.folder)) || undefined : undefined}
             />
           ); }}
         </CardGrid>
@@ -135,8 +146,8 @@ export function GalleryScreen({ back }: { back: Back | null }) {
           <List label={`${BIN}의 ${title}`} keys={items.map(({ key }) => key)}>{(index) => items[index]!.render()}</List>
         </Section>
       ))}
-      {shown.length === 0 && listed.length === 0 && (
-        <Empty>{search.none ?? (binned ? '삭제한 항목이 없어요.' : '캐릭터가 없어요.')}</Empty>
+      {folderCards.length + shown.length === 0 && listed.length === 0 && (
+        <Empty>{search.none ?? (binned ? '삭제한 항목이 없어요.' : here ? '빈 폴더예요.' : '캐릭터가 없어요.')}</Empty>
       )}
       {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={movePicked} />}
       {purging && (

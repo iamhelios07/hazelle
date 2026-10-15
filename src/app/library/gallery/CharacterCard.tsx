@@ -19,9 +19,11 @@ type Props = {
   onPick: () => void;
   actions: CharacterActions;
   onPurge: () => void;
+  // The folder path, shown before the note where cards from every folder stand together.
+  where?: string;
 };
 
-export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge }: Props) {
+export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge, where }: Props) {
   const wide = useWide();
   const name = aliased(shelf.character.card.name, shelf.character.alias);
   const handle = useMenuHandle();
@@ -50,7 +52,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
     <FaceCard
       image={shelf.face}
       name={name}
-      note={busy ?? (binned ? binCardNote(shelf) : cardNote(shelf))}
+      note={busy ?? (binned ? binCardNote(shelf) : where ? `${where} · ${cardNote(shelf)}` : cardNote(shelf))}
       selected={picked}
       menu={shows ? menu : undefined}
       {...press}

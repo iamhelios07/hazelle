@@ -73,7 +73,7 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
             </Button>
             <IconButton icon={UserRoundPlus} label={newOf('캐릭터')} size="sm" onClick={create} />
             <IconButton icon={PackageOpen} label="Risu에서 이사" size="sm" onClick={move} />
-            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery' })} />
+            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery', place: null })} />
             <IconButton icon={MessageSquarePlus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Row>
           {search.field}

@@ -2,9 +2,10 @@ import { FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
 import { FOLDER_DEPTH, pathOf, type FolderTree } from '../../../model/library';
 import { ACTS, newOf } from '../../common/acts';
 import { BIN } from '../../common/words';
-import { useBin, useLibrary } from '../../session';
+import { useLibrary } from '../../session';
 import { IconButton, MenuItem, MoreMenu, Row, Stack, Tab, Tabs } from '../../ui';
 import { useFolderActions } from '../useFolderActions';
+import { useInBin } from './useInBin';
 
 // 'all', 'loose' (in no folder), 'deleted' (휴지통), or a folder's id.
 export type Filter = string;
@@ -19,13 +20,12 @@ type Props = {
 };
 
 export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
-  const { characters, folders, deleted, deletedChats, byFolder } = useLibrary();
-  const bin = useBin();
+  const { characters, folders, byFolder } = useLibrary();
+  const inBin = useInBin();
   const { remove } = useFolderActions();
   const path = folder ? pathOf(byFolder, folder.id) : [];
   const top = path[0] ?? null;
   const binned = filter === 'deleted';
-  const inBin = deleted.length + deletedChats.length + bin.modules.length + bin.prompts.length + bin.personas.length + bin.profiles.length;
 
   function drop(target: FolderTree) {
     const removed = remove(target);

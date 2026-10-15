@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check, Folder } from 'lucide-react';
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
@@ -84,6 +84,27 @@ export function FaceCard({ image, name, note, selected, current = false, tag, fa
         <span className={faint ? `${styles.note} ${styles.faint}` : styles.note}>{note}</span>
         {/* After the name, so the card is named by its name first; drawn over the picture's corner. */}
         {tag && <span className={styles.tag}><Tag tone="accent">{tag}</Tag></span>}
+      </button>
+      {menu && <div className={styles.menu}>{menu}</div>}
+    </div>
+  );
+}
+
+// Tiles fill the card: one face whole, two side by side, three or four in quarters.
+const TILES = [styles.one, styles.one, styles.two, styles.four, styles.four];
+
+// A folder among the cards: up to four faces of what it holds, or a folder mark when it holds none.
+type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode };
+
+export function FolderCard({ name, note, faces, onClick, menu }: FolderCardProps) {
+  return (
+    <div className={styles.cardBox}>
+      <button type="button" className={styles.card} onClick={onClick}>
+        <span className={`${styles.picture} ${styles.folder} ${TILES[Math.min(faces.length, 4)]}`}>
+          {faces.length === 0 ? <span className={styles.emptyFolder}><Icon icon={Folder} size="lg" /></span> : faces.slice(0, 4).map((face, index) => <span key={index} className={styles.tile}><Face {...face} /></span>)}
+        </span>
+        <span className={styles.folderName}><Icon icon={Folder} size="xs" /><span className={styles.name}>{name}</span></span>
+        <span className={styles.note}>{note}</span>
       </button>
       {menu && <div className={styles.menu}>{menu}</div>}
     </div>
