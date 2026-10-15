@@ -45,6 +45,13 @@
   gap: var(--space-16);
 }
 
+@media (max-width: 599px) {
+  .row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+  }
+}
+
 .detail {
   margin: 0;
   font-size: var(--text-xs);
