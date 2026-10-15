@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { resolveAssets } from '../../engine/assets';
-import { unused } from '../../engine/pipeline';
+import { holdsPersona, unused } from '../../engine/pipeline';
+import type { Card } from '../../engine/import/types';
 import { shown, type ChatItem, type ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { resetToggles, setToggle, translateSwitches } from '../../runtime/characters';
@@ -12,7 +13,10 @@ import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf } from '../../runtime/chat-context';
 import { takeTurn, type TurnFailure } from '../../runtime/turn';
+import type { PersonaChoice } from '../../runtime/personas';
+import type { PromptChoice } from '../../runtime/prompts';
 import { describeTurnFailure } from '../common/failure';
+import { NO_PERSONA_SLOT } from '../common/prompt-words';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
 import { BIN_KEEPS, LORE_BUDGET_LABEL, PAGES } from '../common/words';
@@ -275,6 +279,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toggles,
     toggleOwner: chat.character,
     notUsed: card && describeUnused(unused(card)),
+    personaNote: personaNote(card, prompt, persona),
     messages,
     texts,
     view,
@@ -355,4 +360,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       drop,
     },
   };
+}
+
+// A missing prompt or persona stops the turn on its own; a utility card leaves the persona out as Risu does.
+function personaNote(card: Card | null, prompt: PromptChoice, persona: PersonaChoice): string | null {
+  if (card?.utility || prompt.kind !== 'prompt' || persona.kind !== 'persona') return null;
+  if (!holdsPersona(prompt.prompt.value.blocks)) return NO_PERSONA_SLOT;
+  return persona.persona.value.description.trim() ? null : '페르소나 설명이 비어 있어요.';
 }

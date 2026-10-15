@@ -3,10 +3,10 @@ import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, MemoryRecord } from '../model/memory';
-import type { Prompt } from '../model/prompt';
+import type { Block, Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, tokenGroups, unused, type Assembled, type From, type PromptInput } from './pipeline';
+import { assemble, holdsPersona, tokenGroups, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, speakersOf, type ChatRead } from './memory';
 import { RETRIEVED_HEADING } from './retrieval';
 import { inspectVariables, renderChat, VARIABLE_LIMITS } from './render';
@@ -565,6 +565,18 @@ describe('renderChat', () => {
 describe('unused', () => {
   it('counts what chats do not use yet', () => {
     expect(unused(card({ bias: [['a', 1]], utility: true }))).toEqual([{ kind: 'bias', count: 1 }]);
+  });
+});
+
+describe('holdsPersona', () => {
+  it('takes a 페르소나 slot, or the tag in a text or a 감싸는 텍스트 under any spelling, and nothing else', () => {
+    const text = (body: string): Block => ({ id: body, name: null, kind: 'text', role: 'system', text: body, mark: null });
+    const description = (wrapper: string): Block => ({ id: wrapper, name: null, kind: 'slot', slot: 'description', role: 'system', wrapper });
+    expect(holdsPersona(starter.blocks)).toBe(true);
+    expect(['{{persona}}', '{{User_Persona}}', '{{ user persona }}'].map((tag) => holdsPersona([text(`About {{user}}: ${tag}`)]))).toEqual([true, true, true]);
+    expect(holdsPersona([description('{{slot}}\n{{userpersona}}')])).toBe(true);
+    expect(holdsPersona(starter.blocks.filter((block) => block.kind !== 'slot' || block.slot !== 'persona'))).toBe(false);
+    expect(holdsPersona([text('{{personality}} {{charpersona}}')])).toBe(false);
   });
 });
 

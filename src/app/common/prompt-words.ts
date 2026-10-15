@@ -16,6 +16,8 @@ export const SLOT_NAMES: Record<SlotKind, string> = {
   span: '정리할 메시지',
 };
 
+export const NO_PERSONA_SLOT = `프롬프트에 '${SLOT_NAMES.persona}' 블록이 없어서 페르소나 설명이 대화에 들어가지 않아요.`;
+
 export const MESSAGE_ROLES: Record<Role, string> = { system: '시스템', user: '사용자', assistant: 'AI' };
 
 export const textName = (role: Role) => `${MESSAGE_ROLES[role]} 메시지`;

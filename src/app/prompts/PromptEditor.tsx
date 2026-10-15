@@ -1,11 +1,13 @@
 import { Cpu, ImageIcon, SlidersHorizontal } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { holdsPersona } from '../../engine/pipeline';
 import type { Stored } from '../../model/kinds';
 import { isToggle, slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
 import { ModuleSwitches } from '../common/ModuleSwitches';
+import { NO_PERSONA_SLOT } from '../common/prompt-words';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, promptName } from '../common/words';
@@ -278,6 +280,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   );
 
   const warning = sort === 'conversation' ? chatWarning(draft.blocks) : null;
+  const noPersona = sort === 'conversation' && !holdsPersona(draft.blocks);
   const outline = (
     <>
       <Stack gap="related">
@@ -304,6 +307,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
         }
       >
         {warning && <Callout tone="warn">{warning}</Callout>}
+        {noPersona && <Callout tone="warn">{NO_PERSONA_SLOT}</Callout>}
         <Outline
           label="보내는 순서"
           help={HELP}

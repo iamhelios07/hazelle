@@ -24,7 +24,7 @@ const NO_PICTURES: Stored<'illustration'>[] = [];
 const NO_BADGES: string[] = [];
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, placed, pictures, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, busy, editing, pinned, bookmarked, found, search, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, placed, pictures, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, personaNote, busy, editing, pinned, bookmarked, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -40,6 +40,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   );
   return <>
     {notUsed && <Text variant="note" align="center">{notUsed}</Text>}
+    {personaNote && <Text variant="note" align="center">{personaNote}</Text>}
     {messages.length === 0 ? <Empty variant="story">
       {card ? '첫인사가 없는 캐릭터예요.' : '캐릭터 없이 모델과 대화하는 채팅이에요.'}
     </Empty> : <Viewport keys={messages.map((message) => message.id)} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}

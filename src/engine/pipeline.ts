@@ -518,6 +518,12 @@ export function unused(card: Card): Unused[] {
   return found.filter((item) => item.count > 0);
 }
 
+// Whether a conversation prompt sends the persona's description: by its 페르소나 slot, or by the tag written in a block
+// under any spelling cbs/tags.ts normalizes to persona or userpersona. A utility card's request has no persona (UTILITY).
+const PERSONA_TAG = /\{\{[\s_-]*(?:user[\s_-]*)?persona[\s_-]*\}\}/i;
+export const holdsPersona = (blocks: Block[]) =>
+  blocks.some((block) => (block.kind === 'text' ? PERSONA_TAG.test(block.text) : block.slot === 'persona' || ('wrapper' in block && block.wrapper !== null && PERSONA_TAG.test(block.wrapper))));
+
 export type TokenSource = From | { kind: 'description' | 'persona' | 'memory' | 'chat' | 'lorebook' };
 export type TokenGroup = { source: TokenSource; tokens: number; count: number };
 export type TokenGroups = { groups: TokenGroup[]; total: number; fit: TokenFit; estimate: TokenEstimate; dropped: number };
