@@ -58,8 +58,10 @@ export const text = (value: unknown) => (value === undefined || value === null ?
 
 export const read = (run: Run, name: string) => run.written.get(name) ?? run.variables.get(name) ?? UNSET;
 
+// A nil write unsets the name, and Risu reads an unset name as the card's default or 'null' (parser/chatVar.svelte.ts
+// getChatVar). That reading is what is written, so the replay applies an unset as any other write.
 export function write(run: Run, name: string, value: unknown): boolean {
-  const next = text(value);
+  const next = value === undefined || value === null ? (run.snapshot.scope.card?.variables.find(([key]) => key === name)?.[1] ?? UNSET) : text(value);
   if ((run.written.get(name) ?? run.variables.get(name)) === next) return false;
   run.written.set(name, next);
   return true;

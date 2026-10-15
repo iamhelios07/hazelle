@@ -4,6 +4,7 @@ import type { Snapshot } from '../../engine/lua/state';
 import type { Host } from '../../engine/script-api';
 import { applyTail } from '../history-delta';
 import { LuaWorker, type Down, type Up } from './client';
+import { luaStanding } from './snapshot';
 
 const snapshot: Snapshot = {
   messages: [{ role: 'user', data: 'first', time: 0 }, { role: 'char', data: 'last', time: 1 }], variables: [], globals: [],
@@ -112,4 +113,8 @@ it('keeps each pending host until completion and ignores old replies after a cra
     next.receive({ kind: 'failed', id: 3, message: 'new failure' });
     await expect(restarted).rejects.toThrow('new failure');
   } finally { runner.close(); }
+});
+
+it("names a chat's missing persona 'User', as Risu does", () => {
+  expect(luaStanding({ ...snapshot.scope, toggles: new Map(), packs: [], cast: [] }).persona.name).toBe('User');
 });

@@ -57,11 +57,7 @@ function LLM(id, prompt, useMultimodal, options)
 end
 
 function axLLM(id, prompt, useMultimodal, options)
-    return json.decode(axLLMMain(id, json.encode(prompt)):await())
-end
-
-function simpleLLM(id, prompt)
-    return json.decode(LLMMain(id, json.encode({ { role = 'user', content = prompt } })):await())
+    return json.decode(axLLMMain(id, json.encode(prompt), useMultimodal, json.encode(options)):await())
 end
 
 local listeners = { editRequest = {}, editDisplay = {}, editInput = {}, editOutput = {} }
@@ -115,6 +111,11 @@ function async(callback)
         end)
     end
 end
+
+-- Risu's simpleLLM is a promise, which bots await: simpleLLM(id, prompt):await().
+simpleLLM = async(function(id, prompt)
+    return json.decode(LLMMain(id, json.encode({ { role = 'user', content = prompt } })):await())
+end)
 
 callListenMain = async(function(type, id, value, meta)
     -- With nobody listening nothing is answered and the value is never decoded: a request is its whole text.

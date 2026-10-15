@@ -1,5 +1,6 @@
 import { TOGGLE_GLOBAL } from '../../engine/cbs/tags';
 import type { Snapshot } from '../../engine/lua/state';
+import { personaName } from '../../engine/memory';
 import { authorNote, type ChatScope } from '../../engine/render';
 
 // What Lua's own functions read of a chat besides its messages and variables; its CBS and lorebook reads go through
@@ -26,7 +27,7 @@ export function luaStanding(scope: ChatScope): LuaStanding {
   return {
     globals: [...scope.toggles].map(([key, value]) => [`${TOGGLE_GLOBAL}${key}`, value ?? '']),
     character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
-    persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
+    persona: { name: personaName(scope.persona), description: scope.persona?.description ?? '' },
     note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
   };
 }

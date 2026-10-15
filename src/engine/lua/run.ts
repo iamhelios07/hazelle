@@ -40,6 +40,18 @@ const failure = (run: Run, error: unknown): Failure => (run.ranAway ? { runaway:
 const roleOf = (value: unknown): Working['role'] => (value === 'user' ? 'user' : 'char');
 const view = ({ role, data, time }: Working) => ({ role, data, time });
 
+const AX_MODES = new Set(['emotion', 'memory', 'otherAx', 'submodel', 'translate']);
+
+// What a script passes as options, json-encoded by the prelude; anything but an object reads as none, as in Risu.
+function luaOptions(value: unknown): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(text(value));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 const MODEL_ROLES: Record<string, ModelMessage['role']> = { system: 'system', sys: 'system', user: 'user', assistant: 'assistant', bot: 'assistant', char: 'assistant' };
 
 // owner names whose Lua globals an engine holds (a chat), so two chats of one bot never share them; lane keeps the
@@ -457,7 +469,13 @@ export class Lua {
       });
     });
     act('LLMMain', model('main'));
-    act('axLLMMain', model('aux'));
+    // Every mode goes to the 보조 모델; an unknown one is refused before any call, as Risu refuses it. useMultimodal is
+    // Risu's third argument: no picture goes with a script's call.
+    act('axLLMMain', (run, prompt: string, _multimodal: unknown, options: unknown) => {
+      const mode = text(luaOptions(options).mode ?? 'otherAx');
+      if (!AX_MODES.has(mode)) return Promise.resolve(JSON.stringify({ success: false, result: `Error: Invalid axLLM mode: ${mode}` }));
+      return model('aux')(run, prompt);
+    });
     // nil when a call is refused or fails, as Risu answers a script it does not let call.
     act('similarity', (run, source: unknown, values: unknown) => ranked(run, text(source), Object.values((values ?? {}) as Record<string, unknown>).map(text)));
 
