@@ -124,13 +124,11 @@ export async function exportRisuChats(reader: Reader, character: string, output:
   }
 }
 
-export type EveryStep = { done: number; total: number; name: string };
-
 // Every live character as a zip of its charx and its chats' risuAllChats file, which only the user's OS opens: Risu
 // loads the files one by one. ZIP64 with data descriptors (ruled 2026-10-15), so it may pass 4 GiB and 65,535 files,
 // and each entry streams in as it is made. A character with no chats has no chat file. tools: modules left out of
 // the charx files for holding a tool.
-export async function exportEveryCharacter(reader: Pick<Session, 'store' | 'files'>, output: BackupOutput, signal: AbortSignal, progress: (step: EveryStep) => void): Promise<ApiResult<LeftOut & { tools: number }>> {
+export async function exportEveryCharacter(reader: Pick<Session, 'store' | 'files'>, output: BackupOutput, signal: AbortSignal, progress: (step: ExportStep) => void): Promise<ApiResult<LeftOut & { tools: number }>> {
   const { store, files } = reader;
   const characters = store
     .list('character')
@@ -144,7 +142,7 @@ export async function exportEveryCharacter(reader: Pick<Session, 'store' | 'file
   let complete = false;
   try {
     for (const [done, { id, name }] of characters.entries()) {
-      progress({ done, total: characters.length, name });
+      progress({ done, total: characters.length });
       const content = charxContent(store, id);
       if (!content.ok) continue;
       // Two characters of one name each keep their pair apart, the second as name (2).

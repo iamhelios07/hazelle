@@ -19,6 +19,8 @@ export function runExport<T>(
     try {
       const made = await write(await destination, ({ done, total }) => show(`내보내는 중 · ${done} / ${total}`));
       if (made.ok) done(made.data);
+      // Only a write given a stop ends so, at the person's own press.
+      else if (made.error === 'stopped') return;
       else if (made.error === 'export-write') toast.error('파일을 저장하지 못했어요.', { detail: '저장 공간을 확인한 뒤 다시 시도해 주세요.' });
       else if (made.error === 'unreadable') toast.error('내보내지 못했어요.', { detail: '열리지 않는 이미지가 있어요.' });
       else toast.failed(made, '내보내지 못했어요.');
