@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import type { Block } from '../../model/prompt';
-import { cacheShown, editorOf, flippedCache, NO_PANELS, opened } from './panels';
+import { inspectShown, editorOf, NO_PANELS, opened } from './panels';
 
 describe('the panels beside the story', () => {
   const editor = { kind: 'character', id: 'c', part: null } as const;
 
-  it('keeps the cache panel beside an editor where two fit, and one panel at a time elsewhere', () => {
-    const cache = flippedCache(NO_PANELS, true);
-    const both = opened(cache, editor, true);
-    expect([both, cacheShown(both, true)]).toEqual([{ panel: editor, cache: true }, true]);
-    expect(opened(both, { kind: 'toggles' }, true)).toEqual({ panel: { kind: 'toggles' }, cache: false });
-    expect(flippedCache(both, true)).toEqual({ panel: editor, cache: false });
-    expect(opened(cache, editor, false)).toEqual({ panel: editor, cache: false });
-    expect(flippedCache({ panel: editor, cache: false }, false)).toEqual({ panel: null, cache: true });
-    expect(cacheShown(both, false)).toBe(false);
+  it('keeps every inspect tab beside an editor where two fit, and one panel at a time elsewhere', () => {
+    for (const tab of ['request', 'tokens', 'cache', 'variables', 'modules', 'scripts'] as const) {
+      const inspect = { kind: 'inspect', tab } as const;
+      const openedInspect = opened(NO_PANELS, inspect, true);
+      const both = opened(openedInspect, editor, true);
+      expect([both, inspectShown(both, true)]).toEqual([{ panel: editor, inspect }, inspect]);
+      expect(opened(both, { kind: 'toggles' }, true)).toEqual({ panel: { kind: 'toggles' }, inspect: null });
+      expect(opened(openedInspect, editor, false)).toEqual({ panel: editor, inspect: null });
+      expect(opened({ panel: editor, inspect: null }, inspect, false)).toEqual({ panel: null, inspect });
+      expect(opened({ panel: editor, inspect: null }, inspect, true)).toEqual(both);
+      expect(inspectShown(both, false)).toBeNull();
+    }
   });
 });
 

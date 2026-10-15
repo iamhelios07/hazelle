@@ -257,9 +257,19 @@ describe('Lua runs', () => {
   });
 });
 
+it('keeps initialization log output once with the first hook of that engine', async () => {
+  const scripts: Script[] = [{ owner: OWNER, kind: 'lua', name: 'initial', code: `log('loaded')
+function onStart(id) log('started') end` }];
+  const first = await lua.run('initial-log', scripts, SNAPSHOT, { kind: 'start' }, host());
+  expect(first.trace.entries.map(({ stage, logs }) => [stage, logs])).toEqual([['load', ['"loaded"']], ['onStart', ['"started"']]]);
+  const next = await lua.run('initial-log', scripts, SNAPSHOT, { kind: 'start' }, host());
+  expect(next.trace.entries.map(({ stage }) => stage)).toEqual(['onStart']);
+});
+
 describe('Lua display', () => {
   it('edits each message with the state as of it and keeps none of its writes or acts', async () => {
     const code = `listenEdit('editDisplay', function(id, value, meta)
+        log(value)
         alertNormal(id, 'never')
         setChat(id, 0, 'never')
         local hp = getChatVar(id, 'hp')
@@ -271,7 +281,8 @@ describe('Lua display', () => {
       { index: 1, text: 'b', variables: [['hp', '4']] },
     ]);
     const shown = await lua.display('display', 1, 2);
-    expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], listening: [true], errors: [], missing: [], from: 0, remaining: 0 });
+    expect(shown).toMatchObject({ texts: ['a:0:10:hello', 'b:1:4:hello'], listening: [true], errors: [], missing: [], from: 0, remaining: 0 });
+    expect(shown.trace?.entries.map(({ stage, logs, writes, changed }) => ({ stage, logs, writes, changed }))).toEqual(['a', 'b'].map((text) => ({ stage: 'editDisplay', logs: [JSON.stringify(text)], writes: [['hp', 'changed']], changed: true })));
   });
 
   it('retains full-chat reads while walking newest-first variable deltas and replacing a revision', async () => {

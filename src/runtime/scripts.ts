@@ -1,3 +1,5 @@
+import { ChangeSignal } from '../change-signal';
+import type { HookLog, HookTrace } from '../engine/lua/run';
 import type { Tokens } from './token-calibration';
 import { ScriptInteractions } from './script-interactions';
 import { ScriptSchedule } from './script-schedule';
@@ -32,6 +34,11 @@ import { receiptOf } from './talk';
 import { packsOf, scopeOf } from './chat-context';
 import { setBackground } from './characters';
 import type { Blocked, TurnContext } from './turn-context';
+
+export type ScriptLog = { entries: readonly HookLog[]; omitted: number };
+// Page memory only; evict by both entry count and serialized characters, since a script controls its text.
+export const SCRIPT_LOG_LIMITS = { entries: 100, characters: 256 * 1024 } as const;
+const EMPTY_LOG: ScriptLog = { entries: [], omitted: 0 };
 
 export type Halted = { kind: 'halted' };
 // turn: as it goes on. Its said is null once the user's message was saved here; a failure after that is kept
@@ -74,6 +81,8 @@ export class Scripts {
   private readonly schedule: ScriptSchedule;
   private readonly closing = new AbortController();
   private readonly unsubscribe: () => void;
+  private readonly logs = new Map<string, { snapshot: ScriptLog; sizes: number[]; characters: number }>();
+  private readonly logChanges = new Map<string, { changes: ChangeSignal; users: number }>();
   private readonly lastPrompt = new Map<string, Map<string, Answered>>();
 
   constructor(
@@ -83,6 +92,12 @@ export class Scripts {
     this.interactions = new ScriptInteractions(session.store, this.closing.signal);
     this.schedule = new ScriptSchedule(session.store, this.interactions, this.closing.signal);
     this.unsubscribe = session.store.subscribe(() => {
+      for (const chat of this.logs.keys()) {
+        if (!live(session.store.get('chat', chat)) || session.store.scopeState(chat) === 'unloaded') {
+          this.logs.delete(chat);
+          this.logChanges.get(chat)?.changes.notify();
+        }
+      }
       for (const [chat, last] of this.lastPrompt) {
         const stored = live(session.store.get('chat', chat));
         if (!stored || session.store.scopeState(chat) === 'unloaded') { this.lastPrompt.delete(chat); continue; }
@@ -91,6 +106,44 @@ export class Scripts {
         if (!last.size) this.lastPrompt.delete(chat);
       }
     });
+  }
+
+  readonly log = (chat: string): ScriptLog => this.logs.get(chat)?.snapshot ?? EMPTY_LOG;
+
+  readonly subscribeLog = (chat: string, listener: () => void) => {
+    const held = this.logChanges.get(chat) ?? { changes: new ChangeSignal(), users: 0 };
+    this.logChanges.set(chat, held);
+    held.users++;
+    const stop = held.changes.subscribe(listener);
+    return () => {
+      stop();
+      if (--held.users === 0) this.logChanges.delete(chat);
+    };
+  };
+
+  private keepLog(chat: string, entries: readonly HookLog[], dropped = 0) {
+    if (!entries.length || this.closing.signal.aborted || this.session.store.scopeState(chat) === 'unloaded') return;
+    const held = this.logs.get(chat) ?? { snapshot: EMPTY_LOG, sizes: [], characters: 0 };
+    const next = [...held.snapshot.entries];
+    let omitted = held.snapshot.omitted + dropped;
+    for (const raw of entries) {
+      let truncated = raw.truncated;
+      const clip = (text: string) => { if (text.length > 1024) truncated = true; return text.slice(0, 1024); };
+      const tail = <T>(items: T[]) => { if (items.length > 16) truncated = true; return items.slice(-16); };
+      const entry: HookLog = { ...raw, stage: clip(raw.stage), script: clip(raw.script), logs: tail(raw.logs).map(clip), writes: tail(raw.writes).map(([name, value]) => [clip(name), clip(value)]), errors: tail(raw.errors).map((error) => 'message' in error ? { ...error, script: clip(error.script), message: clip(error.message) } : error), missing: tail(raw.missing).map(clip), truncated };
+      const size = JSON.stringify(entry).length;
+      next.push(entry);
+      held.sizes.push(size);
+      held.characters += size;
+      while (next.length > SCRIPT_LOG_LIMITS.entries || held.characters > SCRIPT_LOG_LIMITS.characters) {
+        next.shift();
+        held.characters -= held.sizes.shift()!;
+        omitted++;
+      }
+    }
+    held.snapshot = { entries: next, omitted };
+    this.logs.set(chat, held);
+    this.logChanges.get(chat)?.changes.notify();
   }
 
   readonly subscribe = (listener: () => void) => this.interactions.subscribe(listener);
@@ -102,6 +155,11 @@ export class Scripts {
   answer(question: number, answer: string | null) { this.interactions.answer(question, answer); }
 
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown, from: PackOwner | null = null) {
+    // Event outcomes forward the Lua trace through runEvent's spread; display batches report it directly.
+    if (isRecord(result) && 'trace' in result) {
+      const trace = result.trace as HookTrace;
+      this.keepLog(chat, trace.entries, trace.omitted);
+    }
     this.interactions.report(chat, result, from);
   }
 
@@ -111,6 +169,9 @@ export class Scripts {
     this.closing.abort();
     this.unsubscribe();
     this.lastPrompt.clear();
+    this.logs.clear();
+    for (const { changes } of this.logChanges.values()) { changes.notify(); changes.clear(); }
+    this.logChanges.clear();
     this.interactions.close();
   }
 
@@ -449,6 +510,8 @@ export class Scripts {
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.
   private async run(chat: string, units: Units, scope: ChatScope, signal?: AbortSignal): Promise<ScriptOutcome> {
+    const began = performance.now();
+    const at = Date.now();
     const { event } = units;
     const nothing = { ...noOutcome(), value: event.kind === 'edit' ? event.value : undefined };
     if (this.closing.signal.aborted || signal?.aborted) return nothing;
@@ -466,9 +529,11 @@ export class Scripts {
       });
       const outcome = await Promise.race([running, stopped]).finally(() => signal?.removeEventListener('abort', stop));
       this.report(chat, outcome, from);
+      if ('tool' in units) this.keepLog(chat, [{ stage: event.kind, pack: from, script: units.tool.tool.manifest.displayName, at, duration: performance.now() - began, logs: [], writes: outcome.writes, errors: outcome.errors, missing: outcome.missing, stopped: outcome.stop, changed: outcome.value !== undefined, handled: outcome.handled, truncated: false }]);
       return outcome;
     } catch (error) {
       this.report(chat, error, from);
+      this.keepLog(chat, [{ stage: event.kind === 'edit' ? event.stage : event.kind, pack: from, script: '', at, duration: performance.now() - began, logs: [], writes: [], errors: [{ from, script: '', message: String(error) }], missing: [], stopped: error instanceof ToolStopped, changed: false, handled: false, truncated: false }]);
       return nothing;
     }
   }

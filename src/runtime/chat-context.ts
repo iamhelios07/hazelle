@@ -132,6 +132,17 @@ export function togglesOf(store: Reader['store'], chat: Chat, prompt: PromptChoi
   return { declared, sources, value:toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
 }
 
+export type InspectedToggle = { declaration: Toggle; value: string | null; sources: ToggleSource[] };
+
+export function inspectToggles(store: Reader['store'], chat: Chat): InspectedToggle[] {
+  const toggles = togglesOf(store, chat, chatPrompt(store, chat));
+  return toggles.declared.map((declaration) => ({
+    declaration,
+    value: toggles.value(declaration.key),
+    sources: toggles.sources.filter(({ lines }) => lines.some((line) => 'key' in line && line.key === declaration.key)),
+  }));
+}
+
 // null while its 묶음 is missing, which a turn stops on.
 export function sentSettings(store: Reader['store'], { connection, model }: Route): ModelSettings | null {
   const profile = modelProfile(store, model);

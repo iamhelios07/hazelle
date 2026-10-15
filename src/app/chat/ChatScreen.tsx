@@ -8,7 +8,7 @@ import { useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
 import { ChatFrame, Pill, SidePeeks, usePanelsBeside } from '../ui';
 import { ChatBookmarks } from './ChatBookmarks';
-import { ChatCachePanel } from './ChatCachePanel';
+import { ChatInspect } from './ChatInspect';
 import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
@@ -53,8 +53,8 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
   });
   useShortcut('find', () => actions.openSearch());
   const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
-  const cache = chat.cacheShown && <ChatCachePanel cache={chat.cache} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onClose={actions.closeCache} onEdit={actions.side} />;
-  const paired = usePanelsBeside() && !!panel && chat.cacheShown;
+  const inspect = chat.inspect && <ChatInspect tab={chat.inspect.tab} notes={chat.sendNotes} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onClose={actions.closeInspect} onEdit={actions.side} />;
+  const paired = usePanelsBeside() && !!panel && !!chat.inspect;
   useEffect(() => {
     onPaired(paired);
     return () => onPaired(false);
@@ -95,10 +95,10 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
           ) : panel ? (
             side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           ) : (
-            cache
+            inspect
           )
         }
-        beside={panel && cache}
+        beside={panel && inspect}
         peek={
           <SidePeeks>
             {chat.peeking && <ChatStatusPeek status={chat.status} held={chat.held} decor={chat.decor} onHold={actions.hold} onPress={actions.press} onUnmark={(script) => actions.markStatus(script, false)} />}

@@ -23,7 +23,7 @@ import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 import { evaluateChat } from './chat-context';
-import { triggersOf } from './scripts';
+import { SCRIPT_LOG_LIMITS, triggersOf } from './scripts';
 import type { TurnContext } from './turn-context';
 import { takeTurn } from './turn';
 
@@ -756,3 +756,41 @@ describe('tool events through Scripts', () => {
     expect(log).toHaveLength(2);
   }));
 });
+
+it('keeps bounded per-chat hook logs with Lua output and writes, notifies readers, and forgets unloaded scopes', () => server.withSession(async (session) => {
+  const card = blankCard('logger');
+  card.triggers = [{ id: 'log', kind: 'lua', name: 'logger', code: `function onButtonClick(id, data)
+    log({ message = data })
+    setChatVar(id, 'last', data)
+    request(id, 'unsupported')
+    if data == 'flood' then for i = 1, 20 do log(string.rep('x', 1100)) end end
+    return false
+  end` }];
+  const character = await session.store.create('character', { card, folder: null, loreFolders: [] });
+  if (!character.ok) throw new Error(character.error);
+  const chat = crypto.randomUUID();
+  const lease = session.store.retainChat(chat);
+  await lease.ready;
+  const notify = vi.fn();
+  const stop = session.scripts.subscribeLog(chat, notify);
+  try {
+    await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, null);
+    await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
+    expect(await session.scripts.press(chat, { data: 'awake' })).toBe(true);
+    expect(session.scripts.log(chat).entries).toHaveLength(1);
+    const entry = session.scripts.log(chat).entries[0]!;
+    expect(entry).toMatchObject({ stage: 'button', pack: { kind: 'character', id: character.data.id }, script: 'logger', writes: [['last', 'awake']], missing: ['request'], stopped: true, changed: false, errors: [] });
+    expect(entry.logs.map((line) => JSON.parse(line))).toEqual([{ message: 'awake' }]);
+    expect(entry.duration).toBeGreaterThanOrEqual(0);
+    expect(notify).toHaveBeenCalledTimes(1);
+    for (let n = 0; n < 20; n++) await session.scripts.press(chat, { data: 'flood' });
+    const log = session.scripts.log(chat);
+    expect(log.entries.length).toBeLessThanOrEqual(SCRIPT_LOG_LIMITS.entries);
+    expect(log.entries.reduce((size, each) => size + JSON.stringify(each).length, 0)).toBeLessThanOrEqual(SCRIPT_LOG_LIMITS.characters);
+    expect(log.omitted).toBeGreaterThan(0);
+    expect(log.entries.at(-1)!.truncated).toBe(true);
+    lease.release();
+    await expect.poll(() => session.store.scopeState(chat)).toBe('unloaded');
+    expect(session.scripts.log(chat)).toEqual({ entries: [], omitted: 0 });
+  } finally { stop(); lease.release(); }
+}));

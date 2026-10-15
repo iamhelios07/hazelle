@@ -2,7 +2,7 @@ import { Runaway } from '../engine/cbs/evaluate';
 import type { DisplayPatch } from '../engine/display';
 import type { RegexScript } from '../engine/import/types';
 import type { assembleIllustration, assembleMemory, assembleTranslation, IllustrationInput, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
-import type { ChatScope } from '../engine/render';
+import type { ChatScope, VariableInspection } from '../engine/render';
 import type { ApiFailure } from './api';
 import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState } from './evaluation-core';
 import { noteProblem } from './diagnostics';
@@ -111,6 +111,10 @@ export class Evaluation {
 
   state(lane: Lane<'tool'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<ToolState | RanAway> {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'state', prefix }, signal) as Promise<ToolState | RanAway>;
+  }
+
+  variables(lane: Lane<'view'>, scope: ChatScope, prefix = '', signal?: AbortSignal): Promise<VariableInspection> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'variables', prefix }, signal) as Promise<VariableInspection>;
   }
 
   // A translation's, and a bot's lorebook read, may run beside others of the same chat: each has a lane of its own,

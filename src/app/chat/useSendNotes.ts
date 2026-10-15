@@ -4,10 +4,12 @@ import type { Memory } from '../../model/memory';
 import { breakCost, forecast, lastCache, prior, type Forecast } from '../../runtime/cache';
 import { leaving } from '../../runtime/memory-view';
 import type { Shown } from '../../runtime/talk';
-import { cacheSend, wouldSend } from '../../runtime/turn-context';
+import { cacheSend, previewRequest, wouldSend, type PreviewRequest, type Sending } from '../../runtime/turn-context';
 import { useSession } from '../session';
 
 const SETTLE_MS = 400;
+
+export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Sending | null | undefined; request: () => PreviewRequest | null };
 
 // until: when the last call's cache runs out, null when it cached nothing. next: the draft's forecast against the
 // chat's stored last call (runtime/cache), with what a break costs where the model is priced; undefined until it is
@@ -16,10 +18,11 @@ export type CacheNotes = { until: number | null; next: { forecast: Forecast; cos
 
 // The draft is read again after any store change settles, so an edit to the prompt, a lorebook or the model shows in
 // the forecast while it is open.
-export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean) {
+export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean): SendNotes {
   const session = useSession();
   const last = useMemo(() => lastCache(messages), [messages]);
   const [next, setNext] = useState<CacheNotes['next']>(undefined);
+  const [sending, setSending] = useState<Sending | null | undefined>(undefined);
   const [left, setLeft] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
 
@@ -31,6 +34,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
   useEffect(() => {
     if (id === null || busy) {
       setNext(id === null ? null : undefined);
+      setSending(id === null ? null : undefined);
       return setLeft(null);
     }
     const controller = new AbortController();
@@ -38,6 +42,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
       // A message sent translated goes out as its translation, which is not made yet, so it stands in as typed.
       void wouldSend(session, id, { kind: 'send', text }, controller.signal).then((sending) => {
         if (controller.signal.aborted) return;
+        setSending(sending);
         setLeft(sending && leaving(sending.prompt));
         const send = sending && cacheSend(sending, session.credentials.pool.peek(sending.turn.route.connection.value)?.id ?? null);
         const before = session.store.scopeState(id) === 'loaded' ? prior(session.store, id, messages, Date.now()) : null;
@@ -46,6 +51,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
       }, () => {
         if (controller.signal.aborted) return;
         setNext(null);
+        setSending(null);
         setLeft(null);
       });
     }, SETTLE_MS);
@@ -56,5 +62,12 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
   }, [id, chat, messages, memory, text, busy, changes]);
 
   const cache = useMemo((): CacheNotes => ({ until: last?.until ?? null, next }), [last, next]);
-  return { cache, leaving: left };
+  const request = useMemo(() => {
+    let wire: PreviewRequest | null | undefined;
+    return () => {
+      if (wire === undefined) wire = sending ? previewRequest(sending) : null;
+      return wire;
+    };
+  }, [sending]);
+  return { cache, leaving: left, sending, request };
 }

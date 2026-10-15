@@ -1,0 +1,107 @@
+import { readTool } from '../engine/import/tool';
+import { importTool } from './tools/store';
+import { setModuleAlways } from './modules';
+import { expect, it } from 'vitest';
+import { CONNECTION_TYPES, resolveConnection } from '../connectors/registry';
+import { blankCard } from '../engine/import/card';
+import type { Assembled } from '../engine/pipeline';
+import { emptyMemory, vectorsId } from '../model/memory';
+import { SETTINGS_ID } from '../model/settings';
+import { setDefaultModel } from './assignment';
+import { startChat } from './chat-log';
+import { inspectToggles } from './chat-context';
+import { setTranslate } from './characters';
+import { addLore } from './lore';
+import { afterEnter, gatherTurn, moduleContributions, previewRequest, wouldSend } from './turn-context';
+import { answerable, testServer } from './testing';
+
+const server = testServer();
+
+it('prepares the preview without credentials for every chat connector, with the same cache points and batch settings', () => server.withSession(async (session) => {
+  await answerable(session);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  const sending = await wouldSend(session, chat, { kind: 'send', text: 'draft' });
+  if (!sending) throw new Error('not sendable');
+  sending.turn.settings = { maxOutput: 100 };
+  const connection = sending.turn.route.connection;
+  const key = { type: 'service_account', project_id: 'project', private_key: 'PRIVATE_KEY_SECRET', client_email: 'bot@example.test', token_uri: 'https://oauth2.googleapis.com/token' };
+  for (const type of CONNECTION_TYPES) {
+    const secret = type.id === 'vertex' ? JSON.stringify(key) : 'ACCOUNT_SECRET';
+    const value = { ...connection.value, type: type.id, accounts: [{ id: 'account', secret }] };
+    const resolved = resolveConnection(value);
+    if (!resolved || !resolved.codec) continue;
+    sending.turn.route = { ...sending.turn.route, connection: { ...connection, value } };
+    const request = previewRequest(sending)!;
+    expect(Object.keys(request)).toEqual(['url', 'body']);
+    expect(JSON.stringify(request)).not.toMatch(/ACCOUNT_SECRET|PRIVATE_KEY_SECRET|client_email/);
+    if (type.id === 'google') expect(request.url).not.toContain('key=');
+    if (type.id === 'vertex') expect(request.url).toContain('/projects/project/');
+  }
+  sending.turn.route.connection = { ...connection, value: { ...connection.value, type: 'anthropic' } };
+  sending.turn.route.model = { ...sending.turn.route.model, id: 'claude-sonnet-4-5' };
+  sending.turn.settings = { cache: '5m', discount: true, maxOutput: 100 };
+  sending.prompt.messages = Array.from({ length: 6 }, (_, n) => ({ role: 'user', content: String(n), cache: true }));
+  const request = previewRequest(sending)!;
+  const body = JSON.parse(request.body!) as { stream: boolean; messages: { content: { cache_control?: unknown }[] }[] };
+  expect(body.stream).toBe(false);
+  expect(body.messages.flatMap(({ content }) => content).filter(({ cache_control }) => cache_control)).toHaveLength(4);
+  sending.turn.route.connection.value = { ...connection.value, type: 'generic', protocol: 'gemini', baseUrl: 'https://user:PASSWORD@example.test/v1?key=QUERY_SECRET' };
+  expect(previewRequest(sending)!.url).not.toMatch(/PASSWORD|QUERY_SECRET/);
+  sending.turn.route.connection.value = { ...sending.turn.route.connection.value, accounts: [{ id: 'key', secret: 'PATH.[SECRET]$' }], baseUrl: 'https://example.test/PATH.[SECRET]$' };
+  expect(previewRequest(sending)!.url).not.toContain('PATH.[SECRET]$');
+}));
+
+it('lists only the post-Enter work selected by the real translation, trigger, tool and retrieval facts', () => server.withSession(async (session) => {
+  await answerable(session);
+  const card = blankCard('bot');
+  card.triggers = [{ id: 'live', kind: 'lua', name: 'live', code: 'function onStart(id) end' }, { id: 'off', kind: 'lua', name: 'off', code: 'x()', off: true }];
+  const character = await session.store.create('character', { card, folder: null, loreFolders: [] });
+  if (!character.ok) throw new Error(character.error);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, null);
+  const turn = gatherTurn(session, chat, { kind: 'send', text: 'question' });
+  if (!turn || 'kind' in turn) throw new Error('not sendable');
+  await setTranslate(session.store, null, { input: true });
+  expect(afterEnter(session, chat, turn).map((item) => item.kind === 'hook' ? item.stage : item.kind)).toEqual(['input-translation', 'onInput', 'editInput', 'onStart', 'editRequest']);
+  await setTranslate(session.store, null, { reverse: true });
+  expect(afterEnter(session, chat, turn).some(({ kind }) => kind === 'input-translation')).toBe(false);
+  await setDefaultModel(session.store, 'embed', { connection: turn.route.connection.id, model: turn.route.model.id });
+  await session.store.create('vectors', { model: turn.route.model.id, items: { record: { at: 0, data: 'AQ==', scale: 1 } } }, { id: vectorsId(chat), parent: chat });
+  turn.memory = { kind: 'built-in', memory: emptyMemory(), budget: 100, shown: [], found: [] };
+  expect(afterEnter(session, chat, turn).map((item) => item.kind === 'hook' ? item.stage : item.kind)).toEqual(['onInput', 'editInput', 'onStart', 'retrieval', 'editRequest']);
+  const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name test\n//@author tester'));
+  if (!parsed.ok) throw new Error('fixture');
+  const tool = await importTool(session.store, session.files, parsed.tool);
+  if (!tool.ok) throw new Error(tool.error);
+  await setModuleAlways(session.store, tool.data.id, true);
+  expect(afterEnter(session, chat, turn)).toContainEqual({ kind: 'tools', modules: [tool.data.id] });
+  turn.said = null;
+  expect(afterEnter(session, chat, turn).filter((item) => item.kind === 'hook').map((item) => item.stage)).toEqual(['onStart', 'editRequest']);
+  turn.memory = null;
+  expect(afterEnter(session, chat, turn).some(({ kind }) => kind === 'retrieval')).toBe(false);
+}));
+
+it('attributes preview lore to its pack and keeps pack order, attachment sites and enabled contributions', () => server.withSession(async (session) => {
+  const { store } = session;
+  const toggle = { kind: 'check' as const, key: 'enabled', label: 'enabled', default: '1' as const };
+  const module = await store.create('module', { name: 'module', description: '', namespace: null, loreFolders: [], toggles: [toggle], regex: [{ id: 'r', name: '', stage: 'input', find: 'x', replace: 'y', flags: null }], triggers: [{ id: 't', kind: 'lua', name: '', code: 'function onInput(id) end' }, { id: 'off', kind: 'lua', name: '', code: 'x()', off: true }] });
+  if (!module.ok) throw new Error(module.error);
+  const character = await store.create('character', { card: blankCard('bot'), folder: null, loreFolders: [], modules: [module.data.id] });
+  if (!character.ok) throw new Error(character.error);
+  await store.update('settings', SETTINGS_ID, (settings) => ({ ...settings, modules: [module.data.id] }));
+  const settings = store.get('settings', SETTINGS_ID)!.value;
+  await store.update('prompt', settings.prompt!, (prompt) => ({ ...prompt, modules: [module.data.id] }));
+  await store.update('persona', settings.persona!, (persona) => ({ ...persona, modules: [module.data.id] }));
+  const lore = crypto.randomUUID();
+  await addLore(store, module.data.id, null, lore);
+  const chat = { title: null, character: character.data.id, models: {} };
+  const preview: Assembled = { messages: [{ role: 'system', content: 'entry' }], parts: [{ from: { kind: 'depth', id: lore, name: 'entry', depth: 1 }, tokens: 7 }], lore: [{ id: lore, name: 'entry', why: { kind: 'constant' }, fate: { kind: 'placed', tokens: 7 } }], memory: null, dropped: 0 };
+  const contributions = moduleContributions(session, chat, preview);
+  expect(contributions.map(({ id }) => id)).toEqual([character.data.id, module.data.id]);
+  expect(contributions[0]).toMatchObject({ kind: 'character', attached: [{ kind: 'character', id: character.data.id, own: true }], lore: [] });
+  expect(contributions[1]).toMatchObject({ attached: [{ kind: 'settings', id: SETTINGS_ID, own: false }, { kind: 'prompt', id: settings.prompt, own: false }, { kind: 'character', id: character.data.id, own: false }, { kind: 'persona', id: settings.persona, own: false }], regex: { input: 1, output: 0, process: 0, display: 0 }, triggers: { lua: 1, blocks: 0 }, toggles: [toggle], lore: [{ id: lore, tokens: 7, parts: [{ index: 0, tokens: 7 }] }] });
+  expect(inspectToggles(store, chat)).toContainEqual({ declaration: toggle, value: '1', sources: [{ from: 'module', name: 'module', lines: [toggle] }] });
+}));

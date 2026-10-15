@@ -1,3 +1,4 @@
+import type { TokenEstimate, TokenFit } from '../model/token-calibration';
 import { cachePoints, type CachePart, type Sent } from './cache-points';
 import { fitChat, type ProviderFit, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
@@ -515,4 +516,25 @@ export type Unused = { kind: 'bias'; count: number };
 export function unused(card: Card): Unused[] {
   const found: Unused[] = [{ kind: 'bias', count: card.bias.length }];
   return found.filter((item) => item.count > 0);
+}
+
+export type TokenSource = From | { kind: 'description' | 'persona' | 'memory' | 'chat' | 'lorebook' };
+export type TokenGroup = { source: TokenSource; tokens: number; count: number };
+export type TokenGroups = { groups: TokenGroup[]; total: number; fit: TokenFit; estimate: TokenEstimate; dropped: number };
+
+export function tokenGroups(prompt: Pick<Assembled, 'parts' | 'dropped'>, snapshot: Pick<TokenGroups, 'fit' | 'estimate'>): TokenGroups {
+  const groups = new Map<string, TokenGroup>();
+  let total = 0;
+  for (const { from, tokens } of prompt.parts) {
+    const source: TokenSource = from.kind === 'block' && (from.slot === 'description' || from.slot === 'persona' || from.slot === 'memory' || from.slot === 'chat')
+      ? { kind: from.slot }
+      : from.kind === 'lore' ? { kind: 'lorebook' } : from;
+    const key = JSON.stringify(source);
+    const group = groups.get(key) ?? { source, tokens: 0, count: 0 };
+    group.tokens += tokens;
+    group.count++;
+    total += tokens;
+    groups.set(key, group);
+  }
+  return { groups: [...groups.values()], total, fit: snapshot.fit, estimate: snapshot.estimate, dropped: prompt.dropped };
 }

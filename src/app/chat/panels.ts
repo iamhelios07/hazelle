@@ -5,24 +5,23 @@ import type { CharacterPart } from '../common/characterPart';
 // block: the prompt block the editor opens at, absent for its list. fromToggles: opened from the chat's 토글 panel,
 // which its 토글 pane goes back to.
 export type Side = { kind: 'prompts'; id: string | null; pane: 'toggles' | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null };
-export type Panel = { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | Side;
+export type InspectTab = 'request' | 'tokens' | 'cache' | 'variables' | 'modules' | 'scripts';
+export type InspectPanel = { kind: 'inspect'; tab: InspectTab };
+export type Panel = InspectPanel | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | Side;
 
 const isSide = (panel: Panel): panel is Side => panel.kind === 'prompts' || panel.kind === 'character';
 
-// What stands beside the story. The cache panel stays open beside an editor where two panels stand beside the page
-// (pairs), so a break is fixed while its forecast follows; elsewhere one panel at a time, the newest.
-export type Panels = { panel: Panel | null; cache: boolean };
+// The inspect panel stays open beside an editor where two panels stand beside the page (pairs), so a break is
+// fixed while its preview follows; elsewhere one panel at a time, the newest.
+export type Panels = { panel: Exclude<Panel, InspectPanel> | null; inspect: InspectPanel | null };
 
-export const NO_PANELS: Panels = { panel: null, cache: false };
+export const NO_PANELS: Panels = { panel: null, inspect: null };
 
-export const cacheShown = ({ panel, cache }: Panels, pairs: boolean) => cache && (panel === null || pairs);
+export const inspectShown = ({ panel, inspect }: Panels, pairs: boolean) => panel === null || pairs ? inspect : null;
 
-export const opened = ({ cache }: Panels, panel: Panel, pairs: boolean): Panels => ({ panel, cache: cache && pairs && isSide(panel) });
-
-export function flippedCache(panels: Panels, pairs: boolean): Panels {
-  if (cacheShown(panels, pairs)) return { ...panels, cache: false };
-  const { panel } = panels;
-  return { panel: pairs && panel && isSide(panel) ? panel : null, cache: true };
+export function opened(current: Panels, panel: Panel, pairs: boolean): Panels {
+  if (panel.kind === 'inspect') return { panel: pairs && current.panel && isSide(current.panel) ? current.panel : null, inspect: panel };
+  return { panel, inspect: pairs && isSide(panel) ? current.inspect : null };
 }
 
 // The editor a part of the prompt is written in: a block of the chat's prompt, the character's 설명 or one of its

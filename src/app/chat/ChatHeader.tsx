@@ -69,7 +69,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         {item && !chat.displayPending && <MenuItem icon={Bookmark} label={BOOKMARK} onClick={actions.bookmarks} />}
         {item && <MenuItem icon={Brain} label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
         {item && <MenuItem icon={BookKey} label={CHAT_LORE} onClick={actions.lore} />}
-        {item && <MenuItem icon={DatabaseZap} label="캐시" onClick={actions.cache} />}
+        {item && <MenuItem icon={DatabaseZap} label="캐시" onClick={() => actions.openInspect('cache')} />}
         {tools.length > 0 && <>
           <Divider variant="menu" />
           {tools.map((tool) => <MenuItem key={`${tool.module}:${tool.kind === 'page' ? 'page' : `menu:${tool.item}`}`} icon={Package} label={tool.label} sub={tool.name} checked={tool.kind === 'page' ? panel?.kind === 'tool' && panel.module === tool.module : undefined} onClick={() => tool.kind === 'page' ? actions.tool(tool.module) : actions.toolMenu(tool.module, tool.item)} />)}
