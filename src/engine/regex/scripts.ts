@@ -18,11 +18,13 @@ const FLAG_CHARS = 'dgimsuvy';
 const ACTIONS = ['move_top', 'move_bottom', 'repeat_back', 'inject'];
 const DIRECTIVE = /^@@(emo|move_top|move_bottom|repeat_back|inject)(?:\s|$)/;
 const append = (text: string, copy: string) => text + copy;
+const appendLine = (text: string, copy: string) => `${text}\n${copy}`;
+const prependLine = (text: string, copy: string) => `${copy}\n${text}`;
 const PLACEMENTS = new Map([
   ['end', append],
   ['start', (text: string, copy: string) => copy + text],
-  ['end_nl', (text: string, copy: string) => `${text}\n${copy}`],
-  ['start_nl', (text: string, copy: string) => `${copy}\n${text}`],
+  ['end_nl', appendLine],
+  ['start_nl', prependLine],
 ]);
 
 // What a box is made of: a script's replacement (or the block it moves) holding one of these draws a box; one of
@@ -80,7 +82,7 @@ export class Scripts {
         const { block, rest } = cut(result, once, argument);
         if (take.has(place)) boxes.push({ script: place, html: cbs(block), at: kind === 'move_top' ? 'top' : 'bottom' });
         if (take.has(place) || BOX_TAG.test(argument)) drawn.push(place);
-        result = cbs(take.has(place) ? rest : kind === 'move_top' ? block + rest : rest + block);
+        result = cbs(take.has(place) ? rest : (kind === 'move_top' ? prependLine : appendLine)(rest, block));
       } else if (kind === 'replace' && take.has(place)) {
         const pieces: string[] = [];
         const marked = result.replace(regex(), OPEN + argument + CLOSE);

@@ -81,10 +81,10 @@ describe('Scripts', () => {
     expect([options, replacements]).toEqual([1, 1]);
   });
 
-  it('moves only the first match to the top or the bottom, with $1 expanded', () => {
+  it('moves only the first match to the top or the bottom on a line of its own, with $1 expanded', () => {
     const text = 'a<s>1</s>b<s>2</s>';
-    expect(apply([script('<s>(\\d)</s>', '@@move_top [$1]')], text).text).toBe('[1]ab<s>2</s>');
-    expect(apply([script('<s>(\\d)</s>', '<t>$1</t>', { flags: '<move_bottom>' })], text).text).toBe('ab<s>2</s><t>1</t>\n');
+    expect(apply([script('<s>(\\d)</s>', '@@move_top [$1]')], text).text).toBe('[1]\nab<s>2</s>');
+    expect(apply([script('<s>(\\d)</s>', '<t>$1</t>', { flags: '<move_bottom>' })], text).text).toBe('ab<s>2</s>\n<t>1</t>\n');
   });
 
   it('repeats the latest earlier same-role match onto a message without one, and leaves a message with one alone', () => {
@@ -139,7 +139,7 @@ describe('Scripts', () => {
 
   it('takes a block a script moves as its box', () => {
     const scripts = [script('\\[hp=(\\d+)\\]', '@@move_top <div>HP $1</div>')];
-    expect(apply(scripts, 'hi [hp=3]').drawn).toEqual([0]);
+    expect(apply(scripts, 'hi [hp=3]')).toMatchObject({ text: '<div>HP 3</div>\n\nhi ', drawn: [0] });
     expect(apply(scripts, 'hi [hp=3]', { take: new Set([0]) })).toMatchObject({ text: 'hi ', boxes: [{ script: 0, html: '<div>HP 3</div>\n', at: 'top' }] });
   });
 
