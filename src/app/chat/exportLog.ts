@@ -1,7 +1,7 @@
 import { pictureRef, resolveAssets, type PictureKind, type PictureUrl } from '../../engine/assets';
 import type { Display } from '../../engine/display';
 import { shown } from '../../model/chat';
-import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
+import { byParagraph, placeMark, withMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import type { Shown } from '../../runtime/talk';
 import { inlaid, type LogRow } from '../ui';
@@ -29,7 +29,7 @@ export type Illustrated = { placed: ReadonlyMap<number, string>; pictures: Reado
 
 // The rows a log draws, as the chat draws them, their pictures still named by pictureRef. A reply being written, a
 // failed one and an empty one are left out, and a message's boxes stand in it as they did when it was written. A
-// message's newest 삽화 goes into its first text, at its paragraph as the chat places it.
+// message's 삽화 go into its first text, the newest of each place, at its paragraph as the chat places it.
 export function logDraft(messages: Shown[], view: Display, { placed, pictures: drawn }: Illustrated, flipped: ReadonlySet<string>, bot: boolean, names: ReturnType<typeof speakers>, { hideMe, text, from, to }: LogChoices): LogDraft {
   const decor = { bot, url: pictureRef };
   const rows: LogRow[] = [];
@@ -42,12 +42,12 @@ export function logDraft(messages: Shown[], view: Display, { placed, pictures: d
     const own = { text: original, original: true };
     const other = translation === null ? own : { text: translation, original: false };
     const said = (text === 'original' ? [own] : text === 'both' ? [...new Set([own, other])] : [seenText(original, translation, null, flipped.has(version.id)) === original ? own : other]).filter((each) => each.text.trim());
-    const picture = drawn.get(version.id)?.at(-1);
+    const places = byParagraph(drawn.get(version.id) ?? []);
     const story = ({ text, original }: (typeof said)[number], at: number) => {
-      if (!picture || at > 0) return shownHtml(text, decor);
-      const { paragraph } = picture.value.scene;
-      const marked = original ? withoutMarks(placed.get(index) ?? text, paragraph) : withMarks(text, new Set([paragraph]));
-      return inlaid(shownHtml(marked, decor), placeMark(paragraph), `<img src="${pictureRef('illustration', picture.id)}">`);
+      if (!places.size || at > 0) return shownHtml(text, decor);
+      const paragraphs = new Set(places.keys());
+      const marked = original ? withoutMarks(placed.get(index) ?? text, paragraphs) : withMarks(text, paragraphs);
+      return [...places].reduce((html, [paragraph, pictures]) => inlaid(html, placeMark(paragraph), `<img src="${pictureRef('illustration', pictures.at(-1)!.id)}">`), shownHtml(marked, decor));
     };
     const boxes = view.boxes[index]!;
     if (!said.length && !boxes.length) continue;

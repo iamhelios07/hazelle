@@ -2,9 +2,9 @@ import { SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import type { PictureUrl } from '../../engine/assets';
 import { parseScene, sceneText, SIZES, type SceneInvalid } from '../../engine/illustrate';
-import { paragraphsOf, type Scene } from '../../model/illustration';
+import { byParagraph, paragraphsOf, type Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
-import type { Drawing } from '../../runtime/illustrate';
+import type { Drawing, IllustrateFailure } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import { ACTS } from '../common/acts';
 import { describeIllustrateFailure } from '../common/failure';
@@ -12,17 +12,24 @@ import { timeOfDay } from '../common/time';
 import { Button, Dialog, Failure, IconButton, StoryPicture, Switcher, TextField } from '../ui';
 import type { IllustrationActions, Reshaping } from './useChatIllustrations';
 
-// What a message's slot holds: a run under way or failed comes before the picture paged to. A failed run with no scene
-// has no paragraph and goes at the message end.
-export type Slot =
+// What a place of a message holds: a scene being drawn or failed comes before the picture paged to there. A run that
+// failed with no scene has no paragraph and goes at the message end. pictures: the place's, oldest first.
+export type Slot = { paragraph: number | null } & (
   | { kind: 'drawing'; scene: Scene }
-  | { kind: 'failed'; drawing: Extract<Drawing, { stage: 'failed' }>; scene: Scene | null }
-  | { kind: 'picture'; picture: Stored<'illustration'>; scene: Scene };
+  | { kind: 'failed'; failure: IllustrateFailure; version: string; scene: Scene | null }
+  | { kind: 'picture'; picture: Stored<'illustration'>; pictures: Stored<'illustration'>[] }
+);
 
-export function slotOf(drawing: Drawing | null, picture: Stored<'illustration'> | null): Slot | null {
-  if (drawing?.stage === 'drawing') return { kind: 'drawing', scene: drawing.scene };
-  if (drawing?.stage === 'failed') return { kind: 'failed', drawing, scene: drawing.scene };
-  return picture && { kind: 'picture', picture, scene: picture.value.scene };
+// pictures: the shown version's. pages: by paragraph, the picture paged to; none follows the newest.
+export function slotsOf(drawing: Drawing | null, pictures: Stored<'illustration'>[], pages: ReadonlyMap<number, string>): Slot[] {
+  const slots = new Map<number, Slot>();
+  for (const [paragraph, place] of byParagraph(pictures)) slots.set(paragraph, { paragraph, kind: 'picture', picture: place.find(({ id }) => id === pages.get(paragraph)) ?? place.at(-1)!, pictures: place });
+  for (const { scene, failure } of drawing?.sketches ?? []) {
+    const { paragraph } = scene;
+    slots.set(paragraph, failure ? { paragraph, kind: 'failed', failure, version: drawing!.version, scene } : { paragraph, kind: 'drawing', scene });
+  }
+  const placed = [...slots.values()].sort((a, b) => a.paragraph! - b.paragraph!);
+  return drawing?.failure ? [...placed, { paragraph: null, kind: 'failed', failure: drawing.failure, version: drawing.version, scene: null }] : placed;
 }
 
 const LABEL = '삽화';
@@ -30,10 +37,8 @@ const LABEL = '삽화';
 type Props = {
   slot: Slot;
   message: Shown;
-  // The shown version's pictures, oldest first.
-  pictures: Stored<'illustration'>[];
   onPage: (picture: string | null) => void;
-  // A scene being written for the message, which another run must wait for.
+  // A run under way for the message, which another must wait for.
   running: boolean;
   url: PictureUrl;
   // 삽화's 기능: off, a picture stays and is drawn again no more.
@@ -44,38 +49,38 @@ type Props = {
   onDrop: IllustrationActions['dropPicture'];
 };
 
-export function ChatPicture({ slot, message, pictures, onPage, running, url, draws, onDraw, onDismiss, onReshape, onDrop }: Props) {
+export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw, onDismiss, onReshape, onDrop }: Props) {
   if (slot.kind === 'drawing') {
     const { width, height } = SIZES[slot.scene.shape];
     return <StoryPicture src={undefined} label={LABEL} width={width} height={height} status="그리는 중" />;
   }
   if (slot.kind === 'failed') {
-    const { drawing } = slot;
+    const { failure, version, scene } = slot;
     return (
       <Failure
-        title={drawing.failure.kind === 'costs' ? '비용이 드는 이미지' : '삽화 실패'}
+        title={failure.kind === 'costs' ? '비용이 드는 이미지' : '삽화 실패'}
         actions={
           <>
-            <Button variant="secondary" size="sm" onClick={() => onDismiss(message.id)}>
+            <Button variant="secondary" size="sm" disabled={running} onClick={() => onDismiss(message.id, scene)}>
               닫기
             </Button>
-            {!draws ? null : drawing.failure.kind === 'costs' ? (
-              <Button size="sm" onClick={() => onDraw(message.id, drawing.version, drawing.scene, true)}>
+            {!draws ? null : failure.kind === 'costs' ? (
+              <Button size="sm" disabled={running} onClick={() => onDraw(message.id, version, scene, true)}>
                 그래도 만들기
               </Button>
             ) : (
-              <Button size="sm" onClick={() => onDraw(message.id, drawing.version, drawing.scene)}>
+              <Button size="sm" disabled={running} onClick={() => onDraw(message.id, version, scene)}>
                 {ACTS.retry.label}
               </Button>
             )}
           </>
         }
       >
-        {describeIllustrateFailure(drawing.failure)}
+        {describeIllustrateFailure(failure)}
       </Failure>
     );
   }
-  const { picture } = slot;
+  const { picture, pictures } = slot;
   const { version, scene, sent } = picture.value;
   const at = pictures.indexOf(picture);
   const step = (by: -1 | 1) => onPage(pictures[(at + by + pictures.length) % pictures.length]!.id);

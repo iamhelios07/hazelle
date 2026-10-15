@@ -36,14 +36,23 @@ export type Illustration = {
 // Shared by every chat, or a character's own (Character.ownIllustrate). auto: draw after each reply received, off by default since every
 // picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
 // absent for the first one starred. Absent fields are read through runtime/characters illustrateSwitches.
-// spend: draw a picture not known to be free (runtime/illustrate costs) without asking each time.
-export type IllustrateSwitches = { auto?: boolean; spend?: boolean; prompt?: string; model?: ModelRef };
+// spend: draw a picture not known to be free (runtime/illustrate costs) without asking each time. ladder: lengths in
+// characters, each higher than the one before; a reply at least as long as one gets one more picture (pictureCount).
+export type IllustrateSwitches = { auto?: boolean; spend?: boolean; prompt?: string; model?: ModelRef; ladder?: number[] };
 
 // The one rule of what a paragraph is, which the scene writer reads numbered and the chat places pictures by: each
 // line of the stored text with words outside its tags, since roleplay prose often breaks paragraphs with a single
 // newline. A line of tags alone (a bot's <GT-SEP/>) shows nothing to put a picture after.
 const isParagraph = (line: string) => line.replace(/<[^>]*>/g, '').trim() !== '';
 export const paragraphsOf = (text: string): string[] => text.split('\n').filter(isParagraph).map((line) => line.trim());
+
+// A reply's length is its paragraphs' characters without their tags, so a bot's markup never adds pictures. Each
+// picture follows a paragraph of its own, so there are never more than paragraphs.
+export function pictureCount(ladder: readonly number[], text: string): number {
+  const paragraphs = paragraphsOf(text);
+  const length = paragraphs.join('').replace(/<[^>]*>/g, '').length;
+  return Math.min(1 + ladder.filter((rung) => length >= rung).length, paragraphs.length);
+}
 
 // The paragraph a picture comes after in text as it stands now; null when an edit left fewer paragraphs, and the
 // picture goes at the message's end, never after another paragraph.
@@ -65,5 +74,17 @@ export function withMarks(text: string, paragraphs: ReadonlySet<number>): string
     .join('\n');
 }
 
-// keep: the one paragraph whose mark stays.
-export const withoutMarks = (text: string, keep: number | null = null) => (text.includes('') ? text.replace(MARK, (whole, paragraph: string) => (Number(paragraph) === keep ? whole : '')) : text);
+// keep: the paragraphs whose marks stay.
+export const withoutMarks = (text: string, keep: ReadonlySet<number> = new Set()) => (text.includes('') ? text.replace(MARK, (whole, paragraph: string) => (keep.has(Number(paragraph)) ? whole : '')) : text);
+
+// A version's pictures by the paragraph each stands after, in paragraph order, each place's oldest first: a place shows
+// one picture and pages through the others.
+export function byParagraph<T extends { value: Pick<Illustration, 'scene' | 'at'> }>(pictures: readonly T[]): Map<number, T[]> {
+  const places = new Map<number, T[]>();
+  for (const picture of [...pictures].sort((a, b) => a.value.scene.paragraph - b.value.scene.paragraph || a.value.at - b.value.at)) {
+    const place = places.get(picture.value.scene.paragraph);
+    if (place) place.push(picture);
+    else places.set(picture.value.scene.paragraph, [picture]);
+  }
+  return places;
+}

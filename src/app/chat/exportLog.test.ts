@@ -43,17 +43,18 @@ it('keeps a version flipped to its original on screen in its original, and shows
   expect(said(new Set(['a']))).toBe('Hello');
 });
 
-it('puts a version’s newest 삽화 in its text where the chat places it, and in a translation after the same paragraph', () => {
+it('puts the newest 삽화 of each place in a version’s text where the chat places it, and in a translation after the same paragraphs', () => {
   const illustration = (id: string, paragraph: number, at: number) => ({ id, value: { version: 'a', at, scene: { paragraph } } }) as Stored<'illustration'>;
-  const pictures = new Map([['a', [illustration('11111111-1111-4111-8111-111111111111', 0, 1), illustration('22222222-2222-4222-8222-222222222222', 1, 2)]]]);
-  const shownAs = (text: LogText) => logDraft([message('a', 'assistant', { translation: { text: '하나\n둘\n셋', receipt: null, at: 0 } })], { ...view, texts: ['One\nTwo\nThree'] }, { placed: new Map([[0, `One\nTwo\n${placeMark(1)}\nThree`]]), pictures }, new Set(), true, names, { pictures: true, hideMe: false, text, from: 1, to: 1 });
-  const picture = '<p><img src="illustration:22222222-2222-4222-8222-222222222222"></p>';
-  expect(shownAs('original').rows[0]!.stories[0]).toBe(`<p>One</p>\n<p>Two</p>\n${picture}\n<p>Three</p>\n`);
-  expect(shownAs('translation').rows[0]!.stories[0]).toBe(`<p>하나</p>\n<p>둘</p>\n${picture}\n<p>셋</p>\n`);
-  const boxed = logDraft([message('a', 'assistant')], { ...view, texts: ['<div>\nOne\nTwo\n</div>'] }, { placed: new Map([[0, `<div>\nOne\n${placeMark(1)}\nTwo\n</div>`]]), pictures }, new Set(), true, names, { pictures: true, hideMe: false, text: 'original', from: 1, to: 1 });
-  expect(boxed.rows[0]!.stories[0]).toBe('<div>\nOne\n<img src="illustration:22222222-2222-4222-8222-222222222222">\nTwo\n</div>');
+  const [older, newer, first] = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333'];
+  const pictures = new Map([['a', [illustration(older, 1, 1), illustration(newer, 1, 2), illustration(first, 0, 3)]]]);
+  const shownAs = (text: LogText) => logDraft([message('a', 'assistant', { translation: { text: '하나\n둘\n셋', receipt: null, at: 0 } })], { ...view, texts: ['One\nTwo\nThree'] }, { placed: new Map([[0, `One\n${placeMark(0)}\nTwo\n${placeMark(1)}\nThree`]]), pictures }, new Set(), true, names, { pictures: true, hideMe: false, text, from: 1, to: 1 });
+  const picture = (id: string) => `<p><img src="illustration:${id}"></p>`;
+  expect(shownAs('original').rows[0]!.stories[0]).toBe(`<p>One</p>\n${picture(first)}\n<p>Two</p>\n${picture(newer)}\n<p>Three</p>\n`);
+  expect(shownAs('translation').rows[0]!.stories[0]).toBe(`<p>하나</p>\n${picture(first)}\n<p>둘</p>\n${picture(newer)}\n<p>셋</p>\n`);
+  const boxed = logDraft([message('a', 'assistant')], { ...view, texts: ['<div>\nOne\nTwo\n</div>'] }, { placed: new Map([[0, `<div>\nOne\n${placeMark(0)}\nTwo\n${placeMark(1)}\n</div>`]]), pictures }, new Set(), true, names, { pictures: true, hideMe: false, text: 'original', from: 1, to: 1 });
+  expect(boxed.rows[0]!.stories[0]).toBe(`<div>\nOne\n<img src="illustration:${first}">\nTwo\n<img src="illustration:${newer}">\n</div>`);
   const both = shownAs('both');
-  expect([both.rows[0]!.stories.join('').split('illustration:').length - 1, both.pictures.get('illustration:22222222-2222-4222-8222-222222222222')?.kind]).toEqual([1, 'illustration']);
+  expect([both.rows[0]!.stories.join('').split('illustration:').length - 1, both.pictures.has(`illustration:${older}`)]).toEqual([2, false]);
 });
 
 it('offers to translate only what a translated log would show untranslated', () => {

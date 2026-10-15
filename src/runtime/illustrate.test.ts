@@ -7,6 +7,7 @@ import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 import { placeMark } from '../model/illustration';
+import { severalScenes } from '../engine/illustrate';
 import { takeTurn } from './turn';
 import { removeIllustration, restoreIllustration } from './illustrate';
 import { likenessId } from '../model/likeness';
@@ -83,6 +84,25 @@ describe('Illustrator', () => {
       expect(read.ok && [...read.data]).toEqual([...PNG]);
     }));
 
+  it('writes as many scenes as the reply’s length earns in one call, and draws each in turn', () =>
+    server.withSession(async (session) => {
+      const chat = await painted(session);
+      await setIllustrate(session.store, null, { auto: true, spend: true, ladder: [REPLY.length - 20, REPLY.length * 2] });
+      const scenes = [scene, { ...scene, after: 2, shape: 'square' }, { ...scene, after: 3 }, { ...scene, after: 1 }];
+      const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scenes)), picture(), picture()]));
+      await takeTurn(session, chat, { kind: 'answer' });
+      await vi.waitFor(() => {
+        expect(session.store.children('illustration', chat)).toHaveLength(2);
+        expect(session.illustrator.snapshot().size).toBe(0);
+      }, { timeout: 5000 });
+      expect(log[1]!.sent.body).toContain(severalScenes(2));
+      expect(log).toHaveLength(4);
+      // A paragraph already taken drops its scene, and so does one past the count.
+      const drawn = session.store.children('illustration', chat).map(({ value }) => value);
+      expect(drawn.map(({ scene }) => scene.paragraph).sort()).toEqual([1, 2]);
+      expect(drawn[0]!.receipt!.id).toBe(drawn[1]!.receipt!.id);
+    }));
+
   it('draws no picture not known to be free until the user agrees to spend, then draws it from the same scene', () =>
     server.withSession(async (session) => {
       const chat = await painted(session);
@@ -90,10 +110,10 @@ describe('Illustrator', () => {
       const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scene)), free(false), picture()]));
       await takeTurn(session, chat, { kind: 'answer' });
       const reply = fold(session.store.children('entry', chat))[1]!;
-      await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ stage: 'failed', failure: { kind: 'costs' }, scene: { paragraph: 1 } }), { timeout: 5000 });
+      await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ writing: false, failure: null, sketches: [{ failure: { kind: 'costs' }, scene: { paragraph: 1 } }] }), { timeout: 5000 });
       expect(log).toHaveLength(3);
-      const failed = session.illustrator.snapshot().get(reply.id);
-      session.illustrator.draw(chat, reply.id, shown(reply).id, { scene: failed?.stage === 'failed' ? failed.scene : null, spend: true });
+      const failed = session.illustrator.snapshot().get(reply.id)!.sketches[0]!;
+      session.illustrator.draw(chat, reply.id, shown(reply).id, { scene: failed.scene, spend: true });
       await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(1));
       expect(log).toHaveLength(4);
       expect(log[3]!.sent.url).toBe('https://image.example/generate');
@@ -116,7 +136,7 @@ describe('Illustrator', () => {
       await takeTurn(session, chat, { kind: 'answer' });
       const reply = fold(session.store.children('entry', chat))[1]!;
       session.illustrator.draw(chat, reply.id, shown(reply).id);
-      await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ stage: 'failed', failure: { kind: 'no-image-model' }, scene: null }));
+      await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ writing: false, failure: { kind: 'no-image-model' }, sketches: [] }));
       expect(log).toHaveLength(1);
       session.illustrator.dismiss(reply.id);
       expect(session.illustrator.snapshot().has(reply.id)).toBe(false);

@@ -4,14 +4,15 @@ import type { IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { setIllustrate, setOwnIllustrate } from '../../runtime/characters';
 import { chatIllustrate } from '../../runtime/features';
-import { removeIllustration, restoreIllustration, type Drawing } from '../../runtime/illustrate';
+import { removeIllustration, restoreIllustration, type IllustrateFailure } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import { describeIllustrateFailure } from '../common/failure';
 import { useChildren, useIllustrating, useSession } from '../session';
 import { useToast } from '../toast';
 
-// The failures a toast already said, by run: each is said once, though the chat is left and opened again.
-const told = new WeakSet<Drawing>();
+// The failures a toast already said: each is said once, though the chat is left and opened again, and once for all the
+// scenes of a run it failed together.
+const told = new WeakSet<IllustrateFailure>();
 
 // A version's pictures, oldest first.
 function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap<string, Stored<'illustration'>[]> {
@@ -42,9 +43,12 @@ export function useChatIllustrations(chatId: string, id: string | null, chat: Ch
 
   useEffect(() => {
     for (const drawing of illustrating.values()) {
-      if (drawing.chat !== chatId || drawing.stage !== 'failed' || told.has(drawing)) continue;
-      told.add(drawing);
-      toast.error(describeIllustrateFailure(drawing.failure));
+      if (drawing.chat !== chatId) continue;
+      for (const failure of [drawing.failure, ...drawing.sketches.map((sketch) => sketch.failure)]) {
+        if (!failure || told.has(failure)) continue;
+        told.add(failure);
+        toast.error(describeIllustrateFailure(failure));
+      }
     }
   }, [illustrating]);
 
@@ -73,7 +77,7 @@ export function useChatIllustrations(chatId: string, id: string | null, chat: Ch
       setOwnIllustrate: setOwnIllustrateSwitches,
       illustrate: (message: Shown) => draw(message.id, shown(message).id),
       draw,
-      dismissIllustration: (message: string) => illustrator.dismiss(message),
+      dismissIllustration: (message: string, scene: Scene | null) => illustrator.dismiss(message, scene),
       dropPicture,
       reshape: setReshaping,
     },

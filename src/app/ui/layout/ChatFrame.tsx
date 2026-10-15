@@ -27,7 +27,7 @@ const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: sty
 export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[font]} ${LEADING[leading]} ${WIDTH[width]}`, style: { '--reading-size': `${size}px` } as CSSProperties });
 
 // Whether the story stands left of a stage at least half its text's width: a message's 삽화 stands there
-// (MarginPicture), not in the text. Outside a chat there is no stage.
+// (MarginPictures), not in the text. Outside a chat there is no stage.
 const MarginRoom = createContext(false);
 export const useMarginRoom = () => useContext(MarginRoom);
 

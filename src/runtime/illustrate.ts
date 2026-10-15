@@ -2,14 +2,15 @@ import { ChangeSignal } from '../change-signal';
 import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
-import { parseScene, pictureRequest, type SceneInvalid } from '../engine/illustrate';
+import { parseScenes, pictureRequest, type SceneInvalid } from '../engine/illustrate';
 import type { ModelSettings } from '../connectors/settings';
 import type { RanAway } from '../engine/pipeline';
 import { fold, type Chat, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
-import { paragraphsOf, type Illustration, type Scene } from '../model/illustration';
+import { paragraphsOf, pictureCount, type Illustration, type Scene } from '../model/illustration';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
+import type { Portrait } from '../model/likeness';
 import type { IllustratePrompt } from '../model/prompt';
 import type { ApiFailure } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
@@ -27,8 +28,8 @@ import { callOf, endCall, pageCall } from './streams';
 import { receiptOf, unsettled } from './talk';
 import { chatPlace, receiptRow } from './usage';
 
-// 삽화 (design §6.6): one picture per message per run, from one scene call to the chat's 보조 model (or the 삽화
-// prompt's own) and one image call. The only writer of `illustration` objects but a backup's restore and a chat's copies.
+// 삽화 (design §6.6): per message per run, one scene call to the chat's 보조 model (or the 삽화 prompt's own) writes
+// as many scenes as the reply's length earns (model/illustration pictureCount), and each is one image call, in turn. The only writer of `illustration` objects but a backup's restore and a chat's copies.
 
 export type ImageRoute = Route & { draws: Draws };
 
@@ -68,10 +69,14 @@ export type IllustrateFailure =
   | { kind: 'empty' }
   | { kind: 'unsaved'; failure: ApiFailure };
 
-// By message, one run each. scene: once written, so the chat shows the 그리는 중 slot after its paragraph; on a failure,
-// the scene it had, which a retry draws again without another scene call.
-export type Drawing = { chat: string; version: string } & ({ stage: 'scene' } | { stage: 'drawing'; scene: Scene } | { stage: 'failed'; failure: IllustrateFailure; scene: Scene | null });
+// A scene being drawn, or one whose picture failed, which a retry draws again without another scene call.
+export type Sketch = { scene: Scene; failure: IllustrateFailure | null };
+// By message, one run each. writing: its scenes are being written. failure: the run failed before it had a scene, so
+// it stands at the message's end. sketches: its scenes still to draw or failed; a saved picture takes a scene's place.
+export type Drawing = { chat: string; version: string; writing: boolean; failure: IllustrateFailure | null; sketches: readonly Sketch[] };
 export type Illustrating = ReadonlyMap<string, Drawing>;
+
+export const runs = (drawing: Drawing) => drawing.writing || drawing.sketches.some(({ failure }) => failure === null);
 
 type Stopped = { kind: 'stopped' };
 type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'files' | 'likenesses'>;
@@ -106,33 +111,45 @@ export class Illustrator {
 
   private change(message: string, drawing: Drawing | null) {
     const next = new Map(this.state);
-    if (drawing) next.set(message, drawing);
+    if (drawing && (drawing.writing || drawing.failure || drawing.sketches.length)) next.set(message, drawing);
     else next.delete(message);
     this.state = next;
     this.changes.notify();
   }
 
-  // scene: one the user changed (어떻게 바꿀까요?) or a failed run's, drawn with no scene call. auto: asked by a reply
-  // received here, whose scene a chat judged stuck refuses (evaluation's passive gate).
-  // 다시 그리기 is another draw: earlier pictures of the version stay. spend: the user agreed to a picture that may cost,
-  // as the switches' spend does for every draw.
+  private update(message: string, change: (drawing: Drawing) => Drawing) {
+    const drawing = this.state.get(message);
+    if (drawing) this.change(message, change(drawing));
+  }
+
+  private sketch(message: string, scene: Scene, failure: IllustrateFailure | null | 'drawn') {
+    this.update(message, (drawing) => ({ ...drawing, sketches: failure === 'drawn' ? drawing.sketches.filter((each) => each.scene !== scene) : drawing.sketches.map((each) => (each.scene === scene ? { scene, failure } : each)) }));
+  }
+
+  // scene: one the user changed (어떻게 바꿀까요?) or a failed one's, drawn with no scene call; the version's other
+  // failed scenes stay. auto: asked by a reply received here, whose scene a chat judged stuck refuses (evaluation's
+  // passive gate). 다시 그리기 is another draw: earlier pictures of the version stay. spend: the user agreed to a picture
+  // that may cost, as the switches' spend does for every draw.
   draw(chat: string, message: string, version: string, { scene = null, auto = false, spend = false }: { scene?: Scene | null; auto?: boolean; spend?: boolean } = {}) {
     if (this.closed || this.aborts.has(message)) return;
     const abort = new AbortController();
     this.aborts.set(message, abort);
-    this.change(message, scene ? { chat, version, stage: 'drawing', scene } : { chat, version, stage: 'scene' });
+    const previous = this.state.get(message);
+    const kept = scene && previous?.version === version ? previous.sketches.filter((each) => each.scene !== scene) : [];
+    this.change(message, { chat, version, writing: !scene, failure: null, sketches: [...kept, ...(scene ? [{ scene, failure: null }] : [])] });
     const lease = this.deps.store.retainChat(chat);
-    let written: Scene | null = scene;
     void lease.ready
-      .then(async (failure) => {
-        if (failure) return { kind: 'unsaved' as const, failure };
-        return this.run(chat, message, version, scene, auto, spend, abort.signal, (made) => {
-          written = made;
-          this.change(message, { chat, version, stage: 'drawing', scene: made });
-        });
-      })
+      .then(async (failure) => (failure ? { kind: 'unsaved' as const, failure } : this.run(chat, message, version, scene, auto, spend, abort.signal)))
       .then(
-        (outcome) => this.change(message, outcome === null || outcome.kind === 'stopped' ? null : { chat, version, stage: 'failed', failure: outcome, scene: written }),
+        (outcome) => {
+          if (outcome?.kind === 'stopped') return this.change(message, null);
+          // A failure before any picture is drawn is every waiting scene's, or the run's when it has none.
+          this.update(message, (drawing) => {
+            const waiting = drawing.sketches.some((each) => each.failure === null);
+            const sketches = outcome && waiting ? drawing.sketches.map((each) => (each.failure === null ? { ...each, failure: outcome } : each)) : drawing.sketches;
+            return { ...drawing, writing: false, failure: outcome && !waiting ? outcome : null, sketches };
+          });
+        },
         (error: unknown) => {
           this.change(message, null);
           throw error;
@@ -144,9 +161,12 @@ export class Illustrator {
       });
   }
 
-  // 닫기 on a failure; a run under way has none to close.
-  dismiss(message: string) {
-    if (this.state.get(message)?.stage === 'failed') this.change(message, null);
+  // 닫기 on a failure: the run's, or one scene's. A run under way has none to close.
+  dismiss(message: string, scene: Scene | null = null) {
+    const drawing = this.state.get(message);
+    if (!drawing || runs(drawing)) return;
+    if (scene) this.sketch(message, scene, 'drawn');
+    else this.change(message, { ...drawing, failure: null });
   }
 
   close() {
@@ -154,9 +174,9 @@ export class Illustrator {
     for (const abort of this.aborts.values()) abort.abort();
   }
 
-  // null once the illustration is saved.
-  private async run(chat: string, message: string, version: string, given: Scene | null, auto: boolean, spend: boolean, signal: AbortSignal, onScene: (scene: Scene) => void): Promise<IllustrateFailure | Stopped | null> {
-    const { store, files } = this.deps;
+  // null once every scene is drawn or failed on its own; a failure returned came before any picture.
+  private async run(chat: string, message: string, version: string, given: Scene | null, auto: boolean, spend: boolean, signal: AbortSignal): Promise<IllustrateFailure | Stopped | null> {
+    const { store } = this.deps;
     const stored = live(store.get('chat', chat));
     const messages = fold(store.children('entry', chat));
     const index = messages.findIndex(({ id }) => id === message);
@@ -171,20 +191,41 @@ export class Illustrator {
     if (prompt.kind === 'missing') return { kind: 'prompt-missing', own: prompt.own };
     // Built beside the scene call; a pack whose build fails is drawn without its portraits.
     const portraits = this.deps.likenesses.portraits(stored.value, prompt.prompt.value, signal);
-    let scene = given;
+    let scenes = given ? [given] : [];
     let receipt: Receipt | null = null;
-    if (!scene) {
+    if (!given) {
       const paragraphs = paragraphsOf(text);
       if (!paragraphs.length) return { kind: 'empty' };
       const history = [...messages.slice(0, index), { ...messages[index]!, selected }];
-      const written = await this.scene(chat, stored.value, history, paragraphs, prompt.prompt.value, auto, signal);
+      const written = await this.scenes(chat, stored.value, history, paragraphs, pictureCount(switches.ladder, text), prompt.prompt.value, auto, signal);
       if ('kind' in written) return written;
-      ({ scene, receipt } = written);
-      onScene(scene);
+      ({ scenes, receipt } = written);
+      this.update(message, (drawing) => ({ ...drawing, writing: false, sketches: scenes.map((scene) => ({ scene, failure: null })) }));
     }
+    const drawn = { chat, message, version, route, prompt: prompt.prompt.value, portraits: await portraits, spend: spend || switches.spend, signal };
+    // The scene call's row goes into the ledger once, with the first picture saved.
+    let logged = false;
+    // In turn: an image connection draws one picture at a time.
+    for (const scene of scenes) {
+      const outcome = await this.drawScene(drawn, scene, receipt, !logged);
+      if (outcome?.kind === 'stopped') return outcome;
+      this.sketch(message, scene, outcome ?? 'drawn');
+      logged ||= !outcome;
+    }
+    return null;
+  }
+
+  // null once the illustration is saved. Each picture of the run keeps the receipt of the call that wrote its scene.
+  private async drawScene(
+    { chat, message, version, route, prompt, portraits, spend, signal }: { chat: string; message: string; version: string; route: ImageRoute; prompt: IllustratePrompt; portraits: Portrait[]; spend: boolean; signal: AbortSignal },
+    scene: Scene,
+    receipt: Receipt | null,
+    log: boolean,
+  ): Promise<IllustrateFailure | Stopped | null> {
+    const { store, files } = this.deps;
     const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-    const request = pictureRequest(scene, prompt.prompt.value, route.model, seed, await portraits);
-    const drawn = await this.picture(route, request, spend || switches.spend, signal);
+    const request = pictureRequest(scene, prompt, route.model, seed, portraits);
+    const drawn = await this.picture(route, request, spend, signal);
     if ('kind' in drawn) return drawn;
     const saved = await files.save([drawn.bytes], { signal });
     if (!saved.ok) return saved.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unsaved', failure: saved };
@@ -193,21 +234,21 @@ export class Illustrator {
     const illustration: Illustration = { message, version, scene, receipt, model: { connection: route.connection.id, model: route.model.id }, sent: without(request, 'model'), file, type: drawn.type, size: drawn.bytes.byteLength, at: Date.now() };
     const created = await store.batch([
       { type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: chat, value: illustration },
-      ...(receipt ? [receiptRow(receipt, illustration.at, chatPlace(store, chat))] : []),
+      ...(receipt && log ? [receiptRow(receipt, illustration.at, chatPlace(store, chat))] : []),
     ]);
     return created.ok ? null : { kind: 'unsaved', failure: created };
   }
 
   // The scene call reads through the server's stream like any model call, but leaves no marker: a pick-up on another
   // device would draw the picture again and pay for it twice.
-  private async scene(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scene: Scene; receipt: Receipt } | IllustrateFailure | Stopped> {
+  private async scenes(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
     const { store, credentials } = this.deps;
     const writer = illustrateWriter(store, value, prompt);
     if ('kind' in writer) return writer;
     const { route, settings } = writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
+    const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
       const failure = evaluationFailure(error);
       return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
     });
@@ -218,8 +259,8 @@ export class Illustrator {
     if (answer.cut === 'stopped') return { kind: 'stopped' };
     const receipt = unsettled(receiptOf(callOf(route), answer));
     if (answer.state !== 'done') return { kind: 'failed', receipt };
-    const parsed = parseScene(text.value(), paragraphs.length);
-    return parsed.ok ? { scene: parsed.scene, receipt } : { kind: 'invalid', receipt, reason: parsed.reason };
+    const parsed = parseScenes(text.value(), paragraphs.length, count);
+    return parsed.ok ? { scenes: parsed.scenes, receipt } : { kind: 'invalid', receipt, reason: parsed.reason };
   }
 
   // Straight through the relay: a picture is one answer, not a stream to pick up.

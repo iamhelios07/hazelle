@@ -24,8 +24,8 @@ type Props = {
   term?: string;
   // Every picture open, for a page drawn once where nothing can be tapped open (snapshot).
   whole?: boolean;
-  // The message's 삽화, put where mark stands in html (inlaid), or at the end for a mark null.
-  inlay?: { mark: string | null; node: ReactNode };
+  // The message's 삽화, each put where its mark stands in html (inlaid), or at the end for a mark null.
+  inlays?: { mark: string | null; node: ReactNode }[];
 };
 
 const NAMED = '[risu-trigger], [risu-btn]';
@@ -153,9 +153,9 @@ const videoSource = (video: Element) => [video, ...video.querySelectorAll('sourc
 
 // The one mark inlaid left: a paragraph of its own becomes the slot, a mark inside the bot's HTML gives the slot its
 // place; a mark the sanitizer took leaves the slot at the end.
-function placeInlay(fragment: DocumentFragment, mark: string | null) {
+function placeInlay(fragment: DocumentFragment, mark: string | null, name: string) {
   const slot = document.createElement('slot');
-  slot.name = 'inlay';
+  slot.name = name;
   const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode() as Text | null; node && mark; node = walker.nextNode() as Text | null) {
     const at = node.data.indexOf(mark);
@@ -168,6 +168,8 @@ function placeInlay(fragment: DocumentFragment, mark: string | null) {
   }
   fragment.append(slot);
 }
+
+const inlayName = (index: number) => `inlay-${index}`;
 
 function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFragment {
   const fragment = DOMPurify.sanitize(html.replace(STYLE_ATTRIBUTE, `$1${SET_ASIDE}`), CONFIG);
@@ -271,7 +273,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
-export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlay }: Props) {
+export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [] }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
   const veil = useVeil();
   // A veil tapped open or shut changes only veil.revealed, which no render sees.
@@ -279,19 +281,20 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
 
-  const placed = inlay !== undefined;
-  const mark = inlay?.mark ?? null;
+  const marks = inlays.map(({ mark }) => mark);
+  // A dependency that changes only when a mark does.
+  const placed = JSON.stringify(marks);
   const math = useMath(html);
   useLayoutEffect(() => {
-    const marked = mark ? inlaid(html, mark, mark) : html;
+    const marked = marks.reduce((text: string, mark) => (mark ? inlaid(text, mark, mark) : text), html);
     const fragment = sanitize(math ? math(marked) : marked, cursor, veil);
     for (const picture of fragment.querySelectorAll(`[${PICTURE}]`)) {
       if (whole || pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
     }
     // After the cursor, which would otherwise go into the slot.
-    if (placed) placeInlay(fragment, mark);
+    for (const [index, mark] of marks.entries()) placeInlay(fragment, mark, inlayName(index));
     root().replaceChildren(fragment);
-  }, [html, cursor, pictures, veil, veilTaps, whole, placed, mark, math]);
+  }, [html, cursor, pictures, veil, veilTaps, whole, placed, math]);
 
   // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
   useEffect(() => {
@@ -303,7 +306,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     return () => {
       for (const range of ranges) lit.delete(range);
     };
-  }, [html, cursor, pictures, veil, veilTaps, term, placed, mark, math]);
+  }, [html, cursor, pictures, veil, veilTaps, term, placed, math]);
 
   useLayoutEffect(() => {
     if (!base) (base = new CSSStyleSheet()).replaceSync(shadowCss);
@@ -365,7 +368,11 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     <div className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
       <div ref={host} data-buttons={buttons} data-scrollbars={scrollbarKind()}>
         {cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}
-        {inlay && <div slot="inlay">{inlay.node}</div>}
+        {inlays.map(({ node }, index) => (
+          <div key={index} slot={inlayName(index)}>
+            {node}
+          </div>
+        ))}
       </div>
     </div>
   );

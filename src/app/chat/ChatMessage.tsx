@@ -6,7 +6,7 @@ import type { Box } from '../../engine/regex/scripts';
 import { firstLine, shown, type Message } from '../../model/chat';
 import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
-import type { Drawing } from '../../runtime/illustrate';
+import { runs, type Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
@@ -16,8 +16,8 @@ import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPicture, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
-import { ChatPicture, slotOf } from './ChatPicture';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { ChatPicture, slotsOf } from './ChatPicture';
 import type { ToolActions } from './toolMenu';
 import type { ChatActions } from './useChat';
 import { seenText } from './search';
@@ -91,18 +91,39 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const text = seenText(original, translation?.text ?? null, translatingText, flipped);
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live && !message.whole);
-  // null follows the newest picture.
-  const [page, setPage] = useState<string | null>(null);
-  const slot = slotOf(drawing, pictures.find(({ id }) => id === page) ?? pictures.at(-1) ?? null);
-  const paragraph = slot?.scene?.paragraph ?? null;
+  // By paragraph, the picture paged to there; a place left out follows its newest.
+  const [pages, setPages] = useState<ReadonlyMap<number, string>>(() => new Map());
+  const slots = slotsOf(drawing, pictures, pages);
+  const paragraphs = new Set(slots.flatMap(({ paragraph }) => (paragraph === null ? [] : [paragraph])));
   const beside = useMarginRoom();
-  const anchor = useRef<HTMLDivElement>(null);
-  // A translation never goes through the display, so it takes its mark here, by the same paragraph.
+  const anchors = useRef<(HTMLDivElement | null)[]>([]);
+  // A translation never goes through the display, so it takes its marks here, by the same paragraphs.
   const originalShown = text === original;
-  const storyText = paragraph === null ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraph) : withMarks(text, new Set([paragraph]));
+  const storyText = !paragraphs.size ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraphs) : withMarks(text, paragraphs);
   const html = useMemo(() => shownHtml(storyText, decor), [storyText, decor.bot, decor.url]);
-  const running = drawing !== null && drawing.stage !== 'failed';
-  const picture = slot && <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} draws={canIllustrate} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />;
+  const running = drawing !== null && runs(drawing);
+  const page = (paragraph: number) => (picture: string | null) =>
+    setPages((current) => {
+      const next = new Map(current);
+      if (picture) next.set(paragraph, picture);
+      else next.delete(paragraph);
+      return next;
+    });
+  const shownPictures = slots.map((slot) => (
+    <ChatPicture key={slot.paragraph ?? 'run'} slot={slot} message={message} onPage={page(slot.paragraph ?? -1)} running={running} url={decor.url} draws={canIllustrate} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />
+  ));
+  const inlays = slots.map((slot, index) => ({
+    mark: slot.paragraph === null ? null : placeMark(slot.paragraph),
+    node: beside ? (
+      <div
+        ref={(element) => {
+          anchors.current[index] = element;
+        }}
+      />
+    ) : (
+      shownPictures[index]
+    ),
+  }));
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
@@ -200,10 +221,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             term={term}
             tone={pending ? 'faded' : 'plain'}
             cursor={live || reveal.revealing || (translatingText !== null && !flipped)}
-            inlay={slot ? { mark: paragraph === null ? null : placeMark(paragraph), node: beside ? <div ref={anchor} /> : picture } : undefined}
+            inlays={inlays}
           />
         )}
-        {!empty && beside && picture && <MarginPicture anchor={anchor}>{picture}</MarginPicture>}
+        {!empty && beside && shownPictures.length > 0 && <MarginPictures anchors={anchors}>{shownPictures}</MarginPictures>}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );
@@ -238,7 +259,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const after = (
     <>
       {editing === null && translationMark}
-      {drawing?.stage === 'scene' && <Marker reason="illustration" label="장면 정하는 중" />}
+      {drawing?.writing && <Marker reason="illustration" label="장면 정하는 중" />}
       {cut && (
         <Marker
           reason={cut === 'stopped' ? 'stopped' : 'length'}
@@ -310,7 +331,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
               label="삽화"
               disabled={running}
               onClick={() => {
-                setPage(null);
+                setPages(new Map());
                 actions.illustrate(message);
               }}
             />

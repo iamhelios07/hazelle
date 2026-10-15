@@ -35,6 +35,12 @@ export function illustratorPrompt(): IllustratePrompt {
   };
 }
 
+// Sent after the 삽화 prompt when a reply gets more than one picture (model/illustration pictureCount). The engine's,
+// not the prompt's: each account keeps its own copy of the prompt, written before several pictures existed, and
+// parseScenes reads the array asked for here.
+export const severalScenes = (count: number) =>
+  `This time pick ${count} moments instead of one, each after a different paragraph, spread through the message. Answer with only a JSON array of ${count} objects, each in the shape above, in the order of their paragraphs.`;
+
 export const numbered = (paragraphs: readonly string[]) => paragraphs.map((paragraph, index) => `[${index + 1}] ${paragraph}`).join('\n');
 
 // unreadable: no JSON object. fields: one the format asks for is missing or of the wrong type. paragraph: it names no
@@ -54,15 +60,18 @@ function figure(value: unknown): Figure | null {
 // A scene as the writer answers it, for the user to change (어떻게 바꿀까요?) and parseScene to read back.
 export const sceneText = ({ paragraph, ...rest }: Scene) => JSON.stringify({ after: paragraph + 1, ...rest }, null, 2);
 
-// paragraphs: how many the message holds. A field left out fails the scene; none is filled in.
-export function parseScene(text: string, paragraphs: number): { ok: true; scene: Scene } | { ok: false; reason: SceneInvalid } {
+function readJson(text: string): { ok: true; value: unknown } | { ok: false } {
   const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```$/.exec(text.trim());
-  let value: unknown;
   try {
-    value = JSON.parse(fenced ? fenced[1]! : text.trim());
+    return { ok: true, value: JSON.parse(fenced ? fenced[1]! : text.trim()) };
   } catch {
-    return { ok: false, reason: 'unreadable' };
+    return { ok: false };
   }
+}
+
+type SceneRead = { ok: true; scene: Scene } | { ok: false; reason: SceneInvalid };
+
+function readScene(value: unknown, paragraphs: number): SceneRead {
   if (!isRecord(value)) return { ok: false, reason: 'unreadable' };
   const { after, shape, setting, framing, characters } = value;
   if (typeof after !== 'number' || !SHAPES.includes(shape as Shape) || !isText(setting) || !isText(framing) || !Array.isArray(characters)) return { ok: false, reason: 'fields' };
@@ -70,6 +79,26 @@ export function parseScene(text: string, paragraphs: number): { ok: true; scene:
   if (figures.some((each) => each === null)) return { ok: false, reason: 'fields' };
   if (!Number.isInteger(after) || after < 1 || after > paragraphs) return { ok: false, reason: 'paragraph' };
   return { ok: true, scene: { paragraph: after - 1, shape: shape as Shape, setting, framing, characters: figures as Figure[] } };
+}
+
+// paragraphs: how many the message holds. A field left out fails the scene; none is filled in.
+export function parseScene(text: string, paragraphs: number): SceneRead {
+  const read = readJson(text);
+  return read.ok ? readScene(read.value, paragraphs) : { ok: false, reason: 'unreadable' };
+}
+
+// The writer's answer to severalScenes, or to the prompt alone: an array or one scene. One scene that fails fails the
+// answer. A writer that gives fewer is drawn as given; past count, or on a paragraph already taken, a scene is dropped.
+export function parseScenes(text: string, paragraphs: number, count: number): { ok: true; scenes: Scene[] } | { ok: false; reason: SceneInvalid } {
+  const read = readJson(text);
+  if (!read.ok) return { ok: false, reason: 'unreadable' };
+  const scenes: Scene[] = [];
+  for (const value of Array.isArray(read.value) ? read.value : [read.value]) {
+    const scene = readScene(value, paragraphs);
+    if (!scene.ok) return scene;
+    if (scenes.length < count && !scenes.some(({ paragraph }) => paragraph === scene.scene.paragraph)) scenes.push(scene.scene);
+  }
+  return scenes.length ? { ok: true, scenes } : { ok: false, reason: 'unreadable' };
 }
 
 // Inside NovelAI Opus's free band: one picture of at most 1024×1024 pixels.

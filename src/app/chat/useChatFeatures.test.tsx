@@ -96,7 +96,7 @@ it('searches the original when translation is flipped and keeps the choice per r
 });
 
 it('keeps illustration failures acknowledged across reopening and does not draw an unsaved chat', async () => {
-  const failed: Drawing = { chat: 'chat', version: 'version', stage: 'failed', failure: { kind: 'no-image-model' }, scene: null };
+  const failed: Drawing = { chat: 'chat', version: 'version', writing: false, failure: { kind: 'no-image-model' }, sketches: [] };
   drawings = new Map([['message', failed]]);
   let illustration: ReturnType<typeof useChatIllustrations>;
   function Probe({ id }: { id: string | null }) {

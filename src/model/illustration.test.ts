@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { paragraphsOf, placeMark, placeOf, withMarks, withoutMarks } from './illustration';
+import { paragraphsOf, pictureCount, placeMark, placeOf, withMarks, withoutMarks } from './illustration';
 
 it('takes each non-blank line as a paragraph, whether the prose breaks with one newline or two', () => {
   expect(paragraphsOf('  First line.\nSecond line.\n\n\nThird after a gap.  \n')).toEqual(['First line.', 'Second line.', 'Third after a gap.']);
@@ -17,10 +17,16 @@ it('places a picture whose paragraph an edit removed at the message end', () => 
   expect(placeOf({ paragraph: 2 }, 'One.\nTwo.')).toBeNull();
 });
 
-it('marks a paragraph on its own line after it, none past the end, and takes the marks out but the one kept', () => {
+it('marks a paragraph on its own line after it, none past the end, and takes the marks out but the ones kept', () => {
   const text = 'One.\n\n  Two.\nThree.';
   const marked = withMarks(text, new Set([1, 5]));
   expect(marked).toBe(`One.\n\n  Two.\n${placeMark(1)}\nThree.`);
   expect(withoutMarks(marked)).toBe(text);
-  expect(withoutMarks(withMarks(text, new Set([0, 1])), 1)).toBe(`One.\n\n  Two.\n${placeMark(1)}\nThree.`);
+  expect(withoutMarks(withMarks(text, new Set([0, 1])), new Set([1]))).toBe(`One.\n\n  Two.\n${placeMark(1)}\nThree.`);
+});
+
+it('counts one more picture per rung the text reaches, without its tags, and never more than its paragraphs', () => {
+  const text = '<div class="box">0123456789</div>\nabcdefghij';
+  expect([pictureCount([], text), pictureCount([20], text), pictureCount([21], text)]).toEqual([1, 2, 1]);
+  expect(pictureCount([1, 2, 3], text)).toBe(2);
 });

@@ -12,7 +12,7 @@ import { prepareLore, merge, type Activation, type Fired, type LoreBook, type Lo
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, recordsTarget, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import { retrieval, retrievalRoom } from './retrieval';
-import { numbered } from './illustrate';
+import { numbered, severalScenes } from './illustrate';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
@@ -389,6 +389,8 @@ export type IllustrationInput = {
   // paragraphsOf), which the scene names by number.
   index: number;
   paragraphs: string[];
+  // How many scenes to write (model/illustration pictureCount).
+  count: number;
   seed: string;
   countTokens: (text: string) => number;
 };
@@ -396,11 +398,12 @@ export type IllustrationInput = {
 // Like a translation, a 삽화 task holds no chat, so entries placed at a depth are not sent in it.
 export const assembleIllustration = (input: IllustrationInput): { messages: ChatMessage[] } | RanAway => stoppable(() => illustration(input));
 
-function illustration({ scope, take, prompt, index, paragraphs, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
+function illustration({ scope, take, prompt, index, paragraphs, count, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
   const { texts, variables } = renderChat('display', scope, take);
   const laid = lay(scope, prompt.blocks, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
-  return { messages: taskMessages(parts) };
+  const messages = taskMessages(parts);
+  return { messages: count > 1 ? [...messages, { role: 'user', content: severalScenes(count) }] : messages };
 }
 
 export type MemoryTaskInput = {

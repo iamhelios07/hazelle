@@ -285,12 +285,12 @@ function placesOf(store: ObjectStore, chat: string, drawings: Illustrating): Map
   const places = new Map<string, Set<number>>();
   const add = (version: string, paragraph: number) => places.set(version, (places.get(version) ?? new Set()).add(paragraph));
   for (const { value } of store.children('illustration', chat)) add(value.version, value.scene.paragraph);
-  for (const drawing of drawings.values()) if (drawing.chat === chat && drawing.stage !== 'scene' && drawing.scene) add(drawing.version, drawing.scene.paragraph);
+  for (const drawing of drawings.values()) if (drawing.chat === chat) for (const { scene } of drawing.sketches) add(drawing.version, scene.paragraph);
   return places;
 }
 
 const drawingKey = (chat: string, drawings: Illustrating) =>
-  [...drawings.values()].flatMap((drawing) => (drawing.chat === chat && drawing.stage !== 'scene' && drawing.scene ? [`${drawing.version}:${drawing.scene.paragraph}`] : [])).sort().join(' ');
+  [...drawings.values()].flatMap((drawing) => (drawing.chat === chat ? drawing.sketches.map(({ scene }) => `${drawing.version}:${scene.paragraph}`) : [])).sort().join(' ');
 
 function marked(messages: Shown[], places: Map<string, Set<number>>): Shown[] {
   if (!places.size) return messages;
