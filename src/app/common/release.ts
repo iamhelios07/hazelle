@@ -8,6 +8,18 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.9',
+    date: '2026-10-15',
+    lines: [
+      '답장이 길면 삽화를 여러 장 그려요. 설정의 삽화 수에서 글자 수 단계마다 몇 장을 그릴지 정해요.',
+      '삽화 프로필을 인물마다, 또는 한꺼번에 지울 수 있어요.',
+      '응답을 기다리는 동안 추론 중인지, 얼마나 기다렸는지 보여요.',
+      '응답 정보에 응답 원문 탭이 생겼고, 추론 토큰도 보여요. Claude의 적응형 추론도 추론 내용이 보여요.',
+      '장기 기억 패널에 기록, 정리를 기다리는 대화, 원문으로 보낼 최근 대화가 막대로 보여요. 다음 정리까지 얼마나 남았는지도 알려 줘요.',
+      '설정 화면의 제목 크기와 상자를 정리했어요.',
+    ],
+  },
+  {
     version: 'v0.2.8',
     date: '2026-10-15',
     lines: [
