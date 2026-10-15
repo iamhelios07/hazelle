@@ -1,5 +1,5 @@
 import type { InputPicture } from '../connectors/types';
-import { toBase64 } from '../vault/aead';
+import { fromBase64, toBase64 } from '../vault/aead';
 
 const THUMB = 400;
 // The longest side of a picture shown to a model: enough to read a character's looks, a few hundred tokens each.
@@ -24,6 +24,26 @@ export async function thumbnail(picture: { bytes: Uint8Array<ArrayBuffer>; type:
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
+}
+
+// A thumbnail as a PNG, redrawn unless it is one; none is a grey 256×256 square, as Risu's persona file holds then.
+export async function pngOf(thumb: string | null): Promise<Uint8Array<ArrayBuffer>> {
+  let canvas: OffscreenCanvas;
+  if (thumb === null) {
+    canvas = new OffscreenCanvas(256, 256);
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = 'grey';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    const type = thumb.slice('data:'.length, thumb.indexOf(';'));
+    const bytes = fromBase64(thumb.slice(thumb.indexOf(',') + 1));
+    if (type === 'image/png') return bytes;
+    const bitmap = await createImageBitmap(new Blob([bytes], { type }));
+    canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+    bitmap.close();
+  }
+  return new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
 }
 
 // type: what the canvas wrote, not the stored picture's.

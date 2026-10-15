@@ -288,6 +288,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         pick: () => open(undefined),
         pickChats: open,
         pickPrompts: () => open(undefined, PRESETS),
+        pickPersonas: () => open(undefined, '.png'),
         move: () => asked(() => setAsking(true)),
         bring: (file) => new Promise((done) => asked(() => void take([file], undefined).then((results) => done(results.some((result) => result.kind === 'character'))))),
       }}

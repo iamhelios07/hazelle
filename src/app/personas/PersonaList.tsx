@@ -1,7 +1,8 @@
 import { addPersona } from '../../runtime/personas';
-import { ACTS, newOf } from '../common/acts';
+import { ACTS, importOf, newOf } from '../common/acts';
 import { personaFaces, personaTexts } from '../common/alias';
 import type { Frame } from '../common/frame';
+import { useImport } from '../common/importing';
 import { useSearch } from '../common/useSearch';
 import { PAGES } from '../common/words';
 import { usePersonas, useSettings, useStore } from '../session';
@@ -20,6 +21,7 @@ export function PersonaList({ onPick, current, frame }: Props) {
   const toast = useToast();
   const settings = useSettings();
   const search = useSearch(personaFaces(usePersonas()), '페르소나 검색', personaTexts);
+  const { pickPersonas } = useImport();
 
   function add() {
     const id = crypto.randomUUID();
@@ -28,9 +30,14 @@ export function PersonaList({ onPick, current, frame }: Props) {
   }
 
   const actions = (
-    <Button variant="secondary" icon={ACTS.create.icon} onClick={add}>
-      {newOf('페르소나')}
-    </Button>
+    <>
+      <Button variant="secondary" icon={ACTS.import.icon} onClick={pickPersonas}>
+        {importOf('페르소나')}
+      </Button>
+      <Button variant="secondary" icon={ACTS.create.icon} onClick={add}>
+        {newOf('페르소나')}
+      </Button>
+    </>
   );
   const body = (
     <>
