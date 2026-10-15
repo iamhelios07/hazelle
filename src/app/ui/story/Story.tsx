@@ -223,7 +223,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
     }
     element.removeAttribute('srcset');
   }
-  // Sound starts only from the reader's own press (user, 2026-10-15): what would play aloud by itself waits for its
+  // Sound starts only from the reader's own press: what would play aloud by itself waits for its
   // controls. A muted one may play; muted is set as the property too, since the attribute is only its default.
   for (const media of fragment.querySelectorAll<HTMLMediaElement>('video[autoplay], audio[autoplay]')) {
     if (media.hasAttribute('muted')) {
