@@ -5,12 +5,17 @@ const LEVELS: Map<string, Operator>[] = [
   new Map<string, Operator>([['||', (a, b) => Number(a !== 0 || b !== 0)]]),
   new Map<string, Operator>([['&&', (a, b) => Number(a !== 0 && b !== 0)]]),
   new Map<string, Operator>([
+    // Risu folds == != <= >= into = ≠ ≤ ≥ before it reads, so a preset may write either form; a single = is equality.
     ['==', (a, b) => Number(a === b)],
+    ['=', (a, b) => Number(a === b)],
     ['!=', (a, b) => Number(a !== b)],
+    ['≠', (a, b) => Number(a !== b)],
     ['<', (a, b) => Number(a < b)],
     ['>', (a, b) => Number(a > b)],
     ['<=', (a, b) => Number(a <= b)],
+    ['≤', (a, b) => Number(a <= b)],
     ['>=', (a, b) => Number(a >= b)],
+    ['≥', (a, b) => Number(a >= b)],
   ]),
   new Map<string, Operator>([
     ['+', (a, b) => a + b],
@@ -23,7 +28,7 @@ const LEVELS: Map<string, Operator>[] = [
   ]),
   new Map<string, Operator>([['^', (a, b) => a ** b]]),
 ];
-const TOKENS = /\d+(?:\.\d+)?|\.\d+|[$@][\p{L}\p{N}_]+|<=|>=|==|!=|&&|\|\||[-+*/%^<>!()]/gu;
+const TOKENS = /\d+(?:\.\d+)?|\.\d+|[$@][\p{L}\p{N}_]+|<=|>=|==|!=|&&|\|\||[-+*/%^<>=≠≤≥!()]/gu;
 
 class Invalid {}
 

@@ -8,6 +8,10 @@ describe('calc', () => {
     expect([' 1 + 2 * 3', '2^3^2', '-2^2', '(1+2)*-3', '7%4', '3>2 && 1<=0', '!0 || 0', '2==2'].map((expression) => calc(expression, none))).toEqual([7, 64, 4, -9, 3, 0, 1, 1]);
   });
 
+  it("reads Risu's single = and its ≠ ≤ ≥ as the comparisons they fold into", () => {
+    expect(['0=0', '1=2', '1≠2', '2≤2', '3≥4'].map((expression) => calc(expression, none))).toEqual([1, 0, 1, 1, 0]);
+  });
+
   it('reads $ and @ tokens through its reader, and gives null for an expression it cannot read', () => {
     expect(calc('$hp + @toggle_x', (token) => (token === '$hp' ? 10 : 1))).toBe(11);
     expect(['2 + abc', '1 +', '(1', '', '1)'].map((expression) => calc(expression, none))).toEqual([null, null, null, null, null]);
