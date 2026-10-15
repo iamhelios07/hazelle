@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 // How many screens that take dropped files of their own are mounted; while one is, the app-wide drop stands aside.
 let screens = 0;
 
-// dragenter and dragleave fire for every element crossed, so it counts them instead of trusting either one.
+// A drag enters the next element before it leaves the last, so only a leave from the element last entered means it left
+// the page or was cancelled. Content replaced under the pointer, as a streaming reply is, gets its leave sent to a node
+// no longer in the page; DropOverlay takes the pointer so the element under it stays put.
 // scope 'screen': a screen's own drop, such as an editor's 에셋 taking pictures, which the app's import would read as cards.
 export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'screen' = 'app'): boolean {
   const [dragging, setDragging] = useState(false);
@@ -11,17 +13,20 @@ export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'scr
   latest.current = onDrop;
   useEffect(() => {
     if (scope === 'screen') screens += 1;
-    let depth = 0;
+    let entered: EventTarget | null = null;
     const carriesFiles = (event: DragEvent) => (scope === 'screen' || screens === 0) && (event.dataTransfer?.types.includes('Files') ?? false);
     const enter = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
-      depth += 1;
+      // Cancelled like dragover: when the element under the pointer changed since the last tick, the browser takes the
+      // drop or refuses it by this event alone, and over a streaming reply it changes every tick.
+      event.preventDefault();
+      entered = event.target;
       setDragging(true);
     };
     const leave = (event: DragEvent) => {
-      if (!carriesFiles(event)) return;
-      depth = Math.max(0, depth - 1);
-      if (depth === 0) setDragging(false);
+      if (!carriesFiles(event) || event.target !== entered) return;
+      entered = null;
+      setDragging(false);
     };
     const over = (event: DragEvent) => {
       if (carriesFiles(event)) event.preventDefault();
@@ -29,7 +34,7 @@ export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'scr
     const drop = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
       event.preventDefault();
-      depth = 0;
+      entered = null;
       setDragging(false);
       // Entries are only readable during the drop event itself; their files are read after it. An item that is not from
       // the file system has no entry, and is taken as its file.

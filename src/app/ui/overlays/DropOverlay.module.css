@@ -7,7 +7,6 @@
   justify-content: center;
   padding: var(--space-24);
   background: var(--color-scrim);
-  pointer-events: none;
 }
 
 .target {
