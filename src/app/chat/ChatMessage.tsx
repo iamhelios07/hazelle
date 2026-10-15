@@ -1,5 +1,5 @@
 import { Bookmark, Bot, Info, Languages, Pin, PinOff, SquarePen } from 'lucide-react';
-import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
@@ -151,13 +151,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     );
   } else if (live && empty) {
     const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : null;
-    body = waiting ? (
+    body = (
       <>
         <Waiting />
-        <Text variant="note">{waiting}</Text>
+        {waiting ? <Text variant="note">{waiting}</Text> : <Elapsed thinking={Boolean(version.reasoning)} />}
       </>
-    ) : (
-      <Waiting />
     );
   } else if (failed) {
     body = (
@@ -357,6 +355,18 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     </StoryMessage>
   );
 }, sameRow);
+
+// The ticking lives here, so only this note draws each second. It counts from when this page began to wait.
+function Elapsed({ thinking }: { thinking: boolean }) {
+  const [start] = useState(Date.now);
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = Math.floor((now - start) / 1000);
+  return <Text variant="note">{`${thinking ? '추론 중' : '기다리는 중'} · ${seconds}초`}</Text>;
+}
 
 function sameRow(previous: Props, next: Props): boolean {
   const { decor: aDecor, hosted: aHosted, offered: aOffered, character: aCharacter, me: aMe, translating: aTranslating, ...a } = previous;
