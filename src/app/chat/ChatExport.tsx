@@ -3,6 +3,7 @@ import { pictureRef } from '../../engine/assets';
 import type { ChatItem } from '../../model/chat';
 import { assetDataUrls } from '../../runtime/assets';
 import { chatFile } from '../../runtime/chat-file';
+import { exportRisuChat } from '../../runtime/risu-export';
 import type { Shown } from '../../runtime/talk';
 import type { TranslatorFailure } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
@@ -11,11 +12,11 @@ import { describeTranslateFailure } from '../common/failure';
 import { languageLabel, withRo } from '../common/languages';
 import { sizeText } from '../common/size';
 import { useCopyHtml } from '../common/useCopy';
-import { ARCA_LOG, CHAT_FILE, EXPORT, STOP } from '../common/words';
+import { ARCA_LOG, CHAT_FILE, EXPORT, RISU_CHAT_FILE, RISU_LOSES, risuLeftOut, STOP } from '../common/words';
 import { useDisplay } from '../display';
 import { useFiles, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Progress, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
+import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Progress, Row, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
 import type { speakers } from './ChatLog';
 import { logDraft, resolveLog, untranslated, type LogChoices, type LogText } from './exportLog';
 import type { OpenChat } from './useChat';
@@ -24,7 +25,8 @@ import type { OpenChat } from './useChat';
 const SHORT = 100;
 const LATEST = 50;
 
-const FORMS = [{ value: 'log', label: ARCA_LOG }, { value: 'file', label: CHAT_FILE }] as const;
+const FORMS = [{ value: 'log', label: ARCA_LOG }, { value: 'file', label: CHAT_FILE }, { value: 'risu', label: RISU_CHAT_FILE }] as const;
+type Form = (typeof FORMS)[number]['value'];
 const TEXTS: { value: LogText; label: string }[] = [{ value: 'translation', label: '번역' }, { value: 'original', label: '원문' }, { value: 'both', label: '둘 다' }];
 
 type Drawing = { key: string; title: string; sub: string | null; css: string; rows: LogRow[]; missing: number };
@@ -47,7 +49,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
   const toast = useToast();
   const { reading, display } = useDisplay();
   const copyHtml = useCopyHtml();
-  const [form, setForm] = useState<'log' | 'file'>('log');
+  const [form, setForm] = useState<Form>('log');
   const [choices, setChoices] = useState<LogChoices>(() => ({ pictures: !display.hidePictures, hideMe: false, text: 'translation', from: messages.length > SHORT ? messages.length - LATEST + 1 : 1, to: messages.length }));
   const [range, setRange] = useState({ from: String(choices.from), to: String(choices.to) });
   const [drawing, setDrawing] = useState<Drawing | null>(null);
@@ -109,6 +111,13 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
       const made = await chatFile({ store, files }, item.id);
       return made.ok ? download(fileNamed(item.title, '채팅', 'json'), new Blob([made.data], { type: 'application/json' })) : toast.failed(made, '채팅 파일을 만들지 못했어요.');
     }
+    if (form === 'risu') {
+      const made = await exportRisuChat({ store }, item.id);
+      if (!made.ok) return toast.failed(made, `${RISU_CHAT_FILE}을 만들지 못했어요.`);
+      download(fileNamed(`${item.title}_chat`, '채팅', 'json'), new Blob([made.data.text], { type: 'application/json' }));
+      const left = risuLeftOut(made.data.left);
+      return left && toast.show(`${RISU_CHAT_FILE}을 내보냈어요.`, { detail: left });
+    }
     const page = snapshotPage(item.title, prepared!.html, getComputedStyle(document.body).backgroundColor);
     download(fileNamed(item.title, '채팅', 'html'), new Blob([page], { type: 'text/html' }));
   }
@@ -121,7 +130,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
   }
   const typed = (edge: 'from' | 'to') => Number(range[edge]) === choices[edge];
 
-  const ready = form === 'file' || prepared !== null;
+  const ready = form !== 'log' || prepared !== null;
   return (
     <Dialog
       title={EXPORT}
@@ -141,6 +150,12 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
     >
       <Stack gap="related">
         <ChoiceGroup layout="segmented" label="형식" options={[...FORMS]} value={form} onChange={setForm} />
+        {form === 'risu' && (
+          <Row kind="toolbar">
+            <Text variant="note">빠지는 것</Text>
+            <Hint label={RISU_CHAT_FILE}>{RISU_LOSES}</Hint>
+          </Row>
+        )}
         {form === 'log' && (
           <>
             <SettingRow label="처음" control={<NumberInput label="처음" unit="번째" value={range.from} invalid={!typed('from')} onChange={(text) => typeRange('from', text)} />} />

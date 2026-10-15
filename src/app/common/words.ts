@@ -1,3 +1,4 @@
+import type { LeftOut } from '../../runtime/risu-export';
 import type { Role } from '../../connectors/assignment';
 import type { RegexScript } from '../../engine/import/types';
 import { KEEP_DAYS } from '../../model/library';
@@ -107,6 +108,17 @@ export const EXPORT = '내보내기';
 export const CHAT_FILE = '채팅 파일';
 export const IMPORT_CHATS = '채팅 가져오기';
 export const ARCA_LOG = '아카라이브용 HTML';
+// A chat's or a character's chats in Risu's own chat file (risuChat, risuAllChats), which Risu loads only through its
+// chat list, into the character picked there; what the file cannot hold, behind each place's ⓘ.
+export const RISU_CHAT_FILE = 'Risu 채팅 파일';
+export const RISU_LOSES = 'Risu에서 캐릭터를 고른 뒤 채팅 목록의 가져오기로 불러와요. 화면의 버전만 담겨요. 다른 버전, 고친 첫 메시지, 번역, 이미지와 삽화, 장기 기억, 등장인물, 채팅에 고른 프롬프트·페르소나·모델은 빠져요.';
+// What one export left out of what it was asked to hold.
+export const risuLeftOut = ({ greetings, lore, unread }: LeftOut) =>
+  [
+    greetings ? `고친 첫 메시지 ${greetings}개는 빠지고 카드의 첫 메시지로 보여요.` : '',
+    lore ? `Risu 로어북이 담지 못하는 ${CHAT_LORE} 항목 ${lore}개는 빠졌어요.` : '',
+    unread ? `열리지 않는 채팅 ${unread}개는 빠졌어요.` : '',
+  ].filter(Boolean).join(' ');
 
 // An empty model setting is unset: nothing is sent, and the provider's default applies. It is never shown as a number.
 // Not 기본값, which reads as the default 설정 named 기본.

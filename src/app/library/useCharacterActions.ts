@@ -5,10 +5,11 @@ import type { CharacterShelf, Removable } from '../../model/library';
 import { exportCharacter } from '../../runtime/card-file';
 import { copyCharacter, createCharacter, setDeleted } from '../../runtime/characters';
 import { markDeleted, purgeNow } from '../../runtime/removal';
+import { exportRisuChats } from '../../runtime/risu-export';
 import { newOf } from '../common/acts';
 import { fileNamed } from '../common/download';
 import { runExport } from '../common/exporting';
-import { BIN_KEEPS, moduleName, promptName, TOOL } from '../common/words';
+import { BIN_KEEPS, moduleName, promptName, RISU_CHAT_FILE, risuLeftOut, TOOL } from '../common/words';
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -70,6 +71,17 @@ export function useCharacterActions() {
     );
   }
 
+  // Risu's risuAllChats file of the character's chats, streamed to disk chat by chat.
+  function exportChats({ id, character }: Shelf) {
+    runExport(
+      toast,
+      fileNamed(`${character.card.name}_all_chats`, '채팅', 'json'),
+      (output, progress) => exportRisuChats({ store }, id, output, progress),
+      (label) => setBusy(label === null ? null : { id, label }),
+      (left) => toast.show(`'${character.card.name}'의 ${RISU_CHAT_FILE}을 내보냈어요.`, risuLeftOut(left) ? { detail: risuLeftOut(left) } : undefined),
+    );
+  }
+
   function remove(shelf: Shelf) {
     const { id, character } = shelf;
     void setDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
@@ -89,5 +101,5 @@ export function useCharacterActions() {
     else toast.failed(removed, '일부를 삭제하지 못했어요.');
   }
 
-  return { busy, copy, exportFile, remove, restore, purge, sharing, share: setSharing, stopSharing: () => setSharing(null) };
+  return { busy, copy, exportFile, exportChats, remove, restore, purge, sharing, share: setSharing, stopSharing: () => setSharing(null) };
 }

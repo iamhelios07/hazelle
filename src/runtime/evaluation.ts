@@ -53,6 +53,7 @@ const GATES = {
   illustration: 'press',
   lore: 'press',
   tool: 'press',
+  export: 'press',
 } as const;
 type Asker = keyof typeof GATES;
 // Who asks, for which chat, saved or not yet. A lane holds one job: a newer one on the same lane stops the one waiting
@@ -109,7 +110,7 @@ export class Evaluation {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'read', memory }) as Promise<Counted<ChatTexts>>;
   }
 
-  state(lane: Lane<'tool'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<ToolState | RanAway> {
+  state(lane: Lane<'tool' | 'export'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<ToolState | RanAway> {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'state', prefix }, signal) as Promise<ToolState | RanAway>;
   }
 
