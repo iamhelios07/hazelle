@@ -176,7 +176,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         level={3}
         title="설정"
         note={setup.own ? '이 채팅만' : '기본값'}
-        help={`기본값은 ${inSettings('prompts')}에서 바꿀 수 있어요.`}
+        help={`기본값은 ${inSettings('chat')}에서 바꿀 수 있어요.`}
         action={
           setup.own && (
             <Button variant="link" onClick={() => void revert()}>

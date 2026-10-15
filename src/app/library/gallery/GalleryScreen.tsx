@@ -7,7 +7,7 @@ import { useLab } from '../../common/labs';
 import { NameDialog } from '../../common/NameDialog';
 import { TASK_NAMES } from '../../common/prompt-words';
 import { useSearch } from '../../common/useSearch';
-import { BIN, PAGES } from '../../common/words';
+import { BIN, MODEL_SETTINGS, PAGES } from '../../common/words';
 import { useBin, useLibrary } from '../../session';
 import { backBar } from '../../shell/router';
 import { BIN_PLACE, type Back } from '../../shell/routes';
@@ -23,7 +23,6 @@ import { MoveBar } from './MoveBar';
 import { PurgeDialog } from './PurgeDialog';
 import { ShareDialog } from '../ShareDialog';
 
-const MODEL_SETTINGS = '모델 설정';
 const ORDERS = [{ value: 'recent', label: '최근 대화' }, { value: 'name', label: '이름' }] as const;
 const byName = new Intl.Collator('ko').compare;
 

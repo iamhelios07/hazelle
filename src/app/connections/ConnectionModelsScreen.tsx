@@ -12,7 +12,7 @@ import { describeCatalogFailure } from '../common/failure';
 import { NameDialog } from '../common/NameDialog';
 import { useSearch } from '../common/useSearch';
 import { RetriesRow } from '../common/RetriesRow';
-import { detailLabel } from '../common/words';
+import { detailLabel, MODEL_SETTINGS } from '../common/words';
 import { useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -106,7 +106,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     const listed = !listedIds || listedIds.has(model.id);
     const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
     const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
-    const opens = choice && (choice.kind === 'profile' ? `설정 · ${choice.profile.value.name}` : '설정 없음');
+    const opens = choice && (choice.kind === 'profile' ? `${MODEL_SETTINGS} · ${choice.profile.value.name}` : `${MODEL_SETTINGS} 없음`);
     const settings = choice && (
       <Button
         variant="ghost"

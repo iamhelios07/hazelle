@@ -3,7 +3,7 @@ import { fitsRole, sameModelRef, type ModelRef, type Role } from '../../connecto
 import { embedRoute } from '../../connectors/registry';
 import type { Stored } from '../../model/kinds';
 import { ChipButton, Empty, Menu, MenuHeading, MenuItem, PickCard, SettingRow } from '../ui';
-import { MODEL_ROLES, NOT_STARRED, noStarred } from './words';
+import { MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, noStarred } from './words';
 
 // 임베딩 모델 offers only what its connection embeds: the type says so, not the model (design §4).
 export function starredModels(connections: readonly Stored<'connection'>[], role: Role) {
@@ -62,10 +62,12 @@ export function RolePicker({ role, label = MODEL_ROLES[role], help, own, follow,
   );
 }
 
-type CardProps = Omit<Props, 'label'>;
+// values: what the chosen model's 모델 설정 sets, under its connection; open: the door to that model's page, the
+// menu's first item, so the values are read on the card and reached in one press.
+type CardProps = Omit<Props, 'label'> & { values?: string; open?: () => void };
 
 // RolePicker's choices from a card that leads its page: the model's name, and its connection under it.
-export function RoleCard({ role, help, own, follow, connections, onPick }: CardProps) {
+export function RoleCard({ role, help, own, follow, connections, onPick, values, open }: CardProps) {
   const label = MODEL_ROLES[role];
   const choice = own && findStarred(own, connections);
   return (
@@ -75,7 +77,7 @@ export function RoleCard({ role, help, own, follow, connections, onPick }: CardP
         <PickCard
           label={label}
           value={own ? (choice ? choice.name : NOT_STARRED) : (follow ?? '정하지 않음')}
-          note={choice ? choice.source : undefined}
+          note={choice ? [choice.source, values].filter(Boolean).join(' · ') : undefined}
           help={help}
           tone={own && !choice ? 'warn' : 'default'}
           popup="menu"
@@ -85,15 +87,16 @@ export function RoleCard({ role, help, own, follow, connections, onPick }: CardP
         />
       )}
     >
-      <RoleChoices role={role} own={own} follow={follow} connections={connections} onPick={onPick} />
+      <RoleChoices role={role} own={own} follow={follow} connections={connections} onPick={onPick} open={open} />
     </Menu>
   );
 }
 
-function RoleChoices({ role, own, follow, connections, onPick }: CardProps) {
+function RoleChoices({ role, own, follow, connections, onPick, open }: CardProps) {
   const starred = starredModels(connections, role);
   return (
     <>
+      {open && <MenuItem tone="muted" label={`${MODEL_SETTINGS} 열기`} onClick={open} />}
       {follow && <MenuItem label={follow} checked={!own} onClick={() => onPick(null)} />}
       {own && !findStarred(own, connections) && <MenuItem label={NOT_STARRED} sub={own.model} checked onClick={() => undefined} />}
       {starred.length === 0 ? (

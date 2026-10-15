@@ -8,7 +8,7 @@ import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
 import { LedgerWait, useLedger } from '../common/useLedger';
-import { defaultMark, UNKNOWN } from '../common/words';
+import { defaultMark, MODEL_SETTINGS, UNKNOWN } from '../common/words';
 import { spent, tally } from '../common/usage';
 import { ago } from '../common/time';
 import { useProfiles, useSettings, useSession } from '../session';
@@ -108,9 +108,9 @@ function ChatModelScreen({ connection, model, back }: Props) {
       width="form"
       top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}
       aside={
-        <SettingGroup label="쓰는 설정">
+        <SettingGroup label={MODEL_SETTINGS}>
           <SettingRow
-            label="쓰는 설정"
+            label={MODEL_SETTINGS}
             help="같은 설정을 쓰는 모델은 함께 바뀌어요."
             sub={current ? (words?.length ? words.join(' · ') : '정한 값 없음') : undefined}
             error={current ? undefined : '쓰던 설정이 삭제돼서 이 모델을 사용할 수 없어요.'}

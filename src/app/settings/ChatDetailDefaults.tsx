@@ -6,7 +6,7 @@ import { setSharedRetries } from '../../runtime/connections';
 import { typedText } from '../common/typed';
 import { count, readTyped } from '../common/typedNumber';
 import { useAutosave } from '../common/useAutosave';
-import { detailLabel, LORE_BUDGET_LABEL, RETRY_COUNT, RETRY_HELP } from '../common/words';
+import { detailLabel, LORE_BUDGET_LABEL, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, SettingGroup, SettingRow, Stepper } from '../ui';
@@ -35,7 +35,7 @@ export function ChatDetailDefaults() {
       <SettingGroup label="세부 설정">
         <SettingRow
           label={RETRY_COUNT}
-          help={`${RETRY_HELP} API 연결이나 설정 묶음마다 따로 정할 수도 있어요.`}
+          help={`${RETRY_HELP} API 연결이나 ${MODEL_SETTINGS}마다 따로 정할 수도 있어요.`}
           changed={retries !== undefined}
           control={
             <Stepper

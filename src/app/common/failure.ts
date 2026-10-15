@@ -11,7 +11,7 @@ import type { SignInFailure } from '../../runtime/sign-in';
 import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
 import { count } from './typedNumber';
-import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, UNREADABLE_IMAGE } from './words';
+import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, UNREADABLE_IMAGE } from './words';
 
 // The server's codes left on the generic fallback, which names the code for the operator. Every other server code needs
 // words in MESSAGES; its remaining keys are codes the runtime makes itself.
@@ -82,7 +82,7 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
 };
 
 const SERVER_TROUBLE = '서버에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
-const NO_DEFAULT_PROFILE = `기본 설정이 없어요. ${inSettings('models')}에서 설정 하나를 기본으로 지정해 주세요.`;
+const NO_DEFAULT_PROFILE = `기본으로 지정한 ${MODEL_SETTINGS}이 없어요. ${inSettings('models')}에서 ${MODEL_SETTINGS} 하나를 기본으로 지정해 주세요.`;
 
 const SECRET = { password: '비밀번호가', recovery: '복구 키가' } as const;
 

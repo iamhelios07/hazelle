@@ -21,7 +21,7 @@ import { RetriesRow } from '../common/RetriesRow';
 import { typedText } from '../common/typed';
 import { useSearch } from '../common/useSearch';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, defaultMark, detailLabel, DISCOUNT, RESET, UNSET } from '../common/words';
+import { BIN_KEEPS, defaultMark, detailLabel, DISCOUNT, MODEL_SETTINGS, RESET, UNSET } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -303,11 +303,15 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <NavBar
           title={name}
           rename={{ label: '설정 이름', placeholder: stored.value.name, onChange: rename }}
-          subtitle={mark && <Tag tone="accent">{mark}</Tag>}
+          subtitle={
+            <>
+              {MODEL_SETTINGS} {mark && <Tag tone="accent">{mark}</Tag>}
+            </>
+          }
           {...backBar(back)}
           status={status ? SAVE_STATUS[status] : undefined}
           menu={{
-            of: '설정',
+            of: MODEL_SETTINGS,
             items: (
               <>
                 <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />

@@ -11,6 +11,8 @@ import { KEEP_DAYS } from '../../model/library';
 // the request a reply was asked with. 사용 중 marks what is in use, 생성 중 a reply being written.
 
 export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '보조 모델', embed: '임베딩 모델' };
+// A role as a tag on a model's row, where 모델 is the column: the prompts page tags its kinds the same short way.
+export const ROLE_TAGS: Record<Role, string> = { main: '대화', aux: '보조', embed: '임베딩' };
 
 // Where a translation's model comes from, said beside the model wherever it shows.
 export const TRANSLATION_MODEL_HELP = `번역 프롬프트에서 선택하지 않으면 ${MODEL_ROLES.aux}을 사용해요.`;
@@ -67,6 +69,9 @@ export const ALWAYS = '항상';
 
 // The layer of the model assignment that 설정's 모델 page holds, under every prompt and chat.
 export const DEFAULT_MODELS = '기본 모델';
+
+// The profile object (design §4.4) on every screen; RETIRED_COPY bans the names it replaced.
+export const MODEL_SETTINGS = '모델 설정';
 
 // What passes between a person and the operator, always said with its direction. from: what the operator sent, on the
 // person's page. received: what people sent, on the operator's page. send: the operator sending one.
