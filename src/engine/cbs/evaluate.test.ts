@@ -143,10 +143,10 @@ describe('evaluate', () => {
     expect(run('a{{// note}}b', { stage: 'display' })).toBe('a{{// note}}b');
   });
 
-  it('writes variables from a chat message only, reads an unset one as empty, and adds to it from 0', () => {
+  it('writes variables from a chat message only, reads an unset one as null, and adds to it from 0', () => {
     const variables = new Map([['hp', '10']]);
     const text = '{{setvar::mood::calm}}{{addvar::hp::5}}{{addvar::gold::3}}{{setdefaultvar::mood::angry}}{{setdefaultvar::name::Bo}}[{{getvar::mood}}{{getvar::none}}]';
-    expect(run(text, { ...inMessage, variables })).toBe('[calm]');
+    expect(run(text, { ...inMessage, variables })).toBe('[calmnull]');
     expect(Object.fromEntries(variables)).toEqual({ hp: '15', mood: 'calm', gold: '3', name: 'Bo' });
 
     const unchanged = new Map(variables);
@@ -156,7 +156,7 @@ describe('evaluate', () => {
   });
 
   it('reads a toggle as the global variable toggle_<key>, and every other global variable as unset', () => {
-    expect(run('[{{getglobalvar::toggle_nsfw}}|{{getglobalvar::other}}|{{getglobalvar::toggle_none}}]', { toggle: (key) => (key === 'nsfw' ? '1' : null) })).toBe('[1||]');
+    expect(run('[{{getglobalvar::toggle_nsfw}}|{{getglobalvar::other}}|{{getglobalvar::toggle_none}}]', { toggle: (key) => (key === 'nsfw' ? '1' : null) })).toBe('[1|null|null]');
   });
 
   it('rolls a message random tag by its version and place, text outside messages by the request, and pick by its own seed', () => {
@@ -236,7 +236,7 @@ describe('evaluate', () => {
   });
 
   it('counts a negative arrayelement index from the end, as Risu does', () => {
-    expect(run('{{arrayelement::["a","b","c"]::-1}}|{{arrayelement::["a"]::-2}}')).toBe('c|');
+    expect(run('{{arrayelement::["a","b","c"]::-1}}|{{arrayelement::["a"]::-2}}')).toBe('c|null');
   });
 
   it("tells which modules are on by namespace, and lists the character's pictures apart from each module's", () => {
@@ -303,8 +303,25 @@ describe('evaluate', () => {
     expect(run('{{metadata::language}} {{iserror::{{metadata::nope}}}} {{metadata::nope}}')).toBe('{{metadata::language}} 1 Error: nope is not a valid metadata key.');
   });
 
-  it("reads the pressed element's risu-id as {{triggerid}}, and empty outside a press", () => {
+  it("reads the pressed element's risu-id as {{triggerid}}, and null outside a press", () => {
     expect(run('[{{trigger_id}}]', { triggerId: 'door' })).toBe('[door]');
-    expect(run('[{{triggerid}}]')).toBe('[]');
+    expect(run('[{{triggerid}}]')).toBe('[null]');
+  });
+
+  it('sets a default only on a missing or empty variable, and adds to a value that is not a number from 0', () => {
+    const variables = new Map([['kept', 'null'], ['blank', ''], ['word', 'abc']]);
+    run('{{setdefaultvar::kept::x}}{{setdefaultvar::blank::y}}{{addvar::word::2}}', { ...inMessage, variables });
+    expect(Object.fromEntries(variables)).toEqual({ kept: 'null', blank: 'y', word: '2' });
+  });
+
+  it('reads an unset variable as an empty array and as 0 in calc, and a missing element as null', () => {
+    expect(run('{{arraylength::{{getvar::bag}}}} {{arraypush::{{getvar::bag}}::a}} {{? {{getvar::n}}+1}} {{#when::{{getvar::n}}::is::null}}unset{{/when}}')).toBe('0 ["a"] 1 unset');
+    expect(run('{{dictelement::{"a":1}::b}} {{element::{"a":[0]}::a::0}} {{element::{"a":[0]}::a::1}}')).toBe('null 0 null');
+  });
+
+  it("gives Risu's long escape names the character of their short form", () => {
+    const long = '{{displayescapedbracketopen}}{{debc}}{{deabo}}{{displayescapedanglebracketclose}}{{dec}}{{displayescapedsemicolon}}{{displayescapedcurlybracketopen}}{{ddecbc}}';
+    expect(unescapeCbs(run(long))).toBe('()<>:;{}}');
+    expect(run(long)).toBe(run('{{(}}{{)}}{{<}}{{>}}{{:}}{{;}}{{decbo}}{{bc}}'));
   });
 });

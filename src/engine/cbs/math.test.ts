@@ -14,6 +14,10 @@ describe('calc', () => {
 
   it('reads $ and @ tokens through its reader, and gives null for an expression it cannot read', () => {
     expect(calc('$hp + @toggle_x', (token) => (token === '$hp' ? 10 : 1))).toBe(11);
-    expect(['2 + abc', '1 +', '(1', '', '1)'].map((expression) => calc(expression, none))).toEqual([null, null, null, null, null]);
+    expect(['2 + abc', '(1', '1)'].map((expression) => calc(expression, none))).toEqual([null, null, null]);
+  });
+
+  it("reads a missing operand and `null`, an unset variable's text, as 0", () => {
+    expect(['1 +', '+1', '', '()', 'null+1', 'NULL*2', '5-', '2*-3'].map((expression) => calc(expression, none))).toEqual([1, 1, 0, 0, 1, 0, 5, -6]);
   });
 });

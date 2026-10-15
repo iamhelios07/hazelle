@@ -28,12 +28,16 @@ const LEVELS: Map<string, Operator>[] = [
   ]),
   new Map<string, Operator>([['^', (a, b) => a ** b]]),
 ];
-const TOKENS = /\d+(?:\.\d+)?|\.\d+|[$@][\p{L}\p{N}_]+|<=|>=|==|!=|&&|\|\||[-+*/%^<>=≠≤≥!()]/gu;
+const TOKENS = /\d+(?:\.\d+)?|\.\d+|[$@][\p{L}\p{N}_]+|null|<=|>=|==|!=|&&|\|\||[-+*/%^<>=≠≤≥!()]/giu;
+
+// What may follow an operand: where one comes first, the operand is missing. `-` is left out, since it also negates.
+const AFTER_OPERAND = new Set([...LEVELS.flatMap((operators) => [...operators.keys()]).filter((op) => op !== '-'), ')']);
 
 class Invalid {}
 
-// {{calc::…}} and {{? …}}. variable reads a `$name` or `@name` token as a number. null: the expression does
-// not read, and the tag stays as written; Risu drops the tokens it cannot read and evaluates the rest.
+// {{calc::…}} and {{? …}}. variable reads a `$name` or `@name` token as a number. A missing operand and `null`, an
+// unset variable's text, read as 0, as in Risu. null: the expression does not read, and the tag stays as written; Risu
+// drops the tokens it cannot read and evaluates the rest.
 export function calc(expression: string, variable: (token: string) => number): number | null {
   const source = expression.replace(/\s/g, '');
   const tokens = source.match(TOKENS) ?? [];
@@ -41,7 +45,8 @@ export function calc(expression: string, variable: (token: string) => number): n
   let at = 0;
 
   const operand = (): number => {
-    const token = tokens[at++];
+    if (at === tokens.length || AFTER_OPERAND.has(tokens[at]!)) return 0;
+    const token = tokens[at++]!;
     if (token === '-') return -operand();
     if (token === '!') return operand() === 0 ? 1 : 0;
     if (token === '(') {
@@ -49,8 +54,9 @@ export function calc(expression: string, variable: (token: string) => number): n
       if (tokens[at++] !== ')') throw new Invalid();
       return value;
     }
-    if (token?.startsWith('$') || token?.startsWith('@')) return variable(token);
-    if (token === undefined || !/^[\d.]/.test(token)) throw new Invalid();
+    if (token.startsWith('$') || token.startsWith('@')) return variable(token);
+    if (token.toLowerCase() === 'null') return 0;
+    if (!/^[\d.]/.test(token)) throw new Invalid();
     return Number(token);
   };
   const level = (depth: number): number => {
