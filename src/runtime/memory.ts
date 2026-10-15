@@ -1,6 +1,7 @@
 import { ChangeSignal } from '../change-signal';
 import { chatMemory, memoryOwner, memorySetup, sourcesOf, storedMemory } from './memory-read';
 import { chatSent, type ChatSent } from './memory-view';
+import { MemorySchedule, type MemoryCheck } from './memory-schedule';
 import type { ModelSettings } from '../connectors/settings';
 import { chapterCap, chapterTarget, coveredBy, fingerprint, isChapter, memoryBudget, nextChapters, nextSpan, owned, parseChapter, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type Invalid, type Scene } from '../engine/memory';
 import type { RanAway } from '../engine/pipeline';
@@ -261,11 +262,7 @@ export class Rememberer {
   private closed = false;
   private state: Remembering = { running: new Map(), failed: new Map(), chapterFailed: new Map(), indexing: new Map(), indexFailed: new Map() };
   private readonly changes = new ChangeSignal();
-  // The chats with a job running, and of those the ones that may summarize new messages too, not only stale records.
-  private readonly working = new Set<string>();
-  private readonly full = new Set<string>();
-  private readonly recheck = new Set<string>();
-  private readonly asked = new Map<string, string>();
+  private readonly schedule = new MemorySchedule();
   // The message versions a stale record was summarized again from this session. One that renders differently each
   // time it is read ({{time}}, or CBS reading later messages) stays stale, and is not summarized again from the same
   // versions, which would pay for a call on every check.
@@ -287,7 +284,7 @@ export class Rememberer {
     // Another device's reply arrives here as entries too; only the device that saved it summarizes new messages, so two
     // open devices do not pay for the same span.
     this.stop = session.store.subscribe((changes) => {
-      for (const chat of new Set(changes.flatMap(({ kind, parent }) => (kind === 'entry' && parent ? [parent] : [])))) this.start(chat, false);
+      for (const chat of new Set(changes.flatMap(({ kind, parent }) => (kind === 'entry' && parent ? [parent] : [])))) this.start(chat, 'stale');
     });
   }
 
@@ -298,13 +295,13 @@ export class Rememberer {
   // Opening a chat tries a failed index pass again; a failed summary waits for 다시 시도.
   check(chat: string) {
     this.change(chat, { indexFailed: null });
-    this.start(chat, true);
+    this.start(chat, 'full');
   }
 
   retry(chat: string) {
     this.unchaptered.delete(chat);
     this.change(chat, { failed: null, chapterFailed: null, indexFailed: null });
-    this.start(chat, true);
+    this.start(chat, 'full');
   }
 
   // 원문에서 다시 만들기: one record or chapter from its source, or the whole chat's memory when record is null, which
@@ -313,12 +310,12 @@ export class Rememberer {
     this.unchaptered.delete(chat);
     this.change(chat, { failed: null, chapterFailed: null });
     if (record === null) {
-      this.asked.delete(chat);
-      void changeMemory(this.session.store, chat, () => emptyMemory()).then(() => this.start(chat, true));
+      this.schedule.rebuild(chat, null);
+      void changeMemory(this.session.store, chat, () => emptyMemory()).then(() => this.start(chat, 'full'));
       return;
     }
-    this.asked.set(chat, record);
-    this.start(chat, true);
+    this.schedule.rebuild(chat, record);
+    this.start(chat, 'full');
   }
 
   // A summary the server was making when this page came, which Streams hands over. Waits while the chat has a job
@@ -327,8 +324,7 @@ export class Rememberer {
     const chat = stream.parent!;
     const purpose = stream.value.for;
     if (this.ended.has(stream.id)) return endCall(this.session.store, stream.id);
-    if (this.closed || purpose.kind !== 'memory' || this.working.has(chat)) return;
-    this.working.add(chat);
+    if (this.closed || purpose.kind !== 'memory' || !this.schedule.begin(chat, 'stale')) return;
     this.change(chat, { running: { model: stream.value.call.modelName, left: 1 } });
     void this.hold(chat, () => this.resumed(chat, stream, purpose)).finally(() => this.done(chat));
   }
@@ -355,19 +351,14 @@ export class Rememberer {
     this.changes.notify();
   }
 
-  private start(chat: string, full: boolean) {
-    if (this.closed || this.state.failed.has(chat) || (!full && this.session.store.scopeState(chat) !== 'loaded')) return;
-    if (this.working.has(chat)) {
-      if (full) this.full.add(chat);
-      this.recheck.add(chat);
-      return;
-    }
+  private start(chat: string, check: MemoryCheck) {
+    if (this.closed || this.state.failed.has(chat) || (check === 'stale' && this.session.store.scopeState(chat) !== 'loaded')) return;
+    if (this.schedule.queue(chat, check)) return;
     const stored = live(this.session.store.get('chat', chat));
     // A chat whose memory slot a tool holds keeps its records as they are, unsummarized, until the slot is the built-in
     // memory's again (design §6.10).
-    if (!stored || memoryOwner(this.session.store, stored.value)?.kind !== 'built-in' || (!full && !chatMemory(this.session.store, chat).records.length)) return;
-    if (full) this.full.add(chat);
-    this.working.add(chat);
+    if (!stored || memoryOwner(this.session.store, stored.value)?.kind !== 'built-in' || (check === 'stale' && !chatMemory(this.session.store, chat).records.length)) return;
+    this.schedule.begin(chat, check);
     void this.hold(chat, () => this.work(chat).then(() => this.index(chat))).finally(() => this.done(chat));
   }
 
@@ -384,17 +375,14 @@ export class Rememberer {
   }
 
   private done(chat: string) {
-    const again = this.recheck.delete(chat);
-    const full = this.full.delete(chat);
-    this.working.delete(chat);
+    const next = this.schedule.finish(chat);
     this.change(chat, { running: null });
-    if (again) this.start(chat, full);
+    if (next) this.start(chat, next);
   }
 
   private async work(chat: string) {
     while (!this.closed) {
-      // A request arriving after this plan starts must survive its decision to stop, including indexing.
-      this.recheck.delete(chat);
+      this.schedule.planning(chat);
       const planned = await this.plan(chat);
       if (!planned) return;
       if ('kind' in planned) return this.change(chat, { failed: planned });
@@ -444,19 +432,19 @@ export class Rememberer {
     const { setup } = owner;
     const held = sent.standing!;
     const places = placesOf(sent.read.shown);
-    const asked = [...memory.records, ...memory.chapters].find(({ id }) => id === this.asked.get(chat));
+    const asked = [...memory.records, ...memory.chapters].find(({ id }) => id === this.schedule.requested(chat));
     const stale = memory.records.filter((record) => !owned(record) && !record.forgotten && staleness(record, sent.read, places) === 'changed' && !this.reread.has(readKey(shownFor(record, sent.read, places))));
     const member = asked && isChapter(asked) ? stale.find(({ id }) => asked.records.some((each) => each.id === id)) : undefined;
-    if (!member) this.asked.delete(chat);
+    if (!member) this.schedule.rebuild(chat, null);
     // Without a 장기 기억 slot in the request, a new record would only take its messages out of it, and a stale one
     // summarized again would be paid for and never read. What the user asked for is made whatever the prompt holds.
     let slot: boolean | null = null;
     const reaches = async () => (slot ??= (await wouldSend(this.session, chat, { kind: 'answer' }, undefined, 'memory'))?.prompt.memory?.slot === true);
     const again = member ?? asked ?? (stale.length && await reaches() ? stale[0] : undefined);
-    const span = !again && this.full.has(chat) && await reaches() ? await this.span(chat, sent.tokens, coveredBy(memory, places), setup) : null;
+    const span = !again && this.schedule.includesNew(chat) && await reaches() ? await this.span(chat, sent.tokens, coveredBy(memory, places), setup) : null;
     const tools = this.tools(sent.chat);
     let chapters: ReturnType<typeof nextChapters> = [];
-    if (!('kind' in tools) && !again && !span && this.full.has(chat) && await reaches()) {
+    if (!('kind' in tools) && !again && !span && this.schedule.includesNew(chat) && await reaches()) {
       const snapshot = await this.session.tokens.snapshot(tools.route, tools.settings, tokenLimits(tools.route.model, sentSettings(store, tools.route)), 'memory', chat, new AbortController().signal);
       if (!snapshot.ok) return { kind: 'unsaved', failure: snapshot };
       const cap = chapterCap(setup.batch, snapshot.data.fit.allowance);

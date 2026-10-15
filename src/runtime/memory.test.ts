@@ -5,6 +5,8 @@ import { fingerprint } from '../engine/memory';
 import { memoryId, type Chapter, type MemorySettings } from '../model/memory';
 import { appendUserMessage, editMessage, startChat } from './chat-log';
 import { api } from './api';
+import { setDefaultModel } from './assignment';
+import * as retrieval from './retrieval';
 import { chatMemory } from './memory-read';
 import { editRecord, forgetRecord, removeFact, removeThread, setDefaultMemory, setFact, setThread } from './memory';
 import { addPrompt, editPrompt } from './prompts';
@@ -357,6 +359,37 @@ describe('chapters', () => {
         expect(chatMemory(session.store, chat).chapters).toEqual([]);
         expect(log).toHaveLength(1);
       } finally { release(); }
+    }));
+
+  it('coalesces checks during indexing into another pass without starting a concurrent summary', () =>
+    server.withSession(async (session) => {
+      const { chat } = await recorded(session, { budget: 1_000_000 });
+      const connection = session.store.list('connection')[0]!.id;
+      await setDefaultModel(session.store, 'embed', { connection, model: 'm' });
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      const indexing = vi.spyOn(retrieval, 'indexRecords').mockImplementation(async () => {
+        await held;
+        return { ok: true };
+      });
+      try {
+        const log = stubRelay(inTurn([saying('Luna smiles.'), saying(summary('jin asks Luna to wait.', 'Will you wait?'))]));
+        expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+        await vi.waitFor(() => expect(indexing).toHaveBeenCalledTimes(1));
+        await setDefaultMemory(session.store, { batch: 1 });
+        session.memory.check(chat);
+        session.memory.check(chat);
+        expect(log).toHaveLength(1);
+        release();
+        await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(4));
+        await vi.waitFor(() => expect(indexing).toHaveBeenCalledTimes(2));
+        await vi.waitFor(() => expect(session.memory.snapshot().indexing.size).toBe(0));
+        await vi.waitFor(() => expect(session.memory.snapshot().running.size).toBe(0));
+        expect(log).toHaveLength(2);
+      } finally {
+        release();
+        indexing.mockRestore();
+      }
     }));
 
   it('drops a chapter whose record the user edited while it was written', () =>
