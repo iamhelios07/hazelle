@@ -320,13 +320,13 @@ export class ChatScreenRead {
   // Whether the latest refresh ran under a verdict.
   private judged = false;
   private turn: Turn | null;
-  private model: ChatModel | null;
+  private base: Opening | null;
   private drawing: string;
   private readonly listeners = new Set<() => void>();
   private leave: (() => void) | null = null;
 
   constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, private readonly drawings: Drawings, readonly id: string, private opening: Opening) {
-    this.model = models.chat(id).snapshot();
+    this.base = this.based();
     this.turn = this.currentTurn();
     this.drawing = drawingKey(id, drawings.snapshot());
     this.state = new Snapshot<ChatScreen>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: false, unfound: [], stopped: null }, stuck: false, pending: true, placed: new Map() });
@@ -337,9 +337,9 @@ export class ChatScreenRead {
     if (!this.leave) {
       const lease = this.models.store.retainChat(this.id);
       const store = this.models.store.subscribe((changes) => {
-        const model = this.models.chat(this.id).snapshot();
-        if (model === this.model && !readsChanged(this.reads, changes) && this.verdict() === this.judged) return;
-        this.model = model;
+        const base = this.based();
+        if (base === this.base && !readsChanged(this.reads, changes) && this.verdict() === this.judged) return;
+        this.base = base;
         this.refresh();
       });
       const talk = this.talk.subscribe(() => {
@@ -360,13 +360,13 @@ export class ChatScreenRead {
         this.state.set({ ...this.state.snapshot(), ...placing(display) });
       });
       this.leave = () => { this.again = false; this.evaluation?.abort(); store(); talk(); drawn(); passed(); lease.release(); };
-      const model = this.models.chat(this.id).snapshot();
+      const base = this.based();
       const turn = this.currentTurn();
       // A pass the display was missing while nobody listened was not run: it is asked for again now. A pass running
       // now lands with a listener, so it is not, unless it was the one a leave just stopped.
       const landing = this.running !== null && !this.evaluation?.signal.aborted;
-      if (model !== this.model || turn !== this.turn || (!landing && (this.state.snapshot().display.pass || this.state.snapshot().pending))) {
-        this.model = model;
+      if (base !== this.base || turn !== this.turn || (!landing && (this.state.snapshot().display.pass || this.state.snapshot().pending))) {
+        this.base = base;
         this.turn = turn;
         this.refresh();
       }
@@ -381,7 +381,7 @@ export class ChatScreenRead {
   };
 
   setInputs(opening: Opening, screen: ChatScope['screen']) {
-    const changed = this.screen?.width !== screen?.width || this.screen?.height !== screen?.height || (!this.model && (opening.chat !== this.opening.chat || opening.messages !== this.opening.messages));
+    const changed = this.screen?.width !== screen?.width || this.screen?.height !== screen?.height || (!this.base && (opening.chat !== this.opening.chat || opening.messages !== this.opening.messages));
     this.opening = opening;
     this.screen = screen;
     if (changed) this.refresh();
@@ -389,6 +389,16 @@ export class ChatScreenRead {
 
   private currentTurn() {
     return this.talk.snapshot(this.id);
+  }
+
+  // The store's fold, which a write changes at once, never the chat's projection, which follows it by a whole display
+  // pass: Talk ends a turn as soon as its reply is saved, so a screen on the projection dropped the reply until then.
+  private based(): Opening | null {
+    const { store } = this.models;
+    const stored = store.scopeState(this.id) === 'loaded' ? live(store.get('chat', this.id)) : null;
+    if (!stored) return null;
+    const { messages } = store.foldedChat(this.id);
+    return this.base?.chat === stored.value && this.base.messages === messages ? this.base : { chat: stored.value, messages };
   }
 
   private verdict() {
@@ -423,8 +433,8 @@ export class ChatScreenRead {
     const evaluation = new AbortController();
     this.evaluation = evaluation;
     const judged = this.judged = this.verdict();
-    const chat = this.model ? this.model.chat : this.opening.chat;
-    const messages = withTurn(this.model ? this.model.messages : this.opening.messages, this.turn, this.id);
+    const chat = this.base ? this.base.chat : this.opening.chat;
+    const messages = withTurn(this.base ? this.base.messages : this.opening.messages, this.turn, this.id);
     const { store } = this.models;
     const { value, reads } = store.capture(() => {
       const places = store.scopeState(this.id) === 'loaded' ? placesOf(store, this.id, this.drawings.snapshot()) : new Map<string, Set<number>>();

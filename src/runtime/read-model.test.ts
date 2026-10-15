@@ -639,6 +639,37 @@ describe('per-chat read models', () => {
     read.close();
   });
 
+  it('keeps a saved reply on screen when its turn ends before the projection follows the save', async () => {
+    const { store } = await account();
+    await store.create('chat', chat, { id: 'a' });
+    await store.create('entry', message('q'), { id: 'said', parent: 'a' });
+    await hold(store, 'a');
+    const read = new ReadModels(store);
+    const talk = liveTalk();
+    const opening = { chat, messages: [] };
+    const screen = read.screen('a', talk, NO_DRAWINGS, opening);
+    const shown: string[][] = [];
+    const leave = screen.subscribe(() => shown.push(screen.snapshot().messages.map((each) => each.id)));
+    screen.setInputs(opening, { width: 800, height: 600 });
+    await vi.waitFor(() => expect(screen.snapshot().pending).not.toBe(true));
+    talk.set({ chat: 'a', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'hello', reasoning: '' });
+    await vi.waitFor(() => expect(screen.snapshot().messages.map((each) => each.id)).toEqual(['said', 'reply']));
+    let release = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const display = store.evaluation.display.bind(store.evaluation);
+    vi.spyOn(store.evaluation, 'display').mockImplementation(async (lane, ...rest) => {
+      if (lane.asker === 'projection') await held;
+      return display(lane, ...rest);
+    });
+    await store.create('entry', { ...message('hello'), role: 'assistant' }, { id: 'reply', parent: 'a' });
+    talk.set(null);
+    await vi.waitFor(() => expect(screen.snapshot().messages[1]?.live).toBeNull());
+    release();
+    expect(shown.every((ids) => ids.length < 2 || ids.includes('reply'))).toBe(true);
+    leave();
+    read.close();
+  });
+
   it('shows a screen left and opened again while its first pass ran', async () => {
     const { store } = await account();
     await store.create('chat', chat, { id: 'a' });
