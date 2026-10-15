@@ -307,7 +307,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
               <Button
                 variant={done.length === 1 ? 'secondary' : 'primary'}
                 icon={Package}
-                onClick={() => go({ kind: 'module', id: modules[0]! })}
+                onClick={() => go({ kind: 'module', id: modules[0]!, pane: null })}
               >
                 모듈 보기
               </Button>

@@ -67,7 +67,7 @@ describe('a character file', () => {
       variables: [['hp', '10']],
       bias: [['luna', 5]],
       background: '<style>.luna { color: red }</style>',
-      toggles: 'mood=기분',
+      toggles: [{ key: 'mood', label: '기분', kind: 'check', default: '0' }],
       loreSettings: { scanDepth: 4, tokenBudget: null, recursive: true, fullWordMatching: null },
       regex: [
         { id: 'regex-0', name: '상태창', find: '<s>(.*)</s>', replace: '$1', stage: 'display', flags: 'gs' },
@@ -106,7 +106,7 @@ describe('a character file', () => {
     const wall = png();
     const module = await importModule(store, files, {
       name: '전화', description: '폰 화면', namespace: 'phone', risu: null, unsupported: [], likeness: portraits,
-      pack: { regex: [{ id: 'regex-0', name: '화면', find: 'x', replace: 'y', stage: 'input', flags: null }], triggers: [], background: '<style>.phone {}</style>', toggles: 'ring=벨' },
+      pack: { regex: [{ id: 'regex-0', name: '화면', find: 'x', replace: 'y', stage: 'input', flags: null }], triggers: [], background: '<style>.phone {}</style>', toggles: [{ key: 'ring', label: '벨', kind: 'check', default: '0' }] },
       lore: [entry('벨', { folder: 0 })], loreFolders: ['기기'], assets: [{ name: 'wall', read: async () => wall }],
     }, () => {});
     const moduleId = module.ok ? module.data.id : '';

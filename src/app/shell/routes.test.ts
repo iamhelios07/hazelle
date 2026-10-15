@@ -35,7 +35,10 @@ const EXAMPLES = {
   personas: [{ kind: 'personas' }],
   persona: [{ kind: 'persona', id: CHAT }],
   modules: [{ kind: 'modules' }],
-  module: [{ kind: 'module', id: CHAT }],
+  module: [
+    { kind: 'module', id: CHAT, pane: null },
+    { kind: 'module', id: CHAT, pane: 'toggles' },
+  ],
   'tool-page': [{ kind: 'tool-page', module: CHAT }],
   models: [{ kind: 'models' }],
   profile: [{ kind: 'profile', id: CHAT }],
@@ -102,8 +105,12 @@ describe('routes', () => {
 it('opens a tool page without a list pane or chat, with its module as the way back', () => {
   const route = { kind: 'tool-page', module: CHAT } as const;
   expect(href(route)).toBe(`/modules/${CHAT}/page`);
-  expect(up(route)).toEqual({ kind: 'module', id: CHAT });
+  expect(up(route)).toEqual({ kind: 'module', id: CHAT, pane: null });
   expect(listOf(route)).toBeNull();
   expect(settingsPage(route)).toBe('modules');
   expect(shelfOf(route)).toBeUndefined();
+});
+
+it("goes back from a module's 토글 page to the module", () => {
+  expect(up({ kind: 'module', id: CHAT, pane: 'toggles' })).toEqual({ kind: 'module', id: CHAT, pane: null });
 });

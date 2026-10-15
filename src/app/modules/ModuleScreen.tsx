@@ -1,12 +1,14 @@
 import { ToolSection } from './ToolSection';
 import type { Stored } from '../../model/kinds';
 import { likenessId } from '../../model/likeness';
+import { isToggle } from '../../model/prompt';
 import { editModule, setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { holdsLine } from '../common/pack';
 import { AssetsEditor } from '../common/AssetsEditor';
 import { LoreEditor } from '../common/LoreEditor';
+import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
@@ -23,7 +25,7 @@ const USED_BY = '쓰는 캐릭터';
 const PROMPTS_USING = '쓰는 프롬프트';
 const PERSONAS_USING = '쓰는 페르소나';
 
-export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back: Back }) {
+export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>; pane: 'toggles' | null; back: Back }) {
   const store = useStore();
   const toast = useToast();
   const wide = useWide();
@@ -49,6 +51,13 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
     navigate({ kind: 'modules' });
     toast.undoable(`'${moduleName(name)}' 모듈을 삭제했어요.`, () => setModuleDeleted(store, id, null), BIN_KEEPS);
   }
+
+  if (pane === 'toggles')
+    return (
+      <Screen width="form" top={<NavBar title={moduleName(name)} {...backBar(back)} />}>
+        <PackToggles owner={{ kind: 'module', id }} lines={value.toggles} />
+      </Screen>
+    );
 
   return (
     <Screen
@@ -106,6 +115,9 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
           <Empty variant="section">{always ? '따로 켠 페르소나가 없어요.' : '켠 페르소나가 없어요.'}</Empty>
         )}
       </Section>
+      <List box places label="토글">
+        <ListItem title="토글" aside={`${value.toggles.filter(isToggle).length}개`} onClick={() => navigate({ kind: 'module', id, pane: 'toggles' })} />
+      </List>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />
       <AssetsEditor owner={id} />

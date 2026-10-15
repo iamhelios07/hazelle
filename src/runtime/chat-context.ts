@@ -3,7 +3,6 @@ import { modelSettings } from '../connectors/registry';
 import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Display } from '../engine/display';
-import { readToggles } from '../engine/import/toggles';
 import type { Pack } from '../engine/import/types';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
@@ -126,7 +125,7 @@ export function togglesOf(store: Reader['store'], chat: Chat, prompt: PromptChoi
     ...packsOf(store, chat).map(({ id, pack, module }) => ({
       from: module ? ('module' as const) : ('card' as const),
       name: module ? store.get('module', id)!.value.name : character!.card.name,
-      lines: readToggles(pack.toggles).lines,
+      lines: pack.toggles,
     })),
   ];
   const declared = chatToggles(sources.flatMap(({ lines }) => lines));

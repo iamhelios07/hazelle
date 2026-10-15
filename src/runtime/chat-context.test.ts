@@ -28,7 +28,7 @@ describe('evaluateChat', () => {
 describe('scopeOf', () => {
   it("holds the character's lorebook, then a saved chat's own, then the modules'", async () => {
     const { store } = await server.account();
-    const module = await store.create('module', { name: '종', description: '', namespace: null, regex: [], triggers: [], toggles: '', loreFolders: [] });
+    const module = await store.create('module', { name: '종', description: '', namespace: null, regex: [], triggers: [], toggles: [], loreFolders: [] });
     if (!module.ok) throw new Error(module.error);
     const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [], modules: [module.data.id] });
     if (!character.ok) throw new Error(character.error);

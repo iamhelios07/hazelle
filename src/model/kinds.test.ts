@@ -35,12 +35,13 @@ it('accepts tool files and per-key data without changing existing module shapes'
   expect(isValue('toolchat', { key: 'index', value: 1 })).toBe(false);
 });
 
-it('accepts a prompt whose toggles hold layout lines, and refuses a toggle without its key or a mark without its label', () => {
-  const lines = [{ kind: 'group', label: '모드' }, { key: 'sims', label: '시뮬레이터', kind: 'check', default: '0' }, { kind: 'groupEnd' }, { kind: 'divider', label: '' }, { kind: 'caption', label: '설명' }];
+it('accepts a prompt whose toggles hold layout and unread lines, and refuses a toggle without its key, a mark without its label or an unread line without its text', () => {
+  const lines = [{ kind: 'group', label: '모드' }, { key: 'sims', label: '시뮬레이터', kind: 'check', default: '0' }, { kind: 'groupEnd' }, { kind: 'divider', label: '' }, { kind: 'caption', label: '설명' }, { kind: 'unread', text: '모드 고르기' }];
   const prompt = { name: 'p', blocks: [], authorNote: '', models: {}, toggles: lines };
   expect(isValue('prompt', prompt)).toBe(true);
   expect(isValue('prompt', { ...prompt, toggles: [{ label: '시뮬레이터', kind: 'check', default: '0' }] })).toBe(false);
   expect(isValue('prompt', { ...prompt, toggles: [{ kind: 'divider' }] })).toBe(false);
+  expect(isValue('prompt', { ...prompt, toggles: [{ kind: 'unread' }] })).toBe(false);
 });
 
 it("reads a chat's bookmarks and cast as absent or well formed, and refuses a malformed list", () => {

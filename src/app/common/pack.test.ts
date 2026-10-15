@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Pack } from '../../engine/import/types';
+import type { ToggleLine } from '../../model/prompt';
 import { packHolds, packParts, scriptHolds } from './pack';
 
-const EMPTY: Pack = { regex: [], triggers: [], toggles: '' };
+const EMPTY: Pack = { regex: [], triggers: [], toggles: [] };
+const check = (key: string): ToggleLine => ({ key, label: key, kind: 'check', default: '0' });
 
 describe('what a pack holds', () => {
   it('counts each thing it has and leaves out what it has none of', () => {
@@ -12,7 +14,7 @@ describe('what a pack holds', () => {
         { kind: 'lua', id: 'trigger-0', name: '', code: '' },
         { kind: 'blocks', id: 'trigger-1', name: '', on: 'start', conditions: [], effects: [] },
       ],
-      toggles: 'storm=폭풍\nweather=날씨',
+      toggles: [check('storm'), check('weather')],
       background: '<style></style>',
     };
     expect(packHolds(pack, 6, 0)).toBe('로어북 6개 · 트리거 2개 · 토글 2개 · 스타일');
@@ -25,7 +27,7 @@ describe('what a pack holds', () => {
   });
 
   it('gives each part as a count the contents line is written from', () => {
-    const pack: Pack = { regex: [], triggers: [{ kind: 'lua', id: 'trigger-0', name: '', code: '' }], toggles: 'storm=폭풍\n=\nweather=날씨', background: '<style></style>' };
+    const pack: Pack = { regex: [], triggers: [{ kind: 'lua', id: 'trigger-0', name: '', code: '' }], toggles: [check('storm'), { kind: 'unread', text: '=' }, check('weather')], background: '<style></style>' };
     expect(packParts(pack, 6, 2, true)).toEqual({ tool: true, lore: 6, regex: 0, triggers: 1, toggles: 2, assets: 2, style: true });
     expect(packParts(EMPTY, 0, 0)).toEqual({ tool: false, lore: 0, regex: 0, triggers: 0, toggles: 0, assets: 0, style: false });
   });

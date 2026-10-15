@@ -1,7 +1,7 @@
 import { count, flag, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
 import { parseDecorators } from '../lorebook/decorators';
-import { readToggles } from './toggles';
+import { readToggles, writeToggles } from './toggles';
 import { blockConditions, blockEffects, conditionSources, effectSources } from './blocks';
 import type { Card, ImportedModule, ImportReport, LoreEntry, Pack, RegexScript, Trigger, UnsupportedKind } from './types';
 
@@ -156,8 +156,9 @@ function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; to
   const triggers = readTriggers(raw.trigger);
   const background = text(raw.background);
   if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
-  add(tally, 'toggle-line', readToggles(text(raw.toggles)).unread);
-  return { ...stampIds({ regex: regexScripts(list(raw.regex), tally), triggers }), ...(background.trim() ? { background } : {}), toggles: text(raw.toggles) };
+  const toggles = readToggles(text(raw.toggles));
+  add(tally, 'toggle-line', toggles.filter((line) => line.kind === 'unread').length);
+  return { ...stampIds({ regex: regexScripts(list(raw.regex), tally), triggers }), ...(background.trim() ? { background } : {}), toggles };
 }
 
 // The writer's side, each the inverse of its reader here: what convert reads back as it was written. A charx keeps
@@ -238,7 +239,7 @@ export function cardSource(card: Card, assets: Json[], extensions: Json): Json {
           bias: card.bias,
           utilityBot: card.utility,
           defaultVariables: card.variables.map(([key, value]) => `${key}=${value}`).join('\n'),
-          toggles: card.toggles,
+          toggles: writeToggles(card.toggles),
           ...(card.background !== undefined && { backgroundHTML: card.background }),
         },
         ...extensions,

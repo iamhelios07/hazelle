@@ -1,18 +1,20 @@
 import type { Listed, Pack, RegexScript, Trigger } from '../engine/import/types';
 import { without } from '../model/fields';
 import type { PackOwner } from '../model/library';
+import type { ToggleLine } from '../model/prompt';
 import type { ApiResult } from './api';
 import { evaluationFailure } from './evaluation';
 import type { ObjectStore } from './store';
 
 export type ScriptList = 'regex' | 'triggers';
 type Scripts = Pick<Pack, ScriptList>;
+type Parts = Pick<Pack, ScriptList | 'toggles'>;
 
 // The one place that knows where an owner keeps its pack: a character in its card, a module at its top level. Each
 // change is applied to the copy written over, so an edit to another script on another device survives, and may run
 // again over its own result (ObjectStore.reaching), so it must read the same applied twice as once. null: what it
 // changes is gone there, and nothing is written.
-function updatePack(store: ObjectStore, { kind, id }: PackOwner, change: (pack: Scripts) => Partial<Scripts> | null): Promise<ApiResult<unknown>> {
+function updatePack(store: ObjectStore, { kind, id }: PackOwner, change: (pack: Parts) => Partial<Parts> | null): Promise<ApiResult<unknown>> {
   return kind === 'character'
     ? store.update('character', id, (current) => {
         const pack = change(current.card);
@@ -104,6 +106,9 @@ export async function removeScript(store: ObjectStore, owner: PackOwner, list: S
 
 export const restoreScript = (store: ObjectStore, owner: PackOwner, { list, script, at }: RemovedScript) =>
   updateList(store, owner, list, (scripts) => (holds(scripts, script.id) ? scripts : scripts.toSpliced(Math.min(at, scripts.length), 0, script as (typeof scripts)[number])));
+
+// The whole list, as the prompt's is written (runtime/prompts editPrompt): its lines have no ids to merge by.
+export const setToggles = (store: ObjectStore, owner: PackOwner, toggles: ToggleLine[]) => updatePack(store, owner, () => ({ toggles }));
 
 // A pattern may never end, so a sample runs where a chat's scripts do: in the evaluation worker, which is stopped when
 // it hangs. A newer sample of the same script takes the place of one still waiting.

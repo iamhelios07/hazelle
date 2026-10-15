@@ -58,7 +58,10 @@ export type Toggle = { key: string; label: string } & (
 // A line of a toggle list that holds no value and only lays the list out: a group runs to its groupEnd, as in Risu.
 // It has no key, so it never reaches what reads values (chatToggles, toggleValue).
 export type ToggleMark = { kind: 'divider'; label: string } | { kind: 'caption'; label: string } | { kind: 'group'; label: string } | { kind: 'groupEnd' };
-export type ToggleLine = Toggle | ToggleMark;
+// A line of Risu's toggle text that reads as no toggle and no mark, kept as written so an export gives it back and the
+// editor can fix it. It has no key either, and lays nothing out.
+export type UnreadLine = { kind: 'unread'; text: string };
+export type ToggleLine = Toggle | ToggleMark | UnreadLine;
 export const isToggle = (line: ToggleLine): line is Toggle => 'key' in line;
 
 // A character's or 캐릭터 없이's toggle values by key, over the declared defaults.

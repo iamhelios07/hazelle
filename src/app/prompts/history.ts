@@ -1,7 +1,10 @@
-import { isToggle, type Block, type ChatRange, type ChatSlot, type RecentSlot, type Role, type TextBlock, type Toggle, type ToggleLine, type WrappedSlot } from '../../model/prompt';
+import { isToggle, type Block, type ChatRange, type ChatSlot, type RecentSlot, type Role, type TextBlock, type Toggle, type ToggleLine, type ToggleMark, type UnreadLine, type WrappedSlot } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockTitle, MARKS, SLOT } from './blocks';
-import { keyInUse, lineTitle, moved, placedOnce, rekey, withMark, type Draft } from './edits';
+import { moved } from '../../model/fields';
+import { keyInUse } from '../../model/toggles';
+import { lineTitle } from '../common/toggleWords';
+import { placedOnce, rekey, withMark, type Draft } from './edits';
 
 // A toast's 되돌리기 undoes a step out of turn, so what a step puts back may no longer fit: the slot it held is taken, or
 // its key is another toggle's.
@@ -64,9 +67,9 @@ const placeOf = <T>(items: readonly T[], item: T, at: number, same: (a: T, b: T)
   at < items.length && same(items[at]!, item) ? at : items.findIndex((each) => same(each, item));
 
 const sameBlock = (a: Block, b: Block) => a.id === b.id;
-// A layout line has no key, so it is known by what it says; two alike are interchangeable.
-const sameLine = (a: ToggleLine, b: ToggleLine) =>
-  isToggle(a) || isToggle(b) ? isToggle(a) && isToggle(b) && a.key === b.key : a.kind === b.kind && ('label' in a ? a.label : '') === ('label' in b ? b.label : '');
+// A layout or unread line has no key, so it is known by what it says; two alike are interchangeable.
+const said = (line: ToggleMark | UnreadLine) => ('label' in line ? line.label : 'text' in line ? line.text : '');
+const sameLine = (a: ToggleLine, b: ToggleLine) => (isToggle(a) || isToggle(b) ? isToggle(a) && isToggle(b) && a.key === b.key : a.kind === b.kind && said(a) === said(b));
 const lineAt = (lines: readonly ToggleLine[], line: ToggleLine, at: number) => placeOf(lines, line, at, sameLine);
 // A text comes back without a mark another text has taken since: its words matter more than the mark.
 const joiningBlock = (blocks: readonly Block[], block: Block): Block | Refused => {
@@ -172,12 +175,12 @@ export function removeLine(line: ToggleLine, at: number): Step {
 }
 
 // The whole line swaps, since nothing is typed into one in place.
-export function editLine(before: ToggleLine, after: ToggleLine, at: number, what: 'label' | 'default'): Step {
+export function editLine(before: ToggleLine, after: ToggleLine, at: number, what: 'label' | 'default' | 'line'): Step {
   const swap = (from: ToggleLine, to: ToggleLine) => (draft: Draft): PromptPatch => {
     const now = lineAt(draft.toggles, from, at);
     return now === -1 ? {} : { toggles: draft.toggles.map((each, index) => (index === now ? to : each)) };
   };
-  const words = what === 'default' ? '기본값 바꾸기' : before.kind === 'caption' ? '내용 바꾸기' : '이름 바꾸기';
+  const words = what === 'default' ? '기본값 바꾸기' : what === 'line' || before.kind === 'caption' ? '내용 바꾸기' : '이름 바꾸기';
   return { label: `${lineTitle(before)} ${words}`, block: null, undo: swap(after, before), redo: swap(before, after) };
 }
 

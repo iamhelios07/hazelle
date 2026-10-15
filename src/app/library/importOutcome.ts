@@ -1,6 +1,7 @@
 import type { ToolManifest } from '../../tool-api/manifest';
 import type { ToolImport } from '../../runtime/tools/store';
 import { mergeUnsupported, unsupportedCount, type Imported, type ImportedModule, type Unsupported } from '../../engine/import/types';
+import { isToggle } from '../../model/prompt';
 import { unused } from '../../engine/pipeline';
 import type { ImportedCharacter } from '../../runtime/characters';
 import type { ModulePlace } from '../../runtime/modules';
@@ -24,7 +25,7 @@ export function characterOutcome(file: string, imported: Imported, { id, unsuppo
     lore.length > 0 && `로어북 ${lore.length}개`,
     card.regex.length > 0 && `${SCRIPTS.regex} ${card.regex.length}개`,
     card.variables.length > 0 && `기본 변수 ${card.variables.length}개`,
-    card.toggles.trim() && '토글',
+    card.toggles.some(isToggle) && '토글',
     assets.length - unsupportedCount(unsupported) > 0 && `에셋 ${assets.length - unsupportedCount(unsupported)}개`,
   ].filter(Boolean).join(' · ');
   return { kind: 'character', file, id, title: card.name, holds, placed: null, missed: cardMissed(mergeUnsupported(report.unsupported, unsupported), faceless), unused: describeUnused(unused(card)) };

@@ -15,7 +15,7 @@ import { useOwnUndo, useToast } from '../toast';
 import { Button, Callout, Divider, MenuHeading, MenuItem, NavRow, Outline, Row, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
-import { conditionSnippet, countUses, draftOf, lineTitle, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
+import { conditionSnippet, countUses, draftOf, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
 import {
   addBlock,
   addLine,
@@ -42,7 +42,8 @@ import {
 import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPane';
 import { chatWarning } from './ranges';
 import { PicturePane } from './PicturePane';
-import { TogglePane } from './TogglePane';
+import { TogglePane } from '../common/TogglePane';
+import { lineTitle } from '../common/toggleWords';
 import { EMPTY_USE, usePromptUse } from '../common/usePromptUse';
 
 const MODEL = 'model';

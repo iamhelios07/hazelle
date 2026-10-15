@@ -53,7 +53,7 @@ const luna: Card = {
   version: '',
   tags: [],
   variables: [],
-  toggles: '',
+  toggles: [],
   utility: false,
   bias: [],
   regex: [],
@@ -281,7 +281,7 @@ describe('상태', () => {
 
   it("places a module's status script after the character's, and marks nothing with one that is gone or turned off", () => {
     const script = (id: string, off?: true) => ({ id, name: '', find: 'x', replace: '', stage: 'display' as const, flags: null, ...(off && { off }) });
-    const pack = (regex: ReturnType<typeof script>[]) => ({ regex, triggers: [], toggles: '' });
+    const pack = (regex: ReturnType<typeof script>[]) => ({ regex, triggers: [], toggles: [] });
     const scripts = chatScripts([
       { id: 'own', pack: pack([script('a'), script('b', true), script('c')]), module: null },
       { id: 'bell', pack: pack([script('a')]), module: { namespace: null } },

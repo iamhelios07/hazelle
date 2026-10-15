@@ -718,7 +718,7 @@ it('caches the row the server keeps, never the body a once write sent for a row 
 
 it('fences a tool write across the merge pause when a restore ends the store', async () => {
   const f = await fixture();
-  await f.add('module', 'module', null, { name: 'tool', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: '' });
+  await f.add('module', 'module', null, { name: 'tool', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: [] });
   const store = await f.open();
   await store.pull();
   const writes = new ToolWrites(store);

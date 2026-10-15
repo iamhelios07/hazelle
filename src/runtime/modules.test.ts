@@ -25,7 +25,7 @@ describe('modules', () => {
         regex: [{ id: 'regex-0', name: 'after', find: 'LAMP', replace: 'STAR', stage: 'display' as const, flags: null }],
         triggers: [{ kind: 'lua' as const, id: 'trigger-0', name: 'main', code: `listenEdit('editOutput', function(id, value) return value .. ' (module)' end)` }],
         background: '<style>.bell { color: red }</style>',
-        toggles: 'ring=Ring',
+        toggles: [{ key: 'ring', label: 'Ring', kind: 'check' as const, default: '0' as const }],
       };
       const added = await importModule(store, files, { name: 'Bell', description: '', namespace: 'bell', risu: null, pack, lore: [lore], loreFolders: [], assets: [], unsupported: [] }, () => {});
       if (!added.ok) throw new Error(added.error);
@@ -62,7 +62,7 @@ describe('modules', () => {
   it("orders a chat's packs as its character's own, then 항상, then its prompt's, then its character's, then its persona's, each once", async () => {
     const { store, files } = await server.account();
     const module = async (name: string) => {
-      const added = await importModule(store, files, { name, description: '', namespace: null, risu: null, pack: { regex: [], triggers: [], toggles: '' }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
+      const added = await importModule(store, files, { name, description: '', namespace: null, risu: null, pack: { regex: [], triggers: [], toggles: [] }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
       if (!added.ok) throw new Error(added.error);
       return added.data.id;
     };
@@ -82,7 +82,7 @@ describe('modules', () => {
 
   it('renames a module and rewrites its description, keeping its pack', async () => {
     const { store, files } = await server.account();
-    const added = await importModule(store, files, { name: 'Bell', description: '', namespace: 'bell', risu: null, pack: { regex: [], triggers: [], toggles: '' }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
+    const added = await importModule(store, files, { name: 'Bell', description: '', namespace: 'bell', risu: null, pack: { regex: [], triggers: [], toggles: [] }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
     if (!added.ok) throw new Error(added.error);
     await editModule(store, added.data.id, { name: '종', description: '울려요' });
     expect(store.get('module', added.data.id)!.value).toMatchObject({ name: '종', description: '울려요', namespace: 'bell' });

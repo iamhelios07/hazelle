@@ -64,7 +64,7 @@ describe('pack scripts', () => {
 
   it("writes a module's scripts at its top level, as a character's in its card", async () => {
     const { store } = await server.account();
-    const created = await store.create('module', { name: 'Bell', description: '', namespace: null, regex: [], triggers: [], toggles: '', loreFolders: [] });
+    const created = await store.create('module', { name: 'Bell', description: '', namespace: null, regex: [], triggers: [], toggles: [], loreFolders: [] });
     if (!created.ok) throw new Error(created.error);
     await addLua(store, { kind: 'module', id: created.data.id }, 'lua');
     expect(store.get('module', created.data.id)!.value).toMatchObject({ triggers: [{ kind: 'lua', id: 'lua', name: '', code: '' }] });

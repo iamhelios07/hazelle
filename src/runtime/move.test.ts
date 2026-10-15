@@ -55,7 +55,7 @@ const bell: ImportedModule = {
   description: '',
   namespace: null,
   risu: 'risu-bell',
-  pack: { regex: [], triggers: [], toggles: '' },
+  pack: { regex: [], triggers: [], toggles: [] },
   lore: [],
   loreFolders: [],
   assets: [

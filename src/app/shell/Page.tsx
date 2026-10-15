@@ -105,7 +105,7 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'modules':
         return <ModulesPage back={sideBack(at)} />;
       case 'module':
-        return <ItemPage at={at} back={back(at)}>{(stored) => <ModuleScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
+        return <ItemPage at={at} back={back(at)}>{(stored) => <ModuleScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'tool-page':
         return <ItemPage at={{ kind: 'module', id: at.module }} back={backTo({ kind: 'modules' }, wide)}>{(stored) => <ToolPageScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'models':

@@ -2,6 +2,7 @@ import type { PresetFailure, PresetResult } from './preset';
 import type { BlockCondition, BlockEffect } from './blocks';
 import type { Character } from '../../model/library';
 import type { Likeness } from '../../model/likeness';
+import type { ToggleLine } from '../../model/prompt';
 
 export type Card = {
   name: string;
@@ -34,7 +35,7 @@ export type Pack = {
   triggers: Trigger[];
   // Risu's backgroundHTML, absent when there is none. Only its <style> blocks are shown (design §6.4).
   background?: string;
-  toggles: string;
+  toggles: ToggleLine[];
 };
 
 // id: opaque, and unique within its pack only (import/convert stampIds). off keeps a script in its place but stops it.

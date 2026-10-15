@@ -67,7 +67,7 @@ export async function importTool(store: ObjectStore, files: Files, { manifest, b
     return saved.ok ? { ok: true, data: { id, previous } } : saved;
   }
   const saved = await store.batch([
-    { type: 'create', kind: 'module', id, parent: null, value: { name: manifest.displayName, description: manifest.description, namespace: null, loreFolders: [], regex: [], triggers: [], toggles: '' } },
+    { type: 'create', kind: 'module', id, parent: null, value: { name: manifest.displayName, description: manifest.description, namespace: null, loreFolders: [], regex: [], triggers: [], toggles: [] } },
     { type: 'create', kind: 'tool', id: toolId(id), parent: id, value },
   ]);
   return saved.ok ? { ok: true, data: { id, previous: null } } : saved;

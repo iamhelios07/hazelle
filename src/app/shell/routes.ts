@@ -21,13 +21,13 @@ export type Route =
   // '' when there was none.
   | { kind: 'connect-direct'; address: string }
   | { kind: 'connection'; id: string }
-  // pane opens the editor on its 토글 pane, which the chat's toggle panel links to.
+  // pane opens the editor on its 토글 pane, which the chat's toggle panel links to; a module's, its 토글 page.
   | { kind: 'prompts' }
   | { kind: 'prompt'; id: string; pane: 'toggles' | null }
   | { kind: 'personas' }
   | { kind: 'persona'; id: string }
   | { kind: 'modules' }
-  | { kind: 'module'; id: string }
+  | { kind: 'module'; id: string; pane: 'toggles' | null }
   | { kind: 'tool-page'; module: string }
   | { kind: 'models' }
   | { kind: 'profile'; id: string }
@@ -105,7 +105,7 @@ export function parseRoute(at: string): Route {
     if (id === undefined) return { kind: 'modules' };
     if (!ID.test(id)) return HOME;
     if (sub === 'page') return { kind: 'tool-page', module: id };
-    return sub === undefined ? { kind: 'module', id } : HOME;
+    return sub === undefined ? { kind: 'module', id, pane: params.get('pane') === 'toggles' ? 'toggles' : null } : HOME;
   }
   if (top === 'models') {
     if (id === undefined) return { kind: 'models' };
@@ -167,7 +167,7 @@ export function href(route: Route): string {
     case 'modules':
       return '/modules';
     case 'module':
-      return `/modules/${route.id}`;
+      return `/modules/${route.id}${route.pane ? `?pane=${route.pane}` : ''}`;
     case 'tool-page':
       return `/modules/${route.module}/page`;
     case 'models':
@@ -318,9 +318,9 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'persona':
       return { kind: 'personas' };
     case 'module':
-      return { kind: 'modules' };
+      return route.pane ? { ...route, pane: null } : { kind: 'modules' };
     case 'tool-page':
-      return { kind: 'module', id: route.module };
+      return { kind: 'module', id: route.module, pane: null };
     case 'profile':
     case 'model':
       return { kind: 'models' };

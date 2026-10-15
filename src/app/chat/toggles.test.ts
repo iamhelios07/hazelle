@@ -13,7 +13,7 @@ const set = (sources: ToggleSource[], values: ToggleValues) => {
   const declared = chatToggles(sources.flatMap(({ lines }) => lines));
   return { declared, sources, value: toggleValue(declared, values) };
 };
-const source = (from: ToggleSource['from'], name: string, text: string): ToggleSource => ({ from, name, lines: readToggles(text).lines });
+const source = (from: ToggleSource['from'], name: string, text: string): ToggleSource => ({ from, name, lines: readToggles(text) });
 const shape = (item: ToggleItem): unknown => ('toggle' in item ? item.toggle.key : item.kind === 'group' ? [item.label, item.items.map(shape)] : `${item.kind}:${item.label}`);
 
 describe('toggle panel rows', () => {
@@ -35,11 +35,11 @@ describe('toggle panel rows', () => {
     expect(shownRows(card!.rows, every, true, new Set()).map(({ toggle }) => toggle.key)).toEqual(['storm']);
   });
 
-  it('lays each source out apart by its own lines, a key both declare under the first, and leaves out what holds no toggle', () => {
+  it('lays each source out apart by its own lines, a key both declare under the first, and leaves out what holds no toggle and an unread line, which ends no group', () => {
     const rows = toggleRows(
       set(
         [
-          source('card', 'Ari', '=날씨=group\nstorm=폭풍 이벤트\nfog=안개=text\n=끝=groupEnd\n=빈 그룹=group\n==groupEnd\n=분위기=divider\n=분위기=divider\nmood=분위기=select=밝게,어둡게'),
+          source('card', 'Ari', '=날씨=group\nstorm=폭풍 이벤트\n모드 선택\nfog=안개=text\n=끝=groupEnd\n=빈 그룹=group\n==groupEnd\n=분위기=divider\n=분위기=divider\nmood=분위기=select=밝게,어둡게'),
           source('module', 'A', '=모듈 A=divider\n=설명=caption\nstorm=모듈의 폭풍\nbell=종'),
           source('module', 'B', 'ring=Ring\n=텍스트=group\nnote=메모=textarea'),
           source('module', 'C', '=혼자=divider\nstorm=또 폭풍'),

@@ -7,6 +7,11 @@ export function chatToggles(lines: readonly ToggleLine[]): Toggle[] {
   return lines.filter(isToggle).filter(({ key }) => !keys.has(key) && keys.add(key));
 }
 
+export const keyInUse = (lines: readonly ToggleLine[], key: string) => lines.some((line) => isToggle(line) && line.key === key);
+
+// The lines alone; what names the key elsewhere is its owner's to rewrite (app/prompts/edits rekey).
+export const rekeyed = (lines: readonly ToggleLine[], from: string, to: string): ToggleLine[] => lines.map((line) => (isToggle(line) && line.key === from ? { ...line, key: to } : line));
+
 // null for a key nothing declares.
 export function toggleValue(declared: readonly Toggle[], values: ToggleValues): (key: string) => string | null {
   const defaults = new Map(declared.map((toggle) => [toggle.key, toggle.default]));

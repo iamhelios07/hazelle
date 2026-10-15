@@ -223,7 +223,7 @@ it('holds a job to its chat\'s verdict as it is posted: a passive one is refused
   const { workers, jobs } = fakeWorkers();
   const stuck = new Set<string>();
   const evaluation = new Evaluation({ verdict: (chat) => stuck.has(chat), judged: () => {} });
-  const packs = [{ regex: [{ id: 'x', name: 'x', find: 'a', replace: 'b', stage: 'display' as const, flags: null }], triggers: [], toggles: '' }];
+  const packs = [{ regex: [{ id: 'x', name: 'x', find: 'a', replace: 'b', stage: 'display' as const, flags: null }], triggers: [], toggles: [] }];
   const ahead = evaluation.display(screen('x'), scope, new Set());
   const queued = evaluation.display({ asker: 'projection', chat: 'c' }, { ...scope, packs }, new Set());
   const asked = evaluation.read({ asker: 'view', chat: 'c' }, scope, null);
