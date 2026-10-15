@@ -10,7 +10,7 @@ import { LanguageMenu } from '../common/IntoLanguage';
 import { count } from '../common/typedNumber';
 import { useCopy } from '../common/useCopy';
 import { usePersisted } from '../common/usePersisted';
-import { DEFAULT_MODELS, NOTE_UNSENT, noteLines, PAGES, STOP, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
+import { DEFAULT_MODELS, NOTE_UNSENT, noteLines, PAGES, STOP, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
 import { useConnections, usePrompts, useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -95,7 +95,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
                 />
               )}
             >
-              <MenuHeading>{translator.ok ? TRANSLATION_MODEL_HELP : describeTranslateFailure(translator.failure)}</MenuHeading>
+              <MenuHeading>{translator.ok ? taskModelHelp('번역') : describeTranslateFailure(translator.failure)}</MenuHeading>
               {prompt.kind === 'prompt' && <MenuItem label={`'${prompt.prompt.value.name}' 열기…`} onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: null })} />}
               <MenuItem label={`${DEFAULT_MODELS} 열기…`} onClick={() => navigate({ kind: 'models' })} />
               <MenuHeading>여기서 한 번역은 저장되지 않아요.</MenuHeading>

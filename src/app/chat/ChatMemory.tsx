@@ -1,19 +1,22 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import type { Chat } from '../../model/chat';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
 import { embedModel } from '../../runtime/assignment';
 import { memoryOwner, memorySetup } from '../../runtime/memory-read';
 import { memoryView, type MemoryView } from '../../runtime/memory-view';
-import { removeFact, removeThread, setChatMemory, setFact, setThread } from '../../runtime/memory';
+import { memoryWriter, removeFact, removeThread, setChatMemory, setFact, setThread } from '../../runtime/memory';
+import { memoryPrompt } from '../../runtime/prompts';
 import { ACTS, addOf } from '../common/acts';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, inSettings, MODEL_ROLES, RESET } from '../common/words';
+import { CHAPTER, follows, inSettings, MODEL_ROLES, opens, PAGES, RESET, taskModelHelp } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, MenuItem, MoreMenu, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
+import { navigate } from '../shell/router';
+import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, MenuItem, MoreMenu, Row, Section, SettingRow, SidePanel, Stack, Text, TextField } from '../ui';
 import { MemoryRow, type ChatMemoryRecord } from './ChatMemoryRecord';
 import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
@@ -46,11 +49,12 @@ type Props = Pick<OpenChat, 'item' | 'messages' | 'busy'> & {
   onClose: () => void;
   onTool: (id: string) => void;
   onEditPrompt: (() => void) | undefined;
+  onEditTaskPrompt: (id: string | null) => void;
   onRecord: (id: string | null) => void;
   renderRecord: (record: Omit<ComponentProps<typeof ChatMemoryRecord>, 'actions'>) => ReactNode;
 };
 
-export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, onEditPrompt, onRecord, renderRecord }: Props) {
+export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, onEditPrompt, onEditTaskPrompt, onRecord, renderRecord }: Props) {
   const session = useSession();
   const { store } = session;
   const toast = useToast();
@@ -126,7 +130,14 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
           {`검색할 기록을 준비하지 못했어요. ${describeMemoryFailure(unindexed)}`}
         </Callout>
       )}
-      {owner?.kind === 'built-in' && !embeds && <Text variant="note">{`${MODEL_ROLES.embed}을 고르면 지금 대화와 관련된 지난 기록을 찾아 넣어요. ${inSettings('models')}에서 고를 수 있어요.`}</Text>}
+      {owner?.kind === 'built-in' && !embeds && (
+        <Row kind="spread">
+          <Text variant="note">{`${MODEL_ROLES.embed}을 고르면 지금 대화와 관련된 지난 기록을 찾아 넣어요.`}</Text>
+          <Button variant="link" size="sm" onClick={() => navigate({ kind: 'models' })}>
+            {opens(inSettings('models'))}
+          </Button>
+        </Row>
+      )}
       {!owner && <Text variant="note">이 채팅은 장기 기억을 쓰지 않아요.</Text>}
       {owner && view && !view.slot && (
         <Callout tone="warn" action={onEditPrompt ? { label: '프롬프트 열기', onClick: onEditPrompt } : undefined}>
@@ -144,6 +155,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
           />
         </Stack>
       )}
+      {owner?.kind === 'built-in' && <WriterRow chat={own} onEditPrompt={onEditTaskPrompt} />}
 
       {(!holder || memory.state.length > 0) && <Section
         level={3}
@@ -176,7 +188,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         level={3}
         title="설정"
         note={setup.own ? '이 채팅만' : '기본값'}
-        help={`기본값은 ${inSettings('chat')}에서 바꿀 수 있어요.`}
+        help={{ text: '여기서 바꾸면 이 채팅에만 적용돼요.', open: { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) } }}
         action={
           setup.own && (
             <Button variant="link" onClick={() => void revert()}>
@@ -203,6 +215,23 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         </ConfirmDialog>
       )}
     </SidePanel>
+  );
+}
+
+function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (id: string | null) => void }) {
+  const store = useStore();
+  const writer = memoryWriter(store, chat);
+  const prompt = memoryPrompt(store);
+  return (
+    <SettingRow
+      label="기억 모델"
+      help={{
+        text: taskModelHelp('기억'),
+        open: prompt.kind === 'prompt' ? { label: opens('기억 프롬프트'), onClick: () => onEditPrompt(prompt.prompt.id) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
+      }}
+      sub={prompt.kind === 'prompt' && !prompt.prompt.value.model ? follows(MODEL_ROLES.aux) : undefined}
+      control={<Text variant="note">{'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}</Text>}
+    />
   );
 }
 

@@ -28,7 +28,7 @@ import type { Frame } from '../common/frame';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, opens, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
@@ -293,7 +293,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           lines={6}
           value={text.systemPrompt}
           onChange={(value) => change('systemPrompt', value)}
-          help="비우면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요."
+          help={{ text: '비우면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts' }) } }}
         />
         <TextField
           label="대화 뒤 지시문"
@@ -313,7 +313,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           value={noteSave.unsaved.note ?? character.translatorNote ?? ''}
           onChange={(note) => noteSave.change({ note })}
           placeholder={NOTE_PLACEHOLDER}
-          help={`이 캐릭터의 번역에만 들어가요. 전역 노트는 ${inSettings('chat')}에 있어요.`}
+          help={{ text: '이 캐릭터의 번역에만 들어가요. 모든 번역에 들어가는 전역 노트는 따로 있어요.', open: { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) } }}
         />
       </Section>
     ),

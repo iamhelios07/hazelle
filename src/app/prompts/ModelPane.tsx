@@ -2,12 +2,12 @@ import type { Assignment, ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
 import { findStarred, RolePicker } from '../common/RolePicker';
-import { AUX_HELP, DEFAULT_MODELS, follows, inSettings, MODEL_ROLES, NOT_STARRED } from '../common/words';
-import { Section, SettingGroup } from '../ui';
+import { AUX_HELP, DEFAULT_MODELS, follows, inSettings, MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, opens } from '../common/words';
+import { navigate } from '../shell/router';
+import { Section, SettingGroup, type Help } from '../ui';
 
 const DEFAULTS = follows(DEFAULT_MODELS);
 const AUX = follows(MODEL_ROLES.aux);
-const TUNING = `온도 같은 값은 ${inSettings('models')}에서 정해요.`;
 
 type Task = Exclude<PromptSort, 'conversation'>;
 
@@ -20,6 +20,14 @@ export function modelWords(models: Assignment, connections: readonly Stored<'con
 
 export const taskModelWords = (own: ModelRef | undefined, connections: readonly Stored<'connection'>[]) => (own ? nameOf(own, connections) : AUX);
 
+function tuning(picked: ModelRef | undefined, connections: readonly Stored<'connection'>[]): Help {
+  const model = picked && findStarred(picked, connections);
+  return {
+    text: `온도 같은 값은 ${MODEL_SETTINGS}에서 정해요.`,
+    open: model ? { label: opens(model.name), onClick: () => navigate({ kind: 'model', connection: picked.connection, model: picked.model }) } : { label: opens(inSettings('models')), onClick: () => navigate({ kind: 'models' }) },
+  };
+}
+
 type Props = { models: Assignment; defaults: Assignment; connections: readonly Stored<'connection'>[]; onPick: (role: Role, ref: ModelRef | null) => void };
 
 export function ModelPane({ models, defaults, connections, onPick }: Props) {
@@ -27,7 +35,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
   const follow = (role: Role) => (role === 'main' || defaults.aux ? DEFAULTS : follows(MODEL_ROLES.main));
   const picker = (role: Role, help?: string) => <RolePicker role={role} help={help} own={models[role]} follow={follow(role)} connections={connections} onPick={(ref) => onPick(role, ref)} />;
   return (
-    <Section title="모델" help={TUNING}>
+    <Section title="모델" help={tuning(models.main, connections)}>
       <SettingGroup label="모델">
         {picker('main')}
         {picker('aux', AUX_HELP)}
@@ -43,7 +51,7 @@ type TaskProps = { task: Task; own: ModelRef | undefined; connections: readonly 
 // A task prompt's own model, the one place its task's model is chosen.
 export function TaskModelPane({ task, own, connections, onPick }: TaskProps) {
   return (
-    <Section title="모델" help={TUNING}>
+    <Section title="모델" help={tuning(own, connections)}>
       <SettingGroup label="모델">
         <RolePicker role="aux" label={TASK_LABELS[task]} own={own} follow={AUX} connections={connections} onPick={onPick} />
       </SettingGroup>

@@ -14,8 +14,8 @@ export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '
 // A role as a tag on a model's row, where 모델 is the column: the prompts page tags its kinds the same short way.
 export const ROLE_TAGS: Record<Role, string> = { main: '대화', aux: '보조', embed: '임베딩' };
 
-// Where a translation's model comes from, said beside the model wherever it shows.
-export const TRANSLATION_MODEL_HELP = `번역 프롬프트에서 선택하지 않으면 ${MODEL_ROLES.aux}을 사용해요.`;
+// Where a task's model comes from, said beside the model wherever it shows.
+export const taskModelHelp = (task: string) => `${task} 프롬프트에서 선택하지 않으면 ${MODEL_ROLES.aux}을 사용해요.`;
 
 export const AUX_HELP = '번역, 장기 기억 정리처럼 대화 밖의 작업에 사용해요.';
 
@@ -78,6 +78,9 @@ export const MODEL_SETTINGS = '모델 설정';
 export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
 
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
+
+// A hint's door to the place it names: the thing itself, or a settings page by inSettings when it lands on the page.
+export const opens = (place: string) => `${place} 열기`;
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;

@@ -1,9 +1,11 @@
 import { Languages } from 'lucide-react';
+import { translationPrompt } from '../../runtime/prompts';
 import { sendsNotes, type translatorOf } from '../../runtime/translate';
 import { describeTranslateFailure } from '../common/failure';
 import { IntoLanguage } from '../common/IntoLanguage';
-import { inSettings, NOTE_UNSENT, noteLines, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
-import { useSettings } from '../session';
+import { inSettings, NOTE_UNSENT, noteLines, opens, PAGES, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
+import { useSession, useSettings } from '../session';
+import { navigate } from '../shell/router';
 import { Button, Divider, Menu, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
 import { appliesTo, PerCharacter, TaskPromptMenu } from './ChatTaskPrompt';
 import type { TranslateSetup } from '../../runtime/characters';
@@ -22,6 +24,8 @@ type Props = {
 };
 
 export function ChatTranslate({ translate, translation, card, note, onChange, onOwnChange, onEditPrompt, onEditCharacter }: Props) {
+  const { store } = useSession();
+  const prompt = translationPrompt(store, translate.prompt);
   const on = [translate.replies && '응답 번역', translate.input && '내 메시지 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
   return (
     <Menu
@@ -56,7 +60,10 @@ export function ChatTranslate({ translate, translation, card, note, onChange, on
         />
         <SettingRow
           label="번역 모델"
-          help={TRANSLATION_MODEL_HELP}
+          help={{
+            text: taskModelHelp('번역'),
+            open: prompt.kind === 'prompt' ? { label: opens('번역 프롬프트'), onClick: () => onEditPrompt(prompt.prompt.id) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
+          }}
           control={
             <Text variant="note">
               {translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}
@@ -77,7 +84,7 @@ function NoteRow({ note, translation, onEdit }: { note: string | undefined; tran
   return (
     <SettingRow
       label={TRANSLATOR_NOTE}
-      help={`전역 노트는 ${inSettings('chat')}, 캐릭터 노트는 캐릭터 편집에서 수정해요.`}
+      help={{ text: '전역 노트는 모든 번역에, 캐릭터 노트는 이 캐릭터의 번역에만 들어가요.', open: { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) } }}
       sub={counts || '없음'}
       error={unsent ? NOTE_UNSENT : undefined}
       control={

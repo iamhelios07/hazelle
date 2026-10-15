@@ -88,6 +88,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
               onClose={actions.closePanel}
               onTool={actions.tool}
               onEditPrompt={prompt.kind === 'prompt' ? () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null }) : undefined}
+              onEditTaskPrompt={(id) => actions.side({ kind: 'prompts', id, pane: null })}
               onRecord={actions.memory}
               renderRecord={(record) => <ChatMemoryRecord {...record} actions={actions} />}
             />

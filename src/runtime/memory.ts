@@ -242,6 +242,13 @@ export type MemoryFailure =
   | { kind: 'embed'; reason: Extract<Indexed, { ok: false }>['reason']; receipt: Receipt | null }
   | RanAway;
 
+export function memoryWriter(store: Pick<ObjectStore, 'get'>, chat: Chat): { prompt: MemoryPrompt; route: Route } | MemoryFailure {
+  const prompt = memoryPrompt(store);
+  if (prompt.kind === 'missing') return { kind: 'prompt-missing' };
+  const route = taskModel(store, chat, prompt.prompt.value.model);
+  return 'kind' in route ? route : { prompt: prompt.prompt.value, route };
+}
+
 // failed: why a chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
 // chapterFailed: why its last chapter did not; records go on being summarized meanwhile. indexing: how many records are
 // being embedded for retrieval; indexFailed: why the last pass stopped, which the next 다시 시도 or chat open tries again.
@@ -471,13 +478,11 @@ export class Rememberer {
 
   private tools(chat: Chat): Tools | MemoryFailure {
     const { store } = this.session;
-    const prompt = memoryPrompt(store);
-    if (prompt.kind === 'missing') return { kind: 'prompt-missing' };
-    const route = taskModel(store, chat, prompt.prompt.value.model);
-    if ('kind' in route) return route;
-    const profile = modelProfile(store, route.model);
+    const writer = memoryWriter(store, chat);
+    if ('kind' in writer) return writer;
+    const profile = modelProfile(store, writer.route.model);
     if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
-    return { prompt: prompt.prompt.value, route, settings: profile.profile.value.settings };
+    return { prompt: writer.prompt, route: writer.route, settings: profile.profile.value.settings };
   }
 
   // Earlier than batch when the next request drops messages for want of room.
