@@ -1,7 +1,7 @@
 import { unsupportedCount } from '../../engine/import/types';
 import { ImageUp, type LucideIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { findAsset } from '../../engine/assets';
+import { findAsset, isVideo } from '../../engine/assets';
 import type { Stored } from '../../model/kinds';
 import { addAssets, removeAssets, renameAsset, replaceAsset, restoreAssets } from '../../runtime/characters';
 import { useAssetUrl, useChildren, useFiles, useStore, useUnfoundAssets } from '../session';
@@ -14,6 +14,9 @@ import { useSearch } from './useSearch';
 import { CHANGE_IMAGE } from './words';
 
 const ASSET = '에셋';
+// What runtime/characters keeps as an asset (engine/import assetType).
+const ACCEPT = 'image/*,video/mp4,video/webm';
+const NOT_KEPT = '이미지나 영상(MP4, WebM)이 아니거나 너무 커요.';
 // By name, never by the store's order, which moves an asset to the end on each rename or new picture.
 const byName = new Intl.Collator('ko', { numeric: true }).compare;
 const UNFOUND_SHOWN = 10;
@@ -49,7 +52,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
     setAdding(false);
     if (!added.ok) return toast.failed(added, `${ASSET}을 추가하지 못했어요.`);
     const refused = unsupportedCount(added.data.unsupported);
-    if (refused) toast.error(`${refused}개는 추가하지 못했어요.`, { detail: '이미지가 아니거나 너무 커요.' });
+    if (refused) toast.error(`${refused}개는 추가하지 못했어요.`, { detail: NOT_KEPT });
   }
 
   const dragging = useFileDrop((dropped) => void add(dropped), 'screen');
@@ -63,7 +66,9 @@ export function AssetsEditor({ owner }: { owner: string }) {
 
   async function replace(id: string, file: File) {
     const replaced = await replaceAsset(store, files, id, new Uint8Array(await file.arrayBuffer()));
-    if (!replaced.ok) toast.failed(replaced, '이미지를 바꾸지 못했어요.');
+    if (replaced.ok) return;
+    if (replaced.error === 'picture-unreadable' || replaced.error === 'picture-refused') toast.error('바꾸지 못했어요.', { detail: NOT_KEPT });
+    else toast.failed(replaced, '바꾸지 못했어요.');
   }
 
   function rename(name: string) {
@@ -75,9 +80,9 @@ export function AssetsEditor({ owner }: { owner: string }) {
 
   // One list for a card's ⋯ and its preview's buttons.
   const actionsOf = (asset: Stored<'asset'>): Action[] => [
-    { icon: ACTS.copy.icon, label: `태그 ${ACTS.copy.label}`, run: () => copy(`{{img::${asset.value.name}}}`) },
+    { icon: ACTS.copy.icon, label: `태그 ${ACTS.copy.label}`, run: () => copy(`{{${isVideo(asset.value.type) ? 'video' : 'img'}::${asset.value.name}}}`) },
     { icon: ACTS.rename.icon, label: ACTS.rename.label, run: () => setNaming(asset) },
-    { icon: ImageUp, label: CHANGE_IMAGE, run: () => pickFiles('image/*', false, ([file]) => void replace(asset.id, file!)) },
+    { icon: ImageUp, label: isVideo(asset.value.type) ? '영상 바꾸기' : CHANGE_IMAGE, run: () => pickFiles(ACCEPT, false, ([file]) => void replace(asset.id, file!)) },
     { icon: ACTS.remove.icon, label: ACTS.remove.label, warn: true, run: () => { setViewing(null); void remove([asset.id]); } },
   ];
 
@@ -91,7 +96,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
 
   const viewed = viewing === null ? undefined : assets.find(({ id }) => id === viewing);
   return (
-    <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}처럼 이름으로 불러 보여 주는 이미지예요. 이름이 같은 에셋이 여럿이면 그중 하나가 무작위로 나와요. 파일이나 폴더를 끌어다 놓아도 추가돼요. 없는 이름 경고는 앱을 연 뒤 이 기기에서 본 채팅 기준이에요.">
+    <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}이나 {{video::이름}}처럼 이름으로 불러 보여 주는 이미지와 영상이에요. 이름이 같은 에셋이 여럿이면 그중 하나가 무작위로 나와요. 파일이나 폴더를 끌어다 놓아도 추가돼요. 없는 이름 경고는 앱을 연 뒤 이 기기에서 본 채팅 기준이에요.">
       <Stack gap="related">
         {unfound.length > 0 && (
           <Callout tone="warn">
@@ -105,7 +110,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
               {picked ? '완료' : '선택해서 삭제'}
             </Button>
           )}
-          <FileButton accept="image/*" multiple size="sm" icon={ACTS.create.icon} busy={adding} onFiles={(dropped) => void add(dropped)}>
+          <FileButton accept={ACCEPT} multiple size="sm" icon={ACTS.create.icon} busy={adding} onFiles={(dropped) => void add(dropped)}>
             {addOf(ASSET)}
           </FileButton>
         </Row>
@@ -136,23 +141,24 @@ export function AssetsEditor({ owner }: { owner: string }) {
       </Stack>
       {dragging && <DropOverlay>여기에 놓으면 에셋으로 추가해요</DropOverlay>}
       {viewed && <AssetPreview asset={viewed} actions={actionsOf(viewed)} onClose={() => setViewing(null)} />}
-      {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 이미지를 불러요." onSave={rename} onClose={() => setNaming(null)} />}
+      {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 에셋을 불러요." onSave={rename} onClose={() => setNaming(null)} />}
     </Section>
   );
 }
 
 type Action = { icon: LucideIcon; label: string; warn?: boolean; run: () => void };
-const kindOf = ({ value }: Stored<'asset'>) => value.type.replace('image/', '').toUpperCase();
+const kindOf = ({ value }: Stored<'asset'>) => value.type.slice(value.type.indexOf('/') + 1).toUpperCase();
 
 type CardProps = { asset: Stored<'asset'>; shared: number; picked: boolean | null; onPress: () => void; actions: Action[] };
 
-// Each card holds its own picture while drawn, so a grid of thousands keeps only the rows on screen.
+// Each card holds its own file while drawn, so a grid of thousands keeps only the rows on screen.
 function AssetCard({ asset, shared, picked, onPress, actions }: CardProps) {
   const url = useAssetUrl();
   const { id, value } = asset;
   return (
     <FaceCard
       image={url('asset', id) ?? null}
+      video={isVideo(value.type)}
       name={value.name}
       note={shared > 1 ? `같은 이름 ${shared}개` : kindOf(asset)}
       selected={picked}
@@ -171,7 +177,7 @@ function AssetCard({ asset, shared, picked, onPress, actions }: CardProps) {
   );
 }
 
-// Its own view, so the whole picture is held only while it is open.
+// Its own view, so the whole file is held only while it is open.
 function AssetPreview({ asset, actions, onClose }: { asset: Stored<'asset'>; actions: Action[]; onClose: () => void }) {
   const url = useAssetUrl();
   return (
@@ -186,7 +192,7 @@ function AssetPreview({ asset, actions, onClose }: { asset: Stored<'asset'>; act
         </Button>
       ))}
     >
-      <Preview image={url('asset', asset.id) ?? null} name={asset.value.name} />
+      <Preview image={url('asset', asset.id) ?? null} video={isVideo(asset.value.type)} name={asset.value.name} />
     </Dialog>
   );
 }
