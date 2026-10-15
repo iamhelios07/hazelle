@@ -7,7 +7,7 @@ import type { Backups } from './backup/backups';
 import type { Stores } from './db/account-db';
 import type { Db } from './db/service-db';
 import type { Bucket } from './files/bucket';
-import type { Limiter, UploadBudget, visitorLimits } from './limits';
+import type { Limiter, RelayBudget, UploadBudget, visitorLimits } from './limits';
 import type { Upstream } from './relay';
 import type { Streams } from './stream-registry';
 
@@ -28,7 +28,7 @@ export type Services = {
   streams: Streams;
   outbound: Upstream;
   localProviders: ReadonlySet<string>;
-  limits: { calls: Limiter; botCalls: Limiter; visitors: ReturnType<typeof visitorLimits>; uploads: UploadBudget };
+  limits: { relay: RelayBudget; calls: Limiter; botCalls: Limiter; visitors: ReturnType<typeof visitorLimits>; uploads: UploadBudget };
   backups: Backups;
 };
 

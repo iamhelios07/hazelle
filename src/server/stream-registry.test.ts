@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Upstream } from './relay';
-import { streamRegistry } from './stream-registry';
+import { relayBudget } from './limits';
+import { streamRegistry as registryWithBudget } from './stream-registry';
 import { streamStore, type StreamStore } from './db/streams-db';
+
+const streamRegistry = (store: StreamStore, upstream: Upstream) => registryWithBudget(store, upstream, relayBudget());
 
 const CHUNK = 64 * 1024;
 const staying = new AbortController().signal;

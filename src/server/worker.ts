@@ -76,7 +76,7 @@ app.route('/reports', reports);
 app.route('/notices', notices);
 app.route('/admin', admin);
 app.route('/models-dev', modelsDev);
-app.post('/relay', requireSession, canCall, relayBot, (c) => createRelay(c.env.outbound)(c.req.raw));
+app.post('/relay', requireSession, canCall, relayBot, (c) => createRelay(c.env.outbound, c.env.limits.relay.account(c.get('account').id))(c.req.raw));
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 

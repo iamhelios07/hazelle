@@ -13,7 +13,7 @@ import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
 import { sha256Hex, type Services } from '../http';
 import { beginRestore, cancelRestore, runRestore } from '../lifecycle';
-import { tokenBucket, uploadBudget, visitorLimits } from '../limits';
+import { relayBudget, tokenBucket, uploadBudget, visitorLimits } from '../limits';
 import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
@@ -228,14 +228,15 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   const raw = openDatabase(join(dir, 'service.sqlite'));
   const db = serviceDb(raw);
   const outbound = () => Promise.reject(new Error('no provider'));
+  const relay = relayBudget();
   const env: Services = {
     db,
     files: diskBucket(dir),
     stores: accountRegistry(dir, db, serviceReads(db), Date.now, diskBucket(dir)),
-    streams: streamRegistry(streamStore(':memory:'), outbound),
+    streams: streamRegistry(streamStore(':memory:'), outbound, relay),
     outbound,
     localProviders: new Set(),
-    limits: { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() },
+    limits: { relay, calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() },
     backups: backups(dir, 3, alerts(null)),
   };
   const ctx = { waitUntil: () => {}, passThroughOnException: () => {}, props: {} };

@@ -11,7 +11,7 @@ import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
 import { sha256Hex, type Services } from './http';
-import { tokenBucket, uploadBudget, visitorLimits } from './limits';
+import { relayBudget, tokenBucket, uploadBudget, visitorLimits } from './limits';
 import { reconcile } from './reconcile';
 import type { Upstream } from './relay';
 import { streamRegistry } from './stream-registry';
@@ -20,7 +20,7 @@ import app from './worker';
 
 // The server in process over the production adapters on a temp directory (node.ts builds the same Services on /data).
 // upstream answers the provider calls the relay and the streams make. clock stamps the stores' snapshots.
-export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.'))) {
+export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.')), relay = relayBudget()) {
   const dir = mkdtempSync(join(tmpdir(), 'hazelle-test-'));
   const raw = openDatabase(join(dir, 'service.sqlite'));
   migrate(raw, 'migrations');
@@ -30,14 +30,15 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   const disk = { freePercent: 50 };
   const outbound: Upstream = (url, init) => upstream(url, init);
   const files = diskBucket(dir);
+  const limits = { relay, calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() };
   const env: Services = {
     db,
     files,
     stores: accountRegistry(dir, db, serviceReads(db), () => clock.now(), files),
-    streams: streamRegistry(streamStore(join(dir, 'streams.sqlite')), outbound),
+    streams: streamRegistry(streamStore(join(dir, 'streams.sqlite')), outbound, limits.relay),
     outbound,
     localProviders: new Set(),
-    limits: { calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() },
+    limits,
     backups: backups(dir, 3, alerts('https://alerts.test/hook'), async () => disk.freePercent),
   };
 

@@ -126,6 +126,9 @@ const RELAY: Record<Exclude<RelayError, 'bad-envelope'>, string> & Partial<Recor
   'not-https': HTTPS_ONLY,
   'not-public': '공개된 주소만 연결할 수 있어요.',
   'upstream-unreachable': '제공자 서버에 연결하지 못했어요. 주소를 확인하거나 잠시 후 다시 시도해 주세요.',
+  'relay-traffic-limit': '오늘 보낼 수 있는 양을 다 썼어요. 매일 오전 9시에 다시 채워져요.',
+  'relay-host-limit': '오늘 연결할 수 있는 주소 수를 넘었어요. 매일 오전 9시에 다시 채워져요.',
+  'upstream-not-api': '이 주소는 API가 아니라 웹 페이지를 보냈어요. 주소를 확인해 주세요.',
   'upstream-redirect': '주소가 다른 곳으로 이동됐어요. 주소를 확인해 주세요.',
 };
 

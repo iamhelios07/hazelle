@@ -3,8 +3,11 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
-import { createRelay, type Upstream, type UpstreamInit } from './relay';
+import { createRelay as relayWithBudget, type Upstream, type UpstreamInit } from './relay';
 import { PolicyRefusal } from './ssrf';
+import { relayBudget } from './limits';
+
+const createRelay = (upstream: Upstream) => relayWithBudget(upstream, relayBudget().account('test'));
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
   url: 'https://api.example.com/v1/chat/completions',
@@ -58,7 +61,7 @@ describe('relay', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBe('{"stream":true}');
     expect(init.redirect).toBe('manual');
-    expect(init.signal).toBe(request.signal);
+    expect(init.signal.aborted).toBe(false);
     expect([...init.headers.keys()].sort()).toEqual(['anthropic-version', 'authorization']);
   });
 
@@ -168,4 +171,64 @@ describe('relay', () => {
     expect(response.headers.get('x-relay')).toBe('error');
     expect(await response.json()).toEqual({ error: 'upstream-unreachable' });
   });
+});
+
+it('charges UTF-8 request bodies before sending and rejects the next host before calling it', async () => {
+  const upstream = vi.fn<Upstream>(async () => new Response(null, { status: 204 }));
+  const relay = relayWithBudget(upstream, relayBudget(2 * (Buffer.byteLength(JSON.stringify(envelope({ body: '한' }))) + 2), 1).account('a'));
+  expect((await relay(post(envelope({ body: '한' })))).status).toBe(204);
+  const host = await relay(post(envelope({ url: 'https://another.test', body: null })));
+  expect([host.status, host.headers.get('x-relay'), await host.json()]).toEqual([429, 'error', { error: 'relay-host-limit' }]);
+  expect((await relay(post(envelope({ body: '한' })))).status).toBe(204);
+  const spent = await relay(post(envelope({ body: null })));
+  expect([spent.status, await spent.json()]).toEqual([429, { error: 'relay-traffic-limit' }]);
+  expect(upstream).toHaveBeenCalledTimes(2);
+});
+
+it('shares response bytes between concurrent calls and aborts without forwarding an over-budget chunk', async () => {
+  const signals: AbortSignal[] = [];
+  const cancel = vi.fn();
+  const upstream: Upstream = async (_url, init) => {
+    signals.push(init.signal);
+    return new Response(new ReadableStream<Uint8Array>({
+      pull: (controller) => controller.enqueue(new Uint8Array(3)),
+      cancel,
+    }, { highWaterMark: 0 }), { headers: { 'content-length': '1', 'content-type': 'text/event-stream' } });
+  };
+  const overhead = Buffer.byteLength(JSON.stringify(envelope({ body: null }))) + Buffer.byteLength(JSON.stringify([['content-length', '1'], ['content-type', 'text/event-stream']]));
+  const relay = relayWithBudget(upstream, relayBudget(2 * overhead + 5).account('a'));
+  const replies = await Promise.all([relay(post(envelope({ body: null }))), relay(post(envelope({ body: null })))]);
+  const readers = replies.map((reply) => reply.body!.getReader());
+  expect((await readers[0]!.read()).value).toHaveLength(3);
+  await expect(readers[1]!.read()).rejects.toThrow('relay-traffic-limit');
+  await expect(readers[0]!.read()).rejects.toThrow('relay-traffic-limit');
+  expect(signals.every((signal) => signal.aborted)).toBe(true);
+  expect(cancel).toHaveBeenCalledTimes(2);
+});
+
+it('cancels HTML responses before their body is read', async () => {
+  const pull = vi.fn();
+  const cancel = vi.fn();
+  const relay = createRelay(async () => new Response(new ReadableStream({ pull, cancel }, { highWaterMark: 0 }), {
+    headers: { 'content-type': 'Text/HTML; charset=utf-8' },
+  }));
+  const response = await relay(post(envelope()));
+  expect([response.status, response.headers.get('x-relay'), await response.json()]).toEqual([502, 'error', { error: 'upstream-not-api' }]);
+  expect(pull).not.toHaveBeenCalled();
+  expect(cancel).toHaveBeenCalledOnce();
+});
+
+it('passes an HTML error page on as its status alone', async () => {
+  const cancel = vi.fn();
+  const relay = createRelay(async () => new Response(new ReadableStream({ cancel }), { status: 403, headers: { 'content-type': 'text/html' } }));
+  const response = await relay(post(envelope()));
+  expect([response.status, response.headers.get('x-relay'), response.headers.get('content-type'), await response.text()]).toEqual([403, 'upstream', null, '']);
+  expect(cancel).toHaveBeenCalledOnce();
+});
+
+it('refuses mutation methods outside the provider GET/POST contract before reaching a destination', async () => {
+  const upstream = vi.fn<Upstream>();
+  const response = await createRelay(upstream)(post(envelope({ method: 'DELETE', body: null })));
+  expect([response.status, await response.json()]).toEqual([400, { error: 'bad-envelope' }]);
+  expect(upstream).not.toHaveBeenCalled();
 });
