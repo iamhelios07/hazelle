@@ -264,6 +264,7 @@ export class Rememberer {
   // The chats with a job running, and of those the ones that may summarize new messages too, not only stale records.
   private readonly working = new Set<string>();
   private readonly full = new Set<string>();
+  private readonly recheck = new Set<string>();
   private readonly asked = new Map<string, string>();
   // The message versions a stale record was summarized again from this session. One that renders differently each
   // time it is read ({{time}}, or CBS reading later messages) stays stale, and is not summarized again from the same
@@ -358,6 +359,7 @@ export class Rememberer {
     if (this.closed || this.state.failed.has(chat) || (!full && this.session.store.scopeState(chat) !== 'loaded')) return;
     if (this.working.has(chat)) {
       if (full) this.full.add(chat);
+      this.recheck.add(chat);
       return;
     }
     const stored = live(this.session.store.get('chat', chat));
@@ -382,13 +384,17 @@ export class Rememberer {
   }
 
   private done(chat: string) {
+    const again = this.recheck.delete(chat);
+    const full = this.full.delete(chat);
     this.working.delete(chat);
-    this.full.delete(chat);
     this.change(chat, { running: null });
+    if (again) this.start(chat, full);
   }
 
   private async work(chat: string) {
     while (!this.closed) {
+      // A request arriving after this plan starts must survive its decision to stop, including indexing.
+      this.recheck.delete(chat);
       const planned = await this.plan(chat);
       if (!planned) return;
       if ('kind' in planned) return this.change(chat, { failed: planned });

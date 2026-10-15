@@ -324,19 +324,39 @@ describe('chapters', () => {
       expect(log).toHaveLength(1);
     }));
 
-  it('holds a failed chapter apart, so records go on being made', () =>
+  it('holds a failed chapter apart and checks again when requested while the previous pass is finishing', () =>
     server.withSession(async (session) => {
       const { chat } = await recorded(session, {});
-      stubRelay(inTurn([saying('Luna smiles.'), saying('No chapter today.')]));
-      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
-      await vi.waitFor(() => expect(session.memory.snapshot().chapterFailed.get(chat)).toMatchObject({ kind: 'invalid', reason: 'unreadable' }));
-      expect(session.memory.snapshot().failed.has(chat)).toBe(false);
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      let paused = false;
+      const snapshot = session.tokens.snapshot.bind(session.tokens);
+      vi.spyOn(session.tokens, 'snapshot').mockImplementation(async (...args) => {
+        const result = await snapshot(...args);
+        // This plan already read the old batch size; it will find no work after the failed chapter.
+        if (args[3] === 'memory' && session.memory.snapshot().chapterFailed.has(chat)) {
+          paused = true;
+          await held;
+        }
+        return result;
+      });
+      try {
+        stubRelay(inTurn([saying('Luna smiles.'), saying('No chapter today.')]));
+        expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+        await vi.waitFor(() => expect(paused).toBe(true));
+        expect(session.memory.snapshot().chapterFailed.get(chat)).toMatchObject({ kind: 'invalid', reason: 'unreadable' });
+        expect(session.memory.snapshot().failed.has(chat)).toBe(false);
 
-      await setDefaultMemory(session.store, { batch: 1, budget: 1_000_000 });
-      stubRelay(inTurn([saying(summary('jin asks Luna to wait.', 'Will you wait?'))]));
-      session.memory.check(chat);
-      await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(4), { timeout: 5000 });
-      expect(chatMemory(session.store, chat).chapters).toEqual([]);
+        await setDefaultMemory(session.store, { batch: 1, budget: 1_000_000 });
+        const log = stubRelay(inTurn([saying(summary('jin asks Luna to wait.', 'Will you wait?'))]));
+        session.memory.check(chat);
+        session.memory.check(chat);
+        release();
+        await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(4));
+        await vi.waitFor(() => expect(session.memory.snapshot().running.has(chat)).toBe(false));
+        expect(chatMemory(session.store, chat).chapters).toEqual([]);
+        expect(log).toHaveLength(1);
+      } finally { release(); }
     }));
 
   it('drops a chapter whose record the user edited while it was written', () =>
