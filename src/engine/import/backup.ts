@@ -39,7 +39,8 @@ const MODULES = 5;
 const COLD = 'COLDSTORAGE';
 const READ_AHEAD = 4 * 1024 * 1024;
 const COLD_READS = 8;
-// storage/database.svelte.ts:73-77 (risu-compat-spec §a).
+// storage/database.svelte.ts:73-77 (risu-compat-spec §a). The depth is the one engine/lorebook/activate fixes.
+const RISU_LORE_DEPTH = 5;
 const RISU_LORE_BUDGET = 800;
 const TOGGLE = 'toggle_';
 // A preset slot's keys and endpoints, never read (design F7).
@@ -272,6 +273,7 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
   const alwaysModules = list(db.enabledModules).filter((id) => typeof id === 'string');
   // Risu's default, which most never changed, is not the user's choice: carried, it would cut every heavy lorebook.
   const loreBudget = typeof db.loreBookToken === 'number' && Number.isInteger(db.loreBookToken) && db.loreBookToken > 0 && db.loreBookToken !== RISU_LORE_BUDGET ? db.loreBookToken : null;
+  if (typeof db.loreBookDepth === 'number' && db.loreBookDepth !== RISU_LORE_DEPTH) add(unsupported, 'lore-depth');
   const toggles = Object.fromEntries(Object.entries(record(db.globalChatVariables)).flatMap(([key, value]) => (key.startsWith(TOGGLE) && typeof value === 'string' ? [[key.slice(TOGGLE.length), value]] : [])));
 
   const pictures = [...files].filter(([name]) => isPicture(name));

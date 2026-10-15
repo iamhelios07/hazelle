@@ -37,6 +37,8 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
   'hidden-message': (count) => `숨김·코멘트 메시지 ${count}개(일반 메시지로 들어옴)`,
   'cold-missing': (count) => `백업에 없는 대화 ${count}개`,
   'missing-picture': (count) => `백업에 없는 이미지 ${count}개`,
+  'escape-output': () => `출력 이스케이프(응답 속 ${COMMAND}도 실행됨)`,
+  'lore-depth': () => 'Risu에서 바꾼 로어북 검색 깊이(헤이젤은 5로 고정)',
 };
 
 export const missedLines = (unsupported: Unsupported): string[] => unsupported.map((item) => UNSUPPORTED[item.kind](item.count));
@@ -51,6 +53,7 @@ const PRESET_UNSUPPORTED: Record<Exclude<PresetUnsupported['kind'], 'repeated-sl
   'preset-text': (count) => `템플릿 밖의 텍스트 ${count}개(Risu에서도 보내지 않던 것)`,
   regex: (count) => `${SCRIPTS.regex} ${count}개`,
   variables: (count) => `기본 변수 ${count}개`,
+  'prompt-settings': (count) => `Risu 프롬프트 설정 ${count}개(헤이젤에는 없음)`,
   settings: () => `모델과 생성 설정(${inSettings('models')}에서 정할 수 있음)`,
 };
 

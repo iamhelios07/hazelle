@@ -29,6 +29,7 @@ const luna: RisuCharacter = {
   loreFolders: [],
   assets: [],
   report: { format: 'json', spec: 'v3', unsupported: [] },
+  own: null,
   avatar: async () => null,
   folder: '모험',
   chats: [

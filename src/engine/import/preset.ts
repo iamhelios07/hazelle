@@ -1,14 +1,14 @@
 import { gzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
-import { add, counted, text, type Json, type Tally } from './convert';
+import { add, counted, record, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack, writeMsgpack } from './msgpack';
 import { pack, unpack } from './risum';
 import { readToggles, writeToggles } from './toggles';
 
 // What a preset holds that the prompt does not take, in the order the summary lists it.
-const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
+const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'prompt-settings', 'settings'] as const;
 export type PresetUnsupportedKind = (typeof UNSUPPORTED)[number];
 type Counted = Exclude<PresetUnsupportedKind, 'repeated-slot'>;
 // A repeated slot is listed once per slot, so the summary can name it.
@@ -190,7 +190,8 @@ function convert(preset: Json, template: unknown[]): PresetRead {
   count('regex', list(preset.regex).length);
   // They default chat variables (getvar), not toggles, which are globals with no default (compat spec §d).
   count('variables', text(preset.templateDefaultVariables).split(/\r?\n/).filter((line) => line.trim()).length);
-  // Model, generation and prompt settings belong to each model's settings; every preset has them.
+  count('prompt-settings', promptSettings(record(preset.promptSettings), template));
+  // Model and generation settings belong to each model's settings; every preset has them.
   count('settings');
 
   const companions = text(preset.moduleIntergration).split(',').map((name) => name.trim()).filter(Boolean);
@@ -199,6 +200,17 @@ function convert(preset: Json, template: unknown[]): PresetRead {
     prompt: { name: text(preset.name), blocks, toggles, authorNote, models: {}, imported: 'risu-preset', ...(companions.length > 0 && { companions }) },
     unsupported: UNSUPPORTED.flatMap((kind): PresetUnsupported[] => (kind === 'repeated-slot' ? [...repeated].map(([slot, amount]) => ({ kind, slot, count: amount })) : counted([kind], counts))),
   };
+}
+
+// Risu's prompt settings (process/prompt.ts PromptSettings) that this app has no setting for, each counted only off its
+// default (storage/database.svelte.ts:438-449). Not counted on purpose: assistantPrefill, which Risu never reads, and
+// trimStartNewChat and customChainOfThought, which only leave out what this app never sends ([Start a new chat], Risu's
+// own CoT instruction).
+function promptSettings(settings: Json, template: unknown[]): number {
+  // A chat item marked chatAsOriginalOnSystem keeps its messages' roles, as every chat slot here does.
+  const systemized = settings.sendChatAsSystem === true && template.some((item) => isRecord(item) && item.type === 'chat' && item.chatAsOriginalOnSystem !== true);
+  const depth = typeof settings.maxThoughtTagDepth === 'number' && settings.maxThoughtTagDepth !== -1;
+  return [text(settings.postEndInnerFormat) !== '', systemized, settings.sendName === true, settings.utilOverride === true, depth].filter(Boolean).length;
 }
 
 // One template item (compat spec §e, Template assembly). Fields a type does not use, such as a persona
