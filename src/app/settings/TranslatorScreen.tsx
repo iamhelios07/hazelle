@@ -16,7 +16,7 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
 import { Button, Callout, ChipButton, formatKeys, Icon, Menu, MenuHeading, MenuItem, NavBar, pressed, Screen, TranslateDesk } from '../ui';
-import { GlobalNoteField } from './TranslationDefaults';
+import { GlobalNoteField } from './GlobalNoteField';
 
 const LANGUAGE = 'risu-alpha:translator-language';
 

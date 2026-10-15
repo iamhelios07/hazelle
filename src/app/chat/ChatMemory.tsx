@@ -12,7 +12,7 @@ import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, follows, inSettings, MODEL_ROLES, opens, PAGES, RESET, scopeTag, taskModelHelp } from '../common/words';
+import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, PAGES, RESET, scopeTag, taskModelHelp } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
@@ -188,7 +188,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         level={3}
         title="설정"
         tag={scopeTag(setup.own ? 'chat' : 'default')}
-        help={{ text: '여기서 바꾸면 이 채팅에만 적용돼요.', open: { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) } }}
+        help={{ text: '여기서 바꾸면 이 채팅에만 적용돼요.', open: { label: opens(inFeature('memory')), onClick: () => navigate({ kind: 'feature', feature: 'memory' }) } }}
         action={
           setup.own && (
             <Button variant="link" onClick={() => void revert()}>

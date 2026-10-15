@@ -3,7 +3,7 @@ import { autoCachePoints } from '../../engine/cache-points';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
 import { count } from '../common/typedNumber';
-import { inSettings } from '../common/words';
+import { inFeature } from '../common/words';
 import type { OutlineKind } from '../ui';
 import { toggleUses } from './rekey';
 
@@ -24,7 +24,7 @@ export const SLOT = {
   note: {
     name: SLOT_NAMES.note,
     hint: '이름과 용어의 번역을 맞추는 메모',
-    line: `${inSettings('chat')}의 전역 노트와 캐릭터 편집의 캐릭터 노트가 여기에 들어가요.`,
+    line: `${inFeature('translate')}의 전역 노트와 캐릭터 편집의 캐릭터 노트가 여기에 들어가요.`,
     kind: 'note',
     icon: NotebookPen,
   },

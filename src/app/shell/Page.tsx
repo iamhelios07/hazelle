@@ -40,6 +40,7 @@ const PersonasScreen = lazy(() => import('../personas/PersonasScreen').then(({ P
 const PromptScreen = lazy(() => import('../prompts/PromptScreen').then(({ PromptScreen }) => ({ default: PromptScreen })));
 const PromptsScreen = lazy(() => import('../prompts/PromptsScreen').then(({ PromptsScreen }) => ({ default: PromptsScreen })));
 const AccountScreen = lazy(() => import('../settings/AccountScreen').then(({ AccountScreen }) => ({ default: AccountScreen })));
+const FeatureScreen = lazy(() => import('../settings/FeatureScreen').then(({ FeatureScreen }) => ({ default: FeatureScreen })));
 const ChatSettingsScreen = lazy(() => import('../settings/ChatSettingsScreen').then(({ ChatSettingsScreen }) => ({ default: ChatSettingsScreen })));
 const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ DisplayScreen }) => ({ default: DisplayScreen })));
 const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageScreen }) => ({ default: UsageScreen })));
@@ -120,6 +121,8 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
         return <UsageScreen back={back(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
+      case 'feature':
+        return <FeatureScreen key={at.feature} feature={at.feature} back={back(at)} />;
       case 'display':
         return <DisplayScreen back={sideBack(at)} />;
       case 'translator':

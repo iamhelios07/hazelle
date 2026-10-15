@@ -8,7 +8,7 @@ import { useAccount, useConnections, useModules, usePersonas, usePrompts, useSes
 import { Empty, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
 import type { Route, SettingsPage } from '../routes';
-import { TERMS } from './terms';
+import { SUBPAGES, TERMS } from './terms';
 
 type Place = { page: SettingsPage; label: string; icon: LucideIcon; route: Route };
 
@@ -62,17 +62,23 @@ function useHolds(): Record<SettingsPage, string | undefined> {
   };
 }
 
-type Hit = { term: string; place: Place };
+// where: the page that holds the term, unless the term is that page's own label.
+type Hit = { term: string; place: Place; where: string | undefined; to: Route };
 
 // 설정 검색: a page by its label, or by a title or label shown on it; a hit opens the page and clears the words.
 function useSettingsSearch(places: Place[]) {
   const query = useState('');
-  const hits: Hit[] = places.flatMap((place) => [place.label, ...TERMS[place.page]].map((term) => ({ term, place })));
-  const open = (place: Place) => {
+  const hits: Hit[] = places.flatMap((place) => [
+    ...[place.label, ...TERMS[place.page]].map((term) => ({ term, place, where: term === place.label ? undefined : place.label, to: place.route })),
+    ...(SUBPAGES[place.page] ?? []).flatMap((sub) =>
+      [sub.label, ...sub.terms].map((term) => ({ term, place, where: term === sub.label ? place.label : `${place.label} › ${sub.label}`, to: sub.route })),
+    ),
+  ]);
+  const open = (hit: Hit) => {
     query[1]('');
-    navigate(place.route);
+    navigate(hit.to);
   };
-  return { ...useSearch(hits, '설정 검색', ({ term }) => [term], { query, onEnter: ({ place }) => open(place) }), open };
+  return { ...useSearch(hits, '설정 검색', ({ term }) => [term], { query, onEnter: open }), open };
 }
 
 // Where the library's 설정 lands: the first page where the sidebar lists them all, the list on phones.
@@ -89,7 +95,7 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
         search.none ? (
           <Empty variant="side">{search.none}</Empty>
         ) : (
-          search.found.map(({ term, place }) => <NavRow key={`${place.page}/${term}`} icon={place.icon} label={term} meta={term === place.label ? undefined : place.label} onClick={() => search.open(place)} />)
+          search.found.map((hit) => <NavRow key={`${hit.where}/${hit.term}`} icon={hit.place.icon} label={hit.term} meta={hit.where} onClick={() => search.open(hit)} />)
         )
       ) : (
         GROUPS.map((group) => <NavGroup key={group[0]!.page}>{group.map(row)}</NavGroup>)
@@ -111,8 +117,8 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
           <Empty variant="section">{search.none}</Empty>
         ) : (
           <List places label="설정 검색 결과">
-            {search.found.map(({ term, place }) => (
-              <ListItem key={`${place.page}/${term}`} title={term} aside={term === place.label ? undefined : place.label} onClick={() => search.open(place)} />
+            {search.found.map((hit) => (
+              <ListItem key={`${hit.where}/${hit.term}`} title={hit.term} aside={hit.where} onClick={() => search.open(hit)} />
             ))}
           </List>
         )

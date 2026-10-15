@@ -51,6 +51,11 @@
   flex-shrink: 0;
 }
 
+/* In a box the control keeps the rows' inset from its edge. */
+.box .control {
+  padding-inline-end: max(var(--space-8), var(--box-inset));
+}
+
 .detail {
   padding: 0 max(var(--space-8), var(--box-inset)) var(--space-8);
 }

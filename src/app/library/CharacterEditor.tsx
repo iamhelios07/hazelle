@@ -29,7 +29,7 @@ import type { Frame } from '../common/frame';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, FEATURES_TITLE, inSettings, NOTE_PLACEHOLDER, opens, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
@@ -315,7 +315,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           value={noteSave.unsaved.note ?? character.translatorNote ?? ''}
           onChange={(note) => noteSave.change({ note })}
           placeholder={NOTE_PLACEHOLDER}
-          help={{ text: '이 캐릭터의 번역에만 들어가요. 모든 번역에 들어가는 전역 노트는 따로 있어요.', open: { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) } }}
+          help={{ text: '이 캐릭터의 번역에만 들어가요. 모든 번역에 들어가는 전역 노트는 따로 있어요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
         />
       </Section>
     ),

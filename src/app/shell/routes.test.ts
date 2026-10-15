@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONNECTION_TYPES } from '../../connectors/registry';
+import { FEATURES } from '../../model/features';
 import { backTo, HOME, href, listOf, parseRoute, settingsPage, shelfOf, up, type Route } from './routes';
 
 const CHARACTER = '6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
@@ -56,6 +57,7 @@ const EXAMPLES = {
   usage: [{ kind: 'usage' }],
   admin: [{ kind: 'admin' }],
   'chat-settings': [{ kind: 'chat-settings' }],
+  feature: FEATURES.map((feature) => ({ kind: 'feature', feature })),
   display: [{ kind: 'display' }],
   translator: [{ kind: 'translator' }],
   labs: [{ kind: 'labs' }],
@@ -79,7 +81,7 @@ describe('routes', () => {
     expect(href(model)).toBe(`/models/${CHAT}/anthropic/claude-opus-5.5`);
   });
 
-  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/modules/abc', `/modules/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x'])(
+  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/modules/abc', `/modules/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x', '/settings/chat/nope', '/settings/chat/memory/x'])(
     '%s is home',
     (at) => {
       expect(parseRoute(at)).toEqual(HOME);
@@ -115,4 +117,11 @@ it('opens a tool page without a list pane or chat, with its module as the way ba
 
 it("goes back from a module's 토글 page to the module", () => {
   expect(up({ kind: 'module', id: CHAT, pane: 'toggles' })).toEqual({ kind: 'module', id: CHAT, pane: null });
+});
+
+it('opens a feature under 채팅 기본값, which stays lit and is the way back', () => {
+  const route = { kind: 'feature', feature: 'memory' } as const;
+  expect(href(route)).toBe('/settings/chat/memory');
+  expect(up(route)).toEqual({ kind: 'chat-settings' });
+  expect(settingsPage(route)).toBe('chat');
 });

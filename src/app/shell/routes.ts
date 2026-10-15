@@ -1,6 +1,7 @@
 import { CONNECTION_TYPES } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { SHARE_ID } from '../../contracts/shares';
+import { FEATURES, type Feature } from '../../model/features';
 import type { Shelf } from '../../model/library';
 
 const ACCOUNT_SECTIONS = ['notices', 'news'] as const;
@@ -37,6 +38,7 @@ export type Route =
   | { kind: 'account'; section: AccountSection | null }
   | { kind: 'usage' }
   | { kind: 'chat-settings' }
+  | { kind: 'feature'; feature: Feature }
   | { kind: 'display' }
   | { kind: 'translator' }
   | { kind: 'labs' }
@@ -122,7 +124,11 @@ export function parseRoute(at: string): Route {
     if (top === 'account') return { kind: 'account', section: ACCOUNT_SECTIONS.find((section) => section === params.get('section')) ?? null };
   }
   if (top === 'account' && id === 'usage' && sub === undefined) return { kind: 'usage' };
-  if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
+  if (top === 'settings' && id === 'chat') {
+    if (sub === undefined) return { kind: 'chat-settings' };
+    const feature = FEATURES.find((candidate) => candidate === sub);
+    return feature ? { kind: 'feature', feature } : HOME;
+  }
   if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };
   if (top === 'settings' && id === 'translator' && sub === undefined) return { kind: 'translator' };
   if (top === 'settings' && id === 'labs' && sub === undefined) return { kind: 'labs' };
@@ -189,6 +195,8 @@ export function href(route: Route): string {
       return '/account/usage';
     case 'chat-settings':
       return '/settings/chat';
+    case 'feature':
+      return `/settings/chat/${route.feature}`;
     case 'display':
       return '/settings/display';
     case 'translator':
@@ -249,6 +257,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'usage':
       return 'account';
     case 'chat-settings':
+    case 'feature':
       return 'chat';
     case 'settings':
       return 'list';
@@ -312,6 +321,8 @@ export function up(route: Below, chatShelf?: string | null): Route {
       return { kind: 'settings' };
     case 'usage':
       return { kind: 'account', section: null };
+    case 'feature':
+      return { kind: 'chat-settings' };
     case 'add-connection':
     case 'connection':
       return { kind: 'connections' };

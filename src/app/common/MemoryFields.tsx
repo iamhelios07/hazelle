@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { MemorySettings } from '../../model/memory';
 import { typedText } from './typed';
 import { readTyped } from './typedNumber';
@@ -20,18 +20,20 @@ const readCount = (draft: string) => {
   return typed.ok && typed.value >= 1 ? typed.value : null;
 };
 
-export const MEMORY_HELP = '오래된 대화를 기록으로 정리해서 모델에게 보내요.';
+const MEMORY_HELP = '오래된 대화를 기록으로 정리해서 모델에게 보내요.';
 
 type Props = {
   value: MemorySettings;
   onChange: (change: Partial<MemorySettings>) => void;
-  // panel: inside a Panel whose title row holds the 장기 기억 switch, so only 세부 설정 is drawn, its rows bare in the card.
-  place?: 'section' | 'panel';
+  // 사용's ⓘ, MEMORY_HELP by default.
+  help?: string;
+  // Between 사용 and 세부 설정.
+  children?: ReactNode;
 };
 
 // A number is passed on only once it is valid. A caller that resets the values from outside remounts this, so a number
 // typed and not valid does not stand over the reset.
-export function MemoryFields({ value, onChange, place = 'section' }: Props) {
+export function MemoryFields({ value, onChange, help: usage = MEMORY_HELP, children }: Props) {
   const [drafts, setDrafts] = useState<Partial<Record<Count, string>>>({});
   const row = (field: Count) => {
     const { label, unit, help } = COUNTS[field];
@@ -53,12 +55,12 @@ export function MemoryFields({ value, onChange, place = 'section' }: Props) {
     );
   };
   const rows = [row('budget'), row('window'), row('batch')];
-  if (place === 'panel') return <Disclosure label="세부 설정">{rows}</Disclosure>;
   return (
     <>
       <SettingGroup label="장기 기억">
-        <SettingRow label="사용" help={MEMORY_HELP} control={<Switch label="장기 기억" checked={value.on} onChange={(on) => onChange({ on })} />} />
+        <SettingRow label="사용" help={usage} control={<Switch label="장기 기억" checked={value.on} onChange={(on) => onChange({ on })} />} />
       </SettingGroup>
+      {children}
       <Disclosure label="세부 설정">
         <SettingGroup label="세부 설정">{rows}</SettingGroup>
       </Disclosure>

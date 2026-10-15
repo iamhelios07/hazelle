@@ -20,7 +20,7 @@ export const featureHolds = (own: Switches | undefined) =>
 
 const choiceOf = (value: boolean | undefined): Choice => (value === undefined ? 'default' : value ? 'on' : 'off');
 
-// own: the owner's features as stored. 공용's own section is settings/FeatureDefaults, switches with no 기본값.
+// own: the owner's features as stored. 공용's own switches are settings/FeatureDefaults' FeatureSwitch, with no 기본값.
 export function FeatureSwitches({ owner, own }: { owner: Owner; own: Switches | undefined }) {
   const store = useStore();
   const toast = useToast();

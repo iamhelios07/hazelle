@@ -1,13 +1,11 @@
 import { Languages } from 'lucide-react';
-import { translationPrompt } from '../../runtime/prompts';
 import { sendsNotes, type translatorOf } from '../../runtime/translate';
-import { describeTranslateFailure } from '../common/failure';
-import { IntoLanguage } from '../common/IntoLanguage';
-import { inSettings, NOTE_UNSENT, noteLines, opens, PAGES, scopeTag, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
-import { useSession, useSettings } from '../session';
+import { PerCharacter } from '../common/TaskPrompt';
+import { TranslateRows } from '../common/TranslateRows';
+import { inFeature, NOTE_UNSENT, noteLines, opens, scopeTag, TRANSLATOR_NOTE } from '../common/words';
+import { useSettings } from '../session';
 import { navigate } from '../shell/router';
-import { Button, Divider, Menu, Section, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
-import { appliesTo, PerCharacter, TaskPromptMenu } from './ChatTaskPrompt';
+import { Button, Divider, Menu, Section, SettingRow, Stack, ToolButton } from '../ui';
 import type { TranslateSetup } from '../../runtime/characters';
 import type { TranslationActions } from './useChatTranslation';
 
@@ -24,8 +22,6 @@ type Props = {
 };
 
 export function ChatTranslate({ translate, translation, card, note, onChange, onOwnChange, onEditPrompt, onEditCharacter }: Props) {
-  const { store } = useSession();
-  const prompt = translationPrompt(store, translate.prompt);
   const on = [translate.replies && '응답 번역', translate.input && '내 메시지 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
   return (
     <Menu
@@ -37,39 +33,19 @@ export function ChatTranslate({ translate, translation, card, note, onChange, on
     >
       <Section level={3} title="번역" tag={scopeTag(card && translate.own ? 'character' : 'default')}>
         <Stack gap="related">
-          <SettingRow
-            label="응답 번역"
-            sentence={<IntoLanguage before="응답을" after="번역해서 보기" label="응답 번역 언어" value={translate.replyLanguage} opens="up" onPick={(replyLanguage) => onChange({ replyLanguage })} />}
-            control={<Switch label="응답 번역" checked={translate.replies} onChange={(replies) => onChange({ replies })} />}
-          />
-          <SettingRow
-            label="내 메시지 번역"
-            sentence={<IntoLanguage before="내 메시지를" after="번역해서 보내기" label="내 메시지 번역 언어" value={translate.inputLanguage} opens="up" onPick={(inputLanguage) => onChange({ inputLanguage })} />}
-            sub={translate.reverse ? '반전 모드에서는 원문으로 보내요' : undefined}
-            control={<Switch label="내 메시지 번역" checked={translate.input} disabled={translate.reverse} onChange={(input) => onChange({ input })} />}
-          />
-          <SettingRow
-            label="반전 모드"
-            help="모델에게도 화면에 보이는 내용을 보내요."
-            control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => onChange({ reverse })} />}
-          />
-          <Divider variant="menu" />
-          <NoteRow note={note} translation={translation} onEdit={onEditCharacter} />
-          <SettingRow
-            label="번역 프롬프트"
-            control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
-          />
-          <SettingRow
-            label="번역 모델"
-            help={{
-              text: taskModelHelp('번역'),
-              open: prompt.kind === 'prompt' ? { label: opens('번역 프롬프트'), onClick: () => onEditPrompt(prompt.prompt.id) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
-            }}
-            control={
-              <Text variant="note">
-                {translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}
-              </Text>
+          <TranslateRows
+            translate={translate}
+            translation={translation}
+            card={card}
+            note={
+              <>
+                <Divider variant="menu" />
+                <NoteRow note={note} translation={translation} onEdit={onEditCharacter} />
+              </>
             }
+            opens="up"
+            onChange={onChange}
+            onEditPrompt={onEditPrompt}
           />
           <PerCharacter card={card} own={translate.own} onChange={onOwnChange} />
         </Stack>
@@ -86,7 +62,7 @@ function NoteRow({ note, translation, onEdit }: { note: string | undefined; tran
   return (
     <SettingRow
       label={TRANSLATOR_NOTE}
-      help={{ text: '전역 노트는 모든 번역에, 캐릭터 노트는 이 캐릭터의 번역에만 들어가요.', open: { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) } }}
+      help={{ text: '전역 노트는 모든 번역에, 캐릭터 노트는 이 캐릭터의 번역에만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
       sub={counts || '없음'}
       error={unsent ? NOTE_UNSENT : undefined}
       control={

@@ -2,12 +2,12 @@ import { retrievalRoom } from '../../engine/retrieval';
 import type { MemorySettings } from '../../model/memory';
 import { defaultMemory } from '../../runtime/memory-read';
 import { setDefaultMemory } from '../../runtime/memory';
-import { MEMORY_HELP, MemoryFields } from '../common/MemoryFields';
+import { MemoryFields } from '../common/MemoryFields';
 import { count } from '../common/typedNumber';
 import { useAutosave } from '../common/useAutosave';
 import { MODEL_ROLES } from '../common/words';
 import { useSettings, useStore } from '../session';
-import { Breakdown, Panel, Switch } from '../ui';
+import { Breakdown } from '../ui';
 
 const amount = (tokens: number) => `${count(tokens)} 토큰`;
 
@@ -20,11 +20,7 @@ export function MemoryDefaults() {
   const found = retrievalRoom(value.budget);
   const sum = value.budget + found + value.window;
   return (
-    <Panel
-      title="장기 기억"
-      help={`${MEMORY_HELP} 채팅마다 장기 기억 패널에서 바꿀 수 있어요.`}
-      action={<Switch label="장기 기억" checked={value.on} onChange={(on) => save.change({ on })} />}
-    >
+    <MemoryFields value={value} onChange={save.change} help="새 채팅이 기억을 쓸지예요. 채팅마다 장기 기억 패널에서 바꿀 수 있어요.">
       {/* Off, a request fills no memory slot, so this split is not what it sends. */}
       {value.on && (
         <Breakdown
@@ -37,7 +33,6 @@ export function MemoryDefaults() {
           ]}
         />
       )}
-      <MemoryFields place="panel" value={value} onChange={save.change} />
-    </Panel>
+    </MemoryFields>
   );
 }

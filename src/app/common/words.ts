@@ -79,6 +79,8 @@ export const MODEL_SETTINGS = '모델 설정';
 export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
 
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
+// A feature's page under 채팅 기본값.
+export const inFeature = (feature: Feature) => `${inSettings('chat')} › ${FEATURE_NAMES[feature]}`;
 
 // A hint's door to the place it names: the thing itself, or a settings page by inSettings when it lands on the page.
 export const opens = (place: string) => `${place} 열기`;

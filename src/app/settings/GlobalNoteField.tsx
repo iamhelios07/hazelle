@@ -2,17 +2,9 @@ import { setTranslatorNote } from '../../runtime/characters';
 import { useAutosave } from '../common/useAutosave';
 import { NOTE_PLACEHOLDER, TRANSLATOR_NOTE } from '../common/words';
 import { useSettings, useStore } from '../session';
-import { Panel, TextField } from '../ui';
+import { TextField } from '../ui';
 
-export function TranslationDefaults() {
-  return (
-    <Panel title="번역">
-      <GlobalNoteField />
-    </Panel>
-  );
-}
-
-// 설정 › 채팅 기본값 and 번역기 edit the one 전역 note, through one autosave queue.
+// 채팅 기본값's 번역 page and 번역기 edit the one 전역 note, through one autosave queue.
 export function GlobalNoteField({ error }: { error?: string }) {
   const store = useStore();
   const settings = useSettings();
