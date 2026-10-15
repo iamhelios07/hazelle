@@ -26,7 +26,8 @@ export type Fate =
   | { kind: 'placed'; tokens: number }
   | { kind: 'merged'; into: string; tokens: number }
   | { kind: 'dropped'; cause: 'probability' }
-  | { kind: 'dropped'; cause: 'budget' | 'no-target'; tokens: number };
+  | { kind: 'dropped'; cause: 'budget' | 'no-target'; tokens: number }
+  | { kind: 'dropped'; cause: 'no-block'; target: string; tokens: number };
 
 export type Fired = { id: string; why: Why; fate: Fate };
 
@@ -47,6 +48,8 @@ export type LoreTurn = {
   seed: string;
   // What an entry's own body costs as the request sends it; the id is the entry's, which places its random tags.
   cost: (id: string, body: string) => number;
+  // The marks the prompt's text blocks carry, where the pipeline merges @@inject_at entries: one naming any other goes nowhere.
+  marks: ReadonlySet<string>;
 };
 
 export type Activation = {
@@ -141,7 +144,7 @@ export function prepareLore(entries: LoreEntries, settings: Card['loreSettings']
   };
 }
 
-function activate(books: Book[], settings: Card['loreSettings'], budget: number, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], end: number, depth: number) => Scanned[], { history, turn, greeting, afterMatch: before, seed, cost }: LoreTurn): Activation {
+function activate(books: Book[], settings: Card['loreSettings'], budget: number, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], end: number, depth: number) => Scanned[], { history, turn, greeting, afterMatch: before, seed, cost, marks }: LoreTurn): Activation {
   const afterMatch = new Set(before);
   const scanDepth = settings.scanDepth ?? DEFAULTS.scanDepth;
   const recursive = settings.recursive ?? DEFAULTS.recursive;
@@ -203,7 +206,12 @@ function activate(books: Book[], settings: Card['loreSettings'], budget: number,
   }
   kept.sort((a, b) => b.value.insertionOrder - a.value.insertionOrder);
   const bodies = new Map(kept.map(({ id, body }) => [id, body]));
-  const stays = kept.filter(({ rules }) => rules.into === null);
+  const stays = kept.filter(({ id, rules: { into, where } }) => {
+    if (into !== null) return false;
+    if (where.kind !== 'inject' || marks.has(where.target)) return true;
+    fates.set(id, { kind: 'dropped', cause: 'no-block', target: where.target, tokens: tokens.get(id)! });
+    return false;
+  });
   for (const book of kept) {
     if (book.rules.into === null) continue;
     const target = stays.find(({ value }) => value.name === book.rules.into);

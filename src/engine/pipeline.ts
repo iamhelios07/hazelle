@@ -84,7 +84,7 @@ type Laid = {
   named: (id: string) => string;
 };
 
-function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
+function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
   const { card } = scope;
   const context = contexts(scope, 'prompt', language, '', null);
   const casts = new Map(scope.cast.map((member) => [member.id, contexts({ ...scope, card: member.card }, 'prompt', language, '', null)]));
@@ -107,7 +107,7 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
   const count = (id: string, body: string) => tokens(render(body, id, owners.get(id)));
   // The account's budget, never a card's own token_budget: the user sets how much lore every chat sends.
   const book = prepareLore(scope.lore, card?.loreSettings ?? NO_SETTINGS, scope.loreBudget);
-  const activation = card || scope.lore.length > 0 ? book.activate(loreInput(scope, history, history.length, afterMatch(scope, book, count), seed, count)) : null;
+  const activation = card || scope.lore.length > 0 ? book.activate(loreInput(scope, history, history.length, afterMatch(scope, book, count), seed, count, marksOf(blocks))) : null;
   const names = new Map(scope.lore.map(({ id, value }) => [id, value.name]));
 
   const lorebook: Lore[] = [];
@@ -158,7 +158,7 @@ export const activeLore = (scope: ChatScope, seed: string, countTokens: (text: s
   stoppable(() => placedLore(scope, seed, countTokens));
 
 function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
-  const laid = lay(scope, scope.messages, renderChat('prompt', scope).variables, seed, remembered(countTokens), null);
+  const laid = lay(scope, conversationBlocks(scope), scope.messages, renderChat('prompt', scope).variables, seed, remembered(countTokens), null);
   return (laid.activation?.placed ?? []).flatMap(({ id, body, placement }) => {
     const text = laid.entry(id, body);
     return text ? [{ role: 'role' in placement ? placement.role : 'system', text }] : [];
@@ -273,14 +273,16 @@ const UTILITY: Block[] = [
   { id: 'utility:globalNote', name: null, kind: 'text', role: 'system', text: '', mark: 'globalNote' },
   { id: 'utility:postEverything', name: null, kind: 'slot', slot: 'postEverything' },
 ];
+// A chat whose prompt is gone has no block for an @@inject_at entry to go into.
+const conversationBlocks = (scope: ChatScope) => (scope.card?.utility ? UTILITY : (scope.prompt?.blocks ?? []));
 
 function conversation({ scope, seed, countTokens, budget, fit, continuing, memory, tools }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
-  const blocks = scope.card?.utility ? UTILITY : prompt.blocks;
+  const blocks = conversationBlocks(scope);
   const chat = renderChat('prompt', scope);
   if (chat.stopped) throw chat.stopped;
   const tokens = remembered(countTokens);
-  const laid = lay(scope, scope.messages, chat.variables, seed, tokens, null);
+  const laid = lay(scope, blocks, scope.messages, chat.variables, seed, tokens, null);
   const { activation, named } = laid;
   const built = memory?.kind === 'built-in' ? memory : null;
   const read = built && { shown: built.shown, roles: scope.messages.map(({ role }) => role), speakers: speakersOf(scope), texts: chat.texts };
@@ -353,7 +355,7 @@ function translation({ scope, take, prompt, translations, notes, request, langua
   const before = request.kind === 'message' ? request.index : texts.length;
   const source = request.kind === 'message' ? texts[request.index]! : request.text;
   const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, message: seed, seed, role: 'user' as const, text: request.text, time: null }];
-  const laid = lay(scope, history, variables, seed, remembered(countTokens), language);
+  const laid = lay(scope, prompt.blocks, history, variables, seed, remembered(countTokens), language);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', note: notes, recent: recentOf(scope, texts, before, translations), source });
   return { source, messages: taskMessages(parts) };
 }
@@ -390,7 +392,7 @@ export const assembleIllustration = (input: IllustrationInput): { messages: Chat
 
 function illustration({ scope, take, prompt, index, paragraphs, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
   const { texts, variables } = renderChat('display', scope, take);
-  const laid = lay(scope, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
+  const laid = lay(scope, prompt.blocks, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
   return { messages: taskMessages(parts) };
 }
@@ -420,7 +422,7 @@ export const assembleMemory = (input: MemoryTaskInput): { messages: ChatMessage[
 function memoryTask({ scope, prompt, memory, before, budget, span: { from, to }, chapter, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
   const { texts, variables, stopped } = renderChat('prompt', scope);
   if (stopped) throw stopped;
-  const laid = lay(scope, scope.messages.slice(0, to), variables, seed, remembered(countTokens), null);
+  const laid = lay(scope, prompt.blocks, scope.messages.slice(0, to), variables, seed, remembered(countTokens), null);
   const speakers = speakersOf(scope);
   const span = texts.slice(from, to);
   const shown = spanText(span.map((text, offset) => ({ speaker: speakers[from + offset]!, text: text.trim() })));
@@ -458,18 +460,21 @@ function remembered(measure: (text: string) => number): (text: string) => number
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
-function loreInput(scope: ChatScope, history: HistoryMessage[], turn: number, afterMatch: string[], seed: string, cost: LoreTurn['cost']): LoreTurn {
-  return { history, turn, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost };
+function loreInput(scope: ChatScope, history: HistoryMessage[], turn: number, afterMatch: string[], seed: string, cost: LoreTurn['cost'], marks: LoreTurn['marks']): LoreTurn {
+  return { history, turn, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost, marks };
 }
+
+const marksOf = (blocks: Block[]) => new Set(blocks.flatMap((block) => (block.kind === 'text' && block.mark !== null ? [block.mark] : [])));
 
 // Which after-match entries went into the prompts of the replies before this one. It is not stored: like the
 // variables, it is replayed from the chat, each earlier reply's activation rolled again from its seed.
 function afterMatch(scope: ChatScope, book: LoreBook, cost: LoreTurn['cost']): string[] {
   let state: string[] = [];
   if (!book.sticky) return state;
+  const marks = marksOf(conversationBlocks(scope));
   scope.messages.forEach((message, index) => {
     if (message.role === 'user' || (index === 0 && scope.greeting !== null)) return;
-    state = book.activate(loreInput(scope, scope.messages, index, state, message.seed, cost)).afterMatch;
+    state = book.activate(loreInput(scope, scope.messages, index, state, message.seed, cost, marks)).afterMatch;
   });
   return state;
 }
@@ -480,7 +485,8 @@ function ownText({ text, mark }: TextBlock, card: Card | null): string {
   return replacement?.trim() ? replacement.replaceAll('{{original}}', () => text) : text;
 }
 
-// @@inject_at names a text block by its mark, main or globalNote: the names Risu's own entries target.
+// @@inject_at names a text block by its mark, main or globalNote. Risu's other targets (normal, jailbreak, cot, a slot's
+// 감싸는 텍스트) have no block here, so activation drops the entries naming them (marksOf).
 function injected(text: string, injections: { body: string; operation: Operation }[]): string {
   return injections.reduce((target, { body, operation }) => merge(target, body, operation) ?? target, text);
 }

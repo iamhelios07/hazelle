@@ -6,7 +6,7 @@ import type { Memory, MemoryRecord } from '../model/memory';
 import type { Block, Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, holdsPersona, tokenGroups, unused, type Assembled, type From, type PromptInput } from './pipeline';
+import { activeLore, assemble, holdsPersona, tokenGroups, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, speakersOf, type ChatRead } from './memory';
 import { RETRIEVED_HEADING } from './retrieval';
 import { inspectVariables, renderChat, VARIABLE_LIMITS } from './render';
@@ -246,6 +246,16 @@ describe('assemble', () => {
     expect(sent[1]!.content).not.toContain('one person among many');
     expect(sent[1]!.content.endsWith('---\n Stay kind.')).toBe(true);
     expect(sent.at(-1)).toEqual({ role: 'system', content: 'Last word' });
+  });
+
+  it('tells, and gives loadLoreBooks, no @@inject_at entry whose target the prompt has no block for', () => {
+    const blocks = starter.blocks.filter((block) => block.kind !== 'text' || block.mark !== 'globalNote');
+    const entries = [lore('kind', '@@inject_at main\nStay kind.'), lore('note', '@@inject_at globalNote\nBe brief.')];
+    expect(assembledOf(assemble(input({ prompt: { ...starter, blocks }, lore: entries }))).lore!.map(({ id, fate }) => [id, fate.kind === 'dropped' && fate.cause])).toEqual([
+      ['kind', false],
+      ['note', 'no-block'],
+    ]);
+    expect(activeLore(scope({ prompt: { ...starter, blocks }, lore: entries }), 'reply-1', (text) => text.length)).toEqual([{ role: 'system', text: 'Stay kind.' }]);
   });
 
   it('keeps an entry that fired for an earlier reply after @@keep_activate_after_match, and drops one after @@dont_activate_after_match', () => {

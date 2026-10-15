@@ -148,7 +148,7 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
     case 'merged':
       return `'${loreName(names.get(fate.into)!)}'에 합쳐 들어감`;
     case 'dropped':
-      return DROPPED[fate.cause];
+      return fate.cause === 'no-block' ? `프롬프트에 @@inject_at ${fate.target} 자리가 없어 빠짐` : DROPPED[fate.cause];
   }
 }
 
