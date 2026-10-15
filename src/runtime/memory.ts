@@ -3,7 +3,7 @@ import { chatMemory, memoryOwner, memorySetup, sourcesOf, storedMemory } from '.
 import { chatSent, type ChatSent } from './memory-view';
 import { MemorySchedule, type MemoryCheck } from './memory-schedule';
 import type { ModelSettings } from '../connectors/settings';
-import { chapterCap, chapterTarget, coveredBy, fingerprint, isChapter, memoryBudget, nextChapters, nextSpan, owned, parseChapter, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type Invalid, type Scene } from '../engine/memory';
+import { chapterCap, chapterTarget, coveredBy, fingerprint, isChapter, memoryBudget, nextChapters, nextSpan, owned, parseChapter, parseRecords, placesOf, rawParts, staleness, threadLabel, type ChatRead, type Drafted, type Invalid, type Scene } from '../engine/memory';
 import type { RanAway } from '../engine/pipeline';
 import { fold, shown, type Chat, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
@@ -487,9 +487,8 @@ export class Rememberer {
 
   // Earlier than batch when the next request drops messages for want of room.
   private async span(chat: string, tokens: number[], covered: number, setup: MemorySettings) {
-    const end = windowStart(tokens, setup.window);
-    if (end <= covered) return null;
-    const waiting = tokens.slice(covered, end).reduce((sum, count) => sum + count, 0);
+    const { end, waiting } = rawParts(tokens, covered, setup.window);
+    if (end === covered) return null;
     const dropped = waiting < setup.batch ? ((await wouldSend(this.session, chat, { kind: 'answer' }, undefined, 'memory'))?.prompt.dropped ?? 0) : 0;
     const span = nextSpan(tokens, covered, setup, dropped);
     return span && { ...span, waiting };

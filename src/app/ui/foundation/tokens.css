@@ -415,6 +415,8 @@
   --peek-tab-width: 27px;
   /* A preset's swatch: the sample's band above its name. */
   --swatch-min-height: 84px;
+  /* Breakdown's striped mark: a stripe, and the gap after it. */
+  --stripe-width: 2px;
 
   /* Beside: the body's least width (a Table stays wide in it) and the column beside it. */
   --beside-main-min-width: 600px;

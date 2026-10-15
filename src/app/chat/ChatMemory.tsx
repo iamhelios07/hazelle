@@ -8,7 +8,7 @@ import { memoryWriter, removeFact, removeThread, setChatMemory, setFact, setThre
 import { memoryPrompt } from '../../runtime/prompts';
 import { ACTS, addOf } from '../common/acts';
 import { describeMemoryFailure } from '../common/failure';
-import { MemoryFields, settingsOf } from '../common/MemoryFields';
+import { MemoryFields, MemorySplit, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
@@ -16,7 +16,7 @@ import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, PAGES, RES
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
-import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, MenuItem, MoreMenu, Row, Section, SettingRow, SidePanel, Stack, Text, TextField } from '../ui';
+import { Button, Callout, ConfirmDialog, Empty, IconButton, List, MenuItem, MoreMenu, Row, Section, SettingRow, SidePanel, Stack, Text, TextField } from '../ui';
 import { MemoryRow, type ChatMemoryRecord } from './ChatMemoryRecord';
 import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
@@ -144,17 +144,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
           프롬프트에 장기 기억 블록이 없어서 기억을 보내지 않아요.
         </Callout>
       )}
-      {view && !holder && (
-        <Stack gap="related">
-          <Facts
-            items={[
-              { label: '기억한 메시지', value: `${view.covered}개` },
-              { label: '정리를 기다리는 메시지', value: `${view.waiting}개` },
-              { label: '기억 사용량', value: `약 ${tokens(view.tokens.used)} / ${tokens(view.tokens.budget)} 토큰` },
-            ]}
-          />
-        </Stack>
-      )}
+      {view && owner?.kind === 'built-in' && <MemoryFill view={view} />}
       {owner?.kind === 'built-in' && <WriterRow chat={own} onEditPrompt={onEditTaskPrompt} />}
 
       {(!holder || memory.state.length > 0) && <Section
@@ -215,6 +205,25 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         </ConfirmDialog>
       )}
     </SidePanel>
+  );
+}
+
+// Without a 장기 기억 slot no summary runs on its own (runtime/memory), so none is told as next. found is left out: what an
+// embedding model adds is known only once a request is made.
+function MemoryFill({ view }: { view: MemoryView }) {
+  const { used, budget, waiting, recent } = view.tokens;
+  const { batch, window } = view.setup;
+  const left = batch - waiting;
+  return (
+    <Stack gap="related">
+      <MemorySplit
+        whole={Math.max(budget + batch + window, used + waiting + recent)}
+        records={{ tokens: used, value: `약 ${tokens(used)} / ${tokens(budget)} 토큰` }}
+        waiting={{ tokens: waiting, value: `약 ${tokens(waiting)} / ${tokens(batch)} 토큰` }}
+        recent={{ tokens: recent, value: `약 ${tokens(recent)} 토큰` }}
+      />
+      {view.slot && <Text variant="note">{left > 0 ? `다음 정리까지 약 ${tokens(left)} 토큰` : '정리할 만큼 대화가 쌓였어요.'}</Text>}
+    </Stack>
   );
 }
 

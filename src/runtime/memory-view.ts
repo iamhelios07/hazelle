@@ -1,4 +1,4 @@
-import { memoryBudget, speakersOf, windowStart, type ChatRead, type RecordStatus, type Staleness, type Standing } from '../engine/memory';
+import { memoryBudget, rawParts, speakersOf, type ChatRead, type RecordStatus, type Staleness, type Standing } from '../engine/memory';
 import type { Assembled } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { Chat } from '../model/chat';
@@ -26,18 +26,16 @@ export async function chatSent(session: Pick<Session, 'store' | 'read'>, id: str
 }
 
 // slot: whether the chat's prompt holds 장기 기억 where a request reaches it, false while the chat cannot send. stale: why
-// each stale record is, a record the user edited or pinned included, which stays sent. waiting: messages past the window
-// not summarized yet. tokens: what the slot sends against its budget (shrunk to what the model can take), and the
-// state's share against its limit.
+// each stale record is, a record the user edited or pinned included, which stays sent. tokens: what the slot sends
+// against its budget (shrunk to what the model can take), the state's share against its limit, and the messages sent
+// as written: those waiting for the next summary and the window's (engine rawParts).
 export type MemoryView = {
   memory: Memory;
   setup: MemorySetup;
   slot: boolean;
   records: ReadonlyMap<string, RecordStatus>;
   stale: ReadonlyMap<string, Staleness>;
-  covered: number;
-  waiting: number;
-  tokens: { used: number; budget: number; state: number; stateLimit: number };
+  tokens: { used: number; budget: number; state: number; stateLimit: number; waiting: number; recent: number };
   crowded: boolean;
 };
 
@@ -47,15 +45,14 @@ export async function memoryView(session: Pick<Session, 'store' | 'read' | 'scri
   if (!sent || 'kind' in sent) return null;
   const setup = memorySetup(session.store, sent.chat);
   const held = sent.standing!;
+  const { waiting, recent } = rawParts(sent.tokens, held.covered, setup.window);
   return {
     memory,
     setup,
     slot: (await wouldSend(session, chat, { kind: 'answer' }, undefined, 'view'))?.prompt.memory?.slot ?? false,
     records: held.status,
     stale: held.stale,
-    covered: held.covered,
-    waiting: Math.max(windowStart(sent.tokens, setup.window) - held.covered, 0),
-    tokens: held.tokens,
+    tokens: { ...held.tokens, waiting, recent },
     crowded: held.crowded,
   };
 }

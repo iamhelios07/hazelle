@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Chapter, Memory, MemoryRecord } from '../model/memory';
-import { fingerprint, memoryBefore, memoryBudget, nextChapters, nextSpan, parseChapter, parseRecords, printOf, recordsTarget, standing, windowStart, type ChatRead } from './memory';
+import { fingerprint, memoryBefore, memoryBudget, nextChapters, nextSpan, parseChapter, parseRecords, printOf, rawParts, recordsTarget, standing, windowStart, type ChatRead } from './memory';
 
 const span = ['Luna: "I will  wait\nfor you until spring."', 'jin leaves the lighthouse.', 'Spring comes. Luna lights the lamp.'];
 const record = (to: number, lines: { speaker: string; text: string }[] = []) => ({
@@ -71,6 +71,12 @@ describe('the window and the next span', () => {
     expect(nextSpan(tokens, 3, settings, 0)).toBeNull();
     expect(nextSpan(tokens, 3, settings, 1)).toEqual({ from: 3, to: 4 });
     expect(nextSpan([2000, 300], 0, { window: 300, batch: 1000 }, 0)).toEqual({ from: 0, to: 1 });
+  });
+
+  it('splits what is sent as written into the messages waiting for a summary and the window, the window starting at covered once a record reaches into it', () => {
+    const tokens = [300, 300, 300, 300, 300, 300, 500, 200];
+    expect(rawParts(tokens, 2, 600)).toEqual({ end: 6, waiting: 1200, recent: 700 });
+    expect(rawParts(tokens, 7, 600)).toEqual({ end: 7, waiting: 0, recent: 200 });
   });
 
   it('shrinks a memory budget past half of what the model can take, for that request only', () => {

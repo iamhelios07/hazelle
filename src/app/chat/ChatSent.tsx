@@ -15,6 +15,10 @@ import { CHAPTER, LORE_BUDGET_LABEL, loreName } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
+// Not "none" or "gone": what a call sent is kept only by the page that made it, while its chat stays open (runtime/talk
+// sent), so a reload, another device or a resumed call has none of it to show.
+const UNKEPT = '요청을 보낸 기기에서 채팅을 열어 둔 동안만 볼 수 있어요.';
+
 export function partName(from: From, role: Role): string {
   switch (from.kind) {
     case 'block':
@@ -36,7 +40,6 @@ export function partName(from: From, role: Role): string {
 
 // Headers, which carry the credential, are never kept (runtime/generate), so there is nothing to redact here.
 export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Receipt }) {
-  // Not "gone": a reply written before this page opened, on another device, or edited is not here either.
   if (!sent) {
     return (
       <>
@@ -48,7 +51,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
             { label: '보낸 토큰', value: tokens(receipt.usage?.inputTokens ?? null) },
           ]}
         />
-        <Empty variant="section">이 응답의 요청 원문이 없어요.</Empty>
+        <Empty variant="section">{UNKEPT}</Empty>
       </>
     );
   }
@@ -56,7 +59,8 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
 }
 
 export function SentResponse({ sent }: { sent: Sent | null }) {
-  if (!sent?.response) return <Empty variant="section">이 응답의 응답 원문이 없어요.</Empty>;
+  if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
+  if (!sent.response) return <Empty variant="section">이 응답의 응답 원문이 없어요.</Empty>;
   return <CodeBlock>{sent.response}</CodeBlock>;
 }
 
@@ -159,7 +163,7 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
 
 // The records are named as they are now; one deleted since reads as gone.
 export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memory: Memory | null; onRecord: (record: string) => void }) {
-  if (!sent) return <Empty variant="section">이 응답의 기억 기록이 없어요.</Empty>;
+  if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
   const { memory: used, dropped } = sent.prompt;
   const cut = { label: '컨텍스트 한도로 빠진 메시지', value: `${dropped}개`, tone: dropped ? ('warn' as const) : undefined };
   if (!used) {
@@ -222,7 +226,7 @@ function SentRecords({ title, ids, records, onRecord }: { title: string; ids: st
 }
 
 export function SentLore({ sent }: { sent: Sent | null }) {
-  if (!sent) return <Empty variant="section">이 응답의 로어북 기록이 없어요.</Empty>;
+  if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
   const lore = sent.prompt.lore;
   if (!lore) return <Empty variant="section">캐릭터가 없는 채팅이라 로어북이 없어요.</Empty>;
   if (lore.length === 0) return <Empty variant="section">이 응답에는 활성화된 로어북 항목이 없어요.</Empty>;
