@@ -24,7 +24,7 @@ const RPACK = Uint8Array.from(
 export const unpack = (bytes: Uint8Array) => bytes.map((byte) => RPACK[byte]!);
 const PACK = new Uint8Array(256);
 RPACK.forEach((plain, packed) => (PACK[plain] = packed));
-const pack = (bytes: Uint8Array) => bytes.map((byte) => PACK[byte]!);
+export const pack = (bytes: Uint8Array) => bytes.map((byte) => PACK[byte]!);
 
 const MAGIC = 111;
 const VERSION = 0;

@@ -1,4 +1,4 @@
-import { importPreset, type PresetRead } from '../engine/import/preset';
+import { importPreset, writePreset, type PresetRead, type PresetWritten } from '../engine/import/preset';
 import { illustratorPrompt } from '../engine/illustrate';
 import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
@@ -87,6 +87,13 @@ export async function savePreset(store: ObjectStore, { prompt }: PresetRead): Pr
   const paired = companionModules(store, prompt.companions ?? []);
   const saved = await store.create('prompt', paired.length > 0 ? { ...prompt, modules: paired } : prompt);
   return saved.ok ? { ok: true, data: { id: saved.data.id, paired } } : saved;
+}
+
+// Its Risu preset file, naming for Risu's moduleIntergration the live modules on for it that have a namespace, the only
+// identity a module keeps in Risu.
+export function presetFile(store: Pick<ObjectStore, 'get'>, prompt: ConversationPrompt): Promise<PresetWritten> {
+  const namespaces = (prompt.modules ?? []).flatMap((id) => live(store.get('module', id))?.value.namespace ?? []);
+  return writePreset(prompt, namespaces);
 }
 
 // An account that has never had a sort's default prompt gets that sort's bundled prompt as its default, once. The
