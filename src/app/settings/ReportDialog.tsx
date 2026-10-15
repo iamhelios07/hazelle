@@ -10,7 +10,7 @@ import { useAttempt } from '../common/useAttempt';
 import { useToast } from '../toast';
 import { Button, Callout, Checkbox, Dialog, Stack, Text, TextField } from '../ui';
 
-const REPORT = '운영자에게 알리기';
+export const REPORT = '운영자에게 알리기';
 
 export function ReportButton() {
   const [open, setOpen] = useState(false);

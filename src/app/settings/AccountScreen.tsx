@@ -9,6 +9,7 @@ import { BIN, PAGES, UNKNOWN } from '../common/words';
 import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingRow, Stack, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
+import { LabsSection } from './LabsSection';
 import { LeaveSection } from './LeaveSection';
 import { NewsSection } from './NewsSection';
 import { NoticesSection } from './NoticesSection';
@@ -82,7 +83,10 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
             <LegalNotice />
           </Panel>
         </Stack>
-        <NewsSection seek={section === 'news'} />
+        <Stack gap="section">
+          <NewsSection seek={section === 'news'} />
+          <LabsSection />
+        </Stack>
       </Columns>
       <LeaveSection />
     </Screen>
