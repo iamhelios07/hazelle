@@ -3,11 +3,10 @@ import { ToolSetting } from '../common/ToolSetting';
 import { useTool } from '../session';
 import { Button, Menu, Stack, ToolButton } from '../ui';
 import type { ToolComposer } from './toolMenu';
-import type { OpenChat } from './useChat';
 
 // Each //@composer item of the chat's tools: its fields are the module's own, the same in every chat, as 삽화's are.
-export function ChatComposerTools({ chat }: { chat: OpenChat }) {
-  return chat.composerTools.map((tool) => <ComposerTool key={tool.module} tool={tool} onOpen={() => chat.actions.tool(tool.module)} />);
+export function ChatComposerTools({ tools, onOpen }: { tools: ToolComposer[]; onOpen: (module: string) => void }) {
+  return tools.map((tool) => <ComposerTool key={tool.module} tool={tool} onOpen={() => onOpen(tool.module)} />);
 }
 
 function ComposerTool({ tool, onOpen }: { tool: ToolComposer; onOpen: () => void }) {

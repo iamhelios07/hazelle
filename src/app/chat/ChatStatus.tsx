@@ -3,14 +3,19 @@ import { IconButton, SidePeek, Stack, StatusBox } from '../ui';
 import { shownHtml } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
-export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
-  const { status, held, decor, actions } = chat;
+type Props = Pick<OpenChat, 'status' | 'held' | 'decor'> & {
+  onHold: (held: boolean) => void;
+  onPress: OpenChat['actions']['press'];
+  onUnmark: (script: OpenChat['status'][number]) => void;
+};
+
+export function ChatStatusPeek({ status, held, decor, onHold, onPress, onUnmark }: Props) {
   return (
     <SidePeek
       label="상태"
       open={held}
-      onOpenChange={actions.hold}
-      actions={unmarkOnly(chat)}
+      onOpenChange={onHold}
+      actions={unmarkOnly(status, onUnmark)}
     >
       <Stack gap="section">
         {status.map((box) => (
@@ -20,8 +25,8 @@ export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
             html={box.drawn && shownHtml(box.drawn.html, decor)}
             css={decor.css}
             buttons={decor.buttons}
-            onPress={actions.press}
-            actions={status.length > 1 && unmark(chat, box)}
+            onPress={onPress}
+            actions={status.length > 1 && unmark(box, onUnmark)}
           />
         ))}
       </Stack>
@@ -29,9 +34,9 @@ export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
   );
 }
 
-const unmark = ({ actions }: OpenChat, script: OpenChat['status'][number]) => (
-  <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${script.name}`} onClick={() => actions.markStatus(script, false)} />
+const unmark = (script: Props['status'][number], onUnmark: Props['onUnmark']) => (
+  <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${script.name}`} onClick={() => onUnmark(script)} />
 );
 
 // One box has no head of its own: its 지정 풀기 sits with the drawer's actions.
-const unmarkOnly = (chat: OpenChat) => chat.status.length === 1 && unmark(chat, chat.status[0]!);
+const unmarkOnly = (status: Props['status'], onUnmark: Props['onUnmark']) => status.length === 1 && unmark(status[0]!, onUnmark);

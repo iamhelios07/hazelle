@@ -10,6 +10,7 @@ import { runShortcut } from '../shortcuts';
 import { Avatar, ChatTitle, Divider, MenuItem, MoreMenu, ToolButton, useMenuOpener, useWide } from '../ui';
 import { ChatCastMenu } from './ChatCastMenu';
 import { ChatExport } from './ChatExport';
+import { speakers } from './ChatLog';
 import { ChatModelMenu } from './ChatModelMenu';
 import { PersonaDialog } from './ChatPersonaPicker';
 import { ChatPromptPicker, PromptDialog } from './ChatPromptPicker';
@@ -45,8 +46,8 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
   return (
     <>
-      <ChatPromptPicker chat={chat} />
-      <ChatCastMenu chat={chat} />
+      <ChatPromptPicker prompt={chat.prompt} open={chat.dialog === 'prompt'} onOpen={() => actions.openDialog('prompt')} />
+      <ChatCastMenu handle={castMenu} cast={cast} character={shelf?.id ?? null} onChange={actions.setCast} />
       <ChatModelMenu handle={modelMenu} current={current} label={label} onPick={actions.pickModel} />
       <ToolButton
         icon={SlidersHorizontal}
@@ -92,11 +93,20 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
 // header its actions, and a dialog inside them.
 export function ChatDialogs({ chat }: { chat: OpenChat }) {
   const { dialog, item, reshaping, actions } = chat;
-  if (reshaping) return <SceneDialog reshaping={reshaping} actions={actions} />;
-  if (dialog === 'persona') return <PersonaDialog chat={chat} />;
-  if (dialog === 'prompt') return <PromptDialog chat={chat} />;
+  if (reshaping) return <SceneDialog reshaping={reshaping} onDraw={actions.draw} onClose={() => actions.reshape(null)} />;
+  if (dialog === 'persona') return (
+    <PersonaDialog
+      persona={chat.persona}
+      characterName={chat.shelf?.character.card.name ?? null}
+      pinned={chat.shelf?.character.persona}
+      onChoose={actions.choosePersona}
+      onPin={actions.pinPersona}
+      onClose={actions.closeDialog}
+    />
+  );
+  if (dialog === 'prompt') return <PromptDialog prompt={chat.prompt} onChoose={actions.setPrompt} onEdit={(id) => actions.side({ kind: 'prompts', id, pane: null })} onClose={actions.closeDialog} />;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
-  if (dialog === 'export' && item) return <ChatExport chat={chat} item={item} />;
+  if (dialog === 'export' && item) return <ChatExport item={item} messages={chat.messages} view={chat.view} placed={chat.placed} pictures={chat.pictures} flipped={chat.flipped} busy={chat.busy} bot={chat.decor.bot} characterName={chat.card?.name ?? null} names={speakers(chat)} onClose={actions.closeDialog} />;
   if (dialog === 'rename' && item) {
     return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 표시돼요." onSave={actions.rename} onClose={actions.closeDialog} />;
   }

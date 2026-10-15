@@ -2,9 +2,18 @@ import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { IconButton, pressed, SearchField } from '../ui';
-import type { ChatActions, OpenChat } from './useChat';
+import type { useChatSearch } from './useChatSearch';
 
-export function ChatSearch({ search, actions }: { search: NonNullable<OpenChat['search']>; actions: ChatActions }) {
+type Search = ReturnType<typeof useChatSearch>;
+
+type Props = {
+  search: NonNullable<Search['search']>;
+  onSearch: (term: string) => void;
+  onStep: (step: -1 | 1) => void;
+  onClose: () => void;
+};
+
+export function ChatSearch({ search, onSearch, onStep, onClose }: Props) {
   const field = useRef<HTMLInputElement>(null);
   useEffect(() => {
     field.current?.focus();
@@ -17,10 +26,10 @@ export function ChatSearch({ search, actions }: { search: NonNullable<OpenChat['
     const step = pressed(event, SHORTCUTS.findNext.keys) ? 1 : pressed(event, SHORTCUTS.findPrevious.keys) ? -1 : 0;
     if (step !== 0) {
       event.preventDefault();
-      actions.stepSearch(step);
+      onStep(step);
     } else if (pressed(event, SHORTCUTS.closeFind.keys)) {
       event.preventDefault();
-      actions.closeSearch();
+      onClose();
     }
   };
   const none = search.hits === 0;
@@ -31,14 +40,14 @@ export function ChatSearch({ search, actions }: { search: NonNullable<OpenChat['
       size="sm"
       grow
       value={search.term}
-      onChange={actions.searchFor}
+      onChange={onSearch}
       onKeyDown={keys}
       after={
         <>
           {search.term.trim() && <span aria-live="polite">{`${search.place ?? (none ? 0 : '–')} / ${search.hits}`}</span>}
-          <IconButton icon={ChevronUp} size="xs" label={SHORTCUTS.findPrevious.label} title={titled(SHORTCUTS.findPrevious.label, SHORTCUTS.findPrevious.keys)} disabled={none} onClick={() => actions.stepSearch(-1)} />
-          <IconButton icon={ChevronDown} size="xs" label={SHORTCUTS.findNext.label} title={titled(SHORTCUTS.findNext.label, SHORTCUTS.findNext.keys)} disabled={none} onClick={() => actions.stepSearch(1)} />
-          <IconButton icon={X} size="xs" label={SHORTCUTS.closeFind.label} title={titled(SHORTCUTS.closeFind.label, SHORTCUTS.closeFind.keys)} onClick={actions.closeSearch} />
+          <IconButton icon={ChevronUp} size="xs" label={SHORTCUTS.findPrevious.label} title={titled(SHORTCUTS.findPrevious.label, SHORTCUTS.findPrevious.keys)} disabled={none} onClick={() => onStep(-1)} />
+          <IconButton icon={ChevronDown} size="xs" label={SHORTCUTS.findNext.label} title={titled(SHORTCUTS.findNext.label, SHORTCUTS.findNext.keys)} disabled={none} onClick={() => onStep(1)} />
+          <IconButton icon={X} size="xs" label={SHORTCUTS.closeFind.label} title={titled(SHORTCUTS.closeFind.label, SHORTCUTS.closeFind.keys)} onClick={onClose} />
         </>
       }
     />

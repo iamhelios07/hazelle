@@ -7,10 +7,18 @@ import { useConnections } from '../session';
 import { navigate } from '../shell/router';
 import { Button, ChipButton, Menu, MenuHeading, MenuItem, SettingRow, Stack, Switch, ToolButton } from '../ui';
 import { appliesTo, PerCharacter, TaskPromptMenu } from './ChatTaskPrompt';
-import type { OpenChat } from './useChat';
+import type { IllustrateSetup } from '../../runtime/characters';
+import type { IllustrationActions } from './useChatIllustrations';
 
-export function ChatIllustrate({ chat }: { chat: OpenChat }) {
-  const { illustrate, card, actions } = chat;
+type Props = {
+  illustrate: IllustrateSetup;
+  card: { name: string } | null;
+  onChange: IllustrationActions['setIllustrate'];
+  onOwnChange: IllustrationActions['setOwnIllustrate'];
+  onEditPrompt: (id: string | null) => void;
+};
+
+export function ChatIllustrate({ illustrate, card, onChange, onOwnChange, onEditPrompt }: Props) {
   const routes = drawingModels(useConnections());
   return (
     <Menu
@@ -24,19 +32,19 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
         <SettingRow
           label="자동 삽화"
           help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 이미지 연결의 사용량이 들어요."
-          control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => actions.setIllustrate({ auto })} />}
+          control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => onChange({ auto })} />}
         />
         <SettingRow
           label="무료가 아니어도 만들기"
           help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 묻지 않고 만들어요. 이때는 비용이 들어요."
-          control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => actions.setIllustrate({ spend })} />}
+          control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
         />
         <SettingRow
           label="이미지 모델"
           sub={routes.length ? undefined : '이미지를 만들 모델이 없어요'}
           control={
             routes.length ? (
-              <ImageModelMenu routes={routes} chat={chat} />
+              <ImageModelMenu routes={routes} illustrate={illustrate} card={card} onPick={onChange} />
             ) : (
               <Button variant="ghost" size="sm" onClick={() => navigate({ kind: 'add-connection' })}>
                 {newOf('연결')}
@@ -46,9 +54,9 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
         />
         <SettingRow
           label="삽화 프롬프트"
-          control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} onPick={(prompt) => actions.setIllustrate({ prompt })} chat={chat} />}
+          control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
         />
-        <PerCharacter card={card} own={illustrate.own} onChange={actions.setOwnIllustrate} />
+        <PerCharacter card={card} own={illustrate.own} onChange={onOwnChange} />
       </Stack>
     </Menu>
   );
@@ -56,8 +64,7 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
 
 // Without its own choice the switches draw with the first starred model that draws, and one no longer starred shows as
 // missing, never as another model.
-function ImageModelMenu({ routes, chat }: { routes: ImageRoute[]; chat: OpenChat }) {
-  const { illustrate, card, actions } = chat;
+function ImageModelMenu({ routes, illustrate, card, onPick }: Pick<Props, 'illustrate' | 'card'> & { routes: ImageRoute[]; onPick: IllustrationActions['setIllustrate'] }) {
   const own = illustrate.model;
   const choice = own ? routes.find(({ connection, model }) => sameModelRef(own, { connection: connection.id, model: model.id })) : routes[0];
   return (
@@ -67,14 +74,14 @@ function ImageModelMenu({ routes, chat }: { routes: ImageRoute[]; chat: OpenChat
       trigger={(opener) => <ChipButton variant="field" opens="up" label={choice ? choice.model.name : NOT_STARRED} title="이미지 모델" tone={choice ? 'default' : 'warn'} {...opener} />}
     >
       <MenuHeading>{appliesTo(card, illustrate.own)}</MenuHeading>
-      <MenuItem label={follows('첫 이미지 모델')} sub={routes[0]!.model.name} checked={!own} onClick={() => actions.setIllustrate({ model: undefined })} />
+      <MenuItem label={follows('첫 이미지 모델')} sub={routes[0]!.model.name} checked={!own} onClick={() => onPick({ model: undefined })} />
       {routes.map(({ connection, model }) => (
         <MenuItem
           key={`${connection.id}/${model.id}`}
           label={model.name}
           sub={connection.value.label}
           checked={!!own && sameModelRef(own, { connection: connection.id, model: model.id })}
-          onClick={() => actions.setIllustrate({ model: { connection: connection.id, model: model.id } })}
+          onClick={() => onPick({ model: { connection: connection.id, model: model.id } })}
         />
       ))}
     </Menu>

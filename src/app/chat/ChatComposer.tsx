@@ -28,9 +28,10 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, busy, problem, stuck, translate, sendLanguage, modelMenu, actions } = chat;
+  const { draft, messages, last, busy, problem, stuck, translate, sendLanguage, modelMenu, shelf, actions } = chat;
   const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: { onClick: () => actions.openDialog('prompt') }, persona: { onClick: () => actions.openDialog('persona') } };
   const input = useRef<HTMLTextAreaElement>(null);
+  const editPrompt = (id: string | null) => actions.side({ kind: 'prompts', id, pane: null });
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (pressed(event, SHORTCUTS.send.keys)) {
@@ -70,7 +71,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
           <Hint label="정규식 꺼짐">캐릭터나 모듈의 정규식, 로어북 키워드 중 하나가 원인이에요. 다른 기기에서도 꺼져요.</Hint>
         </Callout>
       )}
-      <ChatAsk chat={chat} onTyped={() => input.current?.focus()} />
+      <ChatAsk id={chat.id} onTyped={() => input.current?.focus()} />
       <Composer
         inputRef={input}
         compact={folded}
@@ -80,12 +81,21 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         placeholder={translate.input ? `${withRo(sendLanguage)} 번역해서 보내요` : '메시지'}
         tools={
           <>
-            <ChatPersonaPicker chat={chat} />
-            <ChatNote chat={chat} />
-            <ChatTranslate chat={chat} />
-            <ChatIllustrate chat={chat} />
-            <ChatComposerTools chat={chat} />
-            <ChatPinnedToggles chat={chat} />
+            <ChatPersonaPicker persona={chat.persona} open={chat.dialog === 'persona'} onOpen={() => actions.openDialog('persona')} />
+            <ChatNote id={chat.id} note={chat.note} prompt={chat.prompt} onSave={actions.setNote} />
+            <ChatTranslate
+              translate={translate}
+              translation={chat.translation}
+              card={chat.card}
+              note={shelf?.character.translatorNote}
+              onChange={actions.setTranslate}
+              onOwnChange={actions.setOwnTranslate}
+              onEditPrompt={editPrompt}
+              onEditCharacter={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: 'instructions' }) : undefined}
+            />
+            <ChatIllustrate illustrate={chat.illustrate} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} onEditPrompt={editPrompt} />
+            <ChatComposerTools tools={chat.composerTools} onOpen={actions.tool} />
+            <ChatPinnedToggles toggles={chat.toggles} onFlip={actions.flip} />
           </>
         }
         actions={

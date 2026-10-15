@@ -16,8 +16,15 @@ const defaultOf = (toggle: Toggle) =>
 
 const FROM: Record<ToggleSection['from'], string> = { prompt: '프롬프트', card: '캐릭터', module: PAGES.modules };
 
-export function ChatToggles({ chat }: { chat: OpenChat }) {
-  const { prompt, card, toggles, toggleOwner, actions } = chat;
+type Props = Pick<OpenChat, 'card' | 'toggles' | 'toggleOwner'> & {
+  onFlip: OpenChat['actions']['flip'];
+  onWrite: OpenChat['actions']['writeToggle'];
+  onReset: () => void;
+  onEditPrompt: (() => void) | undefined;
+  onClose: () => void;
+};
+
+export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onReset, onEditPrompt, onClose }: Props) {
   const store = useStore();
   const pinned = new Set(useSettings().pinnedToggles);
   const [filter, setFilter] = useState<'all' | 'changed'>('all');
@@ -46,11 +53,11 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       action={toggle.kind !== 'text' && <IconButton icon={Pin} size="xs" label="입력창에 고정" pressed={pinned.has(toggle.key)} onClick={() => void pinToggle(store, toggle.key, !pinned.has(toggle.key))} />}
       control={
         toggle.kind === 'check' ? (
-          <Switch label={toggle.label} checked={value === '1'} onChange={(on) => actions.flip(toggle.key, on ? '1' : '0')} />
+          <Switch label={toggle.label} checked={value === '1'} onChange={(on) => onFlip(toggle.key, on ? '1' : '0')} />
         ) : toggle.kind === 'choice' ? (
-          <ToggleChoice label={toggle.label} options={toggle.options} value={value} onChange={(next) => actions.flip(toggle.key, next)} />
+          <ToggleChoice label={toggle.label} options={toggle.options} value={value} onChange={(next) => onFlip(toggle.key, next)} />
         ) : (
-          <TextToggle toggle={toggle} value={value} owner={toggleOwner} write={actions.writeToggle} />
+          <TextToggle toggle={toggle} value={value} owner={toggleOwner} write={onWrite} />
         )
       }
     />
@@ -77,11 +84,11 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
   return (
     <SidePanel
       title="토글"
-      onClose={actions.closePanel}
+      onClose={onClose}
       footer={
         <>
           {toggles.changed ? `변경 ${toggles.changed}개` : '모두 기본값'}
-          <Button variant="link" size="sm" disabled={toggles.changed === 0} onClick={actions.resetToggles}>
+          <Button variant="link" size="sm" disabled={toggles.changed === 0} onClick={onReset}>
             {RESET}
           </Button>
         </>
@@ -93,9 +100,9 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
             ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.`
             : '여기서 바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
         </Text>
-        {prompt.kind === 'prompt' && toggles.sections[0]?.from === 'prompt' && (
+        {onEditPrompt && toggles.sections[0]?.from === 'prompt' && (
           <Row kind="actions">
-            <Button variant="link" size="xs" onClick={() => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles', fromToggles: true })}>
+            <Button variant="link" size="xs" onClick={onEditPrompt}>
               프롬프트 토글의 기본값 바꾸기
             </Button>
           </Row>
@@ -126,7 +133,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
 
 // Typed values are saved after a pause in typing (common/useAutosave), not per key press; the box shows what is
 // still on its way over what is stored.
-function TextToggle({ toggle, value, owner, write }: { toggle: Extract<Toggle, { kind: 'text' }>; value: string; owner: string | null; write: OpenChat['actions']['writeToggle'] }) {
+function TextToggle({ toggle, value, owner, write }: { toggle: Extract<Toggle, { kind: 'text' }>; value: string; owner: string | null; write: Props['onWrite'] }) {
   const autosave = useAutosave<{ value: string }>(toggleSaveKey(owner, toggle.key), (patch) => write(toggle.key, patch.value!));
   return (
     <TextField

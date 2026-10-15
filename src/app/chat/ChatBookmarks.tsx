@@ -8,17 +8,25 @@ import { useSession } from '../session';
 import { Empty, List, ListItem, MenuItem, MoreMenu, SidePanel, useWide } from '../ui';
 import { bookmarkRows, type BookmarkRow } from './bookmarks';
 import { speaker } from './ChatMessage';
-import { speakers } from './ChatLog';
+import type { speakers } from './ChatLog';
 import type { OpenChat } from './useChat';
 
-export function ChatBookmarks({ id, chat }: { id: string; chat: OpenChat }) {
+type Props = Pick<OpenChat, 'item' | 'messages' | 'texts'> & {
+  id: string;
+  names: ReturnType<typeof speakers>;
+  onShow: OpenChat['actions']['showBookmark'];
+  onUnmark: (id: string) => void;
+  onRename: OpenChat['actions']['renameBookmark'];
+  onClose: () => void;
+};
+
+export function ChatBookmarks({ id, item, messages, texts, names, onShow, onUnmark, onRename, onClose }: Props) {
   const { store } = useSession();
-  const { item, messages, texts, actions } = chat;
   const wide = useWide();
   const [naming, setNaming] = useState<BookmarkRow | null>(null);
   const tree = useMemo(() => versionTree(store, id), [item?.messages]);
   const rows = bookmarkRows(item?.chat.bookmarks ?? [], tree);
-  const { character, me, modelName } = speakers(chat);
+  const { character, me, modelName } = names;
   // Off the line shown, a message has no displayed text: its stored one stands in, as in the version switcher.
   const start = ({ message }: BookmarkRow) => {
     const at = messages.findIndex((each) => each.id === message.id);
@@ -27,11 +35,11 @@ export function ChatBookmarks({ id, chat }: { id: string; chat: OpenChat }) {
 
   // A narrow panel covers the story, so it steps aside for the message it points at.
   function show(row: BookmarkRow) {
-    if (actions.showBookmark(row) && !wide) actions.closePanel();
+    if (onShow(row) && !wide) onClose();
   }
 
   return (
-    <SidePanel title={BOOKMARK} onClose={actions.closePanel}>
+    <SidePanel title={BOOKMARK} onClose={onClose}>
       {rows.length ? (
         <List label={BOOKMARK}>
           {rows.map((row) => {
@@ -46,7 +54,7 @@ export function ChatBookmarks({ id, chat }: { id: string; chat: OpenChat }) {
                 control={
                   <MoreMenu of={BOOKMARK}>
                     <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming(row)} />
-                    <MenuItem label={`${BOOKMARK} 해제`} onClick={() => actions.bookmark(row.message.id)} />
+                    <MenuItem label={`${BOOKMARK} 해제`} onClick={() => onUnmark(row.message.id)} />
                   </MoreMenu>
                 }
               />
@@ -62,7 +70,7 @@ export function ChatBookmarks({ id, chat }: { id: string; chat: OpenChat }) {
           value={naming.name ?? ''}
           hint="비워 두면 말한 사람으로 표시돼요."
           onSave={(name) => {
-            actions.renameBookmark(naming.message.id, name);
+            onRename(naming.message.id, name);
             setNaming(null);
           }}
           onClose={() => setNaming(null)}

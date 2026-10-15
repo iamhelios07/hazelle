@@ -1,28 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
-import { shown, type Chat, type ChatItem, type ChatSummary } from '../../model/chat';
+import { shown, type ChatItem, type ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
-import type { ApiFailure } from '../../runtime/api';
-import { chatModel, setChatModel, withMainModel } from '../../runtime/assignment';
 import { resetToggles, setToggle, translateSwitches } from '../../runtime/characters';
-import {
-  removeChat,
-  renameChat,
-  restoreChat,
-  setCast,
-  setChatNote,
-  setChatPersona,
-  setChatPrompt,
-  withCast,
-  withOwn,
-  type Own,
-} from '../../runtime/chat-log';
+import { removeChat, renameChat, restoreChat } from '../../runtime/chat-log';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
-import { chatPersona, pinPersona, setCurrentPersona } from '../../runtime/personas';
-import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
@@ -49,15 +33,15 @@ import { useNewChat } from './useNewChat';
 import { useChatBookmarks } from './useChatBookmarks';
 import { useChatIllustrations } from './useChatIllustrations';
 import { useChatTranslation } from './useChatTranslation';
-
-const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
+import { useChatSettings } from './useChatSettings';
 
 // The chats told this session that a reply's lorebook entries went past the 로어북 최대 분량: each is told once.
 const cutTold = new Set<string>();
 
 export type OpenChat = ReturnType<typeof useChat>;
 
-// Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
+// One actions object flows only between the hubs: ChatScreen, ChatComposer, ChatHeader, ChatLog, ChatMessage and
+// ChatMemoryRecord. Leaves receive only the data and callbacks they use; hubs wire those callbacks to action entries.
 export type ChatActions = OpenChat['actions'];
 
 // item null is a new chat, saved under chatId with its first message; shelf null is 캐릭터 없이.
@@ -75,11 +59,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void session.tools.warm(id);
     session.scripts.claims(id);
   }, [id, tools]);
-  const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
-  const chat: Chat = useMemo(() => item ? item.chat : { title: null, character: shelf?.id ?? null, ...unsaved }, [item?.chat, shelf?.id, unsaved]);
-  const route = chatModel(store, chat, 'main');
-  const prompt = chatPrompt(store, chat);
-  const persona = chatPersona(store, chat);
+  const { chat, route, prompt, persona, actions: settingActions } = useChatSettings(id, item?.chat ?? null, shelf?.id ?? null);
   const toggles = toggleRows(togglesOf(store, chat, prompt));
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
@@ -257,37 +237,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     }, BIN_KEEPS);
   }
 
-  function pickModel(ref: ModelRef) {
-    if (!id) {
-      setUnsaved((current) => withMainModel(current, ref));
-      return;
-    }
-    void setChatModel(store, id, ref).then((saved) => saved.ok || toast.failed(saved));
-  }
-
-  // null: follow the default again. A new chat holds it until its first send. The caller reports a failure.
-  async function setOwn(field: Own, value: string | null): Promise<{ ok: true } | ApiFailure> {
-    if (!id) {
-      setUnsaved((current) => withOwn(current, field, value));
-      return { ok: true };
-    }
-    return WRITE_OWN[field](store, id, value);
-  }
-
-  // A pick is this chat's persona and the current one, which a chat not saved yet follows.
-  async function choosePersona(persona: string): Promise<{ ok: true } | ApiFailure> {
-    const own = await setOwn('persona', persona);
-    return own.ok ? setCurrentPersona(store, persona) : own;
-  }
-
-  function changeCast(ids: string[]) {
-    if (!id) {
-      setUnsaved((current) => withCast(current, chat.character, ids));
-      return;
-    }
-    void setCast(store, id, ids).then((saved) => saved.ok || toast.failed(saved));
-  }
-
   // A value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat.
   const writeToggle = (key: string, value: string) => setToggle(store, chat.character, key, value);
 
@@ -366,6 +315,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       ...translationActions,
       ...illustrationActions,
       ...bookmarkActions,
+      ...settingActions,
       send,
       answer: () => ask({ kind: 'answer' }),
       retryRegex,
@@ -398,11 +348,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       closePanel: () => setPanels((current) => ({ ...current, panel: null })),
       openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt' | 'export') => setDialog(which),
       closeDialog: () => setDialog(null),
-      pickModel,
-      setOwn,
-      choosePersona,
-      pinPersona: (persona: string | null) => pinPersona(store, chat.character!, persona),
-      setCast: changeCast,
       flip,
       writeToggle,
       resetToggles: reset,

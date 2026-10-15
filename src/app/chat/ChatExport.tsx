@@ -12,7 +12,7 @@ import { useDisplay } from '../display';
 import { useFiles, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Progress, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
-import { speakers } from './ChatLog';
+import type { speakers } from './ChatLog';
 import { logDraft, resolveLog, type LogChoices, type LogText } from './exportLog';
 import type { OpenChat } from './useChat';
 
@@ -26,13 +26,20 @@ const TEXTS: { value: LogText; label: string }[] = [{ value: 'translation', labe
 type Drawing = { key: string; title: string; sub: string | null; css: string; rows: LogRow[]; missing: number };
 type Prepared = { html: string; size: string; missing: number; rules: number };
 
-export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
+type Props = Pick<OpenChat, 'messages' | 'view' | 'placed' | 'pictures' | 'flipped' | 'busy'> & {
+  item: ChatItem;
+  bot: boolean;
+  characterName: string | null;
+  names: ReturnType<typeof speakers>;
+  onClose: () => void;
+};
+
+export function ChatExport({ item, messages, view, placed, pictures, flipped, busy, bot, characterName, names, onClose }: Props) {
   const store = useStore();
   const files = useFiles();
   const toast = useToast();
   const { reading, display } = useDisplay();
   const copyHtml = useCopyHtml();
-  const { messages, view, decor, card, busy } = chat;
   const [form, setForm] = useState<'log' | 'file'>('log');
   const [choices, setChoices] = useState<LogChoices>(() => ({ pictures: !display.hidePictures, hideMe: false, text: 'translation', from: messages.length > SHORT ? messages.length - LATEST + 1 : 1, to: messages.length }));
   const [range, setRange] = useState({ from: String(choices.from), to: String(choices.to) });
@@ -47,15 +54,15 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
     setDrawing(null);
     if (form !== 'log' || waiting) return;
     let live = true;
-    const draft = logDraft(messages, view, chat, chat.flipped, decor.bot, speakers(chat), choices);
+    const draft = logDraft(messages, view, { placed, pictures }, flipped, bot, names, choices);
     const read = choices.pictures ? assetDataUrls(store, files, draft.pictures.values()) : Promise.resolve({ urls: new Map<string, string>(), missing: draft.pictures.size });
     void read.then(({ urls, missing }) => {
-      if (live) setDrawing({ key: crypto.randomUUID(), title: item.title, sub: card?.name ?? null, ...resolveLog(draft, (kind, id) => urls.get(pictureRef(kind, id))), missing });
+      if (live) setDrawing({ key: crypto.randomUUID(), title: item.title, sub: characterName, ...resolveLog(draft, (kind, id) => urls.get(pictureRef(kind, id))), missing });
     });
     return () => {
       live = false;
     };
-  }, [form, choices, messages, view, chat.placed, chat.pictures, chat.flipped, waiting]);
+  }, [form, choices, messages, view, placed, pictures, flipped, waiting]);
 
   async function saveFile() {
     if (form === 'file') {
@@ -78,7 +85,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
   return (
     <Dialog
       title={EXPORT}
-      onClose={chat.actions.closeDialog}
+      onClose={onClose}
       actions={
         <>
           {form === 'log' && (
