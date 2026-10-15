@@ -24,11 +24,11 @@ export function useBigEdit(keys: readonly Chord[] | undefined, title: string, bi
     setOpen(to);
   };
   // After the dialog's own focus moves: its trap focuses the × on open and hands focus back to the opener on close,
-  // which is the corner button when it was pressed.
+  // which is the corner button when it was pressed. The caret is kept, not taken: StrictMode runs both effects twice
+  // and the trap's second run moves focus again.
   useEffect(() => {
     const at = caret.current;
     if (!at) return;
-    caret.current = null;
     const area = areaIn(open ? inside.current : field.current);
     area?.focus();
     area?.setSelectionRange(...at);

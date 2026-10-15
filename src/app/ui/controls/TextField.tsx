@@ -44,7 +44,7 @@ export function TextField({ label, showLabel = true, kind = 'text', value, onCha
     readOnly,
     'aria-invalid': error ? true : undefined,
   };
-  const big = useBigEdit(expand, label, () => <textarea className={`${look} ${styles.big}`} aria-label={label} {...typed} {...shared} />);
+  const big = useBigEdit(expand, label, () => <textarea className={`${look} ${styles.big}`} aria-label={label} data-autofocus {...typed} {...shared} />);
   const own = { id, 'aria-label': showLabel ? undefined : label, 'aria-describedby': note ? noteId : undefined, ...shared };
   return (
     <>

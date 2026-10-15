@@ -61,7 +61,7 @@ function Frame({ value, onChange, placeholder, kind, ref, id, label, big }: Fram
           </span>
         ))}
       </div>
-      <textarea id={id} ref={ref} aria-label={label} className={styles.input} value={value} placeholder={placeholder} spellCheck={false} onChange={(event) => onChange(event.target.value)} />
+      <textarea id={id} ref={ref} aria-label={label} data-autofocus={big || undefined} className={styles.input} value={value} placeholder={placeholder} spellCheck={false} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
