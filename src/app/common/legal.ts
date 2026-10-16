@@ -5,7 +5,7 @@ import { SELF_RESTORES_PER_DAY } from '../../contracts/admin';
 export const OPERATOR = '정말고마워요';
 export const REPOSITORY = 'https://github.com/jiniill/hazelle';
 // The date the current text takes effect, set by the operator. Changing either text sets it anew.
-export const EFFECTIVE: string | null = '2026년 10월 14일';
+export const EFFECTIVE: string = '2026년 10월 14일';
 
 type Block = string | string[];
 export type LegalText = { path: string; title: string; sections: { title: string; body: Block[] }[] };
