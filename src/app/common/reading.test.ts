@@ -20,9 +20,9 @@ describe('stored reading settings', () => {
 
 describe('stored display settings', () => {
   it('keeps a known theme, color picks and real switches, and starts anything else from the fallback', () => {
-    const chosen = { theme: 'light', bg: 'blue', ink: 'soft', accent: 'rose', dialogue: 'plain', hideHeader: false, foldComposer: true, hidePictures: true, pictureMost: 60 } as const;
+    const chosen = { theme: 'light', bg: 'blue', ink: 'soft', accent: 'rose', dialogue: 'plain', quotes: 'box', hideHeader: false, foldComposer: true, hidePictures: true, pictureMost: 60 } as const;
     expect(parseDisplay(JSON.stringify(chosen), DISPLAY_DEFAULT)).toEqual(chosen);
-    expect(parseDisplay(JSON.stringify({ theme: 'sepia', bg: 'teal', accent: 3, hideHeader: 'no', hidePictures: 1, pictureMost: 5 }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
+    expect(parseDisplay(JSON.stringify({ theme: 'sepia', bg: 'teal', accent: 3, quotes: 'bubble', hideHeader: 'no', hidePictures: 1, pictureMost: 5 }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
   });
 });
 

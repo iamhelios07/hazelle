@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, Save } from 'lucide-react';
 import { useState } from 'react';
+import { storyHtml } from '../../engine/display';
 import { EMPTY_SETTINGS, type SavedLook } from '../../model/settings';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
@@ -13,11 +14,11 @@ import { useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { ACCENT, Beside, BG, Button, DIALOGUE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
+import { ACCENT, Beside, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
-  { name: '캐릭터', mine: false, html: '<p><em>창밖으로 늦은 오후의 햇살이 기울어 든다. 그녀는 찻잔을 내려놓고 고개를 들었다.</em></p><p>"오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아."</p>' },
-  { name: '나', mine: true, html: '<p>"이번엔 끝까지 읽었어. 결말이 좀 의외던데."</p>' },
+  { name: '캐릭터', mine: false, html: storyHtml(`*창밖으로 늦은 오후의 햇살이 기울어 든다.* 그녀는 찻잔을 내려놓고 고개를 들었다. "오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아." '또 잠든 건 아니겠지.'`, true) },
+  { name: '나', mine: true, html: storyHtml('"이번엔 끝까지 읽었어. 결말이 좀 의외던데."', false) },
 ];
 
 const SWATCH_SAMPLE = '그녀는 찻잔을 내려놓고 고개를 들었다.';
@@ -125,6 +126,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
         <Section title="텍스트">
           <SettingGroup label="텍스트">
             <ReadingRows />
+            <SettingRow label="대사 모양" control={<ChoiceGroup label="대사 모양" options={choices(QUOTE_SHAPE)} value={display.quotes} onChange={(quotes) => changeDisplay({ quotes })} />} />
           </SettingGroup>
         </Section>
         <Section title="스크롤할 때">

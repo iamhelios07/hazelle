@@ -3,6 +3,7 @@ import { useContext, useMemo, useRef, type MouseEvent, type ReactNode } from 're
 import { Button } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
+import { QuoteShapeContext } from '../foundation/quotes';
 import { useHover } from '../foundation/media';
 import { Menu, MenuItem } from '../overlays/Menu';
 import { RowMemoryContext } from '../collections/row-memory';
@@ -66,7 +67,8 @@ export function StoryMessage({ avatar, name, time, mine, mark, badges = [], chil
           {badges.length > BADGES_SHOWN && <span className={styles.badge} title={badges.slice(BADGES_SHOWN).join(' · ')}>{`+${badges.length - BADGES_SHOWN}`}</span>}
           <span className={styles.time}>{time}</span>
         </div>
-        {mine ? <div className={styles.bubble}>{children}</div> : children}
+        {/* The bubble is already a box: its dialogue keeps to color, whatever 대사 모양 says. */}
+        {mine ? <div className={styles.bubble}><QuoteShapeContext value="color">{children}</QuoteShapeContext></div> : children}
         {/* The foot keeps its height while the tools are absent, as while a reply streams, so nothing moves when they come. */}
         <div className={styles.foot}>
           <div className={styles.after}>{after}</div>

@@ -168,6 +168,13 @@ describe('storyHtml', () => {
     expect(storyHtml('*a "b* c"', true)).toBe('<p><em>a <mark risu-mark="quote2">&quot;b</mark></em><mark risu-mark="quote2"> c&quot;</mark></p>\n');
   });
 
+  it('marks 속마음 in single quotes as Risu’s quote1, and leaves an apostrophe and a lone trailing quote as text', () => {
+    expect(storyHtml(`"왜?" '신경 쓰이네'라고 생각했다. ‘정말’`, true)).toBe(
+      '<p><mark risu-mark="quote2">&quot;왜?&quot;</mark> <mark risu-mark="quote1">\'신경 쓰이네\'</mark>라고 생각했다. <mark risu-mark="quote1">‘정말’</mark></p>\n',
+    );
+    expect(storyHtml(`I don't know, it’s the users' book.`, true)).toBe(`<p>I don't know, it’s the users' book.</p>\n`);
+  });
+
   it('keeps a bot’s HTML block as written and escapes it without bot', () => {
     expect(storyHtml('<div class="box">\n*raw*\n</div>\n\n*act*', true)).toBe('<div class="box">\n*raw*\n</div>\n<p><em>act</em></p>\n');
     expect(storyHtml('<b>x</b> \\*y\\*', false)).toBe('<p>&lt;b&gt;x&lt;/b&gt; *y*</p>\n');

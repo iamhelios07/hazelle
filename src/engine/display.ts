@@ -174,13 +174,18 @@ function lines(state: StateCore) {
   state.tokens = out;
 }
 
-type Mark = '**' | '*' | '"' | '“';
-const MARK = /\*\*|\*|"|“|”/g;
-const TAGS: Record<Mark, { type: string; tag: string }> = { '**': { type: 'strong', tag: 'strong' }, '*': { type: 'em', tag: 'em' }, '"': { type: 'mark', tag: 'mark' }, '“': { type: 'mark', tag: 'mark' } };
+type Mark = '**' | '*' | '"' | '“' | "'" | '‘';
+const MARK = /\*\*|\*|"|“|”|'|‘|’/g;
+const TAGS: Record<Mark, { type: string; tag: string }> = { '**': { type: 'strong', tag: 'strong' }, '*': { type: 'em', tag: 'em' }, '"': { type: 'mark', tag: 'mark' }, '“': { type: 'mark', tag: 'mark' }, "'": { type: 'mark', tag: 'mark' }, '‘': { type: 'mark', tag: 'mark' } };
+// Risu's names: quote2 for dialogue, quote1 for 속마음.
+const QUOTES: Partial<Record<Mark, string>> = { '"': 'quote2', '“': 'quote2', "'": 'quote1', '‘': 'quote1' };
+// don't, it’s: an apostrophe after a Latin letter or digit, before a letter. A Korean '속마음'이라고 closes its quote.
+const APOSTROPHE_BEFORE = /[\p{Script=Latin}\d]/u;
+const APOSTROPHE_AFTER = /[\p{L}\d]/u;
 
-// *Actions* lose their asterisks and **bold** its pairs; “dialogue” and "dialogue" keep their quotes, in the mark Risu
-// gives them, so a bot's CSS for dialogue applies. A mark left open runs to the end of its line, which is how a reply
-// looks while it streams.
+// *Actions* lose their asterisks and **bold** its pairs; “dialogue” and "dialogue", ‘속마음’ and '속마음' keep their
+// quotes, in the marks Risu gives them, so a bot's CSS for them applies. A mark left open runs to the end of its line,
+// which is how a reply looks while it streams. A ' followed by a space or the line's end opens nothing (the users' book).
 function marks(state: StateCore) {
   for (const token of state.tokens) {
     if (token.type !== 'inline') continue;
@@ -189,7 +194,7 @@ function marks(state: StateCore) {
     const tag = (mark: Mark, nesting: 1 | -1) => {
       const { type, tag } = TAGS[mark];
       const token = new state.Token(nesting === 1 ? `${type}_open` : `${type}_close`, tag, nesting);
-      if (nesting === 1 && type === 'mark') token.attrSet('risu-mark', 'quote2');
+      if (nesting === 1 && type === 'mark') token.attrSet('risu-mark', QUOTES[mark]!);
       out.push(token);
     };
     const text = (content: string) => content && out.push(Object.assign(new state.Token('text', '', 0), { content }));
@@ -206,18 +211,24 @@ function marks(state: StateCore) {
       }
       let last = 0;
       for (const match of child.content.matchAll(MARK)) {
+        const [mark] = match;
         text(child.content.slice(last, match.index));
-        last = match.index + match[0].length;
-        const found = match[0] === '”' ? '“' : (match[0] as Mark);
-        const at = match[0] === '“' ? -1 : open.lastIndexOf(found);
-        if (at === -1 && match[0] === '”') {
-          text(match[0]);
+        last = match.index + mark.length;
+        const after = child.content[last] ?? '';
+        if ((mark === "'" || mark === '’') && APOSTROPHE_BEFORE.test(child.content[match.index - 1] ?? '') && APOSTROPHE_AFTER.test(after)) {
+          text(mark);
+          continue;
+        }
+        const found = mark === '”' ? '“' : mark === '’' ? '‘' : (mark as Mark);
+        const at = mark === '“' || mark === '‘' ? -1 : open.lastIndexOf(found);
+        if (at === -1 && (mark === '”' || mark === '’' || (mark === "'" && !after.trim()))) {
+          text(mark);
         } else if (at === -1) {
           open.push(found);
           tag(found, 1);
-          if (found === '"' || found === '“') text(match[0]);
+          if (QUOTES[found]) text(mark);
         } else {
-          if (found === '"' || found === '“') text(match[0]);
+          if (QUOTES[found]) text(mark);
           // Closing a mark that another opened inside of closes that one too, and opens it again after.
           for (const mark of close(at)) {
             open.push(mark);

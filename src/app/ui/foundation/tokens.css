@@ -153,6 +153,10 @@
   --color-prose-narration: var(--palette-sand-200);
   --color-prose-dialogue: var(--palette-gold-200);
   --color-prose-action: var(--palette-lilac-350);
+  /* 속마음 mixes the root's dialogue and narration as its theme and 대사 pick leave them; the quote box tints with the
+     mark's own color, taken where it is used. */
+  --color-prose-thought: color-mix(in oklab, var(--color-prose-dialogue) 55%, var(--color-prose-narration));
+  --color-prose-quote-bg: color-mix(in oklab, currentColor 9%, transparent);
 
   /* A prompt's blocks by kind, on the outline's rail: the line and ring, and the node's fill. */
   --color-kind-text: var(--palette-lilac-450);
