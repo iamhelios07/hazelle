@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { day } from '../common/time';
 import { NEWS, type News } from '../common/release';
 import { count } from '../common/typedNumber';
-import { Button, Dialog, Empty, List, ListItem, Panel, Stack, Text } from '../ui';
+import { Button, Dialog, List, ListItem, Panel, Stack, Text } from '../ui';
 
 const TITLE = '새 소식';
 // The rest opens in a dialog, so the account page does not grow with every release.
@@ -17,8 +17,7 @@ export function NewsSection({ seek }: { seek: boolean }) {
       action={NEWS.length > SHOWN ? <Button variant="secondary" size="sm" onClick={() => setAll(true)}>{`모두 보기 (${count(NEWS.length)})`}</Button> : undefined}
       seek={seek}
     >
-      {NEWS.length === 0 && <Empty variant="section">아직 {TITLE}이 없어요.</Empty>}
-      {NEWS.length > 0 && <NewsList news={NEWS.slice(0, SHOWN)} />}
+      <NewsList news={NEWS.slice(0, SHOWN)} />
       {all && (
         <Dialog title={TITLE} onClose={() => setAll(false)}>
           <NewsList news={NEWS} />
