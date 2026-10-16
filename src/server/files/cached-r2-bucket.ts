@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Stats } from 'node:fs';
-import { mkdir, open, readdir, rename, rm, stat, utimes, writeFile, type FileHandle } from 'node:fs/promises';
+import { mkdir, open, rename, rm, stat, utimes, writeFile, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { checkedKey, type R2Bucket } from './bucket';
+import { entries } from './disk-bucket';
 
 // A copy on the machine's disk of the pictures read from or put into an R2 store, <dataDir>/cache/<sha256>, .tmp-* while
 // one is written: the machine reaches R2 in 110–175 ms an object, its own disk in about 1 ms. An entry is named by the
@@ -24,15 +25,6 @@ const SETTLE_MS = 60 * 60 * 1000;
 // Over the cap, entries go oldest-used first until this share of it is left.
 const LOW_WATER = 0.9;
 const CHUNK = 64 * 1024;
-
-async function entries(dir: string): Promise<string[]> {
-  try {
-    return await readdir(dir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
-  }
-}
 
 async function statOf(path: string): Promise<Stats | null> {
   try {

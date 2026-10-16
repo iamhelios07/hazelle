@@ -8,6 +8,7 @@ import { ACCOUNT_SCHEMA_VERSION, CURRENT_BASELINE, RETENTION_MS } from '../db/ac
 import { fsyncPath, makeDirs } from '../db/durable';
 import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
 import { fileKey, snapshotKey, type Bucket, type DiskBucket } from '../files/bucket';
+import { entries } from '../files/disk-bucket';
 import type { Services } from '../http';
 import { DAY_MS, dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
@@ -238,14 +239,7 @@ export async function readManifest(root: string): Promise<Manifest | null> {
 }
 
 export async function listGenerations(dataDir: string): Promise<{ id: string; capturedAt: number }[]> {
-  let names: string[];
-  try {
-    names = await readdir(generationsDir(dataDir));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
-  }
-  return names.flatMap((name) => {
+  return (await entries(generationsDir(dataDir))).flatMap((name) => {
     const at = GENERATION.exec(name)?.[1];
     return at === undefined ? [] : [{ id: name, capturedAt: Number(at) }];
   });
