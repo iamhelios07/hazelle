@@ -10,8 +10,6 @@ type Props = {
   children: ReactNode;
 };
 
-// A thing picked from the cards above it, shown as a part of their page rather than a page of its own (ListDetail
-// stack): a ruled head with its name a step under the page title's.
 export function ItemSection({ title, note, menu, children }: Props) {
   return (
     <section className={styles.section} aria-label={title}>

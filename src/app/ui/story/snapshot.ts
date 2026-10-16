@@ -79,7 +79,6 @@ export function staticHtml(root: Element, look: Look): Snapshot {
   return { html: out.join(''), rules: lost.size };
 }
 
-// A snapshot as a file of its own, on a page of the color it was drawn on.
 export const snapshotPage = (title: string, html: string, background: string) =>
   `<!doctype html><html><head><meta charset="utf-8"><title>${escapeText(title)}</title></head><body style="margin:0;background-color:${escapeAttribute(background)}">${html}</body></html>`;
 
