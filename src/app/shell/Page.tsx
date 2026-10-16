@@ -34,8 +34,8 @@ const ProfileScreen = lazy(() => import('../models/ProfileScreen').then(({ Profi
 const ModelsScreen = lazy(() => import('../models/ModelsScreen').then(({ ModelsScreen }) => ({ default: ModelsScreen })));
 const ModuleScreen = lazy(() => import('../modules/ModuleScreen').then(({ ModuleScreen }) => ({ default: ModuleScreen })));
 const ModulesScreen = lazy(() => import('../modules/ModulesScreen').then(({ ModulesScreen }) => ({ default: ModulesScreen })));
-const PersonaScreen = lazy(() => import('../personas/PersonaScreen').then(({ PersonaScreen }) => ({ default: PersonaScreen })));
-const PersonasScreen = lazy(() => import('../personas/PersonasScreen').then(({ PersonasScreen }) => ({ default: PersonasScreen })));
+const PersonaEditor = lazy(() => import('../personas/PersonaEditor').then(({ PersonaEditor }) => ({ default: PersonaEditor })));
+const PersonaList = lazy(() => import('../personas/PersonaList').then(({ PersonaList }) => ({ default: PersonaList })));
 const PromptScreen = lazy(() => import('../prompts/PromptScreen').then(({ PromptScreen }) => ({ default: PromptScreen })));
 const PromptsScreen = lazy(() => import('../prompts/PromptsScreen').then(({ PromptsScreen }) => ({ default: PromptsScreen })));
 const AccountScreen = lazy(() => import('../settings/AccountScreen').then(({ AccountScreen }) => ({ default: AccountScreen })));
@@ -99,9 +99,9 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'prompt':
         return <ItemPage at={at} back={back(at)}>{(stored) => <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'personas':
-        return <PersonasScreen back={sideBack(at)} />;
+        return <PersonaList back={sideBack(at)} />;
       case 'persona':
-        return <ItemPage at={at} back={back(at)}>{(stored) => <PersonaScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
+        return <ItemPage at={at} back={back(at)}>{(stored) => <PersonaEditor key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'modules':
         return <ModulesScreen back={sideBack(at)} />;
       case 'module':
