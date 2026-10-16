@@ -1,14 +1,12 @@
 import { expect, it } from 'vitest';
 import { DATA, END, HEAD, HELLO } from '../contracts/streams';
 import { relayBudget } from './limits';
-import { sessionCookie, signupBody, testApp } from './testing';
+import { replyKey, testApp } from './testing';
 
 const encode = (text: string) => new TextEncoder().encode(text);
 const request = { url: 'https://custom.example/v1/chat', method: 'POST', headers: {}, body: '{}' };
 async function call() {
-  const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
-  const key = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))));
-  return { pair, id: crypto.randomUUID(), key };
+  return { ...(await replyKey()), id: crypto.randomUUID() };
 }
 async function opened(response: Response, id: string, pair: CryptoKeyPair) {
   const bytes = new Uint8Array(await response.arrayBuffer());
@@ -45,7 +43,7 @@ it('charges detached response bytes after the reader leaves, aborts upstream, an
     }, { highWaterMark: 0 }), { headers: { 'content-type': 'text/event-stream' } });
   }, relayBudget(2048, 30, () => now));
   try {
-    const cookie = sessionCookie(await t.post('signup', signupBody()));
+    const { cookie } = await t.signUp();
     const { pair, id, key } = await call();
     const started = await t.post(`streams/${id}`, { key, request }, cookie);
     await started.body!.cancel();
@@ -69,7 +67,7 @@ it('shares the authenticated budget between direct calls and detached retries, w
   let now = 0;
   const t = await testApp(async () => ++calls === 1 ? new Response(null, { status: 204 }) : new Response(null, { status: 429, headers: { 'retry-after': '0' } }), relayBudget(2000, 30, () => now));
   try {
-    const cookie = sessionCookie(await t.post('signup', signupBody()));
+    const { cookie } = await t.signUp();
     expect((await t.post('relay', { ...request, body: '한' }, cookie)).status).toBe(204);
     const { pair, id, key } = await call();
     const started = await t.post(`streams/${id}`, { key, request: { ...request, body: 'x'.repeat(1024) }, bot: crypto.randomUUID(), retry: { times: 5, statuses: [429] } }, cookie);

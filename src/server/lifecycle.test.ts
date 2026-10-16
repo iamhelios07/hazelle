@@ -20,11 +20,11 @@ afterAll(() => t.dispose());
 beforeEach(fresh);
 
 // The installation's sole operator: the first signup after every reset, so any other account can be deleted.
-let operator: Awaited<ReturnType<typeof signedUp>>;
+let operator: Awaited<ReturnType<typeof t.signUp>>;
 async function fresh() {
   await t.reset();
   await t.env.db.prepare('UPDATE service SET signup_cap = 1000').run();
-  operator = await signedUp('operator');
+  operator = await t.signUp('operator');
 }
 
 const HOUR_MS = 3_600_000;
@@ -151,19 +151,12 @@ function pausing(at: (what: string, count: number) => boolean, reads = false) {
   return { ...watching, reached, release };
 }
 
-async function signedUp(username = `u${crypto.randomUUID().slice(0, 8)}`) {
-  const body = signupBody(username);
-  const cookie = sessionCookie(await t.post('signup', body));
-  const { incarnation, timeline } = (await account(body.accountId))!;
-  return { id: body.accountId, body, cookie, incarnation, timeline };
-}
-
 // An account whose store holds A 'old' from an hour ago, kept in a baseline snapshot, then A 'new' and B from half an
 // hour ago, and an open report. at: a time between the two, so a restore to it leaves A 'old' alone.
 async function seeded() {
   const now = Date.now();
   t.clock.now = () => now - HOUR_MS;
-  const user = await signedUp();
+  const user = await t.signUp();
   const { incarnation, timeline } = user;
   // Straight to the store, as the batch route would: these tests are about what happens around it.
   const write = (...writes: Write[]) => t.stores.getByName(incarnation).batch(incarnation, timeline, writes, null);
@@ -377,7 +370,7 @@ describe('a restore', () => {
   });
 
   it('lists what a restore can land on: each snapshot in the window at its own time, and an older one at the window edge', async () => {
-    const user = await signedUp();
+    const user = await t.signUp();
     const now = Date.now();
     const write = (...writes: Write[]) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, writes, null);
     t.clock.now = () => now - 8 * 24 * HOUR_MS;
@@ -674,7 +667,7 @@ describe('a restore', () => {
 
 describe('a deletion', () => {
   async function holding() {
-    const user = await signedUp();
+    const user = await t.signUp();
     await t.batch([{ id: A, kind: 'chat', parent: null, body: 'sealed', baseRev: null }], user.cookie);
     const bytes = new Uint8Array([1, 2, 3]);
     const file = sha256Hex(bytes);
@@ -806,7 +799,7 @@ describe('a deletion', () => {
       expect(await logged('delete-account')).toBe(0);
     };
     await refusedAll();
-    const other = await signedUp();
+    const other = await t.signUp();
     await refusedAll();
     expect((await t.delete(`admin/accounts/${other.id}`, undefined, operator.cookie)).status).toBe(204);
     expect(await account(other.id)).toBeNull();

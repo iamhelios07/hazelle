@@ -4,6 +4,7 @@ import type { Upstream } from './relay';
 import { relayBudget } from './limits';
 import { StreamBox } from './stream-box';
 import { streamStore } from './db/streams-db';
+import { replyKey } from './testing';
 
 const CHUNK = 64 * 1024;
 const staying = new AbortController().signal;
@@ -32,8 +33,7 @@ function endless() {
 }
 
 async function start(box: StreamBox, retry?: Retry) {
-  const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
-  const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+  const { key } = await replyKey();
   const request = { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' };
   return box.start({ id: crypto.randomUUID(), key, request, ...(retry && { retry }) }, staying);
 }

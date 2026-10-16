@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { ModelsDevList } from '../connectors/models-dev';
 import modelsDev from './fixtures/models-dev.json';
-import { sessionCookie, signupBody, testApp } from './testing';
+import { testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -10,7 +10,7 @@ beforeAll(async () => {
 afterAll(() => t.dispose());
 
 it('stores the listed providers models.dev prices and inputs and outputs, pricing only what it can price whole, on the first ask', async () => {
-  const cookie = sessionCookie(await t.post('signup', { ...signupBody('jin'), accountId: crypto.randomUUID() }));
+  const { cookie } = await t.signUp('jin');
   const read = async (list: string) => (await (await t.get(`models-dev?provider=${list}`, cookie)).json()) as ModelsDevList;
 
   expect(await read('github-copilot')).toEqual({ fetchedAt: null, models: {} });

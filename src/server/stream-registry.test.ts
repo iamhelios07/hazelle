@@ -7,6 +7,7 @@ import type { Upstream } from './relay';
 import { relayBudget } from './limits';
 import { streamRegistry as registryWithBudget } from './stream-registry';
 import { streamStore, type StreamStore } from './db/streams-db';
+import { replyKey } from './testing';
 
 const streamRegistry = (store: StreamStore, upstream: Upstream) => registryWithBudget(store, upstream, relayBudget());
 
@@ -35,8 +36,7 @@ function provider(chunks = 0) {
 }
 
 async function body() {
-  const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
-  const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+  const { key } = await replyKey();
   return { id: crypto.randomUUID(), key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } };
 }
 

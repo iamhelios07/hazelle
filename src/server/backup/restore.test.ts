@@ -15,7 +15,7 @@ import { beginRestore, cancelRestore, runRestore } from '../lifecycle';
 import { relayBudget, tokenBucket, uploadBudget, visitorLimits } from '../limits';
 import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
-import { proof, sessionCookie, signupBody, testApp } from '../testing';
+import { proof, sessionCookie, testApp } from '../testing';
 import app from '../worker';
 import { alerts } from '../alerts';
 import { backups } from './backups';
@@ -71,19 +71,12 @@ function stoppingAt(phase: RestorePhase): Services {
   return { ...t.env, db };
 }
 
-async function signedUp(username: string) {
-  const body = signupBody(username);
-  const cookie = sessionCookie(await t.post('signup', body));
-  const row = (await t.env.db.prepare('SELECT incarnation, timeline FROM accounts WHERE id = ?').bind(body.accountId).first<{ incarnation: string; timeline: string }>())!;
-  return { id: body.accountId, cookie, ...row };
-}
-
 // An account holding X 'old' in a baseline from an hour ago, X 'mid' in a newer baseline, then X 'new', and a restore
 // to the first baseline left at `phase`: 'old' only comes back by installing the target, 'new' only from the checkpoint.
 async function leftAt(username: string, phase: RestorePhase) {
   const now = Date.now();
   t.clock.now = () => now - HOUR_MS;
-  const user = await signedUp(username);
+  const user = await t.signUp(username);
   const write = (body: string, baseRev: number | null) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: X, kind: 'chat', parent: null, body, baseRev }], null);
   await write('old', null);
   await t.stores.snapshot(user.incarnation);
@@ -110,7 +103,7 @@ it.each(['disk', 'r2'] as const)('preserves a %s generation’s released picture
   t.restartProcess();
   try {
     const now = Date.now();
-    const user = await signedUp('released');
+    const user = await t.signUp('released');
     const bytes = bytesOf('released picture');
     const id = sha256Hex(bytes);
     const key = `files/${user.incarnation}/${id}`;
@@ -194,7 +187,7 @@ it.each(['begun', 'fenced', 'checkpointed', 'done', 'cancelled', 'failed'] as co
 }, 30_000);
 
 it('restores a generation into an empty directory: logins, counts, pictures and blocks, every operation ended by its phase, old timelines refused', async () => {
-  const operator = await signedUp('operator');
+  const operator = await t.signUp('operator');
   const kept = bytesOf('a kept picture');
   const blocked = bytesOf('a blocked picture');
   for (const bytes of [kept, blocked]) expect((await t.put(`files/${sha256Hex(bytes)}`, bytes, operator.cookie)).status).toBe(204);
@@ -202,7 +195,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   const targeted = await leftAt('targeted', 'targeted');
   const armed = await leftAt('armed', 'armed');
   const rewound = await leftAt('rewound', 'rewound');
-  const leaver = await signedUp('leaver');
+  const leaver = await t.signUp('leaver');
   expect((await t.put(`files/${sha256Hex(bytesOf('leaving'))}`, bytesOf('leaving'), leaver.cookie)).status).toBe(204);
   await t.lifecycle(leaver.id, "state = 'leaving'");
 
@@ -288,7 +281,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
 }, 60_000);
 
 it('restores a version 3 delta baseline as its base with the delta applied', async () => {
-  const user = await signedUp('delta');
+  const user = await t.signUp('delta');
   const write = (id: string, body: string, baseRev: number | null) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id, kind: 'chat', parent: null, body, baseRev }], null);
   const now = Date.now();
   await write(X, 'in the base', null);
@@ -324,7 +317,7 @@ it('restores a version 3 delta baseline as its base with the delta applied', asy
 }, 30_000);
 
 it('takes the first snapshot after a disaster restore whole, though the catalog keeps a whole checkpoint newer than the baseline it restored', async () => {
-  const user = await signedUp('lineage');
+  const user = await t.signUp('lineage');
   const write = (body: string) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body, baseRev: null }], null);
   const snapshotAt = async (at: number) => {
     t.clock.now = () => at;
@@ -377,7 +370,7 @@ it('takes the first snapshot after a disaster restore whole, though the catalog 
 }, 30_000);
 
 it('names and restores the checkpoint of an account past its fence whose only baseline is from before migration 0007, and cancels the operation', async () => {
-  const user = await signedUp('fenced');
+  const user = await t.signUp('fenced');
   const write = (body: string) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body, baseRev: null }], null);
   const day = dayStart(Date.now()) - DAY_MS;
   await write('in the baseline');
@@ -412,7 +405,7 @@ it('names and restores the checkpoint of an account past its fence whose only ba
 }, 30_000);
 
 it('restores version 2 and 3 generations, whose snapshots are all whole, and refuses a version it does not know', async () => {
-  await signedUp('operator');
+  await t.signUp('operator');
   expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
   const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
   const written = readFileSync(join(generation, MANIFEST), 'utf8');
@@ -432,10 +425,10 @@ it('names R2 snapshots in v4, supports a local store restore and a pooled disast
   t.env.files = r2Bucket(s3.config);
   t.restartProcess();
   try {
-    const operator = await signedUp('operator');
+    const operator = await t.signUp('operator');
     const kept = bytesOf('a kept picture');
     expect((await t.put(`files/${sha256Hex(kept)}`, kept, operator.cookie)).status).toBe(204);
-    const leaver = await signedUp('leaver');
+    const leaver = await t.signUp('leaver');
     expect((await t.put(`files/${sha256Hex(bytesOf('leaving'))}`, bytesOf('leaving'), leaver.cookie)).status).toBe(204);
     await t.lifecycle(leaver.id, "state = 'leaving'");
     expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
@@ -480,7 +473,7 @@ it('names R2 snapshots in v4, supports a local store restore and a pooled disast
 it('restores a disk generation into the R2 bucket by putting its pooled pictures there', async () => {
   const s3 = await fakeS3();
   try {
-    const operator = await signedUp('operator');
+    const operator = await t.signUp('operator');
     const kept = bytesOf('a pooled picture');
     expect((await t.put(`files/${sha256Hex(kept)}`, kept, operator.cookie)).status).toBe(204);
     const outcome = await t.daily(Date.now());

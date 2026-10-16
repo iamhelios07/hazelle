@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VISITOR_HEADER } from '../contracts/http';
 import type { Upstream } from './relay';
-import { proof, sessionCookie, signupBody, testApp } from './testing';
+import { proof, replyKey, sessionCookie, signupBody, testApp } from './testing';
 import app from './worker';
 
 // Before any request: the first one builds the matcher, and no route can be added after it.
@@ -250,8 +250,7 @@ describe('provider calls', () => {
       );
     };
     const cookie = sessionCookie(await post('signup', signupBody()));
-    const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
-    const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+    const { key } = await replyKey();
     const live = () => t.env.streams.live();
     const id = crypto.randomUUID();
     const started = await post(`streams/${id}`, { key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } }, cookie);

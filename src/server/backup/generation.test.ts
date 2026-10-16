@@ -8,7 +8,7 @@ import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
 import { DAY_MS, sha256Hex, type Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
-import { proof, sessionCookie, signupBody, testApp } from '../testing';
+import { proof, signupBody, testApp } from '../testing';
 import { COPIED, expireGenerations, generationsDir, listGenerations, MANIFEST, POOL, readManifest, type Manifest } from './generation';
 import { dayStart } from './snapshots';
 
@@ -41,12 +41,6 @@ beforeEach(async () => {
 
 const picture = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
 
-async function signedUp(username: string) {
-  const body = signupBody(username);
-  const cookie = sessionCookie(await t.post('signup', body));
-  const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(body.accountId).first<string>('incarnation'))!;
-  return { id: body.accountId, cookie, incarnation, body };
-}
 async function uploaded(cookie: string, text: string) {
   const bytes = picture(text);
   expect((await t.put(`files/${sha256Hex(bytes)}`, bytes, cookie)).status).toBe(204);
@@ -61,7 +55,7 @@ it('names R2 whole and delta archives in manifest v4 without linking them into t
   t.env.files = r2Bucket(s3.config);
   t.restartProcess();
   try {
-    const user = await signedUp('operator');
+    const user = await t.signUp('operator');
     const now = Date.now();
     t.clock.now = () => now - 60_000;
     const base = ((await t.stores.snapshot(user.incarnation)) as { taken: string }).taken;
@@ -110,10 +104,10 @@ function pausedAtSnapshot() {
 
 describe('a backup generation', () => {
   it('holds lifecycle steps out while it captures, lets password changes and uploads through, and names only what is durable', async () => {
-    await signedUp('operator');
-    const keeper = await signedUp('keeper');
-    const leaver = await signedUp('leaver');
-    const rewinder = await signedUp('rewinder');
+    await t.signUp('operator');
+    const keeper = await t.signUp('keeper');
+    const leaver = await t.signUp('leaver');
+    const rewinder = await t.signUp('rewinder');
     const kept = await uploaded(keeper.cookie, 'kept picture');
     const left = await uploaded(leaver.cookie, 'leaver picture');
     t.clock.now = () => Date.now() - 60 * 60_000;
@@ -167,8 +161,8 @@ describe('a backup generation', () => {
   });
 
   it('leaves the previous generation whole when one is cut off, and removes the cut-off one after a day', async () => {
-    await signedUp('operator');
-    const lost = await signedUp('lost');
+    await t.signUp('operator');
+    const lost = await t.signUp('lost');
     const lostPicture = await uploaded(lost.cookie, 'its bytes will vanish');
     const first = Date.now() - 2 * DAY_MS;
     expect((await t.daily(first)).generation).toEqual({ outcome: 'ok', error: null });
@@ -186,7 +180,7 @@ describe('a backup generation', () => {
   });
 
   it('puts a picture copied across filesystems into the pool only whole: a copy cut off leaves nothing under its name, and the next generation copies it again', async () => {
-    const operator = await signedUp('operator');
+    const operator = await t.signUp('operator');
     const id = await uploaded(operator.cookie, 'copied, not linked');
     Object.assign(fault, { crossDevice: true, cutPoolCopy: true });
     const first = Date.now() - DAY_MS;
@@ -199,10 +193,10 @@ describe('a backup generation', () => {
   });
 
   it('names a baseline as of today for an account whose rewind was cut off before its checkpoint: a new one if it changed, its old one if not', async () => {
-    await signedUp('operator');
+    await t.signUp('operator');
     const now = Date.now();
     const paused = async (username: string, operation: number, change: boolean) => {
-      const account = await signedUp(username);
+      const account = await t.signUp(username);
       t.clock.now = () => now - 2 * DAY_MS;
       const old = ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
       if (change) expect((await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'since', baseRev: null }], account.cookie)).status).toBe(200);
@@ -220,7 +214,7 @@ describe('a backup generation', () => {
   });
 
   it('names the baseline of the account’s timeline, not one of an older timeline stamped later by a clock put back', async () => {
-    const account = await signedUp('rewound');
+    const account = await t.signUp('rewound');
     const day = dayStart(Date.now()) - DAY_MS;
     t.clock.now = () => day + 60 * 60_000;
     const current = ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
@@ -233,20 +227,20 @@ describe('a backup generation', () => {
   });
 
   it('names the base of a delta baseline and of a pinned delta beside them, and sizes a delta with its base', async () => {
-    await signedUp('operator');
+    await t.signUp('operator');
     const now = Date.now();
-    const baselineAt = async (account: Awaited<ReturnType<typeof signedUp>>, at: number) => {
+    const baselineAt = async (account: Awaited<ReturnType<typeof t.signUp>>, at: number) => {
       expect((await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: String(at), baseRev: null }], account.cookie)).status).toBe(200);
       t.clock.now = () => at;
       return ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
     };
     const base = async (id: string) => t.env.db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(id).first<string | null>('base');
-    const delta = await signedUp('delta');
+    const delta = await t.signUp('delta');
     const deltaBase = await baselineAt(delta, now - 2 * 60 * 60_000);
     const deltaBaseline = await baselineAt(delta, now - 60 * 60_000);
     expect(await base(deltaBaseline)).toBe(deltaBase);
     // Past the base window, so its current baseline is whole and names neither the pinned delta nor its base.
-    const pinner = await signedUp('pinner');
+    const pinner = await t.signUp('pinner');
     const pinnedBase = await baselineAt(pinner, now - 6.5 * DAY_MS);
     const pinned = await baselineAt(pinner, now - 6.4 * DAY_MS);
     const current = await baselineAt(pinner, now - 60 * 60_000);
@@ -286,9 +280,9 @@ describe('a backup generation', () => {
   });
 
   it('collects a generation at 7 days and with it only the pictures no kept generation names', async () => {
-    await signedUp('operator');
-    const keeper = await signedUp('keeper');
-    const leaver = await signedUp('leaver');
+    await t.signUp('operator');
+    const keeper = await t.signUp('keeper');
+    const leaver = await t.signUp('leaver');
     const shared = await uploaded(keeper.cookie, 'both hold this');
     expect(await uploaded(leaver.cookie, 'both hold this')).toBe(shared);
     const kept = await uploaded(keeper.cookie, 'kept');

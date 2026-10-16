@@ -8,7 +8,7 @@ import { r2Bucket } from '../files/r2-bucket';
 import { diskBucket } from '../files/disk-bucket';
 import { snapshotKey } from '../files/bucket';
 import { DAY_MS } from '../http';
-import { sessionCookie, signupBody, testApp } from '../testing';
+import { testApp } from '../testing';
 import { captureGeneration, generationsDir, listGenerations, readManifest } from './generation';
 import { dayStart, expireSnapshots } from './snapshots';
 
@@ -39,12 +39,6 @@ beforeEach(async () => {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-async function signedUp(username: string) {
-  const body = signupBody(username);
-  sessionCookie(await t.post('signup', body));
-  return (await t.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(body.accountId).first<string>('incarnation'))!;
-}
-
 // The job as the process's hourly tick runs it, with the stores' clock at the same time.
 const tickAt = (at: number) => {
   t.clock.now = () => at;
@@ -60,7 +54,7 @@ const baselines = (incarnation: string) =>
 
 describe('the daily job', () => {
   it('takes a baseline only on a day after the account changed, through a day run twice and a clock that jumps back across the hour', async () => {
-    const incarnation = await signedUp('jin');
+    const incarnation = (await t.signUp('jin')).incarnation;
     const first = dayStart(Date.now()) - 10 * DAY_MS + 3 * HOUR_MS;
     for (let day = 0; day < 10; day++) {
       const at = first + day * DAY_MS;
@@ -80,7 +74,7 @@ describe('the daily job', () => {
   }, 30_000);
 
   it('answers a time inside the window from the baseline of an account unchanged for longer than it, and keeps that baseline as the floor once the account changes', async () => {
-    const incarnation = await signedUp('jin');
+    const incarnation = (await t.signUp('jin')).incarnation;
     const day = (n: number) => dayStart(Date.now()) - 17 * DAY_MS + 3 * HOUR_MS + n * DAY_MS;
     await t.daily(day(0));
     await written(incarnation, 'before the idle stretch');
@@ -98,7 +92,7 @@ describe('the daily job', () => {
   });
 
   it('captures the day again after the clock jumps back across midnight, past a run and a baseline stamped in the future', async () => {
-    const incarnation = await signedUp('jin');
+    const incarnation = (await t.signUp('jin')).incarnation;
     const today = dayStart(Date.now()) + 4 * HOUR_MS;
     await tickAt(today + 2 * DAY_MS);
     await tickAt(today);
@@ -109,8 +103,8 @@ describe('the daily job', () => {
   });
 
   it('takes a baseline beside a checkpoint younger than a day, and records a run that failed an account, then tries again', async () => {
-    const live = await signedUp('jin');
-    const lost = await signedUp('lost');
+    const live = (await t.signUp('jin')).incarnation;
+    const lost = (await t.signUp('lost')).incarnation;
     const at = dayStart(Date.now()) + 3 * HOUR_MS;
     await t.env.db
       .prepare("INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256) VALUES (?, ?, 'checkpoint', 1, ?, 0, 1, 1, 'x')")
@@ -131,7 +125,7 @@ describe('the daily job', () => {
 
 describe('retention', () => {
   it('keeps as the floor a baseline from before a rewind, which a time inside the window from before the rewind still lands on', async () => {
-    const incarnation = await signedUp('jin');
+    const incarnation = (await t.signUp('jin')).incarnation;
     const now = Date.now();
     t.clock.now = () => now - 11 * DAY_MS;
     const floor = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
@@ -150,7 +144,7 @@ describe('retention', () => {
   });
 
   it('reclaims a snapshot file whose expiry committed before the process stopped without deleting the live floor', async () => {
-    const incarnation = await signedUp('jin');
+    const incarnation = (await t.signUp('jin')).incarnation;
     const now = Date.now();
     // Older than RETENTION_MS before the floor, so the floor is whole and names no base.
     t.clock.now = () => now - 17 * DAY_MS;
@@ -178,7 +172,7 @@ describe('retention', () => {
   });
 
   it('lets a snapshot go at 7 days unless an operation pins it (open, or ended under 7 days ago however it ended) or it is a live account’s floor; a deleted account keeps none past 7 days', async () => {
-    const live = await signedUp('jin');
+    const live = (await t.signUp('jin')).incarnation;
     const gone = 'f'.repeat(32);
     const now = Date.now();
     const old = now - 8 * DAY_MS;
@@ -248,7 +242,7 @@ it('defers an expired R2 archive for a generation retention, then deletes it fro
   t.env.files = r2Bucket(s3.config);
   t.restartProcess();
   try {
-    const incarnation = await signedUp('jin');
+    const incarnation = (await t.signUp('jin')).incarnation;
     const now = Date.now();
     t.clock.now = () => now - 17 * DAY_MS;
     const old = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;

@@ -8,7 +8,7 @@ import type { Bucket } from './files/bucket';
 import { fakeS3 } from './files/fake-s3';
 import { r2Bucket } from './files/r2-bucket';
 import { sha256Hex, type AppEnv } from './http';
-import { proof, sessionCookie, signupBody, testApp } from './testing';
+import { proof, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -17,11 +17,9 @@ beforeAll(async () => {
 afterAll(() => t.dispose());
 beforeEach(() => t.reset());
 
-const signup = async (body = signupBody()) => {
+const signup = async (username?: string, accountId?: string) => {
   await t.env.db.prepare('UPDATE service SET signup_cap = signup_cap + 1').run();
-  const cookie = sessionCookie(await t.post('signup', body));
-  const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(body.accountId).first<string>('incarnation'))!;
-  return { id: body.accountId, cookie, incarnation };
+  return t.signUp(username, accountId);
 };
 const put = (id: string, bytes: Uint8Array<ArrayBuffer>, cookie?: string) => t.put(`files/${id}`, bytes, cookie);
 const missing = async (ids: string[], cookie: string) => ((await (await t.post('files/missing', { ids }, cookie)).json()) as { missing: string[] }).missing;
@@ -47,7 +45,7 @@ async function withFilesPut(put: Bucket['put'], step: () => Promise<void>) {
 
 describe('files', () => {
   it('keeps a separate copy and sum per account for the same content, and says which ids the asker lacks', async () => {
-    const [jin, other] = [await signup(), await signup(signupBody('other'))];
+    const [jin, other] = [await signup(), await signup('other')];
     const bytes = new Uint8Array([1, 2, 3, 250]);
     const id = sha256Hex(bytes);
     const absent = sha256Hex(new Uint8Array([9]));
@@ -186,7 +184,7 @@ describe('files', () => {
   });
 
   it('refuses blocked content to every account that holds it, and brings every copy back when lifted', async () => {
-    const [jin, other] = [await signup(), await signup(signupBody('other'))];
+    const [jin, other] = [await signup(), await signup('other')];
     const bytes = new Uint8Array([7, 7]);
     const id = sha256Hex(bytes);
     for (const { cookie } of [jin, other]) await put(id, bytes, cookie);
@@ -250,7 +248,7 @@ describe('files', () => {
   });
 
   it('answers an upload whose body ends after its account was deleted as every request of a deleted account', async () => {
-    await signup(signupBody('operator'));
+    await signup('operator');
     const jin = await signup();
     const bytes = new Uint8Array([2, 7, 1]);
     const id = sha256Hex(bytes);
@@ -281,7 +279,7 @@ describe('files', () => {
   });
 
   it('answers a duplicate upload whose account began leaving while its body was on the wire as the session would', async () => {
-    await signup(signupBody('operator'));
+    await signup('operator');
     const jin = await signup();
     const bytes = new Uint8Array([3, 1, 4]);
     const id = sha256Hex(bytes);
@@ -311,9 +309,8 @@ describe('files', () => {
   });
 
   it('serves a signup that reuses a client id nothing of an old upload finishing late, and the next sweep removes its bytes', async () => {
-    await signup(signupBody('operator'));
-    const body = signupBody();
-    const old = await signup(body);
+    await signup('operator');
+    const old = await signup();
     const bytes = new Uint8Array([3, 1, 4]);
     const id = sha256Hex(bytes);
     const files = t.env.files;
@@ -322,7 +319,7 @@ describe('files', () => {
       async (key, value) => {
         expect((await t.delete('account', { method: 'password', proof: proof('password') }, old.cookie)).status).toBe(204);
         await t.settle();
-        reused = await signup(body);
+        reused = await signup(old.body.username, old.id);
         return files.put(key, value);
       },
       async () => expect((await put(id, bytes, old.cookie)).status).toBe(401),
@@ -345,7 +342,7 @@ describe('files', () => {
     const disk = t.env.files;
     t.env.files = r2Bucket(s3.config);
     try {
-      await signup(signupBody('operator'));
+      await signup('operator');
       const gone = await signup();
       const bytes = new Uint8Array([2, 7]);
       const id = sha256Hex(bytes);
