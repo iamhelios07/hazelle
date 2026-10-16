@@ -1,11 +1,31 @@
 import { useState } from 'react';
 import { moduleContributions, type ModuleContribution, type Sending } from '../../runtime/turn-context';
 import { tokens } from '../common/receipt';
+import { useSearch } from '../common/useSearch';
 import { moduleName } from '../common/words';
 import { useSession } from '../session';
-import { Empty, Facts, List, ListItem, Stack, Text } from '../ui';
+import { Disclosure, Empty, Facts, List, ListItem, Stack, Text } from '../ui';
 
 const ATTACHED = { settings: '설정', prompt: '프롬프트', character: '캐릭터', persona: '페르소나' } as const;
+
+function silentReason(why: ModuleContribution['silent'][number]['why']): string {
+  if (why.kind === 'unmatched') return '키가 안 나와요';
+  if (why.kind === 'keyless') return '키가 없어요';
+  switch (why.cause) {
+    case 'disabled':
+      return '꺼져 있어요';
+    case 'never':
+      return '안 켜지게 해 뒀어요';
+    case 'after-match':
+      return '한 번 켜진 뒤로는 안 켜져요';
+    case 'only-after':
+      return `${why.from}번째 메시지부터 켜져요`;
+    case 'only-every':
+      return `${why.every}번째 메시지마다 켜져요`;
+    case 'greeting':
+      return '다른 첫 메시지에서만 켜져요';
+  }
+}
 
 const entryTokens = ({ parts }: ModuleContribution['lore'][number]) => parts.reduce((sum, part) => sum + part.tokens, 0);
 
@@ -66,10 +86,33 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
       ) : (
         <Text variant="note">이번 요청에서 켜진 로어북 항목이 없어요.</Text>
       )}
+      {module.silent.length > 0 && (
+        <Disclosure label={`안 켜진 항목 ${module.silent.length}개`}>
+          <SilentLore module={module} />
+        </Disclosure>
+      )}
       {module.invalidKeys.length > 0 && (
         <List label="잘못된 정규식 키">
           {module.invalidKeys.map((entry) => (
             <ListItem key={entry.entry} title={entry.name} description={entry.keys.join(' · ')} aside="맞지 않음" />
+          ))}
+        </List>
+      )}
+    </Stack>
+  );
+}
+
+function SilentLore({ module }: { module: ModuleContribution }) {
+  const search = useSearch(module.silent, '안 켜진 항목 검색', ({ name, why }) => [name, silentReason(why)]);
+  return (
+    <Stack gap="related">
+      {search.field}
+      {search.none ? (
+        <Empty variant="section">{search.none}</Empty>
+      ) : (
+        <List label={`${module.name} 안 켜진 항목`}>
+          {search.found.map((entry) => (
+            <ListItem key={entry.id} title={entry.name} description={silentReason(entry.why)} />
           ))}
         </List>
       )}

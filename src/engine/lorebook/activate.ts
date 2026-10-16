@@ -31,9 +31,11 @@ export type Fate =
 
 export type Fired = { id: string; why: Why; fate: Fate };
 
-// An entry that did not fire this turn, and why. closed: a condition kept it out of the scan; unmatched: it was scanned
-// and no key was found in the window.
-export type Silent = { id: string; why: { kind: 'closed'; cause: 'never' | 'after-match' | 'only-after' | 'only-every' | 'greeting' } | { kind: 'unmatched' } };
+// An entry that did not fire this turn, and why. closed: the entry is off, or a condition kept it out of the scan, the first
+// that failed in the order activate checks them; only-after and only-every carry the decorator's own number, which counts
+// Risu's chatLength. keyless: it was scanned with no key to find; unmatched: no key was found.
+type Closed = { kind: 'closed'; cause: 'disabled' | 'never' | 'after-match' | 'greeting' } | { kind: 'closed'; cause: 'only-after'; from: number } | { kind: 'closed'; cause: 'only-every'; every: number };
+export type Silent = { id: string; why: Closed | { kind: 'keyless' } | { kind: 'unmatched' } };
 
 // In lorebook order. The ids key the after-match state, so they must outlive the send.
 export type LoreEntries = { id: string; value: Omit<LoreEntry, 'folder'> }[];
@@ -127,7 +129,9 @@ export type LoreBook = { sticky: boolean; activate: (input: LoreTurn) => Activat
 
 export function prepareLore(entries: LoreEntries, settings: Card['loreSettings'], budget: number): LoreBook {
   const invalidKeys: Activation['invalidKeys'] = [];
-  const books = entries.filter(({ value }) => value.enabled).map((entry) => prepare(entry, settings.fullWordMatching ?? DEFAULTS.fullWordMatching, invalidKeys));
+  // A disabled entry stays an id, unprepared: its keys are neither compiled nor reported.
+  const shelf = entries.map((entry) => (entry.value.enabled ? prepare(entry, settings.fullWordMatching ?? DEFAULTS.fullWordMatching, invalidKeys) : entry.id));
+  const books = shelf.filter((entry) => typeof entry !== 'string');
   // A prepared book belongs to one replay; edits/settings changes start another and cannot reuse stale text.
   const scanned = new WeakMap<HistoryMessage, Scanned>();
   const window = (history: HistoryMessage[], depth: number) => {
@@ -145,26 +149,28 @@ export function prepareLore(entries: LoreEntries, settings: Card['loreSettings']
   };
   return {
     sticky: books.some(({ rules }) => rules.trigger !== 'never' && rules.afterMatch !== null),
-    activate: (input) => activate(books, settings, budget, invalidKeys, window, input),
+    activate: (input) => activate(shelf, books, settings, budget, invalidKeys, window, input),
   };
 }
 
-function activate(books: Book[], settings: Card['loreSettings'], budget: number, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], depth: number) => Scanned[], { history, greeting, afterMatch: before, seed, cost, marks }: LoreTurn): Activation {
+function activate(shelf: (Book | string)[], books: Book[], settings: Card['loreSettings'], budget: number, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], depth: number) => Scanned[], { history, greeting, afterMatch: before, seed, cost, marks }: LoreTurn): Activation {
   const afterMatch = new Set(before);
   const scanDepth = settings.scanDepth ?? DEFAULTS.scanDepth;
   const recursive = settings.recursive ?? DEFAULTS.recursive;
   const chatLength = history.length + 1;
 
-  const open = ({ id, rules }: Book) =>
-    rules.trigger !== 'never' &&
-    !(rules.afterMatch === 'dont' && afterMatch.has(id)) &&
-    chatLength >= rules.onlyAfter &&
-    chatLength % rules.onlyEvery === 0 &&
-    (rules.greeting === null || (greeting !== null && greeting + 1 === rules.greeting));
+  const closed = ({ id, rules }: Book): Closed | null => {
+    if (rules.trigger === 'never') return { kind: 'closed', cause: 'never' };
+    if (rules.afterMatch === 'dont' && afterMatch.has(id)) return { kind: 'closed', cause: 'after-match' };
+    if (chatLength < rules.onlyAfter) return { kind: 'closed', cause: 'only-after', from: rules.onlyAfter };
+    if (chatLength % rules.onlyEvery !== 0) return { kind: 'closed', cause: 'only-every', every: rules.onlyEvery };
+    if (rules.greeting !== null && (greeting === null || greeting + 1 !== rules.greeting)) return { kind: 'closed', cause: 'greeting' };
+    return null;
+  };
   const matched: { book: Book; why: Why }[] = [];
   const active: Book[] = [];
   const fates = new Map<string, Fate>();
-  let waiting = books.filter(open).map((book) => ({ book, evidence: new Map<Matcher, Source>() }));
+  let waiting = books.filter((book) => closed(book) === null).map((book) => ({ book, evidence: new Map<Matcher, Source>() }));
   let frontier: Scanned[] = [];
   let first = true;
   // Each pass scans what the passes before it activated; an entry fires once, and its roll is its own for the
@@ -233,11 +239,17 @@ function activate(books: Book[], settings: Card['loreSettings'], budget: number,
 
   const ranked = final.map((book, index) => ({ book, rank: depthRank(book.rules, index) }));
   const placed = [...ranked.filter(({ rank }) => rank.length === 0), ...ranked.filter(({ rank }) => rank.length > 0).sort((a, b) => compare(a.rank, b.rank))];
+  const unmatched = new Set(waiting.map(({ book }) => book));
+  const silent = shelf.flatMap((entry): Silent[] => {
+    if (typeof entry === 'string') return [{ id: entry, why: { kind: 'closed', cause: 'disabled' } }];
+    const why = closed(entry) ?? (unmatched.has(entry) ? { kind: entry.queries.primary.length === 0 ? 'keyless' : 'unmatched' } : null);
+    return why ? [{ id: entry.id, why }] : [];
+  });
   const went = kept.filter(({ id, rules }) => rules.afterMatch !== null && fates.get(id)!.kind !== 'dropped').map(({ id }) => id);
   return {
     placed: placed.map(({ book }) => ({ id: book.id, body: bodies.get(book.id)!, placement: placement(book.rules) })),
     fired: matched.map(({ book, why }) => ({ id: book.id, why, fate: fates.get(book.id)! })),
-    silent: [],
+    silent,
     invalidKeys,
     afterMatch: [...new Set([...before, ...went])],
   };
