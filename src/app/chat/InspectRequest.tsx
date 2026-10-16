@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { tokenGroups, type From, type TokenSource } from '../../engine/pipeline';
 import type { Rehearsal } from '../../runtime/scripts';
 import { afterEnter, previewRequest, type AfterEnter, type Sending } from '../../runtime/turn-context';
-import { describeTurnFailure } from '../common/failure';
+import { describeTurnFailure, runaway } from '../common/failure';
 import { MESSAGE_ROLES, SLOT } from '../common/prompt-words';
 import { tokens } from '../common/receipt';
 import { useSession } from '../session';
@@ -68,7 +68,7 @@ function Rehearsed({ chat, sending, editor, onEdit }: { chat: string; sending: S
 }
 
 function RehearsalView({ rehearsal, sending, editor, onEdit }: { rehearsal: Rehearsal; sending: Sending; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
-  const { trace, stopped, said, asked, calls, input, prompt, request, changed } = rehearsal;
+  const { trace, stopped, said, asked, calls, input, prompt, request, changed, loreRanAway } = rehearsal;
   const facts = [
     ...(input === null ? [] : [{ label: '입력이 바뀌어요', value: input }]),
     ...(asked.length ? [{ label: '보낼 때 물어봐요', value: `${asked.length}개` }] : []),
@@ -82,6 +82,7 @@ function RehearsalView({ rehearsal, sending, editor, onEdit }: { rehearsal: Rehe
       {trace.entries.length > 0 && <HookList label="스크립트 실행 예상" entries={trace.entries.map((entry, index) => ({ entry, key: String(index) }))} aside={(entry) => `${Math.round(entry.duration)}ms`} />}
       {trace.omitted > 0 && <Text variant="note">{`앞선 기록 ${trace.omitted}개는 빠졌어요.`}</Text>}
       {facts.length > 0 && <Facts items={facts} />}
+      {loreRanAway && <Callout tone="warn">{runaway('로어북을 스크립트에 넘기기 전에')}</Callout>}
       {stopped !== null ? (
         <Text variant="note">{`${STAGES[stopped]} 단계에서 멈춰서 요청을 보내지 않아요.`}</Text>
       ) : !changed ? (

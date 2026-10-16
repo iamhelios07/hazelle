@@ -231,7 +231,7 @@ export function describeKeyFailure(failure: KeyFailure): string {
 }
 
 export const RUNAWAY_FIX = '캐릭터나 로어북, 프롬프트, 메시지 안에서 서로를 끝없이 호출하는 명령어가 있어요. 해당 명령어를 수정해 주세요.';
-const runaway = (before: string) => `명령어 실행 결과가 너무 길어서 ${before} 멈췄어요. ${RUNAWAY_FIX}`;
+export const runaway = (before: string) => `명령어 실행 결과가 너무 길어서 ${before} 멈췄어요. ${RUNAWAY_FIX}`;
 
 export function describeTurnFailure(failure: TurnFailure): string {
   switch (failure.kind) {
