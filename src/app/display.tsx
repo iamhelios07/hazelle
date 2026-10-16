@@ -1,7 +1,7 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { DISPLAY_DEFAULT, parseDisplay, parseReading, presets, type Display, type Preset } from './common/reading';
 import { readPersisted, usePersisted } from './common/usePersisted';
-import { applyScheme, readingDefault, VeilContext, type Reading } from './ui';
+import { applyScheme, QuoteShapeContext, readingDefault, VeilContext, type Reading } from './ui';
 
 // Per device, never in the synced settings, since a phone and a desktop screen differ (user, 2026-09-29).
 const READING = 'risu-alpha:reading';
@@ -49,7 +49,9 @@ export function DisplayProvider({ children }: { children: ReactNode }) {
   };
   return (
     <DisplayContext value={control}>
-      <VeilContext value={veil}>{children}</VeilContext>
+      <VeilContext value={veil}>
+        <QuoteShapeContext value={display.quotes}>{children}</QuoteShapeContext>
+      </VeilContext>
     </DisplayContext>
   );
 }

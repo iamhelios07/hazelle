@@ -1,6 +1,6 @@
 import { PICTURE_PERCENT } from '../../model/library';
 import type { SavedLook } from '../../model/settings';
-import { ACCENT, BG, DIALOGUE, INK, THEME, type Reading, type Scheme } from '../ui';
+import { ACCENT, BG, DIALOGUE, INK, QUOTE_SHAPE, THEME, type QuoteShape, type Reading, type Scheme } from '../ui';
 
 export const SIZE = { min: 14, max: 21 };
 
@@ -36,11 +36,12 @@ export function parseReading(stored: string, fallback: Reading): Reading {
 
 // pictureMost: the height no picture-only line's picture is drawn taller than, in percent of the screen's height, unless
 // the character sets its own (Pictures.most).
-export type Display = Scheme & { hideHeader: boolean; foldComposer: boolean; hidePictures: boolean; pictureMost: number };
+// quotes: 대사 모양, a reading habit, so no preset sets it.
+export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; hidePictures: boolean; pictureMost: number };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, hideHeader: false, foldComposer: true, hidePictures: false, pictureMost: 80 };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, hidePictures: false, pictureMost: 80 };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -50,6 +51,7 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     ink: known(INK, read.ink, fallback.ink),
     accent: known(ACCENT, read.accent, fallback.accent),
     dialogue: known(DIALOGUE, read.dialogue, fallback.dialogue),
+    quotes: known(QUOTE_SHAPE, read.quotes, fallback.quotes),
     hideHeader: flag(read.hideHeader, fallback.hideHeader),
     foldComposer: flag(read.foldComposer, fallback.foldComposer),
     hidePictures: flag(read.hidePictures, fallback.hidePictures),

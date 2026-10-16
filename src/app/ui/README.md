@@ -81,6 +81,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | `ColorDot` | `ColorDot.module.css` | A color pick as the current theme draws it |
 | foundation | `scrollbar.ts` (`markScrollbars`) | `scrollbar.css` | Classic scrollbars (not overlay ones) as a round thumb without arrows, on the page, its boxes and inside a bot's story |
 | foundation | `veil.ts` (`VeilContext`) | — | 이미지 가리기: whether story pictures are covered, and which ones were tapped open |
+| foundation | `quotes.ts` (`QuoteShapeContext`, `QUOTE_SHAPE`) | — | 대사 모양: how a story's outermost dialogue and 속마음 marks stand (색만 · 줄바꿈 · 상자 · 점선 속마음); the user's bubble keeps 색만 |
 | foundation | `mark.ts` (`MARK`) | — | The one drawing of the logo mark, also read by `brand/render.mjs` for the favicon and icons |
 | foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
 | foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |

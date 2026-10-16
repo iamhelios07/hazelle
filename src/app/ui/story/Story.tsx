@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import { useEffect, useLayoutEffect, useReducer, useRef, type ReactNode, type Ref } from 'react';
 import { useRowState } from '../collections/row-memory';
 import { scrollbarKind } from '../foundation/scrollbar';
+import { useQuoteShape } from '../foundation/quotes';
 import { useVeil, type Veil } from '../foundation/veil';
 import { inlaid } from './inlay';
 import type { SelectionEnd } from './SelectionButton';
@@ -306,6 +307,7 @@ export function storySelection(story: HTMLElement): { pieces: string[]; end: Sel
 export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [], ref }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
   const veil = useVeil();
+  const quotes = useQuoteShape();
   // A veil tapped open or shut changes only veil.revealed, which no render sees.
   const [veilTaps, tapVeil] = useReducer((count: number) => count + 1, 0);
   const host = useRef<HTMLDivElement>(null);
@@ -396,7 +398,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
 
   return (
     <div ref={ref} className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
-      <div ref={host} data-buttons={buttons} data-scrollbars={scrollbarKind()}>
+      <div ref={host} data-buttons={buttons} data-quotes={quotes} data-scrollbars={scrollbarKind()}>
         {cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}
         {inlays.map(({ node }, index) => (
           <div key={index} slot={inlayName(index)}>
