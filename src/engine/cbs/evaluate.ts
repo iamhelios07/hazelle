@@ -6,7 +6,10 @@ import type { Stage } from '../render';
 import { escapeCbs } from './escape';
 import type { PreviousMessages } from './history';
 import { parse, type Block, type Legacy, type Node, type Tag } from './parse';
-import { bool, handlerFor, items, normalize, readToggle, readVar, Return, truthy, type Env, type Erase } from './tags';
+import { bool, handlerFor, isErrorText, items, normalize, readToggle, readVar, Return, truthy, type Env, type Erase } from './tags';
+
+// unknown-tag: a tag or block no handler takes, as written back. error-text: Risu's error text a tag gave ({{iserror}}).
+export type CbsProblem = { kind: 'unknown-tag' | 'error-text'; text: string };
 
 export type CbsContext = {
   stage: Stage;
@@ -52,6 +55,8 @@ export type CbsContext = {
   inlays: readonly { id: string; name: string; type: string }[];
   // The names the display's asset tags found no picture for, added as they are met; null outside a display.
   unfound: Set<string> | null;
+  // What a request's text left wrong, added as it is met; null outside a request (pipeline lay).
+  problems: CbsProblem[] | null;
   // The namespaces of the modules on in the chat (design §6.5).
   modules: readonly string[];
   faces: { char: string | null; user: string | null };
@@ -141,9 +146,17 @@ function evaluateTag(tag: Tag, frame: Frame): string | Erase {
   if (content.startsWith('//')) return frame.run.context.stage === 'display' ? asWritten(content) : '';
   const [name, ...args] = content.startsWith('? ') ? ['calc', content.slice(2)] : content.trim() === ':' ? [':'] : splitArgs(content);
   const handler = handlerFor(name!);
-  if (!handler || args.length < handler.min) return asWritten(content);
+  const { problems } = frame.run.context;
+  if (!handler) {
+    problems?.push({ kind: 'unknown-tag', text: asWritten(content) });
+    return asWritten(content);
+  }
+  // Not a problem: a wrapper's {{slot}} takes no argument so that it stays as written (pipeline verbatim).
+  if (args.length < handler.min) return asWritten(content);
   try {
-    return handler.run(args, env(frame, frame.prefix + tag.at)) ?? asWritten(content);
+    const out = handler.run(args, env(frame, frame.prefix + tag.at));
+    if (typeof out === 'string' && isErrorText(out)) problems?.push({ kind: 'error-text', text: out });
+    return out ?? asWritten(content);
   } catch (error) {
     // An argument out of range: a timestamp, a digit count, a code point, a repeat count.
     if (error instanceof RangeError) return asWritten(content);
@@ -205,6 +218,7 @@ function evaluateBlock(block: Block, frame: Frame): string {
       return '';
     }
     default:
+      frame.run.context.problems?.push({ kind: 'unknown-tag', text: asWritten(head) });
       return unknown();
   }
 }

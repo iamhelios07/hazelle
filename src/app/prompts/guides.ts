@@ -37,6 +37,7 @@ const SAMPLE: CbsContext = {
   assets: [],
   inlays: [],
   unfound: null,
+  problems: null,
   modules: [],
   faces: { char: null, user: null },
   pickSeed: 'sample',

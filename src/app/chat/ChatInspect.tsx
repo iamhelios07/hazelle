@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { From } from '../../engine/pipeline';
 import type { Sending } from '../../runtime/turn-context';
+import { describeTurnFailure } from '../common/failure';
 import { useSession } from '../session';
 import { Empty, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { CacheTab } from './ChatCacheTab';
@@ -36,8 +37,9 @@ export function ChatInspect({ chat, character, tab, notes, messages, busy, promp
   );
   const ready = (view: (sending: Sending) => ReactNode) =>
     busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty>
-    : notes.sending ? view(notes.sending)
     : notes.sending === null ? <Empty variant="section">지금은 요청을 보낼 수 없어서 계산하지 못했어요.</Empty>
+    : notes.sending && 'turn' in notes.sending ? view(notes.sending)
+    : notes.sending ? <Empty variant="section">{describeTurnFailure(notes.sending)}</Empty>
     : <Text variant="note">계산하는 중…</Text>;
   return (
     <SidePanel title="점검" onClose={onClose}>
@@ -45,7 +47,7 @@ export function ChatInspect({ chat, character, tab, notes, messages, busy, promp
         {tabs}
         {tab === 'request' && ready((sending) => <NextRequest chat={chat} sending={sending} request={notes.request} editor={editor} onEdit={onEdit} />)}
         {tab === 'cache' && <CacheTab cache={notes.cache} messages={messages} busy={busy} editor={editor} onEdit={onEdit} />}
-        {tab === 'variables' && <Variables chat={chat} sending={notes.sending} busy={busy} />}
+        {tab === 'variables' && <Variables chat={chat} sending={notes.sending && 'turn' in notes.sending ? notes.sending : null} busy={busy} />}
         {tab === 'modules' && ready((sending) => <Modules sending={sending} />)}
         {tab === 'scripts' && <Scripts chat={chat} />}
       </Stack>

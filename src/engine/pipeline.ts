@@ -6,7 +6,7 @@ import type { Memory, Written } from '../model/memory';
 import type { MascotId } from '../model/mascot';
 import type { Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
-import { evaluate, Runaway } from './cbs/evaluate';
+import { evaluate, Runaway, type CbsProblem } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
 import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation, type Silent } from './lorebook/activate';
@@ -63,12 +63,15 @@ export type From =
 // parts[i] says where messages[i] came from (origin as Sent's) and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. invalidKeys: regex keys that
 // did not compile (design.md row 2: never match, listed). loreBudget: the 로어북 최대 분량 the activation was held to. memory: null while the
-// chat's memory is off. dropped: the chat's messages the budget left out, oldest first.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: Problem[] };
+// chat's memory is off. dropped: the chat's messages the budget left out, oldest first. problems: the first MOST_PROBLEMS
+// found, and how many more there were.
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: { found: Problem[]; omitted: number } };
 
-// What went wrong in a text the request was built from, at the part it was built into: a tag CBS does not know, or Risu's
-// error text ({{iserror}}) left in the rendered output.
-export type Problem = { from: From; kind: 'unknown-tag' | 'error-text'; text: string };
+// What went wrong in a text outside the chat's messages the request was built from, at the block or entry it was rendered
+// for, once per text: from may match no part, when that text rendered to nothing and was left out. An error text counts
+// only where it reached the output, so one a bot tests with {{iserror}} is none.
+export type Problem = CbsProblem & { from: Extract<From, { kind: 'block' | 'lore' | 'depth' }> };
+const MOST_PROBLEMS = 64;
 
 // The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
 // Claude models refuse with 400.
@@ -89,6 +92,9 @@ type Laid = {
   render: (text: string, place: string, cast?: string) => string;
   entry: (id: string, body: string) => string;
   named: (id: string) => string;
+  // By the place of each text rendered through render or entry, as last rendered there; never a lore entry counted
+  // only for activation.
+  problems: Map<string, CbsProblem[]>;
 };
 
 function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
@@ -98,14 +104,18 @@ function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], varia
   // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
   // text, and reads the variables as the chat's messages left them. The text last rendered at a place is kept, so
   // what is rendered there again is the same text and not a second roll.
-  const held = new Map<string, { text: string; out: string }>();
-  const render = (text: string, place: string, cast?: string) => {
+  const held = new Map<string, { text: string; out: string; problems: CbsProblem[] }>();
+  const rendered = (text: string, place: string, cast?: string) => {
     const last = held.get(place);
-    if (last?.text === text) return last.out;
-    const out = unescapeCbs(evaluate(text, (cast === undefined ? context : casts.get(cast)!)({ seed: `${seed}:${place}` }, new Map(variables)))).trim();
-    held.set(place, { text, out });
-    return out;
+    if (last?.text === text) return last;
+    const found: CbsProblem[] = [];
+    const out = unescapeCbs(evaluate(text, { ...(cast === undefined ? context : casts.get(cast)!)({ seed: `${seed}:${place}` }, new Map(variables)), problems: found })).trim();
+    const problems = [...new Map(found.filter(({ kind, text }) => kind === 'unknown-tag' || out.includes(text)).map((problem) => [`${problem.kind}:${problem.text}`, problem])).values()];
+    const now = { text, out, problems };
+    held.set(place, now);
+    return now;
   };
+  const render = (text: string, place: string, cast?: string) => rendered(text, place, cast).out;
   // A module's entries read the chat's {{char}}, as Risu's do; only a 등장인물's own read theirs.
   const owners = new Map(scope.lore.flatMap(({ id, parent }) => (parent !== null && casts.has(parent) ? [[id, parent] as const] : [])));
   // An entry costs what its body sends, so it is counted as rendered at its own place, where loreMessage sends it.
@@ -144,7 +154,12 @@ function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], varia
     }
   }
 
-  const placed = (text: string, place: string, cast?: string) => render(atPositions(text, positions), place, cast);
+  const problems = new Map<string, CbsProblem[]>();
+  const placed = (text: string, place: string, cast?: string) => {
+    const now = rendered(atPositions(text, positions), place, cast);
+    problems.set(place, now.problems);
+    return now.out;
+  };
   return {
     card,
     cast: scope.cast,
@@ -157,6 +172,7 @@ function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], varia
     render: placed,
     entry: (id, body) => placed(body, id, owners.get(id)),
     named: (id) => names.get(id)!,
+    problems,
   };
 }
 
@@ -180,8 +196,9 @@ type Filling =
   | { sort: 'memory'; memory: string; span: string };
 
 const loreMessage = ({ entry }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: entry(id, body) });
-const throughSlot = (laid: Laid, entries: Lore[], slot: 'lorebook' | 'postEverything') =>
-  entries.map((entry): Sent => ({ message: loreMessage(laid, entry), from: { kind: 'lore', id: entry.id, name: laid.named(entry.id), slot } }));
+const loreFrom = (laid: Laid, { id }: Lore, slot: 'lorebook' | 'postEverything') => ({ kind: 'lore', id, name: laid.named(id), slot }) as const;
+const depthFrom = (laid: Laid, { id, depth }: Lore & { depth: number }) => ({ kind: 'depth', id, name: laid.named(id), depth }) as const;
+const throughSlot = (laid: Laid, entries: Lore[], slot: 'lorebook' | 'postEverything') => entries.map((entry): Sent => ({ message: loreMessage(laid, entry), from: loreFrom(laid, entry, slot) }));
 const filled = (parts: Sent[]) => parts.filter(({ message }) => message.content !== '');
 
 // A prompt's blocks in order, with its chat slots left open and every other block rendered once. memory: whether a
@@ -325,7 +342,8 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, memor
       return at === 0 && scope.greeting !== null ? { message } : { message, origin: scope.messages[at]!.message };
     })
     .filter(({ message }) => message.content !== '');
-  const atDepth: { depth: number; sent: Sent }[] = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: { kind: 'depth', id: entry.id, name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
+  const atDepth: { depth: number; sent: Sent }[] = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: depthFrom(laid, entry) } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
+  const problems = problemsOf(laid, blocks);
   const lastUser = messages.findLastIndex(({ message }) => message.role === 'user');
   const retrieved = found && lastUser !== -1 ? found : null;
   if (retrieved) atDepth.push({ depth: messages.length - lastUser, sent: { message: { role: 'user', content: retrieved.text }, from: { kind: 'retrieval' } } });
@@ -340,13 +358,27 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, memor
       loreBudget: scope.loreBudget,
       memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
-      problems: [],
+      problems,
     };
   };
 
   // The rest of the template stays whole.
   const fitted = fitChat(template, messages, atDepth, tokens, fit ?? null);
   return 'kind' in fitted ? fitted : assembled(fitted.parts, fitted.dropped);
+}
+
+// A block's description renders at places under its own id (templateOf); an entry's at its id.
+function problemsOf(laid: Laid, blocks: Block[]): Assembled['problems'] {
+  const entries = new Map<string, Problem['from']>([
+    ...laid.lorebook.map((entry) => [entry.id, loreFrom(laid, entry, 'lorebook')] as const),
+    ...laid.last.map((entry) => [entry.id, loreFrom(laid, entry, 'postEverything')] as const),
+    ...laid.depths.map((entry) => [entry.id, depthFrom(laid, entry)] as const),
+  ]);
+  const all = [...laid.problems].flatMap(([place, found]) => {
+    const from = entries.get(place) ?? blockFrom(blocks.find(({ id }) => place === id || place.startsWith(`${id}:`))!);
+    return found.map((problem): Problem => ({ ...problem, from }));
+  });
+  return { found: all.slice(0, MOST_PROBLEMS), omitted: Math.max(all.length - MOST_PROBLEMS, 0) };
 }
 
 // How much of each message before the source 앞 메시지 holds, from its end.
@@ -498,7 +530,7 @@ function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
   else map.set(key, [value]);
 }
 
-const blockFrom = (block: Block): From => ({ kind: 'block', id: block.id, name: block.name, slot: block.kind === 'slot' ? block.slot : null });
+const blockFrom = (block: Block): Extract<From, { kind: 'block' }> => ({ kind: 'block', id: block.id, name: block.name, slot: block.kind === 'slot' ? block.slot : null });
 
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };

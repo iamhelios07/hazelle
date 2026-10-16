@@ -3,7 +3,7 @@ import type { HistoryMessage } from '../history';
 import { blankCard } from '../import/card';
 import type { Card } from '../import/types';
 import { unescapeCbs } from './escape';
-import { evaluate, Runaway, type CbsContext } from './evaluate';
+import { evaluate, Runaway, type CbsContext, type CbsProblem } from './evaluate';
 import { previousMessages } from './history';
 
 const card = (over: Partial<Card> = {}): Card => ({ ...blankCard('Luna'), ...over });
@@ -33,6 +33,7 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => {
     assets: [],
     inlays: [],
     unfound: null,
+    problems: null,
     modules: [],
     faces: { char: null, user: null },
     pickSeed: 'pick-1',
@@ -59,6 +60,16 @@ describe('evaluate', () => {
   it('leaves an unknown or unsupported tag as written with its inner tags evaluated, and {{char}} with no character', () => {
     expect(run('{{img::{{user}}.png}} {{nope}} {{jb}}')).toBe('{{img::jin.png}} {{nope}} {{jb}}');
     expect(run('{{char}}', { card: null })).toBe('{{char}}');
+  });
+
+  it('collects an unknown tag or block as written, and an error text a tag gave, where a request asks for them', () => {
+    const problems: CbsProblem[] = [];
+    expect(run('{{nope::{{user}}}} {{#gone x}}y{{/gone}} {{metadata::bad}} {{slot}}', { problems })).toBe('{{nope::jin}} {{#gone x}}y{{/gone}} Error: bad is not a valid metadata key. {{slot}}');
+    expect(problems).toEqual([
+      { kind: 'unknown-tag', text: '{{nope::jin}}' },
+      { kind: 'unknown-tag', text: '{{#gone x}}' },
+      { kind: 'error-text', text: 'Error: bad is not a valid metadata key.' },
+    ]);
   });
 
   it('re-emits an unclosed tag or block as written and evaluates the tags after it', () => {

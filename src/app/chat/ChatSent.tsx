@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Card } from '../../engine/import/types';
-import type { Assembled, From } from '../../engine/pipeline';
+import type { Assembled, From, Problem } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
 import { isChapter } from '../../engine/memory';
 import type { Chapter, Memory, MemoryRecord } from '../../model/memory';
@@ -14,7 +14,7 @@ import { budgetCut } from './infoReply';
 import { navigate } from '../shell/router';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
-import { CHAPTER, inSettings, LORE_BUDGET_LABEL, loreName, opens } from '../common/words';
+import { CHAPTER, COMMAND, inSettings, LORE_BUDGET_LABEL, loreName, opens } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
@@ -68,7 +68,7 @@ export function SentResponse({ sent }: { sent: Sent | null }) {
 }
 
 type RequestViewProps = {
-  prompt: Pick<Assembled, 'messages' | 'parts'>;
+  prompt: Pick<Assembled, 'messages' | 'parts' | 'problems'>;
   title: string;
   // Read only while 본문 shows: the wire body of a request not sent yet is built on demand.
   request: () => Pick<HttpRequest, 'url' | 'body'> | null;
@@ -77,9 +77,35 @@ type RequestViewProps = {
   onEdit?: (side: Side) => void;
 };
 
+const PROBLEM = { 'unknown-tag': `모르는 ${COMMAND}`, 'error-text': '오류 문구' } as const;
+
+const problemCounts = (problems: Problem[]) =>
+  (['unknown-tag', 'error-text'] as const).flatMap((kind) => {
+    const count = problems.filter((problem) => problem.kind === kind).length;
+    return count ? [`${PROBLEM[kind]} ${count}개`] : [];
+  }).join(' · ');
+
+const problemPlace = ({ from }: Problem) => (from.kind === 'block' ? (from.name ?? (from.slot ? SLOT[from.slot].name : '이름 없는 블록')) : loreName(from.name));
+
+// placed: whether the problems sit under their part, which names their place already.
+function ProblemList({ problems, placed }: { problems: Problem[]; placed: boolean }) {
+  return (
+    <List label="문제">
+      {problems.map((problem, index) => (
+        <ListItem key={index} title={PROBLEM[problem.kind]} code={problem.text} aside={placed ? undefined : problemPlace(problem)} />
+      ))}
+    </List>
+  );
+}
+
 export function RequestView({ prompt, title, request, unbuilt, editor, onEdit }: RequestViewProps) {
   const [view, setView] = useState<'parts' | 'body'>('parts');
   const total = prompt.parts.reduce((sum, part) => sum + part.tokens, 0);
+  const { found, omitted } = prompt.problems;
+  // A problem shows at the first part built from its text; a text that rendered to nothing has none.
+  const owners = found.map((problem) => prompt.parts.findIndex(({ from }) => from.kind === problem.from.kind && 'id' in from && from.id === problem.from.id));
+  const at = (index: number) => found.filter((_, problem) => owners[problem] === index);
+  const unplaced = at(-1);
   return (
     <>
       <ChoiceGroup
@@ -95,12 +121,17 @@ export function RequestView({ prompt, title, request, unbuilt, editor, onEdit }:
       {view === 'parts' ? (
         <Section level={3} title={title} note={`약 ${tokens(total)} 토큰 · 앱 추정`}>
           <Stack gap="related">
+            {found.length > 0 && (
+              <Callout tone="warn">{`문제 ${found.length + omitted}개 · 모르는 ${COMMAND}나 오류 문구가 모델에 그대로 가요.${omitted ? ` ${omitted}개는 목록에서 뺐어요.` : ''}`}</Callout>
+            )}
             {prompt.messages.map((message, index) => {
               const part = prompt.parts[index]!;
               const side = editor?.(part.from);
+              const problems = at(index);
               return (
-                <Disclosure key={index} label={`${partName(part.from, message.role)} · ${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰`}>
+                <Disclosure key={index} label={`${partName(part.from, message.role)} · ${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰${problems.length ? ` · ${problemCounts(problems)}` : ''}`}>
                   <Stack gap="related">
+                    {problems.length > 0 && <ProblemList problems={problems} placed />}
                     <CodeBlock>{message.content}</CodeBlock>
                     {side && onEdit && (
                       <Row kind="actions">
@@ -113,6 +144,14 @@ export function RequestView({ prompt, title, request, unbuilt, editor, onEdit }:
                 </Disclosure>
               );
             })}
+            {unplaced.length > 0 && (
+              <Disclosure label={`그 밖에 · ${problemCounts(unplaced)}`}>
+                <Stack gap="related">
+                  <Text variant="note">요청에 그대로 들어가지 않은 블록이나 로어북 항목이에요.</Text>
+                  <ProblemList problems={unplaced} placed={false} />
+                </Stack>
+              </Disclosure>
+            )}
           </Stack>
         </Section>
       ) : (

@@ -390,6 +390,24 @@ describe('assemble', () => {
   });
 });
 
+describe("a request's problems", () => {
+  it('names the block or entry where an error text reached the output or a tag is unknown, once each, and not an error a bot tested for', () => {
+    const blocks: Prompt['blocks'] = [
+      { id: 'rules', name: '규칙', kind: 'text', role: 'system', mark: null, text: '{{metadata::bad}} {{metadata::bad}} {{iserror::{{metadata::nope}}}}' },
+      { id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' },
+      { id: 'past', name: null, kind: 'slot', slot: 'chat', range: { from: 0, to: null } },
+    ];
+    const result = assembledOf(assemble(input({ prompt: { ...starter, blocks }, lore: [lore('tower', '{{nope}}')] })));
+    expect(result.problems).toEqual({
+      found: [
+        { kind: 'error-text', text: 'Error: bad is not a valid metadata key.', from: { kind: 'block', id: 'rules', name: '규칙', slot: null } },
+        { kind: 'unknown-tag', text: '{{nope}}', from: { kind: 'lore', id: 'tower', name: 'tower', slot: 'lorebook' } },
+      ],
+      omitted: 0,
+    });
+  });
+});
+
 describe('a request whose commands ran away', () => {
   it('is not built', () => {
     expect(assemble(input({ card: card({ description: '{{description}}{{description}}' }) }))).toEqual({ kind: 'runaway' });
@@ -622,7 +640,7 @@ describe('a request a script rewrote', () => {
     { role: 'assistant', content: 'first reply' },
     { role: 'user', content: 'second hello' },
   ];
-  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, silent: null, invalidKeys: [], loreBudget: 0, memory: null, dropped: 2, problems: [] };
+  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, silent: null, invalidKeys: [], loreBudget: 0, memory: null, dropped: 2, problems: { found: [], omitted: 0 } };
   const note: ChatMessage = { role: 'system', content: 'from the script' };
   const count = (text: string) => text.length;
 

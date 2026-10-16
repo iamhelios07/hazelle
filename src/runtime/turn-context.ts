@@ -10,6 +10,7 @@ import { prepareChat } from '../connectors/preparation';
 import { batchLane, resolveConnection, resolveModel } from '../connectors/registry';
 import { providerFit, type TokenSnapshot } from './token-calibration';
 import type { Assembled, PromptInput } from '../engine/pipeline';
+import type { EvaluatedPrompt } from './evaluation-core';
 import { listens } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
@@ -105,13 +106,24 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
   };
 }
 
-// null while it cannot send, or the prompt is over the model's budget.
 export type Sending = { turn: TurnContext; prompt: Assembled; calibration: TokenSnapshot };
+// The prompt was evaluated and cannot go: its CBS ran away, it is over the model's budget, or the tokenizer did not load.
+export type Unsendable = Exclude<EvaluatedPrompt, Assembled>;
 
-// asker: whose forecast this is, each with its own evaluation lane, kept with the chat so a forecast sends the worker
-// only what changed since its last: the composer's, background memory's (Rememberer) and the memory panel's. One lane
-// shared by two would have each cancel the other's.
-export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scripts' | 'tokens'>, chat: string, target: Target, signal?: AbortSignal, asker: 'forecast' | 'memory' | 'view' = 'forecast'): Promise<Sending | null> {
+type Forecaster = Pick<Session, 'store' | 'read' | 'scripts' | 'tokens'>;
+type Asker = 'forecast' | 'memory' | 'view';
+
+// For callers that act only on a request that can go.
+export const wouldSend = async (session: Forecaster, chat: string, target: Target, signal?: AbortSignal, asker: Asker = 'forecast'): Promise<Sending | null> => {
+  const sending = await forecastSend(session, chat, target, signal, asker);
+  return sending && 'kind' in sending ? null : sending;
+};
+
+// null: the chat or its turn cannot be gathered, the calibration did not load, or it was aborted. asker: whose forecast
+// this is, each with its own evaluation lane, kept with the chat so a forecast sends the worker only what changed since
+// its last: the composer's, background memory's (Rememberer) and the memory panel's. One lane shared by two would have
+// each cancel the other's.
+export async function forecastSend(session: Forecaster, chat: string, target: Target, signal?: AbortSignal, asker: Asker = 'forecast'): Promise<Sending | Unsendable | null> {
   // What the prompt reads may change while it is evaluated: it is gathered and evaluated again once, so a save landing
   // mid-flight does not cost memory its round.
   for (let tries = 0; tries < 2; tries++) {
@@ -125,7 +137,7 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scrip
     const fit = providerFit(turn.route, turn.settings, snapshot.data.fit.allowance);
     const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scripts.cachedPrompt(chat, turn), continuing: false }, signal);
     if (signal?.aborted) return null;
-    if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? null : { turn, prompt, calibration: snapshot.data };
+    if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? prompt : { turn, prompt, calibration: snapshot.data };
   }
   return null;
 }
