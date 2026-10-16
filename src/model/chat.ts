@@ -346,9 +346,7 @@ export class ChatFold {
       group.costs.clear();
       const entries = [...group.entries].map((entry) => this.read(entry)!);
       const receipt = (value: Receipt | null) => {
-        for (let current = value; current; current = current.continues ?? null) {
-          if (current.replyId) group.costs.add(current.replyId);
-        }
+        for (const call of value ? calls(value) : []) if (call.replyId) group.costs.add(call.replyId);
       };
       for (const { value } of entries) {
         if ('receipt' in value) receipt(value.receipt);
