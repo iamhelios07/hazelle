@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../../engine/import/types';
 import type { Block } from '../../model/prompt';
-import { inspectShown, editorOf, loreBudgetEditor, NO_PANELS, opened } from './panels';
+import { inspectShown, editorOf, loreBudgetEditor, NO_PANELS, opened, toggleEditor } from './panels';
 
 describe('the panels beside the story', () => {
   const editor = { kind: 'character', id: 'c', part: null } as const;
@@ -43,5 +43,13 @@ describe('where the lorebook budget that cut entries is set', () => {
     expect(loreBudgetEditor({ id: 'c', card: card(500) })).toEqual({ kind: 'character', id: 'c', part: 'lore' });
     expect(loreBudgetEditor({ id: 'c', card: card(null) })).toBeNull();
     expect(loreBudgetEditor(null)).toBeNull();
+  });
+});
+
+describe('the editor a toggle section opens', () => {
+  it('opens the prompt’s 토글 pane that goes back to the panel, the character’s 토글 part, and a module’s 토글 page', () => {
+    expect(toggleEditor({ from: 'prompt', id: 'p' })).toEqual({ kind: 'prompts', id: 'p', pane: 'toggles', fromToggles: true });
+    expect(toggleEditor({ from: 'card', id: 'c' })).toEqual({ kind: 'character', id: 'c', part: 'toggles' });
+    expect(toggleEditor({ from: 'module', id: 'm' })).toEqual({ kind: 'module', id: 'm', pane: 'toggles' });
   });
 });

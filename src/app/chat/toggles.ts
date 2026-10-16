@@ -7,7 +7,7 @@ export type ToggleRow = { toggle: Toggle; value: string; changed: boolean };
 export const toggleSaveKey = (owner: string | null, key: string) => `toggle:${owner ?? ''}:${key}`;
 export type ToggleNote = Extract<ToggleMark, { kind: 'divider' | 'caption' }>;
 export type ToggleItem = ToggleRow | ToggleNote | { kind: 'group'; label: string; items: (ToggleRow | ToggleNote)[] };
-export type ToggleSection = Pick<ToggleSource, 'from' | 'name'> & { rows: ToggleRow[]; items: ToggleItem[] };
+export type ToggleSection = Pick<ToggleSource, 'from' | 'id' | 'name'> & { rows: ToggleRow[]; items: ToggleItem[] };
 export type ToggleRows = { sections: ToggleSection[]; changed: number };
 
 // A key declared again by a later source shows once, in the source that declares it (model/toggles chatToggles keeps
@@ -20,9 +20,9 @@ export function toggleRows({ declared, sources, value }: ChatToggleSet): ToggleR
     }),
   );
   const sections = sources
-    .map(({ from, name, lines }) => {
+    .map(({ from, id, name, lines }) => {
       const kept = lines.flatMap<ToggleRow | ToggleMark>((line) => (isToggle(line) ? (rows.get(line) ?? []) : line.kind === 'unread' ? [] : [line]));
-      return { from, name, rows: kept.filter((line): line is ToggleRow => 'toggle' in line), items: laidOut(kept) };
+      return { from, id, name, rows: kept.filter((line): line is ToggleRow => 'toggle' in line), items: laidOut(kept) };
     })
     .filter((section) => section.rows.length > 0);
   return { sections, changed: [...rows.values()].filter((row) => row.changed).length };

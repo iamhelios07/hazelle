@@ -13,12 +13,12 @@ const set = (sources: ToggleSource[], values: ToggleValues) => {
   const declared = chatToggles(sources.flatMap(({ lines }) => lines));
   return { declared, sources, value: toggleValue(declared, values) };
 };
-const source = (from: ToggleSource['from'], name: string, text: string): ToggleSource => ({ from, name, lines: readToggles(text) });
+const source = (from: ToggleSource['from'], name: string, text: string): ToggleSource => ({ from, id: name, name, lines: readToggles(text) });
 const shape = (item: ToggleItem): unknown => ('toggle' in item ? item.toggle.key : item.kind === 'group' ? [item.label, item.items.map(shape)] : `${item.kind}:${item.label}`);
 
 describe('toggle panel rows', () => {
   it('counts the toggles off their default, and keeps the ones changed at opening first while filtering', () => {
-    const rows = toggleRows(set([{ from: 'prompt', name: 'P', lines: PROMPT }, source('card', 'Ari', 'sims=겹침\nstorm=폭풍 이벤트\nweather=날씨 묘사')], { length: '2', weather: '0', storm: '1' }));
+    const rows = toggleRows(set([{ from: 'prompt', id: 'P', name: 'P', lines: PROMPT }, source('card', 'Ari', 'sims=겹침\nstorm=폭풍 이벤트\nweather=날씨 묘사')], { length: '2', weather: '0', storm: '1' }));
     const [prompt, card] = rows.sections;
     expect(prompt!.rows.map(({ toggle, value, changed }) => [toggle.key, value, changed])).toEqual([
       ['sims', '0', false],

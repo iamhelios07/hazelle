@@ -2,7 +2,8 @@ import type { Card } from '../../engine/import/types';
 import type { From } from '../../engine/pipeline';
 import type { Block } from '../../model/prompt';
 import type { CharacterPart } from '../common/characterPart';
-import type { PromptPane } from '../shell/routes';
+import type { PromptPane, Route } from '../shell/routes';
+import type { ToggleSection } from './toggles';
 
 // block: the prompt block the editor opens at, absent for its list. fromToggles: opened from the chat's 토글 panel,
 // which its 토글 pane goes back to.
@@ -46,3 +47,16 @@ export function editorOf(from: From, prompt: { id: string; blocks: Block[] } | n
 // Where a chat's 로어북 최대 분량 is set, as chat-context reads it: the character's own, in its editor's
 // 로어북 part; null for the account's, in 설정 › 채팅.
 export const loreBudgetEditor = (character: { id: string; card: Card } | null): Side | null => (character && character.card.loreSettings.tokenBudget !== null ? { kind: 'character', id: character.id, part: 'lore' } : null);
+
+// Where a section of the chat's 토글 panel has its toggles edited: the prompt's and the character's beside the chat, a
+// module's on its 토글 page, since a module has no editor beside the chat.
+export function toggleEditor({ from, id }: Pick<ToggleSection, 'from' | 'id'>): Side | Extract<Route, { kind: 'module' }> {
+  switch (from) {
+    case 'prompt':
+      return { kind: 'prompts', id, pane: 'toggles', fromToggles: true };
+    case 'card':
+      return { kind: 'character', id, part: 'toggles' };
+    case 'module':
+      return { kind: 'module', id, pane: 'toggles' };
+  }
+}
