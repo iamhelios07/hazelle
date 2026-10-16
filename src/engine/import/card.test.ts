@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { assetType, blankCard, importCard, importRisum, writeCharx } from './card';
 import { moduleSource } from './hazelle';
-import { concat } from './png';
+import { concat } from './inflate';
 import { fileSource } from './source';
 import { readRisum, readRisumModule, risumBlock, risumHead, RISUM_END, unpack, writeRisum } from './risum';
 import type { Bot, ImportResult, Imported, Trigger, TypedModule } from './types';

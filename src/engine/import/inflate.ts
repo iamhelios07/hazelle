@@ -1,5 +1,4 @@
 import { Gunzip, Inflate } from 'fflate';
-import { concat } from './png';
 
 // How much packed data each step takes. DEFLATE unpacks to at most 1032 times its size, so an output past the size
 // declared for it is refused within one step of passing it.
@@ -26,4 +25,14 @@ export const inflate = (packed: Uint8Array, size: number) => drain(new Inflate()
 // A gzip file, whose last four bytes declare its output's size.
 export function gunzip(file: Uint8Array): Uint8Array<ArrayBuffer> {
   return drain(new Gunzip(), file, new DataView(file.buffer, file.byteOffset, file.byteLength).getUint32(file.length - 4, true));
+}
+
+export function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
 }

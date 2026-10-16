@@ -1,7 +1,7 @@
 import { zlibSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { artistTags, picturePrompt } from './picture-prompt';
-import { concat } from './png';
+import { concat } from './inflate';
 
 const encoder = new TextEncoder();
 const u32 = (value: number, little = false) => {

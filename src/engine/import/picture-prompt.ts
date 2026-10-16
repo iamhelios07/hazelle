@@ -1,6 +1,6 @@
 import { Unzlib } from 'fflate';
 import { isRecord } from '../../connectors/values';
-import { concat } from './png';
+import { concat } from './inflate';
 
 // What NovelAI wrote into a picture it drew: its prompt JSON, in a PNG `Comment` text chunk (tEXt, or zTXt packed), or,
 // in a picture saved again as WebP, in its EXIF: UserComment (`ASCII\0\0\0` then the JSON) or ImageDescription. Read

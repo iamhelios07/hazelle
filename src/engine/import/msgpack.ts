@@ -1,4 +1,4 @@
-import { concat } from './png';
+import { concat } from './inflate';
 
 // Not fatal: msgpackr writes a lone surrogate in a short string as three bytes and reads them back, so one cut
 // emoji in a Risu chat must not make the whole database unreadable.
