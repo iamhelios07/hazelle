@@ -29,8 +29,6 @@ import { tokenLimits, promptBudget, sentSettings } from './chat-context';
 import { wouldSend } from './turn-context';
 import { indexRecords, unembedded, type Indexed } from './retrieval';
 
-export type { RecordStatus } from '../engine/memory';
-
 // The only writer of `memory` objects and of the memory settings (design §6.2).
 
 // null: 공용으로 되돌리기.

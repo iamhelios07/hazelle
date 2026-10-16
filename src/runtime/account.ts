@@ -9,7 +9,7 @@ import { page } from './pages';
 export type Storage = { bytes: number | null; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
 export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: Exclude<AccountState, 'leaving'>; storage: Storage; unreadNotices: number; localProviders: readonly string[] };
 export type SignedIn = { session: SessionFacts; vault: VaultRecord };
-export type Boot = { session: null; signupOpen: boolean } | SignedIn;
+type Boot = { session: null; signupOpen: boolean } | SignedIn;
 export type Signup = { accountId: string; username: string; passwordProof: string; passwordWrap: string; recoveryProof: string; recoveryWrap: string };
 
 // null: a recovery key that is not one, so nothing was sent.

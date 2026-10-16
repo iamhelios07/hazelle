@@ -70,7 +70,7 @@ export const addLoreFolder = (store: ObjectStore, owner: LoreOwner, name: string
 export const renameLoreFolder = (store: ObjectStore, owner: LoreOwner, folder: string, name: string) =>
   setFolders(store, owner, (folders) => folders.map((each) => (each.id === folder ? { ...each, name } : each)));
 
-export type RemovedLoreFolder = { folder: LoreFolder; at: number; entries: string[] };
+type RemovedLoreFolder = { folder: LoreFolder; at: number; entries: string[] };
 
 const place = (store: ObjectStore, entries: string[], folder: string | null) => allWritten(entries.map((id) => store.update('lore', id, (current) => ({ ...current, folder }))));
 

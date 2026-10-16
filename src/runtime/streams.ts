@@ -1,3 +1,5 @@
+import type { ModelSettings } from '../connectors/settings';
+import type { Receipt } from '../model/chat';
 import { unavailableCalibration } from '../model/token-calibration';
 import { tokenLimits, sentSettings } from './chat-context';
 import type { Session } from './session';
@@ -8,9 +10,12 @@ import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
 import { streamKey } from '../vault/streams';
 import type { Route } from './assignment';
+import { retriesOf } from './connections';
+import { gather, generate, type GenerateInput } from './generate';
 import { chatMemory } from './memory-read';
 import { dropStream, type StreamCall } from './relay';
 import type { ObjectStore } from './store';
+import { receiptOf, unsettled } from './talk';
 
 // The only writer of `stream` objects, each the marker of a generation call the server is making for a chat
 // (tech-spec §6, Detached replies).
@@ -33,11 +38,23 @@ export async function newCall({ store, tokens }: Pick<Session, 'store' | 'tokens
 }
 
 // A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
-// reload has no use for (bot: its chat, where the server limits these), a 삽화 scene (runtime/illustrate) or a mascot's
-// line (runtime/mascot).
+// reload has no use for (bot: its chat, where the server limits these), or a task's through pageAnswer.
 export async function pageCall(session: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: 'script' | 'illustration' | 'likeness' | 'mascot', chat: string | null): Promise<StreamCall> {
   const key = await streamKey();
   return { id: crypto.randomUUID(), key: key.private, public: key.public, ...calibrate(session, route, requestClass, chat), ...(requestClass === 'script' && chat !== null && { bot: chat }) };
+}
+
+// A 삽화 scene (runtime/illustrate), a likeness (runtime/likeness) or a mascot's line (runtime/mascot), read through the
+// server's stream like any model call but with no marker: a pick-up on another device would make it again and pay for
+// it twice. The caller parses the text.
+export async function pageAnswer(session: Pick<Session, 'store' | 'tokens' | 'credentials'>, { route, settings }: { route: Route; settings: ModelSettings }, requestClass: 'illustration' | 'likeness' | 'mascot', chat: string | null, messages: GenerateInput['messages'], signal: AbortSignal): Promise<{ kind: 'stopped' } | { kind: 'failed'; receipt: Receipt } | { text: string; receipt: Receipt }> {
+  const { store, credentials } = session;
+  const text = gather();
+  const call = await pageCall(session, route, requestClass, chat);
+  const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
+  if (answer.cut === 'stopped') return { kind: 'stopped' };
+  const receipt = unsettled(receiptOf(callOf(route), answer));
+  return answer.state === 'done' ? { text: text.value(), receipt } : { kind: 'failed', receipt };
 }
 
 // Auxiliary prompts stay caller-owned: no splitting, trimming, or shrink-and-retry after a provider refusal.

@@ -12,15 +12,14 @@ import type { RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
 import { packsOf } from './chat-context';
 import { chatPersona } from './personas';
-import { refreshStarred, retriesOf } from './connections';
-import { gather, generate } from './generate';
+import { refreshStarred } from './connections';
+import { PERMANENT } from './files';
 import { shownPicture } from './picture';
 import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
-import { callOf, endCall, pageCall } from './streams';
-import { receiptOf, unsettled } from './talk';
+import { pageAnswer } from './streams';
 import { keepRow } from './usage';
 import { fromBase64 } from '../vault/aead';
 
@@ -40,7 +39,7 @@ export type LikenessFailure =
   | { kind: 'gone' };
 
 // By pack. A failure stays for the session, until the next try.
-export type LikenessRun = { stage: 'building' } | { stage: 'failed'; failure: LikenessFailure };
+type LikenessRun = { stage: 'building' } | { stage: 'failed'; failure: LikenessFailure };
 export type LikenessRuns = ReadonlyMap<string, LikenessRun>;
 
 type Stopped = { kind: 'stopped' };
@@ -49,9 +48,6 @@ type Picture = Pick<Asset, 'name' | 'type' | 'file'> & { avatar: boolean };
 type Held = { name: string; type: string; avatar: boolean; bytes: Uint8Array<ArrayBuffer> };
 // files: pictures still to read; held: one already in the owner's value, a persona's thumb.
 type Material = { name: string; user: boolean; texts: { label: string; text: string }[]; lore: { name: string; keys: string[]; content: string }[]; files: Picture[]; held: Held[] };
-
-// A file gone or not opening is left out; any other failure ends the build.
-const PERMANENT = new Set(['not-found', 'unreadable']);
 
 // Replaces what is there but the user's portraits (rebuiltPortraits): 다시 만들기, or another device's build met in a
 // conflict.
@@ -65,7 +61,7 @@ async function writeLikeness(store: ObjectStore, owner: string, value: Likeness)
 }
 
 // A portrait by its place and the name it had when shown, so an edit never lands on another one moved there ('gone').
-export type PortraitAt = { index: number; name: string };
+type PortraitAt = { index: number; name: string };
 
 // Any edit makes the portrait the user's, which 다시 만들기 keeps.
 export function editPortrait(store: ObjectStore, owner: string, at: PortraitAt, edit: Partial<Omit<Portrait, 'source'>>): Promise<ApiResult<Stored<'likeness'>>> {
@@ -200,7 +196,7 @@ export class Likenesses {
   // owner's text with its lorebook. An owner with none of them gets no call and nothing saved, so a description
   // written later (an account's first persona starts blank) is read on the next draw.
   private async build(owner: string, chat: Chat, prompt: IllustratePrompt, signal: AbortSignal): Promise<LikenessFailure | Stopped | null> {
-    const { store, files, credentials } = this.deps;
+    const { store, files } = this.deps;
     const material = this.material(owner);
     if (!material) return { kind: 'gone' };
     const { texts, lore } = material;
@@ -215,6 +211,7 @@ export class Likenesses {
     if ('kind' in writer) return writer;
 
     const read = await Promise.all(material.files.map(async (picture) => ({ picture, read: await files.read(picture.file, { signal }) })));
+    // A file gone or not opening is left out; any other failure ends the build.
     const failed = read.find(({ read }) => !read.ok && !PERMANENT.has(read.error))?.read;
     if (failed && !failed.ok) return failed.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unread', failure: failed };
     const held: Held[] = [...material.held, ...read.flatMap(({ picture, read }) => (read.ok ? [{ ...picture, bytes: read.data }] : []))];
@@ -224,13 +221,10 @@ export class Likenesses {
     const sources = sourcesOf(input);
     if (!sources.length) return save(empty);
 
-    const text = gather();
-    const call = await pageCall(this.deps, writer.route, 'likeness', null);
-    const answer = await generate({ credentials, connection: writer.route.connection.value, model: writer.route.model, settings: writer.settings, retries: retriesOf(store, writer.route.connection.value, writer.settings), messages: likenessRequest(input), call, signal, onText: text.add }).finally(() => endCall(store, call.id));
-    if (answer.cut === 'stopped') return { kind: 'stopped' };
-    const receipt = unsettled(receiptOf(callOf(writer.route), answer));
-    if (answer.state !== 'done') return { kind: 'failed', receipt };
-    const parsed = parseLikeness(text.value(), { sources, artist: artistOf(prompts.map(({ prompt }) => artistTags(prompt))), most: PORTRAITS_MOST });
+    const answer = await pageAnswer(this.deps, writer, 'likeness', null, likenessRequest(input), signal);
+    if ('kind' in answer) return answer;
+    const { receipt } = answer;
+    const parsed = parseLikeness(answer.text, { sources, artist: artistOf(prompts.map(({ prompt }) => artistTags(prompt))), most: PORTRAITS_MOST });
     return parsed.ok ? save({ portraits: parsed.portraits, at: Date.now(), receipt }) : { kind: 'invalid', receipt, reason: parsed.reason };
   }
 }

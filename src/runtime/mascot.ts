@@ -8,14 +8,11 @@ import { MASCOT, type Remark } from '../model/mascot';
 import type { ApiFailure } from './api';
 import type { RouteFailure } from './assignment';
 import { pinned, scopeOf } from './chat-context';
-import { retriesOf } from './connections';
-import { evaluationFailure } from './evaluation';
-import { gather, generate } from './generate';
+import { evaluatingTask } from './evaluation';
 import { taskWriter } from './profiles';
 import { mascotPrompt } from './prompts';
 import type { Session } from './session';
-import { callOf, endCall, pageCall } from './streams';
-import { receiptOf, unsettled } from './talk';
+import { pageAnswer } from './streams';
 import { chatPlace, receiptRow } from './usage';
 
 // 마스코트 대사 (design §6.11): one 보조 call per reply version writes the mascot's line and face. The only writer of
@@ -95,10 +92,8 @@ export class Commentator {
     for (const abort of this.aborts.values()) abort.abort();
   }
 
-  // The line is read through the server's stream like any model call, but leaves no marker: a pick-up on another
-  // device would write it again and pay for it twice.
   private async run(chat: string, message: string, version: string, signal: AbortSignal): Promise<MascotFailure | Stopped | null> {
-    const { store, credentials } = this.deps;
+    const { store } = this.deps;
     const stored = live(store.get('chat', chat));
     const messages = fold(store.children('entry', chat));
     const index = messages.findIndex(({ id }) => id === message);
@@ -108,23 +103,17 @@ export class Commentator {
     if (prompt.kind === 'missing') return { kind: 'prompt-missing' };
     const writer = taskWriter(store, stored.value, prompt.prompt.value.model);
     if ('kind' in writer) return writer;
-    const { route, settings } = writer;
+    const { route } = writer;
     const history = [...messages.slice(0, index), { ...messages[index]!, selected }];
     const said = saidBefore(store.children('remark', chat), messages.slice(0, index));
     const scope = scopeOf({ store }, chat, stored.value, history);
     const input = { scope, take: pinned({ store }, stored.value), prompt: prompt.prompt.value, index, mascot: MASCOT, said, seed: crypto.randomUUID() };
-    const assembled = await store.evaluation.mascot({ asker: 'mascot', chat }, input, signal).catch((error: unknown) => {
-      const failure = evaluationFailure(error);
-      return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
-    });
+    const assembled = await evaluatingTask(store.evaluation.mascot({ asker: 'mascot', chat }, input, signal));
     if ('kind' in assembled) return assembled;
-    const text = gather();
-    const call = await pageCall(this.deps, route, 'mascot', chat);
-    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
-    if (answer.cut === 'stopped') return { kind: 'stopped' };
-    const receipt = unsettled(receiptOf(callOf(route), answer));
-    if (answer.state !== 'done') return { kind: 'failed', receipt };
-    const parsed = parseRemark(text.value(), MASCOT);
+    const answer = await pageAnswer(this.deps, writer, 'mascot', chat, assembled.messages, signal);
+    if ('kind' in answer) return answer;
+    const { receipt } = answer;
+    const parsed = parseRemark(answer.text, MASCOT);
     if (!parsed.ok) return { kind: 'invalid', receipt, reason: parsed.reason };
     const remark: Remark = { message, version, mascot: MASCOT, expression: parsed.expression, line: parsed.line, receipt, model: { connection: route.connection.id, model: route.model.id }, at: Date.now() };
     // One line per version (model/mascot Remark): the new one replaces any written before it.

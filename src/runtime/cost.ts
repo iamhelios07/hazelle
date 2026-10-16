@@ -6,8 +6,8 @@ import type { ObjectStore } from './store';
 import { pause } from './pause';
 import { relayJson, type RelayFailure } from './relay';
 
-export type SettleFailure = RelayFailure | { kind: 'not-a-cost' };
-export type SettleResult = { ok: true; cost: Cost } | { ok: false; failure: SettleFailure };
+type SettleFailure = RelayFailure | { kind: 'not-a-cost' };
+type SettleResult = { ok: true; cost: Cost } | { ok: false; failure: SettleFailure };
 
 // A cost can take a while to be booked, and a lookup before then answers 404. provider-hub found six
 // seconds too short, so the waits grow to about a minute in all.

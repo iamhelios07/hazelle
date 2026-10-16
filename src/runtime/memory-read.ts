@@ -26,7 +26,7 @@ export const sourcesOf = (messages: Message[]): Source[] => messages.map((messag
 // Who fills the chat's memory slot (design §6.10): the first tool in pack order whose module the user let take it, else
 // the built-in memory while it and 장기 기억's 기능 are on; null otherwise. A tool's claim does not read 기능: it is its
 // module's own, switched with the module. A claim not answered yet leaves the built-in memory on.
-export type MemoryOwner = { kind: 'built-in'; setup: MemorySetup } | { kind: 'tool'; unit: ToolUnit } | null;
+type MemoryOwner = { kind: 'built-in'; setup: MemorySetup } | { kind: 'tool'; unit: ToolUnit } | null;
 
 export function memoryOwner(store: ObjectStore, chat: Chat): MemoryOwner {
   const unit = toolsOf(store, chat).find(({ module, tool }) => tool.manifest.uses.includes('memory') && store.get('module', module)?.value.takesMemory === true);

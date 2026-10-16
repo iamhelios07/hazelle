@@ -4,7 +4,7 @@ import { Pool } from './pool';
 import { relayJson, type RelayFailure } from './relay';
 
 export type CredentialFailure = RelayFailure | { kind: 'no-token' } | { kind: 'refused'; code: string };
-export type CredentialResult = { ok: true; credential: string } | { ok: false; failure: CredentialFailure };
+type CredentialResult = { ok: true; credential: string } | { ok: false; failure: CredentialFailure };
 
 // A token is traded again a minute before it runs out, so a reply never starts on a dying one.
 const MARGIN_MS = 60 * 1000;

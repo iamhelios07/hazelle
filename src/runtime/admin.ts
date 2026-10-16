@@ -39,7 +39,7 @@ export type AdminAccount = {
   fileBytesCap: OwnCap;
 };
 // The accounts read at readAt; the sums leave out the unread ones.
-export type Totals = { bytes: number; disk: number; unread: number; readAt: number };
+type Totals = { bytes: number; disk: number; unread: number; readAt: number };
 // A report is an account's message, or a report on a share (share set) sent by anyone holding its link: accountId and
 // username then name a signed-in reporter, else null. shared: the share's state now, null once it went with its sharer.
 export type SharedState = { held: boolean; reviewed: boolean; cut: boolean; removed: boolean; ownerId: string | null; ownerName: string | null };
@@ -68,8 +68,7 @@ export const readAdminAccount = (account: string) => api<{ account: AdminAccount
 export type ServiceUsage = Totals & { accounts: number };
 type UsagePage = { totals: Totals; accounts: number; next: string | null };
 
-// Explicit operator refresh only: bounded pages return totals, never the complete account list. Cancellation keeps
-// an obsolete/unmounted view from continuing to fan out through the service.
+// Explicit operator refresh only: bounded pages return totals, never the complete account list.
 export async function readServiceUsage(progress: (totals: ServiceUsage) => void, signal: AbortSignal): Promise<ApiResult<ServiceUsage>> {
   let next: string | null = null;
   let total: ServiceUsage | null = null;

@@ -22,7 +22,7 @@ import { translationPrompt } from './prompts';
 import type { ObjectStore } from './store';
 import { receiptOf } from './talk';
 import { keepRow } from './usage';
-import { evaluationFailure, type Lane } from './evaluation';
+import { evaluatingTask, type Lane } from './evaluation';
 
 // take: the display scripts that draw the status window (상태창 지정), whose boxes the source leaves out.
 // language: what the text is translated into. lane: auto-translation for 응답 번역, which a chat judged stuck refuses;
@@ -55,10 +55,7 @@ export async function translate(
   const { prompt, route } = translator;
   const profile = modelProfile(store, route.model);
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
-  const assembled = await store.evaluation.translation(lane, { scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
-    const failure = evaluationFailure(error);
-    return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
-  });
+  const assembled = await evaluatingTask(store.evaluation.translation(lane, { scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal));
   if ('kind' in assembled) return { ok: false, failure: assembled };
   const text = gather(onText);
   const answer = await generate({

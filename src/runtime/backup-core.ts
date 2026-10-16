@@ -35,7 +35,6 @@ export type Options = { signal?: AbortSignal; progress?: (step: BackupStep) => v
 export type ReadArchive = { file: Blob; entries: Map<string, ZipEntry>; objects: ObjectRow[]; files: Map<string, FileRef>; records: BackupRecords };
 export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' | 'backup-storage' | 'backup-crashed' };
 export type BackupPin = { pin: Pin; excluded: Set<string> };
-export type { BackupOutput } from './backup-zip';
 
 // Connection keys are kept. What is in 휴지통 reaches nothing: it is left out with all it owns, a character's chats
 // included, as are the pieces nothing reaches: the lore and pictures of an import cut short. left counts the objects that
@@ -400,8 +399,7 @@ async function copyOf({ kind, parent, value }: { kind: string; parent: string | 
   return toBase64(new Uint8Array(digest));
 }
 
-function parse(text: string | undefined): unknown {
-  if (text === undefined) return undefined;
+function parse(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
   } catch {

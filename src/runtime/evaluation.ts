@@ -28,6 +28,12 @@ export function evaluationFailure(error: unknown): ApiFailure {
   throw error;
 }
 
+export const evaluatingTask = <T>(work: Promise<T>): Promise<T | { kind: 'stopped' } | { kind: 'unsaved'; failure: ApiFailure }> =>
+  work.catch((error: unknown) => {
+    const failure = evaluationFailure(error);
+    return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
+  });
+
 // The worker gives a sign of life per stage of a message, lorebook entry scanned and text counted (engine/progress), so
 // STUCK_MS bounds one such unit, never a whole pass over a long chat; a bot's regex that never ends is what passes it.
 // Before a job has started, which a job that counts does once the tokenizer has loaded, only a worker that cannot
@@ -115,7 +121,7 @@ export class Evaluation {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'state', prefix }, signal) as Promise<ToolState | RanAway>;
   }
 
-  variables(lane: Lane<'view'>, scope: ChatScope, prefix = '', signal?: AbortSignal): Promise<VariableInspection> {
+  variables(lane: Lane<'view'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<VariableInspection> {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'variables', prefix }, signal) as Promise<VariableInspection>;
   }
 

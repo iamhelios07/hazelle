@@ -149,9 +149,10 @@ export const restoreAssets = (store: ObjectStore, removed: readonly Stored<'asse
   store.batch(removed.map(({ id, kind, parent, value }): Write => ({ type: 'restore', id, kind, parent, value })));
 
 // A moved character's id is already named by its staged entries; chats: their roots (runtime/chat-log chatWrites).
-export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; toggles: ToggleValues; chats: Write[] };
+export type Brought = { id: string; folder: string | null; risu: string; toggles: ToggleValues; chats: Write[] };
 
-// modules: those on for it, a card file's bundled ones, saved before it (runtime/card-file).
+// modules: those on for it: a moved character's, the ids its Risu modules were moved to (runtime/move), or a card file's
+// bundled ones, saved before it (runtime/card-file).
 export async function importCharacter(
   store: ObjectStore,
   files: Files,
@@ -173,8 +174,7 @@ export async function importCharacter(
   const { kept, unsupported } = stored.data;
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const entries = lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id }));
-  const on = brought?.modules ?? modules;
-  const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...own?.character, ...(brought && { risu: brought.risu }), ...(on.length > 0 && { modules: on }), ...(brought && Object.keys(brought.toggles).length > 0 && { toggles: brought.toggles }) };
+  const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...own?.character, ...(brought && { risu: brought.risu }), ...(modules.length > 0 && { modules }), ...(brought && Object.keys(brought.toggles).length > 0 && { toggles: brought.toggles }) };
   const likeness = own?.likeness ? { ...own.likeness, receipt: null } : null;
   const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries, likeness }, progress, brought && { id: brought.id, chats: brought.chats });
   return added.ok ? { ok: true, data: { id: added.data, unsupported, faceless: picture !== null && avatar === null } } : added;

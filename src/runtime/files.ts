@@ -176,3 +176,5 @@ export class Files {
     return bytes ? { ok: true, data: bytes } : { ok: false, error: 'unreadable' };
   }
 }
+
+export const PERMANENT = new Set(['not-found', 'unreadable']);

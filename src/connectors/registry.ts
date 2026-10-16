@@ -185,11 +185,6 @@ export function sending(route: Route, { model, messages, settings: stored }: Cha
 export const RETRYABLE: readonly number[] = [408, 429, 500, 502, 503, 504, 520, 522, 524, 529];
 export const RETRIES = 2;
 
-// null: each call is sent once.
-export function retryOf(times: number): { times: number; statuses: readonly number[] } | null {
-  return times ? { times, statuses: RETRYABLE } : null;
-}
-
 // Whether a refusal is the discount lane's own: no room for the call on it now (Discount busy).
 export function laneBusy(route: Route, request: ChatRequest, status: number, code: string | null): boolean {
   const lane = route.type?.discount;

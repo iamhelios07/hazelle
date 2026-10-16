@@ -5,7 +5,7 @@ import { authorNote, type ChatScope } from '../../engine/render';
 
 // What Lua's own functions read of a chat besides its messages and variables; its CBS and lorebook reads go through
 // the snapshot's scope. An editDisplay pass run on one is not fresh for another (ScriptDisplay).
-export type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
+type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
 
 // The card without its scripts and triggers, which no tag reads and a run is handed apart. No inlays: Lua's CBS
 // runs as the prompt does, which reads none.

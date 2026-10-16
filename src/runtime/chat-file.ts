@@ -26,7 +26,7 @@ export type ChatFile = {
   lore: Stored<'lore'>[];
   pictures: Map<string, Uint8Array<ArrayBuffer>>;
 };
-export type ChatFileError = 'not-chat-file' | 'other-version';
+type ChatFileError = 'not-chat-file' | 'other-version';
 
 const decoded = (text: string) => {
   try {
