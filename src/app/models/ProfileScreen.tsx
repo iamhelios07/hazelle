@@ -33,8 +33,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     return choice.kind === 'profile' ? choice.profile.value.name : '없음';
   };
   const others = connections.map((connection) => ({ connection, models: connection.value.starred.filter((model) => !using.has(`${connection.id}/${model.id}`)) })).filter((group) => group.models.length > 0);
-  // The default 묶음 is what a model without its own uses, so taking a model onto it clears the model's own.
-  const attach = (connection: string, model: string) => void setModelProfile(store, connection, model, isDefault ? null : id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
+  const attach = (connection: string, model: string) => void setModelProfile(store, connection, model, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
 
   async function copy() {
     if (!(await flush())) return;
