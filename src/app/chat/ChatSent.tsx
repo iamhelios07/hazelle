@@ -7,7 +7,7 @@ import type { Chapter, Memory, MemoryRecord } from '../../model/memory';
 import type { Role } from '../../model/prompt';
 import type { HttpRequest } from '../../connectors/types';
 import type { Sent } from '../../runtime/talk';
-import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
+import { MESSAGE_ROLES, SLOT, textName } from '../common/prompt-words';
 import { Button, Callout, ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Row, Section, Stack, Text } from '../ui';
 import { loreBudgetEditor, type Side } from './panels';
 import { budgetCut } from './infoReply';
@@ -25,17 +25,17 @@ const UNKEPT = '요청을 보낸 기기에서 채팅 화면을 열어 둔 동안
 export function partName(from: From, role: Role): string {
   switch (from.kind) {
     case 'block':
-      return from.name ?? (from.slot ? SLOT_NAMES[from.slot] : textName(role));
+      return from.name ?? (from.slot ? SLOT[from.slot].name : textName(role));
     case 'lore':
-      return `${SLOT_NAMES[from.slot]} · ${loreName(from.name)}`;
+      return `${SLOT[from.slot].name} · ${loreName(from.name)}`;
     case 'depth':
-      return `${SLOT_NAMES.lorebook} · ${loreName(from.name)} · @@depth ${from.depth}`;
+      return `${SLOT.lorebook.name} · ${loreName(from.name)} · @@depth ${from.depth}`;
     case 'continue':
       return '이어 쓰기 지시';
     case 'retrieval':
-      return `${SLOT_NAMES.memory} · 찾은 기록`;
+      return `${SLOT.memory.name} · 찾은 기록`;
     case 'tool':
-      return `${SLOT_NAMES.tool} · ${from.name}`;
+      return `${SLOT.tool.name} · ${from.name}`;
     case 'script':
       return '봇의 스크립트';
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { setChatPersona, startChat } from './chat-log';
+import { setChatOwn, startChat } from './chat-log';
 import { addFirstPersona, addPersona, chatPersona, chatsHolding, pinPersona, rebindChats, recordChatPersonas, removePersona, restorePersona, setCurrentPersona } from './personas';
 import { testServer } from './testing';
 import { blankCard } from '../engine/import/card';
@@ -22,7 +22,7 @@ describe('personas', () => {
     expect(chatPersona(store, read())).toMatchObject({ kind: 'persona', from: 'current', persona: { id: jin } });
     expect(await removePersona(store, jin!)).toEqual({ ok: false, error: 'current' });
 
-    await setChatPersona(store, chat, rin!);
+    await setChatOwn(store, chat, 'persona', rin!);
     const removed = await removePersona(store, rin!);
     expect(chatPersona(store, read())).toEqual({ kind: 'missing', from: 'chat' });
     expect(removed.ok && store.get('persona', rin!)?.value.deleted).toEqual(expect.any(Number));
@@ -43,9 +43,9 @@ describe('personas', () => {
 
     await pinPersona(store, luna, rin!);
     expect(chatPersona(store, read())).toMatchObject({ kind: 'persona', from: 'character', persona: { id: rin } });
-    await setChatPersona(store, chat, jin!);
+    await setChatOwn(store, chat, 'persona', jin!);
     expect(chatPersona(store, read())).toMatchObject({ kind: 'persona', from: 'chat', persona: { id: jin } });
-    await setChatPersona(store, chat, null);
+    await setChatOwn(store, chat, 'persona', null);
     await removePersona(store, rin!);
     expect(chatPersona(store, read())).toEqual({ kind: 'missing', from: 'character' });
     await pinPersona(store, luna, null);

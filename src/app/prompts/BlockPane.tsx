@@ -2,10 +2,11 @@ import { ArrowDown, ArrowUp, GitBranch, X } from 'lucide-react';
 import type { Ref } from 'react';
 import { ACTS, addOf, newOf } from '../common/acts';
 import { withParticle } from '../common/particles';
+import { SLOT } from '../common/prompt-words';
 import { SHORTCUTS } from '../shortcuts';
 import type { Block, ChatRange, ChatSlot, PromptSort, RecentSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
 import { Button, ChoiceGroup, Divider, Empty, Hint, MarkupArea, Menu, MenuHeading, MenuItem, MoreMenu, Row, Section, SettingRow, Stack, Stepper, Switch, Tag, Text, TitleField } from '../ui';
-import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, SLOT, type CacheMark } from './blocks';
+import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, type CacheMark } from './blocks';
 import { CommandMenu } from './CommandMenu';
 import { RECENT_MAX, type Snippet } from './edits';
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionType } from '../connectors/types';
 import { fold, shown } from '../model/chat';
 import { setIllustrate } from './characters';
-import { appendUserMessage, setChatIllustrateNote, startChat } from './chat-log';
+import { appendUserMessage, setChatOwn, startChat } from './chat-log';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { blankCard } from '../engine/import/card';
@@ -324,7 +324,7 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       expect(sceneCalls[0]!.sent.body).toMatch(/- Ari \(also called 아리\), outfits: \\"usual\\""\}/);
       expect(sceneCalls[0]!.sent.body).not.toContain("notes for this chat's pictures");
       expect(sceneCalls[1]!.sent.body).toContain('- Ari (also called 아리), outfits: \\"usual\\"; last drawn in \\"usual\\" in this message');
-      expect((await setChatIllustrateNote(session.store, chat, 'Ari wears the usual, rainy night')).ok).toBe(true);
+      expect((await setChatOwn(session.store, chat, 'illustrateNote', 'Ari wears the usual, rainy night')).ok).toBe(true);
       await draw();
       expect(log.filter(({ sent }) => sent.body?.includes('You direct the illustrations'))[2]!.sent.body).toContain("notes for this chat's pictures, which outrank the message: what to draw, how, and who wears what.\\n---\\nAri wears the usual, rainy night");
       expect(await editPortrait(session.store, owner, { index: 0, name: 'Nobody' }, { look: 'boy' })).toMatchObject({ ok: false, error: 'gone' });

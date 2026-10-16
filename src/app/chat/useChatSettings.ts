@@ -4,14 +4,13 @@ import type { Chat } from '../../model/chat';
 import type { Stored } from '../../model/kinds';
 import type { ApiFailure, ApiResult } from '../../runtime/api';
 import { chatModel, setChatModel, withMainModel } from '../../runtime/assignment';
-import { setCast, setChatIllustrateNote, setChatNote, setChatPersona, setChatPrompt, withCast, withOwn, type Own } from '../../runtime/chat-log';
+import { setCast, setChatOwn, withCast, withOwn, type Own } from '../../runtime/chat-log';
 import { chatPersona, pinPersona, setCurrentPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 
 type Draft = Omit<Chat, 'title' | 'character'>;
-const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote, illustrateNote: setChatIllustrateNote };
 export type ChatSettingsActions = ReturnType<typeof useChatSettings>['actions'];
 
 export function useChatSettings(id: string | null, saved: Chat | null, character: string | null) {
@@ -33,7 +32,7 @@ export function useChatSettings(id: string | null, saved: Chat | null, character
   }
 
   // null: follow the default again. A new chat holds it until its first send. The caller reports a failure.
-  const setOwn = (field: Own, value: string | null) => change((current) => withOwn(current, field, value), (id) => WRITE_OWN[field](store, id, value));
+  const setOwn = (field: Own, value: string | null) => change((current) => withOwn(current, field, value), (id) => setChatOwn(store, id, field, value));
 
   // A pick is this chat's persona and the current one, which a chat not saved yet follows.
   async function choosePersona(persona: string): Promise<{ ok: true } | ApiFailure> {

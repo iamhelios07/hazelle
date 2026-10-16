@@ -5,7 +5,7 @@ import type { VariableInspection, VariableWriter } from '../../engine/render';
 import type { PackOwner } from '../../model/library';
 import { inspectToggles } from '../../runtime/chat-context';
 import { afterEnter, moduleContributions, type AfterEnter, type ModuleContribution, type Sending } from '../../runtime/turn-context';
-import { SLOT_NAMES } from '../common/prompt-words';
+import { SLOT } from '../common/prompt-words';
 import { tokens } from '../common/receipt';
 import { ago } from '../common/time';
 import { useSearch } from '../common/useSearch';
@@ -93,7 +93,7 @@ function sourceName(source: TokenSource): string {
     case 'persona':
     case 'memory':
     case 'lorebook':
-      return SLOT_NAMES[source.kind];
+      return SLOT[source.kind].name;
     case 'chat':
       return '대화';
     default:
