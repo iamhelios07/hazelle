@@ -35,6 +35,7 @@ import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
+import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
@@ -182,6 +183,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         key={label}
         label={label}
         lines={lines}
+        expand={SHORTCUTS.bigEdit.keys}
         readOnly
         value={translation.translationOf(source) ?? ''}
         placeholder={untranslated(source)}
@@ -261,10 +263,10 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           </>
         ) : (
           <>
-            <TextField label="설명" lines={20} value={text.description} onChange={(value) => change('description', value)} />
-            {legacy.personality && <TextField label="성격" lines={4} value={text.personality} onChange={(value) => change('personality', value)} />}
-            {legacy.scenario && <TextField label="상황" lines={4} value={text.scenario} onChange={(value) => change('scenario', value)} />}
-            <TextField label="예시 대화" lines={6} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
+            <TextField label="설명" lines={20} expand={SHORTCUTS.bigEdit.keys} value={text.description} onChange={(value) => change('description', value)} />
+            {legacy.personality && <TextField label="성격" lines={4} expand={SHORTCUTS.bigEdit.keys} value={text.personality} onChange={(value) => change('personality', value)} />}
+            {legacy.scenario && <TextField label="상황" lines={4} expand={SHORTCUTS.bigEdit.keys} value={text.scenario} onChange={(value) => change('scenario', value)} />}
+            <TextField label="예시 대화" lines={6} expand={SHORTCUTS.bigEdit.keys} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
           </>
         )}
       </Section>
@@ -283,7 +285,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
             addLabel="첫인사 추가"
             removed={(index) => `${index + 1}번째 첫인사를 삭제했어요.`}
           >
-            {({ value, name, set, remove }) => <TextField label={name} lines={6} value={value} onChange={set} action={remove} />}
+            {({ value, name, set, remove }) => <TextField label={name} lines={6} expand={SHORTCUTS.bigEdit.keys} value={value} onChange={set} action={remove} />}
           </EntryList>
         )}
       </Section>
@@ -293,6 +295,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         <TextField
           label="시스템 프롬프트"
           lines={6}
+          expand={SHORTCUTS.bigEdit.keys}
           value={text.systemPrompt}
           onChange={(value) => change('systemPrompt', value)}
           help={{ text: '비워 두면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts' }) } }}
@@ -300,6 +303,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         <TextField
           label="대화 뒤 지시문"
           lines={4}
+          expand={SHORTCUTS.bigEdit.keys}
           value={text.postHistoryInstructions}
           onChange={(value) => change('postHistoryInstructions', value)}
           help="대화 기록 바로 뒤에 붙어요."
@@ -312,6 +316,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         <TextField
           label={TRANSLATOR_NOTE}
           lines={6}
+          expand={SHORTCUTS.bigEdit.keys}
           value={noteSave.unsaved.note ?? character.translatorNote ?? ''}
           onChange={(note) => noteSave.change({ note })}
           placeholder={NOTE_PLACEHOLDER}

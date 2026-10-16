@@ -20,7 +20,7 @@ import { ChatSearch } from './ChatSearch';
 import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useEditBeside } from './editBeside';
-import type { Panel, Side } from './panels';
+import { toggleEditor, type Panel, type Side } from './panels';
 import { useChat } from './useChat';
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
@@ -74,7 +74,11 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
         footer={<ChatComposer chat={chat} folded={folded} />}
         panel={
           panel?.kind === 'toggles' ? (
-            <ChatToggles card={chat.card} toggles={chat.toggles} toggleOwner={chat.toggleOwner} onFlip={actions.flip} onWrite={actions.writeToggle} onReset={actions.resetToggles} onEditPrompt={prompt.kind === 'prompt' ? () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles', fromToggles: true }) : undefined} onClose={actions.closePanel} />
+            <ChatToggles card={chat.card} toggles={chat.toggles} toggleOwner={chat.toggleOwner} onFlip={actions.flip} onWrite={actions.writeToggle} onReset={actions.resetToggles} onEdit={(section) => {
+                const to = toggleEditor(section);
+                if (to.kind === 'module') navigate(to);
+                else actions.side(to);
+              }} onClose={actions.closePanel} />
           ) : panel?.kind === 'info' ? (
             <ChatInfo id={id} shelf={shelf} messages={chat.messages} infoPick={chat.infoPick} tab={panel.tab} onTab={actions.switchInfoTab} onPick={actions.pickInfo} onRecord={chat.features.memory ? actions.memory : undefined} onEdit={actions.side} onClose={actions.closePanel} />
           ) : panel?.kind === 'memory' ? (
