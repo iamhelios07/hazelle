@@ -1,9 +1,10 @@
-import { ofSort, translationPrompt, illustrationPrompt, mascotPrompt } from '../../runtime/prompts';
+import type { PromptSort } from '../../model/prompt';
+import { ofSort, translationPrompt, illustrationPrompt, mascotPrompt, type PromptChoice } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import type { PromptPane } from '../shell/routes';
-import { defaultMark, DELETED_PROMPT, follows } from './words';
+import { defaultMark, DELETED_PROMPT, follows, taskModelHelp } from './words';
 import { useSession, useSettings, usePrompts } from '../session';
-import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag } from '../ui';
+import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag, Text } from '../ui';
 type NamedCharacter = { name: string } | null;
 type Reader = Pick<ObjectStore, 'get'>;
 // A prompt and the editor pane a door names; null, the prompt list.
@@ -65,5 +66,17 @@ export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }:
       {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => onEdit({ id: choice.prompt.id, pane })} />}
       <MenuItem label="프롬프트 관리…" onClick={() => onEdit(null)} />
     </Menu>
+  );
+}
+
+export function TaskModelRow<S extends PromptSort>({ label, noun, choice, sub, model, onEdit }: { label: string; noun: string; choice: PromptChoice<S>; sub?: string; model: string; onEdit: (door: PromptDoor) => void }) {
+  const help = taskModelHelp(noun, choice.kind === 'prompt');
+  return (
+    <SettingRow
+      label={label}
+      help={{ text: help.text, open: { label: help.door, onClick: () => onEdit(choice.kind === 'prompt' ? { id: choice.prompt.id, pane: 'model' } : null) } }}
+      sub={sub}
+      control={<Text variant="note">{model}</Text>}
+    />
   );
 }

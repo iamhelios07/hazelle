@@ -10,14 +10,14 @@ import { ACTS, addOf } from '../common/acts';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, MemorySplit, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
-import type { PromptDoor } from '../common/TaskPrompt';
+import { TaskModelRow, type PromptDoor } from '../common/TaskPrompt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, resetTo, SCOPE, scopeTag, taskModelHelp } from '../common/words';
+import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, resetTo, SCOPE, scopeTag } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
-import { Button, Callout, ConfirmDialog, Empty, IconButton, List, MenuItem, MoreMenu, Row, Section, SettingRow, SidePanel, Stack, Text, TextField } from '../ui';
+import { Button, Callout, ConfirmDialog, Empty, IconButton, List, MenuItem, MoreMenu, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
 import { MemoryRow, type ChatMemoryRecord } from './ChatMemoryRecord';
 import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
@@ -231,16 +231,14 @@ function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (door: Pr
   const store = useStore();
   const writer = memoryWriter(store, chat);
   const prompt = memoryPrompt(store);
-  const model = taskModelHelp('기억', prompt.kind === 'prompt');
   return (
-    <SettingRow
+    <TaskModelRow
       label="기억 모델"
-      help={{
-        text: model.text,
-        open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => onEditPrompt(null) },
-      }}
+      noun="기억"
+      choice={prompt}
       sub={prompt.kind === 'prompt' && !prompt.prompt.value.model ? follows(MODEL_ROLES.aux) : undefined}
-      control={<Text variant="note">{'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}</Text>}
+      model={'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}
+      onEdit={onEditPrompt}
     />
   );
 }

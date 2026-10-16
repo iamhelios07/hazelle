@@ -4,11 +4,10 @@ import type { TranslateSetup } from '../../runtime/characters';
 import { translationPrompt } from '../../runtime/prompts';
 import type { translatorOf } from '../../runtime/translate';
 import { useSession } from '../session';
-import { SettingRow, Switch, Text } from '../ui';
+import { SettingRow, Switch } from '../ui';
 import { describeTranslateFailure } from './failure';
 import { IntoLanguage } from './IntoLanguage';
-import { appliesTo, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
-import { taskModelHelp } from './words';
+import { appliesTo, TaskModelRow, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
 
 type Props = {
   translate: TranslateSetup;
@@ -25,7 +24,6 @@ type Props = {
 export function TranslateRows({ translate, translation, card, note, opens, onChange, onEditPrompt }: Props) {
   const { store } = useSession();
   const prompt = translationPrompt(store, translate.prompt);
-  const model = taskModelHelp('번역', prompt.kind === 'prompt');
   return (
     <>
       <SettingRow
@@ -49,14 +47,7 @@ export function TranslateRows({ translate, translation, card, note, opens, onCha
         label="번역 프롬프트"
         control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
       />
-      <SettingRow
-        label="번역 모델"
-        help={{
-          text: model.text,
-          open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => onEditPrompt(null) },
-        }}
-        control={<Text variant="note">{translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}</Text>}
-      />
+      <TaskModelRow label="번역 모델" noun="번역" choice={prompt} model={translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)} onEdit={onEditPrompt} />
     </>
   );
 }

@@ -6,12 +6,12 @@ import { drawingModels, type ImageRoute, type sceneWriterOf } from '../../runtim
 import { illustrationPrompt } from '../../runtime/prompts';
 import { useConnections, useSession } from '../session';
 import { navigate } from '../shell/router';
-import { Button, ChipButton, IconButton, Menu, MenuHeading, MenuItem, NumberInput, SettingRow, Switch, Text } from '../ui';
+import { Button, ChipButton, IconButton, Menu, MenuHeading, MenuItem, NumberInput, SettingRow, Switch } from '../ui';
 import { ACTS, addOf, newOf } from './acts';
 import { describeIllustrateFailure } from './failure';
 import { readTyped } from './typedNumber';
-import { appliesTo, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
-import { follows, NOT_STARRED, taskModelHelp } from './words';
+import { appliesTo, TaskModelRow, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
+import { follows, NOT_STARRED } from './words';
 
 type Props = {
   illustrate: IllustrateSetup;
@@ -27,7 +27,6 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
   const { store } = useSession();
   const routes = drawingModels(useConnections());
   const prompt = illustrationPrompt(store, illustrate.prompt);
-  const model = taskModelHelp('삽화', prompt.kind === 'prompt');
   return (
     <>
       <SettingRow
@@ -58,14 +57,7 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
         label="삽화 프롬프트"
         control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
       />
-      <SettingRow
-        label="장면 모델"
-        help={{
-          text: model.text,
-          open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => onEditPrompt(null) },
-        }}
-        control={<Text variant="note">{'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name}</Text>}
-      />
+      <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name} onEdit={onEditPrompt} />
     </>
   );
 }
