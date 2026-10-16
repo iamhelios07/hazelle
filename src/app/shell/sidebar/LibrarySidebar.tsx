@@ -18,7 +18,6 @@ const openFolderIds = (stored: string): string[] => {
 };
 
 type Props = {
-  // Phones: the list is the home screen.
   page: boolean;
   collapsed: boolean;
   onCollapse: (collapsed: boolean) => void;

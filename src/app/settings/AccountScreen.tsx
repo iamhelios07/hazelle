@@ -20,7 +20,6 @@ function Used({ label, bytes, cap }: { label: string; bytes: number | null; cap:
   return <Gauge label={label} share={share} amount={bytes === null ? UNKNOWN : sizeText(bytes)} of={cap === null ? undefined : `/ ${sizeText(cap)}`} />;
 }
 
-// section: the one the page was opened at (shell/routes).
 export function AccountScreen({ section, back }: { section: AccountSection | null; back: Back | null }) {
   const { username } = useSession();
   const { onLock, onLogout } = useAccount();
@@ -56,7 +55,6 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
           />
         </SettingGroup>
       </Stack>
-      {/* The account's own data first, then help and the app, then 탈퇴 last. */}
       <Columns min="panel">
         <Stack gap="section">
           <Panel title="저장 공간" help={`${BIN}에서 영구 삭제하면 공간이 생겨요.`}>

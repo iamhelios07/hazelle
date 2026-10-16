@@ -8,7 +8,7 @@ import { ReportButton } from './ReportDialog';
 
 const REPLY = '내 알림에 대한 답변';
 
-// Opening it marks what it shows as seen. Writing to the operator starts here too, where their answer comes back. seek: the page was opened at it, from the toast saying notices came.
+// Writing to the operator starts here too, where their answer comes back.
 export function NoticesSection({ seek }: { seek: boolean }) {
   const pages = usePages(readNotices);
   const [open, setOpen] = useState<Notice | null>(null);

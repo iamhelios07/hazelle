@@ -8,7 +8,6 @@ const TITLE = '새 소식';
 // The rest opens in a dialog, so the account page does not grow with every release.
 const SHOWN = 3;
 
-// seek: the page was opened at it, from the toast saying this release came with news.
 export function NewsSection({ seek }: { seek: boolean }) {
   const [all, setAll] = useState(false);
   return (

@@ -36,7 +36,6 @@ const stages = (direction: Direction, steps: Steps): ProgressStep[] => [
   ...STAGES[direction].kinds.map(({ kind, label }): ProgressStep => (steps[kind] ? { label, done: steps[kind].done, total: steps[kind].total } : { label })),
 ];
 
-// The user's own full backup, loaded back only into a new account.
 export function BackupSection() {
   const { username, store, files } = useSession();
   const saves = useSaves();

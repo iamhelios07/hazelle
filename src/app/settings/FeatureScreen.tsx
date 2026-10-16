@@ -20,7 +20,6 @@ import { MemoryDefaults } from './MemoryDefaults';
 
 const editPrompt = (door: PromptDoor) => navigate(door ? { kind: 'prompt', ...door } : { kind: 'prompts' });
 
-// A feature's shared values, the layer every prompt, character and chat that sets none of its own reads.
 export function FeatureScreen({ feature, back }: { feature: Feature; back: Back }) {
   const name = FEATURE_NAMES[feature];
   const Defaults = DEFAULTS[feature];
