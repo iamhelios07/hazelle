@@ -1,5 +1,6 @@
 import type { RelayError, ServerError } from '../../contracts/http';
 import type { ApiFailure } from '../../runtime/api';
+import type { RouteFailure } from '../../runtime/assignment';
 import type { CatalogFailure } from '../../runtime/catalog';
 import type { IllustrateFailure } from '../../runtime/illustrate';
 import type { LikenessFailure } from '../../runtime/likeness';
@@ -12,7 +13,7 @@ import type { SignInFailure } from '../../runtime/sign-in';
 import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
 import { count } from './typedNumber';
-import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, UNREADABLE_IMAGE } from './words';
+import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, SHARE, UNREADABLE_IMAGE } from './words';
 
 // The server's codes left on the generic fallback, which names the code for the operator. Every other server code needs
 // words in MESSAGES; its remaining keys are codes the runtime makes itself.
@@ -61,7 +62,7 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'file-blocked': '운영자가 차단한 파일이라 올리거나 열 수 없어요.',
   'too-many-reports': '운영자가 아직 확인하지 않은 알림이 많아서 더 보낼 수 없어요.',
   'too-many-visits': '요청을 너무 자주 보냈어요. 잠시 뒤에 다시 시도해 주세요.',
-  'share-held': '신고가 들어와 운영자가 확인하는 동안 멈춘 링크예요.',
+  'share-held': SHARE.heldNote,
   'no-consent': '링크로 공유하려면 먼저 공유 규칙에 동의해야 해요.',
   'not-admin': '운영자 계정으로만 할 수 있어요.',
   'no-session': '로그인이 풀렸어요. 새로고침한 뒤 다시 로그인해 주세요.',
@@ -86,6 +87,24 @@ const SERVER_TROUBLE = '서버에 문제가 생겼어요. 잠시 뒤에 다시 �
 // model: the subject of 쓰던, particle and all.
 const profileGone = (model: string) => `${model} 쓰던 ${MODEL_SETTINGS}이 삭제됐어요. ${inSettings('models')}에서 다른 ${MODEL_SETTINGS}을 선택해 주세요.`;
 const NO_DEFAULT_PROFILE = `기본으로 지정한 ${MODEL_SETTINGS}이 없어요. ${inSettings('models')}에서 ${MODEL_SETTINGS} 하나를 기본으로 지정해 주세요.`;
+const TOKENIZER = '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
+const EMPTY_REPLY = '모델이 내용이 비어 있는 응답을 보냈어요.';
+const GONE_MESSAGE = '삭제된 메시지예요.';
+
+// model ends in 모델: 이 and 은 are its particles.
+function describeRoute(failure: RouteFailure | { kind: 'profile-missing'; own: boolean }, model: string, prompt: string): string {
+  const where = `${prompt} 프롬프트나 ${inSettings('models')}에서`;
+  switch (failure.kind) {
+    case 'no-model':
+      return `${model}이 지정되지 않았어요. ${where} 모델을 선택해 주세요.`;
+    case 'model-gone':
+      return `${model}이 즐겨찾기에 없어요. ${where} 다시 선택해 주세요.`;
+    case 'image-only':
+      return `선택한 ${model}은 이미지만 만들 수 있어요. ${where} 다른 모델을 선택해 주세요.`;
+    case 'profile-missing':
+      return failure.own ? profileGone(`${model}이`) : NO_DEFAULT_PROFILE;
+  }
+}
 
 const SECRET = { password: '비밀번호가', recovery: '복구 키가' } as const;
 
@@ -263,13 +282,10 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
     case 'tokenizer':
       return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 번역해 주세요.';
     case 'no-model':
-      return `번역 모델이 지정되지 않았어요. 번역 프롬프트나 ${inSettings('models')}에서 모델을 선택해 주세요.`;
     case 'model-gone':
-      return `번역 모델이 즐겨찾기에 없어요. 번역 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
     case 'image-only':
-      return `선택한 번역 모델은 이미지만 만들 수 있어요. 번역 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
     case 'profile-missing':
-      return failure.own ? profileGone('번역 모델이') : NO_DEFAULT_PROFILE;
+      return describeRoute(failure, '번역 모델', '번역');
     case 'failed':
       return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 내용이 비어 있는 번역 결과를 보냈어요.';
     case 'unsaved':
@@ -285,21 +301,18 @@ const INVALID = {
 export function describeMemoryFailure(failure: MemoryFailure): string {
   switch (failure.kind) {
     case 'no-model':
-      return `기억 정리 모델이 지정되지 않았어요. 기억 프롬프트나 ${inSettings('models')}에서 모델을 선택해 주세요.`;
     case 'model-gone':
-      return `기억 정리 모델이 즐겨찾기에 없어요. 기억 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
     case 'image-only':
-      return `선택한 기억 정리 모델은 이미지만 만들 수 있어요. 기억 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
+    case 'profile-missing':
+      return describeRoute(failure, '기억 정리 모델', '기억');
     case 'prompt-missing':
       return `기본 기억 프롬프트가 없어요. ${inSettings('prompts')}에서 기억 프롬프트 하나를 기본으로 지정해 주세요.`;
-    case 'profile-missing':
-      return failure.own ? profileGone('기억 정리 모델이') : NO_DEFAULT_PROFILE;
     case 'runaway':
       return runaway('기억을 정리하기 전에');
     case 'tokenizer':
-      return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
+      return TOKENIZER;
     case 'failed':
-      return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 내용이 비어 있는 응답을 보냈어요.';
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : EMPTY_REPLY;
     case 'invalid':
       return INVALID[failure.reason];
     case 'unsaved':
@@ -319,21 +332,18 @@ const SCENE_INVALID = { ...INVALID, paragraph: '모델이 메시지에 없는 �
 export function describeIllustrateFailure(failure: IllustrateFailure): string {
   switch (failure.kind) {
     case 'no-model':
-      return `장면 모델이 지정되지 않았어요. 삽화 프롬프트나 ${inSettings('models')}에서 모델을 선택해 주세요.`;
     case 'model-gone':
-      return `장면 모델이 즐겨찾기에 없어요. 삽화 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
     case 'image-only':
-      return `선택한 장면 모델은 이미지만 만들 수 있어요. 삽화 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
+    case 'profile-missing':
+      return describeRoute(failure, '장면 모델', '삽화');
     case 'prompt-missing':
       return failure.own ? '선택한 삽화 프롬프트가 삭제됐어요. 채팅의 삽화 메뉴에서 다른 프롬프트를 선택해 주세요.' : `기본 삽화 프롬프트가 없어요. ${inSettings('prompts')}에서 삽화 프롬프트 하나를 기본으로 지정해 주세요.`;
-    case 'profile-missing':
-      return failure.own ? profileGone('장면 모델이') : NO_DEFAULT_PROFILE;
     case 'tokenizer':
-      return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
+      return TOKENIZER;
     case 'runaway':
       return runaway('장면을 정하기 전에');
     case 'failed':
-      return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 내용이 비어 있는 응답을 보냈어요.';
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : EMPTY_REPLY;
     case 'invalid':
       return SCENE_INVALID[failure.reason];
     case 'no-image-model':
@@ -349,7 +359,7 @@ export function describeIllustrateFailure(failure: IllustrateFailure): string {
     case 'file-refused':
       return '서버에서 이미지 저장을 거절했어요.';
     case 'gone':
-      return '삭제된 메시지예요.';
+      return GONE_MESSAGE;
     case 'empty':
       return '내용이 비어 있는 메시지예요.';
     case 'unsaved':
@@ -376,25 +386,22 @@ const REMARK_INVALID = { unreadable: INVALID.unreadable, line: '모델이 대사
 export function describeMascotFailure(failure: MascotFailure): string {
   switch (failure.kind) {
     case 'no-model':
-      return `대사 모델이 지정되지 않았어요. 마스코트 프롬프트나 ${inSettings('models')}에서 모델을 선택해 주세요.`;
     case 'model-gone':
-      return `대사 모델이 즐겨찾기에 없어요. 마스코트 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
     case 'image-only':
-      return `선택한 대사 모델은 이미지만 만들 수 있어요. 마스코트 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
+    case 'profile-missing':
+      return describeRoute(failure, '대사 모델', '마스코트');
     case 'prompt-missing':
       return `기본 마스코트 프롬프트가 없어요. ${inSettings('prompts')}에서 마스코트 프롬프트 하나를 기본으로 지정해 주세요.`;
-    case 'profile-missing':
-      return failure.own ? profileGone('대사 모델이') : NO_DEFAULT_PROFILE;
     case 'tokenizer':
-      return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
+      return TOKENIZER;
     case 'runaway':
       return runaway('대사를 쓰기 전에');
     case 'failed':
-      return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 내용이 비어 있는 응답을 보냈어요.';
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : EMPTY_REPLY;
     case 'invalid':
       return REMARK_INVALID[failure.reason];
     case 'gone':
-      return '삭제된 메시지예요.';
+      return GONE_MESSAGE;
     case 'unsaved':
       return `대사를 저장하지 못했어요. ${describeFailure(failure.failure)}`;
   }
