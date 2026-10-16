@@ -4,7 +4,7 @@ import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
-import { live } from '../model/library';
+import { live, type Module } from '../model/library';
 import { sortOf, type Block, type ConversationPrompt, type PictureSettings, type PictureTags, type Prompt, type PromptOf, type PromptSort, type ToggleLine } from '../model/prompt';
 import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
@@ -12,6 +12,7 @@ import type { ApiResult } from './api';
 import type { BackupOutput } from './backup-zip';
 import { writeWhole } from './export-file';
 import { companionModules } from './modules';
+import type { Write } from './object-writes';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
@@ -84,11 +85,19 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id
   return store.create('prompt', { name, blocks, toggles: [], authorNote: '', models: {} }, { id });
 }
 
-// paired: the modules its preset named that were here, turned on for it.
-export async function savePreset(store: ObjectStore, { prompt }: PresetRead): Promise<ApiResult<{ id: string; paired: string[] }>> {
-  const paired = companionModules(store, prompt.companions ?? []);
-  const saved = await store.create('prompt', paired.length > 0 ? { ...prompt, modules: paired } : prompt);
-  return saved.ok ? { ok: true, data: { id: saved.data.id, paired } } : saved;
+// paired: the modules turned on for it, those its preset named that were here and then made, the module that holds its
+// preset's regex, written with it in one batch.
+export async function savePreset(store: ObjectStore, { prompt, regex }: PresetRead): Promise<ApiResult<{ id: string; paired: string[]; made: string | null }>> {
+  const id = crypto.randomUUID();
+  const made = regex.length > 0 ? crypto.randomUUID() : null;
+  const paired = [...companionModules(store, prompt.companions ?? []), ...(made ? [made] : [])];
+  const module: Module = { name: `${prompt.name} 정규식`.trim(), description: '', namespace: null, regex, triggers: [], toggles: [], loreFolders: [] };
+  const writes: Write[] = [
+    ...(made ? [{ type: 'create' as const, kind: 'module' as const, id: made, parent: null, value: module }] : []),
+    { type: 'create', kind: 'prompt', id, parent: null, value: paired.length > 0 ? { ...prompt, modules: paired } : prompt },
+  ];
+  const saved = await store.batch(writes);
+  return saved.ok ? { ok: true, data: { id, paired, made } } : saved;
 }
 
 // Its Risu preset file, naming for Risu's moduleIntergration the live modules on for it that have a namespace, the only

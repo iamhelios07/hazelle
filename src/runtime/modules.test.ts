@@ -106,4 +106,15 @@ describe('modules', () => {
     expect(paired.ok && paired.data.map(({ id }) => id)).toEqual([saved.data.id]);
     expect(store.get('prompt', saved.data.id)!.value).toMatchObject({ companions: ['bell', 'risu-chime'], modules: [bell.data.id, chime.data.id] });
   });
+
+  it("puts a preset's regex in a module on for its prompt, counting the one Risu had switched off", async () => {
+    const { store } = await server.account();
+    const read = convertPreset({ name: '핑퐁', promptTemplate: [], regex: [{ comment: '따옴표', in: '"', out: '“', type: 'editoutput', ableFlag: false }, { comment: '꺼짐', in: 'a', out: 'b', type: 'disabled' }] });
+    if (!read.ok) throw new Error(read.failure.kind);
+    expect(read.unsupported).toContainEqual({ kind: 'regex-off', count: 1 });
+    const saved = await savePreset(store, read);
+    if (!saved.ok) throw new Error(saved.error);
+    expect(store.get('prompt', saved.data.id)!.value).toMatchObject({ modules: [saved.data.made] });
+    expect(store.get('module', saved.data.made!)!.value).toMatchObject({ name: '핑퐁 정규식', regex: [{ name: '따옴표', find: '"', replace: '“', stage: 'output' }] });
+  });
 });

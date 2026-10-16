@@ -54,7 +54,7 @@ export class ImportReader {
         if (tool) return readTool(bytes);
         if (isPresetFile(request.file.name)) {
           const read = await importPreset(request.file.name, bytes);
-          if (read.ok) return { ok: true, preset: { prompt: read.prompt, unsupported: read.unsupported } };
+          if (read.ok) return { ok: true, preset: { prompt: read.prompt, regex: read.regex, unsupported: read.unsupported } };
           // Its other failures go as details, which the app's DETAIL_FAILURE words.
           return { ok: false, failure: read.failure.kind === 'unreadable' ? { kind: 'unreadable' } : { kind: 'unreadable', detail: read.failure.kind } };
         }

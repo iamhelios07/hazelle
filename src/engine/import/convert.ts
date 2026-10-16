@@ -316,7 +316,7 @@ function variables(value: unknown): [string, string][] {
 
 // Switching a script off in Risu replaces its stage with 'disabled' (RegexData.svelte), so its stage is lost and it
 // cannot come in as off; it is counted, as is a script on a stage risu-alpha does not run (edittrans).
-export function regexScripts(scripts: unknown[], tally: Tally): Unstamped<RegexScript>[] {
+export function regexScripts<K>(scripts: unknown[], tally: Tally<K | 'regex-off' | 'regex-stage'>): Unstamped<RegexScript>[] {
   return scripts.filter(isRecord).flatMap((script) => {
     const stage = STAGES.get(script.type);
     if (!stage) {

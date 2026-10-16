@@ -81,7 +81,13 @@ const unsaved = (file: string, failure: ApiFailure): Result => ({ kind: 'failed'
 // An import is undone as its kind is deleted, to 휴지통.
 const undoCharacter = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${name}' 캐릭터를 가져왔어요.`, run: () => setDeleted(store, id, Date.now()) });
 const undoModule = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${moduleName(name)}' 모듈을 가져왔어요.`, run: () => setModuleDeleted(store, id, Date.now()) });
-const undoPrompt = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${promptName(name)}' 프롬프트를 가져왔어요.`, run: () => removePrompt(store, id) });
+const undoPrompt = (store: ObjectStore, id: string, name: string, made: string | null): Undo => ({
+  message: `'${promptName(name)}' 프롬프트를 가져왔어요.`,
+  run: async () => {
+    const done = await Promise.all([removePrompt(store, id), ...(made === null ? [] : [setModuleDeleted(store, made, Date.now())])]);
+    return done.find((result) => !result.ok) ?? done[0]!;
+  },
+});
 const undoPersona = (store: ObjectStore, id: string, name: string): Undo => ({ message: `'${name}' 페르소나를 가져왔어요.`, run: () => removePersona(store, id) });
 
 async function undoAll(undos: Undo[]): Promise<{ ok: true } | ApiFailure> {
@@ -186,7 +192,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       if ('preset' in parsed) {
         const saved = await savePreset(store, parsed.preset);
         if (!saved.ok) return unsaved(file.name, saved);
-        offer(undoPrompt(store, saved.data.id, parsed.preset.prompt.name));
+        offer(undoPrompt(store, saved.data.id, parsed.preset.prompt.name, saved.data.made));
         const modules = saved.data.paired.map((id) => moduleName(store.get('module', id)!.value.name));
         return promptOutcome(file.name, parsed.preset, saved.data.id, modules);
       }

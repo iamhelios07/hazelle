@@ -1,14 +1,15 @@
 import { gzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
-import { add, counted, record, text, type Json, type Tally } from './convert';
+import { add, counted, record, regexScripts, stampIds, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack, writeMsgpack } from './msgpack';
 import { pack, unpack } from './risum';
 import { readToggles, writeToggles } from './toggles';
+import type { RegexScript } from './types';
 
 // What a preset holds that the prompt does not take, in the order the summary lists it.
-const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'prompt-settings', 'settings'] as const;
+const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex-off', 'regex-stage', 'variables', 'prompt-settings', 'settings'] as const;
 export type PresetUnsupportedKind = (typeof UNSUPPORTED)[number];
 type Counted = Exclude<PresetUnsupportedKind, 'repeated-slot'>;
 // A repeated slot is listed once per slot, so the summary can name it.
@@ -17,7 +18,8 @@ export type PresetUnsupported = { kind: Counted; count: number } | { kind: 'repe
 // unreadable: not RPack'd gzip'd MessagePack. not-preset: a Risu container of another type. decrypt-failed:
 // the preset inside does not open. no-template: a legacy preset, which risu-alpha does not assemble.
 export type PresetFailure = { kind: 'unreadable' | 'not-preset' | 'decrypt-failed' | 'no-template' };
-export type PresetRead = { prompt: ConversationPrompt; unsupported: PresetUnsupported[] };
+// regex: the preset's scripts, which a prompt cannot hold; saving puts them in a module on for the prompt.
+export type PresetRead = { prompt: ConversationPrompt; regex: RegexScript[]; unsupported: PresetUnsupported[] };
 export type PresetResult = ({ ok: true } & PresetRead) | { ok: false; failure: PresetFailure };
 
 const ROLES = new Map<unknown, Role>([
@@ -187,7 +189,7 @@ function convert(preset: Json, template: unknown[]): PresetRead {
   // A template preset sends none of these texts (compat spec, legacy-only buckets); its jailbreak goes only
   // through a jailbreak item, counted above.
   count('preset-text', [preset.mainPrompt, preset.jailbreak, preset.globalNote].filter((value) => text(value).trim()).length);
-  count('regex', list(preset.regex).length);
+  const { regex } = stampIds({ regex: regexScripts(list(preset.regex), counts), triggers: [] });
   // They default chat variables (getvar), not toggles, which are globals with no default (compat spec §d).
   count('variables', text(preset.templateDefaultVariables).split(/\r?\n/).filter((line) => line.trim()).length);
   count('prompt-settings', promptSettings(record(preset.promptSettings), template));
@@ -198,6 +200,7 @@ function convert(preset: Json, template: unknown[]): PresetRead {
   // Preset model names are not this account's connections, so the prompt's model layer starts empty.
   return {
     prompt: { name: text(preset.name), blocks, toggles, authorNote, models: {}, imported: 'risu-preset', ...(companions.length > 0 && { companions }) },
+    regex,
     unsupported: UNSUPPORTED.flatMap((kind): PresetUnsupported[] => (kind === 'repeated-slot' ? [...repeated].map(([slot, amount]) => ({ kind, slot, count: amount })) : counted([kind], counts))),
   };
 }
