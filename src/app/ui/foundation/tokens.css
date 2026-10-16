@@ -113,6 +113,7 @@
   --palette-sky-850: #1a374e;
   --palette-rose-850: #532639;
   --palette-lime-850: #263b1a;
+  --palette-parchment-200: #ecd9b4;
 }
 
 /* The dark theme: the document's default, and any element drawn in it inside a light one (a preset's swatch). */
@@ -176,6 +177,10 @@
   --color-face-4-bg: var(--palette-rose-900);
   --color-face-5: var(--palette-gold-500);
   --color-face-5-bg: var(--palette-gold-900);
+
+  /* The ground behind the mascot's portrait (story/MascotRemark), light in both themes: the cutouts were drawn on white. */
+  --color-mascot-ground-top: var(--palette-sand-50);
+  --color-mascot-ground-bottom: var(--palette-parchment-200);
 
   /* Prompt text (the editor's highlight layer): the body, heading lines, CBS tags and <tags>. */
   --color-markup-body: var(--palette-sand-100);
@@ -358,6 +363,10 @@
   /* Table: a figure's column (a count, a size) and a trailing button's. */
   --table-figure-width: 72px;
   --portrait-width: 200px;
+  /* The mascot's card (story/MascotRemark): its widest, and its portrait frame's width, 3:5 as the pictures are drawn. */
+  --mascot-card-width: 360px;
+  --mascot-portrait-width: 132px;
+  --mascot-portrait-width-phone: 100px;
   /* A picture shown whole in a dialog (에셋): the tallest it grows, so the dialog's head and actions stay in view. */
   --preview-max-height: 60dvh;
   --header-height: 60px;
@@ -458,6 +467,7 @@
   --duration-stagger: 150ms;
   --duration-found: 2.4s;
   --duration-slide: 1.4s;
+  --duration-sway: 2.4s;
   --ease-enter: ease-out;
   --ease-loop: ease-in-out;
 
@@ -523,6 +533,9 @@
   --color-face-4-bg: var(--palette-rose-100);
   --color-face-5: var(--palette-gold-650);
   --color-face-5-bg: var(--palette-gold-150);
+
+  --color-mascot-ground-top: var(--palette-sand-50);
+  --color-mascot-ground-bottom: var(--palette-parchment-200);
 
   --color-markup-body: var(--palette-ink-700);
   --color-markup-heading: var(--palette-ink-900);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
 import { isComposing } from '../foundation/keys';
 
 type Layer = {
@@ -70,6 +70,33 @@ export function keepOnScreen(element: HTMLElement) {
   const { left, right } = room(element);
   const shift = box.left < left + edge ? left + edge - box.left : box.right > right - edge ? right - edge - box.right : 0;
   element.style.setProperty('--nudge', `${shift}px`);
+}
+
+// A popover on the body at a fixed spot by its anchor, so a dialog's or panel's scrolling box cannot clip it. Its
+// stylesheet places it on one side with --anchor-left and --anchor-below (the anchor's bottom) or --anchor-above (its top,
+// from the window's bottom), and on the other under [data-flipped], set where the first side runs off the screen. It
+// does not follow a scroll, so any scroll closes it.
+export function useAnchored(open: boolean, popover: RefObject<HTMLElement | null>, anchor: RefObject<HTMLElement | null>, close: () => void) {
+  const latest = useRef(close);
+  latest.current = close;
+  useLayoutEffect(() => {
+    const element = popover.current;
+    const at = anchor.current?.getBoundingClientRect();
+    if (!open || !element || !at) return;
+    element.style.setProperty('--anchor-left', `${at.left}px`);
+    element.style.setProperty('--anchor-below', `${at.bottom}px`);
+    element.style.setProperty('--anchor-above', `${window.innerHeight - at.top}px`);
+    keepOnScreen(element);
+    delete element.dataset.flipped;
+    const box = element.getBoundingClientRect();
+    if (box.top < 0 || box.bottom > window.innerHeight) element.dataset.flipped = '';
+  }, [open, popover, anchor]);
+  useEffect(() => {
+    if (!open) return;
+    const scrolled = () => latest.current();
+    window.addEventListener('scroll', scrolled, { capture: true, passive: true });
+    return () => window.removeEventListener('scroll', scrolled, { capture: true });
+  }, [open]);
 }
 
 const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';

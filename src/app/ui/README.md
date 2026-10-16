@@ -72,7 +72,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | Folder | Component (other exports) | Stylesheet | What it styles |
 | --- | --- | --- | --- |
 | foundation | — | `tokens.css`, `global.css` | Every raw value; element defaults, a bare button among them, and reduced motion |
-| foundation | — | `motion.module.css` | Every animation: fade, rise, drop, fade away, spin, pulse, blink, waiting dots |
+| foundation | — | `motion.module.css` | Every animation: fade, rise, drop, fade away, spin, pulse, blink, waiting dots, sway |
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
 | foundation | — | `type.module.css` | Shared text looks: a note, an error line, a field's label |
 | foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field and its compact size, an accent dot |
@@ -155,7 +155,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Table` (`TableColumn`, `TableRow`) | `Table.module.css` | Things compared by the same few facts, a row each that opens its thing or holds its controls; a dash where a row has nothing; narrow, a row becomes its first cell over a summary line and the columns kept |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
-| overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap, which starts on the element marked `data-autofocus`, else the first control |
+| overlays | `layers.ts` (`useLayer`, `useAnchored`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a popover fixed by its anchor on the body, flipped to the anchor's other side where it would run off the screen and closed by a scroll (`Hint`, `MascotRemark`); a dialog's focus trap, which starts on the element marked `data-autofocus`, else the first control |
 | overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; `wide`, a picker at a fixed height, a sheet on a phone; `full`, nearly the whole screen, all of a phone's; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
@@ -179,6 +179,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | story | `Story` (`BotButton`, `READER_RESIZED`, `inlaid`) | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons live or dimmed, and which one was pressed (`BotButton`); math drawn with KaTeX (`math.ts`); the streaming caret; faded while another text will take its place; the message's 삽화 slotted in where its mark stands, or at the end (`inlaid`) |
 | story | `StoryPicture` | `StoryPicture.module.css` | A picture made for a message (삽화) in its story: its frame at the picture's shape while it loads or is made, the 이미지 가리기 stand-in, and a foot of controls |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story: its quiet tag by the name (such as 번역, which flips it), the badges tools put on it (two, then +N), a row under it with its markers (cut, stopped, translation, 삽화) and its tools, its height kept while the tools are absent; a ring that fades from a message looked for, such as a memory record's source; under the avatar, the reader's place in a message taller than the view (`readingRail.ts`, which `ChatFrame` runs): a rail stuck below the header that fills as the message passes the composer, with the share read, fading at its end and without the share while the message is still being written |
+| story | `MascotRemark` | `MascotRemark.module.css` | The mascot's line on a reply (마스코트 대사): a pill of its face and ··· at the start of the message's tools, its dots swaying until first opened (in the accent colour under reduced motion); the card above it, the name and the line beside a 3:5 portrait on a cream-to-gold ground, opened by a pointer resting on the pill, a tap, or a key's focus, its picture loaded only once open |
 | story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text: its script's name and actions among several |
 | story | `MarginPictures` | `MarginPictures.module.css` | A message's 삽화 on the stage right of the story, each level with the paragraph its anchor marks and below the one before, following the reader down its band to the next picture or the message's end; a picture narrower than the text grows leftward over it to the text's width while pointed at |
 | story | `ReadingPreview` (`PreviewRow`) | `ReadingPreview.module.css` | Sample messages drawn as the chat draws them under given reading settings, inert; the reading width does not show |
