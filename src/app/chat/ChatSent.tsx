@@ -75,7 +75,12 @@ type RequestViewProps = {
   unbuilt: string;
   editor?: (from: From) => Side | null;
   onEdit?: (side: Side) => void;
+  // The problems a view shown above already warned of: with the same ones, the warning is not repeated.
+  sameAs?: Assembled['problems'];
 };
+
+const problemKeys = ({ found }: Assembled['problems']) => JSON.stringify(found.map(({ kind, text }) => `${kind}:${text}`).sort());
+const sameProblems = (a: Assembled['problems'], b: Assembled['problems']) => a.omitted === b.omitted && problemKeys(a) === problemKeys(b);
 
 const PROBLEM = { 'unknown-tag': `모르는 ${COMMAND}`, 'error-text': '오류 문구' } as const;
 
@@ -98,7 +103,7 @@ function ProblemList({ problems, placed }: { problems: Problem[]; placed: boolea
   );
 }
 
-export function RequestView({ prompt, title, request, unbuilt, editor, onEdit }: RequestViewProps) {
+export function RequestView({ prompt, title, request, unbuilt, editor, onEdit, sameAs }: RequestViewProps) {
   const [view, setView] = useState<'parts' | 'body'>('parts');
   const total = prompt.parts.reduce((sum, part) => sum + part.tokens, 0);
   const { found, omitted } = prompt.problems;
@@ -121,7 +126,7 @@ export function RequestView({ prompt, title, request, unbuilt, editor, onEdit }:
       {view === 'parts' ? (
         <Section level={3} title={title} note={`약 ${tokens(total)} 토큰 · 앱 추정`}>
           <Stack gap="related">
-            {found.length > 0 && (
+            {found.length > 0 && !(sameAs && sameProblems(prompt.problems, sameAs)) && (
               <Callout tone="warn">{`문제 ${found.length + omitted}개 · 모르는 ${COMMAND}나 오류 문구가 모델에 그대로 가요.${omitted ? ` ${omitted}개는 목록에서 뺐어요.` : ''}`}</Callout>
             )}
             {prompt.messages.map((message, index) => {

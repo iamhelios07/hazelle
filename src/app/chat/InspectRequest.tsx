@@ -87,7 +87,7 @@ function RehearsalView({ rehearsal, sending, editor, onEdit }: { rehearsal: Rehe
       ) : !changed ? (
         <Text variant="note">스크립트가 요청을 바꾸지 않아요.</Text>
       ) : null}
-      {prompt !== null && ('kind' in prompt ? <Callout tone="warn">{describeTurnFailure(prompt)}</Callout> : <RequestView prompt={prompt} title="스크립트 실행 후" request={() => previewRequest({ ...sending, prompt })} unbuilt={UNBUILT} editor={editor} onEdit={onEdit} />)}
+      {prompt !== null && ('kind' in prompt ? <Callout tone="warn">{describeTurnFailure(prompt)}</Callout> : <RequestView prompt={prompt} title="스크립트 실행 후" request={() => previewRequest({ ...sending, prompt })} unbuilt={UNBUILT} editor={editor} onEdit={onEdit} sameAs={sending.prompt.problems} />)}
       {request !== null && (
         <Section level={3} title="요청 편집 후">
           <Stack gap="related">
