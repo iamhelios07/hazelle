@@ -3,6 +3,7 @@ import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
 import type { IllustrateFailure } from '../../runtime/illustrate';
 import type { LikenessFailure } from '../../runtime/likeness';
+import type { MascotFailure } from '../../runtime/mascot';
 import type { MemoryFailure } from '../../runtime/memory';
 import type { KeyFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
@@ -367,5 +368,34 @@ export function describeLikenessFailure(failure: LikenessFailure): string {
       return '삭제됐어요.';
     default:
       return describeIllustrateFailure(failure);
+  }
+}
+
+const REMARK_INVALID = { unreadable: INVALID.unreadable, line: '모델이 대사를 쓰지 않았어요.' } as const;
+
+export function describeMascotFailure(failure: MascotFailure): string {
+  switch (failure.kind) {
+    case 'no-model':
+      return `대사 모델이 지정되지 않았어요. 마스코트 프롬프트나 ${inSettings('models')}에서 모델을 선택해 주세요.`;
+    case 'model-gone':
+      return `대사 모델이 즐겨찾기에 없어요. 마스코트 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
+    case 'image-only':
+      return `선택한 대사 모델은 이미지만 만들 수 있어요. 마스코트 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
+    case 'prompt-missing':
+      return `기본 마스코트 프롬프트가 없어요. ${inSettings('prompts')}에서 마스코트 프롬프트 하나를 기본으로 지정해 주세요.`;
+    case 'profile-missing':
+      return failure.own ? profileGone('대사 모델이') : NO_DEFAULT_PROFILE;
+    case 'tokenizer':
+      return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
+    case 'runaway':
+      return runaway('대사를 쓰기 전에');
+    case 'failed':
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 내용이 비어 있는 응답을 보냈어요.';
+    case 'invalid':
+      return REMARK_INVALID[failure.reason];
+    case 'gone':
+      return '삭제된 메시지예요.';
+    case 'unsaved':
+      return `대사를 저장하지 못했어요. ${describeFailure(failure.failure)}`;
   }
 }

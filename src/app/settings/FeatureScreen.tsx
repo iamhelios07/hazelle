@@ -1,12 +1,14 @@
+import type { ComponentType } from 'react';
 import type { Feature } from '../../model/features';
 import { illustrateSwitches, setIllustrate, setTranslate, translateSwitches } from '../../runtime/characters';
 import { sceneWriterOf } from '../../runtime/illustrate';
+import { setDefaultPrompt } from '../../runtime/prompts';
 import { sendsNotes, translatorOf } from '../../runtime/translate';
 import { TRANSLATOR_CHAT } from '../../runtime/turn';
 import { IllustrateRows } from '../common/IllustrateRows';
-import type { PromptDoor } from '../common/TaskPrompt';
+import { TaskPromptMenu, type PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
-import { FEATURE_NAMES, NOTE_UNSENT, noteLines, PAGES } from '../common/words';
+import { FEATURE_NAMES, MODEL_ROLES, NOTE_UNSENT, noteLines, PAGES } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -21,12 +23,13 @@ const editPrompt = (door: PromptDoor) => navigate(door ? { kind: 'prompt', ...do
 // A feature's shared values, the layer every prompt, character and chat that sets none of its own reads.
 export function FeatureScreen({ feature, back }: { feature: Feature; back: Back }) {
   const name = FEATURE_NAMES[feature];
+  const Defaults = DEFAULTS[feature];
   return (
     <Screen width="form" top={<NavBar title={name} subtitle={PAGES.chat} {...backBar(back)} />}>
       <SettingGroup label={name}>
         <SettingRow label={name} help={FEATURE_HELP} control={<FeatureSwitch feature={feature} />} />
       </SettingGroup>
-      {feature === 'translate' ? <TranslateDefaults /> : feature === 'illustrate' ? <IllustrateDefaults /> : <MemoryDefaults />}
+      <Defaults />
     </Screen>
   );
 }
@@ -78,3 +81,32 @@ function IllustrateDefaults() {
     </SettingGroup>
   );
 }
+
+// The mascot's prompt is the account's default alone (design §6.11): picking one here makes it the default.
+function MascotDefaults() {
+  const store = useStore();
+  const toast = useToast();
+  const settings = useSettings();
+  // chosenPrompt reads these.
+  usePrompts();
+  return (
+    <SettingGroup label={FEATURE_NAMES.mascot}>
+      <SettingRow
+        label="마스코트 프롬프트"
+        help={`응답마다 ${MODEL_ROLES.aux}을 한 번 더 불러요. 마스코트 프롬프트에서 다른 모델을 고를 수 있어요.`}
+        control={
+          <TaskPromptMenu
+            task="mascot"
+            chosen={settings.mascotPrompt}
+            heading="모든 채팅에 적용돼요."
+            opens="down"
+            onPick={(prompt) => void setDefaultPrompt(store, prompt!).then((saved) => saved.ok || toast.failed(saved))}
+            onEdit={editPrompt}
+          />
+        }
+      />
+    </SettingGroup>
+  );
+}
+
+const DEFAULTS: Record<Feature, ComponentType> = { translate: TranslateDefaults, illustrate: IllustrateDefaults, memory: MemoryDefaults, mascot: MascotDefaults };

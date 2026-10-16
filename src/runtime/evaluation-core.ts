@@ -1,7 +1,7 @@
 import { rewritten, type ProviderFit } from '../engine/prompt-budget';
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { speakersOf, standing, type Standing } from '../engine/memory';
-import { activeLore, assemble, assembleIllustration, assembleMemory, assembleTranslation, type Assembled, type IllustrationInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
+import { activeLore, assemble, assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, type Assembled, type IllustrationInput, type MascotInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
 import type { RegexScript } from '../engine/import/types';
 import { trySample } from '../engine/regex/scripts';
 import { inspectVariables, renderChat, type VariableInspection, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
@@ -18,6 +18,7 @@ export type EvaluationJob =
   | { kind: 'translation'; input: Omit<TranslationInput, 'scope' | 'countTokens'> }
   | { kind: 'memory'; input: Omit<MemoryTaskInput, 'scope' | 'countTokens'> }
   | { kind: 'illustration'; input: Omit<IllustrationInput, 'scope' | 'countTokens'> }
+  | { kind: 'mascot'; input: Omit<MascotInput, 'scope' | 'countTokens'> }
   | { kind: 'read'; memory: { memory: Memory; shown: Source[]; budget: number } | null }
   | { kind: 'lore'; seed: string; limit: number }
   | { kind: 'state'; prefix: string }
@@ -41,7 +42,7 @@ export type EvaluationResult =
   | DisplayEvaluation
   | DisplayPatch
   | EvaluatedPrompt
-  | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
+  | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ReturnType<typeof assembleMascot> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | { sampled: string }
   | null;
 // probe: 문제 진단's check, sent to a worker of its own: whether the tokenizer loads, and what stopped it if not.
@@ -117,6 +118,8 @@ export class Evaluator {
           return assembleMemory({ ...job.input, scope, countTokens });
         case 'illustration':
           return assembleIllustration({ ...job.input, scope, countTokens });
+        case 'mascot':
+          return assembleMascot({ ...job.input, scope, countTokens });
         case 'read': {
           const { texts } = renderChat('prompt', scope);
           const sent = job.memory && standing(job.memory.memory, { shown: job.memory.shown, roles: messages.map(({ role }) => role), speakers: speakersOf(scope), texts }, job.memory.budget, countTokens);

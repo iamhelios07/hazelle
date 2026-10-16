@@ -1,11 +1,13 @@
+import type { ModelRef } from '../connectors/assignment';
 import type { ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
+import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { Profile } from '../model/profile';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
-import { imageOnly } from './assignment';
+import { imageOnly, taskModel, type Route, type RouteFailure } from './assignment';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
@@ -26,6 +28,15 @@ export function modelProfile(store: Pick<ObjectStore, 'get'>, model: Starred): P
   const id = profileId(model, store.get('settings', SETTINGS_ID)?.value.profile);
   const profile = id === undefined ? null : live(store.get('profile', id));
   return profile ? { kind: 'profile', profile, own } : { kind: 'missing', own };
+}
+
+// A task prompt's own model, else the chat's 보조, with its 설정 묶음: what a 삽화 scene, a pack's profiles and a mascot's
+// line are written by.
+export function taskWriter(store: Pick<ObjectStore, 'get'>, chat: Chat, own: ModelRef | undefined): { route: Route; settings: ModelSettings } | RouteFailure | { kind: 'profile-missing'; own: boolean } {
+  const route = taskModel(store, chat, own);
+  if ('kind' in route) return route;
+  const profile = modelProfile(store, route.model);
+  return profile.kind === 'missing' ? { kind: 'profile-missing', own: profile.own } : { route, settings: profile.profile.value.settings };
 }
 
 // A model that only draws uses no 묶음, whatever it names.

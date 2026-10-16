@@ -9,6 +9,7 @@ import type { AccountFacts, Standing } from '../runtime/account';
 import type { Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
 import type { Illustrating, Illustrator } from '../runtime/illustrate';
+import type { Commenting } from '../runtime/mascot';
 import type { Likenesses, LikenessRuns } from '../runtime/likeness';
 import type { Remembering } from '../runtime/memory';
 import { modulesOf } from '../runtime/modules';
@@ -155,7 +156,7 @@ export function useBin() {
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
 // parent null is a chat not saved yet, which has none.
-export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'toolchat'>(kind: K, parent: string | null): Stored<K>[] {
+export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'remark' | 'toolchat'>(kind: K, parent: string | null): Stored<K>[] {
   const { read } = useSession();
   const model = parent === null ? null : read.children(kind, parent);
   return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNone);
@@ -247,6 +248,12 @@ export function useChatMemory(id: string | null): Memory | null {
 export function useIllustrating(): Illustrating {
   const illustrator = useIllustrator();
   return useSyncExternalStore(illustrator.subscribe, illustrator.snapshot);
+}
+
+// 마스코트 대사 by version: a line being written, or why the last try wrote none.
+export function useCommenting(): Commenting {
+  const { commentator } = useSession();
+  return useSyncExternalStore(commentator.subscribe, commentator.snapshot);
 }
 
 // 삽화 profiles by pack: one being made, or the failure of the last try. The profiles themselves:

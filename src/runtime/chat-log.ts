@@ -4,6 +4,7 @@ import { memoryThrough } from '../engine/memory';
 import { CAST_MAX, foldTree, shown, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import type { Illustration } from '../model/illustration';
+import type { Remark } from '../model/mascot';
 import { live, type Asset, type Lore } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { Badges } from '../model/tool';
@@ -81,10 +82,11 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const id = crypto.randomUUID();
     const memory = storedMemory(store, item.id)?.value;
     const illustrations = store.children('illustration', item.id).map(({ value }) => value);
+    const remarks = store.children('remark', item.id).map(({ value }) => value);
     const inlays = store.children('inlay', item.id).map(({ value }) => value);
     const lore = store.children('lore', item.id).map(({ value }) => value);
     const line = item.messages.slice(0, upTo + 1).map((each, index, all) => ({ message: each, follows: index === 0 ? null : shown(all[index - 1]!).id }));
-    const { writes, after, messages, versions } = copyWrites(id, line, memory, illustrations, inlays, lore);
+    const { writes, after, messages, versions } = copyWrites(id, line, memory, illustrations, remarks, inlays, lore);
     writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
     const print = chatPrint(store, item.id);
     if (print) writes.push({ type: 'create', kind: 'cacheprint', id: cachePrintId(id), parent: id, value: print.value });
@@ -115,7 +117,7 @@ export async function importChat({ store, files }: Pick<Session, 'store' | 'file
   });
   const illustrations = resealed(file.illustrations.map(({ value }) => value));
   const inlays = resealed(file.inlays.map(({ value }) => value));
-  const { writes, messages } = copyWrites(id, foldTree(file.entries), file.memory?.value, illustrations, inlays, file.lore.map(({ value }) => value));
+  const { writes, messages } = copyWrites(id, foldTree(file.entries), file.memory?.value, illustrations, file.remarks.map(({ value }) => value), inlays, file.lore.map(({ value }) => value));
   const { prompt, persona, cast = [], models, origin, bookmarks, ...value } = without(without(file.chat.value, 'deleted'), 'purging');
   const held = (kind: 'prompt' | 'persona' | 'character' | 'chat', ref: string | undefined): ref is string => ref !== undefined && live(store.get(kind, ref)) !== null;
   const kept = cast.filter((each) => held('character', each));
@@ -170,7 +172,7 @@ export async function saveNewChats(
 
 // source: parents before what continues them. messages, versions: each copy's id by the original's. after: the last
 // copy's id.
-function copyWrites(id: string, source: { message: Message; follows: string | null }[], memory: Memory | undefined, illustrations: Illustration[], inlays: Asset[], lore: Lore[]): { writes: Write[]; messages: Map<string, string>; versions: Map<string, string>; after: string } {
+function copyWrites(id: string, source: { message: Message; follows: string | null }[], memory: Memory | undefined, illustrations: Illustration[], remarks: Remark[], inlays: Asset[], lore: Lore[]): { writes: Write[]; messages: Map<string, string>; versions: Map<string, string>; after: string } {
   let after = '';
   const writes: Write[] = [];
   const messages = new Map<string, string>();
@@ -189,6 +191,10 @@ function copyWrites(id: string, source: { message: Message; follows: string | nu
   for (const illustration of illustrations) {
     const [message, version] = [messages.get(illustration.message), versions.get(illustration.version)];
     if (message && version) writes.push({ type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: id, value: { ...illustration, message, version } });
+  }
+  for (const remark of remarks) {
+    const [message, version] = [messages.get(remark.message), versions.get(remark.version)];
+    if (message && version) writes.push({ type: 'create', kind: 'remark', id: crypto.randomUUID(), parent: id, value: { ...remark, message, version } });
   }
   for (const inlay of inlays) writes.push({ type: 'create', kind: 'inlay', id: crypto.randomUUID(), parent: id, value: inlay });
   for (const entry of lore) writes.push({ type: 'create', kind: 'lore', id: crypto.randomUUID(), parent: id, value: entry });

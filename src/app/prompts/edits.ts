@@ -31,6 +31,7 @@ export function newBlock(kind: NewBlock): Block {
     case 'note':
     case 'tool':
     case 'memory':
+    case 'mascot':
       return { ...named, kind: 'slot', slot: kind.slot, role: 'system', wrapper: null };
     case 'span':
       return { ...named, kind: 'slot', slot: 'span', role: 'user', wrapper: null };

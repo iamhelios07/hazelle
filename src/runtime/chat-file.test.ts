@@ -40,6 +40,8 @@ describe('chat file', () => {
     expect(read.file.chat.id).toBe(id);
     expect(fold(read.file.entries)).toEqual(fold(store.children('entry', id)));
     expect(read.file.memory?.value.state).toEqual([{ about: 'Luna', field: 'mood', value: 'calm', record: null }]);
+    // A chat with no 마스코트 대사, as every file written before them is, reads with none.
+    expect(read.file.remarks).toEqual([]);
   });
 
   it('refuses another format or version, a file without pictures, a row that is not stored, a second chat, and a row of another chat', async () => {

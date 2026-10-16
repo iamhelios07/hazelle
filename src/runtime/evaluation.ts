@@ -1,7 +1,7 @@
 import { Runaway } from '../engine/cbs/evaluate';
 import type { DisplayPatch } from '../engine/display';
 import type { RegexScript } from '../engine/import/types';
-import type { assembleIllustration, assembleMemory, assembleTranslation, IllustrationInput, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
+import type { assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, IllustrationInput, MascotInput, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
 import type { ChatScope, VariableInspection } from '../engine/render';
 import type { ApiFailure } from './api';
 import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState } from './evaluation-core';
@@ -48,6 +48,7 @@ const GATES = {
   view: 'passive',
   'auto-translation': 'passive',
   'auto-illustration': 'passive',
+  mascot: 'passive',
   send: 'press',
   translation: 'press',
   illustration: 'press',
@@ -129,6 +130,12 @@ export class Evaluation {
   illustration(lane: Lane<'illustration' | 'auto-illustration'>, input: Omit<IllustrationInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleIllustration>>> {
     const { scope, ...rest } = input;
     return this.once(lane.asker, onChat(lane), scope, { kind: 'illustration', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleIllustration>>>;
+  }
+
+  // Each its own lane, as an illustration's.
+  mascot(lane: Lane<'mascot'>, input: Omit<MascotInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleMascot>>> {
+    const { scope, ...rest } = input;
+    return this.once(lane.asker, onChat(lane), scope, { kind: 'mascot', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleMascot>>>;
   }
 
   lore(lane: Lane<'lore'>, scope: ChatScope, seed: string, limit: number): Promise<Counted<{ role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway>> {

@@ -33,8 +33,9 @@ export async function newCall({ store, tokens }: Pick<Session, 'store' | 'tokens
 }
 
 // A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
-// reload has no use for (bot: its chat, where the server limits these), or a 삽화 scene (runtime/illustrate).
-export async function pageCall(session: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: 'script' | 'illustration' | 'likeness', chat: string | null): Promise<StreamCall> {
+// reload has no use for (bot: its chat, where the server limits these), a 삽화 scene (runtime/illustrate) or a mascot's
+// line (runtime/mascot).
+export async function pageCall(session: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: 'script' | 'illustration' | 'likeness' | 'mascot', chat: string | null): Promise<StreamCall> {
   const key = await streamKey();
   return { id: crypto.randomUUID(), key: key.private, public: key.public, ...calibrate(session, route, requestClass, chat), ...(requestClass === 'script' && chat !== null && { bot: chat }) };
 }

@@ -13,6 +13,7 @@ import { Credentials } from './credential';
 import { Files } from './files';
 import { Illustrator } from './illustrate';
 import { Likenesses } from './likeness';
+import { Commentator } from './mascot';
 import { deviceCache } from './device-cache';
 import { Drafts } from './drafts';
 import type { DeviceCache } from './object-cache';
@@ -47,6 +48,7 @@ export type Session = {
   memory: Rememberer;
   illustrator: Illustrator;
   likenesses: Likenesses;
+  commentator: Commentator;
   drafts: Drafts;
   streams: Streams;
   scripts: Scripts;
@@ -103,6 +105,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const read = new ReadModels(store, display);
   const likenesses = new Likenesses({ tokens, store, credentials, files, catalogs });
   const illustrator = new Illustrator({ tokens, store, credentials, files, likenesses });
+  const commentator = new Commentator({ tokens, store, credentials });
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
   const scripts: Scripts = new Scripts({ tokens, store, read, credentials, costs, display }, { lua: machine, tools });
   const memory = new Rememberer({ store, read, credentials, costs, scripts, tokens }, reading);
@@ -172,6 +175,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     memory.close();
     illustrator.close();
     likenesses.close();
+    commentator.close();
     costs.close();
     usage.close();
     tokens.clear();
@@ -180,6 +184,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { tools, username, store, files, assets, unfound, talk, costs, usage, tokens, translator, memory, illustrator, likenesses, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools, username, store, files, assets, unfound, talk, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

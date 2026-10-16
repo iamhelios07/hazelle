@@ -1,5 +1,6 @@
 import { importPreset, writePreset, type PresetRead } from '../engine/import/preset';
 import { illustratorPrompt } from '../engine/illustrate';
+import { commentatorPrompt } from '../engine/mascot';
 import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
@@ -25,15 +26,17 @@ export const STARTER_ID = '00000000-0000-4000-8000-000000000001';
 export const TRANSLATOR_ID = '00000000-0000-4000-8000-000000000004';
 export const MEMORY_PROMPT_ID = '00000000-0000-4000-8000-000000000005';
 export const ILLUSTRATOR_ID = '00000000-0000-4000-8000-000000000006';
+export const COMMENTATOR_ID = '00000000-0000-4000-8000-000000000007';
 
 // Each task's built-in prompt, which a new prompt of its sort starts from while the account's default is gone.
-const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt, illustrate: illustratorPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
+const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt, illustrate: illustratorPrompt, mascot: commentatorPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
 
 const DEFAULTS = {
   conversation: { setting: 'prompt', id: STARTER_ID, make: starter },
   translate: { setting: 'translatePrompt', id: TRANSLATOR_ID, make: () => Promise.resolve(BUILT_IN.translate()) },
   memory: { setting: 'memoryPrompt', id: MEMORY_PROMPT_ID, make: () => Promise.resolve(BUILT_IN.memory()) },
   illustrate: { setting: 'illustratePrompt', id: ILLUSTRATOR_ID, make: () => Promise.resolve(BUILT_IN.illustrate()) },
+  mascot: { setting: 'mascotPrompt', id: COMMENTATOR_ID, make: () => Promise.resolve(BUILT_IN.mascot()) },
 } as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null> } };
 
 export type StoredPrompt<S extends PromptSort> = Stored<'prompt'> & { value: PromptOf<S> };
@@ -57,6 +60,9 @@ export const translationPrompt = (store: Pick<ObjectStore, 'get'>, chosen: strin
 export const memoryPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, 'memory', undefined);
 
 export const illustrationPrompt = (store: Pick<ObjectStore, 'get'>, chosen: string | undefined) => choose(store, 'illustrate', chosen);
+
+// The account's only: the mascot is on 공용 alone (design §6.11), so no chat or character chooses its own.
+export const mascotPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, 'mascot', undefined);
 
 // A new conversation prompt holds every slot once, the context before the chat with 장기 기억 last. Memory changing
 // at a boundary leaves the rest of the fixed part cached (design §6.2, Cache). 도구 follows the chat, so its text

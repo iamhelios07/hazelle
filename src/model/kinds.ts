@@ -4,6 +4,7 @@ import type { Chat, Entry, Summary } from './chat';
 import type { Asset, Avatar, Character, Folder, Lore, Module } from './library';
 import type { Illustration } from './illustration';
 import type { Likeness } from './likeness';
+import type { Remark } from './mascot';
 import type { Memory, Vectors } from './memory';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
@@ -36,6 +37,7 @@ export type Values = {
   vectors: Vectors;
   cacheprint: CachePrint;
   illustration: Illustration;
+  remark: Remark;
   connection: Connection;
   settings: Settings;
   ledger: Ledger;
@@ -76,6 +78,7 @@ export const KINDS = {
   vectors: { parent: 'chat' },
   cacheprint: { parent: 'chat' },
   illustration: { parent: 'chat', file: true },
+  remark: { parent: 'chat' },
   inlay: { parent: 'chat', file: true },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
@@ -142,7 +145,7 @@ const toggleLine: Check = (value) =>
   isRecord(value) && (value.kind === 'groupEnd' || (value.kind === 'divider' || value.kind === 'caption' || value.kind === 'group' ? mark : value.kind === 'unread' ? unread : toggle)(value));
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(toggleLine) });
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
-const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate', model: (value) => value === undefined || isRecord(value) });
+const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate' || value === 'mascot', model: (value) => value === undefined || isRecord(value) });
 
 const SHAPES = {
   character: shape({
@@ -202,6 +205,7 @@ const SHAPES = {
     size: num,
     at: num,
   }),
+  remark: shape({ ...all(str, 'message', 'version', 'mascot', 'expression', 'line'), receipt: isRecord, model: shape(all(str, 'connection', 'model')), at: num }),
   connection: shape({
     type: str,
     label: str,
