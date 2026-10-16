@@ -149,6 +149,7 @@
    (scroll-state below), since a bare row stuck over the story's words would be unreadable. */
 .foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-8);
   min-height: calc(var(--control-tool) + var(--space-2) * 2 + var(--border-thin) * 2);
@@ -207,6 +208,7 @@
 .tools {
   display: flex;
   align-items: center;
+  margin-left: auto;
   padding: var(--space-2);
   border: var(--border-thin) solid transparent;
   border-radius: var(--radius-md);
