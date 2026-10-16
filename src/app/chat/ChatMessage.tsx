@@ -161,6 +161,16 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   };
   const selected = useSelectedPart(story, findPart, editing === null && !live && !message.unstored && !opening && !failed && !empty);
 
+  const cancel = (
+    <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
+      취소
+    </Button>
+  );
+  const save = (
+    <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
+      저장
+    </Button>
+  );
   let body = null;
   if (editing !== null && !part) {
     body = (
@@ -177,17 +187,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         onKeyDown={editKeys}
         actions={
           <>
-            <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
-              취소
-            </Button>
+            {cancel}
             {replyNext && (
               <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.saveEdit(message, true)}>
                 저장하고 다시 생성
               </Button>
             )}
-            <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
-              저장
-            </Button>
+            {save}
           </>
         }
       />
@@ -340,12 +346,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
 
   const tools = live || message.unstored ? undefined : part ? (
     <>
-      <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
-        취소
-      </Button>
-      <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
-        저장
-      </Button>
+      {cancel}
+      {save}
     </>
   ) : editing !== null ? undefined : opening ? (
     <>
