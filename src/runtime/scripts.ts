@@ -3,7 +3,7 @@ import type { HookLog, HookTrace } from '../engine/lua/run';
 import type { Tokens } from './token-calibration';
 import { ScriptInteractions } from './script-interactions';
 import { ScriptSchedule } from './script-schedule';
-import { noOutcome, ToolLate, ToolStopped, type Binding, type LuaRunner } from './script-binding';
+import { noOutcome, ToolLate, ToolStopped, until, type Binding, type LuaRunner } from './script-binding';
 import { live, type PackOwner } from '../model/library';
 import type { ToolUnit } from '../model/tool';
 import type { Assembled, MemoryFill, PromptInput } from '../engine/pipeline';
@@ -526,13 +526,7 @@ export class Scripts {
       const running = 'lua' in units
         ? this.bindings.lua().then((runner) => runner.run(chat, units.lua, scope, event, host))
         : this.bindings.tools.run(chat, units.tool, scope, units.event, host, signal);
-      let stop = () => {};
-      const stopped = new Promise<never>((_, reject) => {
-        stop = () => reject(signal?.reason instanceof ToolLate ? signal.reason : new ToolStopped());
-        signal?.addEventListener('abort', stop, { once: true });
-        if (signal?.aborted) stop();
-      });
-      const outcome = await Promise.race([running, stopped]).finally(() => signal?.removeEventListener('abort', stop));
+      const outcome = await until(running, signal);
       this.report(chat, outcome, from);
       if ('tool' in units) this.keepLog(chat, [{ stage: event.kind, pack: from, script: units.tool.tool.manifest.displayName, at, duration: performance.now() - began, logs: [], writes: outcome.writes, errors: outcome.errors, missing: outcome.missing, stopped: outcome.stop, changed: outcome.value !== undefined, handled: outcome.handled, truncated: false }]);
       return outcome;

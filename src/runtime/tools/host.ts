@@ -10,7 +10,7 @@ import type { ToolState } from '../evaluation-core';
 import { changedTail } from '../history-delta';
 import type { ScriptOutcome } from '../lua/event';
 import type { Scripts } from '../scripts';
-import { noOutcome, ToolLate, ToolStopped, ToolStuck, type Binding } from '../script-binding';
+import { aborted, noOutcome, ToolStopped, ToolStuck, until, type Binding } from '../script-binding';
 import type { Session } from '../session';
 import type { StoreChange } from '../object-index';
 import { Heartbeat } from '../worker';
@@ -33,16 +33,7 @@ const EVENTS = new Set<EventName>(['reply', 'prompt', 'change', 'branch', 'menu'
 const IDLE_MS = 10 * 60_000;
 const STUCK_MS = 8000;
 const describe = (error: unknown) => error instanceof Error ? error.message : String(error);
-const aborted = (signal: AbortSignal): Error => signal.reason instanceof ToolLate || signal.reason instanceof ToolStuck ? signal.reason : new ToolStopped();
 const framesOf = (entry: Entry) => [...(entry.background ? [entry.background] : []), ...entry.pages];
-
-function until<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(aborted(signal));
-  let stop = () => {};
-  const stopped = new Promise<never>((_, reject) => { stop = () => reject(aborted(signal)); signal.addEventListener('abort', stop, { once: true }); });
-  return Promise.race([promise, stopped]).finally(() => signal.removeEventListener('abort', stop));
-}
 
 function isJson(value: unknown): value is Json {
   try { JSON.stringify(value); } catch { return false; }
