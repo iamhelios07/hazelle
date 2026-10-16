@@ -46,12 +46,13 @@ export const DEFAULT_ORDER = 100;
 
 export const text = (value: unknown) => (typeof value === 'string' ? value : '');
 export const record = (value: unknown): Json => (isRecord(value) ? value : {});
+export const finite = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 export const strings = (value: unknown) => list(value).filter((item): item is string => typeof item === 'string');
 // CCv3 key arrays stay intact; only blank keys are dropped.
 const keys = (value: unknown) => strings(value).filter((key) => key.trim() !== '');
 // Risu's own lore joins keys into one string, split here as Risu splits it.
 const split = (value: unknown) => args(text(value));
-const order = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_ORDER);
+const order = (value: unknown) => finite(value) ?? DEFAULT_ORDER;
 
 // module: a charx's module.risum. Its regex and triggers replace the card's, and its lorebook, when it has one,
 // replaces the character_book entries; lore settings stay the card's (characterCards.ts:148-158 at ca1345fc).
@@ -410,7 +411,7 @@ const BOOK_LORE: LoreSource = {
       selective,
       useRegex: raw.use_regex === true,
       insertionOrder: order(raw.insertion_order),
-      priority: typeof raw.priority === 'number' && Number.isFinite(raw.priority) ? raw.priority : null,
+      priority: finite(raw.priority),
       position: raw.position === 'before_char' || raw.position === 'after_char' ? raw.position : null,
     };
   },
