@@ -20,15 +20,15 @@ import { describeTurnFailure } from '../common/failure';
 import { NO_PERSONA_SLOT } from '../common/prompt-words';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
-import { BIN_KEEPS, inSettings, LORE_BUDGET_LABEL, opens } from '../common/words';
+import { BIN_KEEPS, LORE_BUDGET_LABEL } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
-import { inspectShown, loreBudgetEditor, NO_PANELS, opened, type InspectTab, type Panel, type Panels } from './panels';
+import { inspectShown, NO_PANELS, opened, type InfoTab, type InspectTab, type Panel, type Panels } from './panels';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
-import { pickStarted } from './infoReply';
+import { budgetCut, pickStarted } from './infoReply';
 import { toggleRows, toggleSaveKey } from './toggles';
 import { useFollow } from './useFollow';
 import { useChatSearch } from './useChatSearch';
@@ -112,6 +112,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [panels, setPanels] = useState<Panels>(NO_PANELS);
   const { panel } = panels;
   const open = (next: Panel) => setPanels((current) => opened(current, next, pairs));
+  const openInfo = (reply: string, tab: InfoTab) => {
+    setInfoPick(reply);
+    open({ kind: 'info', tab });
+  };
   const flipPanel = (next: Panel, same: (current: Panel) => boolean) => setPanels((current) => (current.panel && same(current.panel) ? { ...current, panel: null } : opened(current, next, pairs)));
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
@@ -138,16 +142,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const lastCall = lastReply && shown(lastReply).receipt?.id;
   useEffect(() => {
     if (!lastReply || !lastCall || cutTold.has(chatId)) return;
-    const cut = talk.sent(lastCall)?.prompt.lore?.filter(({ fate }) => fate.kind === 'dropped' && fate.cause === 'budget').length ?? 0;
+    const cut = budgetCut(talk.sent(lastCall)?.prompt.lore ?? null);
     if (cut === 0) return;
     cutTold.add(chatId);
-    // A toast takes one action: the door to the budget. Which entries were cut stays a press away, in the reply's 응답 정보.
-    const editor = loreBudgetEditor(shelf && { id: shelf.id, card: shelf.character.card });
     toast.show(`켜진 로어북 항목 중 ${cut}개가 빠졌어요`, {
-      detail: `${editor ? '이 캐릭터의 ' : ''}${LORE_BUDGET_LABEL}을 넘었어요. 빠진 항목은 응답 정보에서 볼 수 있어요.`,
-      action: editor
-        ? { label: opens('캐릭터 편집 › 로어북'), onClick: () => open(editor) }
-        : { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) },
+      detail: `${LORE_BUDGET_LABEL}을 넘었어요.`,
+      action: { label: '정보 보기', onClick: () => openInfo(lastReply.id, 'lore') },
     });
   }, [lastCall]);
 
@@ -347,11 +347,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       lore: () => flipPanel({ kind: 'lore' }, ({ kind }) => kind === 'lore'),
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
-      info: (reply: string) => {
-        setInfoPick(reply);
-        open({ kind: 'info' });
-      },
+      info: (reply: string) => openInfo(reply, panel?.kind === 'info' ? panel.tab : 'reply'),
       pickInfo: setInfoPick,
+      switchInfoTab: (tab: InfoTab) => setPanels((current) => (current.panel?.kind === 'info' ? { ...current, panel: { kind: 'info', tab } } : current)),
       flipToggles: () => flipPanel({ kind: 'toggles' }, ({ kind }) => kind === 'toggles'),
       memory: (record: string | null) => open({ kind: 'memory', record }),
       openInspect: (tab: InspectTab) => open({ kind: 'inspect', tab }),

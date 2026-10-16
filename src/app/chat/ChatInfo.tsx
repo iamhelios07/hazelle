@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { calls, shown, type Receipt } from '../../model/chat';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
@@ -9,17 +9,18 @@ import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
 import { cost, seconds, speed, tokens } from '../common/receipt';
 import { DISCOUNT, UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
+import type { InfoTab, Side } from './panels';
 import type { OpenChat } from './useChat';
 
 const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김' } as const;
 
-const TABS = [
+const TABS: { value: InfoTab; label: string }[] = [
   { value: 'reply', label: '응답' },
   { value: 'lore', label: '로어북' },
   { value: 'memory', label: '기억' },
   { value: 'request', label: '요청 원문' },
   { value: 'response', label: '응답 원문' },
-] as const;
+];
 
 function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
   if (receipt.state === 'failed') return { label: '종료 사유', value: '실패', tone: 'warn' };
@@ -41,17 +42,19 @@ const callFacts = (receipt: Receipt) => [
   ...outcomeFacts(receipt),
 ];
 
-type Props = Pick<OpenChat, 'id' | 'messages' | 'infoPick'> & {
+type Props = Pick<OpenChat, 'id' | 'shelf' | 'messages' | 'infoPick'> & {
+  tab: InfoTab;
+  onTab: (tab: InfoTab) => void;
   onPick: (id: string) => void;
   // Absent while 장기 기억's 기능 is off, which leaves out the 기억 tab that opens its panel.
   onRecord?: (id: string | null) => void;
+  onEdit: (side: Side) => void;
   onClose: () => void;
 };
 
-export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClose }: Props) {
+export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onTab, onPick, onRecord, onEdit, onClose }: Props) {
   const { talk, costs } = useSession();
   const memory = useChatMemory(chat);
-  const [picked, setTab] = useState<(typeof TABS)[number]['value']>('reply');
   const tab = picked === 'memory' && !onRecord ? 'reply' : picked;
   const replies = messages.filter((message) => message.role === 'assistant');
   const reply = infoReply(replies, infoPick);
@@ -108,7 +111,7 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
       <>
         <Tabs label="응답 정보">
           {TABS.filter((each) => each.value !== 'memory' || onRecord).map((each) => (
-            <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => setTab(each.value)} />
+            <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => onTab(each.value)} />
           ))}
         </Tabs>
         {earlier.length > 0 && tab !== 'reply' && <Text variant="note">마지막으로 이어 쓴 요청의 정보예요.</Text>}
@@ -133,7 +136,7 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
             )}
           </>
         )}
-        {tab === 'lore' && <SentLore sent={sent} />}
+        {tab === 'lore' && <SentLore sent={sent} character={shelf && { id: shelf.id, card: shelf.character.card }} onEdit={onEdit} />}
         {tab === 'memory' && onRecord && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
         {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
         {tab === 'response' && <SentResponse sent={sent} />}

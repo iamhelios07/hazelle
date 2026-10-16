@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Card } from '../../engine/import/types';
 import type { Assembled, From } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
 import { isChapter } from '../../engine/memory';
@@ -7,11 +8,13 @@ import type { Role } from '../../model/prompt';
 import type { HttpRequest } from '../../connectors/types';
 import type { Sent } from '../../runtime/talk';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
-import { Button, ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Row, Section, Stack, Text } from '../ui';
-import type { Side } from './panels';
+import { Button, Callout, ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Row, Section, Stack, Text } from '../ui';
+import { loreBudgetEditor, type Side } from './panels';
+import { budgetCut } from './infoReply';
+import { navigate } from '../shell/router';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
-import { CHAPTER, LORE_BUDGET_LABEL, loreName } from '../common/words';
+import { CHAPTER, inSettings, LORE_BUDGET_LABEL, loreName, opens } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
@@ -225,20 +228,27 @@ function SentRecords({ title, ids, records, onRecord }: { title: string; ids: st
   );
 }
 
-export function SentLore({ sent }: { sent: Sent | null }) {
+// The turn's own 로어북 최대 분량 is not kept with what it sent, so the door goes to where it is set now, without a number.
+export function SentLore({ sent, character, onEdit }: { sent: Sent | null; character: { id: string; card: Card } | null; onEdit: (side: Side) => void }) {
   if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
   const lore = sent.prompt.lore;
   if (!lore) return <Empty variant="section">캐릭터 없이 대화하는 채팅이라 로어북이 없어요.</Empty>;
   if (lore.length === 0) return <Empty variant="section">이 응답에서 켜진 로어북 항목이 없어요.</Empty>;
   const names = new Map(lore.map(({ id, name }) => [id, name]));
   const went = lore.filter((entry) => entry.fate.kind !== 'dropped').length;
+  const cut = budgetCut(lore);
+  const editor = loreBudgetEditor(character);
+  const door = editor ? { label: opens('캐릭터 편집 › 로어북'), onClick: () => onEdit(editor) } : { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) };
   return (
-    <Section level={3} title="활성화된 항목" note={`${lore.length}개 중 ${went}개 들어감`}>
-      <List label="활성화된 로어북 항목">
-        {lore.map((entry) => (
-          <ListItem key={entry.id} title={loreName(entry.name)} description={`${why(entry, names)} → ${fate(entry, names)}`} />
-        ))}
-      </List>
-    </Section>
+    <>
+      {cut > 0 && <Callout tone="warn" action={door}>{`${LORE_BUDGET_LABEL}을 넘어 ${cut}개가 빠졌어요.`}</Callout>}
+      <Section level={3} title="활성화된 항목" note={`${lore.length}개 중 ${went}개 들어감`}>
+        <List label="활성화된 로어북 항목">
+          {lore.map((entry) => (
+            <ListItem key={entry.id} title={loreName(entry.name)} description={`${why(entry, names)} → ${fate(entry, names)}`} />
+          ))}
+        </List>
+      </Section>
+    </>
   );
 }
