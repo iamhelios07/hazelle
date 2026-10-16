@@ -17,15 +17,21 @@ export const chatVectors = (store: Pick<ObjectStore, 'children'>, chat: string):
 
 // Which live records have no vector at the current 임베딩 모델 (design §6.2, Retrieval): every one, when the vectors
 // were written by another model. null when retrieval is off, with no model to embed with.
-export function unembedded(store: Pick<ObjectStore, 'get' | 'children'>, chat: string): { route: Route; records: MemoryRecord[]; vectors: Stored<'vectors'> | undefined; stale: boolean } | null {
+export function unembedded(store: Pick<ObjectStore, 'get' | 'children'>, chat: string): { route: Route; records: MemoryRecord[]; kept: Record<string, Vector>; stale: boolean } | null {
   const route = embedModel(store);
   if ('kind' in route) return null;
   const vectors = chatVectors(store, chat);
   const items = vectors?.value.model === route.model.id ? vectors.value.items : {};
   const live = chatMemory(store, chat).records.filter((record) => !record.forgotten);
-  const records = live.filter((record) => items[record.id]?.at !== record.at);
+  const records: MemoryRecord[] = [];
+  const kept: Record<string, Vector> = {};
+  for (const record of live) {
+    const vector = items[record.id];
+    if (vector?.at === record.at) kept[record.id] = vector;
+    else records.push(record);
+  }
   const stale = vectors !== undefined && (vectors.value.model !== route.model.id || Object.keys(items).some((id) => !live.some((record) => record.id === id)));
-  return { route, records, vectors, stale };
+  return { route, records, kept, stale };
 }
 
 export type Indexed = { ok: true } | { ok: false; reason: Extract<Embedded, { ok: false }>['reason']; receipt: Receipt | null };
@@ -37,11 +43,8 @@ export async function indexRecords(session: Reader, chat: string, signal: AbortS
   const { store } = session;
   const missing = unembedded(store, chat);
   if (!missing) return { ok: true };
-  const { route, records, vectors, stale } = missing;
+  const { route, records, kept: items, stale } = missing;
   if (!records.length && !stale) return { ok: true };
-  const kept = vectors?.value.model === route.model.id ? vectors.value.items : {};
-  const items: Record<string, Vector> = {};
-  for (const record of chatMemory(store, chat).records) if (!record.forgotten && kept[record.id]?.at === record.at) items[record.id] = kept[record.id]!;
   for (let from = 0; from < records.length; from += EMBED_TEXTS) {
     const batch = records.slice(from, from + EMBED_TEXTS);
     const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: countTexts(store) }, route, batch.map(recordText), 'document', chat, signal);
@@ -81,19 +84,25 @@ export function queryOf(messages: HistoryMessage[]): string | null {
   return query || null;
 }
 
+export function retrievalOf(store: Pick<ObjectStore, 'get' | 'children'>, chat: string, messages: HistoryMessage[]): { route: Route; items: Record<string, Vector>; query: string } | null {
+  const route = embedModel(store);
+  if ('kind' in route) return null;
+  const vectors = chatVectors(store, chat);
+  if (vectors?.value.model !== route.model.id || !Object.keys(vectors.value.items).length) return null;
+  const query = queryOf(messages);
+  return query ? { route, items: vectors.value.items, query } : null;
+}
+
 const QUERY_WAIT = 5000;
 
 // The records nearest the latest message, nearest first, for a send: none without an 임베딩 모델, vectors at it, or an
 // answer within QUERY_WAIT, since retrieval never holds or fails a send.
 export async function findRecords(session: Reader, chat: string, messages: HistoryMessage[], signal: AbortSignal): Promise<string[]> {
   const { store } = session;
-  const route = embedModel(store);
-  if ('kind' in route) return [];
-  const vectors = chatVectors(store, chat);
-  if (vectors?.value.model !== route.model.id || !Object.keys(vectors.value.items).length) return [];
-  const query = queryOf(messages);
-  if (!query) return [];
+  const found = retrievalOf(store, chat, messages);
+  if (!found) return [];
+  const { route, items, query } = found;
   const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: countTexts(store) }, route, [query], 'query', chat, AbortSignal.any([signal, AbortSignal.timeout(QUERY_WAIT)]));
   if (receipt) await keepCall(session, chat, receipt);
-  return answer.ok ? nearest(rank(answer.vectors[0]!, vectors.value.items)) : [];
+  return answer.ok ? nearest(rank(answer.vectors[0]!, items)) : [];
 }

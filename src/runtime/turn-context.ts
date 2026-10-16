@@ -3,7 +3,7 @@ import { chatToggles } from '../model/toggles';
 import type { Toggle } from '../model/prompt';
 import { chatPrompt } from './prompts';
 import { chatTranslate } from './features';
-import { chatVectors, queryOf } from './retrieval';
+import { retrievalOf } from './retrieval';
 import { scriptsOf, triggersOf } from './scripts';
 import { toolsOf } from './tools/store';
 import { prepareChat } from '../connectors/preparation';
@@ -14,7 +14,7 @@ import { listens } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
-import { chatModel, embedModel, type RouteFailure } from './assignment';
+import { chatModel, type RouteFailure } from './assignment';
 import { wireOf, type CacheSend } from './cache';
 import { asSent, budgetOf, packsOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
@@ -191,11 +191,7 @@ export function afterEnter({ store }: Reader, chat: string, turn: TurnContext): 
   hook('onStart', triggers.filter((trigger) => listens(trigger, { kind: 'start' })));
   const tools = toolsOf(store, turn.chat);
   if (tools.length) result.push({ kind: 'tools', modules: tools.map(({ module }) => module) });
-  if (turn.memory?.kind === 'built-in') {
-    const route = embedModel(store);
-    const vectors = chatVectors(store, chat);
-    if (!('kind' in route) && vectors?.value.model === route.model.id && Object.keys(vectors.value.items).length && queryOf(turn.scope.messages)) result.push({ kind: 'retrieval' });
-  }
+  if (turn.memory?.kind === 'built-in' && retrievalOf(store, chat, turn.scope.messages)) result.push({ kind: 'retrieval' });
   hook('editRequest', scripts);
   return result;
 }
