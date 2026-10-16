@@ -148,10 +148,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     return () => { this.endFrame(frame, new ToolStopped()); this.idle(frame.entry); };
   }
 
-  private settingsChanged(module: string) {
-    const entry = this.entries.get(module);
-    const tool = this.session.store.get('tool', toolId(module))?.value;
-    if (!entry || !tool) return;
+  private settingsChanged(entry: Entry, tool: Tool) {
     const settings = JSON.stringify(tool.settings);
     if (settings === entry.settings) return;
     entry.settings = settings;
@@ -430,7 +427,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     for (const entry of [...this.entries.values()]) {
       const tool = this.session.store.get('tool', toolId(entry.module))?.value;
       if (!tool || !live(this.session.store.get('module', entry.module)) || tool.file.id !== entry.tool.file.id || JSON.stringify(tool.manifest) !== JSON.stringify(entry.tool.manifest)) { this.end(entry, new ToolStopped()); continue; }
-      this.settingsChanged(entry.module);
+      this.settingsChanged(entry, tool);
       const keys = new Set<string>();
       for (const change of changes) {
         if (change.kind !== 'tooldata' || change.parent !== entry.module) continue;
