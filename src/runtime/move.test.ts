@@ -14,13 +14,12 @@ import { MEMORY_DEFAULTS } from './memory-read';
 import { broughtFromRisu, fillInlays, fillPictures, importRisuChats, moveFromRisu, risuMatch, type MoveStep } from './move';
 import { setModuleAlways } from './modules';
 import { addPersona, setCurrentPersona } from './personas';
-import { testServer } from './testing';
+import { png, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 import { summaryId, summaryStale } from './summary';
 
 const server = testServer();
 
-const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 
 const luna: RisuCharacter = {
   id: 'risu-luna',

@@ -1,6 +1,7 @@
 import { rewritten, type ProviderFit } from './prompt-budget';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { describe, expect, it } from 'vitest';
+import { bareModel } from '../connectors/chat-completions';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, MemoryRecord } from '../model/memory';
 import type { Block, Prompt } from '../model/prompt';
@@ -103,7 +104,7 @@ const assembledOf = (result: ReturnType<typeof assemble>) => {
   return result;
 };
 const sentOf = (result: ReturnType<typeof assemble>) => assembledOf(result).messages;
-const providerFit = (allowance: number | null): ProviderFit => ({ allowance, route: { provider: null, endpoint: { baseUrl: 'https://example.test', protocol: 'chat-completions' } }, model: { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } }, settings: {} });
+const providerFit = (allowance: number | null): ProviderFit => ({ allowance, route: { provider: null, endpoint: { baseUrl: 'https://example.test', protocol: 'chat-completions' } }, model: bareModel('m'), settings: {} });
 
 const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: null });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));

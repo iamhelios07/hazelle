@@ -2,6 +2,7 @@ import { unavailableCalibration } from '../model/token-calibration';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelSettings } from '../connectors/settings';
 import { RETRIES } from '../connectors/registry';
+import { bareModel } from '../connectors/chat-completions';
 import type { Connection, Model, Starred } from '../connectors/types';
 import { Credentials } from './credential';
 import { generate, resume } from './generate';
@@ -12,7 +13,7 @@ import { stopStream, stream, type StreamCall } from './relay';
 import { saying, stubRelay, testConnection, testServer, upstream } from './testing';
 import { streamKey } from '../vault/streams';
 
-const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+const model: Model = bareModel('m');
 const openRouter: Connection = { ...testConnection, starred: [] };
 
 const server = testServer();

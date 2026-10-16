@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONNECTION_TYPES, RETRIES } from '../connectors/registry';
+import { bareModel } from '../connectors/chat-completions';
 import type { Connection, HttpRequest, Model } from '../connectors/types';
 import { cycleOf } from '../model/turns';
 import { streamKey } from '../vault/streams';
@@ -76,7 +77,7 @@ it('reads a failed reply’s account again before the next pick, and sends that 
   const log = allowances({ a: left(5), b: left(5) });
   at(OCTOBER_10);
   const credentials = new Credentials();
-  const model: Model = { id: 'gpt-4.1', name: 'gpt', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+  const model: Model = { ...bareModel('gpt-4.1'), name: 'gpt' };
   const send = async () => {
     const key = await streamKey();
     return generate({ credentials, connection: pool(), model, settings: {}, retries: RETRIES, messages: [{ role: 'user', content: '안녕' }], call: { id: crypto.randomUUID(), key: key.private, public: key.public }, signal: new AbortController().signal, onText: () => {} });

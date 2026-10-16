@@ -7,7 +7,6 @@ import { readRisum, readRisumModule } from '../engine/import/risum';
 import { fileSource } from '../engine/import/source';
 import type { Card, LoreEntry } from '../engine/import/types';
 import { likenessId } from '../model/likeness';
-import { randomBytes } from '../vault/aead';
 import { setService } from './admin';
 import { readTool } from '../engine/import/tool';
 import { toolId } from '../model/tool';
@@ -16,12 +15,11 @@ import { importCharacter } from './characters';
 import { importModule, setCharacterModule } from './modules';
 import type { ObjectStore } from './store';
 import type { Files } from './files';
-import { testServer } from './testing';
+import { png, testServer } from './testing';
 
 const server = testServer();
 vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 
-const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 const entry = (name: string, over: Partial<LoreEntry> = {}): LoreEntry => ({
   name, keys: [name], secondaryKeys: [], content: `<user> meets ${name}.\n@@end`, enabled: true, constant: false, selective: false, useRegex: false,
   caseSensitive: false, insertionOrder: 100, priority: null, position: null, folder: null, ...over,

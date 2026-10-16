@@ -6,10 +6,9 @@ import { addAssets, copyCharacter, createCharacter, removeAssets, restoreAssets,
 import { Files } from './files';
 import { fillPictures, importRisuChats } from './move';
 import { markDeleted } from './removal';
-import { testServer } from './testing';
+import { png, testServer } from './testing';
 
 const server = testServer();
-const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 
 describe('files', () => {
   it('stores the same content as one file, whenever it is saved, and reads it back', async () => {

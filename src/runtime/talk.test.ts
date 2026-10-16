@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
+import { bareModel } from '../connectors/chat-completions';
 import { setDefaultModel } from './assignment';
 import { appendUserMessage, editMessage, selectVersion, startChat } from './chat-log';
 import { RELAY_HEADER } from '../contracts/http';
@@ -26,7 +27,7 @@ const replies = (session: Session, chat: string) => fold(session.store.children(
 // A chat model on Anthropic with 할인 받기 on, whose batch the provider answers: each check with the next of checks, and
 // its result once ended.
 async function batching(session: Session, checks: string[], result: unknown) {
-  const claude = { id: 'claude', name: 'Claude', input: null, output: null, contextLength: null, maxOutput: 1000, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+  const claude = { ...bareModel('claude'), name: 'Claude', maxOutput: 1000 };
   const connection = await session.store.create('connection', { type: 'anthropic', label: 'Anthropic', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-ant-x' }], turns: null, starred: [claude] });
   if (!connection.ok) throw new Error(connection.error);
   await setDefaultModel(session.store, 'main', { connection: connection.data.id, model: claude.id });

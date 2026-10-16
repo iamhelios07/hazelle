@@ -1,6 +1,7 @@
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { expect, it, vi } from 'vitest';
 import { anthropicMessages } from '../connectors/anthropic-messages';
+import { bareModel } from '../connectors/chat-completions';
 import { gemini } from '../connectors/gemini';
 import type { ChatMessage } from '../connectors/types';
 import { cachePoints } from './cache-points';
@@ -11,7 +12,7 @@ const chat: From = { kind: 'block', name: null, slot: 'chat' };
 const fitFor = (protocol: 'anthropic-messages' | 'gemini', allowance: number): ProviderFit => ({
   allowance,
   route: { provider: null, endpoint: { baseUrl: 'https://example.test', protocol } },
-  model: { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: 1024, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } },
+  model: { ...bareModel('m'), maxOutput: 1024 },
   settings: {},
 });
 

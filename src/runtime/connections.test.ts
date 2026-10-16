@@ -5,6 +5,8 @@ import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
 import { addConnection, changeKey, providerConnection, refreshStarred, retriesOf, setSharedRetries, setStarred } from './connections';
+import { bareModel } from '../connectors/chat-completions';
+import type { Model } from '../connectors/types';
 import { stubRelay, testModel, testServer, upstream } from './testing';
 
 const server = testServer();
@@ -69,7 +71,7 @@ describe('setStarred', () => {
     server.withSession(async ({ store }) => {
       const saved = await store.create('connection', openRouter);
       const id = saved.ok ? saved.data.id : '';
-      const model = (name: string, output: string[] | null = null) => ({ id: name, name, input: null, output, contextLength: null, maxOutput: null, takes: { settings: null, reasoning: null } }) as never;
+      const model = (name: string, output: Model['output'] = null): Model => ({ ...bareModel(name), output });
       await setStarred(store, id, model('painter', ['image']), true);
       await setStarred(store, id, model('first'), true);
       await setStarred(store, id, model('second'), true);
