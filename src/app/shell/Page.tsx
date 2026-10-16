@@ -15,7 +15,7 @@ import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections,
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
-import { SettingsList } from './settings/SettingsNav';
+import { SettingsList, settingsEntry } from './settings/SettingsNav';
 
 
 const ToolPageScreen = lazy(() => import('../modules/ToolPageScreen').then(({ ToolPageScreen }) => ({ default: ToolPageScreen })));
@@ -81,7 +81,7 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'chat':
         return <ChatPage at={at} wide={wide} onPaired={onPaired} />;
       case 'settings':
-        return <SettingsList onClose={closeSettings} />;
+        return wide ? <Replace to={settingsEntry(true)} /> : <SettingsList onClose={closeSettings} />;
       case 'connections':
         return <ConnectionsScreen back={sideBack(at)} />;
       case 'add-connection':
@@ -156,6 +156,13 @@ function Landing() {
     const id = (main && findStarred(main, connections) ? main.connection : undefined) ?? connections[0]?.id;
     if (id) navigate({ kind: 'connection', id }, { replace: true });
   }, [main, connections]);
+  return null;
+}
+
+// 설정's own list is the phone's; a wide screen reached at /settings, by its address or by widening, opens the first
+// page instead, replaced so 뒤로 does not land here again.
+function Replace({ to }: { to: Route }) {
+  useLayoutEffect(() => navigate(to, { replace: true }), [to]);
   return null;
 }
 
