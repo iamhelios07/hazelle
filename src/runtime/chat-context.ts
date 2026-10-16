@@ -133,7 +133,7 @@ export function togglesOf(store: Reader['store'], chat: Chat, prompt: PromptChoi
   return { declared, sources, value:toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
 }
 
-export type InspectedToggle = { declaration: Toggle; value: string | null; sources: ToggleSource[] };
+type InspectedToggle = { declaration: Toggle; value: string | null; sources: ToggleSource[] };
 
 export function inspectToggles(store: Reader['store'], chat: Chat): InspectedToggle[] {
   const toggles = togglesOf(store, chat, chatPrompt(store, chat));
@@ -187,13 +187,13 @@ export const evaluateChat = async (reader: { store: Reader['store'] & Pick<Objec
 // A chat's regex scripts in the order the engine numbers them (render.ts), each with its 상태창 지정 mark: the
 // character's own script by its id, a module's as `<module id>:<script id>`, since imports number every pack's
 // scripts alike (regex-0…).
-export const statusMark = (module: string | null, script: string) => (module === null ? script : `${module}:${script}`);
+const statusMark = (module: string | null, script: string) => (module === null ? script : `${module}:${script}`);
 export const chatScripts = (packs: ReturnType<typeof packsOf>) =>
   packs.flatMap(({ id, pack, module }) => pack.regex.map((script, index) => ({ script, index, module: module && id, mark: statusMark(module && id, script.id) })));
 
 // 상태창 지정's scripts at their places among a chat's scripts. A mark that names no script marks nothing, nor does
 // one turned off, which never draws; it is kept for when the script or its module is on again.
-export type StatusScript = { id: string; place: number };
+type StatusScript = { id: string; place: number };
 export const statusPlaces = (scripts: ReturnType<typeof chatScripts>, marks: readonly string[]): StatusScript[] =>
   marks.flatMap((id) => {
     const place = scripts.findIndex(({ mark }) => mark === id);

@@ -4,7 +4,7 @@ import workerUrl from './evaluation-worker?worker&url';
 
 // 문제 진단 (settings/Diagnostics): what a user copies and pastes to the operator when something fails. It holds this
 // device and this tab only, never chat text, keys or the account, and is kept nowhere: a reload starts it empty.
-export type Problem = { at: number; text: string };
+type Problem = { at: number; text: string };
 
 const KEPT = 20;
 const PROBE_MS = 30_000;
@@ -25,7 +25,7 @@ export function watchProblems() {
 }
 
 // A worker of its own, so a failed import the app's worker has cached is tried again, as a reload would.
-export function probeTokenizer(): Promise<string> {
+function probeTokenizer(): Promise<string> {
   return new Promise((resolve) => {
     let worker: Worker;
     try {

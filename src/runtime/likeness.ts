@@ -39,7 +39,7 @@ export type LikenessFailure =
   | { kind: 'gone' };
 
 // By pack. A failure stays for the session, until the next try.
-export type LikenessRun = { stage: 'building' } | { stage: 'failed'; failure: LikenessFailure };
+type LikenessRun = { stage: 'building' } | { stage: 'failed'; failure: LikenessFailure };
 export type LikenessRuns = ReadonlyMap<string, LikenessRun>;
 
 type Stopped = { kind: 'stopped' };
@@ -61,7 +61,7 @@ async function writeLikeness(store: ObjectStore, owner: string, value: Likeness)
 }
 
 // A portrait by its place and the name it had when shown, so an edit never lands on another one moved there ('gone').
-export type PortraitAt = { index: number; name: string };
+type PortraitAt = { index: number; name: string };
 
 // Any edit makes the portrait the user's, which 다시 만들기 keeps.
 export function editPortrait(store: ObjectStore, owner: string, at: PortraitAt, edit: Partial<Omit<Portrait, 'source'>>): Promise<ApiResult<Stored<'likeness'>>> {

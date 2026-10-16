@@ -1,6 +1,5 @@
-import { isChapter, type Staleness } from '../../engine/memory';
+import { isChapter, type RecordStatus, type Staleness } from '../../engine/memory';
 import type { Chapter, Fact, Memory, MemoryRecord, Source, Written } from '../../model/memory';
-import type { RecordStatus } from '../../runtime/memory';
 import { CHAPTER } from '../common/words';
 
 const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '한도 넘음', forgotten: '삭제됨', chaptered: `${CHAPTER}로 보냄`, 'recall-over': '요약 보냄' };

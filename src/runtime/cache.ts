@@ -12,7 +12,7 @@ import type { ObjectStore } from './store';
 
 const TTL: Record<Cache, number> = { '5m': 5 * 60_000, '1h': 60 * 60_000 };
 
-export type LastCache = { call: string; until: number };
+type LastCache = { call: string; until: number };
 
 // The call left a cache to forecast against: it sent a point and reported reading or writing some. One that cached
 // none (a prompt shorter than the model caches, a provider that ignores points, a call that failed) leaves the last.

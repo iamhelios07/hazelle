@@ -39,7 +39,7 @@ export type AdminAccount = {
   fileBytesCap: OwnCap;
 };
 // The accounts read at readAt; the sums leave out the unread ones.
-export type Totals = { bytes: number; disk: number; unread: number; readAt: number };
+type Totals = { bytes: number; disk: number; unread: number; readAt: number };
 // A report is an account's message, or a report on a share (share set) sent by anyone holding its link: accountId and
 // username then name a signed-in reporter, else null. shared: the share's state now, null once it went with its sharer.
 export type SharedState = { held: boolean; reviewed: boolean; cut: boolean; removed: boolean; ownerId: string | null; ownerName: string | null };

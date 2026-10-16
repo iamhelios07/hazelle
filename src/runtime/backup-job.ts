@@ -14,7 +14,7 @@ export type BackupInput =
   | { kind: 'export' }
   | { kind: 'read'; file: Blob }
   | { kind: 'restore'; pin: Pin };
-export type BackupTask = BackupInput & { id: number };
+type BackupTask = BackupInput & { id: number };
 export type ScanCall = { scan: number; options: Parameters<ObjectStore['scan']>[0]; pin: Pin };
 export type ScanRows = { scan: number; rows: { row: ObjectRow; value: unknown }[] };
 export type BatchCall = { writes: Write[]; unheld?: boolean };

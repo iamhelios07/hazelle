@@ -7,7 +7,7 @@ import type { ObjectStore } from './store';
 const INACTIVE_BYTES = 32 * 1024 * 1024;
 type Cached = { url: string | null; bytes: number; owners: Set<string>; removed: boolean };
 // url is undefined until read, and for a picture that is gone or unreadable.
-export type AssetView = { url: PictureUrl; hold: () => () => void };
+type AssetView = { url: PictureUrl; hold: () => () => void };
 
 const KINDS = new Set<string>(['asset', 'inlay', 'illustration'] satisfies PictureKind[]);
 

@@ -7,7 +7,7 @@ import { illustrateSwitches, translateSwitches, type IllustrateSetup, type Trans
 import { chatPrompt } from './prompts';
 import type { ObjectStore } from './store';
 
-export type Features = Record<Feature, boolean>;
+type Features = Record<Feature, boolean>;
 type Reader = Pick<ObjectStore, 'get'>;
 type Place = Pick<Chat, 'character' | 'prompt' | 'features'>;
 export type FeatureOwner = { kind: 'settings' } | { kind: 'prompt' | 'character' | 'chat'; id: string };

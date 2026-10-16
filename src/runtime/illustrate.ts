@@ -67,7 +67,7 @@ export type IllustrateFailure =
   | { kind: 'unsaved'; failure: ApiFailure };
 
 // A scene being drawn, or one whose picture failed, which a retry draws again without another scene call.
-export type Sketch = { scene: Scene; failure: IllustrateFailure | null };
+type Sketch = { scene: Scene; failure: IllustrateFailure | null };
 // By message, one run each. writing: its scenes are being written. failure: the run failed before it had a scene, so
 // it stands at the message's end. sketches: its scenes still to draw or failed; a saved picture takes a scene's place.
 export type Drawing = { chat: string; version: string; writing: boolean; failure: IllustrateFailure | null; sketches: readonly Sketch[] };

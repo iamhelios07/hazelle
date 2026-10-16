@@ -9,9 +9,9 @@ import { PendingRequests } from '../pending-requests';
 import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
-export type EventInput = { scope: ChatBasis; history: Tail<ChatScope['messages'][number]> };
+type EventInput = { scope: ChatBasis; history: Tail<ChatScope['messages'][number]> };
 
-export type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
+type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
 
 export type Down =
   | { kind: 'run'; id: number; owner: string; triggers: ScriptUnit[]; input: EventInput; event: Event }

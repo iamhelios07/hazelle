@@ -141,7 +141,7 @@ export const addAccount = (store: ObjectStore, id: string, account: Account) =>
   store.update('connection', id, (current) => (pooled(current) ? signedIn(current, account, Date.now()) : null));
 
 // What removeAccount took, for putAccountBack.
-export type Taken = { account: Account; group: string; index: number };
+type Taken = { account: Account; group: string; index: number };
 
 export async function removeAccount(store: ObjectStore, id: string, account: string): Promise<ApiResult<Taken>> {
   let taken: Taken | null = null;

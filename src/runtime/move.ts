@@ -27,8 +27,8 @@ export type MovePick = Pick<BackupCatalog, 'characters' | 'personas' | 'presets'
 export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules' | 'pictures'; done: number; total: number };
 // risu: its Risu chaId. unsupported: the parser's and the store's counts together (runtime/characters ImportedCharacter);
 // faceless also when the picture did not read.
-export type MovedCharacter = { id: string; risu: string; name: string; chats: number; unsupported: Unsupported; faceless: boolean; missed: MoveUnsupported[]; unused: Unused[] };
-export type MovedModule = { name: string; unsupported: Unsupported };
+type MovedCharacter = { id: string; risu: string; name: string; chats: number; unsupported: Unsupported; faceless: boolean; missed: MoveUnsupported[]; unused: Unused[] };
+type MovedModule = { name: string; unsupported: Unsupported };
 // loreBudget: the 로어북 최대 분량 this move set from Risu's; null when it set none. toggles: how many of Risu's toggle
 // values this move wrote anywhere, onto a character it brought or onto 캐릭터 없이.
 export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[]; loreBudget: number | null; toggles: number };
@@ -232,7 +232,7 @@ export const risuMatch = (store: ObjectStore, name: string): string | null =>
 
 // A character's assets, or a chat's inlays (Risu's pictures inside its messages, by their Risu ids), which are scoped to
 // the chat: the caller holds it, from before reading what it has to after the write.
-export type Holder = { kind: 'asset' | 'inlay'; parent: string };
+type Holder = { kind: 'asset' | 'inlay'; parent: string };
 
 // Only the names the holder does not have yet, so the same pictures given twice add nothing; unsupported as in
 // runtime/characters ImportedCharacter, so a name it had is neither kept nor counted.

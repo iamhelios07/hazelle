@@ -9,7 +9,7 @@ import type { Memory, Source } from '../model/memory';
 import { applyTail, type Tail } from './history-delta';
 import { tokenizer } from './tokenizer';
 
-export type LuaText = { text: string; stamp: string; shown: string };
+type LuaText = { text: string; stamp: string; shown: string };
 const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
 export type EvaluationJob =
   | { kind: 'display'; take: ReadonlySet<number>; lua?: { generation: number; revision: number; waits: boolean } }

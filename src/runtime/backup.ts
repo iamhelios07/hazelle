@@ -11,7 +11,7 @@ import type { FileRef } from '../vault/files';
 import workerUrl from './backup-worker?worker&url';
 
 export type { BackupOutput } from './backup-zip';
-export type { BackupFailure, BackupStep } from './backup-core';
+export type { BackupStep } from './backup-core';
 export type Backup = { close: () => Promise<void>; worker: BackupWorker };
 
 type Host = { store: ExportStore; files: ExportFiles; output: BackupOutput } | { store: ObjectStore; files: RestoreFiles };
