@@ -2,6 +2,7 @@ import { Check } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { toolId } from '../../model/tool';
 import { ACTS, importOf } from '../common/acts';
+import { useImport } from '../common/importing';
 import { counted, holdsLine, packParts, type PackParts } from '../common/pack';
 import { useSearch } from '../common/useSearch';
 import { ALWAYS, moduleName, PAGES, SCRIPTS } from '../common/words';
@@ -33,8 +34,8 @@ const COLUMNS: TableColumn[] = [
 
 const figure = (count: number) => (count > 0 ? count : null);
 
-// onImport opens the app's file picker, which the shell hands over: a feature folder may not import the library's.
-export function ModulesScreen({ back, onImport }: { back: Back | null; onImport: () => void }) {
+export function ModulesScreen({ back }: { back: Back | null }) {
+  const { pick } = useImport();
   const modules = useModules();
   const prompts = usePrompts().flatMap(({ value }) => (value.task === undefined ? [value.modules ?? []] : []));
   const characters = useLibrary().characters.map(({ character }) => character.modules ?? []);
@@ -44,7 +45,7 @@ export function ModulesScreen({ back, onImport }: { back: Back | null; onImport:
   const search = useSearch(modules, '모듈 검색', ({ value }) => [moduleName(value.name)]);
   const parts = useModuleParts(search.found);
   const importing = (
-    <Button variant="secondary" icon={ACTS.import.icon} onClick={onImport}>
+    <Button variant="secondary" icon={ACTS.import.icon} onClick={pick}>
       {importOf('모듈')}
     </Button>
   );

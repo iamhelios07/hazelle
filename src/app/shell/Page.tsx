@@ -9,7 +9,6 @@ import { Missing, type Absent } from '../common/Missing';
 import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
 import { NO_CHARACTER } from '../common/words';
-import { useImport } from '../common/importing';
 import { ShareArrival } from '../library/ShareArrival';
 import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
@@ -104,7 +103,7 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'persona':
         return <ItemPage at={at} back={back(at)}>{(stored) => <PersonaScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'modules':
-        return <ModulesPage back={sideBack(at)} />;
+        return <ModulesScreen back={sideBack(at)} />;
       case 'module':
         return <ItemPage at={at} back={back(at)}>{(stored) => <ModuleScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'tool-page':
@@ -242,11 +241,6 @@ function ModelPage({ at, back }: { at: At<'model'>; back: Back }) {
   const connection = useStored('connection', at.connection);
   const model = connection?.value.starred.find((candidate) => candidate.id === at.model);
   return connection && model ? <ModelScreen key={`${connection.id}/${model.id}`} connection={connection} model={model} back={back} /> : <Missing what="model" back={back} />;
-}
-
-function ModulesPage({ back }: { back: Back | null }) {
-  const { pick } = useImport();
-  return <ModulesScreen back={back} onImport={pick} />;
 }
 
 function AdminPage({ back, closeSettings }: { back: Back | null; closeSettings: () => void }) {
