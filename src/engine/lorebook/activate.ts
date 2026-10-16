@@ -31,6 +31,10 @@ export type Fate =
 
 export type Fired = { id: string; why: Why; fate: Fate };
 
+// An entry that did not fire this turn, and why. closed: a condition kept it out of the scan; unmatched: it was scanned
+// and no key was found in the window.
+export type Silent = { id: string; why: { kind: 'closed'; cause: 'never' | 'after-match' | 'only-after' | 'only-every' | 'greeting' } | { kind: 'unmatched' } };
+
 // In lorebook order. The ids key the after-match state, so they must outlive the send.
 export type LoreEntries = { id: string; value: Omit<LoreEntry, 'folder'> }[];
 
@@ -57,6 +61,8 @@ export type Activation = {
   placed: { id: string; body: string; placement: Placement }[];
   // Every entry that fired, in the order it fired, including those that did not go in.
   fired: Fired[];
+  // Every entry that did not fire, in lorebook order.
+  silent: Silent[];
   invalidKeys: { entry: string; key: string }[];
   afterMatch: string[];
 };
@@ -231,6 +237,7 @@ function activate(books: Book[], settings: Card['loreSettings'], budget: number,
   return {
     placed: placed.map(({ book }) => ({ id: book.id, body: bodies.get(book.id)!, placement: placement(book.rules) })),
     fired: matched.map(({ book, why }) => ({ id: book.id, why, fate: fates.get(book.id)! })),
+    silent: [],
     invalidKeys,
     afterMatch: [...new Set([...before, ...went])],
   };

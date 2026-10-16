@@ -9,7 +9,7 @@ import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
-import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation } from './lorebook/activate';
+import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation, type Silent } from './lorebook/activate';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, recordsTarget, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import { retrieval, retrievalRoom } from './retrieval';
@@ -64,7 +64,11 @@ export type From =
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. invalidKeys: regex keys that
 // did not compile (design.md row 2: never match, listed). loreBudget: the 로어북 최대 분량 the activation was held to. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number };
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: Problem[] };
+
+// What went wrong in a text the request was built from, at the part it was built into: a tag CBS does not know, or Risu's
+// error text ({{iserror}}) left in the rendered output.
+export type Problem = { from: From; kind: 'unknown-tag' | 'error-text'; text: string };
 
 // The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
 // Claude models refuse with 400.
@@ -331,10 +335,12 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, memor
       messages: sent.map(({ message }) => message),
       parts: sent.map(({ message, from, origin }) => ({ from, tokens: tokens(message.content), ...(origin !== undefined && { origin }) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
+      silent: activation && activation.silent.map((silent) => ({ ...silent, name: named(silent.id) })),
       invalidKeys: activation ? activation.invalidKeys.map((invalid) => ({ ...invalid, name: named(invalid.entry) })) : [],
       loreBudget: scope.loreBudget,
       memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
+      problems: [],
     };
   };
 
