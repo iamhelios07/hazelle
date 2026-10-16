@@ -5,7 +5,6 @@ const TEXT_KEYS = new Set(['chara', 'ccv3', 'persona']);
 const ASSET = 'chara-ext-asset_';
 const decoder = new TextDecoder();
 
-// The same one-liner as vault/aead.ts, which the engine may not import.
 export const base64 = (text: string) => Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
 
 export type Png = {

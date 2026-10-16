@@ -280,8 +280,7 @@ export type VariableWrite = { writer: VariableWriter; value: string; truncated: 
 export type InspectedVariable = { name: string; nameTruncated: boolean; last: VariableWrite; history: VariableWrite[]; omitted: number };
 export type VariableInspection = { variables: InspectedVariable[]; omitted: number; stopped: boolean };
 
-// Bounds apply to the whole reply, not per message: 256 variables, 1024 historical writes, 2048 characters per
-// value and 256 per name. Prefix filtering happens before the bound; omitted counts and truncation stay explicit.
+// Bounds apply to the whole reply, not per message. Prefix filtering happens before the bound.
 export const VARIABLE_LIMITS = { variables: 256, writes: 1024, value: 2048, name: 256 } as const;
 
 class VariableTrace {

@@ -508,8 +508,7 @@ export type HookLog = {
   truncated: boolean;
 };
 
-// Both sides of the worker boundary are bounded: each run keeps 100 hooks, each field 16 items of 1024 characters.
-// Scripts separately bounds the page's retained log by serialized size.
+// Both sides of the worker boundary are bounded. Scripts separately bounds the page's retained log by serialized size.
 export const HOOK_TRACE_LIMITS = { entries: 100, items: 16, text: 1024 } as const;
 export type HookTrace = { entries: HookLog[]; omitted: number };
 
