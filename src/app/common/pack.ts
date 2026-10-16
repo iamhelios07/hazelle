@@ -25,4 +25,4 @@ export function holdsLine({ tool, lore, regex, triggers, toggles, assets, style 
   return held.length > 0 ? held.join(' · ') : '안에 담긴 항목이 없어요';
 }
 
-export const packHolds = (pack: Pack, lore: number, assets: number, tool = false): string => holdsLine(packParts(pack, lore, assets, tool));
+export const packHolds = (pack: Pack, lore: number, assets: number): string => holdsLine(packParts(pack, lore, assets));
