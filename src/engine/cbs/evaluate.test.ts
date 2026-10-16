@@ -1,33 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
+import { blankCard } from '../import/card';
 import type { Card } from '../import/types';
 import { unescapeCbs } from './escape';
 import { evaluate, Runaway, type CbsContext } from './evaluate';
 import { previousMessages } from './history';
 
-const card = (over: Partial<Card> = {}): Card => ({
-  name: 'Luna',
-  nickname: null,
-  description: '',
-  personality: '',
-  scenario: '',
-  greetings: [],
-  exampleDialogue: '',
-  systemPrompt: '',
-  postHistoryInstructions: '',
-  creatorNotes: '',
-  creator: '',
-  version: '',
-  tags: [],
-  variables: [],
-  toggles: [],
-  utility: false,
-  bias: [],
-  regex: [],
-  triggers: [],
-  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
-  ...over,
-});
+const card = (over: Partial<Card> = {}): Card => ({ ...blankCard('Luna'), ...over });
 
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, message: id, seed: id, role, text, time: null });
 

@@ -3,35 +3,18 @@ import { resolveAssets } from './assets';
 import { evaluate } from './cbs/evaluate';
 import { display, DisplayPass, storyHtml } from './display';
 import type { HistoryMessage } from './history';
+import { blankCard } from './import/card';
 import type { Card } from './import/types';
 import { onProgress } from './progress';
 import { contexts, type ChatScope, type LuaDisplay } from './render';
 
 const card: Card = {
-  name: 'Luna',
-  nickname: null,
-  description: '',
-  personality: '',
-  scenario: '',
-  greetings: [],
-  exampleDialogue: '',
-  systemPrompt: '',
-  postHistoryInstructions: '',
-  creatorNotes: '',
-  creator: '',
-  version: '',
-  tags: [],
-  variables: [],
-  toggles: [],
-  utility: false,
-  bias: [],
-  triggers: [],
+  ...blankCard('Luna'),
   regex: [
     { id: 'regex-0', name: 'hp', find: '\\[HP (\\d+)\\]', replace: '{{setvar::hp::$1}}<style>.x-risu-box { color: red }</style><div class="box">HP $1</div>', stage: 'output', flags: null },
     { id: 'regex-1', name: 'box', find: 'BOX', replace: '<style>.x-risu-box { color: red }</style><div class="box">box</div>', stage: 'display', flags: null },
   ],
   background: '<style>.hp::after { content: "{{getvar::hp}}" }',
-  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, message: id, seed: id, role, text, time: null });
 const scope: ChatScope = {

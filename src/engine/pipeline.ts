@@ -1,6 +1,6 @@
 import type { TokenEstimate, TokenFit } from '../model/token-calibration';
 import { cachePoints, type CachePart, type Sent } from './cache-points';
-import { fitChat, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
+import { fitChat, remembered, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
 import type { Portrait } from '../model/likeness';
 import type { Memory, Written } from '../model/memory';
@@ -487,18 +487,6 @@ function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
 }
 
 const blockFrom = (block: Block): From => ({ kind: 'block', id: block.id, name: block.name, slot: block.kind === 'slot' ? block.slot : null });
-
-function remembered(measure: (text: string) => number): (text: string) => number {
-  const held = new Map<string, number>();
-  return (text) => {
-    let value = held.get(text);
-    if (value === undefined) {
-      value = measure(text);
-      held.set(text, value);
-    }
-    return value;
-  };
-}
 
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };

@@ -2,22 +2,11 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { assetType, blankCard, importCard, importRisum, writeCharx } from './card';
 import { moduleSource } from './hazelle';
+import { concat } from './png';
 import { fileSource } from './source';
 import { readRisum, readRisumModule, risumBlock, risumHead, RISUM_END, unpack, writeRisum } from './risum';
 import type { Bot, ImportResult, Imported, Trigger, TypedModule } from './types';
-
-const CRC = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-const crc32 = (bytes: Uint8Array) => (bytes.reduce((c, byte) => CRC[(c ^ byte) & 0xff]! ^ (c >>> 8), 0xffffffff) ^ 0xffffffff) >>> 0;
-
-function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
-  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
-  parts.reduce((at, part) => (out.set(part, at), at + part.length), 0);
-  return out;
-}
+import { crc32 } from './zip';
 
 function chunk(type: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(12 + data.length);
@@ -36,7 +25,7 @@ const cardText = (card: unknown) => base64(strToU8(JSON.stringify(card)));
 // A 1x1 PNG; its IDAT is not a valid image, which the importer never inspects.
 function png(...chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const ihdr = chunk('IHDR', new Uint8Array([0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]));
-  return concat(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), ihdr, chunk('IDAT', new Uint8Array([1, 2, 3])), ...chunks, chunk('IEND', new Uint8Array()));
+  return concat([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), ihdr, chunk('IDAT', new Uint8Array([1, 2, 3])), ...chunks, chunk('IEND', new Uint8Array())]);
 }
 
 const v2 = (data: Record<string, unknown>) => ({ spec: 'chara_card_v2', spec_version: '2.0', data: { name: 'Mira', description: 'd', first_mes: 'hi', ...data } });
@@ -128,7 +117,7 @@ describe('importCard', () => {
 
   it('reads a zip appended to a JPEG and keeps the JPEG as the avatar', () => {
     const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 0xff, 0xd9]);
-    const imported = ok(importCard('Mira.jpeg', concat(jpeg, zipSync({ 'card.json': strToU8(JSON.stringify(v3({ name: 'Jay' }))) }))));
+    const imported = ok(importCard('Mira.jpeg', concat([jpeg, zipSync({ 'card.json': strToU8(JSON.stringify(v3({ name: 'Jay' }))) })])));
     expect(imported.card.name).toBe('Jay');
     expect(imported.avatar).toEqual({ bytes: jpeg, type: 'image/jpeg' });
     expect(imported.report.format).toBe('charx');
@@ -421,8 +410,8 @@ describe('assetType', () => {
 function risum(module: unknown, assets: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const encode = new Uint8Array(256);
   unpack(Uint8Array.from({ length: 256 }, (_, byte) => byte)).forEach((plain, packed) => (encode[plain] = packed));
-  const block = (bytes: Uint8Array) => concat(new Uint8Array(new Uint32Array([bytes.length]).buffer), bytes.map((byte) => encode[byte]!));
-  return concat(new Uint8Array([111, 0]), block(strToU8(JSON.stringify({ type: 'risuModule', module }))), ...assets.flatMap((asset) => [new Uint8Array([1]), block(asset)]), new Uint8Array([0]));
+  const block = (bytes: Uint8Array) => concat([new Uint8Array(new Uint32Array([bytes.length]).buffer), bytes.map((byte) => encode[byte]!)]);
+  return concat([new Uint8Array([111, 0]), block(strToU8(JSON.stringify({ type: 'risuModule', module }))), ...assets.flatMap((asset) => [new Uint8Array([1]), block(asset)]), new Uint8Array([0])]);
 }
 
 // A module.risum laid out as Risu's exportModuleLegacy writes it and encoded with the encode half of the real

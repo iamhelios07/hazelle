@@ -141,6 +141,20 @@ export function renderChat(
       return unrun;
     }
   };
+  const shownAt = (index: number, place: number, version: string, replayed: string, stamp: string) => {
+    let edited = replayed;
+    if (lua) {
+      const held = lua(version, replayed, stamp);
+      if (!held?.fresh) {
+        missed.push({ index: place, version, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });
+        variables.changed!.clear();
+      }
+      edited = held?.text ?? '';
+    }
+    const shown = renderStage(stage, scripts, context, index, edited, variables, take);
+    if (shown.stopped) { stopped ??= shown.stopped; failures.display.set(index, shown.stopped); }
+    return shown;
+  };
   const texts = scope.messages.map(({ id, message, role, text, staged, before = [], after = [] }, index) => {
     states?.begin();
     progressed();
@@ -165,23 +179,12 @@ export function renderChat(
     for (const [name, value] of after) variables.set(name, value);
     past.push(unescapeCbs(replayed));
     if (greeting && later) { drawn.push([]); boxes.push([]); return replayed; }
-    let edited = replayed;
-    if (lua) {
-      // A pass is made again when its message's place or the state as of it changes, and for the last LATEST
-      // messages when the chat grows or shrinks, which is when Risu draws them again: bots draw their status on the
-      // last message and take it off the one before. Older messages keep their pass until reloadDisplay.
-      const place = index - first;
-      const length = scope.messages.length - first;
-      const stamp = `${place}/${place >= length - LATEST ? length : ''}/${variables.stamp}`;
-      const held = lua(id, replayed, stamp);
-      if (!held?.fresh) {
-        missed.push({ index: place, version: id, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });
-        variables.changed!.clear();
-      }
-      edited = held?.text ?? '';
-    }
-    const shown = renderStage(stage, scripts, context, index, edited, variables, take);
-    if (shown.stopped) { stopped ??= shown.stopped; failures.display.set(index, shown.stopped); }
+    // A pass is made again when its message's place or the state as of it changes, and for the last LATEST
+    // messages when the chat grows or shrinks, which is when Risu draws them again: bots draw their status on the
+    // last message and take it off the one before. Older messages keep their pass until reloadDisplay.
+    const place = index - first;
+    const length = scope.messages.length - first;
+    const shown = shownAt(index, place, id, replayed, `${place}/${place >= length - LATEST ? length : ''}/${variables.stamp}`);
     drawn.push(shown.drawn);
     boxes.push(shown.boxes);
     return shown.text;
@@ -193,20 +196,9 @@ export function renderChat(
     // Its own writes stood in order above; this reading's are dropped.
     const { id, text } = scope.messages[0]!;
     const replayed = guarded(0, () => evaluate(text, context({ message: 0 }, new Map(variables))), text);
-    let edited = replayed;
-    if (lua) {
-      // The greeting shows the current state, so it is passed again whenever the chat grows or shrinks, as the last
-      // LATEST messages are.
-      const stamp = `-1/${scope.messages.length - first}/${variables.stamp}`;
-      const held = lua(id, replayed, stamp);
-      if (!held?.fresh) {
-        missed.push({ index: -1, version: id, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });
-        variables.changed!.clear();
-      }
-      edited = held?.text ?? '';
-    }
-    const shown = renderStage(stage, scripts, context, 0, edited, variables, take);
-    if (shown.stopped) { stopped ??= shown.stopped; failures.display.set(0, shown.stopped); }
+    // The greeting shows the current state, so it is passed again whenever the chat grows or shrinks, as the last
+    // LATEST messages are.
+    const shown = shownAt(0, -1, id, replayed, `-1/${scope.messages.length - first}/${variables.stamp}`);
     texts[0] = shown.text;
     drawn[0] = shown.drawn;
     boxes[0] = shown.boxes;
@@ -288,8 +280,7 @@ export type VariableWrite = { writer: VariableWriter; value: string; truncated: 
 export type InspectedVariable = { name: string; nameTruncated: boolean; last: VariableWrite; history: VariableWrite[]; omitted: number };
 export type VariableInspection = { variables: InspectedVariable[]; omitted: number; stopped: boolean };
 
-// Bounds apply to the whole reply, not per message: 256 variables, 1024 historical writes, 2048 characters per
-// value and 256 per name. Prefix filtering happens before the bound; omitted counts and truncation stay explicit.
+// Bounds apply to the whole reply, not per message. Prefix filtering happens before the bound.
 export const VARIABLE_LIMITS = { variables: 256, writes: 1024, value: 2048, name: 256 } as const;
 
 class VariableTrace {

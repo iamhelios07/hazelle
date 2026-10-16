@@ -1,14 +1,13 @@
 import { splitThoughts } from '../../connectors/thoughts';
 import { isRecord, list } from '../../connectors/values';
 import { assemble, imageType, type Resolve } from './card';
-import { add, chatLorebook, convert, counted, record, text, type Json, type Tally } from './convert';
+import { add, chatLorebook, convert, counted, finite, record, text, type Json, type Tally } from './convert';
 import { MOVE_UNSUPPORTED_KINDS, type MoveUnsupported, type MoveUnsupportedKind, type Picture, type RisuCharacter, type RisuChat } from './types';
 
 export type Read = () => Promise<Uint8Array<ArrayBuffer>>;
 // The backup's entry for a Risu asset key; null when the backup lacks it.
 export type Entry = (key: string) => Read | null;
 
-const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 const INLAY = /\{\{inlay(?:ed|eddata)?::(.+?)\}\}/g;
 
 // The ids of Risu's inlay store the texts name, each once, in order.
@@ -30,10 +29,10 @@ export function chatInfo(chat: Json | null): { lastTalk: number; inlays: number 
     const message = messages[index];
     if (!isRecord(message)) continue;
     hasMessage = true;
-    const at = number(message.time);
+    const at = finite(message.time);
     if (at !== null) return { lastTalk: at, inlays };
   }
-  return { lastTalk: hasMessage ? (number(chat!.lastDate) ?? 0) : 0, inlays };
+  return { lastTalk: hasMessage ? (finite(chat!.lastDate) ?? 0) : 0, inlays };
 }
 
 export async function picture(read: Read): Promise<Picture | null> {
@@ -60,7 +59,7 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
   if (image === null) add(missed, 'missing-picture');
 
   const page = Number.isInteger(char.chatPage) && chats[char.chatPage as number] ? (char.chatPage as number) : 0;
-  const fmIndex = number(char.firstMsgIndex) ?? -1;
+  const fmIndex = finite(char.firstMsgIndex) ?? -1;
   // Risu turns a module on for one chat too, a place this app does not have: a chat's are on for its character
   // (design §6.5). Only a chat that comes brings its own.
   const modules = new Set(list(char.modules).filter((id) => typeof id === 'string'));
@@ -104,7 +103,7 @@ export function risuChatFile(json: unknown): { chats: RisuChat[]; missed: MoveUn
 
 function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveUnsupportedKind>): RisuChat {
   const messages = list(chat.message).filter(isRecord);
-  let at = number(chat.lastDate) ?? 0;
+  let at = finite(chat.lastDate) ?? 0;
   // 'allBefore' leaves it and every message before it out of the prompt.
   const cut = messages.findLastIndex((message) => message.disabled === 'allBefore');
   for (const [index, message] of messages.entries()) {
@@ -120,14 +119,14 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
     title: text(chat.name),
     note: note.trim() ? note : null,
     persona: text(chat.bindedPersona) || null,
-    greeting: Math.max((number(chat.fmIndex) ?? fmIndex) + 1, 0),
+    greeting: Math.max((finite(chat.fmIndex) ?? fmIndex) + 1, 0),
     variables: Object.entries(record(chat.scriptstate)).flatMap(([key, value]): [string, string][] =>
       key.startsWith('$') && value !== undefined ? [[key.slice(1), typeof value === 'string' ? value : JSON.stringify(value)]] : [],
     ),
     inlays: inlayIds(messageTexts(messages)),
     ...chatLorebook(list(chat.localLore)),
     messages: messages.map((message) => {
-      at = number(message.time) ?? at;
+      at = finite(message.time) ?? at;
       // Risu keeps a reply's reasoning inside its text as <Thoughts> blocks, and takes them out again before it draws or
       // sends the text (ParseMarkdown, and the prompt builder).
       const { text: said, reasoning } = splitThoughts(text(message.data));
@@ -139,14 +138,13 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
 
 const holdsData = (memory: unknown) => isRecord(memory) && Object.values(memory).some((value) => Array.isArray(value) && value.length > 0);
 
-// Risu's own export of a database character (createBaseV3, spec §6), so the one card converter reads it. Scripts and
-// triggers stay in extensions.risuai, where a JSON card holds them. Export quirks are not reproduced: an unset
-// character_version stays unset rather than "undefined", and no ccdefault: icon is added, since the avatar comes
-// from the character's image.
+// The fields of Risu's own export of a database character (createBaseV3, spec §6) that the one card converter reads;
+// the rest of the export is left out. Scripts and triggers stay in extensions.risuai, where a JSON card holds them.
+// Export quirks are not reproduced: an unset character_version stays unset rather than "undefined", and no ccdefault:
+// icon is added, since the avatar comes from the character's image.
 function cardJson(char: Json): Json {
   const settings = record(char.loreSettings);
   const extras = record(char.additionalData);
-  const other = Object.entries(record(char.extentions)).filter(([key]) => key !== 'risuai' && key !== 'depth_prompt');
   return {
     spec: 'chara_card_v3',
     spec_version: '3.0',
@@ -165,49 +163,34 @@ function cardJson(char: Json): Json {
         scan_depth: settings.scanDepth,
         token_budget: settings.tokenBudget,
         recursive_scanning: settings.recursiveScanning,
-        extensions: { ...record(char.loreExt), risu_fullWordMatching: settings.fullWordMatching ?? false },
+        extensions: { risu_fullWordMatching: settings.fullWordMatching ?? false },
       },
       tags: char.tags,
       creator: extras.creator,
       character_version: extras.character_version,
       extensions: {
-        ...Object.fromEntries(other),
         risuai: {
           bias: char.bias,
-          viewScreen: char.viewScreen,
           customScripts: char.customscript,
           utilityBot: char.utilityBot,
-          sdData: char.sdData,
           backgroundHTML: char.backgroundHTML,
-          license: char.license,
           triggerscript: char.triggerscript,
           additionalText: char.additionalText,
-          largePortrait: char.largePortrait,
-          lorePlus: char.lorePlus,
-          inlayViewScreen: char.inlayViewScreen,
-          newGenData: char.newGenData,
           defaultVariables: char.defaultVariables,
           prebuiltAssetCommand: char.prebuiltAssetCommand,
-          prebuiltAssetExclude: char.prebuiltAssetExclude,
-          prebuiltAssetStyle: char.prebuiltAssetStyle,
           toggles: char.customModuleToggle,
-          moduleNamespace: char.moduleNamespace,
-          hideChatIcon: char.hideChatIcon,
         },
         depth_prompt: char.depth_prompt,
       },
-      group_only_greetings: char.group_only_greetings,
       nickname: char.nickname,
-      source: char.source,
-      creation_date: char.creation_date,
       assets: [
         ...list(char.ccAssets),
         ...list(char.additionalAssets)
           .filter(Array.isArray)
-          .map(([name, uri, ext]) => ({ type: 'x-risu-asset', uri, name, ext: text(ext) || 'png' })),
+          .map(([name, uri]) => ({ type: 'x-risu-asset', uri, name })),
         ...list(char.emotionImages)
           .filter(Array.isArray)
-          .map(([name, uri]) => ({ type: 'emotion', uri, name, ext: 'png' })),
+          .map(([name, uri]) => ({ type: 'emotion', uri, name })),
       ],
     },
   };

@@ -68,7 +68,7 @@ const UNSUPPORTED = new Set([
 export const isUnsupportedTag = (name: string) => UNSUPPORTED.has(normalize(name));
 
 export const bool = (value: boolean) => (value ? '1' : '0');
-// The one truthiness, for #when, #if and the logic tags. Risu's and/or/not take only `1`.
+// The one truthiness, for #when, #if, the logic tags and block triggers. Risu's and/or/not take only `1`.
 export const truthy = (value: string) => value === '1' || value === 'true';
 
 export const readVar = (context: CbsContext, name: string) => context.variables.get(name) ?? UNSET;
@@ -92,7 +92,7 @@ const currentMessage = (context: CbsContext) => {
 // split inside it.
 const serialize = (value: unknown) => JSON.stringify(value).replaceAll('::', '\\u003a\\u003a');
 const asText = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value));
-function json(text: string): unknown {
+export function json(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
@@ -107,7 +107,7 @@ export function items(text: string): string[] {
   if (value === null) return [];
   return Array.isArray(value) ? value.map(asText) : text.split('§');
 }
-function dict(text: string): Record<string, unknown> {
+export function dict(text: string): Record<string, unknown> {
   const value = json(text);
   return isRecord(value) ? value : {};
 }

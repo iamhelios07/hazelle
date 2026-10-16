@@ -1,5 +1,6 @@
 import { Unzlib } from 'fflate';
 import { isRecord } from '../../connectors/values';
+import { concat } from './png';
 
 // What NovelAI wrote into a picture it drew: its prompt JSON, in a PNG `Comment` text chunk (tEXt, or zTXt packed), or,
 // in a picture saved again as WebP, in its EXIF: UserComment (`ASCII\0\0\0` then the JSON) or ImageDescription. Read
@@ -63,9 +64,7 @@ function unpacked(packed: Uint8Array): string | null {
   } catch {
     return null;
   }
-  const out = new Uint8Array(total);
-  chunks.reduce((at, chunk) => (out.set(chunk, at), at + chunk.length), 0);
-  return decoder.decode(out);
+  return decoder.decode(concat(chunks));
 }
 
 function webpChunk(bytes: Uint8Array, wanted: string): Uint8Array | null {

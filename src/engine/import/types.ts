@@ -27,8 +27,8 @@ export type Card = {
   loreSettings: { scanDepth: number | null; tokenBudget: number | null; recursive: boolean | null; fullWordMatching: boolean | null };
 } & Pack;
 
-// Its lorebook and assets are stored objects of their own, under whichever holds it. A chat reads its packs as one list
-// (runtime/turn packsOf), never a card's or a module's apart.
+// Its lorebook and assets are stored objects of their own, under whichever holds it. A chat reads its packs as one list,
+// never a card's or a module's apart.
 export type Pack = {
   regex: RegexScript[];
   // The triggers that do something, in Risu's order, which is the order a run walks them in (runtime/scripts).

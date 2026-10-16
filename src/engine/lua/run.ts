@@ -89,16 +89,13 @@ export class Lua {
       const failed = (script: Script | Blocks, error: Failure) => {
         const item = { from: script.owner, script: script.name || (script.kind === 'blocks' ? script.on : 'Lua'), ...error };
         errors.push(item);
-        if (active) boundedItem(active, active.errors, 'message' in item ? { ...item, script: clipped(active, item.script), message: clipped(active, item.message) } : { ...item, script: clipped(active, item.script) });
+        if (active) boundedItem(active, active.errors, clippedError(active, item));
       };
       const fire = async (event: Event, depth: number) => {
         for (const script of triggers) {
-          if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu') continue;
           if (!listens(script, event)) continue;
           const outer = active;
-          const entry: HookLog = { stage: event.kind === 'edit' ? event.stage : event.kind === 'call' ? event.name : event.kind === 'button' ? 'button' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`, pack: script.owner, script: script.name, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled: false, truncated: false };
-          entry.stage = clipped(entry, entry.stage);
-          entry.script = clipped(entry, entry.script);
+          const entry = hookLog(event.kind === 'edit' ? event.stage : event.kind === 'call' ? event.name : event.kind === 'button' ? 'button' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`, script.owner, script.name);
           const began = performance.now();
           const before = event.kind === 'edit' ? JSON.stringify(value) : undefined;
           const stopped = run.stop;
@@ -220,8 +217,7 @@ export class Lua {
           const variables = new Map(session.variables);
           for (const [at, item] of items.entries()) {
             for (const [name, value] of item.variables) variables.set(name, value);
-            const entry: HookLog = { stage: 'editDisplay', pack: script.owner, script: script.name, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled: false, truncated: false };
-            entry.script = clipped(entry, entry.script);
+            const entry = hookLog('editDisplay', script.owner, script.name);
             const began = performance.now();
             const before = texts[at];
             const run: Run = { owner: script.owner, chat: owner, lore: new Map(), quiet: true, snapshot, variables, globals, written: new ObservedWrites((name, value) => boundedItem(entry, entry.writes, [clipped(entry, name), clipped(entry, value)])), messages, host: null, stop: false, reload: false, missing: new ObservedMissing((name) => { missing.add(name); if (!entry.missing.includes(name)) boundedItem(entry, entry.missing, clipped(entry, name)); }), ranAway: false, triggerId: '' };
@@ -235,7 +231,7 @@ export class Lua {
             } catch (error) {
               const item = { from: script.owner, script: script.name, ...failure(run, error) };
               if (!errors.some((known) => known.script === script.name)) errors.push(item);
-              boundedItem(entry, entry.errors, 'message' in item ? { ...item, script: clipped(entry, item.script), message: clipped(entry, item.message) } : { ...item, script: clipped(entry, item.script) });
+              boundedItem(entry, entry.errors, clippedError(entry, item));
             } finally {
               entry.duration = performance.now() - began;
               entry.changed = texts[at] !== before;
@@ -346,8 +342,7 @@ export class Lua {
   private async start(script: Script): Promise<Engine> {
     // enableProxy off: an object handed to Lua becomes a table, never a live JS object a script could walk.
     const lua = await this.factory.createEngine({ injectObjects: true, enableProxy: false, functionTimeout: this.sliceMs });
-    const loaded: HookLog = { stage: 'load', pack: script.owner, script: script.name, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled: true, truncated: false };
-    loaded.script = clipped(loaded, loaded.script);
+    const loaded = hookLog('load', script.owner, script.name, true);
     const began = performance.now();
     const engine: Engine = { loaded: null, log: loaded, lua, own: new Set(), run: null, queue: Promise.resolve(), failed: null };
     this.declare(engine);
@@ -513,14 +508,24 @@ export type HookLog = {
   truncated: boolean;
 };
 
-// Both sides of the worker boundary are bounded: each run keeps 100 hooks, each field 16 items of 1024 characters.
-// Scripts separately bounds the page's retained log by serialized size.
+// Both sides of the worker boundary are bounded. Scripts separately bounds the page's retained log by serialized size.
 export const HOOK_TRACE_LIMITS = { entries: 100, items: 16, text: 1024 } as const;
 export type HookTrace = { entries: HookLog[]; omitted: number };
 
 function clipped(entry: HookLog, text: string): string {
   if (text.length > HOOK_TRACE_LIMITS.text) entry.truncated = true;
   return text.slice(0, HOOK_TRACE_LIMITS.text);
+}
+
+function hookLog(stage: string, pack: PackOwner | null, script: string, handled = false): HookLog {
+  const entry: HookLog = { stage, pack, script, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [], stopped: false, changed: false, handled, truncated: false };
+  entry.stage = clipped(entry, stage);
+  entry.script = clipped(entry, script);
+  return entry;
+}
+
+function clippedError(entry: HookLog, item: HookLog['errors'][number]): HookLog['errors'][number] {
+  return 'message' in item ? { ...item, script: clipped(entry, item.script), message: clipped(entry, item.message) } : { ...item, script: clipped(entry, item.script) };
 }
 
 function boundedItem<T>(entry: HookLog, items: T[], item: T) {

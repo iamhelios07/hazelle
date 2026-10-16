@@ -1,6 +1,7 @@
 import { gzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
+import { args } from '../lorebook/decorators';
 import { add, counted, record, regexScripts, stampIds, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack, writeMsgpack } from './msgpack';
@@ -196,7 +197,7 @@ function convert(preset: Json, template: unknown[]): PresetRead {
   // Model and generation settings belong to each model's settings; every preset has them.
   count('settings');
 
-  const companions = text(preset.moduleIntergration).split(',').map((name) => name.trim()).filter(Boolean);
+  const companions = args(text(preset.moduleIntergration));
   // Preset model names are not this account's connections, so the prompt's model layer starts empty.
   return {
     prompt: { name: text(preset.name), blocks, toggles, authorNote, models: {}, imported: 'risu-preset', ...(companions.length > 0 && { companions }) },

@@ -1,6 +1,7 @@
 import { isRecord } from '../connectors/values';
 import type { Change, Chapter, Fact, Line, Memory, MemoryRecord, Source, Thread, Written } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
+import { args } from './lorebook/decorators';
 
 // by: the tool that held the slot (design §6.10), null for the built-in memory. sent: the built-in memory's records and
 // chapters sent; text: what the tool's memory said. covered: the leading messages memory covers, which the chat slots
@@ -485,7 +486,7 @@ function sceneOf(item: unknown): Scene | null {
   if (!isRecord(item)) return null;
   const { when, where, what, lines, outcome } = item;
   // Asked for a list, a model still writes "Milina, Steve".
-  const who = typeof item.who === 'string' ? item.who.split(',').map((name) => name.trim()).filter(Boolean) : item.who;
+  const who = typeof item.who === 'string' ? args(item.who) : item.who;
   const line = (value: unknown): value is Line => isRecord(value) && isText(value.speaker) && isText(value.text) && flat(value.text) !== '';
   if (!textOrNull(when) || !textOrNull(where) || !textsOf(who) || !isText(what) || !flat(what) || !isText(outcome) || !Array.isArray(lines) || !lines.every(line)) return null;
   return { when, where, who, what, lines: lines.map(({ speaker, text }) => ({ speaker, text })), outcome };

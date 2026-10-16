@@ -5,7 +5,6 @@ const TEXT_KEYS = new Set(['chara', 'ccv3', 'persona']);
 const ASSET = 'chara-ext-asset_';
 const decoder = new TextDecoder();
 
-// The same one-liner as vault/aead.ts, which the engine may not import.
 export const base64 = (text: string) => Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
 
 export type Png = {
@@ -69,7 +68,7 @@ export function withText(png: Uint8Array, key: string, value: string): Uint8Arra
   return concat([png.subarray(0, end), chunk, png.subarray(end)]);
 }
 
-function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
+export function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let at = 0;
   for (const part of parts) {

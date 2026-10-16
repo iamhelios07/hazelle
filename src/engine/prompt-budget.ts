@@ -105,7 +105,7 @@ function rangeBounds(length: number, { from, to }: ChatRange): [number, number] 
   return [at(from), to === null ? length : at(to)];
 }
 
-function remembered(countTokens: (text: string) => number): (text: string) => number {
+export function remembered(countTokens: (text: string) => number): (text: string) => number {
   const counts = new Map<string, number>();
   return (text) => {
     let count = counts.get(text);

@@ -1,7 +1,7 @@
 import { count, isRecord, list } from '../../connectors/values';
 import type { Portrait, PortraitSource } from '../../model/likeness';
 import { fingerprint } from '../memory';
-import { add, convertModule, DEFAULT_ORDER, extensionOf, lorebookSource, nativeHolds, readTriggers, record, regexScripts, regexSource, stampIds, strings, text, triggerSource, type Converted, type ConvertedModule, type Json, type Tally, type Unstamped } from './convert';
+import { add, convertModule, DEFAULT_ORDER, extensionOf, finite, lorebookSource, nativeHolds, readTriggers, record, regexScripts, regexSource, stampIds, strings, text, triggerSource, type Converted, type ConvertedModule, type Json, type Tally, type Unstamped } from './convert';
 import { readToggles, writeToggles } from './toggles';
 import type { Bot, BundledModule, CharacterOwn, HazelleOwn, LoreEntry, Profiles, RegexScript, Trigger, TypedModule } from './types';
 
@@ -143,8 +143,6 @@ function sections<T>(items: T[], sizes: number[]): T[][] {
   let at = Math.max(0, items.length - sizes.reduce((sum, size) => sum + size, 0));
   return [items.slice(0, at), ...sizes.map((size) => items.slice(at, (at += size)))];
 }
-
-const finite = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
 function loreEntry(raw: unknown): LoreEntry {
   const entry = record(raw);
