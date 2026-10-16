@@ -61,10 +61,6 @@ export function ownershipDepth(kind: Kind): number {
   return owners.length === 0 ? 0 : Math.max(...owners.map(ownershipDepth)) + 1;
 }
 
-function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
-  return store.pinned((pin) => removeOn(store, root, progress, pin));
-}
-
 async function removeOn(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void, pin: Pin): Promise<ApiResult<null>> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const plan = await planRemoval(store, root, pin);
@@ -104,7 +100,7 @@ async function purge(store: ObjectStore, kind: Removable, id: string, due: (valu
     const cut = await cutShare(store, value.share);
     if (!cut.ok) return cut;
   }
-  return removeOwned(store, { kind, id }, progress);
+  return store.pinned((pin) => removeOn(store, { kind, id }, progress, pin));
 }
 
 export async function purgeNow(store: ObjectStore, files: Files, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
