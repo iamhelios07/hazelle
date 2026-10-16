@@ -1,4 +1,5 @@
 import type { MemoryFill } from '../engine/pipeline';
+import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Memory, type MemorySettings, type Source } from '../model/memory';
@@ -35,10 +36,10 @@ export function memoryOwner(store: ObjectStore, chat: Chat): MemoryOwner {
   return setup.on && featuresOf(store, chat).memory ? { kind: 'built-in', setup } : null;
 }
 
-// The slot as a turn is gathered. A tool's text comes with the turn's prompt event (runtime/scripts prompting); until
-// then it stands for no message.
-export function memoryFill(store: ObjectStore, id: string, chat: Chat, messages: Message[]): MemoryFill | null {
+// The slot for a turn's scope, as gathered or as its scripts leave it (Scripts.rehearse). A tool's text comes with
+// the turn's prompt event (runtime/scripts prompting); until then it stands for no message.
+export function memoryFill(store: ObjectStore, id: string, chat: Chat, messages: ChatScope['messages']): MemoryFill | null {
   const owner = memoryOwner(store, chat);
   if (owner?.kind === 'tool') return { kind: 'tool', name: owner.unit.tool.manifest.displayName, text: '', through: -1 };
-  return owner && { kind: 'built-in', memory: chatMemory(store, id), budget: owner.setup.budget, shown: sourcesOf(messages), found: [] };
+  return owner && { kind: 'built-in', memory: chatMemory(store, id), budget: owner.setup.budget, shown: messages.map(({ message, id: version }) => ({ message, version })), found: [] };
 }

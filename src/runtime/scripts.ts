@@ -17,7 +17,7 @@ import { shown, type Writes } from '../model/chat';
 import { allWritten, type ApiFailure } from './api';
 import { chatModel, embedModel } from './assignment';
 import { countTexts, embedTexts } from './embed';
-import { memoryOwner } from './memory-read';
+import { memoryFill, memoryOwner } from './memory-read';
 import { appendScripted, appendUserMessage, keepCall, type Written } from './chat-log';
 import { upsertChatLore } from './lore';
 import { retriesOf } from './connections';
@@ -184,9 +184,10 @@ export function applied(chat: string, scope: ChatScope, { edits, removed, added,
 
 // The pre-send scripts run ahead on a copy (Scripts.rehearse). stopped: the stage that ended the turn, which then sends
 // nothing. asked: each question, dismissed here and asked when sent; calls: what is refused here and made when sent.
-// scope: the chat as onStart leaves it, its writes pending. input: the message as editInput left it, null when
-// unchanged. prompt: the request built after onStart, null when it is the forecast's. request: what editRequest
-// answered, null when it left the request as given. changed: the request sent would differ from the forecast's.
+// scope: the chat as onStart leaves it, its writes and then editRequest's pending. input: the message as editInput left
+// it, null when unchanged. prompt: the request built after onStart, null when it is the forecast's. request: what
+// editRequest answered, null when it left the request as given. changed: the request sent would differ from the
+// forecast's. loreRanAway: a script read the lorebook, whose CBS ran away, and read none of it.
 export type Rehearsal = {
   trace: HookTrace;
   stopped: StartStage | null;
@@ -198,6 +199,7 @@ export type Rehearsal = {
   prompt: EvaluatedPrompt | null;
   request: ChatMessage[] | null;
   changed: boolean;
+  loreRanAway: boolean;
 };
 
 export const NOT_REHEARSED = 'Error: not called while rehearsing';
@@ -374,8 +376,9 @@ export class Scripts {
     let scope = turn.scope;
     let touched = false;
     let input: string | null = null;
+    let loreRanAway = false;
     const host = (at: ChatScope): Host => ({
-      ...this.reads(chat, at, () => {}),
+      ...this.reads(chat, at, () => { loreRanAway = true; }),
       say: (tone, text) => { if (!signal.aborted) said.push({ tone, text }); },
       ask: async (question) => { if (!signal.aborted) asked.push(question); return null; },
       model: async () => { calls.model++; return { success: false, reason: 'failed', result: NOT_REHEARSED }; },
@@ -413,14 +416,15 @@ export class Scripts {
       touched = true;
       scope = { ...scope, pending: end.writes };
     }
-    const rehearsal = { trace, said, asked, calls, scope, input, prompt: null, request: null, changed: false };
-    if (end.kind === 'stopped') return { ...rehearsal, stopped: end.stage };
-    const built = touched ? await this.session.store.evaluation.prompt({ asker: 'view', chat }, { scope, seed: turn.reply.id, budget: turn.budget, fit: providerFit(turn.route, turn.settings, calibration.fit.allowance), ...this.cachedPrompt(chat, { scope, memory: turn.memory }), continuing: false }, signal) : prompt;
+    const rehearsal = () => ({ trace, said, asked, calls, scope, input, loreRanAway, prompt: null, request: null, changed: false });
+    if (end.kind === 'stopped') return { ...rehearsal(), stopped: end.stage };
+    const built = touched ? await this.session.store.evaluation.prompt({ asker: 'view', chat }, { scope, seed: turn.reply.id, budget: turn.budget, fit: providerFit(turn.route, turn.settings, calibration.fit.allowance), ...this.cachedPrompt(chat, { scope, memory: memoryFill(this.session.store, chat, turn.chat, scope.messages) }), continuing: false }, signal) : prompt;
     const after = 'kind' in built || JSON.stringify(built.messages) !== JSON.stringify(prompt.messages) ? built : null;
-    if ('kind' in built) return { ...rehearsal, stopped: null, prompt: after, changed: true };
+    if ('kind' in built) return { ...rehearsal(), stopped: null, prompt: after, changed: true };
     const edited = await run(requestEvent(built), scope);
+    if (edited.outcome.writes.length > 0) scope = { ...scope, pending: [...end.writes, ...edited.outcome.writes] };
     const request = edited.outcome.trace?.entries.some((entry) => entry.changed) ? requestAnswer(edited.outcome, built.messages) : null;
-    return { ...rehearsal, stopped: null, prompt: after, request, changed: after !== null || request !== null };
+    return { ...rehearsal(), stopped: null, prompt: after, request, changed: after !== null || request !== null };
   }
 
   async ending(chat: string, reply: Written): Promise<Written> {

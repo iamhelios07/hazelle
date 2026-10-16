@@ -99,7 +99,7 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
     settings,
     scope,
     budget: budgetOf(route.model, sentSettings(session.store, route)),
-    memory: memoryFill(session.store, chat, stored.value, history),
+    memory: memoryFill(session.store, chat, stored.value, scope.messages),
     said,
     reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, ...(message === null && { follows: said ? said.id : follows }), continues },
   };

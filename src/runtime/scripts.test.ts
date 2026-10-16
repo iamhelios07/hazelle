@@ -857,4 +857,42 @@ describe('a rehearsal of the pre-send scripts', () => {
       expect(rehearsal.calls).toEqual({ model: 1, embed: 0, background: 0 });
       expect(rehearsal.scope.pending).toEqual([['answer', NOT_REHEARSED]]);
     }));
+
+  it("says a script's lorebook read ran away", () =>
+    server.withSession(async (session) => {
+      const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
+      const { chat } = await chatWith(
+        session,
+        `function onInput(id) upsertLocalLoreBook(id, 'Grow', ${doubling}, { alwaysActive = true }) end
+        function onStart(id) loadLoreBooks(id) end`,
+      );
+      const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
+      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      expect(rehearsal.loreRanAway).toBe(true);
+    }));
+
+  it('builds the request with memory over the messages onStart added', () =>
+    server.withSession(async (session) => {
+      const { chat } = await chatWith(session, `function onStart(id) addChat(id, 'char', 'narration') end`);
+      const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
+      expect(sending.turn.memory?.kind).toBe('built-in');
+      const prompt = vi.spyOn(session.store.evaluation, 'prompt');
+      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      const memory = prompt.mock.lastCall![1].memory;
+      if (memory?.kind !== 'built-in') throw new Error(memory?.kind);
+      expect(memory.shown.map(({ message }) => message)).toEqual(rehearsal.scope.messages.map(({ message }) => message));
+      expect(rehearsal.scope.messages.at(-1)!.text).toBe('narration');
+    }));
+
+  it("keeps editRequest's writes pending after onStart's", () =>
+    server.withSession(async (session) => {
+      const { chat } = await chatWith(
+        session,
+        `function onStart(id) setChatVar(id, 'turn', 'start') end
+        listenEdit('editRequest', function(id, value) setChatVar(id, 'request', 'seen') return value end)`,
+      );
+      const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
+      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      expect(rehearsal.scope.pending).toEqual([['turn', 'start'], ['request', 'seen']]);
+    }));
 });
