@@ -91,7 +91,6 @@ function described(restore: Restore): string {
 
 type Asking = { kind: 'restore'; point: RestorePoint } | { kind: 'undo'; restore: Restore } | { kind: 'resume'; restore: Restore };
 
-// operated: null for the signed-in account's own restores.
 export function RestoresDialog({ operated, onClose, onActed }: { operated: Operated | null; onClose: () => void; onActed?: () => void }) {
   const whose = operated?.accountId ?? null;
   const subject = operated ? `${operated.username} 계정` : '계정';

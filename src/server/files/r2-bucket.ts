@@ -48,7 +48,6 @@ export function r2Bucket(config: R2Config): R2Bucket {
     throw new Error(`r2: ${what} answered ${response.status}`);
   };
 
-  // ListObjectsV2, every page.
   const listing = async (query: Record<string, string>) => {
     const keys: string[] = [];
     const archives: { key: string; modified: number }[] = [];

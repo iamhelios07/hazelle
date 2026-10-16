@@ -14,9 +14,7 @@ export type Streams = {
   // The call ends, its readers end, then its rows go.
   drop(name: string): Promise<void>;
   live(): number;
-  // Settles once no call runs.
   settled(): Promise<void>;
-  // Drops every stream whose alarm is at or before now.
   expire(now: number): Promise<void>;
   close(): void;
 };
