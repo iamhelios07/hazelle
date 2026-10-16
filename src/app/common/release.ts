@@ -8,6 +8,15 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.13',
+    date: '2026-10-16',
+    lines: [
+      '삽화 프로필의 옷에 이름을 붙여 두면 장면 작가가 그 이름으로 옷을 골라 입혀요. 이야기가 옷을 갈아입히지 않으면 마지막에 그린 옷을 그대로 입어요.',
+      '장면 바꾸기 창 아래에서 실제로 보낸 태그를 볼 수 있어요.',
+      '점검의 모듈 상세에서 작동하지 않는 정규식 로어북 키를 알려 줘요.',
+    ],
+  },
+  {
     version: 'v0.2.12',
     date: '2026-10-16',
     lines: [
