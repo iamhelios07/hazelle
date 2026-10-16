@@ -24,7 +24,7 @@ const NO_PICTURES: Stored<'illustration'>[] = [];
 const NO_BADGES: string[] = [];
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, placed, pictures, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, personaNote, busy, editing, pinned, bookmarked, found, search, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, placed, pictures, remarks, fresh, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, personaNote, busy, editing, pinned, bookmarked, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -50,6 +50,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
       const label = day(message.at);
       const version = shown(message).id;
       const drawing = illustrating.get(message.id);
+      const remark = (chat.features.mascot && remarks.get(version)) || null;
       const divider = index === 0 || day(messages[index - 1]!.at) !== label;
       return <Fragment>
         {divider && <Divider label={label} />}
@@ -60,6 +61,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           placed={placed.get(index) ?? null}
           pictures={pictures.get(version) ?? NO_PICTURES}
           drawing={drawing?.version === version ? drawing : null}
+          remark={remark}
+          fresh={remark !== null && fresh(remark)}
           badges={badges.get(version) ?? NO_BADGES}
           toolActions={messageTools}
           decor={decor}

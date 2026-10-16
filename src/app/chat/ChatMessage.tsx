@@ -10,6 +10,7 @@ import { runs, type Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
+import { MASCOT_PICTURES } from '../common/mascots';
 import { BOOKMARK } from '../common/words';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
@@ -17,7 +18,8 @@ import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
 import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { MASCOTS } from '../../model/mascot';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotsOf } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
 import type { ToolActions } from './toolMenu';
@@ -36,6 +38,9 @@ type Props = {
   // The shown version's pictures, oldest first, and its 삽화 run, if any.
   pictures: Stored<'illustration'>[];
   drawing: Drawing | null;
+  // The shown version's 마스코트 line, null with none or with the 기능 off; fresh until opened once on this page.
+  remark: Stored<'remark'> | null;
+  fresh: boolean;
   // What the chat's tools put on the shown version, and the actions they offer on a message.
   badges: string[];
   toolActions: ToolActions[];
@@ -81,7 +86,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -355,6 +360,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     </>
   ) : (
     <>
+      {remark && <Remark remark={remark} fresh={fresh} onSeen={() => actions.seeRemark(remark.id)} />}
       {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="xs" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}
@@ -414,6 +420,12 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     </StoryMessage>
   );
 }, sameRow);
+
+function Remark({ remark, fresh, onSeen }: { remark: Stored<'remark'>; fresh: boolean; onSeen: () => void }) {
+  const { mascot, expression, line } = remark.value;
+  const pictures = MASCOT_PICTURES[mascot];
+  return <MascotRemark face={pictures.face} picture={pictures.expressions[expression]} name={MASCOTS[mascot].name} line={line} fresh={fresh} onSeen={onSeen} />;
+}
 
 // The ticking lives here, so only this note draws each second. It counts from when this page began to wait.
 function Elapsed({ thinking }: { thinking: boolean }) {

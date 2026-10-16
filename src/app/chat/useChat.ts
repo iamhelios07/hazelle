@@ -37,6 +37,7 @@ import { useMessageEdit } from './useMessageEdit';
 import { useNewChat } from './useNewChat';
 import { useChatBookmarks } from './useChatBookmarks';
 import { useChatIllustrations } from './useChatIllustrations';
+import { useChatRemarks } from './useChatRemarks';
 import { useChatTranslation } from './useChatTranslation';
 import { useChatSettings } from './useChatSettings';
 
@@ -89,6 +90,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const url = useAssetUrl();
   const { actions: translationActions, ...translation } = useChatTranslation(chatId, chat, messages, texts, translate);
   const { actions: illustrationActions, ...illustration } = useChatIllustrations(chatId, id, chat);
+  const { actions: remarkActions, ...remark } = useChatRemarks(chatId, id);
   const toolData = useChildren('toolchat', id);
   const badges = useMemo(() => badgesByVersion(toolData, tools), [toolData, tools]);
   const messageTools = useMemo(() => toolActions(tools), [tools]);
@@ -300,6 +302,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     translate,
     ...translation,
     ...illustration,
+    ...remark,
     badges,
     messageTools,
     composerTools,
@@ -329,6 +332,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       ...editActions,
       ...translationActions,
       ...illustrationActions,
+      ...remarkActions,
       ...bookmarkActions,
       ...settingActions,
       send,
