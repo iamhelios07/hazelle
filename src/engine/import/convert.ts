@@ -1,6 +1,6 @@
 import { count, flag, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
-import { parseDecorators } from '../lorebook/decorators';
+import { args, parseDecorators } from '../lorebook/decorators';
 import { readToggles, writeToggles } from './toggles';
 import { blockConditions, blockEffects, conditionSources, effectSources } from './blocks';
 import type { Card, ImportedModule, ImportReport, LoreEntry, Pack, RegexScript, Trigger, UnsupportedKind } from './types';
@@ -50,11 +50,7 @@ export const strings = (value: unknown) => list(value).filter((item): item is st
 // CCv3 key arrays stay intact; only blank keys are dropped.
 const keys = (value: unknown) => strings(value).filter((key) => key.trim() !== '');
 // Risu's own lore joins keys into one string, split here as Risu splits it.
-const split = (value: unknown) =>
-  text(value)
-    .split(',')
-    .map((key) => key.trim())
-    .filter((key) => key !== '');
+const split = (value: unknown) => args(text(value));
 const order = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_ORDER);
 
 // module: a charx's module.risum. Its regex and triggers replace the card's, and its lorebook, when it has one,

@@ -1,4 +1,5 @@
 import type { ToggleLine } from '../../model/prompt';
+import { args } from '../lorebook/decorators';
 
 // Risu's toggle text, one line each, `key=label=kind=option`: no kind or `check` is a check, `select=a,b` a choice
 // whose value is the option's index as in Risu, `text` a typed value and `textarea` one of several lines. The layout
@@ -10,7 +11,7 @@ export function readToggles(text: string): ToggleLine[] {
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const [key, label = '', kind, ...rest] = line.split('=').map((part) => part.trim());
-    const options = kind === 'select' && rest.length === 1 ? rest[0]!.split(',').map((option) => option.trim()).filter(Boolean) : [];
+    const options = kind === 'select' && rest.length === 1 ? args(rest[0]!) : [];
     if (kind === 'group' || kind === 'divider') lines.push({ kind, label });
     // Risu ignores a lowercase groupend, so its group runs on; it is read as the end its writer meant.
     else if (kind === 'groupEnd' || kind === 'groupend') lines.push({ kind: 'groupEnd' });
