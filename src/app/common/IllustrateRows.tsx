@@ -2,26 +2,31 @@ import { useState } from 'react';
 import { sameModelRef } from '../../connectors/assignment';
 import type { IllustrateSwitches, Rung } from '../../model/illustration';
 import type { IllustrateSetup } from '../../runtime/characters';
-import { drawingModels, type ImageRoute } from '../../runtime/illustrate';
-import { useConnections } from '../session';
+import { drawingModels, type ImageRoute, type sceneWriterOf } from '../../runtime/illustrate';
+import { illustrationPrompt } from '../../runtime/prompts';
+import { useConnections, useSession } from '../session';
 import { navigate } from '../shell/router';
-import { Button, ChipButton, IconButton, Menu, MenuHeading, MenuItem, NumberInput, SettingRow, Switch } from '../ui';
+import { Button, ChipButton, IconButton, Menu, MenuHeading, MenuItem, NumberInput, SettingRow, Switch, Text } from '../ui';
 import { ACTS, addOf, newOf } from './acts';
+import { describeIllustrateFailure } from './failure';
 import { readTyped } from './typedNumber';
-import { appliesTo, TaskPromptMenu } from './TaskPrompt';
-import { follows, NOT_STARRED } from './words';
+import { appliesTo, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
+import { follows, NOT_STARRED, opens as door, PAGES, taskModelHelp } from './words';
 
 type Props = {
   illustrate: IllustrateSetup;
+  sceneWriter: ReturnType<typeof sceneWriterOf>;
   card: { name: string } | null;
   opens: 'up' | 'down';
   onChange: (change: Partial<IllustrateSwitches>) => void;
-  onEditPrompt: (id: string | null) => void;
+  onEditPrompt: (door: PromptDoor) => void;
 };
 
 // 삽화's shared values, the same rows in the chat's 삽화 dialog and on 채팅 기본값's 삽화 page.
-export function IllustrateRows({ illustrate, card, opens, onChange, onEditPrompt }: Props) {
+export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange, onEditPrompt }: Props) {
+  const { store } = useSession();
   const routes = drawingModels(useConnections());
+  const prompt = illustrationPrompt(store, illustrate.prompt);
   return (
     <>
       <SettingRow
@@ -51,6 +56,14 @@ export function IllustrateRows({ illustrate, card, opens, onChange, onEditPrompt
       <SettingRow
         label="삽화 프롬프트"
         control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
+      />
+      <SettingRow
+        label="장면 모델"
+        help={{
+          text: taskModelHelp('삽화'),
+          open: prompt.kind === 'prompt' ? { label: door('삽화 프롬프트'), onClick: () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) } : { label: door(PAGES.prompts), onClick: () => onEditPrompt(null) },
+        }}
+        control={<Text variant="note">{'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name}</Text>}
       />
     </>
   );

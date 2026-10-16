@@ -7,7 +7,7 @@ import { useSession } from '../session';
 import { SettingRow, Switch, Text } from '../ui';
 import { describeTranslateFailure } from './failure';
 import { IntoLanguage } from './IntoLanguage';
-import { appliesTo, TaskPromptMenu } from './TaskPrompt';
+import { appliesTo, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
 import { opens as door, PAGES, taskModelHelp } from './words';
 
 type Props = {
@@ -18,7 +18,7 @@ type Props = {
   note?: ReactNode;
   opens: 'up' | 'down';
   onChange: (change: Partial<TranslateSwitches>) => void;
-  onEditPrompt: (id: string | null) => void;
+  onEditPrompt: (door: PromptDoor) => void;
 };
 
 // 번역's shared values, the same rows in the chat's 번역 dialog and on 채팅 기본값's 번역 page.
@@ -52,7 +52,7 @@ export function TranslateRows({ translate, translation, card, note, opens, onCha
         label="번역 모델"
         help={{
           text: taskModelHelp('번역'),
-          open: prompt.kind === 'prompt' ? { label: door('번역 프롬프트'), onClick: () => onEditPrompt(prompt.prompt.id) } : { label: door(PAGES.prompts), onClick: () => onEditPrompt(null) },
+          open: prompt.kind === 'prompt' ? { label: door('번역 프롬프트'), onClick: () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) } : { label: door(PAGES.prompts), onClick: () => onEditPrompt(null) },
         }}
         control={<Text variant="note">{translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}</Text>}
       />

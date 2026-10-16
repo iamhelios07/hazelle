@@ -4,7 +4,7 @@ import type { IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { setIllustrate, setOwnIllustrate } from '../../runtime/characters';
 import { chatIllustrate } from '../../runtime/features';
-import { removeIllustration, restoreIllustration, type IllustrateFailure } from '../../runtime/illustrate';
+import { removeIllustration, restoreIllustration, sceneWriterOf, type IllustrateFailure } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import { describeIllustrateFailure } from '../common/failure';
 import { useChildren, useIllustrating, useSession } from '../session';
@@ -34,6 +34,7 @@ export function useChatIllustrations(chatId: string, id: string | null, chat: Ch
   const { store, illustrator } = useSession();
   const toast = useToast();
   const illustrate = chatIllustrate(store, chat);
+  const sceneWriter = sceneWriterOf(store, chat);
   const illustrations = useChildren('illustration', id);
   const pictures = useMemo(() => picturesByVersion(illustrations), [illustrations]);
   const illustrating = useIllustrating();
@@ -71,7 +72,7 @@ export function useChatIllustrations(chatId: string, id: string | null, chat: Ch
   }
 
   return {
-    illustrate, pictures, illustrating, stage, reshaping,
+    illustrate, sceneWriter, pictures, illustrating, stage, reshaping,
     actions: {
       setIllustrate: setIllustrateSwitches,
       setOwnIllustrate: setOwnIllustrateSwitches,

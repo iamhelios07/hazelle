@@ -32,6 +32,8 @@ const EXAMPLES = {
   prompt: [
     { kind: 'prompt', id: CHAT, pane: null },
     { kind: 'prompt', id: CHAT, pane: 'toggles' },
+    { kind: 'prompt', id: CHAT, pane: 'model' },
+    { kind: 'prompt', id: CHAT, pane: 'picture' },
   ],
   personas: [{ kind: 'personas' }],
   persona: [{ kind: 'persona', id: CHAT }],

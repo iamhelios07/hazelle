@@ -89,6 +89,11 @@ export function illustrateWriter(store: Deps['store'], chat: Chat, prompt: Illus
   return profile.kind === 'missing' ? { kind: 'profile-missing', own: profile.own } : { route, settings: profile.profile.value.settings };
 }
 
+export function sceneWriterOf(store: Deps['store'], chat: Chat): ReturnType<typeof illustrateWriter> | { kind: 'prompt-missing'; own: boolean } {
+  const prompt = illustrationPrompt(store, chatIllustrate(store, chat).prompt);
+  return prompt.kind === 'missing' ? { kind: 'prompt-missing', own: prompt.own } : illustrateWriter(store, chat, prompt.prompt.value);
+}
+
 function imageRoute(store: Deps['store'], ref: ModelRef | undefined): ImageRoute | { kind: 'no-image-model' } | { kind: 'image-model-gone' } {
   const routes = drawingModels(store.list('connection'));
   if (!ref) return routes[0] ?? { kind: 'no-image-model' };

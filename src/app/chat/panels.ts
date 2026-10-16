@@ -1,10 +1,11 @@
 import type { From } from '../../engine/pipeline';
 import type { Block } from '../../model/prompt';
 import type { CharacterPart } from '../common/characterPart';
+import type { PromptPane } from '../shell/routes';
 
 // block: the prompt block the editor opens at, absent for its list. fromToggles: opened from the chat's 토글 panel,
 // which its 토글 pane goes back to.
-export type Side = { kind: 'prompts'; id: string | null; pane: 'toggles' | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null };
+export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null };
 export type InspectTab = 'request' | 'cache' | 'variables' | 'modules' | 'scripts';
 export type InspectPanel = { kind: 'inspect'; tab: InspectTab };
 export type Panel = InspectPanel | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | Side;

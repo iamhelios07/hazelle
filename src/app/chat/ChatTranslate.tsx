@@ -1,6 +1,6 @@
 import { Languages } from 'lucide-react';
 import { sendsNotes, type translatorOf } from '../../runtime/translate';
-import { PerCharacter } from '../common/TaskPrompt';
+import { PerCharacter, type PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
 import { inFeature, NOTE_UNSENT, noteLines, opens, scopeTag, TRANSLATOR_NOTE } from '../common/words';
 import { useSettings } from '../session';
@@ -17,7 +17,7 @@ type Props = {
   note: string | undefined;
   onChange: TranslationActions['setTranslate'];
   onOwnChange: TranslationActions['setOwnTranslate'];
-  onEditPrompt: (id: string | null) => void;
+  onEditPrompt: (door: PromptDoor) => void;
   onEditCharacter: (() => void) | undefined;
 };
 

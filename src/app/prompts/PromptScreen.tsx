@@ -1,11 +1,11 @@
 import type { Stored } from '../../model/kinds';
 import { framePage } from '../common/frame';
 import { navigate } from '../shell/router';
-import type { Back } from '../shell/routes';
+import type { Back, PromptPane } from '../shell/routes';
 import { useWide } from '../ui';
 import { PromptEditor } from './PromptEditor';
 
-export function PromptScreen({ stored, pane, back }: { stored: Stored<'prompt'>; pane: 'toggles' | null; back: Back }) {
+export function PromptScreen({ stored, pane, back }: { stored: Stored<'prompt'>; pane: PromptPane | null; back: Back }) {
   const wide = useWide();
   return (
     <PromptEditor
