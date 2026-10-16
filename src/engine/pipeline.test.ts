@@ -296,6 +296,7 @@ describe('assemble', () => {
     const fates = (loreBudget: number) => assembledOf(assemble(input({ card: own, lore: entries, loreBudget }))).lore!.map(({ fate }) => fate.kind);
     expect(fates(100)).toEqual(['placed', 'placed']);
     expect(fates(50)).toEqual(['placed', 'dropped']);
+    expect(assembledOf(assemble(input({ card: own, lore: entries, loreBudget: 50 }))).loreBudget).toBe(50);
   });
 
   it('sends a lorebook entry as the text its cost was counted on, whichever way its random tag rolls', () => {
@@ -629,7 +630,7 @@ describe('a request a script rewrote', () => {
     { role: 'assistant', content: 'first reply' },
     { role: 'user', content: 'second hello' },
   ];
-  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, memory: null, dropped: 2 };
+  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, loreBudget: 0, memory: null, dropped: 2 };
   const note: ChatMessage = { role: 'system', content: 'from the script' };
   const count = (text: string) => text.length;
 

@@ -228,7 +228,6 @@ function SentRecords({ title, ids, records, onRecord }: { title: string; ids: st
   );
 }
 
-// The turn's own 로어북 최대 분량 is not kept with what it sent, so the door goes to where it is set now, without a number.
 export function SentLore({ sent, character, onEdit }: { sent: Sent | null; character: { id: string; card: Card } | null; onEdit: (side: Side) => void }) {
   if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
   const lore = sent.prompt.lore;
@@ -241,7 +240,7 @@ export function SentLore({ sent, character, onEdit }: { sent: Sent | null; chara
   const door = editor ? { label: opens('캐릭터 편집 › 로어북'), onClick: () => onEdit(editor) } : { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) };
   return (
     <>
-      {cut > 0 && <Callout tone="warn" action={door}>{`${LORE_BUDGET_LABEL}을 넘어 ${cut}개가 빠졌어요.`}</Callout>}
+      {cut > 0 && <Callout tone="warn" action={door}>{`${LORE_BUDGET_LABEL}(${sent.prompt.loreBudget.toLocaleString()} 토큰)을 넘어 ${cut}개가 빠졌어요.`}</Callout>}
       <Section level={3} title="활성화된 항목" note={`${lore.length}개 중 ${went}개 들어감`}>
         <List label="활성화된 로어북 항목">
           {lore.map((entry) => (

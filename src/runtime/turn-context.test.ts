@@ -98,7 +98,7 @@ it('attributes preview lore to its pack and keeps pack order, attachment sites a
   const lore = crypto.randomUUID();
   await addLore(store, module.data.id, null, lore);
   const chat = { title: null, character: character.data.id, models: {} };
-  const preview: Assembled = { messages: [{ role: 'system', content: 'entry' }], parts: [{ from: { kind: 'depth', id: lore, name: 'entry', depth: 1 }, tokens: 7 }], lore: [{ id: lore, name: 'entry', why: { kind: 'constant' }, fate: { kind: 'placed', tokens: 7 } }], memory: null, dropped: 0 };
+  const preview: Assembled = { messages: [{ role: 'system', content: 'entry' }], parts: [{ from: { kind: 'depth', id: lore, name: 'entry', depth: 1 }, tokens: 7 }], lore: [{ id: lore, name: 'entry', why: { kind: 'constant' }, fate: { kind: 'placed', tokens: 7 } }], loreBudget: 0, memory: null, dropped: 0 };
   const contributions = moduleContributions(session, chat, preview);
   expect(contributions.map(({ id }) => id)).toEqual([character.data.id, module.data.id]);
   expect(contributions[0]).toMatchObject({ kind: 'character', attached: [{ kind: 'character', id: character.data.id, own: true }], lore: [] });

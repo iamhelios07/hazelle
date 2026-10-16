@@ -59,9 +59,9 @@ export type From =
   | { kind: 'tool'; name: string };
 
 // parts[i] says where messages[i] came from (origin as Sent's) and what it counts in o200k_base, an estimate for any other
-// tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. memory: null while the
+// tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. loreBudget: the 로어북 최대 분량 the activation was held to. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; loreBudget: number; memory: MemorySent | null; dropped: number };
 
 // The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
 // Claude models refuse with 400.
@@ -321,6 +321,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, memor
       messages: sent.map(({ message }) => message),
       parts: sent.map(({ message, from, origin }) => ({ from, tokens: tokens(message.content), ...(origin !== undefined && { origin }) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
+      loreBudget: scope.loreBudget,
       memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
     };
