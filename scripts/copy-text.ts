@@ -271,14 +271,18 @@ export function fromText(list: readonly Listed[], answers: readonly string[]) {
   const problems: string[] = [];
   const review: string[] = [];
   const seen = new Set<number>();
-  for (const answer of answers) {
-    for (const match of answer.matchAll(/^(\d+)\.[ \t]*(?:\((?:설명|제목)\)[ \t]*)?(.*?)\s*$/gm)) {
+  answers.forEach((answer, place) => {
+    const matches = [...answer.matchAll(/^(\d+)\.[ \t]*(?:\((?:설명|제목)\)[ \t]*)?(.*?)\s*$/gm)];
+    // Sent numbers have gaps, so one that was never sent means the model renumbered or wrote its own list, and the
+    // lines whose numbers happen to match are not answers to them either.
+    const unsent = matches.map((match) => Number(match[1])).filter((number) => !list[number - 1] || !isSentence(list[number - 1]!));
+    if (unsent.length) {
+      problems.push(`answer ${place + 1}: ${unsent.length} of ${matches.length} lines were never sent (first ${unsent[0]}), so none of it is read`);
+      return;
+    }
+    for (const match of matches) {
       const number = Number(match[1]);
-      const entry = list[number - 1];
-      if (!entry || !isSentence(entry)) {
-        problems.push(`${number}: not a line that was sent`);
-        continue;
-      }
+      const entry = list[number - 1]!;
       if (seen.has(number)) {
         problems.push(`${number}: answered twice`);
         continue;
@@ -292,7 +296,7 @@ export function fromText(list: readonly Listed[], answers: readonly string[]) {
         review.push(`${number} ${entry.id}\n   was: ${shownLine(entry)}\n   now: ${match[2]}`);
       }
     }
-  }
+  });
   return { revised, problems, review, read: seen.size };
 }
 
