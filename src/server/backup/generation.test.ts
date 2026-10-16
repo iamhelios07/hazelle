@@ -7,11 +7,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { ACCOUNT_SCHEMA_VERSION } from '../db/account-db';
 import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
-import type { Services } from '../http';
+import { DAY_MS, type Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
 import { COPIED, expireGenerations, generationsDir, listGenerations, MANIFEST, POOL, readManifest, type Manifest } from './generation';
-import { DAY_MS, dayStart } from './snapshots';
+import { dayStart } from './snapshots';
 
 // crossDevice: every link answers EXDEV, as when files/ and backup/ are separate filesystems. cutPoolCopy: a copy into
 // the pool writes part of the picture and throws, as a capture cut off mid-copy leaves it.

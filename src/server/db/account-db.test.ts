@@ -13,7 +13,7 @@ import { r2Bucket } from '../files/r2-bucket';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
 import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, type Stores } from './account-db';
-import { DAY_MS } from '../backup/snapshots';
+import { DAY_MS } from '../http';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
 import * as snapshots from './snapshot';

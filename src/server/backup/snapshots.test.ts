@@ -7,9 +7,10 @@ import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
 import { diskBucket } from '../files/disk-bucket';
 import { snapshotKey } from '../files/bucket';
+import { DAY_MS } from '../http';
 import { sessionCookie, signupBody, testApp } from '../testing';
 import { captureGeneration, generationsDir, listGenerations, readManifest } from './generation';
-import { DAY_MS, dayStart, expireSnapshots } from './snapshots';
+import { dayStart, expireSnapshots } from './snapshots';
 
 const POINT = {
   oldest: '1-000000000000',

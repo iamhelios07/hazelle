@@ -38,7 +38,8 @@ export function fail(c: Context, status: ContentfulStatusCode, error: ServerErro
   return c.json({ error, ...detail }, status);
 }
 
-const RETRY_SECONDS = 5;
+export const RETRY_SECONDS = 5;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 // A leaving or gone account answers as a signed-out one: its session is over.
 export function refused(c: Context, answer: Refused) {

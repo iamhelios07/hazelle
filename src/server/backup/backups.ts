@@ -1,8 +1,8 @@
 import type { Alerts } from '../alerts';
-import type { Services } from '../http';
+import { DAY_MS, type Services } from '../http';
 import { freePercent, freshness, type DiskFree, type Freshness } from './freshness';
 import { captureGeneration, expireGenerations } from './generation';
-import { DAY_MS, dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
+import { dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
 
 // The daily job, the gate a backup generation holds, and their record in backup_runs (docs/research/docker-port-plan.md
 // §10). One job runs at a time.

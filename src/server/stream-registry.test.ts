@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DAY_MS } from './http';
 import type { Upstream } from './relay';
 import { relayBudget } from './limits';
 import { streamRegistry as registryWithBudget } from './stream-registry';
@@ -11,7 +12,6 @@ const streamRegistry = (store: StreamStore, upstream: Upstream) => registryWithB
 
 const CHUNK = 64 * 1024;
 const staying = new AbortController().signal;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // A provider that gives chunks bytes at once and then answers only when the call is aborted. calls: how many calls
 // reached it; aborted: how many of them were aborted.

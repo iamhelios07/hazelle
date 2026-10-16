@@ -6,12 +6,11 @@ import { RETENTION_MS } from './db/account-db';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fileKey } from './files/bucket';
 import { takeBackFiles } from './files/claims';
-import { fail, hex, readObject, refused, type AppEnv } from './http';
+import { fail, hex, readObject, refused, RETRY_SECONDS, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
 
 // Counts sealed bytes, a few more than the file itself. worker.ts enforces it.
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
-const BUSY_RETRY_SECONDS = 5;
 // An import asks about a file before it writes the objects naming it (runtime/files), so a file asked about or
 // uploaded within this long is never released.
 const CLAIM_SETTLE_MS = 60 * 60 * 1000;
@@ -61,7 +60,7 @@ files.put('/:id', canWrite, async (c) => {
   const { uploads } = c.env.limits;
   if (!(await uploads.take(size))) {
     await c.req.raw.body?.pipeTo(new WritableStream());
-    return fail(c, 503, 'busy', { retryAfter: BUSY_RETRY_SECONDS });
+    return fail(c, 503, 'busy', { retryAfter: RETRY_SECONDS });
   }
   try {
     return await publish(c, id);
@@ -112,7 +111,7 @@ async function publish(c: Context<AppEnv>, id: string) {
   ]);
   const { reserved, stored, alive, removing } = reservation!.results[0]!;
   if (!alive) return outlived(c);
-  if (removing) return fail(c, 503, 'busy', { retryAfter: BUSY_RETRY_SECONDS });
+  if (removing) return fail(c, 503, 'busy', { retryAfter: RETRY_SECONDS });
   if (!reserved) return fail(c, 413, 'files-full');
   // A reclaimed copy is already durable. Never demote it to a reservation a generation would omit.
   if (!stored) await c.env.files.put(fileKey(incarnation, id), body);

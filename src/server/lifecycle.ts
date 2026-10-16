@@ -3,7 +3,7 @@ import { SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type Rest
 import type { Life, Unavailable } from './account-store';
 import { landing, RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
-import { fail, refused, type AppEnv, type Services } from './http';
+import { DAY_MS, fail, refused, type AppEnv, type Services } from './http';
 import { removePictures } from './reconcile';
 import { takeBackFiles } from './files/claims';
 
@@ -14,7 +14,6 @@ import { takeBackFiles } from './files/claims';
 // that is gone can never touch a newer account holding the same id.
 
 const MINUTE_MS = 60_000;
-const DAY_MS = 24 * 60 * MINUTE_MS;
 // A restore asks for a time at least this far back, so the snapshot chosen for it lies before the restore's own mark.
 const NEWEST_MS = 10 * MINUTE_MS;
 // Snapshots are kept for RETENTION_MS (db/account-db.ts). A day less leaves an operation time to choose its target, which

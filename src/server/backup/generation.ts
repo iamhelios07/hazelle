@@ -9,8 +9,8 @@ import { fsyncPath, makeDirs } from '../db/durable';
 import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
 import { fileKey, snapshotKey, type Bucket, type DiskBucket } from '../files/bucket';
 import { entries } from '../files/disk-bucket';
-import type { Services } from '../http';
-import { DAY_MS, dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
+import { DAY_MS, type Services } from '../http';
+import { dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
 // Backup generations (docs/research/docker-port-plan.md §10.2): backup/<id>/ holds the service snapshot, the
 // snapshots its manifest names and, written last, manifest.json; with the disk bucket, pictures go once each into the

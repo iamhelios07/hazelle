@@ -2,9 +2,10 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { accountPath } from '../db/account-db';
+import { DAY_MS } from '../http';
 import { sessionCookie, signupBody, testApp } from '../testing';
 import { COPIED, generationsDir, listGenerations, readManifest } from './generation';
-import { DAY_MS, dayStart } from './snapshots';
+import { dayStart } from './snapshots';
 
 const HOUR_MS = 60 * 60 * 1000;
 const sent: { url: string; body: unknown }[] = [];

@@ -11,7 +11,7 @@ import { openDatabase, serviceDb, type Db, type Statement } from '../db/service-
 import { diskBucket } from '../files/disk-bucket';
 import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
-import { sha256Hex, type Services } from '../http';
+import { DAY_MS, sha256Hex, type Services } from '../http';
 import { beginRestore, cancelRestore, runRestore } from '../lifecycle';
 import { relayBudget, tokenBucket, uploadBudget, visitorLimits } from '../limits';
 import { streamRegistry } from '../stream-registry';
@@ -22,7 +22,7 @@ import { alerts } from '../alerts';
 import { backups } from './backups';
 import { captureGeneration, generationsDir, listGenerations, MANIFEST, POOL, readManifest } from './generation';
 import { restoreGeneration } from './restore';
-import { DAY_MS, dayStart } from './snapshots';
+import { dayStart } from './snapshots';
 
 const HOUR_MS = 60 * 60 * 1000;
 const X = '11111111-1111-4111-8111-111111111111';

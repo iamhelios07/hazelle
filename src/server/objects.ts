@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import { FILE_ID } from '../contracts/files';
 import type { FeedQuery, Write } from './account-store';
-import { fail, ID, isRecord, readObject, refused, type AppEnv } from './http';
+import { fail, ID, isRecord, readObject, refused, RETRY_SECONDS, type AppEnv } from './http';
 import { store } from './lifecycle';
 import { canWrite, requireSession } from './session';
 import { claimFiles } from './files/claims';
@@ -98,7 +98,7 @@ objects.post('/batch', canWrite, async (c) => {
   if ('unavailable' in done) return refused(c, done);
   switch (done.refused) {
     case 'busy':
-      return fail(c, 503, 'busy', { retryAfter: 5 });
+      return fail(c, 503, 'busy', { retryAfter: RETRY_SECONDS });
     case 'bad-input':
       return fail(c, 400, 'bad-input');
     case 'conflict':
