@@ -68,7 +68,7 @@ export const GENERIC = 'generic';
 // version of the app speaks.
 const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatCompletions, 'anthropic-messages': anthropicMessages, gemini, responses };
 
-// Route: a connection that speaks a chat format. codec null: one whose type speaks none, with its fixed model list.
+// Route: a connection that speaks a chat format.
 export type Route = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
 // The evaluation worker needs the resolved endpoint and provider policy, never credentials or a model catalog.
 export type WireRoute = { provider: string | null; endpoint: Endpoint };
