@@ -20,7 +20,7 @@ type PathProps = {
   here: FolderContents<ChatSummary> | null;
   binned: boolean;
   onName: (naming: Naming) => void;
-  // What a card dragged onto a part does, there to; absent where cards do not drag.
+  // What a card dragged onto a part does; absent where cards do not drag.
   dropInto?: Drop;
 };
 
