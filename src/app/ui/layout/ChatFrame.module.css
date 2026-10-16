@@ -25,12 +25,12 @@
   --story-lead: var(--story-stage-lead);
 }
 
-/* The character's picture on a stage no 삽화 hold, between the header and the composer. --story-stage-at is the
+/* The character's picture on a stage no 삽화 hold, from the header down to the composer's foot. --story-stage-at is the
    stage's left edge, measured in ChatFrame.tsx. */
 .portrait {
   position: absolute;
   top: calc(var(--header-height) + var(--space-8));
-  bottom: calc(var(--footer-space) + var(--space-8));
+  bottom: var(--space-24);
   left: var(--story-stage-at);
   width: var(--story-margin);
   display: flex;
@@ -182,13 +182,9 @@
   transition: background-color var(--duration-slow) var(--ease-enter);
 }
 
-/* The composer and what stands above it go with the story's text. */
+/* The composer and what stands above it go with the story's text, and its ground covers only the text, so the stage
+   runs down beside it. */
 .staged .footer {
-  justify-content: flex-start;
-  padding-left: calc(var(--story-stage-lead) + var(--read-gutter));
-}
-
-.staged .above {
   right: auto;
   left: var(--story-stage-lead);
   width: var(--read-width);
