@@ -164,7 +164,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
       },
       landed: async () => {
         chatsDone += chats.length;
-        const imported = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), toggles: backup.catalog.toggles, chats: chats.map(({ root }) => root) });
+        const imported = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, toggles: backup.catalog.toggles, chats: chats.map(({ root }) => root) }, character.modules.flatMap((risu) => moduleIds.get(risu) ?? []));
         if (!imported.ok) return imported;
         saved = imported.data;
         picturesDone += character.assets.length;
