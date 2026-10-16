@@ -35,7 +35,7 @@ const ToastContext = createContext<Toasts | null>(null);
 
 export type Standing = { message: string; detail: string };
 
-// A mouse pointing at the stack opens it and stops every notice's time, which runs on from where it stopped.
+// A mouse over the stack, or the focus in it, opens it and stops every notice's time, which runs on from where it stopped.
 // standing: a notice in front of them for as long as the caller passes it, with no time of its own.
 export function ToastProvider({ standing, children }: { standing: Standing | null; children: ReactNode }) {
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -70,8 +70,6 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
   }, []);
 
   useEffect(() => {
-    // The stack leaves with its last notice, so no pointer leave or blur comes to end a hold.
-    if (notices.length === 0 && !standing) setHeld(false);
     if (held || notices.length === 0) return;
     const now = Date.now();
     const soonest = Math.min(...notices.map(({ ends }) => ends));
@@ -79,7 +77,7 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
     if (soonest === Infinity) return;
     const timer = setTimeout(() => setNotices((all) => all.filter(({ ends }) => ends > Date.now())), Math.max(0, soonest - now));
     return () => clearTimeout(timer);
-  }, [held, notices, standing]);
+  }, [held, notices]);
 
   const hold = (on: boolean) => {
     if (on === held) return;
