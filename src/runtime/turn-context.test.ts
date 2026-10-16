@@ -103,5 +103,5 @@ it('attributes preview lore to its pack and keeps pack order, attachment sites a
   expect(contributions.map(({ id }) => id)).toEqual([character.data.id, module.data.id]);
   expect(contributions[0]).toMatchObject({ kind: 'character', attached: [{ kind: 'character', id: character.data.id, own: true }], lore: [] });
   expect(contributions[1]).toMatchObject({ attached: [{ kind: 'settings', id: SETTINGS_ID, own: false }, { kind: 'prompt', id: settings.prompt, own: false }, { kind: 'character', id: character.data.id, own: false }, { kind: 'persona', id: settings.persona, own: false }], regex: { input: 1, output: 0, process: 0, display: 0 }, triggers: { lua: 1, blocks: 0 }, toggles: [toggle], lore: [{ id: lore, tokens: 7, parts: [{ index: 0, tokens: 7 }] }] });
-  expect(inspectToggles(store, chat)).toContainEqual({ declaration: toggle, value: '1', sources: [{ from: 'module', name: 'module', lines: [toggle] }] });
+  expect(inspectToggles(store, chat)).toContainEqual({ declaration: toggle, value: '1', sources: [{ from: 'module', id: module.data.id, name: 'module', lines: [toggle] }] });
 }));

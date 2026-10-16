@@ -20,11 +20,11 @@ type Props = Pick<OpenChat, 'card' | 'toggles' | 'toggleOwner'> & {
   onFlip: OpenChat['actions']['flip'];
   onWrite: OpenChat['actions']['writeToggle'];
   onReset: () => void;
-  onEditPrompt: (() => void) | undefined;
+  onEdit: (section: ToggleSection) => void;
   onClose: () => void;
 };
 
-export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onReset, onEditPrompt, onClose }: Props) {
+export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onReset, onEdit, onClose }: Props) {
   const store = useStore();
   const pinned = new Set(useSettings().pinnedToggles);
   const [filter, setFilter] = useState<'all' | 'changed'>('all');
@@ -113,18 +113,21 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
             </Row>
           )}
           {visible.map((section, index) => (
-            <Section key={index} level={3} title={`${FROM[section.from]} · ${section.name}`} note={String(section.rows.length)}>
+            <Section
+              key={index}
+              level={3}
+              title={`${FROM[section.from]} · ${section.name}`}
+              note={String(section.rows.length)}
+              action={
+                <Button variant="link" onClick={() => onEdit(section)}>
+                  기본값 바꾸기
+                </Button>
+              }
+            >
               {laying ? section.items.map(item) : section.shown.map(row)}
             </Section>
           ))}
           {visible.length === 0 && <Empty variant="section">{search.none ?? '바꾼 토글이 없어요.'}</Empty>}
-          {onEditPrompt && toggles.sections[0]?.from === 'prompt' && (
-            <Row kind="actions">
-              <Button variant="link" size="xs" onClick={onEditPrompt}>
-                프롬프트 토글의 기본값 바꾸기
-              </Button>
-            </Row>
-          )}
         </Section>
       )}
     </SidePanel>

@@ -114,16 +114,17 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
 
 // Each source's lines apart, in the order they are declared, so one source's layout lines never lay out another's
 // toggles.
-export type ToggleSource = { from: 'prompt' | 'card' | 'module'; name: string; lines: ToggleLine[] };
+export type ToggleSource = { from: 'prompt' | 'card' | 'module'; id: string; name: string; lines: ToggleLine[] };
 export type ChatToggleSet = { declared: Toggle[]; sources: ToggleSource[]; value: (key: string) => string | null };
 
 export function togglesOf(store: Reader['store'], chat: Chat, prompt: PromptChoice): ChatToggleSet {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
   const sources: ToggleSource[] = [
-    ...(prompt.kind === 'prompt' ? [{ from: 'prompt' as const, name: prompt.prompt.value.name, lines: prompt.prompt.value.toggles }] : []),
+    ...(prompt.kind === 'prompt' ? [{ from: 'prompt' as const, id: prompt.prompt.id, name: prompt.prompt.value.name, lines: prompt.prompt.value.toggles }] : []),
     // packsOf holds only a character or module that is there.
     ...packsOf(store, chat).map(({ id, pack, module }) => ({
       from: module ? ('module' as const) : ('card' as const),
+      id,
       name: module ? store.get('module', id)!.value.name : character!.card.name,
       lines: pack.toggles,
     })),
