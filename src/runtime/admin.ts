@@ -68,8 +68,7 @@ export const readAdminAccount = (account: string) => api<{ account: AdminAccount
 export type ServiceUsage = Totals & { accounts: number };
 type UsagePage = { totals: Totals; accounts: number; next: string | null };
 
-// Explicit operator refresh only: bounded pages return totals, never the complete account list. Cancellation keeps
-// an obsolete/unmounted view from continuing to fan out through the service.
+// Explicit operator refresh only: bounded pages return totals, never the complete account list.
 export async function readServiceUsage(progress: (totals: ServiceUsage) => void, signal: AbortSignal): Promise<ApiResult<ServiceUsage>> {
   let next: string | null = null;
   let total: ServiceUsage | null = null;
