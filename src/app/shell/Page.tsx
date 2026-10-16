@@ -14,7 +14,7 @@ import { ShareArrival } from '../library/ShareArrival';
 import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
-import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
+import { backTo, HOME, listOf, up, type Back, type Below, type Route } from './routes';
 import { SettingsList, settingsEntry } from './settings/SettingsNav';
 
 
@@ -50,7 +50,7 @@ const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ defau
 
 const side = (at: SideAt) => <ScreenLoad><ChatSide {...at} /></ScreenLoad>;
 type At<K extends Route['kind']> = Extract<Route, { kind: K }>;
-const missing = (at: Route, what: Absent, wide: boolean) => <Missing what={what} back={backTo(upFromMissing(at), wide)} />;
+const missing = (what: Absent, wide: boolean) => <Missing what={what} back={backTo(HOME, wide)} />;
 type ItemKind = 'character' | 'prompt' | 'persona' | 'module' | 'profile';
 const absentItem = <K extends ItemKind>(kind: K, stored: Stored<K> | null): K | `deleted-${K}` =>
   stored && isBinned(stored.value) ? `deleted-${kind}` : kind;
@@ -181,7 +181,7 @@ function CharacterPage({ at, wide }: { at: At<'shelf' | 'edit'>; wide: boolean }
       <Button icon={MessageSquarePlus} onClick={() => navigate({ kind: 'new-chat', character: null })}>새 채팅</Button>
     </Screen>
   );
-  if (!shelf) return missing(at, absentItem('character', stored), wide);
+  if (!shelf) return missing(absentItem('character', stored), wide);
   return <CharacterEditScreen key={shelf.id} shelf={shelf} back={wide ? null : backTo(up(at), wide)} />;
 }
 
@@ -204,11 +204,11 @@ function ChatPage({ at, wide, onPaired }: { at: At<'new-chat' | 'chat'>; wide: b
   }
   const back = backTo(up(at, summary?.chat.character), wide);
   if (at.kind === 'new-chat') {
-    if (at.character !== null && !shelf) return missing(at, absentItem('character', characterStored), wide);
+    if (at.character !== null && !shelf) return missing(absentItem('character', characterStored), wide);
     return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={wide ? null : back} side={side} onPaired={onPaired} />;
   }
   if (!summary) {
-    return missing(at, stored && binsChat(stored.value, () => shelf !== null) ? 'deleted-chat' : 'chat', wide);
+    return missing(stored && binsChat(stored.value, () => shelf !== null) ? 'deleted-chat' : 'chat', wide);
   }
   const item = chatModel.model;
   if (!item || chatModel.state !== 'loaded') return (
@@ -222,7 +222,7 @@ function ChatPage({ at, wide, onPaired }: { at: At<'new-chat' | 'chat'>; wide: b
       )}
     </Screen>
   );
-  if (character !== null && !shelf) return missing(at, 'orphaned-chat', wide);
+  if (character !== null && !shelf) return missing('orphaned-chat', wide);
   return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={wide ? null : back} side={side} onPaired={onPaired} />;
 }
 
