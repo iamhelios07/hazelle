@@ -62,7 +62,7 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
         label="장면 모델"
         help={{
           text: model.text,
-          open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => navigate({ kind: 'models' }) },
+          open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => onEditPrompt(null) },
         }}
         control={<Text variant="note">{'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name}</Text>}
       />

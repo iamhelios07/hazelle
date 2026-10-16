@@ -17,11 +17,12 @@ export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '
 export const ROLE_TAGS: Record<Role, string> = { main: '대화', aux: '보조', embed: '임베딩' };
 
 // Where a task's model comes from, said beside the model wherever it shows, and the door to where it is chosen: the
-// prompt's 모델 pane, whose picker reads 보조 모델 따르기, or with no prompt 보조 모델's own card.
-export const taskModelHelp = (task: string, prompted: boolean) =>
-  prompted
-    ? { text: `${task} 프롬프트에서 선택해요. 선택하지 않으면 ${MODEL_ROLES.aux}을 따라요.`, door: opens(`${task} 프롬프트`) }
-    : { text: `${task} 프롬프트에서 선택하지 않으면 ${MODEL_ROLES.aux}을 따라요. ${MODEL_ROLES.aux}은 ${inSettings('models')}에서 정해요.`, door: opens(inSettings('models')) };
+// prompt's 모델 pane, whose picker reads 보조 모델 따르기. Without a prompt the task cannot run at all (prompt-missing),
+// so the door goes to the prompts, not to 보조 모델.
+export const taskModelHelp = (task: string, prompted: boolean) => ({
+  text: `${task} 프롬프트에서 선택해요. 선택하지 않으면 ${MODEL_ROLES.aux}을 따라요.`,
+  door: prompted ? opens(`${task} 프롬프트`) : opens(inSettings('prompts')),
+});
 
 export const AUX_HELP = '번역이나 장기 기억 정리처럼 대화 밖의 작업에 써요.';
 

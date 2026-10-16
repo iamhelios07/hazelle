@@ -4,7 +4,6 @@ import type { TranslateSetup } from '../../runtime/characters';
 import { translationPrompt } from '../../runtime/prompts';
 import type { translatorOf } from '../../runtime/translate';
 import { useSession } from '../session';
-import { navigate } from '../shell/router';
 import { SettingRow, Switch, Text } from '../ui';
 import { describeTranslateFailure } from './failure';
 import { IntoLanguage } from './IntoLanguage';
@@ -54,7 +53,7 @@ export function TranslateRows({ translate, translation, card, note, opens, onCha
         label="번역 모델"
         help={{
           text: model.text,
-          open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => navigate({ kind: 'models' }) },
+          open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => onEditPrompt(null) },
         }}
         control={<Text variant="note">{translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}</Text>}
       />
