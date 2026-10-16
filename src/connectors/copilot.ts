@@ -1,3 +1,4 @@
+import { bareModel } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
 import type { CacheMark, ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
 import { count, flag, isRecord, modelEntries, nameOf } from './values';
@@ -166,7 +167,7 @@ export const copilot: ConnectionType = {
         const vision = flag(supports.vision);
         const input: Modality[] | null = vision === null ? null : vision ? ['text', 'image'] : ['text'];
         return {
-          id: raw.id,
+          ...bareModel(raw.id),
           name: nameOf(raw, 'name'),
           input,
           output: ['text'],

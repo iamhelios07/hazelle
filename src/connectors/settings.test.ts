@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterModels from './fixtures/openrouter-models.json';
 import vercelModels from './fixtures/vercel-models.json';
+import { bareModel } from './chat-completions';
 import { cacheView, chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel, type Route } from './registry';
 import { fit, type ModelSettings } from './settings';
 import type { ChatMessage, Connection, Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Connection => ({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra });
 const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
-const bare: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+const bare = bareModel('m');
 
 function listed(type: string, payload: unknown, id: string): Model {
   return parseCatalog(resolveConnection(connection(type)) as Route, payload)!.find((model) => model.id === id)!;

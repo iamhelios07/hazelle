@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { anthropicMessages } from './anthropic-messages';
+import { bareModel } from './chat-completions';
 import { copilot } from './copilot';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterKey from './fixtures/openrouter-key.json';
@@ -31,19 +32,7 @@ import { ConnectorError, type Connection, type Model } from './types';
 const connection = (type: string, extra: Partial<Connection> = {}) =>
   resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra }) as Route;
 
-const model = (extra: Partial<Model> = {}): Model => ({
-  id: 'm',
-  name: 'm',
-  input: null,
-  output: null,
-  contextLength: null,
-  maxOutput: null,
-  reasoning: null,
-  tools: null,
-  protocol: null,
-  takes: { settings: null, reasoning: null },
-  ...extra,
-});
+const model = (extra: Partial<Model> = {}): Model => ({ ...bareModel('m'), ...extra });
 
 describe('detection', () => {
   it('recognizes built-in keys and hosts', () => {

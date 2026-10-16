@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { bareModel } from './chat-completions';
 import { batchLane, chatRequest, CONNECTION_TYPES, resolveConnection, type Route } from './registry';
 import type { Batches, Connection, Model } from './types';
 
 const route = (type: string) => resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] } as Connection) as Route;
-const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: 1000, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+const model: Model = { ...bareModel('m'), maxOutput: 1000 };
 const messages = [{ role: 'user' as const, content: '안녕' }];
 const lane = (type: string): Batches => batchLane(route(type), { model, messages, settings: { discount: true } })!;
 const whole = (type: string) => chatRequest(route(type), { model, messages, settings: { streaming: false } });

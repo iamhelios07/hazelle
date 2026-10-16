@@ -1,10 +1,11 @@
 import { expect, it } from 'vitest';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
+import { bareModel } from './chat-completions';
 import { contextRefusal, prepareChat } from './preparation';
 import { resolveConnection, type Route } from './registry';
 import type { ChatMessage, Connection, Model, Protocol } from './types';
 
-const model: Model = { id: 'opaque-id', name: 'arbitrary name', input: ['text', 'image'], output: ['text'], contextLength: 10000, maxOutput: 100, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+const model: Model = { ...bareModel('opaque-id'), name: 'arbitrary name', input: ['text', 'image'], output: ['text'], contextLength: 10000, maxOutput: 100 };
 const connection = (protocol: Protocol): Connection => ({ type: 'generic', label: '', baseUrl: 'https://example.test', protocol, accounts: [], turns: null, starred: [] });
 const route = (protocol: Protocol) => resolveConnection(connection(protocol)) as Route;
 const messages: ChatMessage[] = [{ role: 'system', content: '첫 지시' }, { role: 'system', content: '다음 지시', cache: true }, { role: 'user', content: '질문', pictures: [{ type: 'image/png', data: 'BASE64_NOT_TEXT' }] }, { role: 'user', content: '계속' }];
