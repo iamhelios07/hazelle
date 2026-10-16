@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { TAB_STOPS } from '../overlays/layers';
 import { RowMemoryContext, type RowMemory } from './row-memory';
 import { RowSizes } from './viewport-size';
 import styles from './Viewport.module.css';
@@ -186,7 +187,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
     const pending = keyboard.current;
     if (!pending) return;
     const row = [...root.current!.children].find((node) => (node as HTMLElement).dataset.key === pending.key);
-    const controls = row?.querySelectorAll<HTMLElement>(FOCUSABLE);
+    const controls = row?.querySelectorAll<HTMLElement>(TAB_STOPS);
     const control = controls?.[pending.back ? controls.length - 1 : 0];
     if (control) { keyboard.current = null; control.focus(); }
   });
@@ -264,7 +265,7 @@ function Measured({ item, revision, offset, last, memory, onMeasure, onFocus, on
   return <RowMemoryContext value={memory}><Row ref={ref} className={`${styles.row} ${last ? styles.last : ''}`}
     data-key={rowKey} onKeyDown={(event) => {
       if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
-      const controls = event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE);
+      const controls = event.currentTarget.querySelectorAll<HTMLElement>(TAB_STOPS);
       if (event.target === controls[event.shiftKey ? 0 : controls.length - 1] && onTab(event.shiftKey)) event.preventDefault();
     }} style={{ '--viewport-offset': `${offset}px` } as CSSProperties} onFocusCapture={onFocus}
     onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onBlur(); }}>{children}</Row></RowMemoryContext>;
@@ -297,7 +298,6 @@ function across(root: HTMLElement, frame: HTMLElement): Reading | null {
 }
 
 const MOVES = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
-const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]';
 function frameHeight(frame: HTMLElement) { return frame === document.scrollingElement ? window.innerHeight : frame.clientHeight; }
 function offsetIn(element: HTMLElement, frame: HTMLElement) {
   return element.getBoundingClientRect().top - (frame === document.scrollingElement ? 0 : frame.getBoundingClientRect().top) + frame.scrollTop;

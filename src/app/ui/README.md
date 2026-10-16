@@ -156,7 +156,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Table` (`TableColumn`, `TableRow`) | `Table.module.css` | Things compared by the same few facts, a row each that opens its thing or holds its controls; a dash where a row has nothing; narrow, a row becomes its first cell over a summary line and the columns kept |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
-| overlays | `layers.ts` (`useLayer`, `useAnchored`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a popover fixed by its anchor on the body, flipped to the anchor's other side where it would run off the screen and closed by a scroll (`Hint`, `MascotRemark`); a dialog's focus trap, which starts on the element marked `data-autofocus`, else the first control |
+| overlays | `layers.ts` (`useLayer`, `useAnchored`, `useFocusTrap`, `TAB_STOPS`) | — | The layer stack for Esc and presses outside; a popover fixed by its anchor on the body, flipped to the anchor's other side where it would run off the screen and closed by a scroll (`Hint`, `MascotRemark`); a dialog's focus trap, which starts on the element marked `data-autofocus`, else the first control |
 | overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; `wide`, a picker at a fixed height, a sheet on a phone; `full`, nearly the whole screen, all of a phone's; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
