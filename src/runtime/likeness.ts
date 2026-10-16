@@ -13,6 +13,7 @@ import { illustrateSwitches } from './characters';
 import { packsOf } from './chat-context';
 import { chatPersona } from './personas';
 import { refreshStarred } from './connections';
+import { PERMANENT } from './files';
 import { shownPicture } from './picture';
 import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
@@ -47,9 +48,6 @@ type Picture = Pick<Asset, 'name' | 'type' | 'file'> & { avatar: boolean };
 type Held = { name: string; type: string; avatar: boolean; bytes: Uint8Array<ArrayBuffer> };
 // files: pictures still to read; held: one already in the owner's value, a persona's thumb.
 type Material = { name: string; user: boolean; texts: { label: string; text: string }[]; lore: { name: string; keys: string[]; content: string }[]; files: Picture[]; held: Held[] };
-
-// A file gone or not opening is left out; any other failure ends the build.
-const PERMANENT = new Set(['not-found', 'unreadable']);
 
 // Replaces what is there but the user's portraits (rebuiltPortraits): 다시 만들기, or another device's build met in a
 // conflict.
@@ -213,6 +211,7 @@ export class Likenesses {
     if ('kind' in writer) return writer;
 
     const read = await Promise.all(material.files.map(async (picture) => ({ picture, read: await files.read(picture.file, { signal }) })));
+    // A file gone or not opening is left out; any other failure ends the build.
     const failed = read.find(({ read }) => !read.ok && !PERMANENT.has(read.error))?.read;
     if (failed && !failed.ok) return failed.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unread', failure: failed };
     const held: Held[] = [...material.held, ...read.flatMap(({ picture, read }) => (read.ok ? [{ ...picture, bytes: read.data }] : []))];

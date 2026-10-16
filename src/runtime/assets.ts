@@ -1,10 +1,9 @@
 import { ChangeSignal } from '../change-signal';
 import { pictureRef, type PictureKind, type PictureUrl } from '../engine/assets';
 import { toBase64 } from '../vault/aead';
-import type { Files } from './files';
+import { PERMANENT, type Files } from './files';
 import type { ObjectStore } from './store';
 
-const PERMANENT = new Set(['not-found', 'unreadable']);
 const INACTIVE_BYTES = 32 * 1024 * 1024;
 type Cached = { url: string | null; bytes: number; owners: Set<string>; removed: boolean };
 // url is undefined until read, and for a picture that is gone or unreadable.
