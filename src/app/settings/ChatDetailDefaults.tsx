@@ -4,17 +4,12 @@ import { RETRY_MOST } from '../../contracts/streams';
 import { LORE_BUDGET, loreBudgetOf, setLoreBudget } from '../../runtime/chat-context';
 import { setSharedRetries } from '../../runtime/connections';
 import { typedText } from '../common/typed';
-import { count, readTyped } from '../common/typedNumber';
+import { count, readCount } from '../common/typedNumber';
 import { useAutosave } from '../common/useAutosave';
 import { detailLabel, LORE_BUDGET_LABEL, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, SettingGroup, SettingRow, Stepper } from '../ui';
-
-const readBudget = (draft: string) => {
-  const typed = readTyped(draft, true);
-  return typed.ok && typed.value >= 1 ? typed.value : null;
-};
 
 export function ChatDetailDefaults() {
   const store = useStore();
@@ -23,11 +18,11 @@ export function ChatDetailDefaults() {
   const save = useAutosave<{ loreBudget: number }>('lore-budget', (patch) => setLoreBudget(store, patch.loreBudget!));
   const [typed, setTyped] = useState<string>();
   const budget = save.unsaved.loreBudget ?? loreBudgetOf(store);
-  const draft = typedText(typed, readBudget, budget, String);
-  const invalid = readBudget(draft) === null;
+  const draft = typedText(typed, readCount, budget, String);
+  const invalid = readCount(draft) === null;
   const type = (next: string) => {
     setTyped(next);
-    const value = readBudget(next);
+    const value = readCount(next);
     if (value !== null) save.change({ loreBudget: value });
   };
   return (

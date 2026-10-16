@@ -17,3 +17,8 @@ export function readOptional(draft: string, whole: boolean): number | null | und
   const typed = readTyped(draft, whole);
   return typed.ok ? typed.value : null;
 }
+
+export function readCount(draft: string): number | null {
+  const typed = readTyped(draft, true);
+  return typed.ok && typed.value >= 1 ? typed.value : null;
+}

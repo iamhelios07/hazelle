@@ -22,7 +22,7 @@ function aliasNotes(people: readonly Named[]): { note: string; faint: boolean }[
   });
 }
 
-export type PersonaFace = { persona: Stored<'persona'>; note: string; faint: boolean };
+type PersonaFace = { persona: Stored<'persona'>; note: string; faint: boolean };
 
 // Personas as faces to pick from, notes taken over all of them so a search keeps each face's note.
 export function personaFaces(personas: readonly Stored<'persona'>[]): PersonaFace[] {

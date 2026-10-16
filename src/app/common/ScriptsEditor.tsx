@@ -9,6 +9,7 @@ import { useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
 import { ACTS, addOf } from './acts';
+import { withParticle } from './particles';
 import { choices } from './reading';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
 import { useSearch } from './useSearch';
@@ -132,7 +133,6 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
 
 type ItemProps = { owner: PackOwner; pack: Pack; place: number; page: boolean; open: boolean; onOpen: (open: boolean) => void };
 
-// A row of its list that opens in place, or with page the open script alone.
 function Item({ page, open, onOpen, title, tag, aside, children }: Pick<ItemProps, 'page' | 'open' | 'onOpen'> & { title: string; tag: string | null; aside?: string; children: ReactNode }) {
   if (page)
     return (
@@ -157,7 +157,7 @@ function useScriptActions({ owner, pack, onOpen }: ItemProps, list: ScriptList, 
     if (!done) return;
     if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
     onOpen(false);
-    toast.undoable(`'${name}' ${SCRIPTS[list]}${list === 'regex' ? '을' : '를'} 삭제했어요.`, () => restoreScript(store, owner, done.data));
+    toast.undoable(`'${name}' ${withParticle(SCRIPTS[list], '을/를')} 삭제했어요.`, () => restoreScript(store, owner, done.data));
   }
 
   const move = (by: -1 | 1, icon: LucideIcon, label: string) => {

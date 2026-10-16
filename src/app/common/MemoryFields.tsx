@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { MemorySettings } from '../../model/memory';
 import { typedText } from './typed';
-import { readTyped } from './typedNumber';
+import { readCount } from './typedNumber';
 import { MODEL_ROLES } from './words';
 import { Breakdown, Disclosure, NumberInput, SettingGroup, SettingRow, Switch } from '../ui';
 
@@ -14,11 +14,6 @@ const COUNTS: Record<Count, { label: string; unit: string; help?: string }> = {
 };
 
 export const settingsOf = ({ on, budget, window, batch }: MemorySettings): MemorySettings => ({ on, budget, window, batch });
-
-const readCount = (draft: string) => {
-  const typed = readTyped(draft, true);
-  return typed.ok && typed.value >= 1 ? typed.value : null;
-};
 
 type Part = { tokens: number; value: string };
 

@@ -6,7 +6,7 @@ import { Callout, Text } from '../ui';
 import { ACTS } from './acts';
 import { count } from './typedNumber';
 
-export type LedgerView = { kind: 'filling' } | { kind: 'fill-failed' } | { kind: 'reading' } | { kind: 'failed' } | { kind: 'read'; calls: Counted[] };
+type LedgerView = { kind: 'filling' } | { kind: 'fill-failed' } | { kind: 'reading' } | { kind: 'failed' } | { kind: 'read'; calls: Counted[] };
 
 // The ledger's calls, read again whenever a row lands. Until the account's one fill of the calls made before the ledger
 // has ended, nothing is read: a total of part of them would look like the whole.
