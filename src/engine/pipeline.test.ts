@@ -286,6 +286,11 @@ describe('assemble', () => {
     expect(assembledOf(assemble(input({ card: own, lore: entries, loreBudget: 50 }))).loreBudget).toBe(50);
   });
 
+  it('names the regex keys that did not compile, for 점검 to list (design.md row 2)', () => {
+    const entries = [lore('broken', 'x', { useRegex: true, constant: false, keys: ['/(/', 'moat'] })];
+    expect(assembledOf(assemble(input({ card: card({}), lore: entries }))).invalidKeys).toEqual([{ entry: 'broken', name: 'broken', key: '/(/' }]);
+  });
+
   it('sends a lorebook entry as the text its cost was counted on, whichever way its random tag rolls', () => {
     const blocks: Prompt['blocks'] = [{ id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' }];
     const entries = [lore('coin', `{{random::short::${'long '.repeat(20)}}}`)];
@@ -617,7 +622,7 @@ describe('a request a script rewrote', () => {
     { role: 'assistant', content: 'first reply' },
     { role: 'user', content: 'second hello' },
   ];
-  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, loreBudget: 0, memory: null, dropped: 2 };
+  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, invalidKeys: [], loreBudget: 0, memory: null, dropped: 2 };
   const note: ChatMessage = { role: 'system', content: 'from the script' };
   const count = (text: string) => text.length;
 

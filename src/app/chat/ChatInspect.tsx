@@ -222,6 +222,7 @@ function moduleTags(module: ModuleContribution): string[] {
   const fired = module.lore.reduce((sum, entry) => sum + entryTokens(entry), 0);
   return [
     ...(module.lore.length ? [`로어북 ${module.lore.length}개 · ${tokens(fired)} 토큰`] : []),
+    ...(module.invalidKeys.length ? [`잘못된 정규식 키 ${module.invalidKeys.reduce((sum, { keys }) => sum + keys.length, 0)}개`] : []),
     ...(regex ? [`정규식 ${regex}개`] : []),
     ...(module.triggers.lua ? [`Lua ${module.triggers.lua}개`] : []),
     ...(module.triggers.blocks ? [`트리거 ${module.triggers.blocks}개`] : []),
@@ -272,6 +273,13 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
         </List>
       ) : (
         <Text variant="note">이번 요청에서 켜진 로어북 항목이 없어요.</Text>
+      )}
+      {module.invalidKeys.length > 0 && (
+        <List label="잘못된 정규식 키">
+          {module.invalidKeys.map((entry) => (
+            <ListItem key={entry.entry} title={entry.name} description={entry.keys.join(' · ')} aside="맞지 않음" />
+          ))}
+        </List>
       )}
     </Stack>
   );
