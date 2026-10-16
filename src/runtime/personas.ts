@@ -65,7 +65,6 @@ export async function rebindChats(store: ObjectStore, ids: string[], persona: st
   return writes.length ? store.batch(writes, undefined, { unheld: true }) : { ok: true, data: null };
 }
 
-// null takes the 고정 off.
 export const pinPersona = (store: ObjectStore, character: string, persona: string | null) =>
   store.update('character', character, (current) => (persona === null ? without(current, 'persona') : { ...current, persona }));
 

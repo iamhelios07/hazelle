@@ -51,7 +51,6 @@ export const addRegex = (store: ObjectStore, owner: PackOwner, id: string) =>
 export const addLua = (store: ObjectStore, owner: PackOwner, id: string) =>
   updatePack(store, owner, ({ triggers }) => ({ triggers: holds(triggers, id) ? triggers : [...triggers, { kind: 'lua', id, name: '', code: '' }] }));
 
-// Only the fields given.
 export const editRegex = (store: ObjectStore, owner: PackOwner, id: string, patch: Partial<Omit<RegexScript, 'id' | 'off'>>) =>
   updatePack(store, owner, ({ regex }) => {
     const edited = patched(regex, id, (script) => ({ ...script, ...patch }));

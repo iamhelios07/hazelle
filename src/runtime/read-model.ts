@@ -140,7 +140,6 @@ export class ReadModels {
     return memo(this.byChildren, `${kind}:${parent}`, () => ({ kind, parent, state: new Snapshot<Stored<Kind>[]>(this.childrenOf(kind, parent)) })).state as Snapshot<Stored<K>[]>;
   }
 
-  // null while it has none.
   memory(chat: string): Snapshot<Memory | null> {
     return memo(this.byMemory, chat, () => new Snapshot(this.memoryOf(chat)));
   }

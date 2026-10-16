@@ -451,7 +451,6 @@ export class Scripts {
     return (await this.now(chat, event, onLast)) ?? false;
   }
 
-  // null: the chat has no triggers.
   private now(chat: string, event: Event, anchor: (scope: ChatScope) => Anchor | null): Promise<boolean | null> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? triggersOf(packsOf(this.session.store, stored.value)) : [];

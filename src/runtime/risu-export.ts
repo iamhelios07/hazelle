@@ -67,7 +67,6 @@ async function lineOf({ store }: Reader, id: string): Promise<ApiResult<{ chat: 
   return { ok: true, data: { chat: written.chat, left: { greetings: edited ? 1 : 0, lore: written.unheld, unread: 0 } } };
 }
 
-// One chat as Risu's risuChat file.
 export async function exportRisuChat(reader: Reader, id: string): Promise<ApiResult<{ text: string; left: LeftOut }>> {
   const made = await reader.store.withChat(id, () => lineOf(reader, id));
   return made.ok ? { ok: true, data: { text: risuChatJson(made.data.chat), left: made.data.left } } : made;
