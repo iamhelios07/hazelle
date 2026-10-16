@@ -1,31 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from './history';
+import { blankCard } from './import/card';
 import type { Card } from './import/types';
 import { assembleTranslation } from './pipeline';
 import type { ChatScope } from './render';
 import { translatorPrompt } from './translate';
 
 const card: Card = {
-  name: 'Luna',
-  nickname: null,
+  ...blankCard('Luna'),
   description: '{{char}} keeps the lighthouse.',
-  personality: '',
-  scenario: '',
-  greetings: [],
-  exampleDialogue: '',
   systemPrompt: 'Act as {{char}}.',
-  postHistoryInstructions: '',
-  creatorNotes: '',
-  creator: '',
-  version: '',
-  tags: [],
-  variables: [],
-  toggles: [],
-  utility: false,
-  bias: [],
-  triggers: [],
   regex: [{ id: 'regex-0', name: 'shout', find: 'lamp', replace: 'LAMP', stage: 'display', flags: null }],
-  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, message: id, seed: id, role, text, time: null });
 const scope: ChatScope = {

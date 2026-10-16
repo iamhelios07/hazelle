@@ -5,6 +5,7 @@ import type { ChatMessage } from '../connectors/types';
 import type { Memory, MemoryRecord } from '../model/memory';
 import type { Block, Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
+import { blankCard } from './import/card';
 import type { Card, LoreEntry, RegexScript } from './import/types';
 import { activeLore, assemble, holdsPersona, tokenGroups, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, speakersOf, type ChatRead } from './memory';
@@ -53,26 +54,11 @@ const starter: Prompt = {
 };
 
 const card = (over: Partial<Card> = {}): Card => ({
-  name: 'Luna',
-  nickname: null,
+  ...blankCard('Luna'),
   description: '{{char}} keeps the lighthouse.',
-  personality: '',
-  scenario: '',
   greetings: ['The lamp is lit, {{user}}.'],
-  exampleDialogue: '',
-  systemPrompt: '',
   postHistoryInstructions: 'Keep it short. {{original}}',
-  creatorNotes: '',
-  creator: '',
-  version: '',
-  tags: [],
   variables: [['count', '0']],
-  toggles: [],
-  utility: false,
-  bias: [],
-  regex: [],
-  triggers: [],
-  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
   ...over,
 });
 
