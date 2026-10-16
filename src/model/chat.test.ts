@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, ChatFold, chatTitle, fold, foldTree, previewLine, recentIn, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { calls, ChatFold, chatTitle, fold, foldTree, previewLine, recentIn, recentModels, shown, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -257,29 +257,6 @@ describe('chatTitle', () => {
     expect(chatTitle({ title: '이름', character: null, models: {} }, messages, asStored(messages))).toBe('이름');
     expect(chatTitle({ title: null, character: null, models: {}, origin: { id: 'a', name: '기숙사의 밤', after: 'u1' } }, messages, asStored(messages))).toBe('기숙사의 밤 · 분기');
     expect(chatTitle({ title: null, character: null, models: {} }, [], [])).toBe('새 채팅');
-  });
-});
-
-describe('branchTree', () => {
-  it('puts each branch under the chat it came from, and one whose origin is gone at the top', () => {
-    const item = (id: string, origin?: string): ChatItem => ({
-      id,
-      chat: { title: null, character: null, models: {}, ...(origin && { origin: { id: origin, name: origin, after: 'm' } }) },
-      messages: [],
-      count: 0,
-      title: id,
-      preview: '',
-      at: null,
-      order: 0,
-    });
-    const tree = branchTree([item('b1', 'a'), item('c'), item('orphan', 'deleted'), item('a'), item('b2', 'b1')]);
-    expect(tree.map(({ item, nested }) => [item.id, nested])).toEqual([
-      ['c', false],
-      ['orphan', false],
-      ['a', false],
-      ['b1', true],
-      ['b2', true],
-    ]);
   });
 });
 

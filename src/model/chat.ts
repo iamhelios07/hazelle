@@ -558,16 +558,6 @@ export type Summary = {
 };
 export type RecentModel = { at: number; ref: ModelRef };
 
-// Each branch right under the chat it came from, in the order given at each level.
-// A branch whose origin is not among them stands at the top level.
-export function branchTree(items: ChatSummary[]): { item: ChatSummary; nested: boolean }[] {
-  const ids = new Set(items.map((item) => item.id));
-  const parent = ({ chat }: ChatSummary) => (chat.origin && ids.has(chat.origin.id) ? chat.origin.id : null);
-  const under = (origin: string | null): { item: ChatSummary; nested: boolean }[] =>
-    items.filter((item) => parent(item) === origin).flatMap((item) => [{ item, nested: origin !== null }, ...under(item.id)]);
-  return under(null);
-}
-
 export const usageCall = ({ id, connection, model, modelName, source, usage, cost, calibration }: Receipt, at: number): UsageCall => ({ at, call: { id, connection, model, modelName, source, usage, cost, ...(calibration && { calibration }) } });
 
 // Every call a chat's log keeps, whatever the chat still shows: a deleted message's, a translation made again. An edit
