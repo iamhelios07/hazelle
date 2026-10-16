@@ -20,12 +20,12 @@ import { describeTurnFailure } from '../common/failure';
 import { NO_PERSONA_SLOT } from '../common/prompt-words';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
-import { BIN_KEEPS, LORE_BUDGET_LABEL, PAGES } from '../common/words';
+import { BIN_KEEPS, inSettings, LORE_BUDGET_LABEL, opens } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
-import { inspectShown, NO_PANELS, opened, type InspectTab, type Panel, type Panels } from './panels';
+import { inspectShown, loreBudgetEditor, NO_PANELS, opened, type InspectTab, type Panel, type Panels } from './panels';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { pickStarted } from './infoReply';
@@ -141,11 +141,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     const cut = talk.sent(lastCall)?.prompt.lore?.filter(({ fate }) => fate.kind === 'dropped' && fate.cause === 'budget').length ?? 0;
     if (cut === 0) return;
     cutTold.add(chatId);
+    // A toast takes one action: the door to the budget. Which entries were cut stays a press away, in the reply's 응답 정보.
+    const editor = loreBudgetEditor(shelf && { id: shelf.id, card: shelf.character.card });
     toast.show(`켜진 로어북 항목 중 ${cut}개가 빠졌어요`, {
-      detail: card !== null && card.loreSettings.tokenBudget !== null
-        ? `이 캐릭터의 ${LORE_BUDGET_LABEL}을 넘었어요. 캐릭터 편집 › 로어북에서 늘릴 수 있어요.`
-        : `${LORE_BUDGET_LABEL}을 넘었어요. 설정 › ${PAGES.chat}에서 늘릴 수 있어요.`,
-      action: { label: '정보 보기', onClick: () => { setInfoPick(lastReply.id); open({ kind: 'info' }); } },
+      detail: `${editor ? '이 캐릭터의 ' : ''}${LORE_BUDGET_LABEL}을 넘었어요. 빠진 항목은 응답 정보에서 볼 수 있어요.`,
+      action: editor
+        ? { label: opens('캐릭터 편집 › 로어북'), onClick: () => open(editor) }
+        : { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) },
     });
   }, [lastCall]);
 

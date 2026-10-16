@@ -36,7 +36,7 @@ import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore,
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
@@ -138,7 +138,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     pictureSave.change({ [field]: value ?? undefined }, value !== null);
   }
 
-  function heightRow(field: Height, label: string, help: string, placeholder: string) {
+  function heightRow(field: Height, label: string, help: Help, placeholder: string) {
     const height = typedText(typedHeights[field], readPictureHeight, pictures[field], (value) => String(value ?? ''));
     const set = height.trim() !== '';
     const invalid = readPictureHeight(height) === null;
@@ -350,7 +350,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           <Disclosure label="이미지 크기">
             <SettingGroup label="이미지 크기">
               {fold && heightRow('peek', '접힌 높이', '화면 높이 대비 비율이에요.', '40')}
-              {heightRow('most', '최대 높이', '화면 높이 대비 비율이에요. 비워 두면 디스플레이 설정을 따라요.', String(display.pictureMost))}
+              {heightRow('most', '최대 높이', { text: '화면 높이 대비 비율이에요. 비워 두면 디스플레이 설정을 따라요.', open: { label: opens(inSettings('display')), onClick: () => navigate({ kind: 'display' }) } }, String(display.pictureMost))}
             </SettingGroup>
           </Disclosure>
         )}

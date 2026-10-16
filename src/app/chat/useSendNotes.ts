@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Chat } from '../../model/chat';
 import type { Memory } from '../../model/memory';
+import type { Route } from '../../runtime/assignment';
 import { breakCost, forecast, lastCache, prior, type Forecast } from '../../runtime/cache';
 import { leaving } from '../../runtime/memory-view';
 import type { Shown } from '../../runtime/talk';
@@ -12,9 +13,9 @@ const SETTLE_MS = 400;
 export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Sending | null | undefined; request: () => PreviewRequest | null };
 
 // until: when the last call's cache runs out, null when it cached nothing. next: the draft's forecast against the
-// chat's stored last call (runtime/cache), with what a break costs where the model is priced; undefined until it is
-// worked out after the chat opens or a reply ends.
-export type CacheNotes = { until: number | null; next: { forecast: Forecast; cost: ReturnType<typeof breakCost> } | null | undefined };
+// chat's stored last call (runtime/cache), with what a break costs where the model is priced and the model it was worked
+// out for; undefined until it is worked out after the chat opens or a reply ends.
+export type CacheNotes = { until: number | null; next: { forecast: Forecast; cost: ReturnType<typeof breakCost>; route: Route } | null | undefined };
 
 // The draft is read again after any store change settles, so an edit to the prompt, a lorebook or the model shows in
 // the forecast while it is open.
@@ -47,7 +48,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
         const send = sending && cacheSend(sending, session.credentials.pool.peek(sending.turn.route.connection.value)?.id ?? null);
         const before = session.store.scopeState(id) === 'loaded' ? prior(session.store, id, messages, Date.now()) : null;
         const made = send && forecast(before, send);
-        setNext(made ? { forecast: made, cost: breakCost(sending.turn.route.connection.value, sending.turn.route.model, made) } : null);
+        setNext(made ? { forecast: made, cost: breakCost(sending.turn.route.connection.value, sending.turn.route.model, made), route: sending.turn.route } : null);
       }, () => {
         if (controller.signal.aborted) return;
         setNext(null);

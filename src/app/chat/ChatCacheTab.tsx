@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { From } from '../../engine/pipeline';
-import { cacheTurns, type CacheTurn, type Forecast, type ForecastPart } from '../../runtime/cache';
+import { cacheTurns, type CacheTurn, type ForecastPart } from '../../runtime/cache';
 import { cost, tokens } from '../common/receipt';
 import { ago } from '../common/time';
-import { UNKNOWN } from '../common/words';
+import { MODEL_SETTINGS, opens, UNKNOWN } from '../common/words';
+import { useStore } from '../session';
+import { navigate } from '../shell/router';
 import { Button, Callout, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
-import { BROKEN, reads, why } from './ChatCache';
+import { BROKEN, profileName, reads, why } from './ChatCache';
 import { partName } from './ChatSent';
 import type { Side } from './panels';
 import type { OpenChat } from './useChat';
@@ -42,7 +44,7 @@ export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenCha
   return (
     <>
         <Section title="다음 전송 예상" help="지금 보내면 어떻게 될지 입력 내용과 프롬프트로 미리 계산해요. 토큰 수는 추정치예요.">
-          {busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty> : cache.next ? <Next forecast={cache.next.forecast} price={cache.next.cost} editor={editor} onEdit={onEdit} /> : cache.next === null && <Empty variant="section">계산할 캐시가 없어요.</Empty>}
+          {busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty> : cache.next ? <Next next={cache.next} editor={editor} onEdit={onEdit} /> : cache.next === null && <Empty variant="section">계산할 캐시가 없어요.</Empty>}
         </Section>
         <Section title="지난 요청">
           {turns.length ? (
@@ -66,13 +68,15 @@ export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenCha
   );
 }
 
-type NextProps = { forecast: Forecast; price: NonNullable<CacheNotes['next']>['cost']; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
+type NextProps = { next: NonNullable<CacheNotes['next']>; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
 
-function Next({ forecast, price, editor, onEdit }: NextProps) {
+function Next({ next: { forecast, cost: price, route }, editor, onEdit }: NextProps) {
+  const store = useStore();
   const { against, written, tail, removed } = forecast;
+  const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', connection: route.connection.id, model: route.model.id }) } : undefined;
   return (
     <Stack gap="group">
-      {against?.broken && <Callout tone="warn">{`${BROKEN}: ${why(against.broken)} ${reads(against)}`}</Callout>}
+      {against?.broken && <Callout tone="warn" action={off}>{`${BROKEN}: ${why(against.broken, profileName(store, route))} ${reads(against)}`}</Callout>}
       <Facts
         variant="tiles"
         items={[
@@ -128,7 +132,7 @@ function Turn({ turn }: { turn: CacheTurn }) {
       badge={counted && input > 0 ? `적중 ${Math.round((read / input) * 100)}%` : undefined}
       description={counted ? `읽음 ${tokens(read)} · 저장 ${tokens(written)} · 그 외 ${tokens(rest)}` : `사용량 ${UNKNOWN}`}
       aside={ago(turn.at)}
-      detail={forecast?.broken && <Text variant="note">{`${BROKEN}: ${why(forecast.broken)}`}</Text>}
+      detail={forecast?.broken && <Text variant="note">{`${BROKEN}: ${why(forecast.broken, null)}`}</Text>}
     />
   );
 }
