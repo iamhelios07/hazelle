@@ -25,7 +25,8 @@ export const EMPTY_SETTINGS: Settings = { models: {} };
 // retries: the shared 실패하면 다시 보내기, absent for RETRIES; a connection or a 설정 묶음 overrides it (runtime/connections
 // retriesOf). loreBudget: 로어북 최대 분량, the most tokens every chat's lorebook entries may take, absent for LORE_BUDGET
 // (runtime/chat-context loreBudgetOf). labs: the 실험실 switches turned on, by entry id (app/common/labs); an id with no
-// entry is ignored. features: 기능, the ladder's farthest layer (runtime/features).
+// entry is ignored. features: 기능, the ladder's farthest layer (runtime/features). answerInstruction: 응답 받기 지시,
+// absent for ANSWER_INSTRUCTION (runtime/chat-context answerInstructionOf).
 export type SavedLook = { id: string; name: string; look: Record<string, string | number> };
 
 export type Settings = {
@@ -52,4 +53,5 @@ export type Settings = {
   loreBudget?: number;
   labs?: string[];
   features?: FeatureSwitches;
+  answerInstruction?: string;
 };

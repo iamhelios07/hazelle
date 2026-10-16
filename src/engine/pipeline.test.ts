@@ -106,7 +106,7 @@ const assembledOf = (result: ReturnType<typeof assemble>) => {
 const sentOf = (result: ReturnType<typeof assemble>) => assembledOf(result).messages;
 const providerFit = (allowance: number | null): ProviderFit => ({ allowance, route: { provider: null, endpoint: { baseUrl: 'https://example.test', protocol: 'chat-completions' } }, model: bareModel('m'), settings: {} });
 
-const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: null });
+const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: null });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
 describe('assemble', () => {
@@ -194,6 +194,7 @@ describe('assemble', () => {
       { role: 'user', content: 'Hi.' },
       { role: 'assistant', content: 'Hello.', cache: true },
       { role: 'system', content: 'After.' },
+      { role: 'user', content: 'Go on.' },
     ]);
   });
 
@@ -220,6 +221,14 @@ describe('assemble', () => {
       { id: 'lighthouse', name: 'lighthouse', why: { kind: 'keys', matched: [{ query: 'primary', key: 'lighthouse', source: { kind: 'message', id: 'u1' } }] }, fate: { kind: 'placed', tokens: 22 } },
       { id: 'mood', name: 'mood', why: { kind: 'constant' }, fate: { kind: 'placed', tokens: 10 } },
     ]);
+  });
+
+  it('ends a new reply after the model\'s message with the 응답 받기 지시, and none after the user\'s', () => {
+    const messages = [message('u1', 'user', 'Hello.'), message('a1', 'assistant', 'Hi.')];
+    const after = assembledOf(assemble(input({ messages, greeting: null })));
+    expect(after.messages.at(-1)).toEqual({ role: 'user', content: 'Go on.' });
+    expect(after.parts.at(-1)!.from).toEqual({ kind: 'answer' });
+    expect(assembledOf(assemble(input())).parts.some(({ from }) => from.kind === 'answer')).toBe(false);
   });
 
   it('never scans the greeting for keys, and still places @@depth entries counting from the chat’s end', () => {
@@ -375,7 +384,7 @@ describe('assemble', () => {
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));
-    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, tools: [], continuing: false, memory: null };
+    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, tools: [], continuing: false, answerInstruction: 'Go on.', memory: null };
     const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
     const inChat = ({ content }: ChatMessage) => content.startsWith('Message ');
     const whole = sentOf(assemble({ ...input, budget: null, fit: providerFit(null) }));
@@ -445,7 +454,7 @@ describe('assemble with memory', () => {
   });
   const memoryOf = (records: MemoryRecord[]): Memory => ({ records, chapters: [], state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
   const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}, found: string[] = []): Assembled =>
-    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: { kind: 'built-in', memory, budget, shown, found } }));
+    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: { kind: 'built-in', memory, budget, shown, found } }));
   const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
   const memoryOfSent = (result: Assembled) => result.messages.find((_, index) => (result.parts[index]!.from as { slot?: string }).slot === 'memory');
 
@@ -466,7 +475,7 @@ describe('assemble with memory', () => {
     expect(result.memory).toEqual({ by: null, sent: ['r1', 'r2'], found: ['r2'], covered: 4, missing: 0, slot: true });
     const at = result.parts.findIndex(({ from }) => from.kind === 'retrieval');
     expect(result.messages[at]).toEqual({ role: 'user', content: `${RETRIEVED_HEADING}\n\n[When: unknown · Where: the lighthouse · Present: Luna, jin]\nThe messages, word for word:\njin: I promise to come back.\nLuna: Luna nods.` });
-    expect(result.messages.slice(at + 1).map(({ content }) => content)).toEqual(['Morning comes.', 'Luna is calm.']);
+    expect(result.messages.slice(at + 1).map(({ content }) => content)).toEqual(['Morning comes.', 'Luna is calm.', 'Go on.']);
     expect(withMemory(memory, 25_000, {}, []).parts.some(({ from }) => from.kind === 'retrieval')).toBe(false);
   });
 
@@ -518,7 +527,7 @@ describe('assemble with memory', () => {
 
   it("sends a tool's memory in the slot's own place, leaves out the messages through the one it names, and cuts nothing where the slot does not reach", () => {
     const told = (text: string, through: number, over: Partial<PromptInput['scope']> = {}) =>
-      assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (each) => each.length, budget: null, tools: [], continuing: false, memory: { kind: 'tool', name: '기억', text, through } }));
+      assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (each) => each.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: { kind: 'tool', name: '기억', text, through } }));
     const result = told('Luna waits at the lighthouse.', 3);
     expect(result.memory).toEqual({ by: '기억', text: 'Luna waits at the lighthouse.', covered: 4, missing: 0, slot: true });
     expect(chatOf(result)).toEqual(['Morning comes.', 'Luna is calm.']);

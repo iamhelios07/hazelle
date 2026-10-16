@@ -14,7 +14,7 @@ import { budgetCut } from './infoReply';
 import { navigate } from '../shell/router';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
-import { CHAPTER, COMMAND, inSettings, LORE_BUDGET_LABEL, loreName, opens } from '../common/words';
+import { ANSWER_INSTRUCTION_LABEL, CHAPTER, COMMAND, inSettings, LORE_BUDGET_LABEL, loreName, opens } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
@@ -32,6 +32,8 @@ export function partName(from: From, role: Role): string {
       return `${SLOT.lorebook.name} · ${loreName(from.name)} · @@depth ${from.depth}`;
     case 'continue':
       return '이어 쓰기 지시';
+    case 'answer':
+      return ANSWER_INSTRUCTION_LABEL;
     case 'retrieval':
       return `${SLOT.memory.name} · 찾은 기록`;
     case 'tool':

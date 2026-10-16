@@ -1,20 +1,20 @@
 import { useState } from 'react';
 import { RETRIES } from '../../connectors/registry';
 import { RETRY_MOST } from '../../contracts/streams';
-import { LORE_BUDGET, loreBudgetOf, setLoreBudget } from '../../runtime/chat-context';
+import { ANSWER_INSTRUCTION, answerInstructionOf, LORE_BUDGET, loreBudgetOf, setAnswerInstruction, setLoreBudget } from '../../runtime/chat-context';
 import { setSharedRetries } from '../../runtime/connections';
-import { typedText } from '../common/typed';
+import { filled, typedText } from '../common/typed';
 import { count, readCount } from '../common/typedNumber';
 import { useAutosave } from '../common/useAutosave';
-import { detailLabel, LORE_BUDGET_LABEL, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
+import { ANSWER_INSTRUCTION_LABEL, detailLabel, LORE_BUDGET_LABEL, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { Disclosure, NumberInput, SettingGroup, SettingRow, Stepper } from '../ui';
+import { Disclosure, NumberInput, SettingGroup, SettingRow, Stepper, TextField } from '../ui';
 
 export function ChatDetailDefaults() {
   const store = useStore();
   const toast = useToast();
-  const { retries, loreBudget } = useSettings();
+  const { retries, loreBudget, answerInstruction } = useSettings();
   const save = useAutosave<{ loreBudget: number }>('lore-budget', (patch) => setLoreBudget(store, patch.loreBudget!));
   const [typed, setTyped] = useState<string>();
   const budget = save.unsaved.loreBudget ?? loreBudgetOf(store);
@@ -26,7 +26,7 @@ export function ChatDetailDefaults() {
     if (value !== null) save.change({ loreBudget: value });
   };
   return (
-    <Disclosure label={detailLabel([retries, loreBudget].filter((value) => value !== undefined).length)}>
+    <Disclosure label={detailLabel([retries, loreBudget, answerInstruction].filter((value) => value !== undefined).length)}>
       <SettingGroup label="세부 설정">
         <SettingRow
           label={RETRY_COUNT}
@@ -51,7 +51,30 @@ export function ChatDetailDefaults() {
           error={invalid ? '1 이상의 정수를 입력해 주세요.' : undefined}
           control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={draft} invalid={invalid} onChange={type} />}
         />
+        <AnswerInstructionField changed={answerInstruction !== undefined} />
       </SettingGroup>
     </Disclosure>
+  );
+}
+
+function AnswerInstructionField({ changed }: { changed: boolean }) {
+  const store = useStore();
+  const save = useAutosave<{ text: string }>('answer-instruction', (patch) => setAnswerInstruction(store, patch.text!));
+  const [typed, setTyped] = useState<string>();
+  const draft = typedText(typed, filled, save.unsaved.text ?? answerInstructionOf(store), (text) => text);
+  const type = (next: string) => {
+    setTyped(next);
+    const text = filled(next);
+    if (text !== null) save.change({ text });
+  };
+  return (
+    <SettingRow
+      label={ANSWER_INSTRUCTION_LABEL}
+      help={`입력 없이 보내면 봇의 메시지 뒤에 이 문장을 붙여 다음 응답을 받아요. 채팅에는 남지 않아요. 기본값은 ${ANSWER_INSTRUCTION}이에요.`}
+      changed={changed}
+      error={filled(draft) === null ? '문장을 입력해 주세요.' : undefined}
+      wide
+      control={<TextField label={ANSWER_INSTRUCTION_LABEL} showLabel={false} lines={2} value={draft} onChange={type} />}
+    />
   );
 }

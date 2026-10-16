@@ -57,6 +57,13 @@ export const loreBudgetOf = (store: Reader['store']) => store.get('settings', SE
 export const setLoreBudget = (store: ObjectStore, budget: number) =>
   store.upsert('settings', (current = EMPTY_SETTINGS) => (budget === LORE_BUDGET ? without(current, 'loreBudget') : { ...current, loreBudget: budget }));
 
+export const ANSWER_INSTRUCTION = '(OOC: Continue the story with your next reply.)';
+
+export const answerInstructionOf = (store: Reader['store']) => store.get('settings', SETTINGS_ID)?.value.answerInstruction ?? ANSWER_INSTRUCTION;
+
+export const setAnswerInstruction = (store: ObjectStore, text: string) =>
+  store.upsert('settings', (current = EMPTY_SETTINGS) => (text === ANSWER_INSTRUCTION ? without(current, 'answerInstruction') : { ...current, answerInstruction: text }));
+
 // id is null for a chat not saved yet.
 export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);

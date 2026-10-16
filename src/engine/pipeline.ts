@@ -29,6 +29,9 @@ export type PromptInput = {
   fit?: ProviderFit;
   // 이어 쓰기: the chat's messages end with the cut reply, and the continue instruction goes last.
   continuing: boolean;
+  // 응답 받기 지시, the account's: the user message sent last when the chat's messages end with the model's and the
+  // reply is a new one, so that a request never ends with the model's message (see CONTINUE).
+  answerInstruction: string;
   // null while the chat's memory is off.
   memory: MemoryFill | null;
 };
@@ -56,6 +59,7 @@ export type From =
   | { kind: 'lore'; id?: string; name: string; slot: 'lorebook' | 'postEverything' }
   | { kind: 'depth'; id?: string; name: string; depth: number }
   | { kind: 'continue' }
+  | { kind: 'answer' }
   | { kind: 'retrieval' }
   | { kind: 'script' }
   | { kind: 'tool'; name: string };
@@ -307,7 +311,7 @@ const UTILITY: Block[] = [
 // A chat whose prompt is gone has no block for an @@inject_at entry to go into.
 const conversationBlocks = (scope: ChatScope) => (scope.card?.utility ? UTILITY : (scope.prompt?.blocks ?? []));
 
-function conversation({ scope, seed, countTokens, budget, fit, continuing, memory, tools }: PromptInput): Assembled | TooLong {
+function conversation({ scope, seed, countTokens, budget, fit, continuing, answerInstruction, memory, tools }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const blocks = conversationBlocks(scope);
   const chat = renderChat('prompt', scope);
@@ -331,6 +335,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, memor
   if (!blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
   if (!hasToolSlot && toolText.trim()) out({ message: { role: 'system', content: toolText }, from: toolFrom(tools) });
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
+  else if (scope.messages.at(-1)?.role === 'assistant') out({ message: { role: 'user', content: answerInstruction }, from: { kind: 'answer' } });
 
   const messages = chat.texts
     .slice(covered)

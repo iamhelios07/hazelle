@@ -2,10 +2,11 @@ import { useRef, type KeyboardEvent } from 'react';
 import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
+import { ANSWER } from '../common/words';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Button, Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
+import { Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
 import { ChatComposerTools } from './ChatComposerTools';
@@ -31,7 +32,7 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, busy, problem, stuck, translate, sendLanguage, modelMenu, shelf, route, actions } = chat;
+  const { draft, messages, last, answerable, busy, problem, stuck, translate, sendLanguage, modelMenu, shelf, route, actions } = chat;
   // A model whose own 모델 설정 is gone picks another on its page; a missing default is set in 설정 › 모델.
   const profilePage = problem?.kind === 'profile-missing' && problem.own && !('kind' in route) ? { kind: 'model' as const, connection: route.connection.id, model: route.model.id } : { kind: 'models' as const };
   const chips: Record<Chip, { onClick: () => void }> = {
@@ -41,6 +42,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
     profile: { onClick: () => navigate(profilePage) },
   };
   const input = useRef<HTMLTextAreaElement>(null);
+  const typed = draft.text.trim() !== '';
   const editPrompt = (door: PromptDoor) => actions.side(promptEditor(door));
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -110,17 +112,12 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         }
         actions={
           <>
-            {!busy && !draft.text.trim() && last?.role === 'user' && (
-              <Button variant="ghost" size="sm" onClick={actions.answer}>
-                응답 받기
-              </Button>
-            )}
             {!busy && chat.sendNotes.leaving ? <SendNote label={`메시지 ${chat.sendNotes.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
             {!busy && <ChatCache cache={chat.sendNotes.cache} onOpen={() => chat.actions.openInspect('cache')} />}
             <SendButton
               streaming={busy}
-              disabled={!busy && !draft.text.trim()}
-              title={busy ? titled(SHORTCUTS.stop.label, SHORTCUTS.stop.keys) : titled(SHORTCUTS.send.label, SHORTCUTS.send.keys)}
+              disabled={!busy && !typed && !answerable}
+              title={busy ? titled(SHORTCUTS.stop.label, SHORTCUTS.stop.keys) : titled(typed ? SHORTCUTS.send.label : ANSWER, SHORTCUTS.send.keys)}
               onClick={() => (busy ? actions.stop() : void actions.send())}
             />
           </>

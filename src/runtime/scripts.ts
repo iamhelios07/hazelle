@@ -31,7 +31,7 @@ import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
-import { packsOf, scopeOf } from './chat-context';
+import { answerInstructionOf, packsOf, scopeOf } from './chat-context';
 import { setBackground } from './characters';
 import type { Blocked, Sending, TurnContext } from './turn-context';
 import type { HistoryMessage } from '../engine/history';
@@ -418,7 +418,7 @@ export class Scripts {
     }
     const rehearsal = () => ({ trace, said, asked, calls, scope, input, loreRanAway, prompt: null, request: null, changed: false });
     if (end.kind === 'stopped') return { ...rehearsal(), stopped: end.stage };
-    const built = touched ? await this.session.store.evaluation.prompt({ asker: 'view', chat }, { scope, seed: turn.reply.id, budget: turn.budget, fit: providerFit(turn.route, turn.settings, calibration.fit.allowance), ...this.cachedPrompt(chat, { scope, memory: memoryFill(this.session.store, chat, turn.chat, scope.messages) }), continuing: false }, signal) : prompt;
+    const built = touched ? await this.session.store.evaluation.prompt({ asker: 'view', chat }, { scope, seed: turn.reply.id, budget: turn.budget, fit: providerFit(turn.route, turn.settings, calibration.fit.allowance), ...this.cachedPrompt(chat, { scope, memory: memoryFill(this.session.store, chat, turn.chat, scope.messages) }), continuing: false, answerInstruction: answerInstructionOf(this.session.store) }, signal) : prompt;
     const after = 'kind' in built || JSON.stringify(built.messages) !== JSON.stringify(prompt.messages) ? built : null;
     if ('kind' in built) return { ...rehearsal(), stopped: null, prompt: after, changed: true };
     const edited = await run(requestEvent(built), scope);

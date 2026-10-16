@@ -98,6 +98,16 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(messages.nth(2)).toContainText('Mira smiles. (bows)');
   });
 
+  await test.step('보내기 with nothing typed asks for the next reply, whose request ends with the 응답 받기 지시 after the reply', async () => {
+    await page.getByRole('button', { name: '보내기', exact: true }).click();
+    await expect(messages).toHaveCount(4);
+    await expect(messages.nth(3)).toHaveText(/Mira smiles\. \(bows\)/);
+    expect(sent).toHaveLength(2);
+    const { messages: prompt } = sent[1] as { messages: { role: string; content: string }[] };
+    expect(prompt.at(-2)?.role).toBe('assistant');
+    expect(prompt.at(-1)).toEqual({ role: 'user', content: '(OOC: Continue the story with your next reply.)' });
+  });
+
   await test.step('Ctrl+P opens the chat\'s prompt choice, whose 프롬프트 관리 opens the prompts beside the chat, a role changed there comes back with Ctrl+Z, Ctrl+/ lists every shortcut, and Ctrl+S opens and closes 설정', async () => {
     await page.keyboard.press('Control+p');
     await page.getByRole('dialog', { name: '이 채팅의 프롬프트' }).getByRole('button', { name: '프롬프트 관리' }).click();
@@ -110,7 +120,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(system).toHaveAttribute('aria-pressed', 'false');
     await page.keyboard.press('Control+z');
     await expect(system).toHaveAttribute('aria-pressed', 'true');
-    await expect(messages).toHaveCount(3);
+    await expect(messages).toHaveCount(4);
     await side.getByRole('button', { name: '프롬프트 닫기' }).click();
     await expect(side).toBeHidden();
     await page.keyboard.press('Control+/');

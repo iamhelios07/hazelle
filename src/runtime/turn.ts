@@ -1,5 +1,5 @@
 import { providerFit } from './token-calibration';
-import { scopeOf, translationInput, tokenLimits, sentSettings } from './chat-context';
+import { answerInstructionOf, scopeOf, translationInput, tokenLimits, sentSettings } from './chat-context';
 import { cacheSend, gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
 import { forecast, prior } from './cache';
 import type { RanAway } from '../engine/pipeline';
@@ -193,7 +193,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if (!snapshot.ok) return { kind: 'unsent', failure: snapshot, ...kept };
   const calibration = snapshot.data;
   const fit = providerFit(route, settings, calibration.fit.allowance);
-  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, memory }, signal));
+  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, answerInstruction: answerInstructionOf(session.store), memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, turn, prompt);
   const sent = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));

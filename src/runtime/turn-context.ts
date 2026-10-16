@@ -16,7 +16,7 @@ import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import { chatModel, type RouteFailure } from './assignment';
 import { wireOf, type CacheSend } from './cache';
-import { asSent, budgetOf, packsOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
+import { answerInstructionOf, asSent, budgetOf, packsOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
 import { cacheViewOf } from './generate';
 import { memoryFill } from './memory-read';
@@ -134,7 +134,7 @@ export async function forecastSend(session: Forecaster, chat: string, target: Ta
     const snapshot = await session.tokens.snapshot(turn.route, turn.settings, tokenLimits(turn.route.model, sentSettings(session.store, turn.route)), 'conversation', chat, signal ?? new AbortController().signal);
     if (!snapshot.ok) return null;
     const fit = providerFit(turn.route, turn.settings, snapshot.data.fit.allowance);
-    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scripts.cachedPrompt(chat, turn), continuing: false }, signal);
+    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scripts.cachedPrompt(chat, turn), continuing: false, answerInstruction: answerInstructionOf(session.store) }, signal);
     if (signal?.aborted) return null;
     if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? prompt : { turn, prompt, calibration: snapshot.data };
   }

@@ -40,8 +40,9 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      // A message sent translated goes out as its translation, which is not made yet, so it stands in as typed.
-      void forecastSend(session, id, { kind: 'send', text }, controller.signal).then((result) => {
+      // A message sent translated goes out as its translation, which is not made yet, so it stands in as typed. Nothing
+      // typed sends 응답 받기.
+      void forecastSend(session, id, text.trim() ? { kind: 'send', text } : { kind: 'answer' }, controller.signal).then((result) => {
         if (controller.signal.aborted) return;
         setSending(result);
         const sending = result && 'turn' in result ? result : null;

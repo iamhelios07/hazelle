@@ -97,6 +97,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const composerTools = useMemo(() => toolComposer(tools), [tools]);
   const busy = turn !== null;
   const last = messages.at(-1);
+  const answerable = id !== null && last !== undefined;
 
   const replyTarget = busy ? (turn.reply.message ?? turn.reply.id) : null;
   // 이어 쓰기 answers none, since it goes on under text already read.
@@ -174,8 +175,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setPinned(null);
   }
 
+  // Nothing typed asks for a reply after the last message (응답 받기), as RisuAI's empty send does.
   async function send() {
-    if (!draft.text.trim() || busy) return;
+    if (busy) return;
+    if (!draft.text.trim()) {
+      if (answerable) ask({ kind: 'answer' });
+      return;
+    }
     if (blocked(session, chat)) return setStopped(true);
     const text = drafts.text(draft.key).trim();
     if (!text || talk.snapshot(chatId)) return;
@@ -310,6 +316,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     placed,
     opening,
     last,
+    answerable,
     busy,
     sendNotes,
     found,
@@ -337,7 +344,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       ...bookmarkActions,
       ...settingActions,
       send,
-      answer: () => ask({ kind: 'answer' }),
       retryRegex,
       stop: () => talk.stop(chatId),
       regenerate: (message: Shown) => ask({ kind: 'regenerate', message: message.id }),
