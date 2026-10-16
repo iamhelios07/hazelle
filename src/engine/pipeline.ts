@@ -402,7 +402,7 @@ export type IllustrationInput = {
   // How many scenes to write (model/illustration pictureCount).
   count: number;
   // The portraits the pictures are drawn with (runtime/likeness).
-  portraits: Pick<Portrait, 'name' | 'aliases'>[];
+  portraits: Pick<Portrait, 'name' | 'aliases' | 'outfits'>[];
   seed: string;
   countTokens: (text: string) => number;
 };

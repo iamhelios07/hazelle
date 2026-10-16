@@ -239,7 +239,7 @@ export class Illustrator {
     if ('kind' in writer) return writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: portraits.map(({ name, aliases }) => ({ name, aliases })), seed: crypto.randomUUID() }, signal));
+    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: portraits.map(({ name, aliases, outfits }) => ({ name, aliases, outfits })), seed: crypto.randomUUID() }, signal));
     if ('kind' in assembled) return assembled;
     const answer = await pageAnswer(this.deps, writer, 'illustration', chat, assembled.messages, signal);
     if ('kind' in answer) return answer;

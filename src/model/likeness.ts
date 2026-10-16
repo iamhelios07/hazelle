@@ -10,8 +10,8 @@ export type BuiltSource = 'metadata' | 'vision' | 'text';
 export type PortraitSource = BuiltSource | 'user';
 export type Outfit = { name: string; tags: string };
 
-// aliases: other names the story calls them by, matched like name. outfits: the first is what they wear unless a scene
-// says otherwise. artist: the artist tags the bot's own pictures were drawn with, empty when none are known.
+// aliases: other names the story calls them by, matched like name. outfits: each named, so a scene naming one dresses
+// them in it (engine/illustrate); the first is what they wear when a scene names none. artist: the artist tags the bot's own pictures were drawn with, empty when none are known.
 export type Portrait = { name: string; aliases: string[]; look: string; outfits: Outfit[]; artist: string; source: PortraitSource };
 
 // receipt: the call that wrote it. portraits empty: the pack describes no one's looks, which is kept so no draw asks again.

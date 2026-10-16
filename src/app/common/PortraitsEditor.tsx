@@ -140,6 +140,7 @@ function PortraitFields({ owner, index, portrait, onRemove }: { owner: string; i
             key={at}
             title={at === 0 ? '옷 (기본)' : '옷'}
             level={3}
+            help={at === 0 ? '이야기가 옷 이름 그대로 입히면 그 옷의 태그로 그리고, 옷을 말하지 않으면 (기본)을 입어요.' : undefined}
             action={<IconButton icon={ACTS.remove.icon} label={`${outfit.name || '옷'} ${ACTS.remove.label}`} size="sm" onClick={() => save.change({ outfits: outfits.toSpliced(at, 1) })} />}
           >
             <Stack gap="related">

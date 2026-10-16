@@ -44,9 +44,16 @@ export const severalScenes = (count: number) =>
   `This time pick ${count} moments instead of one, each after a different paragraph, spread through the message. Answer with only a JSON array of ${count} objects, each in the shape above, in the order of their paragraphs.`;
 
 // Sent after the 삽화 prompt, the engine's for the same reason as severalScenes: a figure is matched to its profile by
-// name or alias (pictureRequest), so the scene is asked to use the profile's own name.
-export const profileNames = (portraits: readonly Pick<Portrait, 'name' | 'aliases'>[]) =>
-  `These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them:\n${portraits.map(({ name, aliases }) => `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}`).join('\n')}`;
+// name or alias and its outfit to one of the profile's by name (pictureRequest), so the scene is asked to use the
+// profile's own names.
+export const profileNames = (portraits: readonly Pick<Portrait, 'name' | 'aliases' | 'outfits'>[]) =>
+  [
+    'These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them. When the story has one of them in an outfit named here, give its "outfit" as that name alone, exactly as written; otherwise write their clothes as tags.',
+    ...portraits.map(({ name, aliases, outfits }) => {
+      const named = outfits.filter(({ name }) => name.trim());
+      return `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}${named.length ? `, outfits: ${named.map(({ name }) => `"${name.trim()}"`).join(', ')}` : ''}`;
+    }),
+  ].join('\n');
 
 export const numbered = (paragraphs: readonly string[]) => paragraphs.map((paragraph, index) => `[${index + 1}] ${paragraph}`).join('\n');
 
@@ -117,8 +124,9 @@ const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((pa
 
 // Artist tags lead the base caption (design §6.6): the 삽화 prompt's, else the first drawn portrait's. random: the seed
 // of a prompt that fixes none. portraits: the chat's packs' in pack order (runtime/likeness), the character's own first;
-// the scene call is told their names after the prompt (profileNames). A figure whose name is a portrait's name or alias takes the portrait's look in place of its own, and its first outfit when the scene
-// gives none.
+// the scene call is told their names after the prompt (profileNames). A figure whose name is a portrait's name or alias
+// takes the portrait's look in place of its own, and the portrait's outfit whose name the scene's outfit is, the first
+// when the scene gives none, its own tags otherwise.
 export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Model, random: number, portraits: readonly Portrait[]): PictureRequest {
   const { artist, quality, negative } = prompt.tags ?? PICTURE_DEFAULTS;
   const { steps = null, scale = null, rescale = null, sampler = null, seed = random } = prompt.picture ?? {};
@@ -126,13 +134,17 @@ export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Mo
   for (const portrait of portraits) for (const key of namesOf(portrait)) if (!byName.has(key)) byName.set(key, portrait);
   const matched = scene.characters.map(({ name }) => byName.get(nameKey(name)) ?? null);
   const drawn = portraits.find((portrait) => matched.includes(portrait) && portrait.artist.trim());
+  const wornBy = (portrait: Portrait, outfit: string) => {
+    const key = nameKey(outfit);
+    return key ? (portrait.outfits.find((each) => nameKey(each.name) === key)?.tags ?? outfit) : (portrait.outfits[0]?.tags ?? '');
+  };
   return {
     model,
     prompt: tags(artist.trim() ? artist : (drawn?.artist ?? ''), scene.setting, scene.framing, quality),
     negative: negative.trim(),
     characters: scene.characters.map(({ look, outfit, action, x, y }, index) => {
       const portrait = matched[index];
-      const drawnAs = portrait ? tags(portrait.look, outfit.trim() ? outfit : (portrait.outfits[0]?.tags ?? ''), action) : tags(look, outfit, action);
+      const drawnAs = portrait ? tags(portrait.look, wornBy(portrait, outfit), action) : tags(look, outfit, action);
       return { prompt: drawnAs, negative: '', center: { x, y } };
     }),
     ...SIZES[scene.shape],

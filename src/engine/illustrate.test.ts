@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Model } from '../connectors/types';
 import type { Portrait } from '../model/likeness';
-import { illustratorPrompt, parseScene, pictureRequest, PICTURE_DEFAULTS, sceneText } from './illustrate';
+import { illustratorPrompt, parseScene, pictureRequest, PICTURE_DEFAULTS, profileNames, sceneText } from './illustrate';
 
 const answer = {
   after: 2,
@@ -89,6 +89,17 @@ describe('pictureRequest with portraits', () => {
   it("dresses a matched figure in the portrait's first outfit when the scene gives none, and leaves an unmatched figure as written", () => {
     const request = prompts([{ name: 'Ari', outfit: ' ' }, { name: 'Stranger', outfit: '' }], [portrait('Ari')]);
     expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, Ari uniform, smile', 'girl, from scene, smile']);
+  });
+
+  it("dresses a matched figure in the portrait's outfit the scene names, after trim, NFC and case, and in the scene's own tags when it names none", () => {
+    const request = prompts([{ name: 'Ari', outfit: ' NIGHT ' }, { name: 'Ari', outfit: 'night, torn' }], [portrait('Ari')]);
+    expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, pajamas, smile', 'girl, Ari look, night, torn, smile']);
+  });
+
+  it('tells the scene writer each portrait’s names and its named outfits', () => {
+    const told = profileNames([portrait('Ari', { aliases: ['Lotta'] }), portrait('Mina', { outfits: [{ name: ' ', tags: 'unnamed' }] })]);
+    expect(told).toContain('- Ari (also called Lotta), outfits: "usual", "night"');
+    expect(told).toMatch(/\n- Mina$/);
   });
 
   it("leads with the prompt's artist tags, else the first drawn portrait's in pack order", () => {
