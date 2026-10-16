@@ -195,8 +195,6 @@ type TypeHooks = {
   // The model list at an address of the provider's own, in place of the codec's (Vertex AI lists models outside a project).
   listModels?: (endpoint: Endpoint) => HttpRequest;
   parseModels?: (payload: unknown) => Model[] | null;
-  // A second list, read by the same parser, for the embedding models the model list leaves out (OpenRouter).
-  embeddingModels?: (endpoint: Endpoint) => HttpRequest;
   // Reasoning by a token budget, in a field of the provider's own where its codec has none. Its
   // parseModels says which models take one.
   reasoningBudget?: (tokens: number) => Record<string, unknown>;

@@ -572,9 +572,8 @@ describe('embeddings', () => {
     expect(embedRoute({ ...generic, type: 'mistral' }, model())).not.toBeNull();
   });
 
-  it('lists OpenRouter’s embedding models from their own list', () => {
+  it('reads an OpenRouter embedding model’s output as an embedding', () => {
     const route = connection('openrouter');
-    expect(route.type!.embeddingModels!(route.endpoint).url).toBe('https://openrouter.ai/api/v1/embeddings/models');
     const listed = { data: [{ id: 'liquid/lfm-2.5-embedding-350m:free', name: 'LiquidAI: LFM2.5-Embedding-350M (free)', context_length: 512, architecture: { input_modalities: ['text'], output_modalities: ['embeddings'] }, pricing: { prompt: '0', completion: '0' }, supported_parameters: [] }] };
     expect(parseCatalog(route, listed)).toEqual([expect.objectContaining({ id: 'liquid/lfm-2.5-embedding-350m:free', output: ['embedding'] })]);
   });
