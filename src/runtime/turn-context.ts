@@ -4,14 +4,13 @@ import type { Toggle } from '../model/prompt';
 import { chatPrompt } from './prompts';
 import { chatTranslate } from './features';
 import { retrievalOf } from './retrieval';
-import { scriptsOf, triggersOf } from './scripts';
+import { triggersOf } from './scripts';
 import { toolsOf } from './tools/store';
 import { prepareChat } from '../connectors/preparation';
 import { batchLane, resolveConnection, resolveModel } from '../connectors/registry';
 import { providerFit, type TokenSnapshot } from './token-calibration';
 import type { Assembled, PromptInput } from '../engine/pipeline';
 import type { EvaluatedPrompt } from './evaluation-core';
-import { listens } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
@@ -183,28 +182,15 @@ export function previewRequest({ turn, prompt }: Sending): PreviewRequest | null
 
 export type AfterEnter =
   | { kind: 'input-translation' }
-  | { kind: 'hook'; stage: 'onInput' | 'editInput' | 'onStart' | 'editRequest'; packs: string[] }
   | { kind: 'tools'; modules: string[] }
   | { kind: 'retrieval' };
 
 export function afterEnter({ store }: Reader, chat: string, turn: TurnContext): AfterEnter[] {
   const result: AfterEnter[] = [];
   if (turn.said && chatTranslate(store, turn.chat).input) result.push({ kind: 'input-translation' });
-  const packs = packsOf(store, turn.chat);
-  const triggers = triggersOf(packs);
-  const scripts = scriptsOf(packs);
-  const hook = (stage: Extract<AfterEnter, { kind: 'hook' }>['stage'], units: typeof triggers) => {
-    if (units.length) result.push({ kind: 'hook', stage, packs: [...new Set(units.map(({ owner }) => owner.id))] });
-  };
-  if (turn.said) {
-    hook('onInput', triggers.filter((trigger) => listens(trigger, { kind: 'input' })));
-    hook('editInput', scripts);
-  }
-  hook('onStart', triggers.filter((trigger) => listens(trigger, { kind: 'start' })));
   const tools = toolsOf(store, turn.chat);
   if (tools.length) result.push({ kind: 'tools', modules: tools.map(({ module }) => module) });
   if (turn.memory?.kind === 'built-in' && retrievalOf(store, chat, turn.scope.messages)) result.push({ kind: 'retrieval' });
-  hook('editRequest', scripts);
   return result;
 }
 

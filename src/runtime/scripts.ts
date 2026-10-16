@@ -11,7 +11,7 @@ import { saveToolChat, toolsOf } from './tools/store';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage, EmbedPurpose } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, ScriptUnit, ToolEvent } from '../engine/script-api';
+import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, Question, ScriptUnit, ToolEvent } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Writes } from '../model/chat';
 import { allWritten, type ApiFailure } from './api';
@@ -33,7 +33,10 @@ import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
 import { packsOf, scopeOf } from './chat-context';
 import { setBackground } from './characters';
-import type { Blocked, TurnContext } from './turn-context';
+import type { Blocked, Sending, TurnContext } from './turn-context';
+import type { HistoryMessage } from '../engine/history';
+import type { EvaluatedPrompt } from './evaluation-core';
+import { providerFit } from './token-calibration';
 
 export type ScriptLog = { entries: readonly HookLog[]; omitted: number };
 // Page memory only; evict by both entry count and serialized characters, since a script controls its text.
@@ -74,6 +77,130 @@ const onLast = (scope: ChatScope): Anchor | null => {
 
 // A tool's last prompt answer in this session: its slot text, and its memory with the id it stands through.
 type Answered = { tool: string; memory: { text: string; through: string | null } | null };
+
+export type StartStage = 'onInput' | 'editInput' | 'onStart';
+type StartSteps<F> = {
+  // The turn's scope as it now stands, the message being sent last.
+  scope(): ChatScope;
+  run(event: Event, scope: ChatScope): Promise<{ outcome: Outcome; changed: boolean }>;
+  // The chat changed under the turn; answer: once the message being sent is saved.
+  changed(answer: boolean): Promise<F | null>;
+  send(text: string, before: Writes): Promise<F | null>;
+  aborted(): boolean;
+};
+// stage: null when the turn was stopped from outside before onStart. writes: onStart's, which stand after the last
+// message; what onInput and editInput wrote went with the message sent.
+type StartEnd = { kind: 'stopped'; stage: StartStage | null; writes: Writes } | { kind: 'started'; writes: Writes };
+
+// The bot's scripts before a request, in their order (design §6.8): onInput and editInput for a message being sent,
+// which is then saved, so that what onStart does to the chat lands after it; then onStart. A stop ends them where it
+// is called: what would have run after it does not, and the message is saved as it stands, with what was written
+// until then. The one order for a send (Scripts.starting) and its rehearsal (Scripts.rehearse).
+async function startStages<F>(said: string | null, steps: StartSteps<F>): Promise<F | StartEnd> {
+  if (said !== null) {
+    const history = (): ChatScope => ({ ...steps.scope(), messages: steps.scope().messages.slice(0, -1) });
+    const input = await steps.run({ kind: 'input' }, history());
+    let { stop, writes: before } = input.outcome;
+    let stage: StartStage = 'onInput';
+    let text = said;
+    if (!stop) {
+      if (input.changed) {
+        const failed = await steps.changed(false);
+        if (failed) return failed;
+      }
+      const edited = await steps.run({ kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } }, { ...history(), pending: before });
+      before = [...before, ...edited.outcome.writes];
+      if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
+      stop = edited.outcome.stop;
+      stage = 'editInput';
+    }
+    const failed = await steps.send(text, before);
+    if (failed) return failed;
+    if (stop) return { kind: 'stopped', stage, writes: [] };
+    const moved = await steps.changed(true);
+    if (moved) return moved;
+  }
+  if (steps.aborted()) return { kind: 'stopped', stage: null, writes: [] };
+  const start = await steps.run({ kind: 'start' }, steps.scope());
+  if (start.outcome.stop) return { kind: 'stopped', stage: 'onStart', writes: start.outcome.writes };
+  if (start.changed) {
+    const failed = await steps.changed(said !== null);
+    if (failed) return failed;
+  }
+  return { kind: 'started', writes: start.outcome.writes };
+}
+
+// editRequest reads each message's origin as Risu's memo; what it answers keeps no memo, which nothing past it reads.
+const requestEvent = ({ messages, parts }: Pick<Assembled, 'messages' | 'parts'>): Event => ({
+  kind: 'edit',
+  stage: 'editRequest',
+  value: messages.map((message, at) => {
+    const { origin } = parts[at]!;
+    return origin === undefined ? message : { ...message, memo: origin };
+  }),
+  meta: {},
+});
+
+// A listener's answer that is no list of messages leaves the request as it was built.
+const requestAnswer = (outcome: Outcome, messages: ChatMessage[]): ChatMessage[] => !outcome.handled || !Array.isArray(outcome.value) ? messages : outcome.value.flatMap((message: unknown): ChatMessage[] => {
+  if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
+  return [{ role: message.role, content: message.content, ...(message.cache === true && { cache: true }) }];
+});
+
+// What saving a run's changes to the chat (Scripts.event) and gathering it again make of scope: an edited message is
+// a staged version keeping what its text wrote, an added one is new and staged, and a lorebook write takes the place
+// of the chat's own entries of its name. Writes are the caller's, which knows where each stage's stand.
+export function applied(chat: string, scope: ChatScope, { edits, removed, added, lore }: ScriptOutcome): ChatScope {
+  if (!edits.length && !removed.length && !added.length && !lore.length) return scope;
+  const greeting = scope.greeting === null ? 0 : 1;
+  const edited = new Map(edits.map((edit) => [edit.index + greeting, edit]));
+  const gone = new Set(removed.map((index) => index + greeting));
+  const ahead = (at: number | null) => added.filter(({ before }) => (before === null ? null : before + greeting) === at).map(({ role, text }): HistoryMessage => {
+    const id = crypto.randomUUID();
+    return { id, message: id, seed: id, role: role === 'user' ? 'user' : 'assistant', text, time: Date.now(), staged: true };
+  });
+  const messages = [
+    ...scope.messages.flatMap((message, at) => {
+      const edit = edited.get(at);
+      const before = [...(message.before ?? []), ...(edit?.wrote ?? [])];
+      const kept = edit ? { ...message, id: crypto.randomUUID(), text: edit.text, staged: true as const, ...(before.length > 0 && { before }) } : message;
+      return [...ahead(at), ...(gone.has(at) ? [] : [kept])];
+    }),
+    ...ahead(null),
+  ];
+  const written = new Map(lore.map((entry) => [entry.name, entry]));
+  const placed = new Set<string>();
+  const held = scope.lore.flatMap((entry) => {
+    const value = entry.parent === chat ? written.get(entry.value.name) : undefined;
+    if (!value) return [entry];
+    if (placed.has(value.name)) return [];
+    placed.add(value.name);
+    return [{ ...entry, value }];
+  });
+  const fresh = lore.filter(({ name }) => !placed.has(name)).map((value) => ({ id: crypto.randomUUID(), parent: chat, value }));
+  const last = held.findLastIndex(({ parent }) => parent === chat) + 1 || held.length;
+  return { ...scope, messages, lore: [...held.slice(0, last), ...fresh, ...held.slice(last)] };
+}
+
+// The pre-send scripts run ahead on a copy (Scripts.rehearse). stopped: the stage that ended the turn, which then sends
+// nothing. asked: each question, dismissed here and asked when sent; calls: what is refused here and made when sent.
+// scope: the chat as onStart leaves it, its writes pending. input: the message as editInput left it, null when
+// unchanged. prompt: the request built after onStart, null when it is the forecast's. request: what editRequest
+// answered, null when it left the request as given. changed: the request sent would differ from the forecast's.
+export type Rehearsal = {
+  trace: HookTrace;
+  stopped: StartStage | null;
+  said: { tone: 'normal' | 'error'; text: string }[];
+  asked: Question[];
+  calls: { model: number; embed: number; background: number };
+  scope: ChatScope;
+  input: string | null;
+  prompt: EvaluatedPrompt | null;
+  request: ChatMessage[] | null;
+  changed: boolean;
+};
+
+export const NOT_REHEARSED = 'Error: not called while rehearsing';
 
 // The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
@@ -175,9 +302,8 @@ export class Scripts {
     this.interactions.close();
   }
 
-  // The bot's scripts on the way to a reply: onInput and editInput for a message being sent, which is then saved here so
-  // that what onStart does to the chat lands after it; then onStart. Each may end the turn. again gathers the turn
-  // anew once the chat has changed under it: answer, once the user's message is saved and no longer sent.
+  // The bot's scripts on the way to a reply (startStages), each saved as it lands. again gathers the turn anew once the
+  // chat has changed under it: answer, once the user's message is saved and no longer sent.
   async starting(
     chat: string,
     first: TurnContext,
@@ -200,42 +326,24 @@ export class Scripts {
         return failed && answer ? { ...failed, kept: true as const } : failed;
       };
       const { said } = first;
-      if (said) {
-        const history = (): ChatScope => ({ ...turn.scope, messages: turn.scope.messages.slice(0, -1) });
-        const input = await this.dispatch(chat, { lua: scripts, event: { kind: 'input' } }, history(), null);
-        let { stop, writes: before } = input.outcome;
-        let text = said.text;
-        // A stop ends the turn where it is called: what would have run after it does not, and the message is saved
-        // as it stands, with what was written until then.
-        if (!stop) {
-          if (input.changed) {
-            const failed = await regather(false);
-            if (failed) return failed;
-          }
-          const edited = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } } }, { ...history(), pending: before }, null);
-          before = [...before, ...edited.outcome.writes];
-          if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
-          stop = edited.outcome.stop;
-        }
-        const sent = await appendUserMessage(this.session.store, chat, { ...said, text, ...(before.length > 0 && { before }) });
-        if (!sent.ok) return { kind: 'unsent', failure: sent };
-        if (stop) return halted;
-        const failed = await regather(true);
-        if (failed) return failed;
-      }
-      if (signal.aborted) return halted;
-      const start = await this.dispatch(chat, { lua: scripts, event: { kind: 'start' } }, turn.scope, null);
-      if (start.outcome.stop) {
+      const end = await startStages(said?.text ?? null, {
+        scope: () => turn.scope,
+        run: (event, scope) => this.dispatch(chat, { lua: scripts, event }, scope, null),
+        changed: regather,
+        send: async (text, before) => {
+          const sent = await appendUserMessage(this.session.store, chat, { ...said!, text, ...(before.length > 0 && { before }) });
+          return sent.ok ? null : ({ kind: 'unsent', failure: sent } as const);
+        },
+        aborted: () => signal.aborted,
+      });
+      if (end.kind === 'stopped') {
         const last = turn.scope.messages.at(-1);
-        const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: start.outcome.writes } }));
+        const saved = end.stage === 'onStart' && last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: end.writes } }));
         if (saved && !saved.ok) this.interactions.note(chat, { kind: 'unsaved', failure: saved });
         return halted;
       }
-      if (start.changed) {
-        const failed = await regather(said !== null);
-        if (failed) return failed;
-      }
-      const before = start.outcome.writes;
+      if (end.kind !== 'started') return end;
+      const before = end.writes;
       return { turn: { ...turn, said: null, scope: { ...turn.scope, pending: before }, reply: { ...turn.reply, ...(before.length > 0 && { before }) } } };
     });
     // A message that could not be saved after the turn was stopped has nobody left to hear of it but the chat.
@@ -243,24 +351,76 @@ export class Scripts {
     return Promise.race([started, stopped]);
   }
 
-  // A listener's answer that is no list of messages leaves the request as it was built. It reads each message's origin
-  // as Risu's memo; what it answers keeps no memo, which nothing past it reads.
-  async requesting(chat: string, turn: TurnContext, { messages, parts }: Pick<Assembled, 'messages' | 'parts'>): Promise<{ messages: ChatMessage[]; writes: Writes }> {
+  async requesting(chat: string, turn: TurnContext, prompt: Pick<Assembled, 'messages' | 'parts'>): Promise<{ messages: ChatMessage[]; writes: Writes }> {
     const scripts = scriptsOf(packsOf(this.session.store, turn.chat));
-    if (scripts.length === 0) return { messages, writes: [] };
+    if (scripts.length === 0) return { messages: prompt.messages, writes: [] };
     return this.schedule.queued(chat, async () => {
-      const value = messages.map((message, at) => {
-        const { origin } = parts[at]!;
-        return origin === undefined ? message : { ...message, memo: origin };
-      });
-      const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editRequest', value, meta: {} } }, turn.scope, null);
-      if (!outcome.handled) return { messages, writes: outcome.writes };
-      const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
-        if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
-        return [{ role: message.role, content: message.content, ...(message.cache === true && { cache: true }) }];
-      }) : messages;
-      return { messages: edited, writes: outcome.writes };
+      const { outcome } = await this.dispatch(chat, { lua: scripts, event: requestEvent(prompt) }, turn.scope, null);
+      return { messages: requestAnswer(outcome, prompt.messages), writes: outcome.writes };
     });
+  }
+
+  // The pre-send stages of sending, on Lua engines of their own and off the chat's queue, so a real send never waits
+  // behind one; nothing is saved or kept in the page log. Each stage hands the next the chat as the send's would. A
+  // question is dismissed and no model is called, so a script that branches on either may go another way when sent.
+  // null: the chat has no triggers.
+  async rehearse(chat: string, { turn, prompt, calibration }: Sending, signal: AbortSignal): Promise<Rehearsal | null> {
+    const scripts = triggersOf(packsOf(this.session.store, turn.chat));
+    if (scripts.length === 0) return null;
+    const trace: HookTrace = { entries: [], omitted: 0 };
+    const said: Rehearsal['said'] = [];
+    const asked: Question[] = [];
+    const calls = { model: 0, embed: 0, background: 0 };
+    let scope = turn.scope;
+    let touched = false;
+    let input: string | null = null;
+    const host = (at: ChatScope): Host => ({
+      ...this.reads(chat, at, () => {}),
+      say: (tone, text) => { if (!signal.aborted) said.push({ tone, text }); },
+      ask: async (question) => { if (!signal.aborted) asked.push(question); return null; },
+      model: async () => { calls.model++; return { success: false, reason: 'failed', result: NOT_REHEARSED }; },
+      embed: async () => { calls.embed++; return { ok: false, reason: 'failed' }; },
+      background: async () => { calls.background++; return false; },
+    });
+    const run = async (event: Event, at: ChatScope) => {
+      const outcome = await until(this.bindings.lua().then((runner) => runner.run(chat, scripts, at, event, host(at), 'preview')), signal);
+      trace.entries.push(...(outcome.trace?.entries ?? []));
+      trace.omitted += outcome.trace?.omitted ?? 0;
+      const next = applied(chat, at, outcome);
+      if (next !== at) {
+        touched = true;
+        scope = { ...scope, messages: [...next.messages, ...scope.messages.slice(at.messages.length)], lore: next.lore };
+      }
+      return { outcome, changed: next !== at };
+    };
+    const end = await startStages<never>(turn.said?.text ?? null, {
+      scope: () => scope,
+      run,
+      changed: async () => null,
+      send: async (text, before) => {
+        const last = scope.messages.at(-1)!;
+        if (text !== last.text) input = text;
+        if (text !== last.text || before.length > 0) {
+          touched = true;
+          scope = { ...scope, messages: [...scope.messages.slice(0, -1), { ...last, text, ...(before.length > 0 && { before }) }] };
+        }
+        return null;
+      },
+      aborted: () => signal.aborted,
+    });
+    if (end.kind === 'stopped' && end.stage === null) throw new ToolStopped();
+    if (end.writes.length > 0) {
+      touched = true;
+      scope = { ...scope, pending: end.writes };
+    }
+    const rehearsal = { trace, said, asked, calls, scope, input, prompt: null, request: null, changed: false };
+    if (end.kind === 'stopped') return { ...rehearsal, stopped: end.stage };
+    const built = touched ? await this.session.store.evaluation.prompt({ asker: 'view', chat }, { scope, seed: turn.reply.id, budget: turn.budget, fit: providerFit(turn.route, turn.settings, calibration.fit.allowance), ...this.cachedPrompt(chat, { scope, memory: turn.memory }), continuing: false }, signal) : prompt;
+    const after = 'kind' in built || JSON.stringify(built.messages) !== JSON.stringify(prompt.messages) ? built : null;
+    if ('kind' in built) return { ...rehearsal, stopped: null, prompt: after, changed: true };
+    const edited = await run(requestEvent(built), scope);
+    const request = edited.outcome.trace?.entries.some((entry) => entry.changed) ? requestAnswer(edited.outcome, built.messages) : null;
+    return { ...rehearsal, stopped: null, prompt: after, request, changed: after !== null || request !== null };
   }
 
   async ending(chat: string, reply: Written): Promise<Written> {
@@ -522,7 +682,7 @@ export class Scripts {
     try {
       const host = this.host(chat, scope, signal, event.kind === 'prompt');
       const running = 'lua' in units
-        ? this.bindings.lua().then((runner) => runner.run(chat, units.lua, scope, event, host))
+        ? this.bindings.lua().then((runner) => runner.run(chat, units.lua, scope, event, host, 'event'))
         : this.bindings.tools.run(chat, units.tool, scope, units.event, host, signal);
       const outcome = await until(running, signal);
       this.report(chat, outcome, from);
@@ -539,19 +699,25 @@ export class Scripts {
   private host(chat: string, scope: ChatScope, signal?: AbortSignal, deadline = false): Host {
     const either = (callSignal?: AbortSignal) => (callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal);
     return {
+      ...this.reads(chat, scope, () => this.interactions.tell(chat, 'runaway', { kind: 'runaway' })),
       say: (tone, text, from) => { if (!signal?.aborted) this.interactions.note(chat, { kind: 'said', tone, text }, from); },
       ask: (question, from, callSignal) => this.interactions.ask(chat, question, from, either(callSignal)),
       model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, deadline, either(callSignal)),
       embed: (texts, as, from, callSignal) => this.embed(chat, texts, as, from, deadline, either(callSignal)),
-      tokens: async (text) => (await countTexts(this.session.store)([text]))[0]!,
       background: (html, from, callSignal) => this.background(chat, html, from, deadline, either(callSignal)),
+    };
+  }
+
+  // What a script reads of the app, acting on nothing. ranAway: the lorebook's CBS ran away, and the script reads none.
+  private reads(chat: string, scope: ChatScope, ranAway: () => void): Pick<Host, 'tokens' | 'lore'> {
+    return {
+      tokens: async (text) => (await countTexts(this.session.store)([text]))[0]!,
       lore: async (reserve) => {
         const context = scope.model?.maxContext ?? null;
         const lore = await this.session.store.evaluation.lore({ asker: 'lore', chat }, scope, crypto.randomUUID(), reserve === null || context === null ? Infinity : context - reserve);
         if (!('kind' in lore)) return lore;
         if (lore.kind === 'tokenizer') throw new Error('tokenizer');
-        // The script reads none, and the person is told why.
-        this.interactions.tell(chat, 'runaway', { kind: 'runaway' });
+        ranAway();
         return [];
       },
     };

@@ -1,11 +1,11 @@
 import type { ScriptUnit } from '../engine/script-api';
-import type { Lua } from '../engine/lua/run';
+import type { Lua, RunLane } from '../engine/lua/run';
 import type { Event, Host } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import type { ScriptOutcome } from './lua/event';
 
 export type Binding<U, E extends Event = Event> = { run(chat: string, units: U, scope: ChatScope, event: E, host: Host, signal?: AbortSignal): Promise<ScriptOutcome>; close(): void };
-export type LuaRunner = Binding<ScriptUnit[]> & Pick<Lua, 'installDisplay' | 'display' | 'forgetDisplay'>;
+export type LuaRunner = Pick<Binding<ScriptUnit[]>, 'close'> & Pick<Lua, 'installDisplay' | 'display' | 'forgetDisplay'> & { run(chat: string, units: ScriptUnit[], scope: ChatScope, event: Event, host: Host, lane: RunLane): Promise<ScriptOutcome> };
 
 export class ToolStuck extends Error {
   constructor(readonly disabled: boolean) { super(); }

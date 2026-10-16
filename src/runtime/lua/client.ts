@@ -1,6 +1,6 @@
 import type { LuaRunner } from '../script-binding';
 import type { Event, Host, ScriptUnit } from '../../engine/script-api';
-import type { DisplayBatch, DisplayItem, Script } from '../../engine/lua/run';
+import type { DisplayBatch, DisplayItem, RunLane, Script } from '../../engine/lua/run';
 import type { LuaMessage, Snapshot } from '../../engine/lua/state';
 import type { ChatBasis, ChatScope } from '../../engine/render';
 import type { ScriptOutcome } from './event';
@@ -14,7 +14,7 @@ type EventInput = { scope: ChatBasis; history: Tail<ChatScope['messages'][number
 type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
 
 export type Down =
-  | { kind: 'run'; id: number; owner: string; triggers: ScriptUnit[]; input: EventInput; event: Event }
+  | { kind: 'run'; id: number; owner: string; triggers: ScriptUnit[]; input: EventInput; event: Event; lane: RunLane }
   | { kind: 'install-display'; id: number; owner: string; install: DisplayInstall }
   | { kind: 'display'; id: number; owner: string; revision: number; size: number }
   | { kind: 'forget-display'; owner: string; revision: number }
@@ -46,11 +46,11 @@ export class LuaWorker implements LuaRunner {
   private history: ChatScope['messages'] = [];
   private readonly heart = new Heartbeat(() => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
 
-  run(owner: string, triggers: ScriptUnit[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> {
+  run(owner: string, triggers: ScriptUnit[], scope: ChatScope, event: Event, host: Host, lane: RunLane): Promise<ScriptOutcome> {
     const { messages, ...fixed } = scope;
     const input: EventInput = { scope: fixed, history: changedTail(this.history, messages, sameHistory) };
     this.history = messages;
-    return this.send((id) => ({ kind: 'run', id, owner, triggers, input, event }), host) as Promise<ScriptOutcome>;
+    return this.send((id) => ({ kind: 'run', id, owner, triggers, input, event, lane }), host) as Promise<ScriptOutcome>;
   }
 
   installDisplay(owner: string, revision: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {

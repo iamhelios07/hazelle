@@ -32,7 +32,10 @@ const UNSUPPORTED = [
 ];
 
 type Engine = { loaded: HookLog | null; log: HookLog | null; lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
-type Lane = 'event' | 'display';
+type Lane = RunLane | 'display';
+// preview: the 점검 panel's rehearsal of a send, whose engines never share a Lua global with the events' (or the
+// reverse), so a rehearsal neither sees nor leaves state a real turn reads.
+export type RunLane = 'event' | 'preview';
 type Workset = { engines: Map<string, Promise<Engine>>; codes: Set<string>; held: number; retired: boolean };
 
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -55,7 +58,8 @@ function luaOptions(value: unknown): Record<string, unknown> {
 const MODEL_ROLES: Record<string, ModelMessage['role']> = { system: 'system', sys: 'system', user: 'user', assistant: 'assistant', bot: 'assistant', char: 'assistant' };
 
 // owner names whose Lua globals an engine holds (a chat), so two chats of one bot never share them; lane keeps the
-// display's engines apart from the events', so a question an event waits on never holds up the display.
+// display's engines apart from the events', so a question an event waits on never holds up the display, and a
+// preview's apart from both.
 export class Lua {
   private readonly worksets = new Map<string, Workset>();
   private readonly displays = new Map<string, DisplaySession>();
@@ -76,8 +80,8 @@ export class Lua {
 
   // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
   // the event is its own.
-  async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome & { trace: HookTrace }> {
-    const workset = this.hold(owner, 'event', triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
+  async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host, lane: RunLane): Promise<Outcome & { trace: HookTrace }> {
+    const workset = this.hold(owner, lane, triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
     try {
       const trace: HookTrace = { entries: [], omitted: 0 };
       let active: HookLog | null = null;
