@@ -12,7 +12,7 @@ import { evaluatingTask } from './evaluation';
 import { taskWriter } from './profiles';
 import { mascotPrompt } from './prompts';
 import type { Session } from './session';
-import { pageAnswer } from './streams';
+import { pageAnswer } from './talk';
 import { chatPlace, receiptRow } from './usage';
 
 // 마스코트 대사 (design §6.11): one 보조 call per reply version writes the mascot's line and face. The only writer of

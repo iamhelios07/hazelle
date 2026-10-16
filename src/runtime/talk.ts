@@ -17,11 +17,12 @@ import { appendReply, appendUserMessage, savedElsewhere, type Said, type Written
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { generate, resume, type Reply } from './generate';
+import { gather, generate, resume, type GenerateInput, type Reply } from './generate';
 import { stopStream } from './relay';
 import type { ObjectStore } from './store';
 import type { ChatLease } from './chat-scope';
-import { callOf, endCall, newCall } from './streams';
+import { callOf, endCall, newCall, pageCall } from './streams';
+import type { Session } from './session';
 
 // A continuation's text and reasoning start as those it continues. before:
 // what the bot's Lua wrote before the reply was made (model/chat Entry).
@@ -396,4 +397,17 @@ export function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
     case 'pool':
       return { kind: 'pool', group: error.group };
   }
+}
+
+// A 삽화 scene (runtime/illustrate), a likeness (runtime/likeness) or a mascot's line (runtime/mascot), read through the
+// server's stream like any model call but with no marker: a pick-up on another device would make it again and pay for
+// it twice. The caller parses the text.
+export async function pageAnswer(session: Pick<Session, 'store' | 'tokens' | 'credentials'>, { route, settings }: { route: Route; settings: ModelSettings }, requestClass: 'illustration' | 'likeness' | 'mascot', chat: string | null, messages: GenerateInput['messages'], signal: AbortSignal): Promise<{ kind: 'stopped' } | { kind: 'failed'; receipt: Receipt } | { text: string; receipt: Receipt }> {
+  const { store, credentials } = session;
+  const text = gather();
+  const call = await pageCall(session, route, requestClass, chat);
+  const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
+  if (answer.cut === 'stopped') return { kind: 'stopped' };
+  const receipt = unsettled(receiptOf(callOf(route), answer));
+  return answer.state === 'done' ? { text: text.value(), receipt } : { kind: 'failed', receipt };
 }

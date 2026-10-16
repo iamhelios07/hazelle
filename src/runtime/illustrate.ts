@@ -22,7 +22,7 @@ import { illustrationPrompt } from './prompts';
 import { relayBytes, relayJson } from './relay';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
-import { pageAnswer } from './streams';
+import { pageAnswer } from './talk';
 import { chatPlace, receiptRow } from './usage';
 
 // 삽화 (design §6.6): per message per run, one scene call to the chat's 보조 model (or the 삽화 prompt's own) writes

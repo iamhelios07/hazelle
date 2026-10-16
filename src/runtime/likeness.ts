@@ -19,7 +19,7 @@ import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
-import { pageAnswer } from './streams';
+import { pageAnswer } from './talk';
 import { keepRow } from './usage';
 import { fromBase64 } from '../vault/aead';
 
