@@ -403,3 +403,13 @@ export const selectVersion = (store: ObjectStore, chat: string, message: string,
 export const removeMessage = (store: ObjectStore, chat: string, message: string) => append(store, chat, { type: 'delete', message, at: Date.now() });
 
 export const restoreMessage = (store: ObjectStore, chat: string, message: string) => append(store, chat, { type: 'restore', message, at: Date.now() });
+
+// A run of messages deleted or restored as one act, in one batch, so a 되돌리기 brings back all of them or none.
+const markAll = (store: ObjectStore, chat: string, messages: string[], type: 'delete' | 'restore') => {
+  const at = Date.now();
+  return store.batch(messages.map((message) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: chat, value: { type, message, at } as Entry })));
+};
+
+export const removeMessages = (store: ObjectStore, chat: string, messages: string[]) => markAll(store, chat, messages, 'delete');
+
+export const restoreMessages = (store: ObjectStore, chat: string, messages: string[]) => markAll(store, chat, messages, 'restore');

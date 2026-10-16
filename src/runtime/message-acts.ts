@@ -1,6 +1,6 @@
 import type { ChatItem, Message } from '../model/chat';
 import type { ApiResult } from './api';
-import { branchChat, editMessage, removeMessage, restoreMessage, selectVersion } from './chat-log';
+import { branchChat, editMessage, removeMessage, removeMessages, restoreMessage, restoreMessages, selectVersion } from './chat-log';
 import type { Session } from './session';
 
 // The user's own acts on a chat's messages, each told to the chat's tools once it is saved (Hazelle change and branch
@@ -34,6 +34,21 @@ export async function deleteMessage(session: Acting, chat: string, message: Mess
 
 export async function undeleteMessage(session: Acting, chat: string, message: Message) {
   return told(await restoreMessage(session.store, chat, message.id), () => tellAt(session, chat, message.id, 'restore'));
+}
+
+// A message and every one after it, as one act. Each is told as its own delete, the last first, so every index told
+// still stands when it is read.
+export async function deleteMessages(session: Acting, chat: string, messages: Message[]) {
+  const at = messages.map((message) => session.scripts.at(chat, message.id)).reverse();
+  return told(await removeMessages(session.store, chat, messages.map(({ id }) => id)), () => {
+    for (const each of at) if (each) session.scripts.changed(chat, { ...each, kind: 'delete' });
+  });
+}
+
+export async function undeleteMessages(session: Acting, chat: string, messages: Message[]) {
+  return told(await restoreMessages(session.store, chat, messages.map(({ id }) => id)), () => {
+    for (const { id } of messages) tellAt(session, chat, id, 'restore');
+  });
 }
 
 export async function branchFrom(session: Acting, item: ChatItem, message: string): Promise<ApiResult<string>> {

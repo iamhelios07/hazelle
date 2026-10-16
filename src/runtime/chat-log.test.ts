@@ -4,7 +4,7 @@ import { cachePrintId } from '../model/cache';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatPrint } from './cache';
 import { chatFile, readChatFile } from './chat-file';
-import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, nameBookmark, removeMessage, selectVersion, setBookmark, setCast, setChatOwn, startChat, withOwn } from './chat-log';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, nameBookmark, removeMessage, removeMessages, restoreMessages, selectVersion, setBookmark, setCast, setChatOwn, startChat, withOwn } from './chat-log';
 import { setChatModel, withMainModel } from './assignment';
 import type { Files } from './files';
 import { summaryId } from './summary';
@@ -54,6 +54,22 @@ describe('setCast', () => {
     expect(store.get('chat', id)!.value.cast).toEqual(['a', 'b', 'c', 'd', 'e']);
     await setCast(store, id, []);
     expect('cast' in store.get('chat', id)!.value).toBe(false);
+  });
+});
+
+describe('removeMessages', () => {
+  it('deletes a message and every one after it together, and restores them together', async () => {
+    const { store } = await server.account();
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: null, character: null, models: {} }, null);
+    const said = Array.from({ length: 5 }, () => crypto.randomUUID());
+    for (const [index, message] of said.entries()) await appendUserMessage(store, chat, { id: message, text: `말 ${index}`, follows: said[index - 1] ?? null });
+    const texts = () => fold(store.children('entry', chat)).map((message) => shown(message).text);
+    expect(await removeMessages(store, chat, said.slice(2))).toEqual({ ok: true, data: null });
+    expect(texts()).toEqual(['말 0', '말 1']);
+    await restoreMessages(store, chat, said.slice(2));
+    expect(texts()).toEqual(['말 0', '말 1', '말 2', '말 3', '말 4']);
   });
 });
 

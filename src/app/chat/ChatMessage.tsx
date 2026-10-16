@@ -64,6 +64,8 @@ type Props = {
   // The greeting of a chat not started yet: its versions are the other greetings, and it has nothing
   // to regenerate, edit or delete.
   opening: boolean;
+  // The chat's last message: deleting any other asks whether the ones after it go too.
+  last: boolean;
   busy: boolean;
   editing: Editing | null;
   pinned: boolean;
@@ -87,7 +89,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, replyNext, character, me, modelName, opening, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, replyNext, character, me, modelName, opening, last, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -398,7 +400,14 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         !mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />
       )}
       <Divider variant="tools" />
-      <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => actions.remove(message)} />
+      {last ? (
+        <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => actions.remove(message)} />
+      ) : (
+        <Menu place="end" label="메시지 삭제" trigger={(opener) => <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} {...opener} />}>
+          <MenuItem label="이 메시지만 삭제" tone="warn" onClick={() => actions.remove(message)} />
+          <MenuItem label="여기부터 끝까지 삭제" tone="warn" onClick={() => actions.removeFrom(message)} />
+        </Menu>
+      )}
     </>
   );
 
