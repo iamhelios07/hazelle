@@ -167,7 +167,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(greeting.locator('em')).toHaveText('nods');
     await expect(greeting.locator('mark')).toHaveText('"hello"');
     await greeting.getByRole('button', { name: '누르기', exact: true }).click();
-    await expect(page.getByText('동작이 연결되지 않은 버튼이에요.', { exact: true })).toBeVisible();
+    await expect(page.getByText('아무 동작도 연결되지 않은 버튼이에요.', { exact: true })).toBeVisible();
     expect(await page.evaluate('window.ran')).toBeUndefined();
     expect(violations).toEqual([]);
   });

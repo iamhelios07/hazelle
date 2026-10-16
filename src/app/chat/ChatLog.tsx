@@ -36,13 +36,13 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const { character, me, modelName } = speakers(chat);
   const term = search ? foldTerm(search.term) : '';
   if (chat.displayPending) return chat.displayError === undefined ? <Progress steps={[{ label: '채팅을 불러오는 중' }]} /> : (
-    <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: chat.retryDisplay }}>채팅을 표시하지 못했어요.</Callout>
+    <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: chat.retryDisplay }}>채팅을 화면에 표시하지 못했어요.</Callout>
   );
   return <>
     {notUsed && <Text variant="note" align="center">{notUsed}</Text>}
     {personaNote && <Text variant="note" align="center">{personaNote}</Text>}
     {messages.length === 0 ? <Empty variant="story">
-      {card ? '첫인사가 없는 캐릭터예요.' : '캐릭터 없이 모델과 대화하는 채팅이에요.'}
+      {card ? '첫인사가 없는 캐릭터예요.' : '캐릭터 없이 모델과 바로 대화하는 채팅이에요.'}
     </Empty> : <Viewport keys={messages.map((message) => message.id)} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}
       // Story bodies are shadow roots, whose controls a row's light-DOM query cannot see: Tab stays the browser's.
       traverse={false}>{(index) => {

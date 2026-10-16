@@ -44,7 +44,7 @@ function ImageModelScreen({ connection, model, back }: Props) {
         <SettingGroup label="이미지 설정">
           <SettingRow
             label="이미지 설정"
-            help="태그, 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
+            help="태그와 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
             control={
               <Button variant="secondary" size="sm" onClick={openPrompt}>
                 삽화 프롬프트 열기

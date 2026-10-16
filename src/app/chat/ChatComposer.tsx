@@ -14,7 +14,7 @@ import { ChatPersonaPicker } from './ChatPersonaPicker';
 import { ChatTranslate } from './ChatTranslate';
 import type { OpenChat } from './useChat';
 
-const LEAVING = '가장 오래된 메시지가 요청에서 빠지는데, 장기 기억에 없어서 모델이 그 내용을 몰라요.';
+const LEAVING = '가장 오래된 메시지가 요청에서 빠지는데, 장기 기억에도 없어서 모델이 그 내용을 알 수 없어요.';
 
 type Chip = 'model' | 'prompt' | 'persona';
 const FIX = {
@@ -67,8 +67,8 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
       )}
       {stuck && (
         <Callout tone="warn" action={{ label: '다시 시도', onClick: actions.retryRegex }}>
-          봇 스크립트가 끝나지 않아 정규식을 껐어요.
-          <Hint label="정규식 꺼짐">캐릭터나 모듈의 정규식, 로어북 키워드 중 하나가 원인이에요. 다른 기기에서도 꺼져요.</Hint>
+          봇 스크립트가 끝나지 않아서 정규식을 껐어요.
+          <Hint label="정규식 꺼짐">캐릭터나 모듈의 정규식, 또는 로어북 키워드 중 하나가 원인이에요. 다른 기기에서도 함께 꺼져요.</Hint>
         </Callout>
       )}
       <ChatAsk id={chat.id} onTyped={() => input.current?.focus()} />

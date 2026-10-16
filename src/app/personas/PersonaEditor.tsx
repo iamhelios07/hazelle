@@ -64,7 +64,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => restorePersona(store, id), BIN_KEEPS);
   }
 
-  const makeCurrent = () => void setCurrentPersona(store, id).then((saved) => saved.ok || toast.failed(saved, '현재 페르소나로 정하지 못했어요.'));
+  const makeCurrent = () => void setCurrentPersona(store, id).then((saved) => saved.ok || toast.failed(saved, '현재 페르소나로 지정하지 못했어요.'));
 
   function moveChats(to: string) {
     setMoving(false);
@@ -90,8 +90,8 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
         </FileButton>
       </FaceRow>
       {facts.length > 0 && <Facts items={facts} />}
-      <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 입력해 주세요.'} />
-      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요." />
+      <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅에서 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 입력해 주세요.'} />
+      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 볼 수 있는 이름이에요." />
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} />
       <ModuleSwitches owner={{ kind: 'persona', id }} own={stored.value.modules ?? []} />
       <PortraitsEditor owner={id} />
@@ -102,7 +102,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     items: (
       <>
         <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />
-        {settings.persona !== id && <MenuItem label="현재 페르소나로 정하기" sub="새 채팅이 이 페르소나로 시작해요" onClick={makeCurrent} />}
+        {settings.persona !== id && <MenuItem label="현재 페르소나로 정하기" sub="새 채팅을 시작할 때 이 페르소나를 써요" onClick={makeCurrent} />}
         {holding > 0 && <MenuItem label="채팅 옮기기" sub={`이 페르소나를 쓰는 채팅 ${holding}개를 다른 페르소나로 옮겨요`} onClick={() => setMoving(true)} />}
         <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />
       </>

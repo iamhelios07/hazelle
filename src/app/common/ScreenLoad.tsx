@@ -11,7 +11,7 @@ export class ScreenLoad extends Component<{ children: ReactNode }, { failed: boo
   render() {
     if (this.state.failed) return (
       <Screen align="center">
-        <Intro title="화면을 불러오지 못했어요">연결을 확인한 뒤 다시 시도해 주세요.</Intro>
+        <Intro title="화면을 열지 못했어요">네트워크 연결을 확인한 뒤 다시 시도해 주세요.</Intro>
         <Button onClick={() => location.reload()}>새로고침</Button>
       </Screen>
     );

@@ -57,7 +57,7 @@ export function NoticeDialog({ title, note, label, optional = false, placeholder
         onChange={setText}
         placeholder={placeholder}
         hint={`${count(length)} / ${count(MAX_NOTICE_LENGTH)}자`}
-        error={over ? `${count(MAX_NOTICE_LENGTH)}자까지 보낼 수 있어요.` : undefined}
+        error={over ? `최대 ${count(MAX_NOTICE_LENGTH)}자까지 보낼 수 있어요.` : undefined}
       />
       {failure && (
         <Callout tone="warn" alert>

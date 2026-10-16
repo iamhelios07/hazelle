@@ -45,7 +45,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
           </Button>
         </Stack>
       )}
-      {search.kind === 'address' && <Text variant="note">목록에 없는 주소는 아래 직접 연결로 연결해요.</Text>}
+      {search.kind === 'address' && <Text variant="note">목록에 없는 주소는 아래의 직접 연결로 추가해요.</Text>}
       {search.kind === 'none' && <Empty>{noResults(query.trim())}</Empty>}
       {failure && (
         <Callout tone="warn" alert>
@@ -77,7 +77,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
         <List label="직접 연결" places>
           <ListItem
             title="직접 연결"
-            description="OpenAI 호환, OpenAI Responses, Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 알 수 없어요."
+            description="OpenAI 호환, OpenAI Responses, Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 확인할 수 없어요."
             current={route.kind === 'connect-direct'}
             onClick={() => navigate({ kind: 'connect-direct', address: search.kind === 'address' ? search.baseUrl : '' })}
           />

@@ -43,7 +43,7 @@ export function ChatInspect({ chat, character, tab, notes, messages, busy, promp
   const ready = (view: (sending: Sending) => ReactNode) =>
     busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty>
     : notes.sending ? view(notes.sending)
-    : notes.sending === null ? <Empty variant="section">지금은 보낼 수 없어서 계산하지 못했어요.</Empty>
+    : notes.sending === null ? <Empty variant="section">지금은 요청을 보낼 수 없어서 계산하지 못했어요.</Empty>
     : <Text variant="note">계산하는 중…</Text>;
   return (
     <SidePanel title="점검" onClose={onClose}>
@@ -84,7 +84,7 @@ function NextRequest({ chat, sending, request, editor, onEdit }: { chat: string;
     <Stack gap="group">
       <NextTokens sending={sending} />
       {missing.length > 0 && <Text variant="note">{`보낼 때 실행돼서 여기에는 없어요: ${missing.join(', ')}`}</Text>}
-      <RequestView prompt={sending.prompt} title="보낼 순서대로" request={request} unbuilt="이 연결은 본문을 미리 만들 수 없어요." editor={editor} onEdit={onEdit} />
+      <RequestView prompt={sending.prompt} title="보낼 순서대로" request={request} unbuilt="이 연결 방식은 요청 본문을 미리 만들어 볼 수 없어요." editor={editor} onEdit={onEdit} />
     </Stack>
   );
 }
@@ -114,9 +114,9 @@ function NextTokens({ sending }: { sending: Sending }) {
         tone={fit.allowance && total > fit.allowance ? 'warn' : 'plain'}
         amount={`약 ${tokens(total)}`}
         of={fit.allowance === null ? undefined : `약 ${tokens(fit.allowance)}`}
-        note={['앱 추정', ...(fit.allowance === null ? ['모델 한도를 몰라서 줄이지 않아요'] : fit.multiplier === null ? [] : [`배율 ×${fit.multiplier.toFixed(2)} 반영`])].join(' · ')}
+        note={['앱 추정', ...(fit.allowance === null ? ['모델 한도를 알 수 없어서 내용을 줄이지 않아요'] : fit.multiplier === null ? [] : [`배율 ×${fit.multiplier.toFixed(2)} 반영`])].join(' · ')}
       />
-      {dropped > 0 && <Text variant="note">{`한도 때문에 오래된 메시지 ${dropped}개가 빠져요.`}</Text>}
+      {dropped > 0 && <Text variant="note">{`한도를 넘어서 오래된 메시지 ${dropped}개가 빠져요.`}</Text>}
       <Disclosure label="토큰을 쓰는 곳">
         <List label="토큰을 쓰는 곳">
           {[...groups].sort((a, b) => b.tokens - a.tokens).map((group) => (
@@ -165,7 +165,7 @@ function Variables({ chat, sending, busy }: { chat: string; sending: Sending | n
   const search = useSearch(variables, '변수 검색', ({ name, last }) => [name, last.value]);
   return (
     <Stack gap="section">
-      <Section title="변수" help="지금까지의 대화를 다시 읽어 얻은 값이에요. 누르면 언제 바뀌었는지 보여요.">
+      <Section title="변수" help="지금까지의 대화를 처음부터 다시 읽어서 계산한 값이에요. 누르면 값이 언제 바뀌었는지 볼 수 있어요.">
         {inspected === undefined ? (
           <Text variant="note">읽는 중…</Text>
         ) : inspected === null ? (
@@ -203,7 +203,7 @@ function Variables({ chat, sending, busy }: { chat: string; sending: Sending | n
         )}
       </Section>
       {toggles.length > 0 && (
-        <Section title="토글" help="봇이 toggle_ 이름으로 읽는 값이에요.">
+        <Section title="토글" help="봇이 toggle_이라는 이름으로 읽는 값이에요.">
           <List label="토글">
             {toggles.map(({ declaration, value }) => (
               <ListItem key={declaration.key} title={declaration.label || declaration.key} code={`toggle_${declaration.key}`} aside={value === null ? UNKNOWN : shownValue(value, false)} />
@@ -234,7 +234,7 @@ function Modules({ sending }: { sending: Sending }) {
   const session = useSession();
   const [open, setOpen] = useState<string | null>(null);
   const modules = moduleContributions(session, sending.turn.chat, sending.prompt);
-  if (modules.length === 0) return <Empty variant="section">이 채팅에서 실행되는 모듈이 없어요.</Empty>;
+  if (modules.length === 0) return <Empty variant="section">이 채팅에서 켜져 있는 모듈이 없어요.</Empty>;
   return (
     <List label="실행되는 모듈">
       {modules.map((module) => (
@@ -271,7 +271,7 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
           ))}
         </List>
       ) : (
-        <Text variant="note">이번에 켜진 로어북 항목은 없어요.</Text>
+        <Text variant="note">이번 요청에서 켜진 로어북 항목이 없어요.</Text>
       )}
     </Stack>
   );
@@ -289,7 +289,7 @@ function Scripts({ chat }: { chat: string }) {
   const packName = (pack: PackOwner | null) => (pack === null ? null : pack.kind === 'module' ? store.get('module', pack.id)?.value.name : store.get('character', pack.id)?.value.card.name) ?? null;
   const entries = log.entries.map((entry, index) => ({ entry, key: `${entry.at}:${log.omitted + index}` })).reverse();
   return (
-    <Section title="실행 기록" help="이 페이지에서 실행된 봇 스크립트와 log() 출력이에요. 새로고침하면 사라져요.">
+    <Section title="실행 기록" help="이 화면에서 실행된 봇 스크립트와 log() 출력 내용이에요. 새로고침하면 사라져요.">
       {entries.length === 0 ? (
         <Empty variant="section">실행된 스크립트가 없어요.</Empty>
       ) : (
@@ -334,7 +334,7 @@ function HookDetail({ entry }: { entry: HookLog }) {
       {entry.logs.length > 0 && <CodeBlock>{entry.logs.join('\n')}</CodeBlock>}
       {entry.writes.length > 0 && <Facts items={entry.writes.map(([name, value]) => ({ label: name, value: shownValue(value, false) }))} />}
       {entry.missing.length > 0 && <Text variant="note">{`지원하지 않는 기능: ${entry.missing.join(', ')}`}</Text>}
-      {entry.truncated && <Text variant="note">길어서 일부만 남겼어요.</Text>}
+      {entry.truncated && <Text variant="note">내용이 길어서 일부만 남겼어요.</Text>}
     </Stack>
   );
 }

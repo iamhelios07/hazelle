@@ -182,7 +182,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?:
     <SettingRow
       key="cache"
       label="캐시"
-      help="보낸 앞부분을 저장해 다음 요청에서 저렴하게 읽어요. 저장할 때는 요금이 더 들어요"
+      help="보낸 프롬프트의 앞부분을 저장해 두고 다음 요청에서 더 싸게 읽어요. 처음 저장할 때는 요금이 조금 더 나와요"
       changed={shown.cache !== undefined}
       note={noteFor('cache')}
       control={
@@ -202,7 +202,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?:
     <SettingRow
       key="discount"
       label={DISCOUNT}
-      help="요금이 절반이 되는 대신 응답이 느려질 수 있어요. 연결에 따라 답을 한 번에 받기도 하고, 그때는 번역 같은 보조 작업에 할인이 적용되지 않아요"
+      help="요금이 절반으로 줄어드는 대신 응답이 늦어질 수 있어요. 연결 방식에 따라 응답을 한꺼번에 받기도 하는데, 이때는 번역 같은 보조 작업에는 할인이 적용되지 않아요"
       changed={shown.discount !== undefined}
       note={noteFor('discount')}
       control={<Switch label={DISCOUNT} checked={shown.discount === true} onChange={(on) => set({ discount: on ? true : undefined })} />}
@@ -213,7 +213,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?:
     <SettingRow
       key="stop"
       label="멈춤 문구"
-      help="이 문구가 나오면 응답을 끝내요"
+      help="이 문구가 나오면 그 자리에서 응답 생성을 멈춰요"
       changed={shown.stop !== undefined}
       note={noteFor('stop')}
       control={<PhraseField label="멈춤 문구" phrases={shown.stop ?? []} onChange={(next) => set({ stop: next.length ? next : undefined })} />}
@@ -224,7 +224,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?:
     <SettingRow
       key="system"
       label="시스템 메시지 보내는 방식"
-      help="시스템 메시지를 지원하지 않는 모델이면 사용자 메시지로 보내요"
+      help="시스템 메시지를 지원하지 않는 모델에는 사용자 메시지로 바꿔서 보내요"
       changed={shown.systemAsUser !== undefined}
       control={
         <ChoiceGroup
@@ -245,7 +245,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?:
     <SettingRow
       key="streaming"
       label="스트리밍"
-      help="프록시가 응답을 중간에 끊으면 꺼 주세요"
+      help="프록시 서버에서 응답을 중간에 끊어 버린다면 이 설정을 꺼 주세요"
       changed={shown.streaming !== undefined}
       control={<Switch label="스트리밍" checked={shown.streaming !== false} onChange={(on) => set({ streaming: on ? undefined : false })} />}
     />
@@ -267,8 +267,8 @@ export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?:
         <SettingGroup label="세부 설정">
           {DETAIL.map(numberRow)}
           {stopRow}
-          {choiceRow('verbosity', VERBOSITY_LABEL, '간단히를 선택하면 같은 내용을 더 짧게 써요', VERBOSITY, VERBOSITY_WORDS, shown.verbosity, (verbosity) => ({ verbosity }))}
-          {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동은 Anthropic 계정에 우선 처리 용량이 있으면 그 용량부터 사용해요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
+          {choiceRow('verbosity', VERBOSITY_LABEL, '간단히를 선택하면 같은 내용을 더 짧게 요약해서 써요', VERBOSITY, VERBOSITY_WORDS, shown.verbosity, (verbosity) => ({ verbosity }))}
+          {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동으로 두면 Anthropic 계정에 우선 처리 용량이 남아 있을 때 그 용량부터 먼저 써요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
           {systemRow}
           {streamingRow}
           <RetriesRow value={shown.retries} follows="연결 설정" onChange={(retries) => change({ retries })} />

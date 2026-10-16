@@ -21,35 +21,35 @@ type Words = { tag: string; says: string };
 const UNCHANGED = '계정 데이터는 바뀌지 않았어요.';
 const PHASES: Record<Exclude<RestorePhase, 'done'>, Words> = {
   begun: { tag: '시작함', says: `복원을 시작했어요. ${UNCHANGED}` },
-  fenced: { tag: '저장 차단', says: `계정의 저장과 읽기를 막았어요. ${UNCHANGED}` },
-  checkpointed: { tag: '스냅샷 저장', says: `복원 직전 상태를 스냅샷으로 저장했어요. ${UNCHANGED}` },
-  targeted: { tag: '시점 지정', says: `복원할 시점을 지정했어요. ${UNCHANGED} 여기까지는 취소할 수 있어요.` },
-  armed: { tag: '복원 적용 중', says: '복원을 적용했어요. 이제 취소할 수 없어요.' },
-  rewound: { tag: '복원함', says: '데이터를 복원했어요. 계정을 다시 열면 끝나요.' },
-  failed: { tag: '실패', says: '복원하지 못하고 멈췄어요. 계정은 복원 전 상태예요.' },
-  cancelled: { tag: '취소함', says: '취소했어요. 계정은 복원 전 상태예요.' },
+  fenced: { tag: '저장 차단', says: `계정에 데이터를 저장하거나 읽지 못하게 잠갔어요. ${UNCHANGED}` },
+  checkpointed: { tag: '스냅샷 저장', says: `복원하기 직전 상태를 스냅샷으로 저장했어요. ${UNCHANGED}` },
+  targeted: { tag: '시점 지정', says: `복원할 시점을 지정했어요. ${UNCHANGED} 이 단계까지는 취소할 수 있어요.` },
+  armed: { tag: '복원 적용 중', says: '복원을 적용했어요. 이제는 취소할 수 없어요.' },
+  rewound: { tag: '복원함', says: '데이터를 복원했어요. 계정을 다시 열면 모든 과정이 끝나요.' },
+  failed: { tag: '실패', says: '복원하지 못하고 멈췄어요. 계정은 복원하기 전 상태 그대로예요.' },
+  cancelled: { tag: '취소함', says: '복원을 취소했어요. 계정은 복원하기 전 상태 그대로예요.' },
 };
 const DONE: Words = { tag: '완료', says: '복원을 마치고 계정을 다시 열었어요.' };
-const UNVERIFIED: Words = { tag: '확인 필요', says: '복원은 끝났지만 계정이 다시 열렸는지 확인하지 못했어요. 마무리 확인을 해 주세요.' };
+const UNVERIFIED: Words = { tag: '확인 필요', says: '복원은 끝났지만 계정이 다시 열렸는지 확인하지 못했어요. 마무리 확인을 진행해 주세요.' };
 const wordsOf = ({ phase, verified }: RestoreRun): Words => (phase === 'done' ? (verified ? DONE : UNVERIFIED) : PHASES[phase]);
 const says = (run: RestoreRun) => `${wordsOf(run).says}${run.error === null ? '' : ` 오류: ${restoreError(run.error)}`}`;
 
 // A stored code this build does not know shows as the server wrote it.
 const ERRORS: Record<RestoreError, string> & Partial<Record<string, string>> = {
-  'too-early': '그 시각의 기록이 저장소에 없어요. 더 늦은 시각으로 새로 복원해 주세요.',
-  'store-unavailable': '계정의 저장소나 스냅샷을 읽지 못했어요. 잠시 뒤 이어서 해 주세요.',
-  'not-rewound': '저장소가 아직 그 시점으로 돌아가지 않았어요. 잠시 뒤 이어서 해 주세요.',
-  'not-verified': '계정이 아직 다시 열리지 않았어요. 잠시 뒤 마무리 확인을 해 주세요.',
-  stuck: '같은 단계가 반복되어 멈췄어요.',
+  'too-early': '저장소에 그 시각의 기록이 없어요. 그보다 더 늦은 시각으로 새로 복원해 주세요.',
+  'store-unavailable': '계정의 저장소나 스냅샷을 읽지 못했어요. 잠시 뒤에 이어서 진행해 주세요.',
+  'not-rewound': '저장소가 아직 그 시점으로 돌아가지 않았어요. 잠시 뒤에 이어서 진행해 주세요.',
+  'not-verified': '계정이 아직 다시 열리지 않았어요. 잠시 뒤에 마무리 확인을 진행해 주세요.',
+  stuck: '같은 단계가 계속 반복돼서 멈췄어요.',
 };
 export const restoreError = (code: string) => ERRORS[code] ?? code;
 const REFUSED: Partial<Record<ServerError, string>> = {
-  'bad-report': '그 계정이 보낸, 확인 처리하지 않은 알림으로만 복원할 수 있어요.',
-  'too-many-restores': `복원은 하루에 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`,
-  'bad-time': '10분 전부터 6일 전 사이의 시각으로만 복원할 수 있어요.',
-  'cannot-undo': '마지막 복원만, 완료 후 7일 안에 한 번 되돌릴 수 있어요.',
-  'account-busy': '다른 복원이나 탈퇴가 진행 중이에요.',
-  'cannot-cancel': '복원을 적용해서 취소할 수 없어요. 이어서 하기로 완료해 주세요.',
+  'bad-report': '그 계정에서 보낸 알림 중 아직 확인 처리하지 않은 알림으로만 복원할 수 있어요.',
+  'too-many-restores': `복원은 하루에 최대 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`,
+  'bad-time': '10분 전부터 6일 전 사이의 시점으로만 복원할 수 있어요.',
+  'cannot-undo': '가장 최근에 한 복원만, 끝난 뒤 7일 안에 한 번 되돌릴 수 있어요.',
+  'account-busy': '이미 다른 복원이나 탈퇴가 진행 중이에요.',
+  'cannot-cancel': '이미 복원이 적용돼서 취소할 수 없어요. 이어서 하기를 눌러 끝까지 완료해 주세요.',
 };
 
 // Up to targeted nothing has changed, so resuming from there arms the restore, which cannot be taken back.
@@ -81,13 +81,13 @@ function useUnderWay(whose: string | null, busy: boolean): RestoreRun | null {
 }
 
 const ACTIONS: Record<RestoreAction, { label: string; sub: string }> = {
-  resume: { label: '이어서 하기', sub: '중단된 단계부터 이어서 진행해요' },
-  cancel: { label: '취소', sub: '계정을 복원 전 상태로 다시 열어요' },
+  resume: { label: '이어서 하기', sub: '멈춘 단계부터 이어서 진행해요' },
+  cancel: { label: '취소', sub: '계정을 복원하기 전 상태로 다시 열어요' },
   finalize: { label: '마무리 확인', sub: '계정이 다시 열렸는지 확인해요' },
 };
 
 function described(restore: Restore): string {
-  const undo = restore.canUndo && restore.undoExpiresAt !== null ? ` ${moment(restore.undoExpiresAt)}까지 복원 전으로 되돌릴 수 있어요.` : '';
+  const undo = restore.canUndo && restore.undoExpiresAt !== null ? ` ${moment(restore.undoExpiresAt)}까지 복원하기 전 상태로 되돌릴 수 있어요.` : '';
   return `${says(restore)}${undo}`;
 }
 
@@ -135,21 +135,21 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
   if (asking?.kind === 'restore') {
     return (
       <ConfirmDialog title={`${subject}을 ${moment(asking.point.takenAt)} 기록으로 복원할까요?`} confirm="복원" icon={History} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { report, at: asking.point.at }))} onClose={() => setAsking(null)}>
-        {standing('그 기록 이후 저장한 텍스트, 캐릭터, 채팅, 설정은 사라지고 이미지는 남아요. 복원하는 동안은 계정을 쓸 수 없어요. 완료 후 7일 안에는 복원 전으로 되돌릴 수 있어요.')}
+        {standing('그 기록 이후에 저장한 텍스트와 캐릭터, 채팅, 설정은 모두 사라지고 이미지만 남아요. 복원하는 동안에는 계정을 쓸 수 없어요. 복원이 끝난 뒤 7일 안에는 복원 전 상태로 다시 되돌릴 수 있어요.')}
       </ConfirmDialog>
     );
   }
   if (asking?.kind === 'undo') {
     return (
       <ConfirmDialog title={`${subject}을 복원 전으로 되돌릴까요?`} confirm="복원 전으로 되돌리기" icon={Undo2} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { report, undoes: asking.restore.id }))} onClose={() => setAsking(null)}>
-        {standing('이 복원 직전 상태로 돌아가요. 그 복원 이후 저장한 것은 사라져요.')}
+        {standing('복원하기 바로 전 상태로 돌아가요. 복원한 뒤에 새로 저장한 내용은 모두 사라져요.')}
       </ConfirmDialog>
     );
   }
   if (asking?.kind === 'resume') {
     return (
-      <ConfirmDialog title="복원을 이어서 할까요?" confirm="이어서 하기" icon={Play} busy={busy} onConfirm={() => void go(() => continueRestore(whose, asking.restore.id, 'resume'))} onClose={() => setAsking(null)}>
-        {standing('적용하면 취소할 수 없고, 복원 시점 이후 저장한 것은 사라져요.')}
+      <ConfirmDialog title="복원을 이어서 진행할까요?" confirm="이어서 하기" icon={Play} busy={busy} onConfirm={() => void go(() => continueRestore(whose, asking.restore.id, 'resume'))} onClose={() => setAsking(null)}>
+        {standing('한 번 적용하면 취소할 수 없고, 복원 시점 이후에 저장한 내용은 모두 사라져요.')}
       </ConfirmDialog>
     );
   }
@@ -159,9 +159,9 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
       <Stack gap="group">
         {operated?.report && <Text variant="prose">{operated.report.text}</Text>}
         {begins && (
-          <Section level={3} title="복원할 기록" help="텍스트, 캐릭터, 채팅, 설정을 그 기록 때로 돌려요. 10분 전부터 6일 전까지의 기록이 있어요.">
+          <Section level={3} title="복원할 기록" help="텍스트와 캐릭터, 채팅, 설정을 그때의 기록으로 되돌려요. 10분 전부터 6일 전까지의 기록이 남아 있어요.">
             {points.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: points.reload }}>{points.failure}</Callout>}
-            {points.data && points.data.length === 0 && <Empty variant="section">복원할 기록이 없어요.</Empty>}
+            {points.data && points.data.length === 0 && <Empty variant="section">복원할 수 있는 기록이 없어요.</Empty>}
             {points.data && points.data.length > 0 && (
               <List label="복원할 기록">
                 {points.data.map((point) => (
@@ -177,9 +177,9 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
             )}
           </Section>
         )}
-        <Section level={3} title="복원 기록" help={begins ? undefined : '복원은 그 계정이 보낸 알림에서 시작해요.'}>
+        <Section level={3} title="복원 기록" help={begins ? undefined : '복원은 그 계정이 보낸 알림에서 시작할 수 있어요.'}>
           {restores.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: restores.reload }}>{restores.failure}</Callout>}
-          {restores.data && restores.data.length === 0 && <Empty variant="section">복원한 적이 없어요.</Empty>}
+          {restores.data && restores.data.length === 0 && <Empty variant="section">아직 복원한 기록이 없어요.</Empty>}
           {restores.data && restores.data.length > 0 && (
             <List label="복원 기록">
               {restores.data.map((restore) => {
@@ -197,7 +197,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
                           {restore.actions.map((action) => (
                             <MenuItem key={action} icon={action === 'cancel' ? X : Play} label={ACTIONS[action].label} sub={ACTIONS[action].sub} onClick={() => act(restore, action)} />
                           ))}
-                          {undoable && <MenuItem icon={Undo2} label="복원 전으로 되돌리기" sub="복원 이후 저장한 것은 사라져요" tone="warn" onClick={() => setAsking({ kind: 'undo', restore })} />}
+                          {undoable && <MenuItem icon={Undo2} label="복원 전으로 되돌리기" sub="복원 시점 이후에 저장한 내용은 모두 사라져요" tone="warn" onClick={() => setAsking({ kind: 'undo', restore })} />}
                         </MoreMenu>
                       )
                     }

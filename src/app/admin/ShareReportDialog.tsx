@@ -29,9 +29,9 @@ export function ShareReportDialog({ report, onClose, onActed }: { report: ShareR
       const versions = await readShareVersions(report.share);
       if (!versions.ok) return describeFailure(versions);
       const version = versions.data.versions.find(({ version }) => version === report.shareVersion);
-      if (!version) return '신고한 버전이 없어요.';
+      if (!version) return '신고된 버전을 찾을 수 없어요.';
       const read = await openVersion(source, version.manifest, report.link.slice(report.link.indexOf('#') + 1));
-      if (!read.ok) return read.error === 'unreadable' ? '신고한 링크의 키로 열리지 않아요.' : describeFailure(read);
+      if (!read.ok) return read.error === 'unreadable' ? '신고된 링크의 키로 내용을 열 수 없어요.' : describeFailure(read);
       setOpened(read.data);
       return null;
     });
@@ -51,7 +51,7 @@ export function ShareReportDialog({ report, onClose, onActed }: { report: ShareR
         label="공유한 사람에게 보낼 알림"
         placeholder="예: 미성년자로 보이는 캐릭터의 성적인 이미지가 있어 링크를 내렸어요."
         confirm={{ label: '차단', icon: Ban }}
-        about={<Checkbox label="계정도 정지" note="정지 사유로 이 알림을 보내요." checked={suspend} onChange={setSuspend} />}
+        about={<Checkbox label="계정도 정지" note="작성한 내용을 정지 사유 알림으로 보내요." checked={suspend} onChange={setSuspend} />}
         send={(text) => blockShare(report.share, report.shareVersion, text, suspend)}
         onSent={onActed}
         onClose={() => setBlocking(false)}

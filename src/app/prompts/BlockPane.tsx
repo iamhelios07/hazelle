@@ -37,7 +37,7 @@ type Props = {
   nameRef: Ref<HTMLInputElement>;
 };
 
-const CACHE_HELP = '이 블록까지 캐시해서 다음 요청 비용을 줄여요.';
+const CACHE_HELP = '이 블록까지 캐시로 저장해 다음 요청에서 요금을 아껴요.';
 
 export function BlockPane({ block, sort, index, count, toggles, authorNote, onChange, onRole, onRange, onCount, onTranslations, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onInsert, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
@@ -88,7 +88,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
             {block.kind === 'text' && sort === 'conversation' && (
               <>
                 <MenuHeading>카드 내용으로 대체</MenuHeading>
-                <MenuItem label="대체하지 않음" sub="카드와 상관없이 이 텍스트를 보내요" checked={block.mark === null} onClick={() => onMark(block, null)} />
+                <MenuItem label="대체하지 않음" sub="캐릭터 카드와 상관없이 이 텍스트를 보내요" checked={block.mark === null} onClick={() => onMark(block, null)} />
                 {(['main', 'globalNote'] as const).map((mark) => (
                   <MenuItem key={mark} label={MARKS[mark].label} sub={MARKS[mark].hint} checked={block.mark === mark} onClick={() => onMark(block, mark)} />
                 ))}
@@ -123,7 +123,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
           {sort === 'translate' && (
             <SettingRow
               label="번역 포함"
-              help="끄면 원문만 보내요."
+              help="끄면 대화 원문만 보내요."
               control={<Switch label="번역 포함" checked={block.translations !== false} onChange={(on) => onTranslations(block, on)} />}
             />
           )}
@@ -145,7 +145,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
           <Section
             title="감싸는 텍스트"
             level={3}
-            note={`{{slot}} 자리에 ${SLOT[block.slot].name}이(가) 들어가요.`}
+            note={`{{slot}} 자리에 ${SLOT[block.slot].name} 내용이 들어가요.`}
             action={
               <Button variant="ghost" onClick={() => onWrapper(block, null)}>
                 빼기

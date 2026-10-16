@@ -40,7 +40,7 @@ export function TranslateRows({ translate, translation, card, note, opens, onCha
       />
       <SettingRow
         label="반전 모드"
-        help="모델에게도 화면에 보이는 내용을 보내요."
+        help="모델에게도 화면에 보이는 내용 그대로 보내요."
         control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => onChange({ reverse })} />}
       />
       {note}

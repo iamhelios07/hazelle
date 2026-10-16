@@ -41,7 +41,7 @@ export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenCha
   const [more, setMore] = useState(PAGE);
   return (
     <>
-        <Section title="다음 전송 예상" help="지금 보내면 어떻게 될지 입력과 프롬프트로 미리 계산해요. 토큰 수는 추정이에요.">
+        <Section title="다음 전송 예상" help="지금 보내면 어떻게 될지 입력 내용과 프롬프트로 미리 계산해요. 토큰 수는 추정치예요.">
           {busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty> : cache.next ? <Next forecast={cache.next.forecast} price={cache.next.cost} editor={editor} onEdit={onEdit} /> : cache.next === null && <Empty variant="section">계산할 캐시가 없어요.</Empty>}
         </Section>
         <Section title="지난 요청">
@@ -81,7 +81,7 @@ function Next({ forecast, price, editor, onEdit }: NextProps) {
           { label: STATES.tail, value: tokens(tail) },
         ]}
       />
-      {!against && <Text variant="note">직전 요청 기록이 없어서 읽을 양은 알 수 없어요.</Text>}
+      {!against && <Text variant="note">직전 요청 기록이 없어서 얼마나 읽을지 알 수 없어요.</Text>}
       {price && (
         <Facts
           items={[

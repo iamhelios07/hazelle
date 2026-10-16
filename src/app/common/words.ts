@@ -16,31 +16,31 @@ export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '
 export const ROLE_TAGS: Record<Role, string> = { main: '대화', aux: '보조', embed: '임베딩' };
 
 // Where a task's model comes from, said beside the model wherever it shows.
-export const taskModelHelp = (task: string) => `${task} 프롬프트에서 선택하지 않으면 ${MODEL_ROLES.aux}을 사용해요.`;
+export const taskModelHelp = (task: string) => `${task} 프롬프트에서 모델을 따로 선택하지 않으면 ${MODEL_ROLES.aux}을 써요.`;
 
-export const AUX_HELP = '번역, 장기 기억 정리처럼 대화 밖의 작업에 사용해요.';
+export const AUX_HELP = '번역이나 장기 기억 정리처럼 대화 밖의 작업에 써요.';
 
 // 캐릭터 편집's switch for a bot whose script calls a model, and what the card that asks it in the chat says first.
 export const BOT_MODELS = '봇의 모델 호출';
-export const BOT_MODELS_HELP = '봇 스크립트가 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
+export const BOT_MODELS_HELP = '봇 스크립트가 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.';
 // 캐릭터 편집's switch for scripts that rewrite the card, and what the card that asks it in the chat says first.
 export const CARD_WRITES = '스크립트의 카드 수정';
-export const CARD_WRITES_HELP = '스크립트가 이 캐릭터의 배경 HTML을 바꿔 저장해요. 이 캐릭터의 모든 채팅에 남아요.';
+export const CARD_WRITES_HELP = '스크립트가 이 캐릭터의 배경 HTML을 바꿔서 저장해요. 바뀐 배경은 이 캐릭터의 모든 채팅에 적용돼요.';
 export const CARD_WRITE_CONSENT = { character: '이 봇이 캐릭터 카드를 수정하려고 해요', module: '이 모듈이 캐릭터 카드를 수정하려고 해요' };
-export const CARD_WRITE_ASK_HELP = '허용하면 이 캐릭터의 배경 HTML이 바뀌어 모든 채팅에 남아요. 이 캐릭터에는 한 번만 물어요. 캐릭터 편집에서 바꿀 수 있어요.';
-export const BOT_STUCK = '봇 스크립트가 끝나지 않아 멈췄어요';
+export const CARD_WRITE_ASK_HELP = '허용하면 이 캐릭터의 배경 HTML이 바뀌고 모든 채팅에 적용돼요. 이 캐릭터에서는 한 번만 물어봐요. 나중에 캐릭터 편집에서 다시 바꿀 수 있어요.';
+export const BOT_STUCK = '봇 스크립트가 끝나지 않아서 멈췄어요';
 
 export const TOOL = '도구';
 export const MODULE_MODELS = '모델 호출';
-export const MODULE_MODELS_HELP = '이 모듈이 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
+export const MODULE_MODELS_HELP = '이 모듈이 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.';
 export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 추가로 호출하려고 해요' };
-export const MEMORY_CLAIM = '이 모듈이 장기 기억을 대신 맡으려고 해요';
+export const MEMORY_CLAIM = '이 모듈이 장기 기억을 대신 관리하려고 해요';
 export const MEMORY_CLAIM_HELP = '허용하면 이 모듈을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
-export const TOOL_LATE = '도구가 늦어서 이번엔 빼고 보냈어요';
-export const TOOL_STALE = '다음 응답이 나와서 도구가 바꾼 내용은 넣지 않았어요';
+export const TOOL_LATE = '도구 응답이 늦어져서 이번에는 빼고 보냈어요';
+export const TOOL_STALE = '이미 다음 응답이 나와서 도구가 바꾼 내용은 반영하지 않았어요';
 export const toolVersion = (version: string) => version || UNKNOWN;
-export const TOOL_STUCK = '도구가 응답하지 않아 멈췄어요';
-export const TOOL_DISABLED = '도구가 세 번 멈춰서 껐어요. 새로고침하면 다시 켜져요';
+export const TOOL_STUCK = '도구가 응답하지 않아서 멈췄어요';
+export const TOOL_DISABLED = '도구가 세 번 연속 멈춰서 껐어요. 화면을 새로고침하면 다시 켜져요';
 export const TOOL_FIELD_CHANGED = '도구가 바뀌어서 다시 설정해야 해요.';
 
 export const SETTINGS = '설정';
@@ -57,7 +57,7 @@ export const CHANGE_IMAGE = '이미지 바꾸기';
 export const UNREADABLE_IMAGE = '이 이미지는 열 수 없어요.';
 
 export const TRANSLATOR_NOTE = '번역가의 노트';
-export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 둬 주세요';
+export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 유지해 주세요';
 export const noteLines = (note: string | undefined) => (note ?? '').split('\n').filter((line) => line.trim()).length;
 export const NOTE_UNSENT = `번역 프롬프트에 '${TRANSLATOR_NOTE}' 블록을 추가해야 노트가 적용돼요.`;
 
@@ -104,7 +104,7 @@ export const loreName = (name: string) => name.trim() || '이름 없는 항목';
 
 export const NOT_STARRED = '즐겨찾기에 없음';
 
-export const noStarred = (then: string) => `즐겨찾기한 모델이 없어요. ${inSettings('connections')}에서 모델을 즐겨찾기하면 여기서 ${then}.`;
+export const noStarred = (then: string) => `즐겨찾기한 모델이 없어요. ${inSettings('connections')}에서 모델을 즐겨찾기에 추가하면 여기서 ${then}.`;
 
 export const CAST = '등장인물';
 
@@ -130,12 +130,12 @@ export const ARCA_LOG = '아카라이브용 HTML';
 // A chat's or a character's chats in Risu's own chat file (risuChat, risuAllChats), which Risu loads only through its
 // chat list, into the character picked there; what the file cannot hold, behind each place's ⓘ.
 export const RISU_CHAT_FILE = 'Risu 채팅 파일';
-export const RISU_LOSES = 'Risu에서 캐릭터를 고른 뒤 채팅 목록의 가져오기로 불러와요. 화면의 버전만 담겨요. 다른 버전, 고친 첫 메시지, 번역, 이미지와 삽화, 장기 기억, 등장인물, 채팅에 고른 프롬프트·페르소나·모델은 빠져요.';
+export const RISU_LOSES = 'Risu에서 캐릭터를 선택한 뒤 채팅 목록의 가져오기로 채팅 파일을 추가해요. 지금 화면에 보이는 버전만 담겨요. 다른 버전이나 수정한 첫 메시지, 번역, 이미지와 삽화, 장기 기억, 등장인물, 채팅에서 선택한 프롬프트·페르소나·모델은 빠져요.';
 // What one export left out of what it was asked to hold.
 export const risuLeftOut = ({ greetings, lore, unread }: LeftOut) =>
   [
-    greetings ? `고친 첫 메시지 ${greetings}개는 빠지고 카드의 첫 메시지로 보여요.` : '',
-    lore ? `Risu 로어북이 담지 못하는 ${CHAT_LORE} 항목 ${lore}개는 빠졌어요.` : '',
+    greetings ? `수정한 첫 메시지 ${greetings}개는 빠지고 캐릭터 카드의 원래 첫 메시지로 보여요.` : '',
+    lore ? `Risu 로어북에서 지원하지 않는 ${CHAT_LORE} 항목 ${lore}개는 빠졌어요.` : '',
     unread ? `열리지 않는 채팅 ${unread}개는 빠졌어요.` : '',
   ].filter(Boolean).join(' ');
 
@@ -147,13 +147,13 @@ export const UNSET = '모델 원래 값';
 // shows an answer made before the cancel landed.
 export const DISCOUNT = '할인 받기';
 export const DISCOUNT_WAITING = '할인 받는 중이에요. 답이 다 만들어지면 한 번에 보여요.';
-export const DISCOUNT_STOPPING = '멈추는 중이에요. 그사이 답이 다 만들어지면 그 답을 보여요.';
+export const DISCOUNT_STOPPING = '멈추는 중이에요. 그사이에 응답이 다 만들어지면 완성된 응답을 보여 줘요.';
 
 // A reply whose try failed before any of it came, sent again (design §6.7, retry on failure): the shared count, a
 // connection's or a 설정 묶음's.
 export const RETRYING = '응답을 받지 못해서 다시 보내고 있어요.';
 export const RETRY_COUNT = '실패하면 다시 보내기';
-export const RETRY_HELP = '응답이 오기 전에 실패하면 이 횟수만큼 다시 보내요. 키나 요청이 잘못됐을 때는 바로 알려요.';
+export const RETRY_HELP = '응답이 오기 전에 실패하면 이 횟수만큼 다시 시도해요. 다만 키나 요청 내용이 잘못됐을 때는 바로 알려 줘요.';
 export const LORE_BUDGET_LABEL = '로어북 최대 분량';
 export const CHAT_LORE = '채팅 로어북';
 
@@ -180,7 +180,7 @@ export const SHARE = {
   held: '보류 중',
   removed: '운영자가 내림',
   cover: '미리보기 글',
-  coverHelp: '링크를 붙여 넣은 곳에 이름, 제작자, 소개 첫 줄이 글로 보여요. 이미지는 보이지 않아요.',
+  coverHelp: '링크를 붙여 넣은 곳에 이름과 제작자, 소개 첫 줄이 글자로 보여요. 이미지는 나오지 않아요.',
   heldNote: '신고가 들어와 운영자가 확인하는 동안 멈춘 링크예요.',
   removedNote: '운영자가 내린 링크예요.',
   goneNote: '끊겼거나 운영자가 내린 링크예요.',

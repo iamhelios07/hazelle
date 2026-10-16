@@ -47,7 +47,7 @@ export function HidePicturesRow() {
   return (
     <SettingRow
       label="이미지 가리기"
-      help="채팅 속 이미지는 눌러서 하나씩 볼 수 있어요."
+      help="채팅에 있는 이미지는 눌러서 하나씩 크게 볼 수 있어요."
       control={<Switch label="이미지 가리기" checked={display.hidePictures} onChange={(hidePictures) => changeDisplay({ hidePictures })} />}
     />
   );

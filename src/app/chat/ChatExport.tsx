@@ -193,7 +193,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
                     {prepared.rules > 0 && (
                       <>
                         {`아카라이브에서 지원하지 않는 스타일 ${prepared.rules}개는 빠져요.`}
-                        <Hint label="빠지는 스타일">마우스를 올렸을 때의 효과, 애니메이션, 화면 크기별 스타일, 글꼴 같은 거예요.</Hint>
+                        <Hint label="빠지는 스타일">마우스를 올렸을 때의 효과나 애니메이션, 화면 크기별 스타일, 글꼴 같은 것들이에요.</Hint>
                       </>
                     )}
                   </Callout>

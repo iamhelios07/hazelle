@@ -129,7 +129,7 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
 const UNREAD: Record<SceneInvalid, (paragraphs: number) => string> = {
   unreadable: () => 'JSON 형식이 맞지 않아요.',
   fields: () => '빠진 항목이 있어요.',
-  paragraph: (paragraphs) => `after는 1부터 ${paragraphs} 사이의 숫자여야 해요.`,
+  paragraph: (paragraphs) => `after에는 1부터 ${paragraphs} 사이의 숫자를 입력해야 해요.`,
 };
 
 // 어떻게 바꿀까요?: the scene as the writer answers it, read back through parseScene before anything is drawn.
@@ -154,7 +154,7 @@ export function SceneDialog({ reshaping, onDraw, onClose }: { reshaping: Reshapi
         </Button>
       }
     >
-      <TextField label="장면" kind="key" lines={14} value={text} onChange={setText} error={error} help="after는 삽화가 들어갈 문단 번호, 나머지는 Danbooru 태그예요." />
+      <TextField label="장면" kind="key" lines={14} value={text} onChange={setText} error={error} help="after는 삽화가 들어갈 문단 번호이고, 나머지는 Danbooru 태그예요." />
     </Dialog>
   );
 }

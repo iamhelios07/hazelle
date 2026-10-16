@@ -62,7 +62,7 @@ function NoteRow({ note, translation, onEdit }: { note: string | undefined; tran
   return (
     <SettingRow
       label={TRANSLATOR_NOTE}
-      help={{ text: '전역 노트는 모든 번역에, 캐릭터 노트는 이 캐릭터의 번역에만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
+      help={{ text: '전역 노트는 모든 번역에 들어가고, 캐릭터 노트는 이 캐릭터를 번역할 때만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
       sub={counts || '없음'}
       error={unsent ? NOTE_UNSENT : undefined}
       control={

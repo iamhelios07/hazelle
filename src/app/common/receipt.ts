@@ -10,7 +10,7 @@ export const tokens = (value: number | null) => (value === null ? UNKNOWN : coun
 // A cost the app worked out from a price is an estimate, and says so.
 export function cost(value: Cost | 'pending' | null): string {
   if (value === null) return UNKNOWN;
-  if (value === 'pending') return '확인 중…';
+  if (value === 'pending') return '확인하는 중…';
   const amount = money(value.unit, value.amount);
   return value.source === 'reported' ? amount : `약 ${amount}`;
 }

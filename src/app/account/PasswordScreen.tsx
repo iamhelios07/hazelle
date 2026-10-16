@@ -23,8 +23,8 @@ export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDo
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if ([...password].length < MIN_LENGTH) return setFailure(`비밀번호는 ${MIN_LENGTH}자 이상이어야 해요.`);
-    if (password !== again) return setFailure('두 비밀번호가 달라요.');
+    if ([...password].length < MIN_LENGTH) return setFailure(`비밀번호는 ${MIN_LENGTH}자 이상으로 입력해 주세요.`);
+    if (password !== again) return setFailure('입력한 두 비밀번호가 서로 달라요.');
     await run(() => onDone(username, password));
   }
 
@@ -57,8 +57,8 @@ export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDo
       {signup && <Steps current={1} total={2} />}
       <Intro title={signup ? '계정 만들기' : '새 비밀번호 설정'}>
         {signup
-          ? '서버는 비밀번호를 받지 않아서 채팅, 캐릭터, API 키를 볼 수 없어요.'
-          : '새 비밀번호를 설정해 주세요.'}
+          ? '비밀번호는 서버로 전송되지 않아요. 그래서 서버에서도 내 채팅과 캐릭터, API 키를 볼 수 없어요.'
+          : '새 비밀번호를 입력해 주세요.'}
       </Intro>
       <Stack>
         {signup && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}

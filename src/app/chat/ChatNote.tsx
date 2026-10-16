@@ -75,7 +75,7 @@ function NoteEditor({ id, note, prompt, onSave }: Props) {
         value={text}
         onChange={change}
         placeholder="예: 이번 장면은 짧게 끝내요."
-        help="이 채팅에만 적용돼요."
+        help="지금 이 채팅에만 적용돼요."
         action={
           <Text variant="note">
             {status}

@@ -23,7 +23,7 @@ describe('what a pack holds', () => {
   });
 
   it('says so when it holds nothing', () => {
-    expect(packHolds(EMPTY, 0, 0)).toBe('담긴 것이 없어요');
+    expect(packHolds(EMPTY, 0, 0)).toBe('안에 담긴 항목이 없어요');
   });
 
   it('gives each part as a count the contents line is written from', () => {

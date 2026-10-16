@@ -67,7 +67,7 @@ export function useCharacterActions() {
       fileNamed(character.card.name, '캐릭터', 'charx'),
       (output, progress) => exportCharacter(store, files, id, output, progress),
       (label) => setBusy(label === null ? null : { id, label }),
-      ({ tools }) => toast.show(`'${character.card.name}' 캐릭터를 내보냈어요.`, tools ? { detail: `${TOOL}가 든 모듈 ${tools}개는 빼고 내보냈어요.` } : undefined),
+      ({ tools }) => toast.show(`'${character.card.name}' 캐릭터를 내보냈어요.`, tools ? { detail: `${TOOL}가 들어 있는 모듈 ${tools}개는 빼고 내보냈어요.` } : undefined),
     );
   }
 
@@ -98,7 +98,7 @@ export function useCharacterActions() {
     const removed = await purgeNow(store, files, kind, id, (done, total) => setBusy({ id, label: `삭제 중 · ${done} / ${total}` }));
     setBusy(null);
     if (removed.ok) toast.show(`'${name}' ${OBJECT[kind]} 영구 삭제했어요.`);
-    else toast.failed(removed, '일부를 삭제하지 못했어요.');
+    else toast.failed(removed, '일부 항목을 삭제하지 못했어요.');
   }
 
   return { busy, copy, exportFile, exportChats, remove, restore, purge, sharing, share: setSharing, stopSharing: () => setSharing(null) };

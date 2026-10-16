@@ -23,7 +23,7 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
       }
     >
       <Stack gap="section">
-        <Text>Risu 로컬 백업(.bin)에서 캐릭터, 채팅, 페르소나, 프롬프트, 모듈을 가져와요.</Text>
+        <Text>Risu 로컬 백업(.bin) 파일에서 캐릭터와 채팅, 페르소나, 프롬프트, 모듈을 가져와요.</Text>
         <Slot title="백업 파일" note="Risu의 '로컬 백업 저장'으로 받은 파일이에요. risuai.xyz에서 쓰면 '부분 백업'으로 받아 주세요." file={text} onFile={setText} />
         <Slot
           title="이미지가 든 전체 백업"
@@ -34,8 +34,8 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
         <Disclosure label="메시지 속 이미지도 옮기기">
           <Slot
             title="메시지 속 이미지"
-            note="Risu 웹에서 F12를 눌러 콘솔에 코드를 붙여 넣으면 risu-inlays.bin을 받아요. 이미 옮긴 채팅에 채울 때는 이 파일만 넣어요."
-            help="콘솔이 붙여 넣기를 막으면 allow pasting을 먼저 입력해요. 북마크로 쓰려면 새 북마크의 URL에 주소를 넣고 Risu 웹에서 눌러요."
+            note="Risu 웹에서 F12를 눌러 콘솔에 코드를 붙여 넣으면 risu-inlays.bin 파일을 받아요. 이미 옮긴 채팅에 이미지를 채울 때는 이 파일만 넣으면 돼요."
+            help="콘솔에서 붙여 넣기가 막히면 allow pasting을 먼저 입력해 주세요. 북마크로 쓰려면 새 북마크의 URL에 주소를 넣고 Risu 웹 화면에서 누르면 돼요."
             file={inlays}
             onFile={setInlays}
           >

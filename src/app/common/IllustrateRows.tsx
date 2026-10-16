@@ -26,13 +26,13 @@ export function IllustrateRows({ illustrate, card, opens, onChange, onEditPrompt
     <>
       <SettingRow
         label="자동 삽화"
-        help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 이미지 연결의 사용량이 들어요."
+        help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 연결된 이미지 모델의 사용량이 차감돼요."
         control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => onChange({ auto })} />}
       />
       <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
       <SettingRow
         label="무료가 아니어도 만들기"
-        help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 묻지 않고 만들어요. 이때는 비용이 들어요."
+        help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 물어보지 않고 바로 만들어요. 이때는 요금이 나가요."
         control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
       />
       <SettingRow
@@ -68,10 +68,10 @@ function readRung({ from, count }: Draft, before: Rung | null): Read {
   const least = { from: (before?.from ?? 0) + 1, count: (before?.count ?? 1) + 1 };
   const length = readTyped(from, true);
   if (!length.ok) return length;
-  if (length.value < least.from) return { ok: false, error: `${least.from.toLocaleString('ko-KR')}자 이상을 입력해 주세요.` };
+  if (length.value < least.from) return { ok: false, error: `${least.from.toLocaleString('ko-KR')}자 이상으로 입력해 주세요.` };
   const pictures = readTyped(count, true);
   if (!pictures.ok) return pictures;
-  if (pictures.value < least.count) return { ok: false, error: `${least.count}장 이상을 입력해 주세요.` };
+  if (pictures.value < least.count) return { ok: false, error: `${least.count}장 이상으로 입력해 주세요.` };
   return { ok: true, rung: { from: length.value, count: pictures.value } };
 }
 
@@ -110,7 +110,7 @@ function PictureLadder({ ladder, onChange }: { ladder: Rung[]; onChange: (ladder
     <>
       <SettingRow
         label="삽화 수"
-        help="응답이 길면 삽화를 더 만들어요. 글자 수는 태그를 빼고 세어요."
+        help="응답이 길면 삽화를 더 많이 만들어요. 글자 수는 태그를 빼고 세요."
         sub={ladder.length ? undefined : '응답마다 1장'}
         control={
           <Button variant="ghost" size="sm" icon={ACTS.create.icon} onClick={() => save([...ladder, { from: (last?.from ?? 0) + RUNG, count: (last?.count ?? 1) + 1 }])}>

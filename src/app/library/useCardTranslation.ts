@@ -42,7 +42,7 @@ export function useCardTranslation(id: string, character: Character) {
       const made = await translateText(session, chat, source, language, controller.signal, () => {});
       if (made.ok) {
         const saved = await setTextTranslation(session.store, id, source, language, made.translation);
-        if (!saved.ok) toast.failed(saved, '번역을 저장하지 못했어요.');
+        if (!saved.ok) toast.failed(saved, '번역 결과를 저장하지 못했어요.');
       } else if (made.failure.kind !== 'stopped') failures.push(made.failure);
       setRunning((current) => new Set([...current].filter((each) => each !== source)));
       return next();

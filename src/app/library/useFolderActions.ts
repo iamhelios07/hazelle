@@ -35,7 +35,7 @@ export function useFolderActions() {
   function move(ids: string[], to: string | null) {
     void moveCharacters(store, ids, to).then((moved) => moved.ok || toast.failed(moved));
     const name = to === null ? undefined : byFolder.get(to)?.folder.value.name;
-    toast.show(to ? `${ids.length}명을 '${name}' 폴더로 옮겼어요.` : `${ids.length}명을 폴더에서 뺐어요.`);
+    toast.show(to ? `${ids.length}명을 '${name}' 폴더로 옮겼어요.` : `캐릭터 ${ids.length}명을 폴더에서 뺐어요.`);
   }
 
   return { create, rename, remove, move };

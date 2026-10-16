@@ -54,10 +54,10 @@ const MODEL = 'model';
 const TOGGLES = 'toggles';
 const PICTURE = 'picture';
 const SORT_WORDS = {
-  conversation: { default: '기본 프롬프트', makeDefault: '새 채팅이 이 프롬프트로 시작해요' },
-  translate: { default: '기본 번역 프롬프트', makeDefault: '번역 프롬프트를 선택하지 않은 채팅에 사용해요' },
+  conversation: { default: '기본 프롬프트', makeDefault: '새 채팅을 시작할 때 이 프롬프트를 써요' },
+  translate: { default: '기본 번역 프롬프트', makeDefault: '번역 프롬프트를 따로 선택하지 않은 채팅에 써요' },
   memory: { default: '기본 기억 프롬프트', makeDefault: '장기 기억을 이 프롬프트로 정리해요' },
-  illustrate: { default: '기본 삽화 프롬프트', makeDefault: '삽화 프롬프트를 선택하지 않은 채팅에 사용해요' },
+  illustrate: { default: '기본 삽화 프롬프트', makeDefault: '삽화 프롬프트를 따로 선택하지 않은 채팅에 써요' },
 } satisfies Record<PromptSort, { default: string; makeDefault: string }>;
 const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
 
@@ -222,7 +222,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);
     if (!perform(renameKey(toggle, to))) return;
-    toast.show('키를 바꿨어요.', count ? { detail: `조건 ${count}곳도 바꿨어요.` } : undefined);
+    toast.show('키를 바꿨어요.', count ? { detail: `조건 ${count}곳도 함께 바꿨어요.` } : undefined);
   };
   const modelSaved = (saving: ReturnType<typeof setTaskModel>) => void saving.then((saved) => saved.ok || toast.failed(saved, '모델을 바꾸지 못했어요.'));
 
@@ -236,7 +236,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   };
   const makeDefault = async () => {
     const saved = await setDefaultPrompt(store, stored.id);
-    if (!saved.ok) toast.failed(saved, '기본으로 정하지 못했어요.');
+    if (!saved.ok) toast.failed(saved, '기본 프롬프트로 지정하지 못했어요.');
   };
   const erase = async () => {
     const removed = await save.remove(() => removePrompt(store, stored.id));

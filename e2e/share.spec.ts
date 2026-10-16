@@ -18,7 +18,7 @@ test('a shared link opens signed out, gives its file, and a report holds it', as
     await page.goto('/characters');
     await page.getByRole('button', { name: 'Sora 메뉴', exact: true }).first().click();
     await page.getByRole('menuitem', { name: '링크로 공유', exact: true }).click();
-    const consent = page.getByLabel('읽었고 지킬게요', { exact: true });
+    const consent = page.getByLabel('내용을 읽었고 규칙을 지킬게요', { exact: true });
     await expect(consent.or(page.getByRole('button', { name: '링크 만들기', exact: true }))).toBeVisible();
     if (await consent.isVisible()) {
       await consent.check();

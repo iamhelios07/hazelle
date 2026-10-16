@@ -57,11 +57,11 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
     >
       <Intro title={recovery ? `복구 키로 ${verb}` : verb}>
         {recovery
-          ? '복구 키 파일을 선택하거나 키를 입력해 주세요.'
-          : account && `${account} 계정이 이 기기에서 잠겨 있어요.`}
+          ? '복구 키 파일을 선택하거나 키를 직접 입력해 주세요.'
+          : account && `이 기기에서 ${account} 계정이 잠겼어요.`}
       </Intro>
       {notice && <Text variant="note">{notice}</Text>}
-      {signup === 'full' && <Text variant="note">가입 정원이 다 차서 새 계정을 만들 수 없어요.</Text>}
+      {signup === 'full' && <Text variant="note">가입 정원이 다 차서 지금은 새 계정을 만들 수 없어요.</Text>}
       <Stack>
         {!account && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         {recovery && (

@@ -19,7 +19,7 @@ const STARRED = '즐겨찾기한 모델';
 const NO_VALUES = '정한 값 없음';
 // The bottom rung of every chat's settings: what a prompt, a character or a chat does not set reads from here.
 const DEFAULTS = '기본값';
-const SETTINGS_HELP = '온도, 추론, 캐시 같은 값이에요. 모델마다 따로 둘 수도 있어요.';
+const SETTINGS_HELP = '온도나 추론, 캐시 같은 값이에요. 모델마다 따로 정해 둘 수도 있어요.';
 export function ModelsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
@@ -74,7 +74,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
         </List>
       </Section>
       {ownModels.length > 0 && (
-        <Section title="프롬프트에서 정한 모델" help={`이 프롬프트의 작업에는 ${MODEL_ROLES.aux} 대신 이 모델을 사용해요.`}>
+        <Section title="프롬프트에서 정한 모델" help={`이 프롬프트로 작업할 때는 ${MODEL_ROLES.aux} 대신 이 모델을 써요.`}>
           <List label="프롬프트에서 정한 모델" box>
             {ownModels.map(({ prompt, task, model }) => (
               <ListItem
@@ -95,9 +95,9 @@ export function ModelsScreen({ back }: { back: Back | null }) {
     <Screen width="page" top={<NavBar title={PAGES.models} {...backBar(back)} />}>
       <Section title={DEFAULTS}>
         <Columns>
-          <RoleCard role="main" help="프롬프트나 채팅에서 정하지 않았을 때 쓰는 모델이에요." own={main} follow={null} connections={connections} onPick={(ref) => ref && pickModel('main', ref)} {...cardOf(main)} />
+          <RoleCard role="main" help="프롬프트나 채팅에서 모델을 따로 정하지 않았을 때 쓰는 모델이에요." own={main} follow={null} connections={connections} onPick={(ref) => ref && pickModel('main', ref)} {...cardOf(main)} />
           <RoleCard role="aux" help={AUX_HELP} own={settings.models.aux} follow={follows(MODEL_ROLES.main)} connections={connections} onPick={(ref) => pickModel('aux', ref)} {...cardOf(settings.models.aux)} />
-          <RoleCard role="embed" help="장기 기억이 지금 대화와 관련된 지난 기록을 찾을 때, 도구가 비슷한 내용을 찾을 때 써요. 바꾸면 기록을 다시 준비해요." own={settings.models.embed} follow="정하지 않음" connections={connections} onPick={(ref) => pickModel('embed', ref)} />
+          <RoleCard role="embed" help="장기 기억이 지금 대화와 관련된 지난 기록을 찾을 때와, 도구가 비슷한 내용을 찾을 때 써요. 모델을 바꾸면 기록을 다시 준비해요." own={settings.models.embed} follow="정하지 않음" connections={connections} onPick={(ref) => pickModel('embed', ref)} />
           <PickCard
             label={MODEL_SETTINGS}
             value={defaultProfile ? defaultProfile.value.name : '없음'}

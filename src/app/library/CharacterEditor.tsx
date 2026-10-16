@@ -173,7 +173,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       <ChoiceGroup layout="segmented" label="보기" options={READINGS} value={reading} onChange={setReading} />
     </Row>
   );
-  const untranslated = (source: string) => (translation.running.has(source) ? '번역 중…' : '번역하지 않았어요.');
+  const untranslated = (source: string) => (translation.running.has(source) ? '번역하는 중…' : '번역하지 않았어요.');
   const translatorMissing = translated && !translation.translator.ok && <Callout tone="warn">{`번역할 수 없어요. ${describeTranslateFailure(translation.translator.failure)}`}</Callout>;
   // The stored card's text, as it was translated; a draft not saved yet is not.
   const translatedField = (label: string, source: string, lines: number) =>
@@ -227,12 +227,12 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         {split && lead}
         <Section title={PARTS.profile.label}>
           <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 입력해 주세요.'} />
-          <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 보는 이름이에요." />
+          <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 볼 수 있는 이름이에요." />
           <TextField
             label="부르는 이름"
             value={text.nickname ?? ''}
             onChange={(value) => change('nickname', value === '' ? null : value)}
-            help="채팅에서 {{char}} 자리에 이름 대신 들어가요."
+            help="채팅에서 {{char}} 자리에 캐릭터 이름 대신 들어가요."
           />
         </Section>
         {card.creatorNotes.trim() && (
@@ -270,7 +270,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       </Section>
     ),
     greetings: (
-      <Section title={PARTS.greetings.label} help="새 채팅을 열 때 이 중에서 선택할 수 있어요." action={readingSwitch}>
+      <Section title={PARTS.greetings.label} help="새 채팅을 시작할 때 이 중에서 선택할 수 있어요." action={readingSwitch}>
         {translatorMissing}
         {translated ? (
           card.greetings.map((greeting, index) => translatedField(`첫인사 ${index + 1}`, greeting, 6))
@@ -295,7 +295,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           lines={6}
           value={text.systemPrompt}
           onChange={(value) => change('systemPrompt', value)}
-          help={{ text: '비우면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts' }) } }}
+          help={{ text: '비워 두면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts' }) } }}
         />
         <TextField
           label="대화 뒤 지시문"
@@ -306,7 +306,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         />
         <SettingRow
           label="유틸리티 봇"
-          help="프롬프트는 쓰지 않고 이 캐릭터의 지시문, 설명, 로어북, 대화만 보내요. 번역기처럼 역할극이 아닌 봇에 맞아요."
+          help="프롬프트는 쓰지 않고 이 캐릭터의 지시문과 설명, 로어북, 대화만 보내요. 번역기처럼 역할극이 아닌 봇에 잘 맞아요."
           control={<Switch label="유틸리티 봇" checked={text.utility} onChange={(on) => change('utility', on)} />}
         />
         <TextField
@@ -315,7 +315,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           value={noteSave.unsaved.note ?? character.translatorNote ?? ''}
           onChange={(note) => noteSave.change({ note })}
           placeholder={NOTE_PLACEHOLDER}
-          help={{ text: '이 캐릭터의 번역에만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
+          help={{ text: '이 캐릭터를 번역할 때만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
         />
       </Section>
     ),
@@ -329,17 +329,17 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     display: (
       <Section title={PARTS.display.label}>
         <SettingGroup label={PARTS.display.label}>
-          <SettingRow label="봇 스타일" help="봇이 만든 상태창, 스타일, 버튼을 표시해요." control={<Switch label="봇 스타일" checked={decor} onChange={(on) => flip('decor', on)} />} />
+          <SettingRow label="봇 스타일" help="봇이 만든 상태창과 스타일, 버튼을 화면에 보여 줘요." control={<Switch label="봇 스타일" checked={decor} onChange={(on) => flip('decor', on)} />} />
           {decor && (
             <SettingRow
               label="긴 이미지 접기"
-              help="이미지만 있는 줄은 윗부분만 보여요."
+              help="이미지만 있는 줄은 윗부분만 보여 줘요."
               control={<Switch label="긴 이미지 접기" checked={fold} onChange={(on) => pictureSave.change({ fold: on ? undefined : false })} />}
             />
           )}
           <SettingRow
             label="추론을 본문에 표시"
-            help="<Thoughts> 같은 추론 블록을 숨기지 않고 본문에 보여 줘요."
+            help="<Thoughts> 같은 추론 블록을 숨기지 않고 본문에 그대로 보여 줘요."
             control={<Switch label="추론을 본문에 표시" checked={keepThoughts} onChange={(on) => flip('keepThoughts', on)} />}
           />
           {scripted && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}

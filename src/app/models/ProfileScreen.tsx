@@ -49,11 +49,11 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     const removed = await removing(() => removeProfile(store, id));
     if (!removed) return;
     if (!removed.ok) {
-      if (removed.error === 'default') return toast.error('기본 설정은 삭제할 수 없어요.', { detail: '다른 설정을 기본으로 지정한 뒤 삭제해 주세요.' });
+      if (removed.error === 'default') return toast.error('기본 설정은 삭제할 수 없어요.', { detail: '다른 설정을 기본으로 지정한 뒤에 삭제해 주세요.' });
       return toast.failed(removed, '삭제하지 못했어요.');
     }
     navigate({ kind: 'models' });
-    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 선택해야 사용할 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
+    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 선택해야 쓸 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
     toast.undoable(`'${removed.data.value.name}' 설정을 삭제했어요.`, () => restoreProfile(store, id), note);
   }
 
@@ -81,7 +81,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                 {!isDefault && (
                   <MenuItem
                     label="기본으로 정하기"
-                    sub="설정을 선택하지 않은 모델이 이 설정을 사용해요"
+                    sub="따로 설정을 선택하지 않은 모델은 이 설정을 써요"
                     onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}
                   />
                 )}

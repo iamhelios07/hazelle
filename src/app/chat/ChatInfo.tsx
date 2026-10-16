@@ -80,7 +80,7 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
   const reasoned = counts.includes(null) ? null : counts.reduce<number>((sum, count) => sum + (count ?? 0), 0);
   const thought = version && (version.reasoning || reasoned) && (
     <Section level={3} title="추론" note={reasoned ? `${tokens(reasoned)} 토큰` : undefined}>
-      {version.reasoning ? <Text variant="prose">{version.reasoning}</Text> : <Empty variant="section">모델이 추론 글을 보내지 않았어요.</Empty>}
+      {version.reasoning ? <Text variant="prose">{version.reasoning}</Text> : <Empty variant="section">모델이 추론 과정을 보내지 않았어요.</Empty>}
     </Section>
   );
   if (!version) body = <Empty>응답이 없어요.</Empty>;
@@ -95,7 +95,7 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
   else if (!receipt) {
     body = (
       <>
-        <Empty>{version.reasoning ? '가져온 응답이라 토큰과 비용 정보가 없어요.' : '모델이 생성한 응답이 아니라서 토큰과 비용 정보가 없어요.'}</Empty>
+        <Empty>{version.reasoning ? '밖에서 가져온 응답이라 토큰과 비용 정보가 없어요.' : '모델이 직접 생성한 응답이 아니라서 토큰과 비용 정보가 없어요.'}</Empty>
         {translated && <TranslationCall receipt={translated} />}
         {thought}
       </>
@@ -111,12 +111,12 @@ export function ChatInfo({ id: chat, messages, infoPick, onPick, onRecord, onClo
             <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => setTab(each.value)} />
           ))}
         </Tabs>
-        {earlier.length > 0 && tab !== 'reply' && <Text variant="note">마지막 이어 쓰기의 요청이에요.</Text>}
+        {earlier.length > 0 && tab !== 'reply' && <Text variant="note">마지막으로 이어 쓴 요청의 정보예요.</Text>}
         {tab === 'reply' && (
           <>
             {version.edited && <Text variant="note">수정하기 전 응답의 정보예요.</Text>}
             {earlier.length > 0 && (
-              <Text variant="note">{`호출 ${earlier.length + 1}번으로 이어 쓴 응답이에요. 비용은 호출마다 들어요.`}</Text>
+              <Text variant="note">{`${earlier.length + 1}번 호출해서 이어 쓴 응답이에요. 비용은 호출할 때마다 발생해요.`}</Text>
             )}
             <Call receipt={receipt} />
             {translated && <TranslationCall receipt={translated} />}

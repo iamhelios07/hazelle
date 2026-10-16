@@ -75,7 +75,7 @@ export function personaOutcome(file: string, { id, value }: Stored<'persona'>): 
 }
 
 const modulePlacement = ({ at, failure }: Placement): ImportOutcome['placed'] => at === null
-      ? { text: `어디에도 켜지 않았어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
+      ? { text: `아직 어디에도 켜지 않았어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
       : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true };
 
 export function toolOutcome(file: string, manifest: ToolManifest, saved: ToolImport, placement: Placement): ImportOutcome {

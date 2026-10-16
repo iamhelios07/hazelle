@@ -204,7 +204,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
               {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)} box>{(index) => row(restShown[index]!)}</List>}
             </Stack>
           ) : (
-            catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>
+            catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '조건에 맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>
           )}
         </Panel>
       </Columns>

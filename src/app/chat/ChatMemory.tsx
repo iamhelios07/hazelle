@@ -106,7 +106,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
     <SidePanel title="장기 기억" actions={holder ? undefined : more} onClose={onClose}>
       {holder && (
         <Row kind="spread">
-          <Text>{`${holder.tool.manifest.displayName} 도구가 장기 기억을 맡고 있어요.`}</Text>
+          <Text>{`${holder.tool.manifest.displayName} 도구가 장기 기억을 관리하고 있어요.`}</Text>
           {holder.tool.manifest.page && <Button variant="secondary" size="sm" onClick={() => onTool(holder.module)}>도구 열기</Button>}
         </Row>
       )}
@@ -153,16 +153,16 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         note={view && !holder ? `약 ${tokens(view.tokens.state)} / ${tokens(view.tokens.stateLimit)} 토큰` : undefined}
         help="관계, 호칭, 소지품, 부상, 위치 같은 현재 상태예요."
       >
-        {view && !holder && view.tokens.state > view.tokens.stateLimit && <Callout tone="warn">상태가 한도를 넘었어요. 필요 없는 상태를 삭제하거나 줄여 주세요.</Callout>}
+        {view && !holder && view.tokens.state > view.tokens.stateLimit && <Callout tone="warn">상태가 한도를 넘었어요. 필요 없는 상태를 삭제하거나 내용을 줄여 주세요.</Callout>}
         {factGroups(memory.state).flatMap(({ facts }) => facts.map((fact) => <FactRow key={`${fact.about}\n${fact.field}`} chat={id} fact={fact} />))}
-        {memory.state.length === 0 && <Empty variant="section">상태가 없어요.</Empty>}
+        {memory.state.length === 0 && <Empty variant="section">기록된 상태가 없어요.</Empty>}
         {!holder && <NewFact chat={id} />}
       </Section>}
 
       {(!holder || memory.threads.length > 0) && <Threads chat={id} threads={memory.threads} adding={!holder} />}
 
       {(!holder || memory.records.length > 0) && <Section level={3} title="기록" note={`${rows.filter((each) => !each.forgotten).length}개`}>
-        {view?.crowded && <Callout tone="warn">고정한 기록이 한도를 다 써서 나머지는 보내지 않아요. 고정을 풀거나 한도를 늘려 주세요.</Callout>}
+        {view?.crowded && <Callout tone="warn">고정한 기록이 한도를 다 채워서 나머지 기록은 보내지 않아요. 고정을 풀거나 한도를 늘려 주세요.</Callout>}
         {memory.records.length ? (
           <List label="기록">
             {rows.map((each) => (
@@ -170,7 +170,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
             ))}
           </List>
         ) : (
-          <Empty variant="section">기록이 없어요.</Empty>
+          <Empty variant="section">아직 기록이 없어요.</Empty>
         )}
       </Section>}
 
@@ -178,7 +178,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         level={3}
         title="설정"
         tag={scopeTag(setup.own ? 'chat' : 'default')}
-        help={{ text: '여기서 바꾸면 이 채팅에만 적용돼요.', open: { label: opens(inFeature('memory')), onClick: () => navigate({ kind: 'feature', feature: 'memory' }) } }}
+        help={{ text: '여기서 바꾸면 지금 이 채팅에만 적용돼요.', open: { label: opens(inFeature('memory')), onClick: () => navigate({ kind: 'feature', feature: 'memory' }) } }}
         action={
           setup.own && (
             <Button variant="link" onClick={() => void revert()}>
@@ -192,7 +192,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
 
       {rebuilding && (
         <ConfirmDialog
-          title="원문에서 전부 다시 만들까요?"
+          title="대화 원문으로 기억을 전부 다시 만들까요?"
           confirm="다시 만들기"
           icon={ACTS.regenerate.icon}
           onConfirm={() => {
@@ -201,7 +201,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
           }}
           onClose={() => setRebuilding(false)}
         >
-          남아 있는 메시지로 기억을 처음부터 다시 정리해요. 긴 채팅은 요금이 많이 들 수 있고, 되돌릴 수 없어요.
+          남아 있는 메시지를 바탕으로 기억을 처음부터 다시 정리해요. 대화가 길면 요금이 많이 나올 수 있고, 한 번 실행하면 되돌릴 수 없어요.
         </ConfirmDialog>
       )}
     </SidePanel>
@@ -222,7 +222,7 @@ function MemoryFill({ view }: { view: MemoryView }) {
         waiting={{ tokens: waiting, value: `약 ${tokens(waiting)} / ${tokens(batch)} 토큰` }}
         recent={{ tokens: recent, value: `약 ${tokens(recent)} 토큰` }}
       />
-      {view.slot && <Text variant="note">{left > 0 ? `다음 정리까지 약 ${tokens(left)} 토큰` : '정리할 만큼 대화가 쌓였어요.'}</Text>}
+      {view.slot && <Text variant="note">{left > 0 ? `다음 정리까지 약 ${tokens(left)} 토큰` : '기억을 정리할 만큼 대화가 충분히 쌓였어요.'}</Text>}
     </Stack>
   );
 }
@@ -319,7 +319,7 @@ function Threads({ chat, threads, adding }: { chat: string; threads: Thread[]; a
   if (unsaved.length !== drafts.length) setDrafts(unsaved);
   const shown = [...threads, ...unsaved];
   return (
-    <Section level={3} title="미해결 사건" note={`${threads.length}개`} help="약속, 복선처럼 끝나지 않은 일이에요.">
+    <Section level={3} title="미해결 사건" note={`${threads.length}개`} help="약속이나 복선처럼 아직 끝나지 않은 일이에요.">
       {shown.map((thread, index) => (
         <ThreadRow
           key={thread.id}

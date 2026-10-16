@@ -48,8 +48,8 @@ type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Re
 type Undo = { message: string; run: () => Promise<ApiResult<unknown> | ApiFailure> };
 
 const FAILURE: Record<ImportFailure['kind'], string> = {
-  'unknown-format': '가져올 수 없는 형식이에요.',
-  encrypted: '암호화된 카드라 열 수 없어요.',
+  'unknown-format': '가져올 수 없는 파일 형식이에요.',
+  encrypted: '암호화된 캐릭터 카드라 열 수 없어요.',
   unreadable: '파일을 읽지 못했어요.',
 };
 
@@ -57,20 +57,20 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
 // (engine/import/persona); a detail missing here reads as 파일을 읽지 못했어요.
 const DETAIL_FAILURE: Record<string, string> = {
   'other-version': '이전 버전에서 만든 채팅 파일이라 가져올 수 없어요.',
-  'not-preset': 'Risu 파일이지만 프리셋이 아니에요.',
+  'not-preset': 'Risu 파일이지만 프리셋 파일이 아니에요.',
   'decrypt-failed': '프리셋을 열지 못했어요. 파일이 깨졌을 수 있어요.',
   'no-template': '프롬프트 템플릿을 쓰지 않는 프리셋은 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
-  'tool-too-large': '도구 파일이 너무 커요.',
-  'tool-encoding': 'UTF-8 텍스트 파일이 아니에요.',
-  'tool-api': '헤이젤 도구 파일이 아니에요. 맨 위에 //@api 1이 있어야 해요.',
-  'tool-identity': '//@name과 //@author가 있어야 하고, 글자, 숫자, _ . -로만 쓸 수 있어요.',
+  'tool-too-large': '도구 파일 용량이 너무 커요.',
+  'tool-encoding': 'UTF-8 형식의 텍스트 파일이 아니에요.',
+  'tool-api': '헤이젤 도구 파일이 아니에요. 파일 맨 위에 //@api 1이 있어야 해요.',
+  'tool-identity': '//@name과 //@author가 꼭 있어야 하고, 글자와 숫자, _ . - 기호만 쓸 수 있어요.',
   'tool-setting': '설정 줄을 읽지 못했어요.',
   'tool-menu': '메뉴 줄을 읽지 못했어요.',
   'tool-action': '메시지 동작 줄을 읽지 못했어요.',
   'tool-composer': '입력창 줄을 읽지 못했어요.',
   'tool-uses': '//@uses에는 model, embed, memory만 쓸 수 있어요.',
   'tool-unknown': '알 수 없는 줄이에요.',
-  'persona-unreadable': 'Risu 페르소나 PNG지만 내용을 읽지 못했어요.',
+  'persona-unreadable': 'Risu 페르소나 PNG 파일이지만 내용을 읽지 못했어요.',
   'persona-incomplete': '이름이나 설명이 빠진 페르소나라 가져올 수 없어요.',
 };
 
@@ -315,7 +315,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           제작자가 RisuAI에서만 쓰도록 배포한 봇은 가져오지 마세요.
         </ConfirmDialog>
       )}
-      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈, 프롬프트, 페르소나, 채팅이나 Risu 백업을 가져와요</DropOverlay>}
+      {dragging && <DropOverlay>여기에 파일을 놓으면 봇, 모듈, 프롬프트, 페르소나, 채팅이나 Risu 백업을 가져와요</DropOverlay>}
       {asking && (
         <MoveDialog
           onRead={(files) => {
@@ -434,9 +434,9 @@ function FillChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'fill' }>; on
     ask.answer(fill);
   };
   return (
-    <Section level={3} title={ask.name} help="기존 캐릭터의 대화와 설정은 두고 이미지만 이 카드에서 가져와요.">
+    <Section level={3} title={ask.name} help="기존 캐릭터의 대화와 설정은 그대로 두고 이미지만 이 카드에서 가져와요.">
       <Stack gap="related">
-        <Text>Risu에서 가져온 같은 이름의 캐릭터가 있어요.</Text>
+        <Text>Risu에서 가져온 같은 이름의 캐릭터가 이미 있어요.</Text>
         <Row kind="actions">
           <Button variant="secondary" size="md" onClick={() => answer(false)}>
             새 캐릭터로 가져오기

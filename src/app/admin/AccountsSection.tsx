@@ -52,7 +52,7 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
 
   async function remove(account: AdminAccount) {
     setBusy(true);
-    await act(account.accountId, removeAccount(account.accountId), account.state === 'leaving' ? `${account.username} 계정의 탈퇴를 마무리하지 못했어요.` : `${account.username} 계정을 삭제하지 못했어요.`);
+    await act(account.accountId, removeAccount(account.accountId), account.state === 'leaving' ? `${account.username} 계정의 탈퇴 처리를 끝내지 못했어요.` : `${account.username} 계정을 삭제하지 못했어요.`);
     setBusy(false);
     setRemoving(null);
   }
@@ -68,7 +68,7 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
           <Button variant="ghost" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
         </>}
       </>}
-      help="텍스트는 계정이 저장한 내용의 크기, 디스크는 그 내용이 서버에서 차지하는 크기예요."
+      help="텍스트는 계정에 저장된 데이터의 크기이고, 디스크는 그 데이터가 서버에서 실제로 차지하는 용량이에요."
     >
       {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: reload }}>{failure}</Callout>}
       {data && (
@@ -98,7 +98,7 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
                 monthDay(account.createdAt),
                 <MoreMenu of={account.username}>
                   {account.state === 'leaving' ? (
-                    <MenuItem icon={ACTS.remove.icon} label="탈퇴 마무리" sub="중단된 탈퇴를 완료해요" tone="warn" onClick={() => setRemoving(account)} />
+                    <MenuItem icon={ACTS.remove.icon} label="탈퇴 마무리" sub="중단된 탈퇴 처리를 끝내요" tone="warn" onClick={() => setRemoving(account)} />
                   ) : (
                     <>
                       <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
@@ -106,9 +106,9 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
                       {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
                       {others &&
                         (account.suspended ? (
-                          <MenuItem icon={LockOpen} label="정지 해제" onClick={() => void act(account.accountId, liftSuspension(account.accountId), `${account.username} 계정의 정지를 해제하지 못했어요.`)} />
+                          <MenuItem icon={LockOpen} label="정지 해제" onClick={() => void act(account.accountId, liftSuspension(account.accountId), `${account.username} 계정의 정지를 풀지 못했어요.`)} />
                         ) : (
-                          <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알림, 탈퇴만 가능해요" onClick={() => setWriting({ account, suspend: true })} />
+                          <MenuItem icon={Ban} label="정지" sub="읽기와 백업, 알림 확인, 탈퇴만 할 수 있어요" onClick={() => setWriting({ account, suspend: true })} />
                         ))}
                       {others && account.state === 'active' && <MenuItem icon={ACTS.remove.icon} label="계정 삭제" tone="warn" onClick={() => setRemoving(account)} />}
                     </>
@@ -160,12 +160,12 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
         ))}
       {removing &&
         (removing.state === 'leaving' ? (
-          <ConfirmDialog title={`${removing.username} 계정의 탈퇴를 마무리할까요?`} confirm="마무리" icon={ACTS.remove.icon} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>
-            남은 데이터를 삭제하고 계정을 없애요. 되돌릴 수 없어요.
+          <ConfirmDialog title={`${removing.username} 계정의 탈퇴 처리를 끝낼까요?`} confirm="마무리" icon={ACTS.remove.icon} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>
+            남은 데이터를 모두 삭제하고 계정을 완전히 없애요. 이 작업은 되돌릴 수 없어요.
           </ConfirmDialog>
         ) : (
           <ConfirmDialog title={`${removing.username} 계정을 삭제할까요?`} confirm={ACTS.remove.label} icon={ACTS.remove.icon} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>
-            그 계정과 저장한 모든 데이터를 삭제해요. 되돌릴 수 없어요.
+            계정과 그 안에 저장된 모든 데이터를 삭제해요. 이 작업은 되돌릴 수 없어요.
           </ConfirmDialog>
         ))}
     </Section>

@@ -53,7 +53,7 @@ function LoreBudgetRow({ id }: { id: string }) {
   return (
     <SettingRow
       label={LORE_BUDGET_LABEL}
-      help={`이 캐릭터와의 대화에만 적용돼요. 비우면 설정의 공용 값(${shared} 토큰)을 따라요.`}
+      help={`이 캐릭터와 대화할 때만 적용돼요. 비워 두면 설정의 공용 값(${shared} 토큰)을 따라요.`}
       changed={own !== undefined}
       error={invalid ? '1 이상의 정수를 입력해 주세요.' : undefined}
       control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={draft} invalid={invalid} placeholder={shared} onChange={type} />}
@@ -101,7 +101,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
     toast.undoable(
       `'${folder.name}' 폴더를 삭제했어요.`,
       () => restoreLoreFolder(store, owner, removal),
-      held > 0 ? `항목 ${held}개는 폴더 밖으로 옮겼어요.` : undefined,
+      held > 0 ? `항목 ${held}개는 폴더 밖으로 꺼냈어요.` : undefined,
     );
   }
 
@@ -144,7 +144,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
     </List>
   );
   return (
-    <Section title={owner.kind === 'chat' ? '항목' : '로어북'} note={`${entries.length}개`} help={`대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.${owner.kind === 'chat' ? ' 이 채팅에서만 쓰여요.' : ''}`}>
+    <Section title={owner.kind === 'chat' ? '항목' : '로어북'} note={`${entries.length}개`} help={`대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.${owner.kind === 'chat' ? ' 지금 이 채팅에서만 쓰여요.' : ''}`}>
       <Stack gap="related">
         {owner.kind === 'character' && <LoreBudgetRow id={owner.id} />}
         {search.field}
@@ -232,8 +232,8 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
     <Stack gap="group">
       <TextField label="이름" value={shown.name} onChange={(name) => change({ name })} />
       <SettingGroup label="키워드">
-        <SettingRow label="키워드" help="최근 대화에 이 중 하나가 나오면 내용이 들어가요." wide control={<PhraseField label="키워드" phrases={shown.keys} onChange={(keys) => change({ keys })} />} />
-        {toggle('selective', '보조 키워드 사용', '키워드 하나와 보조 키워드 하나가 함께 나와야 들어가요.')}
+        <SettingRow label="키워드" help="최근 대화에 이 중 하나라도 나오면 내용이 프롬프트에 들어가요." wide control={<PhraseField label="키워드" phrases={shown.keys} onChange={(keys) => change({ keys })} />} />
+        {toggle('selective', '보조 키워드 사용', '키워드 하나와 보조 키워드 하나가 함께 나와야 프롬프트에 들어가요.')}
         {shown.selective && (
           <SettingRow label="보조 키워드" wide control={<PhraseField label="보조 키워드" phrases={shown.secondaryKeys} onChange={(secondaryKeys) => change({ secondaryKeys })} />} />
         )}
@@ -243,23 +243,23 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
       <TextField label="내용" lines={8} expand={SHORTCUTS.bigEdit.keys} value={shown.content} onChange={(content) => change({ content })} help="@@로 시작하는 줄은 삽입 방식을 정하는 명령이에요. 예: @@depth 0" />
       <SettingGroup label="삽입">
         {toggle('enabled', '켬')}
-        {toggle('constant', '항상 삽입', '키워드와 상관없이 넣어요.')}
+        {toggle('constant', '항상 삽입', '키워드와 상관없이 항상 넣어요.')}
         <SettingRow
           label="순서"
-          help="값이 클수록 뒤에 들어가요."
+          help="숫자가 클수록 프롬프트 뒤쪽에 들어가요."
           error={orderValid ? undefined : NUMBER_ERROR}
           control={<NumberInput label="순서" value={order} invalid={!orderValid} onChange={changeOrder} />}
         />
         <SettingRow
           label="우선순위"
-          help="로어북 최대 분량을 넘으면 값이 큰 항목부터 넣어요."
+          help="로어북 최대 분량을 넘으면 숫자가 큰 항목부터 먼저 넣어요."
           changed={shown.priority !== null}
           error={priorityValid ? undefined : NUMBER_ERROR}
           control={<NumberInput label="우선순위" value={priority} placeholder="순서와 같음" invalid={!priorityValid} onChange={changePriority} />}
         />
         <SettingRow
           label="위치"
-          help={`${SLOT_NAMES.lorebook}을 프롬프트의 ${SLOT_NAMES.lorebook} 블록에 넣을지, ${SLOT_NAMES.description} 블록 안의 맨 앞이나 맨 뒤에 넣을지 정해요.`}
+          help={`${SLOT_NAMES.lorebook}을 프롬프트의 ${SLOT_NAMES.lorebook} 블록에 넣을지, 아니면 ${SLOT_NAMES.description} 블록의 맨 앞이나 맨 뒤에 넣을지 정해요.`}
           control={<ChoiceGroup label="위치" options={POSITIONS} value={shown.position ?? 'lorebook'} onChange={(value) => change({ position: value === 'lorebook' ? null : value })} />}
         />
         {folders.length > 0 && (

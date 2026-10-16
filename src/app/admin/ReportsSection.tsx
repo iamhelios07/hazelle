@@ -92,7 +92,7 @@ function ReportDialog({ report, onClose, onRestore, onResolved }: { report: Acco
       note={ago(report.createdAt)}
       label="답변"
       optional
-      placeholder="비워 두면 답변 없이 확인 처리해요."
+      placeholder="비워 두면 답변을 보내지 않고 확인 처리만 해요."
       confirm={{ label: '확인 처리', icon: Check }}
       about={text}
       also={

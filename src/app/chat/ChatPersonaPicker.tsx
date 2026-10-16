@@ -55,7 +55,7 @@ export function PersonaDialog({ persona, characterName, pinned, onChoose, onPin,
             disabled={using === null}
             onChange={(checked) => void onPin(checked ? using : null).then((saved) => saved.ok || toast.failed(saved))}
           />
-          <Hint label="고정">이 캐릭터와 새로 시작하는 채팅에 이 페르소나를 사용해요.</Hint>
+          <Hint label="고정">이 캐릭터와 새로 시작하는 채팅에 이 페르소나를 써요.</Hint>
         </Row>
       )}
       <Button variant="link" onClick={() => navigate(using ? { kind: 'persona', id: using } : { kind: 'personas' })}>

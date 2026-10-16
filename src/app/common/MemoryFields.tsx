@@ -8,7 +8,7 @@ import { Breakdown, Disclosure, NumberInput, SettingGroup, SettingRow, Switch } 
 type Count = 'budget' | 'window' | 'batch';
 
 const COUNTS: Record<Count, { label: string; unit: string; help?: string }> = {
-  budget: { label: '기록 최대 분량', unit: '토큰', help: `정리한 기록을 요청마다 이만큼까지 넣어요. ${MODEL_ROLES.embed}로 찾아 넣는 기록은 이 밖에 1/5까지 더 들어가요.` },
+  budget: { label: '기록 최대 분량', unit: '토큰', help: `정리한 기록을 요청할 때마다 최대 이만큼 넣어요. ${MODEL_ROLES.embed}로 찾아서 넣는 기록은 이 한도 밖에서 최대 1/5까지 더 들어가요.` },
   window: { label: '원문으로 보낼 최근 대화', unit: '토큰' },
   batch: { label: '한 번에 정리할 분량', unit: '토큰', help: '오래된 대화가 이만큼 쌓이면 기록으로 정리해요.' },
 };

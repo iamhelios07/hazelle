@@ -11,15 +11,15 @@ export const inputs = (model: Starred) => (model.input ? model.input.map((modali
 export type Field = NumberSetting | 'context';
 export const NUMBER: Record<Field, { label: string; help?: string; unit?: string; unset?: string }> = {
   maxOutput: { label: '응답 최대 길이', unit: '토큰' },
-  context: { label: '컨텍스트 한도', help: '대화가 이보다 길면 오래된 메시지부터 제외해요', unit: '토큰', unset: '모델 한도' },
-  temperature: { label: '온도', help: '높을수록 응답이 다양해져요' },
-  topP: { label: 'top_p', help: '확률 높은 후보부터 이 비율까지만 선택해요' },
-  topK: { label: 'top_k', help: '확률 높은 후보부터 이 개수까지만 선택해요' },
-  minP: { label: 'min_p', help: '가장 높은 확률 대비 이 비율보다 낮은 후보는 제외해요' },
-  frequencyPenalty: { label: '빈도 억제', help: '자주 나온 말일수록 덜 써요' },
-  presencePenalty: { label: '존재 억제', help: '한 번이라도 나온 말을 덜 써요' },
+  context: { label: '컨텍스트 한도', help: '대화가 이 길이보다 길어지면 오래된 메시지부터 빠져요', unit: '토큰', unset: '모델 한도' },
+  temperature: { label: '온도', help: '값이 높을수록 더 다양한 응답이 나와요' },
+  topP: { label: 'top_p', help: '확률이 높은 후보부터 더해서 이 비율 안에 드는 후보만 선택해요' },
+  topK: { label: 'top_k', help: '확률이 높은 후보부터 순서대로 이 개수만큼만 선택해요' },
+  minP: { label: 'min_p', help: '가장 높은 확률과 비교해 이 비율보다 확률이 낮은 후보는 빼요' },
+  frequencyPenalty: { label: '빈도 억제', help: '자주 나온 단어일수록 덜 쓰게 해요' },
+  presencePenalty: { label: '존재 억제', help: '한 번이라도 나온 단어는 덜 쓰게 해요' },
   repetitionPenalty: { label: '반복 억제', help: '1보다 크면 같은 말을 덜 반복해요' },
-  seed: { label: 'seed', help: '같은 값이면 같은 조건에서 비슷한 응답이 나와요' },
+  seed: { label: 'seed', help: '값이 같으면 같은 조건에서 비슷한 응답이 나와요' },
 };
 export const MAIN: Field[] = ['maxOutput', 'context', 'temperature'];
 export const DETAIL: Field[] = ['topP', 'topK', 'minP', 'frequencyPenalty', 'presencePenalty', 'repetitionPenalty', 'seed'];
@@ -53,7 +53,7 @@ export function valueWords(settings: ModelSettings): string[] {
 }
 
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').
-export const NOT_CALLABLE = '이 버전에서는 이 모델을 호출할 수 없어요';
+export const NOT_CALLABLE = '지금 버전에서는 이 모델을 호출할 수 없어요';
 
 export function changeLine(left: readonly string[], capped: readonly string[]): string | undefined {
   const parts = [...(left.length ? [`제외: ${left.join(', ')}`] : []), ...(capped.length ? [`조정: ${capped.join(', ')}`] : [])];

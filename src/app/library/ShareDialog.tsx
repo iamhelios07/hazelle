@@ -16,7 +16,7 @@ import { Button, Callout, Checkbox, Dialog, SettingRow, Stack, Switch, Text, Tex
 // What a sharer agrees to once per account, at SHARE_CONSENT: raise it when this text changes, and every sharer is
 // asked again.
 const BANNED = [
-  '미성년자로 보이는 캐릭터의 성적인 묘사. 직접 그린 이미지와 AI 이미지도 해당하고, 나이를 성인으로 적어도 마찬가지예요.',
+  '미성년자로 보이는 캐릭터의 성적인 묘사는 공유할 수 없어요. 직접 그린 이미지와 AI 이미지 모두 해당하고, 나이를 성인으로 적어 둬도 마찬가지예요.',
   '실존 인물의 성적인 합성물(딥페이크)',
   '공유할 권리가 없는 자료',
   '법에서 음란물로 보는 내용',
@@ -66,13 +66,13 @@ function ConsentDialog({ onAgreed, onClose }: { onAgreed: () => void; onClose: (
       }
     >
       <Stack gap="related">
-        <Text>링크를 가진 사람은 누구나 열고 받을 수 있어요. 다음은 공유할 수 없어요.</Text>
+        <Text>링크가 있는 사람은 누구나 열어 보고 파일을 받을 수 있어요. 아래에 해당하는 내용은 공유할 수 없어요.</Text>
         {BANNED.map((line) => (
           <Text key={line}>· {line}</Text>
         ))}
         <Text>{AFTER_REPORT}</Text>
       </Stack>
-      <Checkbox label="읽었고 지킬게요" checked={checked} onChange={setChecked} />
+      <Checkbox label="내용을 읽었고 규칙을 지킬게요" checked={checked} onChange={setChecked} />
       {failure && <Callout tone="warn" alert>{failure}</Callout>}
     </Dialog>
   );
@@ -99,8 +99,8 @@ function LinkDialog({ character, name, links, reload, onClose }: { character: st
     }
     const published = await publishShare(store, files, character, link ? link.covered : covered);
     if (!published.ok) return finish(published.error === 'unreadable' ? '열리지 않는 이미지가 있어요.' : describeFailure(published));
-    const tools = published.data.tools ? { detail: `${TOOL}가 든 모듈 ${published.data.tools}개는 빼고 공유했어요.` } : undefined;
-    toast.show(link ? '새 버전으로 바꿨어요.' : '링크를 만들었어요.', tools);
+    const tools = published.data.tools ? { detail: `${TOOL}가 들어 있는 모듈 ${published.data.tools}개는 빼고 공유했어요.` } : undefined;
+    toast.show(link ? '새 버전으로 바꿨어요.' : '공유 링크를 만들었어요.', tools);
     finish(null);
     reload();
   }
@@ -109,7 +109,7 @@ function LinkDialog({ character, name, links, reload, onClose }: { character: st
     setBusy('cut');
     const done = await cutShare(store, link!.id);
     if (!done.ok) return finish(describeFailure(done));
-    toast.show('링크를 끊었어요.');
+    toast.show('공유 링크를 끊었어요.');
     onClose();
   }
 

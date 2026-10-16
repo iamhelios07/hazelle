@@ -12,7 +12,7 @@ export function LegalNotice() {
   return (
     <Stack gap="related">
       <Text variant="note">
-        © 2026 {OPERATOR}. AGPL-3.0에 따라 누구나 사용, 수정, 재배포할 수 있는 자유 소프트웨어예요. 보증은 없어요.
+        © 2026 {OPERATOR}. AGPL-3.0에 따라 누구나 쓰고, 수정하고, 다시 배포할 수 있는 자유 소프트웨어예요. 보증은 제공하지 않아요.
       </Text>
       <Row kind="tags">
         <Link href={source}>GitHub</Link>

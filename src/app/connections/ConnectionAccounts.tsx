@@ -18,7 +18,7 @@ import { useDeviceSignIn } from './useDeviceSignIn';
 
 // Who serves a reply: the current group's first account with allowance left (runtime/pool).
 const HELP =
-  '응답은 지금 차례인 그룹에서 한도가 남은 첫 계정으로 보내요. 남은 계정이 없으면 그룹의 첫 계정으로 보내고, 초과 사용은 GitHub 설정을 따라요.';
+  '지금 차례인 그룹에서 한도가 남은 첫 번째 계정으로 요청을 보내요. 한도가 남은 계정이 없으면 그룹의 첫 번째 계정으로 보내고, 초과 사용은 GitHub 설정을 따라요.';
 
 export function ConnectionAccounts({ id, connection, signIn, level }: { id: string; connection: Connection & { turns: Turns }; signIn: SignIn; level: 2 | 3 }) {
   const { store } = useSession();
@@ -94,7 +94,7 @@ export function ConnectionAccounts({ id, connection, signIn, level }: { id: stri
                   ) : null;
                 })
               ) : (
-                <ListItem title="계정 없음" description={index === 0 ? '계정이 없어서 응답을 받을 수 없어요.' : undefined} />
+                <ListItem title="계정 없음" description={index === 0 ? '연결된 계정이 없어서 응답을 받을 수 없어요.' : undefined} />
               )}
             </ListItem>
           </List>
@@ -244,7 +244,7 @@ function AccountSignIn({ signIn, again, onClose, onApproved }: { signIn: SignIn;
           </Button>
         </>
       ) : (
-        <Text variant="note">{stage.step === 'starting' ? '코드 받는 중…' : `${signIn.site} 계정을 확인하는 중…`}</Text>
+        <Text variant="note">{stage.step === 'starting' ? '코드를 받는 중…' : `${signIn.site} 계정을 확인하는 중…`}</Text>
       )}
       <Row kind="actions">
         <Button variant="ghost" size="sm" onClick={onClose}>

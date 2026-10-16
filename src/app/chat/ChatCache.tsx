@@ -11,17 +11,17 @@ export const BROKEN = '깨짐 예상';
 export function why(broken: CacheBreak): string {
   switch (broken.kind) {
     case 'model':
-      return '모델이나 연결이 직전 요청과 달라요.';
+      return '직전 요청과 모델이나 연결이 달라요.';
     case 'account':
-      return '직전 요청과 다른 계정으로 보내요. 캐시는 계정마다 따로예요.';
+      return '직전 요청과 다른 계정으로 보내요. 캐시는 계정마다 따로 써요.';
     case 'reasoning':
-      return '추론 설정이 직전 요청과 달라요.';
+      return '직전 요청과 추론 설정이 달라요.';
     case 'off':
-      return '이 모델 설정은 캐시를 꺼 두었어요.';
+      return '이 모델 설정에서는 캐시가 꺼져 있어요.';
     case 'expired':
-      return '캐시 시간이 지났어요.';
+      return '캐시 유지 시간이 지났어요.';
     case 'far':
-      return '새 캐시 지점이 직전 캐시에서 너무 멀어서 찾지 못해요.';
+      return '새 캐시 위치가 직전 캐시와 너무 멀어서 찾지 못했어요.';
     case 'changed':
       return broken.from.kind === 'block' && broken.from.slot === 'chat' ? '직전에 보낸 메시지가 수정됐어요.' : `'${partName(broken.from, broken.role)}' 부분이 직전 요청과 달라요.`;
     case 'removed':
@@ -31,7 +31,7 @@ export function why(broken: CacheBreak): string {
   }
 }
 
-export const reads = ({ read, of }: CacheForecast) => (read > 0 ? `캐시된 ${tokens(of)} 토큰 중 약 ${tokens(read)} 토큰만 읽어요.` : '캐시를 읽지 못해요.');
+export const reads = ({ read, of }: CacheForecast) => (read > 0 ? `캐시된 ${tokens(of)} 토큰 중 약 ${tokens(read)} 토큰만 읽어요.` : '캐시를 읽지 못했어요.');
 
 const clock = (ms: number) => {
   const seconds = Math.ceil(ms / 1000);

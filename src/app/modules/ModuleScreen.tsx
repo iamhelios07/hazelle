@@ -30,7 +30,7 @@ const PROMPTS_USING = '쓰는 프롬프트';
 const PERSONAS_USING = '쓰는 페르소나';
 const RISU_FILE = 'Risu 모듈 파일';
 const RISU_FILE_HELP =
-  'RisuAI 설정 › 모듈에서 가져오거나 창에 끌어다 놓으면 열려요. 이미지는 그대로 담겨요. 도구와 삽화 프로필은 빠져요. Risu에는 끄기가 없어서 꺼 둔 스크립트와 로어북 항목은 빠지고, 로어북의 우선순위와 위치도 빠지며, 쉼표가 든 키는 쉼표에서 나뉘어요. 헤이젤로 다시 가져오면 모두 그대로 돌아와요. Lua 트리거가 있으면 Risu의 저수준 접근을 켠 채로 내보내요.';
+  'RisuAI 설정 › 모듈에서 가져오거나 창에 끌어다 놓으면 열려요. 이미지는 그대로 담기고, 도구와 삽화 프로필은 빠져요. Risu에는 끄기 기능이 없어서 꺼 둔 스크립트와 로어북 항목은 빠지고, 로어북의 우선순위와 위치도 빠지며, 쉼표가 들어간 키는 쉼표 기준으로 나뉘어요. 헤이젤로 다시 가져오면 모두 원래대로 돌아와요. Lua 트리거가 있으면 Risu의 저수준 접근을 켠 채로 내보내요.';
 
 export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>; pane: 'toggles' | null; back: Back }) {
   const store = useStore();
@@ -120,7 +120,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '직접 켠 프롬프트가 없어요.' : '켠 프롬프트가 없어요.'}</Empty>
+          <Empty variant="section">{always ? '직접 켠 프롬프트가 없어요.' : '켜 둔 프롬프트가 없어요.'}</Empty>
         )}
       </Section>
       <Section title={USED_BY}>
@@ -131,7 +131,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '직접 켠 캐릭터가 없어요.' : '켠 캐릭터가 없어요.'}</Empty>
+          <Empty variant="section">{always ? '직접 켠 캐릭터가 없어요.' : '켜 둔 캐릭터가 없어요.'}</Empty>
         )}
       </Section>
       <Section title={PERSONAS_USING}>
@@ -142,7 +142,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '직접 켠 페르소나가 없어요.' : '켠 페르소나가 없어요.'}</Empty>
+          <Empty variant="section">{always ? '직접 켠 페르소나가 없어요.' : '켜 둔 페르소나가 없어요.'}</Empty>
         )}
       </Section>
       <List box places label="토글">

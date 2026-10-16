@@ -197,7 +197,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     const report = await importFile(page, pickBot, RECALL_CARD);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     await send('We climb the stairs.');
-    await expect(page.getByText('이 모듈이 장기 기억을 대신 맡으려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 모듈이 장기 기억을 대신 관리하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await send('The lamp is cold.');
     await send('We light the lamp.');
@@ -282,7 +282,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
       return page.getByRole('complementary', { name: '장기 기억', exact: true });
     };
     const panel = await memoryPanel();
-    await expect(panel).toContainText('회상 기억 도구가 장기 기억을 맡고 있어요.');
+    await expect(panel).toContainText('회상 기억 도구가 장기 기억을 관리하고 있어요.');
     await page.goto('/modules');
     await page.getByRole('button', { name: /회상 기억/ }).click();
     const saved = saving(page);
@@ -290,6 +290,6 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     await saved;
     await expect(page.getByRole('switch', { name: '항상 켜기', exact: true })).not.toBeChecked();
     await page.goto(chat);
-    await expect(await memoryPanel()).not.toContainText('도구가 장기 기억을 맡고 있어요');
+    await expect(await memoryPanel()).not.toContainText('도구가 장기 기억을 관리하고 있어요');
   });
 });

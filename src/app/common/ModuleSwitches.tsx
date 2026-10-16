@@ -7,9 +7,9 @@ import { ALWAYS, moduleName, PAGES } from './words';
 type Owner = Exclude<ModulePlace, { kind: 'always' }>;
 
 const WORKS: Record<Owner['kind'], string> = {
-  character: '켠 모듈은 이 캐릭터의 모든 채팅에 적용돼요.',
-  prompt: '켠 모듈은 이 프롬프트를 쓰는 채팅에 적용돼요.',
-  persona: '켠 모듈은 이 페르소나로 하는 모든 채팅에 적용돼요.',
+  character: '켜 둔 모듈은 이 캐릭터의 모든 채팅에 적용돼요.',
+  prompt: '켜 둔 모듈은 이 프롬프트를 쓰는 채팅에 적용돼요.',
+  persona: '켜 둔 모듈은 이 페르소나로 대화하는 모든 채팅에 적용돼요.',
 };
 
 // own: the owner's modules as stored.

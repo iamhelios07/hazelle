@@ -39,7 +39,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
   );
   return (
     <Screen width="page" top={<NavBar title={PAGES.connections} {...backBar(back)} actions={adding} />}>
-      {unreadable > 0 && <Callout tone="warn">암호화 키로 열리지 않는 항목 {unreadable}개는 목록에서 제외했어요.</Callout>}
+      {unreadable > 0 && <Callout tone="warn">암호화 키로 열리지 않는 항목 {unreadable}개는 목록에서 뺐어요.</Callout>}
       {search.field && <Row kind="toolbar">{search.field}</Row>}
       {search.none ? (
         <Empty variant="section">{search.none}</Empty>

@@ -12,7 +12,7 @@ import { Button, Callout, List, ListItem, PhraseField, Row, Section, SettingGrou
 import { recordScene, recordTitle, spanOf, statusWord } from './memory';
 import type { ChatActions } from './useChat';
 
-const STALE = { changed: '원문이 바뀌었어요.', deleted: '원문 메시지가 삭제됐어요.', records: '기록이 바뀌었어요.' };
+const STALE = { changed: '대화 원문이 바뀌었어요.', deleted: '원문 메시지가 삭제됐어요.', records: '기록이 바뀌었어요.' };
 
 type Props = {
   chat: string;
@@ -87,7 +87,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
           {[STALE[stale], status === 'stale' ? dropped : status === 'sent' || status === 'recall-over' ? kept : ''].join(' ').trim()}
         </Callout>
       )}
-      {status === 'over' && <Text variant="note">한도를 넘어 보내지 않아요.</Text>}
+      {status === 'over' && <Text variant="note">한도를 넘어서 보내지 않아요.</Text>}
       {status === 'chaptered' && <Text variant="note">{`이 기록 대신 ${CHAPTER}를 보내요.`}</Text>}
       {holder && view?.records.get(holder.id) === 'sent' && (status === 'sent' || status === 'recall-over') && <Text variant="note">{`${CHAPTER}와 함께 보내요.`}</Text>}
       {item.forgotten && (
@@ -114,8 +114,8 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
         {record && (
           <SettingRow
             label="이 기억 넣기"
-            help="요약 대신 원문 메시지를 보내요."
-            note={status === 'recall-over' ? '원문이 한도를 넘어 요약을 보내요.' : undefined}
+            help="요약본 대신 원문 메시지를 보내요."
+            note={status === 'recall-over' ? '원문이 한도를 넘어서 요약본을 보내요.' : undefined}
             control={<Switch label="이 기억 넣기" checked={record.recalled === true} onChange={recall} />}
           />
         )}

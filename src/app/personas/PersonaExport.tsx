@@ -7,7 +7,7 @@ import { useToast } from '../toast';
 
 // Export spec §4 "Mapping both ways": modules and likenesses have no place in Risu's persona file; the alias is its note.
 // A dropped PNG is a character card to Risu, so its persona import is the one way in.
-const LEFT = 'Risu의 페르소나 설정에서 가져오기로 열어요. Risu 창에 끌어다 놓으면 캐릭터로 읽혀서 열리지 않아요. 켜 둔 모듈과 삽화 프로필은 빠지고, 별명은 Risu의 노트로 가요.';
+const LEFT = 'Risu의 페르소나 설정에서 가져오기로 열어요. Risu 창에 바로 끌어다 놓으면 캐릭터로 인식해서 열리지 않아요. 켜 둔 모듈과 삽화 프로필은 빠지고, 별명은 Risu의 노트로 들어가요.';
 
 export function PersonaExport({ persona, onClose }: { persona: Persona; onClose: () => void }) {
   const toast = useToast();
@@ -20,6 +20,6 @@ export function PersonaExport({ persona, onClose }: { persona: Persona; onClose:
     });
   }
 
-  const blocked = persona.description ? null : '설명이 비어 있으면 Risu가 받지 않아요. 설명을 채운 뒤 내보내 주세요.';
+  const blocked = persona.description ? null : '설명이 비어 있으면 Risu에서 가져갈 수 없어요. 설명을 입력한 뒤에 내보내 주세요.';
   return <FileExport format="Risu 페르소나" file={file} help={LEFT} blocked={blocked} onExport={save} onClose={onClose} />;
 }

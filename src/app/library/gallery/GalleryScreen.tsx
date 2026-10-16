@@ -156,7 +156,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
         </Section>
       ))}
       {folderCards.length + shown.length === 0 && listed.length === 0 && (
-        <Empty>{search.none ?? (binned ? '삭제한 항목이 없어요.' : here ? '빈 폴더예요.' : '캐릭터가 없어요.')}</Empty>
+        <Empty>{search.none ?? (binned ? '삭제한 항목이 없어요.' : here ? '비어 있는 폴더예요.' : '캐릭터가 없어요.')}</Empty>
       )}
       {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={movePicked} />}
       {purging && (

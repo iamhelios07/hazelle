@@ -20,8 +20,8 @@ import { hasModule, stepsOf, tickable, tickCount, toPick, type Have, type Ticks 
 
 const FAILURE: Record<BackupFailure['kind'], string> = {
   encrypted: 'risuai.xyz의 전체 백업만으로는 가져올 수 없어요. Risu에서 \'부분 로컬 백업 저장\'으로 받은 파일을 함께 넣어 주세요.',
-  'no-database': 'Risu 백업이 아니거나 깨진 파일이에요.',
-  unreadable: 'Risu 백업이 아니거나 깨진 파일이에요.',
+  'no-database': 'Risu 백업 파일이 아니거나 깨진 파일이에요.',
+  unreadable: 'Risu 백업 파일이 아니거나 깨진 파일이에요.',
 };
 
 const PRESET_FAILURE: Record<PresetFailure['kind'], string> = {
@@ -89,7 +89,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       if (!live) return;
       if (!(error instanceof ImportReadError)) throw error;
       source.close();
-      setPhase({ kind: 'failed', message: '백업을 읽지 못했어요. 다시 가져와 주세요.', again: null });
+      setPhase({ kind: 'failed', message: '백업 파일을 읽지 못했어요. 다시 가져와 주세요.', again: null });
     });
     return () => {
       live = false;
@@ -135,13 +135,13 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         ...(steps.characters && { presets: ticks.presets.map(() => false) }),
       };
       // A retry would stop at once on a full account, so none is offered.
-      if (moved.error === 'storage-full') return setPhase({ kind: 'failed', message: '텍스트 저장 공간이 다 차서 멈췄어요. 그 전까지 가져온 것은 저장됐어요.', again: null });
+      if (moved.error === 'storage-full') return setPhase({ kind: 'failed', message: '텍스트 저장 공간이 가득 차서 멈췄어요. 멈추기 전까지 가져온 내용은 저장됐어요.', again: null });
       setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, inlays, rest) });
     } catch (error) {
       if (reader.current !== source) return;
       if (!(error instanceof ImportReadError)) throw error;
       source.close();
-      setPhase({ kind: 'failed', message: '백업을 읽지 못했어요. 그 전까지 가져온 것은 저장됐어요.', again: null });
+      setPhase({ kind: 'failed', message: '백업 파일을 읽지 못했어요. 멈추기 전까지 가져온 내용은 저장됐어요.', again: null });
     }
   }
 
@@ -202,7 +202,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         }
       >
         <Callout tone="warn">{phase.message}</Callout>
-        {phase.again && <Text variant="note">다시 시도하면 이어서 가져와요.</Text>}
+        {phase.again && <Text variant="note">다시 시도하면 멈춘 곳부터 이어서 가져와요.</Text>}
       </Dialog>
     );
   }
@@ -232,8 +232,8 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       }
     >
       <Stack gap="section">
-        <Text variant="note">{catalog.pictures > 0 ? `이미지 ${catalog.pictures}개(${sizeText(catalog.pictureBytes)})가 들어 있어요.` : '이미지가 들어 있지 않아요. 이미지를 뺀 백업이라면 전체 백업을 함께 넣어 주세요.'}</Text>
-        {room !== null && pictureBytes > room && <Callout tone="warn">{`남은 이미지 공간은 ${sizeText(room)}예요. 넘는 이미지는 빼고 가져와요.`}</Callout>}
+        <Text variant="note">{catalog.pictures > 0 ? `이미지 ${catalog.pictures}개(${sizeText(catalog.pictureBytes)})가 들어 있어요.` : '이미지가 들어 있지 않아요. 이미지를 뺀 백업 파일이라면 전체 백업 파일을 함께 넣어 주세요.'}</Text>
+        {room !== null && pictureBytes > room && <Callout tone="warn">{`남은 이미지 저장 공간은 ${sizeText(room)}예요. 용량을 넘는 이미지는 빼고 가져와요.`}</Callout>}
         <Picks
           title="캐릭터"
           rows={catalog.characters.map((character) => ({ label: character.name, note: have.characters.has(character.id) ? '이미 있음' : `대화 ${character.chatCount}개` }))}
@@ -309,8 +309,8 @@ function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
     <Stack gap="section">
       {backup.unsupported.length > 0 && <Callout tone="warn">백업에서 못 가져온 것: {moveMissed(backup.unsupported).join(' · ')}</Callout>}
       <Text>{`캐릭터 ${moved.characters.length}개 · 대화 ${chats}개 · 페르소나 ${moved.personas}개 · 프롬프트 ${moved.prompts}개 · 모듈 ${moved.modules.length}개`}</Text>
-      {moved.loreBudget !== null && <Text variant="note">{`Risu에서 정한 ${LORE_BUDGET_LABEL}(${countText(moved.loreBudget)}토큰)도 가져왔어요.`}</Text>}
-      {moved.toggles > 0 && <Text variant="note">{`Risu에서 쓰던 토글 값 ${moved.toggles}개도 가져왔어요.`}</Text>}
+      {moved.loreBudget !== null && <Text variant="note">{`Risu에서 정한 ${LORE_BUDGET_LABEL}(${countText(moved.loreBudget)}토큰) 설정도 함께 가져왔어요.`}</Text>}
+      {moved.toggles > 0 && <Text variant="note">{`Risu에서 쓰던 토글 값 ${moved.toggles}개도 함께 가져왔어요.`}</Text>}
       {missed.length > 0 && (
         <Section level={3} title="가져오지 않은 것">
           <Outcome label="가져오지 않은 것" items={missed} />

@@ -93,7 +93,7 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
           title="설정"
           tag={scope ? scopeTag(scope) : undefined}
           note={toggles.changed ? `변경 ${toggles.changed}개` : undefined}
-          help={card ? `바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.` : '바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
+          help={card ? `바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.` : '바꾼 값은 캐릭터 없이 대화하는 모든 채팅에 적용돼요.'}
           action={
             toggles.changed > 0 && (
               <Button variant="link" onClick={onReset}>
@@ -116,7 +116,7 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
               {laying ? section.items.map(item) : section.shown.map(row)}
             </Section>
           ))}
-          {visible.length === 0 && <Empty variant="section">{search.none ?? '변경한 토글이 없어요.'}</Empty>}
+          {visible.length === 0 && <Empty variant="section">{search.none ?? '바꾼 토글이 없어요.'}</Empty>}
           {onEditPrompt && toggles.sections[0]?.from === 'prompt' && (
             <Row kind="actions">
               <Button variant="link" size="xs" onClick={onEditPrompt}>

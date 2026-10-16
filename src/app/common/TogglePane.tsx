@@ -114,7 +114,7 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
     <Section
       title="토글"
       note={`${count}개`}
-      help="채팅에서 켜고 끄면 조건에 따라 보내는 내용이 바뀌어요. 구분선, 설명, 그룹은 채팅의 토글 목록을 정리해요."
+      help="채팅에서 켜고 끄면 조건에 따라 보내는 내용이 바뀌어요. 구분선과 설명, 그룹으로 채팅의 토글 목록을 정리할 수 있어요."
       action={
         <Row kind="actions">
           <Menu label="줄 추가" place="below-end" trigger={(opener) => <Button variant="secondary" {...opener}>줄 추가</Button>}>
@@ -150,7 +150,7 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
                       />
                     )}
                     {line.kind === 'text' && <MenuItem label="기본값 바꾸기" onClick={() => setEditing({ at, field: 'default' })} />}
-                    {isToggle(line) && <MenuItem label="키 바꾸기" sub={uses ? '조건에 쓴 키도 바뀌어요' : undefined} onClick={() => setEditing({ at, field: 'key' })} />}
+                    {isToggle(line) && <MenuItem label="키 바꾸기" sub={uses ? '조건에 쓴 키도 함께 바뀌어요' : undefined} onClick={() => setEditing({ at, field: 'key' })} />}
                     {at > 0 && <MenuItem icon={ArrowUp} label="위로 옮기기" onClick={() => onMove(line, at, at - 1)} />}
                     {at < lines.length - 1 && <MenuItem icon={ArrowDown} label="아래로 옮기기" onClick={() => onMove(line, at, at + 1)} />}
                     <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onRemove(at)} />
@@ -214,7 +214,7 @@ function KeyDialog({ toggle, lines, uses, onClose, onSave }: { toggle: Toggle; l
         value={key}
         onChange={setKey}
         error={error ?? undefined}
-        hint={uses === null ? '이 키를 쓴 곳은 바뀌지 않아요.' : uses ? `조건 ${uses}곳도 바뀌어요.` : '이 키를 쓰는 조건이 없어요.'}
+        hint={uses === null ? '이 키를 쓴 다른 곳은 바뀌지 않아요.' : uses ? `조건 ${uses}곳도 함께 바뀌어요.` : '이 키를 쓰는 조건이 없어요.'}
       />
     </Dialog>
   );
@@ -230,7 +230,7 @@ function LineDialog({ line, lines, onClose, onSave }: { line: UnreadLine; lines:
       onClose={onClose}
       onSubmit={() => {
         const [read] = readToggles(text);
-        if (!read) return setError('줄을 적어 주세요.');
+        if (!read) return setError('내용을 입력해 주세요.');
         const problem = isToggle(read) && keyProblem(read.key, lines, null);
         if (problem) return setError(problem);
         onSave(read);
@@ -257,9 +257,9 @@ function NewToggleDialog({ lines, onClose, onSave }: { lines: readonly ToggleLin
 
   function submit() {
     const problems = {
-      label: label.trim() ? undefined : '이름을 적어 주세요.',
+      label: label.trim() ? undefined : '이름을 입력해 주세요.',
       key: keyProblem(key.trim(), lines, null) ?? undefined,
-      options: kind === 'choice' && choices.length < 2 ? '선택지를 둘 이상 적어 주세요.' : undefined,
+      options: kind === 'choice' && choices.length < 2 ? '선택지를 2개 이상 입력해 주세요.' : undefined,
     };
     if (problems.label || problems.key || problems.options) return setError(problems);
     const named = { key: key.trim(), label: label.trim() };
@@ -305,7 +305,7 @@ function NewToggleDialog({ lines, onClose, onSave }: { lines: readonly ToggleLin
         value={kind}
         onChange={setKind}
       />
-      {kind === 'choice' && <TextField label="선택지" help="쉼표로 구분해요." value={options} onChange={setOptions} placeholder="예: 간결, 보통, 풍부" error={error.options} />}
+      {kind === 'choice' && <TextField label="선택지" help="쉼표(,)로 구분해요." value={options} onChange={setOptions} placeholder="예: 간결, 보통, 풍부" error={error.options} />}
       {kind === 'text' && <Checkbox label="여러 줄" checked={several} onChange={setSeveral} />}
     </Dialog>
   );

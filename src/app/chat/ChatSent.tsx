@@ -17,7 +17,7 @@ type Lore = NonNullable<Assembled['lore']>[number];
 
 // Not "none" or "gone": what a call sent is kept only by the page that made it, while its chat stays open (runtime/talk
 // sent), so a reload, another device or a resumed call has none of it to show.
-const UNKEPT = '요청을 보낸 기기에서 채팅을 열어 둔 동안만 볼 수 있어요.';
+const UNKEPT = '요청을 보낸 기기에서 채팅 화면을 열어 둔 동안에만 볼 수 있어요.';
 
 export function partName(from: From, role: Role): string {
   switch (from.kind) {
@@ -55,7 +55,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
       </>
     );
   }
-  return <RequestView prompt={sent.prompt} title="보낸 순서대로" request={() => sent.request} unbuilt="요청 전에 중단돼서 본문이 없어요." />;
+  return <RequestView prompt={sent.prompt} title="보낸 순서대로" request={() => sent.request} unbuilt="요청을 보내기 전에 멈춰서 본문이 없어요." />;
 }
 
 export function SentResponse({ sent }: { sent: Sent | null }) {
@@ -169,7 +169,7 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
   if (!used) {
     return (
       <>
-        <Text variant="note">이 응답을 요청할 때 장기 기억이 꺼져 있었어요.</Text>
+        <Text variant="note">이 응답을 요청할 때는 장기 기억이 꺼져 있었어요.</Text>
         <Facts variant="tiles" items={[cut]} />
       </>
     );
@@ -228,8 +228,8 @@ function SentRecords({ title, ids, records, onRecord }: { title: string; ids: st
 export function SentLore({ sent }: { sent: Sent | null }) {
   if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
   const lore = sent.prompt.lore;
-  if (!lore) return <Empty variant="section">캐릭터가 없는 채팅이라 로어북이 없어요.</Empty>;
-  if (lore.length === 0) return <Empty variant="section">이 응답에는 활성화된 로어북 항목이 없어요.</Empty>;
+  if (!lore) return <Empty variant="section">캐릭터 없이 대화하는 채팅이라 로어북이 없어요.</Empty>;
+  if (lore.length === 0) return <Empty variant="section">이 응답에서 켜진 로어북 항목이 없어요.</Empty>;
   const names = new Map(lore.map(({ id, name }) => [id, name]));
   const went = lore.filter((entry) => entry.fate.kind !== 'dropped').length;
   return (

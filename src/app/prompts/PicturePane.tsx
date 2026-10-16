@@ -15,10 +15,10 @@ type NumberField = Exclude<keyof PictureSettings, 'sampler'>;
 
 // Bounds only where a source states them; NovelAI answers a value past its own with a refusal the 삽화 slot shows.
 const NUMBERS: Record<NumberField, { label: string; help?: string; whole: boolean; check?: (value: number) => boolean; error?: string; unset: string }> = {
-  steps: { label: '스텝', whole: true, check: (value) => value >= 1, error: '1 이상을 입력해 주세요.', unset: UNSET },
-  scale: { label: '프롬프트 가이던스', whole: false, check: (value) => value >= 0, error: '0 이상을 입력해 주세요.', unset: UNSET },
-  rescale: { label: '가이던스 리스케일', whole: false, check: (value) => value >= 0 && value <= 1, error: '0에서 1 사이로 입력해 주세요.', unset: UNSET },
-  seed: { label: '시드', help: '정해 두면 같은 장면은 같은 이미지로 만들어요.', whole: true, check: (value) => value >= 0 && value <= 0xffffffff, error: '0에서 4294967295 사이로 입력해 주세요.', unset: '무작위' },
+  steps: { label: '스텝', whole: true, check: (value) => value >= 1, error: '1 이상의 값을 입력해 주세요.', unset: UNSET },
+  scale: { label: '프롬프트 가이던스', whole: false, check: (value) => value >= 0, error: '0 이상의 값을 입력해 주세요.', unset: UNSET },
+  rescale: { label: '가이던스 리스케일', whole: false, check: (value) => value >= 0 && value <= 1, error: '0부터 1 사이의 값을 입력해 주세요.', unset: UNSET },
+  seed: { label: '시드', help: '값을 정해 두면 같은 장면은 늘 같은 이미지로 만들어요.', whole: true, check: (value) => value >= 0 && value <= 0xffffffff, error: '0부터 4294967295 사이의 값을 입력해 주세요.', unset: '무작위' },
 };
 
 const TAG_FIELDS: { field: keyof PictureTags; label: string; placeholder?: string }[] = [
@@ -68,7 +68,7 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
       <Section
         title="태그"
         note={tags ? '직접 지정' : '기본값'}
-        help="모든 삽화에 넣어요. 작가 태그는 맨 앞에, 품질 태그는 장면 뒤에 붙어요. 가중치({강조}, [약화], 1.5::태그::)에 따라 색이 달라져요."
+        help="모든 삽화에 공통으로 들어가요. 작가 태그는 맨 앞에, 품질 태그는 장면 설명 뒤에 붙어요. 가중치({강조}, [약화], 1.5::태그::)에 따라 태그 색깔이 달라져요."
         action={
           tags && (
             <Button variant="link" onClick={() => onTags(undefined)}>
@@ -85,7 +85,7 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
           ))}
         </Stack>
       </Section>
-      <Section title="생성" help="비워 두면 이미지 모델의 원래 값을 써요.">
+      <Section title="생성" help="비워 두면 이미지 모델의 기본값을 써요.">
         <SettingGroup label="생성">
           <SettingRow label="샘플러" changed={picture.sampler !== undefined} control={<SamplerMenu draws={draws} chosen={picture.sampler} onPick={(sampler) => onPicture({ ...picture, sampler })} />} />
           {numberRow('steps')}

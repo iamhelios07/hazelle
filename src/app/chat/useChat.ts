@@ -82,7 +82,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // A display that fails after one was shown leaves that one up; one that never showed says so in the log (ChatLog).
   useEffect(() => {
     if (displayError === undefined || displayPending) return;
-    toast.error('채팅을 표시하지 못했어요.', { detail: displayError instanceof Error ? displayError.message : undefined, action: { label: '다시 시도', onClick: retryDisplay } });
+    toast.error('채팅을 화면에 표시하지 못했어요.', { detail: displayError instanceof Error ? displayError.message : undefined, action: { label: '다시 시도', onClick: retryDisplay } });
   }, [displayError]);
   const { texts, css } = view;
   const bot = shelf?.character.decor !== false;
@@ -186,7 +186,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   async function press(button: BotButton | null) {
-    const unanswered = () => toast.show('동작이 연결되지 않은 버튼이에요.');
+    const unanswered = () => toast.show('아무 동작도 연결되지 않은 버튼이에요.');
     if (!scripted) return unanswered();
     if (button === null) return;
     // A script runs over a saved chat only, so a press on a new chat's greeting saves it first.

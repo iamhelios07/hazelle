@@ -16,7 +16,7 @@ import { CHANGE_IMAGE } from './words';
 const ASSET = '에셋';
 // What runtime/characters keeps as an asset (engine/import assetType).
 const ACCEPT = 'image/*,video/mp4,video/webm';
-const NOT_KEPT = '이미지나 영상(MP4, WebM)이 아니거나 너무 커요.';
+const NOT_KEPT = '이미지나 영상(MP4, WebM) 파일이 아니거나 용량이 너무 커요.';
 // By name, never by the store's order, which moves an asset to the end on each rename or new picture.
 const byName = new Intl.Collator('ko', { numeric: true }).compare;
 const UNFOUND_SHOWN = 10;
@@ -96,7 +96,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
 
   const viewed = viewing === null ? undefined : assets.find(({ id }) => id === viewing);
   return (
-    <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}이나 {{video::이름}}처럼 이름으로 불러 보여 주는 이미지와 영상이에요. 이름이 같은 에셋이 여럿이면 그중 하나가 무작위로 나와요. 파일이나 폴더를 끌어다 놓아도 추가돼요. 없는 이름 경고는 앱을 연 뒤 이 기기에서 본 채팅 기준이에요.">
+    <Section title={ASSET} note={`${assets.length}개`} help="봇이 {{img::이름}}이나 {{video::이름}}처럼 이름으로 찾아 보여 주는 이미지와 영상이에요. 이름이 같은 에셋이 여러 개면 그중 하나가 무작위로 나와요. 파일이나 폴더를 끌어다 놓아도 추가돼요. 없는 이름이라는 경고는 앱을 연 뒤 이 기기에서 본 채팅을 기준으로 떠요.">
       <Stack gap="related">
         {unfound.length > 0 && (
           <Callout tone="warn">
@@ -139,9 +139,9 @@ export function AssetsEditor({ owner }: { owner: string }) {
           </SelectionBar>
         )}
       </Stack>
-      {dragging && <DropOverlay>여기에 놓으면 에셋으로 추가해요</DropOverlay>}
+      {dragging && <DropOverlay>여기에 놓으면 에셋으로 추가돼요</DropOverlay>}
       {viewed && <AssetPreview asset={viewed} actions={actionsOf(viewed)} onClose={() => setViewing(null)} />}
-      {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 에셋을 불러요." onSave={rename} onClose={() => setNaming(null)} />}
+      {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 에셋을 찾아요." onSave={rename} onClose={() => setNaming(null)} />}
     </Section>
   );
 }

@@ -58,7 +58,7 @@ export function LogSection() {
   return (
     <Panel title="기록">
       {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
-      {rows && rows.length === 0 && <Empty variant="section">기록이 없어요.</Empty>}
+      {rows && rows.length === 0 && <Empty variant="section">아직 기록이 없어요.</Empty>}
       {rows && rows.length > 0 && (
         <List label="기록" box>
           {rows.map((row) => (

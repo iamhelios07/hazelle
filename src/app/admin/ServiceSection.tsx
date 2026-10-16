@@ -43,7 +43,7 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
       <SettingGroup label="서비스">
         <SettingRow
           label="가입 정원"
-          help="계정 수가 정원보다 적을 때만 가입할 수 있어요."
+          help="전체 계정 수가 정원보다 적을 때만 새로 가입할 수 있어요."
           sub={`지금 ${count(service.accounts)}명`}
           error={signupCap === undefined ? '0 이상의 정수를 입력해 주세요.' : undefined}
           control={<NumberInput label="가입 정원" unit="명" value={seats ?? String(service.signupCap)} invalid={signupCap === undefined} onChange={setSeats} />}
@@ -56,7 +56,7 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
         />
         <SettingRow
           label="계정당 이미지 한도"
-          help="계정별로 올린 이미지의 총 크기예요."
+          help="계정마다 올린 이미지의 전체 용량이에요."
           sub={`저장된 이미지 합계 ${sizeText(service.fileBytes)}`}
           error={accountFileBytesCap === undefined ? CAP_ERROR : undefined}
           control={<NumberInput label="계정당 이미지 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}

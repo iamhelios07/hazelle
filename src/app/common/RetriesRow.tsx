@@ -27,7 +27,7 @@ export function RetriesRow({ value, follows, onChange }: { value: number | undef
       label={RETRY_COUNT}
       help={RETRY_HELP}
       changed={value !== undefined}
-      error={invalid ? `0에서 ${RETRY_MOST} 사이의 정수를 입력해 주세요.` : undefined}
+      error={invalid ? `0부터 ${RETRY_MOST} 사이의 정수를 입력해 주세요.` : undefined}
       control={<NumberInput label={RETRY_COUNT} value={draft} placeholder={follows} invalid={invalid} onChange={type} />}
     />
   );

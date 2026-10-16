@@ -23,7 +23,7 @@ export function ToolsSection({ onActed }: { onActed: () => void }) {
       <SettingGroup label="관리 도구">
         <SettingRow
           label={`모두에게 ${NOTICES.send}`}
-          help="지금 있는 계정이 모두 받아요."
+          help="현재 가입된 모든 계정에 알림을 보내요."
           control={<Button variant="secondary" size="sm" icon={Send} onClick={() => setOpen('notice')}>보내기</Button>}
         />
         <SettingRow
@@ -33,7 +33,7 @@ export function ToolsSection({ onActed }: { onActed: () => void }) {
         />
         <SettingRow
           label="파일 차단"
-          help="차단한 파일은 어느 계정에서도 올리거나 열 수 없어요."
+          help="차단한 파일은 어떤 계정에서도 올리거나 열 수 없어요."
           control={<Button variant="secondary" size="sm" icon={FileX} onClick={() => setOpen('file')}>id 입력</Button>}
         />
       </SettingGroup>
@@ -44,7 +44,7 @@ export function ToolsSection({ onActed }: { onActed: () => void }) {
           confirm={{ label: '보내기', icon: Send }}
           send={(text) => sendNotice(null, text)}
           onSent={() => {
-            toast.show('모두에게 보냈어요.');
+            toast.show('모든 계정에게 보냈어요.');
             done();
           }}
           onClose={close}

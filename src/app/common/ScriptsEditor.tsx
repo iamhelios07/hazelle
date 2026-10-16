@@ -198,7 +198,7 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
     <Item {...props} title={name} tag={tag} aside={searched ? STAGES[shown.stage] : undefined}>
       <TextField label="이름" value={shown.name} onChange={(value) => save.change({ name: value })} />
       <ChoiceGroup label="단계" showLabel layout="segmented" options={STAGE_OPTIONS} value={shown.stage} onChange={(stage) => save.change({ stage })} />
-      <TextField label="패턴" kind="key" lines={2} value={shown.find} onChange={(find) => save.change({ find })} error={check === 'invalid' ? '패턴이 올바르지 않아요.' : undefined} />
+      <TextField label="패턴" kind="key" lines={2} value={shown.find} onChange={(find) => save.change({ find })} error={check === 'invalid' ? '패턴 형식이 맞지 않아요.' : undefined} />
       <TextField
         label="바꿀 내용"
         kind="key"
@@ -213,7 +213,7 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
       <Disclosure label="시험해 보기">
         <Stack gap="related">
           <TextField label="예시 텍스트" lines={3} value={sample} onChange={setSample} />
-          <TextField label="결과" kind="key" lines={3} readOnly help={`${COMMAND}는 채팅에서 값으로 바뀌어요.`} value={sample && (tried ?? '')} onChange={() => {}} error={sample && tried === null ? '결과를 내지 못했어요.' : undefined} />
+          <TextField label="결과" kind="key" lines={3} readOnly help={`${COMMAND}는 채팅에서 실제 값으로 바뀌어요.`} value={sample && (tried ?? '')} onChange={() => {}} error={sample && tried === null ? '결과를 만들지 못했어요.' : undefined} />
         </Stack>
       </Disclosure>
       {actions(save.status)}

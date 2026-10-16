@@ -18,7 +18,7 @@ const PROTOCOLS: { value: Protocol; label: string }[] = [
 
 const PROBLEMS = {
   'not-https': HTTPS_ONLY,
-  local: '내 컴퓨터나 내부 네트워크 주소에는 연결할 수 없어요.',
+  local: '내 컴퓨터나 내부 네트워크 주소로는 연결할 수 없어요.',
 };
 
 // An address the list does know becomes that provider, so it gets the provider's balance and costs however it was
@@ -57,7 +57,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
         </Button>
       }
     >
-      <Intro title="목록에 없는 제공자 연결">OpenAI 호환, OpenAI Responses, Anthropic 호환 API에 연결할 수 있어요. 잔액과 비용은 알 수 없어요.</Intro>
+      <Intro title="목록에 없는 제공자 연결">OpenAI 호환, OpenAI Responses, Anthropic 호환 API에 연결할 수 있어요. 잔액과 비용은 확인할 수 없어요.</Intro>
       <Stack>
         <TextField label="주소" kind="key" value={address} onChange={setAddress} placeholder="https://…/v1" />
         {place?.kind === 'url' && <Callout tone="success">{place.type.label} 주소라서 {place.type.label} 연결로 추가해요.</Callout>}
@@ -74,7 +74,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
             kind="key"
             value={key}
             onChange={setKey}
-            hint={place.kind === 'generic-url' ? '키가 필요 없으면 비워 두어도 돼요.' : undefined}
+            hint={place.kind === 'generic-url' ? '키가 필요 없으면 비워 둬도 돼요.' : undefined}
           />
         )}
       </Stack>

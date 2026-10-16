@@ -22,7 +22,7 @@ export const packParts = (pack: Pack, lore: number, assets: number, tool = false
 
 export function holdsLine({ tool, lore, regex, triggers, toggles, assets, style }: PackParts): string {
   const held = [...(tool ? [TOOL] : []), ...counted([['로어북', lore]]), ...scriptCounts({ regex, triggers }), ...counted([['토글', toggles], ['에셋', assets]]), ...(style ? ['스타일'] : [])];
-  return held.length > 0 ? held.join(' · ') : '담긴 것이 없어요';
+  return held.length > 0 ? held.join(' · ') : '안에 담긴 항목이 없어요';
 }
 
 export const packHolds = (pack: Pack, lore: number, assets: number, tool = false): string => holdsLine(packParts(pack, lore, assets, tool));

@@ -212,7 +212,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             </>
           }
         >
-          {receipt.error ? describeReplyError(receipt.error) : '실패한 이유를 알 수 없어요.'}
+          {receipt.error ? describeReplyError(receipt.error) : '왜 실패했는지 알 수 없어요.'}
         </Failure>
       </>
     );

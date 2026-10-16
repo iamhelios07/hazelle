@@ -37,7 +37,7 @@ export function PortraitsEditor({ owner }: { owner: string }) {
       <Section
         title="삽화 프로필"
         note={building ? '만드는 중' : undefined}
-        help="삽화에서 인물을 늘 같은 외모로 그리도록 쓰는 태그예요. 처음 삽화를 그릴 때 만들어져요."
+        help="삽화에서 인물을 늘 같은 모습으로 그릴 때 쓰는 태그예요. 처음 삽화를 그릴 때 자동으로 만들어져요."
         action={
           <>
             <Button variant="link" disabled={building} onClick={() => likenesses.rebuild(owner)}>
@@ -45,14 +45,14 @@ export function PortraitsEditor({ owner }: { owner: string }) {
             </Button>
             {stored && !building && (
               <MoreMenu of="삽화 프로필">
-                <MenuItem icon={ACTS.remove.icon} label={`모두 ${ACTS.remove.label}`} sub="다음에 삽화를 그릴 때 다시 만들어져요" tone="warn" onClick={() => void removeAll()} />
+                <MenuItem icon={ACTS.remove.icon} label={`모두 ${ACTS.remove.label}`} sub="다음에 삽화를 그릴 때 새로 만들어져요" tone="warn" onClick={() => void removeAll()} />
               </MoreMenu>
             )}
           </>
         }
       >
         {run?.stage === 'failed' && <Callout tone="warn">{`프로필을 만들지 못했어요. ${describeLikenessFailure(run.failure)}`}</Callout>}
-        {!stored ? <Empty variant="section">프로필이 없어요.</Empty> : portraits.length === 0 && <Empty variant="section">삽화에 쓸 인물이 없어요.</Empty>}
+        {!stored ? <Empty variant="section">프로필이 없어요.</Empty> : portraits.length === 0 && <Empty variant="section">삽화에 넣을 인물이 없어요.</Empty>}
       </Section>
       {portraits.map((portrait) => (
         <PortraitTags key={portrait.name} owner={owner} portrait={portrait} onRemove={building ? undefined : () => void remove(portrait.name)} />
