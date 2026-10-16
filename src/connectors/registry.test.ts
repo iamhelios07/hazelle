@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { anthropicMessages } from './anthropic-messages';
+import { bareModel } from './chat-completions';
 import { copilot } from './copilot';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterKey from './fixtures/openrouter-key.json';
@@ -31,19 +32,7 @@ import { ConnectorError, type Connection, type Model } from './types';
 const connection = (type: string, extra: Partial<Connection> = {}) =>
   resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra }) as Route;
 
-const model = (extra: Partial<Model> = {}): Model => ({
-  id: 'm',
-  name: 'm',
-  input: null,
-  output: null,
-  contextLength: null,
-  maxOutput: null,
-  reasoning: null,
-  tools: null,
-  protocol: null,
-  takes: { settings: null, reasoning: null },
-  ...extra,
-});
+const model = (extra: Partial<Model> = {}): Model => ({ ...bareModel('m'), ...extra });
 
 describe('detection', () => {
   it('recognizes built-in keys and hosts', () => {
@@ -578,14 +567,12 @@ describe('embeddings', () => {
     expect(embedRoute({ ...generic, type: 'groq' }, model())).toBeNull();
     expect(embedRoute({ ...generic, type: 'anthropic' }, model())).toBeNull();
     expect(embedRoute({ ...generic, type: 'novelai' }, model())).toBeNull();
-    expect(() => embedRequest(connection('groq'), model(), ['밤'], null)).toThrow(ConnectorError);
     expect(embedRoute(generic, model())).toMatchObject({ endpoint: { baseUrl: 'https://example.com/v1' } });
     expect(embedRoute({ ...generic, type: 'mistral' }, model())).not.toBeNull();
   });
 
-  it('lists OpenRouter’s embedding models from their own list', () => {
+  it('reads an OpenRouter embedding model’s output as an embedding', () => {
     const route = connection('openrouter');
-    expect(route.type!.embeddingModels!(route.endpoint).url).toBe('https://openrouter.ai/api/v1/embeddings/models');
     const listed = { data: [{ id: 'liquid/lfm-2.5-embedding-350m:free', name: 'LiquidAI: LFM2.5-Embedding-350M (free)', context_length: 512, architecture: { input_modalities: ['text'], output_modalities: ['embeddings'] }, pricing: { prompt: '0', completion: '0' }, supported_parameters: [] }] };
     expect(parseCatalog(route, listed)).toEqual([expect.objectContaining({ id: 'liquid/lfm-2.5-embedding-350m:free', output: ['embedding'] })]);
   });

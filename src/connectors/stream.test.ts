@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import anthropicMessage from './fixtures/anthropic-message.json';
 import chatCompletion from './fixtures/chat-completion.json';
+import { bareModel } from './chat-completions';
 import { resolveConnection, type Route } from './registry';
 import { decodeStream, type InlineThoughts } from './stream';
 import type { Connection, Model, Phase } from './types';
@@ -10,7 +11,7 @@ const connection = (type: string, extra: Partial<Connection> = {}): Route =>
 
 const openRouter = connection('openrouter');
 const anthropic = connection('anthropic');
-const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+const model = bareModel('m');
 
 // Chunks are cut at awkward places on purpose: inside a line and inside a multi-byte character.
 function body(text: string, cuts = 7): ReadableStream<Uint8Array> {

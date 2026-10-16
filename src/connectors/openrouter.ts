@@ -1,4 +1,4 @@
-import { listedSettings } from './chat-completions';
+import { bareModel, listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
 import { statedPrice } from './pricing';
 import type { ConnectionType, Meter, MeterReset, Model } from './types';
@@ -51,7 +51,7 @@ export function openRouterModels(payload: unknown): Model[] | null {
       const pricing = isRecord(raw.pricing) ? raw.pricing : {};
       const name = typeof raw.name === 'string' && raw.name ? raw.name.replace(/^[^:]+:\s+(?=\S)/, '') : raw.id;
       return {
-        id: raw.id,
+        ...bareModel(raw.id),
         name,
         input: modalities(architecture.input_modalities),
         output: modalities(architecture.output_modalities),
@@ -59,7 +59,6 @@ export function openRouterModels(payload: unknown): Model[] | null {
         maxOutput: count(topProvider.max_completion_tokens),
         reasoning: parameters ? parameters.includes('reasoning') : null,
         tools: parameters ? parameters.includes('tools') : null,
-        protocol: null,
         takes: { settings: parameters && listedSettings(parameters), reasoning: isRecord(raw.reasoning) ? reasoningTakes(raw.reasoning) : null },
         price: statedPrice(perMillion(pricing.prompt), perMillion(pricing.completion), perMillion(pricing.input_cache_read), perMillion(pricing.input_cache_write)),
       };
@@ -78,7 +77,6 @@ export const openRouter: ConnectionType = {
   detect: { key: /^sk-or-/, host: 'openrouter.ai' },
 
   parseModels: openRouterModels,
-  embeddingModels: (endpoint) => ({ url: `${endpoint.baseUrl}/embeddings/models`, method: 'GET', headers: {}, body: null }),
 
   reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 

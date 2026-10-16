@@ -346,9 +346,7 @@ export class ChatFold {
       group.costs.clear();
       const entries = [...group.entries].map((entry) => this.read(entry)!);
       const receipt = (value: Receipt | null) => {
-        for (let current = value; current; current = current.continues ?? null) {
-          if (current.replyId) group.costs.add(current.replyId);
-        }
+        for (const call of value ? calls(value) : []) if (call.replyId) group.costs.add(call.replyId);
       };
       for (const { value } of entries) {
         if ('receipt' in value) receipt(value.receipt);
@@ -557,16 +555,6 @@ export type Summary = {
   stuck?: { dependencies: SummaryRead[] };
 };
 export type RecentModel = { at: number; ref: ModelRef };
-
-// Each branch right under the chat it came from, in the order given at each level.
-// A branch whose origin is not among them stands at the top level.
-export function branchTree(items: ChatSummary[]): { item: ChatSummary; nested: boolean }[] {
-  const ids = new Set(items.map((item) => item.id));
-  const parent = ({ chat }: ChatSummary) => (chat.origin && ids.has(chat.origin.id) ? chat.origin.id : null);
-  const under = (origin: string | null): { item: ChatSummary; nested: boolean }[] =>
-    items.filter((item) => parent(item) === origin).flatMap((item) => [{ item, nested: origin !== null }, ...under(item.id)]);
-  return under(null);
-}
 
 export const usageCall = ({ id, connection, model, modelName, source, usage, cost, calibration }: Receipt, at: number): UsageCall => ({ at, call: { id, connection, model, modelName, source, usage, cost, ...(calibration && { calibration }) } });
 

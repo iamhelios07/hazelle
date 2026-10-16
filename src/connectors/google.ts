@@ -1,4 +1,4 @@
-import { errorValue } from './errors';
+import { streamError } from './errors';
 import type { BatchAnswer, Batches, ConnectionType } from './types';
 import { isRecord, list } from './values';
 
@@ -34,8 +34,8 @@ function answerOf(operation: Record<string, unknown>): BatchAnswer | null {
   const inlined = isRecord(response.inlinedResponses) ? response.inlinedResponses : {};
   const [first] = list(inlined.inlinedResponses);
   if (isRecord(first) && first.response !== undefined) return { kind: 'reply', payload: first.response };
-  if (isRecord(first) && first.error !== undefined) return { kind: 'failed', detail: errorValue(first.error) ?? JSON.stringify(first.error) };
-  if (operation.error !== undefined) return { kind: 'failed', detail: errorValue(operation.error) ?? JSON.stringify(operation.error) };
+  if (isRecord(first) && first.error !== undefined) return { kind: 'failed', detail: streamError(first.error) };
+  if (operation.error !== undefined) return { kind: 'failed', detail: streamError(operation.error) };
   const state = isRecord(operation.metadata) && typeof operation.metadata.state === 'string' ? operation.metadata.state : '';
   if (state.endsWith('_CANCELLED')) return { kind: 'canceled' };
   if (state.endsWith('_EXPIRED')) return { kind: 'expired' };

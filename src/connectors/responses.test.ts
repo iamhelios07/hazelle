@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { bareModel } from './chat-completions';
 import { chatRequest, modelSettings, resolveConnection, type Route } from './registry';
 import { fit, type ModelSettings } from './settings';
 import { decodeStream } from './stream';
-import type { ChatMessage, Connection, Model, Phase } from './types';
+import type { ChatMessage, Connection, Phase } from './types';
 
 // Event and reply shapes follow OpenAI's Responses API reference (streaming events, the response object) and
 // provider-hub's parser (wire/formats/openai-responses.js). None was captured from a live provider.
 const on: Connection = { type: 'generic', label: '직접 연결', baseUrl: 'https://api.example.com/v1', protocol: 'responses', accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] };
 const route = resolveConnection(on) as Route;
-const model: Model = { id: 'gpt-5', name: 'gpt-5', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+const model = bareModel('gpt-5');
 
 async function decode(resolved: Route, text: string, media = 'text/event-stream') {
   const parts: [Phase, string][] = [];

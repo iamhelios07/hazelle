@@ -1,4 +1,5 @@
 import type { Receipt } from './chat';
+import { inverted } from './memory';
 
 // 삽화 profiles (design §6.6): how the characters a pack describes look, as Danbooru tags, so every picture draws them
 // alike. One object per pack at likenessId(owner), made on the first 삽화 that needs it and again only on 다시 만들기.
@@ -18,8 +19,6 @@ export type Likeness = { portraits: Portrait[]; at: number; receipt: Receipt | n
 
 // Ruled 2026-10-11: the characters past this are written per scene, as before profiles.
 export const PORTRAITS_MOST = 8;
-
-const inverted = (group: string) => [...group].map((digit) => (15 - parseInt(digit, 16)).toString(16)).join('');
 
 // The owner's id with its second group's hex digits inverted, the same on every device, so two devices making a pack's
 // likeness at once meet in a version conflict instead of making two (as model/memory memoryId).

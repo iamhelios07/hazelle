@@ -68,16 +68,14 @@ export const GENERIC = 'generic';
 // version of the app speaks.
 const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatCompletions, 'anthropic-messages': anthropicMessages, gemini, responses };
 
-// Route: a connection that speaks a chat format. codec null: one whose type speaks none, with its fixed model list.
+// Route: a connection that speaks a chat format.
 export type Route = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
 // The evaluation worker needs the resolved endpoint and provider policy, never credentials or a model catalog.
 export type WireRoute = { provider: string | null; endpoint: Endpoint };
 export const wireRoute = ({ type, endpoint }: Route): WireRoute => ({ provider: type?.id ?? null, endpoint });
 export function requestRoute({ provider, endpoint }: WireRoute): Route {
-  const type = provider === null ? null : CONNECTION_TYPES.find(({ id }) => id === provider);
-  const codec = CODECS[endpoint.protocol];
-  if (type === undefined || !codec) throw new ConnectorError('unsupported-protocol');
-  return { type, endpoint, codec };
+  const type = provider === null ? null : CONNECTION_TYPES.find(({ id }) => id === provider)!;
+  return { type, endpoint, codec: CODECS[endpoint.protocol]! };
 }
 
 export type Resolved = Route | { type: ConnectionType; endpoint: null; codec: null; models: Model[] };
@@ -136,14 +134,12 @@ export function embedRoute(connection: Connection, model: Model): Route | null {
 }
 
 export function embedRequest(route: Route, model: Model, texts: string[], as: EmbedPurpose | null): HttpRequest {
-  const embeds = embedsOf(route);
-  if (!embeds) throw new ConnectorError('no-embeddings');
-  return embeds.request(route.endpoint, model, texts, as, route.type?.embedPurpose?.(as) ?? {});
+  return embedsOf(route)!.request(route.endpoint, model, texts, as, route.type?.embedPurpose?.(as) ?? {});
 }
 
 // null for a body that is not the format's embedding answer for this many texts.
 export function embedAnswer(route: Route, model: Model, payload: unknown, count: number): { vectors: number[][]; usage: Usage; cost: Cost | null } | null {
-  const parsed = embedsOf(route)?.parse(payload, count);
+  const parsed = embedsOf(route)!.parse(payload, count);
   if (!parsed) return null;
   const { vectors, usage, raw } = parsed;
   const cost = route.type?.cost?.({ facts: { rawUsage: raw, finishReason: null, id: null, tier: null }, usage, model }) ?? (model.price ? priceCost(model.price, usage, costUnit(route.type)) : null);

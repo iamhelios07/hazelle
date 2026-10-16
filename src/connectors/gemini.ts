@@ -1,6 +1,6 @@
 import { failedTerminal } from './errors';
 import type { Reasoning } from './settings';
-import { embedUsage } from './chat-completions';
+import { bareModel, embedUsage } from './chat-completions';
 import type { ChatMessage, Codec, EmbedPurpose, Model, Phase, StreamFacts, Terminal } from './types';
 import { count, isRecord, list, vector } from './values';
 
@@ -101,16 +101,12 @@ export const gemini: Codec = {
       const id = raw.name.slice('models/'.length);
       return [
         {
-          id,
+          ...bareModel(id),
           name: typeof raw.displayName === 'string' && raw.displayName ? raw.displayName : id,
-          input: null,
           output: embeds ? ['embedding'] : null,
           contextLength: count(raw.inputTokenLimit) || null,
           maxOutput: count(raw.outputTokenLimit) || null,
           reasoning: raw.thinking === true,
-          tools: null,
-          protocol: null,
-          takes: { settings: null, reasoning: null },
         },
       ];
     });

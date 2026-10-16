@@ -1,4 +1,4 @@
-import { listedSettings } from './chat-completions';
+import { bareModel, listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
 import { statedPrice } from './pricing';
 import type { Rates } from './models-dev';
@@ -57,7 +57,7 @@ export const vercel: ConnectionType = {
         const kinds = isRecord(raw.modalities) ? raw.modalities : {};
         const tags = Array.isArray(raw.tags) ? raw.tags : null;
         return {
-          id: raw.id,
+          ...bareModel(raw.id),
           name: nameOf(raw, 'name'),
           input: modalities(kinds.input),
           output: embeds ? ['embedding' as const] : modalities(kinds.output),
@@ -65,7 +65,6 @@ export const vercel: ConnectionType = {
           maxOutput: count(raw.max_tokens),
           reasoning: tags ? tags.includes('reasoning') : null,
           tools: tags ? tags.includes('tool-use') : null,
-          protocol: null,
           takes: {
             settings: Array.isArray(raw.supported_parameters) ? listedSettings(raw.supported_parameters) : null,
             reasoning: Array.isArray(raw.reasoning_options) ? reasoningTakes(raw.reasoning_options) : null,

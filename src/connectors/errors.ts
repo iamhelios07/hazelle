@@ -8,8 +8,8 @@ export function errorValue(error: unknown): string | null {
   return isRecord(error) && typeof error.message === 'string' ? error.message : null;
 }
 
-// A stream has already identified an error event: retain an unknown JSON value verbatim as JSON.
-// A malformed error event with no value still fails, but has no detail to display.
+// An error already identified (a stream's error event, a batch's failed answer): retain an unknown JSON value verbatim
+// as JSON. A malformed error event with no value still fails, but has no detail to display.
 export const streamError = (error: unknown): string => errorValue(error) ?? JSON.stringify(error) ?? '';
 
 export function failedTerminal(error: unknown): Terminal {

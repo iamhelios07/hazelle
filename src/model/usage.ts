@@ -101,12 +101,7 @@ export function usageReport(calls: Counted[], window: ReportWindow, now: number,
     return [...groups].map(([key, made]) => ({ key, usage: sum(made) })).sort((a, b) => b.usage.calls - a.usage.calls);
   };
   const monthly = window === 'all';
-  const startOf = (at: number) => {
-    const start = new Date(at);
-    start.setHours(0, 0, 0, 0);
-    if (monthly) start.setDate(1);
-    return start.getTime();
-  };
+  const startOf = (at: number) => windowStart(monthly ? 'month' : 'today', at);
   const made = new Map(group(({ at }) => startOf(at)).map(({ key, usage }) => [key, usage]));
   const periods: UsageGroup<number>[] = [];
   const first = since ?? Math.min(now, ...made.keys());
