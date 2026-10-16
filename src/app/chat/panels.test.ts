@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../../engine/import/types';
 import type { Block } from '../../model/prompt';
-import { inspectShown, editorOf, loreBudgetEditor, NO_PANELS, opened, toggleEditor } from './panels';
+import { inspectShown, editorOf, loreBudgetEditor, NO_PANELS, opened, promptEditor, toggleEditor } from './panels';
 
 describe('the panels beside the story', () => {
   const editor = { kind: 'character', id: 'c', part: null } as const;
@@ -51,5 +51,12 @@ describe('the editor a toggle section opens', () => {
     expect(toggleEditor({ from: 'prompt', id: 'p' })).toEqual({ kind: 'prompts', id: 'p', pane: 'toggles', fromToggles: true });
     expect(toggleEditor({ from: 'card', id: 'c' })).toEqual({ kind: 'character', id: 'c', part: 'toggles', fromToggles: true });
     expect(toggleEditor({ from: 'module', id: 'm' })).toEqual({ kind: 'module', id: 'm' });
+  });
+});
+
+describe('the editor a task prompt door opens', () => {
+  it('opens the prompt at its pane, or the prompt list without one', () => {
+    expect(promptEditor({ id: 'p', pane: 'model' })).toEqual({ kind: 'prompts', id: 'p', pane: 'model' });
+    expect(promptEditor(null)).toEqual({ kind: 'prompts', id: null, pane: null });
   });
 });
