@@ -49,7 +49,7 @@ const clock = (ms: number) => {
 };
 
 // The ticking lives here, so only this note draws each second.
-function useNow(until: number | null) {
+export function useNow(until: number | null) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (until === null) return;

@@ -1,5 +1,5 @@
 import { Bookmark, Bot, Info, Languages, Pin, PinOff, SquarePen } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
@@ -20,6 +20,7 @@ import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { useNow } from './ChatCache';
 import { ChatPicture, slotsOf } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
 import type { ToolActions } from './toolMenu';
@@ -429,14 +430,10 @@ function Remark({ remark, fresh, onSeen }: { remark: Stored<'remark'>; fresh: bo
   return <MascotRemark face={pictures.face} picture={pictures.expressions[expression]} name={MASCOTS[mascot].name} line={line} fresh={fresh} onSeen={onSeen} />;
 }
 
-// The ticking lives here, so only this note draws each second. It counts from when this page began to wait.
+// It counts from when this page began to wait.
 function Elapsed({ thinking }: { thinking: boolean }) {
   const [start] = useState(Date.now);
-  const [now, setNow] = useState(start);
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const now = useNow(Infinity);
   const seconds = Math.floor((now - start) / 1000);
   return <Text variant="note">{`${thinking ? '추론 중' : '기다리는 중'} · ${seconds}초`}</Text>;
 }
