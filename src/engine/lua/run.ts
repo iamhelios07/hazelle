@@ -93,7 +93,6 @@ export class Lua {
       };
       const fire = async (event: Event, depth: number) => {
         for (const script of triggers) {
-          if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu') continue;
           if (!listens(script, event)) continue;
           const outer = active;
           const entry = hookLog(event.kind === 'edit' ? event.stage : event.kind === 'call' ? event.name : event.kind === 'button' ? 'button' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`, script.owner, script.name);
