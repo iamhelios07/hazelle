@@ -15,16 +15,14 @@ import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
 import { chatIllustrate } from './features';
 import { pinned, scopeOf } from './chat-context';
-import { retriesOf } from './connections';
-import { evaluationFailure } from './evaluation';
-import { gather, generate, type ReplyError } from './generate';
+import { evaluatingTask } from './evaluation';
+import type { ReplyError } from './generate';
 import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
 import { relayBytes, relayJson } from './relay';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
-import { callOf, endCall, pageCall } from './streams';
-import { receiptOf, unsettled } from './talk';
+import { pageAnswer } from './streams';
 import { chatPlace, receiptRow } from './usage';
 
 // 삽화 (design §6.6): per message per run, one scene call to the chat's 보조 model (or the 삽화 prompt's own) writes
@@ -238,24 +236,17 @@ export class Illustrator {
   // The scene call reads through the server's stream like any model call, but leaves no marker: a pick-up on another
   // device would draw the picture again and pay for it twice.
   private async scenes(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, portraits: Portrait[], prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
-    const { store, credentials } = this.deps;
+    const { store } = this.deps;
     const writer = taskWriter(store, value, prompt.model);
     if ('kind' in writer) return writer;
-    const { route, settings } = writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: portraits.map(({ name, aliases }) => ({ name, aliases })), seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
-      const failure = evaluationFailure(error);
-      return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
-    });
+    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: portraits.map(({ name, aliases }) => ({ name, aliases })), seed: crypto.randomUUID() }, signal));
     if ('kind' in assembled) return assembled;
-    const text = gather();
-    const call = await pageCall(this.deps, route, 'illustration', chat);
-    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
-    if (answer.cut === 'stopped') return { kind: 'stopped' };
-    const receipt = unsettled(receiptOf(callOf(route), answer));
-    if (answer.state !== 'done') return { kind: 'failed', receipt };
-    const parsed = parseScenes(text.value(), paragraphs.length, count);
+    const answer = await pageAnswer(this.deps, writer, 'illustration', chat, assembled.messages, signal);
+    if ('kind' in answer) return answer;
+    const { receipt } = answer;
+    const parsed = parseScenes(answer.text, paragraphs.length, count);
     return parsed.ok ? { scenes: parsed.scenes, receipt } : { kind: 'invalid', receipt, reason: parsed.reason };
   }
 

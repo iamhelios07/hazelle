@@ -12,15 +12,13 @@ import type { RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
 import { packsOf } from './chat-context';
 import { chatPersona } from './personas';
-import { refreshStarred, retriesOf } from './connections';
-import { gather, generate } from './generate';
+import { refreshStarred } from './connections';
 import { shownPicture } from './picture';
 import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
-import { callOf, endCall, pageCall } from './streams';
-import { receiptOf, unsettled } from './talk';
+import { pageAnswer } from './streams';
 import { keepRow } from './usage';
 import { fromBase64 } from '../vault/aead';
 
@@ -200,7 +198,7 @@ export class Likenesses {
   // owner's text with its lorebook. An owner with none of them gets no call and nothing saved, so a description
   // written later (an account's first persona starts blank) is read on the next draw.
   private async build(owner: string, chat: Chat, prompt: IllustratePrompt, signal: AbortSignal): Promise<LikenessFailure | Stopped | null> {
-    const { store, files, credentials } = this.deps;
+    const { store, files } = this.deps;
     const material = this.material(owner);
     if (!material) return { kind: 'gone' };
     const { texts, lore } = material;
@@ -224,13 +222,10 @@ export class Likenesses {
     const sources = sourcesOf(input);
     if (!sources.length) return save(empty);
 
-    const text = gather();
-    const call = await pageCall(this.deps, writer.route, 'likeness', null);
-    const answer = await generate({ credentials, connection: writer.route.connection.value, model: writer.route.model, settings: writer.settings, retries: retriesOf(store, writer.route.connection.value, writer.settings), messages: likenessRequest(input), call, signal, onText: text.add }).finally(() => endCall(store, call.id));
-    if (answer.cut === 'stopped') return { kind: 'stopped' };
-    const receipt = unsettled(receiptOf(callOf(writer.route), answer));
-    if (answer.state !== 'done') return { kind: 'failed', receipt };
-    const parsed = parseLikeness(text.value(), { sources, artist: artistOf(prompts.map(({ prompt }) => artistTags(prompt))), most: PORTRAITS_MOST });
+    const answer = await pageAnswer(this.deps, writer, 'likeness', null, likenessRequest(input), signal);
+    if ('kind' in answer) return answer;
+    const { receipt } = answer;
+    const parsed = parseLikeness(answer.text, { sources, artist: artistOf(prompts.map(({ prompt }) => artistTags(prompt))), most: PORTRAITS_MOST });
     return parsed.ok ? save({ portraits: parsed.portraits, at: Date.now(), receipt }) : { kind: 'invalid', receipt, reason: parsed.reason };
   }
 }
