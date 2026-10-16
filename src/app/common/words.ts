@@ -85,7 +85,6 @@ export const MODEL_SETTINGS = '모델 설정';
 export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
 
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
-// A feature's page under 설정 › 채팅.
 export const inFeature = (feature: Feature) => `${inSettings('chat')} › ${FEATURE_NAMES[feature]}`;
 
 // A hint's door to the place it names: the thing itself, or a settings page by inSettings when it lands on the page.
@@ -138,7 +137,6 @@ export const ARCA_LOG = '아카라이브용 HTML';
 // chat list, into the character picked there; what the file cannot hold, behind each place's ⓘ.
 export const RISU_CHAT_FILE = 'Risu 채팅 파일';
 export const RISU_LOSES = 'Risu에서 캐릭터를 선택한 뒤 채팅 목록의 가져오기로 채팅 파일을 추가해요. 지금 화면에 보이는 버전만 담겨요. 다른 버전이나 수정한 첫 메시지, 번역, 이미지와 삽화, 장기 기억, 등장인물, 채팅에서 선택한 프롬프트·페르소나·모델은 빠져요.';
-// What one export left out of what it was asked to hold.
 export const risuLeftOut = ({ greetings, lore, unread }: LeftOut) =>
   [
     greetings ? `수정한 첫 메시지 ${greetings}개는 빠지고 캐릭터 카드의 원래 첫 메시지로 보여요.` : '',

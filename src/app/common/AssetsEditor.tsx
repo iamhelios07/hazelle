@@ -30,7 +30,6 @@ export function AssetsEditor({ owner }: { owner: string }) {
   const [adding, setAdding] = useState(false);
   const [naming, setNaming] = useState<Stored<'asset'> | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
-  // null while not picking.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const copy = useCopy();
   // A module is never a key: a chat's names are told under its character, whichever pack's text asked for them. A name
@@ -78,7 +77,6 @@ export function AssetsEditor({ owner }: { owner: string }) {
     void renameAsset(store, naming.id, trimmed).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
-  // One list for a card's ⋯ and its preview's buttons.
   const actionsOf = (asset: Stored<'asset'>): Action[] => [
     { icon: ACTS.copy.icon, label: `태그 ${ACTS.copy.label}`, run: () => copy(`{{${isVideo(asset.value.type) ? 'video' : 'img'}::${asset.value.name}}}`) },
     { icon: ACTS.rename.icon, label: ACTS.rename.label, run: () => setNaming(asset) },

@@ -133,7 +133,6 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
 
 type ItemProps = { owner: PackOwner; pack: Pack; place: number; page: boolean; open: boolean; onOpen: (open: boolean) => void };
 
-// A row of its list that opens in place, or with page the open script alone.
 function Item({ page, open, onOpen, title, tag, aside, children }: Pick<ItemProps, 'page' | 'open' | 'onOpen'> & { title: string; tag: string | null; aside?: string; children: ReactNode }) {
   if (page)
     return (
