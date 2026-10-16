@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Card } from '../../engine/import/types';
 import type { Assembled, From, Problem } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
@@ -8,7 +8,7 @@ import type { Role } from '../../model/prompt';
 import type { HttpRequest } from '../../connectors/types';
 import type { Sent } from '../../runtime/talk';
 import { MESSAGE_ROLES, SLOT, textName } from '../common/prompt-words';
-import { Button, Callout, ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Row, Section, Stack, Text } from '../ui';
+import { Button, Callout, ChoiceGroup, CodeBlock, Empty, Facts, List, ListItem, Row, Section, Stack, Text } from '../ui';
 import { loreBudgetEditor, type Side } from './panels';
 import { budgetCut } from './infoReply';
 import { navigate } from '../shell/router';
@@ -70,6 +70,9 @@ export function SentResponse({ sent }: { sent: Sent | null }) {
 type RequestViewProps = {
   prompt: Pick<Assembled, 'messages' | 'parts' | 'problems'>;
   title: string;
+  level?: 2 | 3;
+  // Above the parts: what the view leaves out, as a note.
+  lead?: ReactNode;
   // Read only while 본문 shows: the wire body of a request not sent yet is built on demand.
   request: () => Pick<HttpRequest, 'url' | 'body'> | null;
   unbuilt: string;
@@ -103,66 +106,88 @@ function ProblemList({ problems, placed }: { problems: Problem[]; placed: boolea
   );
 }
 
-export function RequestView({ prompt, title, request, unbuilt, editor, onEdit, sameAs }: RequestViewProps) {
+export function RequestView({ prompt, title, level = 3, lead, request, unbuilt, editor, onEdit, sameAs }: RequestViewProps) {
   const [view, setView] = useState<'parts' | 'body'>('parts');
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  const toggle = (index: number) =>
+    setOpen((was) => {
+      const next = new Set(was);
+      if (!next.delete(index)) next.add(index);
+      return next;
+    });
   const total = prompt.parts.reduce((sum, part) => sum + part.tokens, 0);
   const { found, omitted } = prompt.problems;
   // A problem shows at the first part built from its text; a text that rendered to nothing has none.
   const owners = found.map((problem) => prompt.parts.findIndex(({ from }) => from.kind === problem.from.kind && 'id' in from && from.id === problem.from.id));
   const at = (index: number) => found.filter((_, problem) => owners[problem] === index);
   const unplaced = at(-1);
+  const switcher = (
+    <ChoiceGroup
+      label="요청 원문 보기"
+      layout="segmented"
+      options={[
+        { value: 'parts', label: '블록별' },
+        { value: 'body', label: '본문' },
+      ]}
+      value={view}
+      onChange={setView}
+    />
+  );
   return (
-    <>
-      <ChoiceGroup
-        label="요청 원문 보기"
-        layout="segmented"
-        options={[
-          { value: 'parts', label: '블록별' },
-          { value: 'body', label: '본문' },
-        ]}
-        value={view}
-        onChange={setView}
-      />
+    <Section level={level} title={title} note={`약 ${tokens(total)} 토큰 · 앱 추정`} action={switcher}>
       {view === 'parts' ? (
-        <Section level={3} title={title} note={`약 ${tokens(total)} 토큰 · 앱 추정`}>
-          <Stack gap="related">
-            {found.length > 0 && !(sameAs && sameProblems(prompt.problems, sameAs)) && (
-              <Callout tone="warn">{`문제 ${found.length + omitted}개 · 모르는 ${COMMAND}나 오류 문구가 모델에 그대로 가요.${omitted ? ` ${omitted}개는 목록에서 뺐어요.` : ''}`}</Callout>
-            )}
+        <Stack gap="related">
+          {lead}
+          {found.length > 0 && !(sameAs && sameProblems(prompt.problems, sameAs)) && (
+            <Callout tone="warn">{`문제 ${found.length + omitted}개 · 모르는 ${COMMAND}나 오류 문구가 모델에 그대로 가요.${omitted ? ` ${omitted}개는 목록에서 뺐어요.` : ''}`}</Callout>
+          )}
+          <List label={title}>
             {prompt.messages.map((message, index) => {
               const part = prompt.parts[index]!;
               const side = editor?.(part.from);
               const problems = at(index);
               return (
-                <Disclosure key={index} label={`${partName(part.from, message.role)} · ${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰${problems.length ? ` · ${problemCounts(problems)}` : ''}`}>
-                  <Stack gap="related">
-                    {problems.length > 0 && <ProblemList problems={problems} placed />}
-                    <CodeBlock>{message.content}</CodeBlock>
-                    {side && onEdit && (
-                      <Row kind="actions">
-                        <Button variant="link" size="sm" onClick={() => onEdit(side)}>
-                          편집
-                        </Button>
-                      </Row>
-                    )}
-                  </Stack>
-                </Disclosure>
+                <ListItem
+                  key={index}
+                  title={partName(part.from, message.role)}
+                  badge={problems.length ? problemCounts(problems) : undefined}
+                  aside={`${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰`}
+                  expanded={open.has(index)}
+                  onClick={() => toggle(index)}
+                  detail={
+                    open.has(index) && (
+                      <Stack gap="related">
+                        {problems.length > 0 && <ProblemList problems={problems} placed />}
+                        <CodeBlock>{message.content}</CodeBlock>
+                        {side && onEdit && (
+                          <Row kind="actions">
+                            <Button variant="link" size="sm" onClick={() => onEdit(side)}>
+                              편집
+                            </Button>
+                          </Row>
+                        )}
+                      </Stack>
+                    )
+                  }
+                />
               );
             })}
             {unplaced.length > 0 && (
-              <Disclosure label={`그 밖에 · ${problemCounts(unplaced)}`}>
-                <Stack gap="related">
-                  <Text variant="note">요청에 그대로 들어가지 않은 블록이나 로어북 항목이에요.</Text>
-                  <ProblemList problems={unplaced} placed={false} />
-                </Stack>
-              </Disclosure>
+              <ListItem
+                title="그 밖에"
+                badge={problemCounts(unplaced)}
+                description="요청에 그대로 들어가지 않은 블록이나 로어북 항목이에요."
+                expanded={open.has(-1)}
+                onClick={() => toggle(-1)}
+                detail={open.has(-1) && <ProblemList problems={unplaced} placed={false} />}
+              />
             )}
-          </Stack>
-        </Section>
+          </List>
+        </Stack>
       ) : (
         <RequestBody request={request()} unbuilt={unbuilt} />
       )}
-    </>
+    </Section>
   );
 }
 

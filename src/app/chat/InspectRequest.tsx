@@ -29,10 +29,20 @@ export function NextRequest({ chat, sending, request, editor, onEdit }: { chat: 
   const session = useSession();
   const missing = later(afterEnter(session, chat, sending.turn));
   return (
-    <Stack gap="group">
-      <NextTokens sending={sending} />
-      {missing.length > 0 && <Text variant="note">{`보낼 때 실행돼서 여기에는 없어요: ${missing.join(', ')}`}</Text>}
-      <RequestView prompt={sending.prompt} title="보낼 순서대로" request={request} unbuilt={UNBUILT} editor={editor} onEdit={onEdit} />
+    <Stack gap="section">
+      <Section title="토큰">
+        <NextTokens sending={sending} />
+      </Section>
+      <RequestView
+        level={2}
+        prompt={sending.prompt}
+        title="보낼 순서대로"
+        lead={missing.length > 0 && <Text variant="note">{`보낼 때 실행돼서 여기에는 없어요: ${missing.join(', ')}`}</Text>}
+        request={request}
+        unbuilt={UNBUILT}
+        editor={editor}
+        onEdit={onEdit}
+      />
       <Rehearsed chat={chat} sending={sending} editor={editor} onEdit={onEdit} />
     </Stack>
   );
