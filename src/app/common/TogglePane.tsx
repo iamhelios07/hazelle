@@ -138,24 +138,22 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
               key={isToggle(line) ? line.key : `${line.kind}${at}`}
               label={isToggle(line) || (line.kind !== 'groupEnd' && line.kind !== 'unread' && line.label) ? line.label : LINE_WORDS[line.kind]}
               sub={subOf(line)}
-              control={
-                <Row kind="toolbar">
-                  {control(line, at)}
-                  <MoreMenu of={isToggle(line) ? `'${line.label}'` : LINE_WORDS[line.kind]}>
-                    {line.kind !== 'groupEnd' && (
-                      <MenuItem
-                        icon={ACTS.rename.icon}
-                        label={line.kind === 'caption' || line.kind === 'unread' ? '내용 바꾸기' : ACTS.rename.label}
-                        onClick={() => setEditing({ at, field: line.kind === 'unread' ? 'line' : 'label' })}
-                      />
-                    )}
-                    {line.kind === 'text' && <MenuItem label="기본값 바꾸기" onClick={() => setEditing({ at, field: 'default' })} />}
-                    {isToggle(line) && <MenuItem label="키 바꾸기" sub={uses ? '조건에 쓴 키도 함께 바뀌어요' : undefined} onClick={() => setEditing({ at, field: 'key' })} />}
-                    {at > 0 && <MenuItem icon={ArrowUp} label="위로 옮기기" onClick={() => onMove(line, at, at - 1)} />}
-                    {at < lines.length - 1 && <MenuItem icon={ArrowDown} label="아래로 옮기기" onClick={() => onMove(line, at, at + 1)} />}
-                    <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onRemove(at)} />
-                  </MoreMenu>
-                </Row>
+              control={control(line, at)}
+              menu={
+                <MoreMenu of={isToggle(line) ? `'${line.label}'` : LINE_WORDS[line.kind]}>
+                  {line.kind !== 'groupEnd' && (
+                    <MenuItem
+                      icon={ACTS.rename.icon}
+                      label={line.kind === 'caption' || line.kind === 'unread' ? '내용 바꾸기' : ACTS.rename.label}
+                      onClick={() => setEditing({ at, field: line.kind === 'unread' ? 'line' : 'label' })}
+                    />
+                  )}
+                  {line.kind === 'text' && <MenuItem label="기본값 바꾸기" onClick={() => setEditing({ at, field: 'default' })} />}
+                  {isToggle(line) && <MenuItem label="키 바꾸기" sub={uses ? '조건에 쓴 키도 함께 바뀌어요' : undefined} onClick={() => setEditing({ at, field: 'key' })} />}
+                  {at > 0 && <MenuItem icon={ArrowUp} label="위로 옮기기" onClick={() => onMove(line, at, at - 1)} />}
+                  {at < lines.length - 1 && <MenuItem icon={ArrowDown} label="아래로 옮기기" onClick={() => onMove(line, at, at + 1)} />}
+                  <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onRemove(at)} />
+                </MoreMenu>
               }
             />
           ))}

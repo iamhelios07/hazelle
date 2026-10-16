@@ -29,11 +29,13 @@ type RowProps = {
   // Under the words at every width, for a control as wide as the row, such as a row of chips. Beside them, its
   // grid column takes the chips' one-line width and squeezes the words to a letter a line.
   wide?: boolean;
+  // The row's ⋯: at the end of the words' line at every width, where a narrow row puts the control under them.
+  menu?: ReactNode;
   error?: string;
   note?: string;
 };
 
-export function SettingRow({ label, sentence, changed = false, help, sub, preview, control, action, wide = false, error, note }: RowProps) {
+export function SettingRow({ label, sentence, changed = false, help, sub, preview, control, action, wide = false, menu, error, note }: RowProps) {
   const id = useId();
   const grouped = useContext(Grouped);
   const className = [styles.row, grouped ? styles.ruled : styles.panel, wide && styles.wide].filter(Boolean).join(' ');
@@ -56,6 +58,7 @@ export function SettingRow({ label, sentence, changed = false, help, sub, previe
         ))}
       </div>
       <div className={styles.control}>{control}</div>
+      {menu && <div className={styles.menu}>{menu}</div>}
       {error && (
         <p className={styles.error} role="alert">
           {error}

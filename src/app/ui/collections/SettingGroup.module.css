@@ -19,6 +19,25 @@
   gap: var(--space-8);
 }
 
+.row:has(> .menu) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.menu {
+  display: flex;
+  align-items: center;
+}
+
+/* Under the words, the control takes the line below; the ⋯ stays beside the words. */
+.row.wide:has(> .menu) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.row.wide:has(> .menu) > .control {
+  grid-row: 2;
+  grid-column: 1 / -1;
+}
+
 /* Given to group rows only (SettingGroup.tsx): the shared rule loads after this file, so a panel row could not undo it. */
 .ruled {
   composes: ruled from '../foundation/surface.module.css';
@@ -80,6 +99,10 @@
   gap: var(--space-8);
 }
 
+.control:empty {
+  display: none;
+}
+
 .wide .control {
   justify-content: flex-start;
 }
@@ -118,6 +141,15 @@
     gap: var(--space-8);
   }
 
+  .row:has(> .menu):not(:has(> .control > [role='switch']:only-child)) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .row:has(> .menu):not(:has(> .control > [role='switch']:only-child)) > .control {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+
   .control {
     justify-content: flex-start;
   }
@@ -132,6 +164,15 @@
   .row:not(.panel, :has(> .control > [role='switch']:only-child)) {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-8);
+  }
+
+  .row:has(> .menu):not(.panel, :has(> .control > [role='switch']:only-child)) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .row:has(> .menu):not(.panel, :has(> .control > [role='switch']:only-child)) > .control {
+    grid-row: 2;
+    grid-column: 1 / -1;
   }
 
   .control {
