@@ -103,7 +103,6 @@ export class Tokens {
   }
 
   clear() { this.events = []; this.rows = null; this.byKey.clear(); this.index = new Calibration(); }
-  project(calibration: CallCalibration, usage: ReportedUsage | null) { return tokenProjection(calibration, usage); }
   call(call: UsageCall['call']) { return tokenProjection(call.calibration === undefined ? unavailableCalibration('historical') : call.calibration, call.usage); }
 }
 
