@@ -132,14 +132,15 @@ function NextTokens({ sending }: { sending: Sending }) {
   const { groups, total, fit, dropped } = tokenGroups(sending.prompt, sending.calibration);
   const counted = (source: TokenSource, count: number) => (source.kind === 'chat' ? `메시지 ${count}개` : source.kind === 'lorebook' ? `항목 ${count}개` : undefined);
   return (
-    <Stack gap="group">
+    <Stack gap="related">
       <Gauge
         share={fit.allowance ? total / fit.allowance : undefined}
         tone={fit.allowance && total > fit.allowance ? 'warn' : 'plain'}
         amount={`약 ${tokens(total)}`}
         of={fit.allowance === null ? undefined : `약 ${tokens(fit.allowance)}`}
-        note={['앱 추정', ...(fit.allowance === null ? ['모델 한도를 알 수 없어서 내용을 줄이지 않아요'] : fit.multiplier === null ? [] : [`배율 ×${fit.multiplier.toFixed(2)} 반영`])].join(' · ')}
+        note={['앱 추정', ...(fit.allowance !== null && fit.multiplier !== null ? [`배율 ×${fit.multiplier.toFixed(2)} 반영`] : [])].join(' · ')}
       />
+      {fit.allowance === null && <Text variant="note">모델 한도를 알 수 없어서 내용을 줄이지 않아요.</Text>}
       {dropped > 0 && <Text variant="note">{`한도를 넘어서 오래된 메시지 ${dropped}개가 빠져요.`}</Text>}
       <Disclosure label="토큰을 쓰는 곳">
         <List label="토큰을 쓰는 곳">
