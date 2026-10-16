@@ -1,13 +1,14 @@
 import { moved } from '../../model/fields';
 import { PICTURE_PERCENT } from '../../model/library';
 import type { SavedLook } from '../../model/settings';
-import { ACCENT, BG, DIALOGUE, INK, QUOTE_SHAPE, THEME, type QuoteShape, type Reading, type Scheme } from '../ui';
+import { ACCENT, BG, DIALOGUE, INK, QUOTE_SHAPE, THEME, type QuoteShape, type Reading, type Scheme, type StageSide } from '../ui';
 
 export const SIZE = { min: 14, max: 21 };
 
 export const FONT: Record<Reading['font'], string> = { serif: '명조', sans: '고딕' };
 export const SPACING: Record<Reading['leading'], string> = { narrow: '좁게', normal: '보통', wide: '넓게' };
 export const REPLY: Record<Reading['reply'], string> = { follow: '자동 스크롤', stay: '스크롤 고정' };
+export const SIDE: Record<StageSide, string> = { right: '오른쪽', left: '왼쪽' };
 
 export const choices = <T extends string>(labels: Record<T, string>) => (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }));
 
@@ -37,12 +38,13 @@ export function parseReading(stored: string, fallback: Reading): Reading {
 
 // pictureMost: the height no picture-only line's picture is drawn taller than, in percent of the screen's height, unless
 // the character sets its own (Pictures.most).
-// quotes: 대사 모양, a reading habit, so no preset sets it.
-export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; hidePictures: boolean; pictureMost: number };
+// quotes (대사 모양), pictureSide and portrait: reading habits, so no preset sets them.
+// portrait: the character's picture on the stage, only in a chat without 삽화: the stage is theirs (user, 2026-10-16).
+export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; hidePictures: boolean; pictureMost: number; pictureSide: StageSide; portrait: boolean };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, hidePictures: false, pictureMost: 80 };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, hidePictures: false, pictureMost: 80, pictureSide: 'right', portrait: false };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -57,6 +59,8 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     foldComposer: flag(read.foldComposer, fallback.foldComposer),
     hidePictures: flag(read.hidePictures, fallback.hidePictures),
     pictureMost: percent(read.pictureMost) ?? fallback.pictureMost,
+    pictureSide: known(SIDE, read.pictureSide, fallback.pictureSide),
+    portrait: flag(read.portrait, fallback.portrait),
   };
 }
 

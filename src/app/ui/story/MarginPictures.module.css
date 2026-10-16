@@ -4,13 +4,22 @@
 
   position: absolute;
   top: 0;
-  left: calc(100% + var(--read-gutter));
   bottom: 0;
   width: var(--story-margin);
 
   /* Measured as the space between two pictures. */
   row-gap: var(--space-16);
   pointer-events: none;
+}
+
+.right {
+  left: calc(100% + var(--read-gutter));
+}
+
+.left {
+  --picture-at-end: 1;
+
+  right: calc(100% + var(--read-gutter));
 }
 
 .column {

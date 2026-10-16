@@ -25,6 +25,26 @@
   --story-lead: var(--story-stage-lead);
 }
 
+/* The character's picture on a stage no 삽화 hold, between the header and the composer. --story-stage-at is the
+   stage's left edge, measured in ChatFrame.tsx. */
+.portrait {
+  position: absolute;
+  top: calc(var(--header-height) + var(--space-8));
+  bottom: calc(var(--footer-space) + var(--space-8));
+  left: var(--story-stage-at);
+  width: var(--story-margin);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.portrait img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-md);
+}
+
 /* 읽기 설정: ChatFrame.tsx readingScope sets --reading-size and one class of each kind. */
 .serif {
   --prose-font: var(--font-serif);

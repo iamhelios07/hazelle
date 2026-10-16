@@ -5,9 +5,9 @@ export type BotAsset = { id: string; name: string; type: string; module?: string
 // A kept asset is a picture or a video (engine/import assetType).
 export const isVideo = (type: string) => type.startsWith('video/');
 
-// A stored picture by its kind and id: a bot's asset, a chat's inlay, or a 삽화 (illustration), which only an export names
-// this way.
-export type PictureKind = 'asset' | 'inlay' | 'illustration';
+// A stored picture by its kind and id: a bot's asset, a chat's inlay, a 삽화 (illustration), which only an export names
+// this way, or a character's avatar, which no text names (PICTURE_REF leaves it out).
+export type PictureKind = 'asset' | 'inlay' | 'illustration' | 'avatar';
 export type PictureUrl = (kind: PictureKind, id: string) => string | undefined;
 
 // The chat screen puts the picture's own URL there once it is loaded (resolveAssets), and nothing before.

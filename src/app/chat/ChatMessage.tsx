@@ -253,7 +253,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             ref={story}
           />
         )}
-        {!empty && beside && shownPictures.length > 0 && <MarginPictures anchors={anchors}>{shownPictures}</MarginPictures>}
+        {!empty && beside && shownPictures.length > 0 && <MarginPictures anchors={anchors} side={beside}>{shownPictures}</MarginPictures>}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );

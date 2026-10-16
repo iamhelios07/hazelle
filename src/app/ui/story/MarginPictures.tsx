@@ -1,9 +1,11 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import type { StageSide } from '../layout/ChatFrame';
 import styles from './MarginPictures.module.css';
 
 type Props = {
   // By picture, the element slotted into the message's Story where its paragraph ends; each stands level with its own.
   anchors: RefObject<(HTMLElement | null)[]>;
+  side: StageSide;
   children: ReactNode[];
 };
 
@@ -20,9 +22,9 @@ function placesOf(wanted: number[], heights: number[], end: number, gap: number)
   return tops.map((top, index) => ({ top, height: Math.max(index === tops.length - 1 ? end - top : tops[index + 1]! - gap - top, heights[index]!) }));
 }
 
-// A message's 삽화 on the stage right of the story, so the text never moves when one lands. Each follows the reader
-// down its band. Laid out against the message, which StoryMessage positions, whose right edge is the text's.
-export function MarginPictures({ anchors, children }: Props) {
+// A message's 삽화 on the stage beside the story, so the text never moves when one lands. Each follows the reader
+// down its band. Laid out against the message, which StoryMessage positions, whose edges are the text's.
+export function MarginPictures({ anchors, side, children }: Props) {
   const stage = useRef<HTMLDivElement>(null);
   const pictures = useRef<(HTMLDivElement | null)[]>([]);
   const [places, setPlaces] = useState<Place[]>([]);
@@ -51,7 +53,7 @@ export function MarginPictures({ anchors, children }: Props) {
   }, [children.length]);
 
   return (
-    <div ref={stage} className={styles.stage}>
+    <div ref={stage} className={`${styles.stage} ${styles[side]}`}>
       {children.map((child, index) => (
         <div key={index} className={styles.column} style={{ '--top': `${places[index]?.top ?? 0}px`, '--height': `${places[index]?.height ?? 0}px` } as CSSProperties}>
           <div

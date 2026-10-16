@@ -6,7 +6,7 @@ import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { HidePicturesRow, ReadingRows, ReplyRow } from '../common/ReadingRows';
-import { choices, describeLook, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
+import { choices, describeLook, SIDE, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
 import { typedText } from '../common/typed';
 import { PAGES } from '../common/words';
 import { useDisplay } from '../display';
@@ -121,6 +121,16 @@ export function DisplayScreen({ back }: { back: Back | null }) {
           <SettingGroup label="이미지">
             <HidePicturesRow />
             <PictureMostRow />
+            <SettingRow
+              label="이미지 위치"
+              help="넓은 화면에서 삽화와 캐릭터 이미지를 채팅 어느 쪽에 둘지 정해요."
+              control={<ChoiceGroup layout="segmented" label="이미지 위치" options={choices(SIDE)} value={display.pictureSide} onChange={(pictureSide) => changeDisplay({ pictureSide })} />}
+            />
+            <SettingRow
+              label="캐릭터 이미지 크게 보기"
+              help="넓은 화면에서 채팅 옆에 캐릭터 이미지를 크게 띄워요. 삽화를 쓰는 채팅에선 삽화가 그 자리를 써요."
+              control={<Switch label="캐릭터 이미지 크게 보기" checked={display.portrait} onChange={(portrait) => changeDisplay({ portrait })} />}
+            />
           </SettingGroup>
         </Section>
         <Section title="텍스트">

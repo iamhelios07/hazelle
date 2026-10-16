@@ -5,16 +5,18 @@
   margin: 0;
 }
 
-/* --ratio is the picture's width over its height, set by StoryPicture. --picture-grow is set where it stands on the
-   stage (MarginPicture). */
+/* --ratio is the picture's width over its height, set by StoryPicture. --picture-grow and --picture-at-end are set where
+   it stands on the stage (MarginPictures): on a stage left of the story, a picture stands at its right, by the text. */
 .frame {
+  --fitted: min(100%, calc(var(--story-illustration-most) * var(--ratio)));
   --grown: min(max(100%, var(--picture-grow, 100%)), calc(var(--story-illustration-most) * var(--ratio)));
 
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(100%, calc(var(--story-illustration-most) * var(--ratio)));
+  width: var(--fitted);
+  margin-left: calc(var(--picture-at-end, 0) * (100% - var(--fitted)));
   aspect-ratio: var(--ratio);
   overflow: hidden;
   border-radius: var(--radius-md);
@@ -26,11 +28,11 @@
 
 /* A touch screen keeps :hover on whatever was tapped last. */
 @media (hover: hover) {
-  /* A stage wider than the text (a wide screen) must not shrink it. Grown past its place, it grows to the left, over
-     the text. */
+  /* A stage wider than the text (a wide screen) must not shrink it. Grown past its place, it grows toward the text and
+     over it. */
   .frame:hover {
     width: var(--grown);
-    margin-left: min(0px, calc(100% - var(--grown)));
+    margin-left: calc(var(--picture-at-end, 0) * max(0px, 100% - var(--grown)) + (1 - var(--picture-at-end, 0)) * min(0px, 100% - var(--grown)));
     transition-delay: var(--duration-intent);
   }
 }

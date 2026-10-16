@@ -1,5 +1,5 @@
 export { Beside } from './Beside';
-export { ChatFrame, ChatTitle, readingDefault, useMarginRoom, type Reading } from './ChatFrame';
+export { ChatFrame, ChatTitle, readingDefault, useMarginRoom, type Reading, type StageSide } from './ChatFrame';
 export { Columns } from './Columns';
 export { Disclosure } from './Disclosure';
 export { FaceRow } from './FaceRow';

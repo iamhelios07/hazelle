@@ -26,9 +26,12 @@ const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: sty
 // The reading settings on the element a story sits in: the chat's column, or an exported log (LogExport).
 export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[font]} ${LEADING[leading]} ${WIDTH[width]}`, style: { '--reading-size': `${size}px` } as CSSProperties });
 
-// Whether the story stands left of a stage at least half its text's width: a message's 삽화 stands there
+// Which side of the story the stage stands on.
+export type StageSide = 'right' | 'left';
+
+// Where the story has a stage beside it at least half its text's width, its side: a message's 삽화 stands there
 // (MarginPictures), not in the text. Outside a chat there is no stage.
-const MarginRoom = createContext(false);
+const MarginRoom = createContext<StageSide | false>(false);
 export const useMarginRoom = () => useContext(MarginRoom);
 
 type Props = {
@@ -45,8 +48,11 @@ type Props = {
   peek?: ReactNode;
   reading: Reading;
   hideHeader: boolean;
-  // The chat has 삽화, or will: its story makes room on its right for them where the page is wide enough.
+  // The chat has 삽화, or will: its story makes room beside it for them where the page is wide enough.
   stage: boolean;
+  side: StageSide;
+  // The character's picture, standing on the stage where no 삽화 do.
+  portrait?: string;
   // A character's own look for the lines that are only a picture, over the defaults in tokens.css.
   pictures?: { fold?: false; peek?: number; most?: number };
   compact: boolean;
@@ -54,7 +60,7 @@ type Props = {
   onScroll: () => void;
 };
 
-export function ChatFrame({ back, title, actions, children, above, footer, panel, beside, peek, reading, hideHeader, stage, pictures, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, panel, beside, peek, reading, hideHeader, stage, side, portrait, pictures, compact, scrollRef, onScroll }: Props) {
   const scope = readingScope(reading);
   const pairs = usePanelsBeside();
   const [shown, setShown] = useState(true);
@@ -67,8 +73,10 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   const [space, setSpace] = useState(0);
   const [scrollbar, setScrollbar] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [room, setRoom] = useState({ stage: 0, lead: 0, text: 0 });
-  const staged = stage && room.stage >= room.text / 2;
+  const [room, setRoom] = useState({ stage: 0, lead: 0, text: 0, page: 0, story: 0 });
+  const staged = (stage || !!portrait) && room.stage >= room.text / 2;
+  // lead is the gap on the stage's far side, so a stage on the left stands in the story's lead.
+  const storyLead = side === 'right' ? room.lead : room.page - room.story - room.lead;
   useReadingRail(scrollRef, footerRef);
 
   useLayoutEffect(() => {
@@ -99,13 +107,14 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
     const measure = () => {
       setScrollbar(element.offsetWidth - element.clientWidth);
       // The stage is at most as wide as the story, so the two stand centred together where the page has room; where
-      // it has not, the story keeps its least lead and the stage ends a gap and SidePeek's tab short of the page's edge.
+      // it has not, the story keeps its least lead and the stage ends a gap and SidePeek's tab short of the page's edge,
+      // either edge, so the two read the same on both sides.
       const style = getComputedStyle(content);
       const px = (name: string) => parseFloat(style.getPropertyValue(name));
       const least = px('--read-stage-least');
       const stage = Math.max(0, Math.min(content.offsetWidth, element.clientWidth - content.offsetWidth - least - px('--space-16') - px('--peek-tab-width')));
       const lead = Math.max(least, (element.clientWidth - content.offsetWidth - stage) / 2);
-      setRoom({ stage, lead, text: content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) });
+      setRoom({ stage, lead, text: content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight), page: element.clientWidth, story: content.offsetWidth });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -136,7 +145,8 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
             '--footer-space': `${space}px`,
             '--story-scrollbar': `${scrollbar}px`,
             '--story-margin': `${room.stage}px`,
-            '--story-stage-lead': `${room.lead}px`,
+            '--story-stage-lead': `${storyLead}px`,
+            '--story-stage-at': `${side === 'right' ? storyLead + room.story : storyLead - room.stage}px`,
             '--story-picture-peek': pictures?.fold === false ? 'none' : pictures?.peek && `${pictures.peek}vh`,
             '--story-picture-most': pictures?.most && `${pictures.most}vh`,
           } as CSSProperties
@@ -151,9 +161,14 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
         </div>
         <div className={styles.scroll} ref={scrollRef} onScroll={scrolled}>
           <div ref={contentRef} className={styles.content}>
-            <MarginRoom.Provider value={staged}>{children}</MarginRoom.Provider>
+            <MarginRoom.Provider value={staged && side}>{children}</MarginRoom.Provider>
           </div>
         </div>
+        {staged && !stage && (
+          <div className={styles.portrait}>
+            <img src={portrait} alt="" />
+          </div>
+        )}
         {peek}
         <div ref={footerRef} className={`${styles.footer} ${compact ? styles.compact : ''}`}>
           <div className={styles.above}>{above}</div>

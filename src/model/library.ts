@@ -129,8 +129,9 @@ export type Avatar = { type: string; size: number; thumb: string; file: FileRef 
 // Kind `asset`, whose parent is the character or module (design §6.4). type is what the bytes are, read from them.
 export type Asset = { name: string; type: string; size: number; file: FileRef };
 
-// A character with its chats, or (id null) the chats that have no character: 캐릭터 없이.
-export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; chats: C[] };
+// A character with its chats, or (id null) the chats that have no character: 캐릭터 없이. face: the avatar's thumbnail;
+// avatar: its id, whose file is the picture at full size.
+export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; avatar: string | null; chats: C[] };
 export type CharacterShelf<C> = Shelf<C> & { id: string; character: Character };
 
 type ChatLike = { chat: { character: string | null } & Mark; order: number };
@@ -146,20 +147,20 @@ export function shelve<C extends ChatLike>(
   chats: C[],
   binned: C[],
 ): { characters: CharacterShelf<C>[]; none: Shelf<C>; deleted: CharacterShelf<C>[]; deletedChats: C[] } {
-  const faces = new Map(avatars.map((avatar) => [avatar.parent, avatar.value.thumb]));
+  const avatarOf = new Map(avatars.map((avatar) => [avatar.parent, avatar]));
   const grouped = new Map<string | null, C[]>();
   for (const item of chats) {
     const own = grouped.get(item.chat.character);
     if (own) own.push(item);
     else grouped.set(item.chat.character, [item]);
   }
-  const shelves = characters.map(({ id, value }) => ({ id, character: value, face: faces.get(id) ?? null, chats: grouped.get(id) ?? [] }));
+  const shelves = characters.map(({ id, value }) => ({ id, character: value, face: avatarOf.get(id)?.value.thumb ?? null, avatar: avatarOf.get(id)?.id ?? null, chats: grouped.get(id) ?? [] }));
   const loose = grouped.get(null) ?? [];
   const live = shelves.filter((shelf) => isLive(shelf.character));
   const liveIds = new Set(live.map((shelf) => shelf.id));
   return {
     characters: live.sort((a, b) => (b.chats[0]?.order ?? 0) - (a.chats[0]?.order ?? 0) || a.character.card.name.localeCompare(b.character.card.name, 'ko')),
-    none: { id: null, character: null, face: null, chats: loose },
+    none: { id: null, character: null, face: null, avatar: null, chats: loose },
     deleted: shelves.filter((shelf) => isBinned(shelf.character)).sort((a, b) => b.character.deleted! - a.character.deleted!),
     deletedChats: binned
       .filter(({ chat }) => binsChat(chat, (id) => liveIds.has(id)))

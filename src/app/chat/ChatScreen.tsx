@@ -6,6 +6,7 @@ import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
+import { useAssetUrl } from '../session';
 import { ChatFrame, Pill, SidePeeks, usePanelsBeside } from '../ui';
 import { ChatBookmarks } from './ChatBookmarks';
 import { ChatInspect } from './ChatInspect';
@@ -44,6 +45,9 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
   const chat = useChat(chatId, item, shelf, reading.reply);
   const { id, busy, panel, scroll, prompt, actions } = chat;
   const folded = display.foldComposer && scroll.away;
+  const url = useAssetUrl();
+  // The thumbnail stands in until the full picture is read.
+  const portrait = display.portrait && !display.hidePictures && shelf?.avatar ? (url('avatar', shelf.avatar) ?? shelf.face ?? undefined) : undefined;
   useShortcut('personas', () => actions.openDialog('persona'));
   useShortcut('prompts', () => actions.openDialog('prompt'));
   useEditBeside(shelf?.id ?? null, () => shelf && actions.side({ kind: 'character', id: shelf.id, part: null }));
@@ -111,6 +115,8 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
         reading={reading}
         hideHeader={display.hideHeader}
         stage={chat.stage}
+        side={display.pictureSide}
+        portrait={portrait}
         pictures={{ ...shelf?.character.pictures, most: shelf?.character.pictures?.most ?? display.pictureMost }}
         compact={folded}
         scrollRef={scroll.scrollRef}
