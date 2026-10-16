@@ -11,7 +11,7 @@ import type { ToggleSection } from './toggles';
 // with its toggles alone.
 export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null; fromToggles?: true } | { kind: 'module'; id: string };
 export type InspectTab = 'request' | 'cache' | 'variables' | 'modules' | 'scripts';
-export type InspectPanel = { kind: 'inspect'; tab: InspectTab };
+type InspectPanel = { kind: 'inspect'; tab: InspectTab };
 export type InfoTab = 'reply' | 'lore' | 'memory' | 'request' | 'response';
 export type Panel = InspectPanel | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info'; tab: InfoTab } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | Side;
 

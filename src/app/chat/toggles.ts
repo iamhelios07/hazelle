@@ -8,7 +8,7 @@ export const toggleSaveKey = (owner: string | null, key: string) => `toggle:${ow
 export type ToggleNote = Extract<ToggleMark, { kind: 'divider' | 'caption' }>;
 export type ToggleItem = ToggleRow | ToggleNote | { kind: 'group'; label: string; items: (ToggleRow | ToggleNote)[] };
 export type ToggleSection = Pick<ToggleSource, 'from' | 'id' | 'name'> & { rows: ToggleRow[]; items: ToggleItem[] };
-export type ToggleRows = { sections: ToggleSection[]; changed: number };
+type ToggleRows = { sections: ToggleSection[]; changed: number };
 
 // A key declared again by a later source shows once, in the source that declares it (model/toggles chatToggles keeps
 // the very line, so it is matched by identity). A source with no toggle of its own is left out.
