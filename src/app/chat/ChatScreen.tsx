@@ -57,7 +57,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
     if (chat.inspect) actions.closeInspect();
     else if (chat.id !== null) actions.openInspect('request');
   });
-  const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
+  const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null, module: null };
   const inspect = chat.inspect && chat.id !== null && <ChatInspect chat={chat.id} tab={chat.inspect.tab} notes={chat.sendNotes} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onTab={actions.switchInspectTab} onClose={actions.closeInspect} onEdit={actions.side} />;
   const paired = usePanelsBeside() && !!panel && !!chat.inspect;
   useEffect(() => {
@@ -74,11 +74,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
         footer={<ChatComposer chat={chat} folded={folded} />}
         panel={
           panel?.kind === 'toggles' ? (
-            <ChatToggles card={chat.card} toggles={chat.toggles} toggleOwner={chat.toggleOwner} onFlip={actions.flip} onWrite={actions.writeToggle} onReset={actions.resetToggles} onEdit={(section) => {
-                const to = toggleEditor(section);
-                if (to.kind === 'module') navigate(to);
-                else actions.side(to);
-              }} onClose={actions.closePanel} />
+            <ChatToggles card={chat.card} toggles={chat.toggles} toggleOwner={chat.toggleOwner} onFlip={actions.flip} onWrite={actions.writeToggle} onReset={actions.resetToggles} onEdit={(section) => actions.side(toggleEditor(section))} onClose={actions.closePanel} />
           ) : panel?.kind === 'info' ? (
             <ChatInfo id={id} shelf={shelf} messages={chat.messages} infoPick={chat.infoPick} tab={panel.tab} onTab={actions.switchInfoTab} onPick={actions.pickInfo} onRecord={chat.features.memory ? actions.memory : undefined} onEdit={actions.side} onClose={actions.closePanel} />
           ) : panel?.kind === 'memory' ? (

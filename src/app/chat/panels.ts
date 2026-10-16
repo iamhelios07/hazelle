@@ -2,18 +2,19 @@ import type { Card } from '../../engine/import/types';
 import type { From } from '../../engine/pipeline';
 import type { Block } from '../../model/prompt';
 import type { CharacterPart } from '../common/characterPart';
-import type { PromptPane, Route } from '../shell/routes';
+import type { PromptPane } from '../shell/routes';
 import type { ToggleSection } from './toggles';
 
 // block: the prompt block the editor opens at, absent for its list. fromToggles: opened from the chat's 토글 panel,
-// which the prompt's 토글 pane and the character's 토글 part go back to.
-export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null; fromToggles?: true };
+// which the prompt's 토글 pane and the character's 토글 part go back to. A module opens beside the chat only from there,
+// with its toggles alone.
+export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null; fromToggles?: true } | { kind: 'module'; id: string };
 export type InspectTab = 'request' | 'cache' | 'variables' | 'modules' | 'scripts';
 export type InspectPanel = { kind: 'inspect'; tab: InspectTab };
 export type InfoTab = 'reply' | 'lore' | 'memory' | 'request' | 'response';
 export type Panel = InspectPanel | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info'; tab: InfoTab } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | Side;
 
-const isSide = (panel: Panel): panel is Side => panel.kind === 'prompts' || panel.kind === 'character';
+const isSide = (panel: Panel): panel is Side => panel.kind === 'prompts' || panel.kind === 'character' || panel.kind === 'module';
 
 // The inspect panel stays open beside an editor where two panels stand beside the page (pairs), so a break is
 // fixed while its preview follows; elsewhere one panel at a time, the newest.
@@ -48,15 +49,14 @@ export function editorOf(from: From, prompt: { id: string; blocks: Block[] } | n
 // 로어북 part; null for the account's, in 설정 › 채팅.
 export const loreBudgetEditor = (character: { id: string; card: Card } | null): Side | null => (character && character.card.loreSettings.tokenBudget !== null ? { kind: 'character', id: character.id, part: 'lore' } : null);
 
-// Where a section of the chat's 토글 panel has its toggles edited: the prompt's and the character's beside the chat, a
-// module's on its 토글 page, since a module has no editor beside the chat.
-export function toggleEditor({ from, id }: Pick<ToggleSection, 'from' | 'id'>): Side | Extract<Route, { kind: 'module' }> {
+// Where a section of the chat's 토글 panel has its toggles edited, beside the chat.
+export function toggleEditor({ from, id }: Pick<ToggleSection, 'from' | 'id'>): Side {
   switch (from) {
     case 'prompt':
       return { kind: 'prompts', id, pane: 'toggles', fromToggles: true };
     case 'card':
       return { kind: 'character', id, part: 'toggles', fromToggles: true };
     case 'module':
-      return { kind: 'module', id, pane: 'toggles' };
+      return { kind: 'module', id };
   }
 }

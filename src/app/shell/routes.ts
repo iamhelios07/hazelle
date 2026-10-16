@@ -30,7 +30,6 @@ export type Route =
   | { kind: 'personas' }
   | { kind: 'persona'; id: string }
   | { kind: 'modules' }
-  // pane opens a module on its 토글 page, which the chat's toggle panel links to.
   | { kind: 'module'; id: string; pane: 'toggles' | null }
   | { kind: 'tool-page'; module: string }
   | { kind: 'models' }
