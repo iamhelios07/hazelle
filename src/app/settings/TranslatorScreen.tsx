@@ -98,7 +98,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
               <MenuHeading>{translator.ok ? taskModelHelp('번역') : describeTranslateFailure(translator.failure)}</MenuHeading>
               {prompt.kind === 'prompt' && <MenuItem label={`'${prompt.prompt.value.name}' 열기…`} onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: null })} />}
               <MenuItem label={`${DEFAULT_MODELS} 열기…`} onClick={() => navigate({ kind: 'models' })} />
-              <MenuHeading>여기서 한 번역은 저장되지 않아요.</MenuHeading>
+              <MenuHeading>여기서 번역한 내용은 저장되지 않아요.</MenuHeading>
             </Menu>
             <Icon icon={ArrowRight} size="xs" />
             <LanguageMenu label="번역할 언어" value={language} opens="down" onPick={setLanguage} />

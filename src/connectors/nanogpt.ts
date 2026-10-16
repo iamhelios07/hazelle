@@ -23,7 +23,7 @@ export const nanogpt: ConnectionType = {
   id: 'nanogpt',
   label: 'NanoGPT',
   group: 'gateway',
-  description: '여러 회사의 모델을 NanoGPT 키 하나로 써요. 잔액도 보여요.',
+  description: '여러 회사의 모델을 NanoGPT 키 하나로 써요. 잔액도 볼 수 있어요.',
   keyPage: 'https://nano-gpt.com/api',
   // The direct API host, which its docs name for API-key requests; nano-gpt.com is the website's.
   endpoint: { baseUrl: 'https://api.nano-gpt.com/api/v1', protocol: 'chat-completions' },

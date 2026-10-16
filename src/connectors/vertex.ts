@@ -58,7 +58,7 @@ export const vertex: ConnectionType = {
   id: 'vertex',
   label: 'Vertex AI',
   group: 'maker',
-  description: '서비스 계정 키(JSON)로 Vertex AI의 Gemini를 사용해요.',
+  description: '서비스 계정 키(JSON)로 Vertex AI의 Gemini를 써요.',
   keyPage: 'https://console.cloud.google.com/iam-admin/serviceaccounts',
   keyForm: {
     label: '서비스 계정 키',

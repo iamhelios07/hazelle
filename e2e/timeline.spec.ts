@@ -237,8 +237,8 @@ test('two tabs across a restore and its undo end on the undo’s timeline with i
   await test.step('the first tab’s delayed bootstrap of the restore changes nothing, and the tab reloads the undo from the cache', async () => {
     server.release(first);
     await expect(mira(first)).toBeVisible();
-    await expect(second.getByText('계정을 복원해서 다시 불러왔어요')).toBeVisible();
-    await expect(first.getByText('계정을 복원해서 다시 불러왔어요')).toBeVisible();
+    await expect(second.getByText('계정을 복원해서 다시 열었어요')).toBeVisible();
+    await expect(first.getByText('계정을 복원해서 다시 열었어요')).toBeVisible();
   });
 
   await test.step('both tabs pull again with no further reset; the cache holds the undo’s timeline and the server’s rows', async () => {
@@ -294,7 +294,7 @@ test('an edit made offline across a restore is dropped and counted when the tab 
   server.restore(restorePoint, 't1');
   server.offline = false;
 
-  await expect(page.getByText('계정을 복원해서 다시 불러왔어요')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('계정을 복원해서 다시 열었어요')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('방금 바꾼 내용 1개는 저장되지 않았어요')).toBeVisible();
   // The persona is shown again as the restore left it.
   await expect(alias).toHaveValue('');
@@ -318,7 +318,7 @@ test('a restore between the two scans of a backup export ends it with its sessio
   await expect.poll(() => server.held(page)).toBe(1);
   server.restore(server.snapshot(), 't1');
   server.release(page);
-  await expect(page.getByText('계정을 복원해서 다시 불러왔어요')).toBeVisible();
+  await expect(page.getByText('계정을 복원해서 다시 열었어요')).toBeVisible();
   await page.waitForTimeout(500);
   expect(downloads).toEqual([]);
 });

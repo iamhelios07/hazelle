@@ -47,7 +47,7 @@ export const google: ConnectionType = {
   label: 'Google',
   group: 'maker',
   major: true,
-  description: 'Gemini API로 Gemini를 사용해요.',
+  description: 'Gemini API로 Gemini를 써요.',
   keyPage: 'https://aistudio.google.com/apikey',
   endpoint: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', protocol: 'gemini' },
   detect: { key: /^AIza[0-9A-Za-z_-]{35}$/, host: 'generativelanguage.googleapis.com' },

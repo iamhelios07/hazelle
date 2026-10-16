@@ -9,7 +9,7 @@ export const featherless: ConnectionType = {
   id: 'featherless',
   label: 'Featherless',
   group: 'gateway',
-  description: '공개 모델 수천 개를 월정액으로 사용해요.',
+  description: '공개 모델 수천 개를 월정액으로 써요.',
   keyPage: 'https://featherless.ai/account/api-keys',
   endpoint: { baseUrl: 'https://api.featherless.ai/v1', protocol: 'chat-completions' },
   detect: { key: null, host: 'api.featherless.ai' },

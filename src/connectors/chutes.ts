@@ -6,7 +6,7 @@ export const chutes: ConnectionType = {
   id: 'chutes',
   label: 'Chutes',
   group: 'gateway',
-  description: '여러 회사의 공개 모델을 Chutes의 분산 서버에서 실행해요.',
+  description: '여러 회사의 공개 모델을 Chutes 분산 서버에서 실행해요.',
   keyPage: 'https://chutes.ai/app',
   endpoint: { baseUrl: 'https://llm.chutes.ai/v1', protocol: 'chat-completions' },
   embeds: null,

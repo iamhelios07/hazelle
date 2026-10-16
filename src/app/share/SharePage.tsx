@@ -56,7 +56,7 @@ function SharePage({ id, shareKey }: { id: string; shareKey: string | null }) {
   // The workspace takes the link from here after a reload, through the sign-in or unlock it may need.
   const bring = () => {
     if (shareKey !== null && holdPending({ id, key: shareKey })) location.reload();
-    else setFailure('이 브라우저에서는 가져올 수 없어요. 파일로 받은 뒤 가져와 주세요.');
+    else setFailure('이 브라우저에서는 바로 가져올 수 없어요. 파일로 받은 뒤 가져와 주세요.');
   };
 
   return (
@@ -77,7 +77,7 @@ function SharePage({ id, shareKey }: { id: string; shareKey: string | null }) {
       {view.kind === 'failed' && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((held) => held + 1) }}>{view.failure}</Callout>}
       {view.kind === 'held' && <Intro title="멈춘 링크">{SHARE.heldNote}</Intro>}
       {view.kind === 'gone' && <Intro title="없는 링크">{SHARE.goneNote}</Intro>}
-      {view.kind === 'broken' && <Intro title="열 수 없는 링크">주소의 # 뒤까지 모두 복사했는지 확인해 주세요.</Intro>}
+      {view.kind === 'broken' && <Intro title="열 수 없는 링크">주소의 # 뒷부분까지 모두 복사했는지 확인해 주세요.</Intro>}
       {view.kind === 'live' && (
         <Stack gap="section">
           <SharePreview

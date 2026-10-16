@@ -5,7 +5,7 @@ export const surplus: ConnectionType = {
   id: 'surplus',
   label: 'Surplus Intelligence',
   group: 'gateway',
-  description: '여러 판매자 중 가장 저렴한 판매자로 모델을 호출해요.',
+  description: '여러 판매자 중 가장 저렴한 곳에서 모델을 써요.',
   keyPage: 'https://www.surplusintelligence.ai/buy',
   endpoint: { baseUrl: 'https://api.surplusintelligence.ai/v1', protocol: 'chat-completions' },
   embeds: null,

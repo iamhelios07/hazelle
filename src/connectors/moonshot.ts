@@ -6,7 +6,7 @@ export const moonshot: ConnectionType = {
   id: 'moonshot',
   label: 'Moonshot AI',
   group: 'maker',
-  description: 'Moonshot AI API로 Kimi를 사용해요.',
+  description: 'Moonshot AI API로 Kimi를 써요.',
   keyPage: 'https://platform.kimi.ai/console/api-keys',
   // The international host; api.moonshot.cn is the mainland one.
   endpoint: { baseUrl: 'https://api.moonshot.ai/v1', protocol: 'chat-completions' },

@@ -7,7 +7,7 @@ export const xai: ConnectionType = {
   id: 'xai',
   label: 'xAI',
   group: 'maker',
-  description: 'xAI API로 Grok을 사용해요.',
+  description: 'xAI API로 Grok을 써요.',
   keyPage: 'https://console.x.ai/team/default/api-keys',
   endpoint: { baseUrl: 'https://api.x.ai/v1', protocol: 'chat-completions' },
   embeds: null,

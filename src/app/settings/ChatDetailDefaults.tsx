@@ -51,7 +51,7 @@ export function ChatDetailDefaults() {
         />
         <SettingRow
           label={LORE_BUDGET_LABEL}
-          help={`켜진 로어북 항목을 요청마다 이만큼까지 넣어요. 넘치는 항목은 빠지고, 빠지면 알려 드려요. 기본은 ${count(LORE_BUDGET)} 토큰이에요.`}
+          help={`켜 둔 로어북 항목을 요청마다 이만큼까지 넣어요. 넘치는 항목은 빠지고, 빠지면 알려 드려요. 기본값은 ${count(LORE_BUDGET)} 토큰이에요.`}
           changed={loreBudget !== undefined}
           error={invalid ? '1 이상의 정수를 입력해 주세요.' : undefined}
           control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={draft} invalid={invalid} onChange={type} />}

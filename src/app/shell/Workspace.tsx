@@ -19,10 +19,10 @@ import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 import { navigate } from './router';
 
-const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 연결되면 이어서 불러오고 저장해요.' };
+const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 연결되면 이어서 읽고 저장해요.' };
 const SUSPENDED: Standing = {
   message: '운영자가 이 계정을 정지했어요',
-  detail: `읽기만 할 수 있고 저장과 모델 호출은 막혀 있어요. ${inSettings('account')}에서 ${NOTICES.from}을 확인할 수 있어요.`,
+  detail: `읽기만 할 수 있고 저장과 모델 요청은 막혀 있어요. ${inSettings('account')}에서 ${NOTICES.from}을 확인할 수 있어요.`,
 };
 // Said once, and standing until the account shrinks: each refused write saying it again would be a stream of toasts.
 const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: `새로 만든 내용은 저장되지 않아요. ${BIN}에서 영구 삭제하면 공간이 생겨요.` };
@@ -41,7 +41,7 @@ function Restored({ dropped }: { dropped: number }) {
   useEffect(() => {
     if (said.current) return;
     said.current = true;
-    toast.show('계정을 복원해서 다시 불러왔어요', dropped ? { detail: `방금 바꾼 내용 ${dropped}개는 저장되지 않았어요` } : {});
+    toast.show('계정을 복원해서 다시 열었어요', dropped ? { detail: `방금 바꾼 내용 ${dropped}개는 저장되지 않았어요` } : {});
   }, []);
   return null;
 }

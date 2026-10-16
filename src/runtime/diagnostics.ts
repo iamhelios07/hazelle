@@ -38,12 +38,12 @@ export function probeTokenizer(): Promise<string> {
       worker.terminate();
       resolve(text);
     };
-    const timer = setTimeout(() => done(`${PROBE_MS / 1000}초 안에 답이 없었어요`), PROBE_MS);
+    const timer = setTimeout(() => done(`${PROBE_MS / 1000}초 동안 응답이 없었어요`), PROBE_MS);
     worker.onmessage = ({ data }: MessageEvent<EvaluationUp>) => {
       if ('probed' in data) done(data.probed);
     };
     worker.onerror = (event) => done(`워커 오류 · ${event.message || '내용 없음'}`);
-    worker.onmessageerror = () => done('워커의 답을 읽지 못했어요');
+    worker.onmessageerror = () => done('워커의 응답을 읽지 못했어요');
     worker.postMessage({ probe: true } satisfies EvaluationDown);
   });
 }

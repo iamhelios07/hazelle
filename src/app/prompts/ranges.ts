@@ -23,7 +23,7 @@ export function chatWarning(blocks: readonly Block[]): string | null {
   const missed: string[] = [];
   let next = 0;
   for (const [start, end] of spans) {
-    if (start < next) return `'채팅' 블록들의 범위가 겹쳐서 같은 메시지가 두 번 들어가요.`;
+    if (start < next) return `'채팅' 블록끼리 범위가 겹쳐서 같은 메시지가 두 번 들어가요.`;
     if (start > next) missed.push(describeRun(next, start - 1, length, reach));
     next = end;
   }

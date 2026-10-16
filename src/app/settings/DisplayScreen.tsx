@@ -137,7 +137,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             />
             <SettingRow
               label="입력창 접기"
-              help="위로 스크롤하면 한 줄로 접고, 맨 아래에서 다시 펼쳐요."
+              help="위로 스크롤하면 한 줄로 접고, 맨 아래로 내려가면 다시 펼쳐요."
               control={<Switch label="입력창 접기" checked={display.foldComposer} onChange={(foldComposer) => changeDisplay({ foldComposer })} />}
             />
           </SettingGroup>

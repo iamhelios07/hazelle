@@ -41,7 +41,7 @@ export const vercel: ConnectionType = {
   id: 'vercel',
   label: 'Vercel AI Gateway',
   group: 'gateway',
-  description: '여러 회사의 모델을 키 하나로 써요. 잔액도 보여요.',
+  description: '여러 회사의 모델을 키 하나로 써요. 잔액도 볼 수 있어요.',
   keyPage: 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway%2Fapi-keys',
   endpoint: { baseUrl: API, protocol: 'chat-completions' },
   detect: { key: /^vck_/, host: 'ai-gateway.vercel.sh' },

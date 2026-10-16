@@ -13,7 +13,7 @@ describe('chatWarning', () => {
 
   it('says when there is no chat slot or two slots send a message twice', () => {
     expect(chatWarning([])).toBe("'채팅' 블록이 없어서 메시지가 하나도 들어가지 않아요.");
-    expect(chatWarning([chat(0, null), chat(-1, null)])).toBe("'채팅' 블록들의 범위가 겹쳐서 같은 메시지가 두 번 들어가요.");
+    expect(chatWarning([chat(0, null), chat(-1, null)])).toBe("'채팅' 블록끼리 범위가 겹쳐서 같은 메시지가 두 번 들어가요.");
   });
 
   it('names what no slot sends', () => {

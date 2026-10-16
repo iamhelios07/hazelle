@@ -16,7 +16,7 @@ const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup
   'not-backup': { message: '헤이젤 백업 파일이 아니거나 손상된 파일이에요.' },
   'other-version': { message: '이전 버전에서 만든 백업이라 가져올 수 없어요.' },
   'backup-storage': { message: '백업을 준비하지 못했어요.', detail: '기기 저장 공간과 브라우저 저장 설정을 확인해 주세요.' },
-  'backup-crashed': { message: '백업 작업이 중간에 멈췄어요.', detail: '새로고침한 뒤 다시 시도해 주세요.' },
+  'backup-crashed': { message: '백업이 중간에 멈췄어요.', detail: '새로고침한 뒤 다시 시도해 주세요.' },
 };
 
 // sv-SE writes the local date as 2026-09-29.
@@ -76,7 +76,7 @@ export function BackupSection() {
         return toast.failed(made, '백업을 만들지 못했어요.');
       }
       const { left, skipped } = made.data;
-      const detail = [left ? `암호화 키로 열리지 않는 항목 ${left}개는 제외했어요.` : '', skipped ? `차단된 이미지 ${skipped}개는 제외했어요.` : ''].filter(Boolean).join(' ');
+      const detail = [left ? `암호화 키로 열리지 않는 항목 ${left}개는 뺐어요.` : '', skipped ? `차단된 이미지 ${skipped}개는 뺐어요.` : ''].filter(Boolean).join(' ');
       toast.show('백업을 내보냈어요.', detail ? { detail } : undefined);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('백업을 저장하지 못했어요.');
@@ -96,7 +96,7 @@ export function BackupSection() {
       }
       backup = read.backup;
       const loaded = await restoreBackup(store, files, backup, options);
-      if (loaded.ok) return toast.show('백업을 가져왔어요.', loaded.data.skipped ? { detail: `차단됐거나 너무 큰 이미지 ${loaded.data.skipped}개는 제외했어요.` } : undefined);
+      if (loaded.ok) return toast.show('백업을 가져왔어요.', loaded.data.skipped ? { detail: `차단됐거나 너무 큰 이미지 ${loaded.data.skipped}개는 뺐어요.` } : undefined);
       if (loaded.error === 'not-new') return toast.error('백업은 새 계정에만 가져올 수 있어요.');
       if (loaded.error === 'not-backup' || loaded.error === 'backup-storage' || loaded.error === 'backup-crashed') return unread(loaded.error);
       if (loaded.error === 'stopped') return toast.show('가져오기를 멈췄어요.', { detail: '같은 파일로 이어서 가져올 수 있어요.' });
@@ -131,7 +131,7 @@ export function BackupSection() {
         />
         <SettingRow
           label="이전 시점으로 복원"
-          help={`10분 전부터 6일 전 사이의 기록으로 돌아가요. 하루 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`}
+          help={`10분 전부터 6일 전 사이의 기록으로 돌아가요. 하루에 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`}
           control={
             <Button variant="secondary" size="sm" icon={History} onClick={() => setRestoring(true)}>
               복원

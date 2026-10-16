@@ -43,7 +43,7 @@ it('shows a plain notice said again while it is up once, but every 되돌리기'
   const root = probeRoot();
   try {
     await act(() => root.render(<ToastProvider standing={null}><Probe /></ToastProvider>));
-    await act(() => { toasts!.show('계정을 복원해서 다시 불러왔어요'); toasts!.show('계정을 복원해서 다시 불러왔어요'); });
+    await act(() => { toasts!.show('계정을 복원해서 다시 열었어요'); toasts!.show('계정을 복원해서 다시 열었어요'); });
     expect(shown).toHaveLength(1);
     await act(() => { toasts!.undoable('삭제했어요', () => {}); toasts!.undoable('삭제했어요', () => {}); });
     expect(shown).toHaveLength(3);

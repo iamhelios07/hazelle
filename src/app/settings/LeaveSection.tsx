@@ -15,7 +15,7 @@ export function LeaveSection() {
       <SettingGroup label="탈퇴">
         <SettingRow
           label="계정 삭제"
-          help="되돌릴 수 없어요. 전체 백업을 내보내 두세요."
+          help="되돌릴 수 없어요. 전체 백업을 미리 내보내 두세요."
           control={
             <Button variant="danger" size="sm" icon={UserX} onClick={() => setAsking(true)}>
               탈퇴
