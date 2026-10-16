@@ -44,6 +44,10 @@
   animation: slide var(--duration-slide) var(--ease-loop) infinite;
 }
 
+.sway {
+  animation: sway var(--duration-sway) var(--ease-loop) infinite;
+}
+
 @keyframes fade {
   from {
     opacity: 0;
@@ -111,6 +115,22 @@
 
   to {
     transform: translateX(334%);
+  }
+}
+
+@keyframes sway {
+  0%,
+  50%,
+  100% {
+    transform: translateX(0);
+  }
+
+  65% {
+    transform: translateX(-2px);
+  }
+
+  80% {
+    transform: translateX(2px);
   }
 }
 

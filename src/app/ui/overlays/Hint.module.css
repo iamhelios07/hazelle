@@ -24,8 +24,8 @@
   composes: dropIn from '../foundation/motion.module.css';
   composes: note from '../foundation/type.module.css';
   position: fixed;
-  top: calc(var(--hint-top) + var(--space-8));
-  left: var(--hint-left);
+  top: calc(var(--anchor-below) + var(--space-8));
+  left: var(--anchor-left);
   /* On the body, so above the dialog that may hold its ⓘ and below the toast. */
   z-index: var(--layer-hint);
   width: max-content;
@@ -41,9 +41,9 @@
   translate: var(--nudge, 0) 0;
 }
 
-.bubble[data-above] {
+.bubble[data-flipped] {
   top: auto;
-  bottom: calc(var(--hint-bottom) + var(--space-8));
+  bottom: calc(var(--anchor-above) + var(--space-8));
 }
 
 /* Its own line, its words on the text's left edge past the link's padding. */

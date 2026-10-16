@@ -1,10 +1,10 @@
 import { Info } from 'lucide-react';
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, ButtonSlot } from '../controls/Button';
 import { Icon } from '../foundation/Icon';
 import { useHover } from '../foundation/media';
-import { keepOnScreen, useLayer } from './layers';
+import { useAnchored, useLayer } from './layers';
 import { useMenuClose } from './Menu';
 import styles from './Hint.module.css';
 
@@ -40,26 +40,8 @@ export function Hint({ label, children }: { label: string; children: Help }) {
   });
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  // The bubble lives on the body at a fixed spot under the ⓘ, so a dialog's or panel's scrolling box cannot clip it.
-  // It does not follow a scroll, so any scroll closes it.
-  useLayoutEffect(() => {
-    const element = bubble.current;
-    const anchor = box.current;
-    if (!element || !anchor) return;
-    const at = anchor.getBoundingClientRect();
-    element.style.setProperty('--hint-left', `${at.left}px`);
-    element.style.setProperty('--hint-top', `${at.bottom}px`);
-    element.style.setProperty('--hint-bottom', `${window.innerHeight - at.top}px`);
-    keepOnScreen(element);
-    delete element.dataset.above;
-    if (element.getBoundingClientRect().bottom > window.innerHeight) element.dataset.above = '';
-  }, [state]);
-  useEffect(() => {
-    if (state === 'closed') return;
-    const close = () => setState('closed');
-    window.addEventListener('scroll', close, { capture: true, passive: true });
-    return () => window.removeEventListener('scroll', close, { capture: true });
-  }, [state]);
+  useAnchored(state !== 'closed', bubble, box, () => setState('closed'));
+
   // The bubble sits at the end of the body, out of the Tab order after the ⓘ, so a pinned door takes the focus.
   useEffect(() => {
     if (state === 'pinned') door.current?.focus();
