@@ -5,12 +5,12 @@ import type { Route } from '../../runtime/assignment';
 import { breakCost, forecast, lastCache, prior, type Forecast } from '../../runtime/cache';
 import { leaving } from '../../runtime/memory-view';
 import type { Shown } from '../../runtime/talk';
-import { cacheSend, previewRequest, wouldSend, type PreviewRequest, type Sending } from '../../runtime/turn-context';
+import { cacheSend, forecastSend, previewRequest, type PreviewRequest, type Sending, type Unsendable } from '../../runtime/turn-context';
 import { useSession } from '../session';
 
 const SETTLE_MS = 400;
 
-export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Sending | null | undefined; request: () => PreviewRequest | null };
+export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Sending | Unsendable | null | undefined; request: () => PreviewRequest | null };
 
 // until: when the last call's cache runs out, null when it cached nothing. next: the draft's forecast against the
 // chat's stored last call (runtime/cache), with what a break costs where the model is priced and the model it was worked
@@ -23,7 +23,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
   const session = useSession();
   const last = useMemo(() => lastCache(messages), [messages]);
   const [next, setNext] = useState<CacheNotes['next']>(undefined);
-  const [sending, setSending] = useState<Sending | null | undefined>(undefined);
+  const [sending, setSending] = useState<SendNotes['sending']>(undefined);
   const [left, setLeft] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
 
@@ -41,9 +41,10 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       // A message sent translated goes out as its translation, which is not made yet, so it stands in as typed.
-      void wouldSend(session, id, { kind: 'send', text }, controller.signal).then((sending) => {
+      void forecastSend(session, id, { kind: 'send', text }, controller.signal).then((result) => {
         if (controller.signal.aborted) return;
-        setSending(sending);
+        setSending(result);
+        const sending = result && 'turn' in result ? result : null;
         setLeft(sending && leaving(sending.prompt));
         const send = sending && cacheSend(sending, session.credentials.pool.peek(sending.turn.route.connection.value)?.id ?? null);
         const before = session.store.scopeState(id) === 'loaded' ? prior(session.store, id, messages, Date.now()) : null;
@@ -66,7 +67,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
   const request = useMemo(() => {
     let wire: PreviewRequest | null | undefined;
     return () => {
-      if (wire === undefined) wire = sending ? previewRequest(sending) : null;
+      if (wire === undefined) wire = sending && 'turn' in sending ? previewRequest(sending) : null;
       return wire;
     };
   }, [sending]);

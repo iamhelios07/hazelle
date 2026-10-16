@@ -83,6 +83,8 @@ export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles:
     assets,
     inlays,
     unfound,
+    // Each text of a request collects its own (pipeline lay).
+    problems: null,
     modules,
     faces,
   };

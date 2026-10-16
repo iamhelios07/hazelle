@@ -213,7 +213,8 @@ define('or', 2, ([a, b]) => bool(truthy(a!) || truthy(b!)));
 define('not', 1, ([a]) => bool(!truthy(a!)));
 define('all', 1, (args) => bool(variadic(args).every(truthy)));
 define('any', 1, (args) => bool(variadic(args).some(truthy)));
-define('iserror', 1, ([text]) => bool(/^error:/i.test(text!)));
+export const isErrorText = (text: string) => /^error:/i.test(text);
+define('iserror', 1, ([text]) => bool(isErrorText(text!)));
 
 // A value that is not a number counts as 0.
 function asNumber(text: string): number {
