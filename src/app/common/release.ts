@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.14',
+    date: '2026-10-17',
+    lines: [
+      '채팅의 삽화 메뉴에 삽화 노트를 적어 두면 그 채팅의 삽화마다 함께 들어가요.',
+      '디스플레이의 이미지 위치에서 삽화 무대를 왼쪽에도 세울 수 있어요. 캐릭터 이미지 크게 보기를 켜면 삽화를 쓰지 않는 채팅의 무대에 캐릭터 대문 이미지가 떠요.',
+      '디스플레이 글꼴이 명조 넷, 고딕 넷, 손글씨 둘, 기기 글꼴로 늘었어요.',
+      '점검의 요청 탭이 토큰, 요청, 스크립트 세 단으로 나뉘었어요. 보내기 전 봇 스크립트를 미리 실행해 보여 주고, 요청을 만들다 생긴 CBS 문제와 점검에 보낼 수 없는 이유를 알려 줘요.',
+      '점검의 모듈 탭에서 안 켜진 로어북 항목과 그 이유를 볼 수 있어요.',
+    ],
+  },
+  {
     version: 'v0.2.13',
     date: '2026-10-16',
     lines: [
