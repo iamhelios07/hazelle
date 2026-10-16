@@ -1,21 +1,16 @@
-import { isRecord } from '../../connectors/values';
 import { calc } from '../cbs/math';
+import { dict, json, truthy } from '../cbs/tags';
 import type { CallType, Comparison, Operand } from '../import/blocks';
 import { UNSET, type ModelMessage, type ScriptUnit } from '../script-api';
 import { ranked } from './similar';
 import { add, cbs as evaluated, read, write, type Acting, type Working } from './state';
 
 export type Blocks = Omit<Extract<ScriptUnit, { kind: 'blocks' }>, 'id' | 'off'>;
-const isTrue = (value: string) => value === 'true' || value === '1';
 const numbers = (left: string, right: string) => !Number.isNaN(Number(left)) && !Number.isNaN(Number(right));
 const same = (left: string, right: string) => (numbers(left, right) ? Number(left) === Number(right) : left === right);
 const holds = (list: string, item: string) => {
-  try {
-    const parsed: unknown = JSON.parse(list);
-    return Array.isArray(parsed) && parsed.includes(item);
-  } catch {
-    return false;
-  }
+  const parsed = json(list);
+  return Array.isArray(parsed) && parsed.includes(item);
 };
 
 // Trigger conditions compare equality as text; v2 branches compare numerically when both texts are numbers.
@@ -26,14 +21,14 @@ const COMPARE: Record<Comparison['operator'], (source: string, target: string, e
   less: (source, target) => Number(source) < Number(target),
   'at-least': (source, target) => Number(source) >= Number(target),
   'at-most': (source, target) => Number(source) <= Number(target),
-  truthy: isTrue,
+  truthy,
   unset: (source) => source === UNSET,
   in: (source, target) => holds(target, source),
   contains: (source, target) => holds(source, target),
   'not-in': (source, target) => !holds(target, source),
   'not-contains': (source, target) => !holds(source, target),
   near: (source, target) => numbers(source, target) ? Math.abs(Number(source) - Number(target)) < 0.0001 : source.toLowerCase().replaceAll(' ', '') === target.toLowerCase().replaceAll(' ', ''),
-  'same-truth': (source, target) => target === 'true' ? isTrue(source) : target === 'false' ? !isTrue(source) : source === target,
+  'same-truth': (source, target) => target === 'true' ? truthy(source) : target === 'false' ? !truthy(source) : source === target,
 };
 const compare = ({ operator, equality }: Comparison, source: string, target: string) => COMPARE[operator](source, target, equality);
 const ARITHMETIC = {
@@ -47,20 +42,9 @@ const ARITHMETIC = {
 // A loop that ran this often is stopped as a runaway; every hundred turns it lets the worker answer its heartbeat.
 const LOOP_TURNS = 100_000;
 
-const parsed = (value: string): unknown => {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return undefined;
-  }
-};
 const array = (value: string) => {
-  const held = parsed(value);
+  const held = json(value);
   return Array.isArray(held) ? held : null;
-};
-const dict = (value: string) => {
-  const held = parsed(value);
-  return isRecord(held) ? held : null;
 };
 const item = (value: unknown) => (value === undefined || value === null ? UNSET : typeof value === 'string' ? value : JSON.stringify(value));
 const place = (value: string) => {
@@ -123,7 +107,7 @@ type Call = { run: Acting; get(name: string): string; put(name: string, value: s
 
 const listIn = (call: Call) => array(call.get(call.name)) ?? [];
 const keepList = (call: Call, list: unknown[]) => call.put(call.name, JSON.stringify(list));
-const dictIn = (call: Call) => dict(call.get(call.name)) ?? {};
+const dictIn = (call: Call) => dict(call.get(call.name));
 const keepDict = (call: Call, held: Record<string, unknown>) => call.put(call.name, JSON.stringify(held));
 const taken = (call: Call, take: (list: unknown[]) => unknown) => {
   const list = listIn(call);
@@ -176,12 +160,12 @@ const CALLS: Record<CallType, (call: Call, ...inputs: string[]) => string | unde
   v2JoinArrayVar: (_, source = '', delimiter = '') => (array(source) ?? []).map(item).join(delimiter),
   v2GetDictVar: (_, source = '', key = '') => {
     const held = dict(source);
-    return item(held && Object.hasOwn(held, key) ? held[key] : undefined);
+    return item(Object.hasOwn(held, key) ? held[key] : undefined);
   },
-  v2HasDictKey: (_, source = '', key = '') => (Object.hasOwn(dict(source) ?? {}, key) ? '1' : '0'),
-  v2GetDictSize: (_, source = '') => String(Object.keys(dict(source) ?? {}).length),
-  v2GetDictKeys: (_, source = '') => JSON.stringify(Object.keys(dict(source) ?? {})),
-  v2GetDictValues: (_, source = '') => JSON.stringify(Object.values(dict(source) ?? {})),
+  v2HasDictKey: (_, source = '', key = '') => (Object.hasOwn(dict(source), key) ? '1' : '0'),
+  v2GetDictSize: (_, source = '') => String(Object.keys(dict(source)).length),
+  v2GetDictKeys: (_, source = '') => JSON.stringify(Object.keys(dict(source))),
+  v2GetDictValues: (_, source = '') => JSON.stringify(Object.values(dict(source))),
   v2MakeArrayVar: (call) => void call.put(call.name, '[]'),
   v2GetArrayVarLength: (call) => String(listIn(call).length),
   v2GetArrayVar: (call, at = '') => item(listIn(call)[Number(at)]),
