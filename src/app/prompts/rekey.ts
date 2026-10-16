@@ -2,7 +2,7 @@ import { blockHead, conditionSteps, isRawBlock, separatorOf, whenArgs } from '..
 import { parse, type Node, type Tag } from '../../engine/cbs/parse';
 import { normalize, TOGGLE_GLOBAL } from '../../engine/cbs/tags';
 
-export type ToggleUse = { key: string; at: number };
+type ToggleUse = { key: string; at: number };
 
 // Every place CBS reads a toggle by a written key, found the way the evaluator reads them: the literal `toggle` applies
 // to and the left side of `tis`/`tisnot` in a #when, and `toggle_KEY` in getglobalvar. A key built by a nested tag is

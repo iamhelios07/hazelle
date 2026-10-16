@@ -21,7 +21,7 @@ type Line = { text: string; failed: boolean };
 // at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
 export type Placement = { at: ModulePlace['kind'] | null; failure: string | null };
 // prompts: the names of the prompts whose preset named the module, turned on there. failure: why that failed.
-export type Pairing = { prompts: string[]; failure: string | null };
+type Pairing = { prompts: string[]; failure: string | null };
 
 const PLACES: Record<ModulePlace['kind'], string> = { character: '이 캐릭터에', prompt: '이 프롬프트에', persona: '이 페르소나에', always: ALWAYS };
 
