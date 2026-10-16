@@ -1,4 +1,5 @@
 import type { Account, Connection, Group, Turns } from '../connectors/types';
+import { moved } from './fields';
 
 export const DEFAULT_DAY = 16;
 
@@ -64,9 +65,7 @@ export function moveGroup(turns: Turns, id: string, by: -1 | 1, now: number): Tu
   const index = from.groups.findIndex((group) => group.id === id);
   const to = index + by;
   if (index < 1 || to < 1 || to >= from.groups.length) return null;
-  const groups = [...from.groups];
-  [groups[index], groups[to]] = [groups[to]!, groups[index]!];
-  return { ...from, groups };
+  return { ...from, groups: moved(from.groups, index, to) };
 }
 
 // Only an empty group, never the last. Removing the current group hands its turn to the next.
@@ -95,9 +94,7 @@ export function moveAccountOrder(turns: Turns, account: string, by: -1 | 1): Tur
   const index = group.accounts.indexOf(account);
   const to = index + by;
   if (to < 0 || to >= group.accounts.length) return null;
-  const accounts = [...group.accounts];
-  [accounts[index], accounts[to]] = [accounts[to]!, accounts[index]!];
-  return { ...turns, groups: turns.groups.map((entry) => (entry.id === group.id ? { ...entry, accounts } : entry)) };
+  return { ...turns, groups: turns.groups.map((entry) => (entry.id === group.id ? { ...entry, accounts: moved(group.accounts, index, to) } : entry)) };
 }
 
 // An account signed in again, found by its name, takes the new secret; another joins the current group last.
