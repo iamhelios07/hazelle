@@ -1,3 +1,4 @@
+import { moved } from '../../model/fields';
 import { PICTURE_PERCENT } from '../../model/library';
 import type { SavedLook } from '../../model/settings';
 import { ACCENT, BG, DIALOGUE, INK, QUOTE_SHAPE, THEME, type QuoteShape, type Reading, type Scheme } from '../ui';
@@ -127,5 +128,5 @@ export function moveLook(looks: SavedLook[], id: string, target: string): SavedL
   const from = looks.findIndex((look) => look.id === id);
   const to = looks.findIndex((look) => look.id === target);
   if (from < 0 || to < 0 || from === to) return looks;
-  return looks.toSpliced(from, 1).toSpliced(to, 0, looks[from]!);
+  return moved(looks, from, to);
 }
