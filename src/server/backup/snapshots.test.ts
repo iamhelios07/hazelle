@@ -1,7 +1,7 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { accountPath } from '../db/account-db';
+import { accountPath, snapshotFor } from '../db/account-db';
 import type { Db, Statement } from '../db/service-db';
 import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
@@ -75,7 +75,7 @@ describe('the daily job', () => {
       "SELECT COUNT(*) AS runs, SUM(json_extract(detail, '$.taken')) AS taken, SUM(json_extract(detail, '$.unchanged')) AS unchanged FROM backup_runs WHERE kind = 'daily' AND outcome = 'ok'",
     );
     expect(await runs.first()).toEqual({ runs: 10, taken: 3, unchanged: 7 });
-    expect(await t.stores.snapshotAt(incarnation, first + 6 * DAY_MS)).toMatchObject({ takenAt: first + 4 * DAY_MS });
+    expect(await snapshotFor(t.env.files, t.env.db, incarnation, first + 6 * DAY_MS)).toMatchObject({ takenAt: first + 4 * DAY_MS });
     // 10 real generations: past 5 s when the whole suite runs beside it.
   }, 30_000);
 
@@ -89,12 +89,12 @@ describe('the daily job', () => {
     await t.daily(day(13));
     // day(0), the signup's baseline, stays as the base of day(1)'s delta.
     expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(0) }, { takenAt: day(1) }]);
-    expect(await t.stores.snapshotAt(incarnation, day(10))).toMatchObject({ takenAt: day(1) });
+    expect(await snapshotFor(t.env.files, t.env.db, incarnation, day(10))).toMatchObject({ takenAt: day(1) });
     await written(incarnation, 'after it');
     await t.daily(day(14));
     await t.daily(day(17));
     expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(0) }, { takenAt: day(1) }, { takenAt: day(14) }]);
-    expect(await t.stores.snapshotAt(incarnation, day(12))).toMatchObject({ takenAt: day(1) });
+    expect(await snapshotFor(t.env.files, t.env.db, incarnation, day(12))).toMatchObject({ takenAt: day(1) });
   });
 
   it('captures the day again after the clock jumps back across midnight, past a run and a baseline stamped in the future', async () => {
@@ -134,19 +134,19 @@ describe('retention', () => {
     const incarnation = await signedUp('jin');
     const now = Date.now();
     t.clock.now = () => now - 11 * DAY_MS;
-    const floor = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    const floor = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
     await written(incarnation, 'then rewound away');
     t.clock.now = () => now - 4 * DAY_MS;
-    const target = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    const target = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
     await t.env.db
       .prepare("INSERT INTO restores (incarnation, report_id, at, timeline, target, phase, verified, created_at, updated_at, ended_at) VALUES (?1, 1, ?2, 'new', ?3, 'done', 1, ?4, ?4, ?4)")
       .bind(incarnation, now - 4 * DAY_MS, target, now - 2 * DAY_MS)
       .run();
     await t.env.db.prepare("UPDATE accounts SET timeline = 'new' WHERE incarnation = ?").bind(incarnation).run();
     t.clock.now = () => now - DAY_MS;
-    expect(await t.stores.snapshot(incarnation, 'baseline')).toEqual({ taken: expect.any(String) });
+    expect(await t.stores.snapshot(incarnation)).toEqual({ taken: expect.any(String) });
     expect(await expireSnapshots(t.env, now)).toBe(0);
-    expect(await t.stores.snapshotAt(incarnation, now - 5 * DAY_MS)).toEqual({ id: floor, takenAt: now - 11 * DAY_MS });
+    expect(await snapshotFor(t.env.files, t.env.db, incarnation, now - 5 * DAY_MS)).toEqual({ id: floor, takenAt: now - 11 * DAY_MS });
   });
 
   it('reclaims a snapshot file whose expiry committed before the process stopped without deleting the live floor', async () => {
@@ -154,10 +154,10 @@ describe('retention', () => {
     const now = Date.now();
     // Older than RETENTION_MS before the floor, so the floor is whole and names no base.
     t.clock.now = () => now - 17 * DAY_MS;
-    const old = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    const old = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
     await written(incarnation, 'floor');
     t.clock.now = () => now - 9 * DAY_MS;
-    const floor = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    const floor = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
     const stopping = (real: Statement): Statement => ({
       ...real,
       bind: (...values) => stopping(real.bind(...values)),
@@ -174,7 +174,7 @@ describe('retention', () => {
     expect(await expireSnapshots(t.env, now)).toBe(0);
     expect((await t.reconcile(now + 61 * 60_000)).removed).toContain(`snapshots/${incarnation}/${old}.sqlite.gz`);
     expect(existsSync(diskBucket(t.dir).path(snapshotKey(incarnation, floor)))).toBe(true);
-    expect(await t.stores.snapshotAt(incarnation, now - DAY_MS)).toEqual({ id: floor, takenAt: now - 9 * DAY_MS });
+    expect(await snapshotFor(t.env.files, t.env.db, incarnation, now - DAY_MS)).toEqual({ id: floor, takenAt: now - 9 * DAY_MS });
   });
 
   it('lets a snapshot go at 7 days unless an operation pins it (open, or ended under 7 days ago however it ended) or it is a live account’s floor; a deleted account keeps none past 7 days', async () => {
@@ -251,11 +251,11 @@ it('defers an expired R2 archive for a generation retention, then deletes it fro
     const incarnation = await signedUp('jin');
     const now = Date.now();
     t.clock.now = () => now - 17 * DAY_MS;
-    const old = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    const old = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
     const generation = await captureGeneration(t.env, t.dir, t.clock.now(), t.clock.now, async (work) => ({ value: await work(), gateMs: 0 }));
     await written(incarnation, 'floor');
     t.clock.now = () => now - 9 * DAY_MS;
-    const floor = ((await t.stores.snapshot(incarnation, 'baseline')) as { taken: string }).taken;
+    const floor = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
     const key = snapshotKey(incarnation, old);
     await t.env.db.prepare('INSERT INTO snapshot_removals VALUES (?, ?)').bind(key, now - 1).run();
     expect(await expireSnapshots(t.env, now)).toBe(1);

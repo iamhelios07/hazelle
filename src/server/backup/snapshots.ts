@@ -43,7 +43,7 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
   const failed: string[] = [];
   for (const incarnation of incarnations) {
     try {
-      const outcome = await env.stores.snapshot(incarnation, 'baseline');
+      const outcome = await env.stores.snapshot(incarnation);
       if ('taken' in outcome) taken++;
       else if ('unchanged' in outcome) unchanged++;
       else skipped++;

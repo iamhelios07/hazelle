@@ -181,7 +181,7 @@ export function testServer() {
     // time lands on the newest baseline at or before that time.
     async baseline(accountId: string) {
       const incarnation = (await app.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(accountId).first<string>('incarnation'))!;
-      await app.stores.snapshot(incarnation, 'baseline');
+      await app.stores.snapshot(incarnation);
     },
     // The first signup of a reset installation is its operator, so a test calls this before any account().
     operator: () => harness.account(),

@@ -64,11 +64,11 @@ it('names R2 whole and delta archives in manifest v4 without linking them into t
     const user = await signedUp('operator');
     const now = Date.now();
     t.clock.now = () => now - 60_000;
-    const base = ((await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string }).taken;
+    const base = ((await t.stores.snapshot(user.incarnation)) as { taken: string }).taken;
     const timeline = (await t.env.db.prepare('SELECT timeline FROM accounts WHERE incarnation = ?').bind(user.incarnation).first<string>('timeline'))!;
     await t.stores.getByName(user.incarnation).batch(user.incarnation, timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'changed', baseRev: null }], null);
     t.clock.now = () => now - 30_000;
-    await t.stores.snapshot(user.incarnation, 'baseline');
+    await t.stores.snapshot(user.incarnation);
     expect((await t.daily(now)).generation).toEqual({ outcome: 'ok', error: null });
     const manifest = await newest();
     expect(manifest).toMatchObject({ version: 4, snapshotStore: { kind: 'r2', bucket: s3.config.bucket } });
@@ -117,7 +117,7 @@ describe('a backup generation', () => {
     const kept = await uploaded(keeper.cookie, 'kept picture');
     const left = await uploaded(leaver.cookie, 'leaver picture');
     t.clock.now = () => Date.now() - 60 * 60_000;
-    await t.stores.snapshot(rewinder.incarnation, 'baseline');
+    await t.stores.snapshot(rewinder.incarnation);
     t.clock.now = () => Date.now();
     expect((await t.post('reports', { text: 'restore' }, rewinder.cookie)).status).toBe(204);
     const report = (await t.env.db.prepare('SELECT id FROM reports').first<number>('id'))!;
@@ -204,7 +204,7 @@ describe('a backup generation', () => {
     const paused = async (username: string, operation: number, change: boolean) => {
       const account = await signedUp(username);
       t.clock.now = () => now - 2 * DAY_MS;
-      const old = ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+      const old = ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
       if (change) expect((await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'since', baseRev: null }], account.cookie)).status).toBe(200);
       await t.env.db.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (?, ?, 1, 1, 't', 'fenced', 1, 1)").bind(operation, account.incarnation).run();
       await t.lifecycle(account.id, `state = 'restoring', operation = ${operation}`);
@@ -223,7 +223,7 @@ describe('a backup generation', () => {
     const account = await signedUp('rewound');
     const day = dayStart(Date.now()) - DAY_MS;
     t.clock.now = () => day + 60 * 60_000;
-    const current = ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+    const current = ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
     await t.env.db
       .prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256, timeline, schema_version) VALUES ('old-timeline', ?1, 'baseline', ?2, 1, 1, 1, 'x', 'old', ?3)")
       .bind(account.incarnation, day + 2 * 60 * 60_000, ACCOUNT_SCHEMA_VERSION)
@@ -238,7 +238,7 @@ describe('a backup generation', () => {
     const baselineAt = async (account: Awaited<ReturnType<typeof signedUp>>, at: number) => {
       expect((await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: String(at), baseRev: null }], account.cookie)).status).toBe(200);
       t.clock.now = () => at;
-      return ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+      return ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
     };
     const base = async (id: string) => t.env.db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(id).first<string | null>('base');
     const delta = await signedUp('delta');

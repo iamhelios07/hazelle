@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { RestorePhase } from '../contracts/admin';
 import type { Write } from './account-store';
 import { expireSnapshots } from './backup/snapshots';
-import type { Stores } from './db/account-db';
+import { snapshotFor, type Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
 import { snapshotKey, type Bucket } from './files/bucket';
@@ -169,7 +169,7 @@ async function seeded() {
   // Straight to the store, as the batch route would: these tests are about what happens around it.
   const write = (...writes: Write[]) => t.stores.getByName(incarnation).batch(incarnation, timeline, writes, null);
   await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
-  await t.stores.snapshot(incarnation, 'baseline');
+  await t.stores.snapshot(incarnation);
   t.clock.now = () => now - HOUR_MS / 2;
   await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 }, { id: B, kind: 'chat', parent: null, body: 'b', baseRev: null });
   t.clock.now = () => Date.now();
@@ -383,17 +383,17 @@ describe('a restore', () => {
     const write = (...writes: Write[]) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, writes, null);
     t.clock.now = () => now - 8 * 24 * HOUR_MS;
     await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
-    await t.stores.snapshot(user.incarnation, 'baseline');
+    await t.stores.snapshot(user.incarnation);
     t.clock.now = () => now - HOUR_MS;
     await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 });
-    await t.stores.snapshot(user.incarnation, 'baseline');
+    await t.stores.snapshot(user.incarnation);
     t.clock.now = () => Date.now();
     const points = (await restorePoints(t.env.db, user.id, now))!;
     expect(points).toEqual([
       { at: now - HOUR_MS, takenAt: now - HOUR_MS, kind: 'baseline' },
       { at: expect.any(Number), takenAt: now - 8 * 24 * HOUR_MS, kind: 'baseline' },
     ]);
-    for (const point of points) expect((await t.stores.snapshotAt(user.incarnation, point.at))?.takenAt).toBe(point.takenAt);
+    for (const point of points) expect((await snapshotFor(t.env.files, t.env.db, user.incarnation, point.at))?.takenAt).toBe(point.takenAt);
   });
 
   it('takes back the pictures released since the snapshot it lands on, with their bytes counted again, and leaves older releases', async () => {
@@ -576,11 +576,11 @@ describe('a restore', () => {
     const id = await begin(seed);
     await runRestore(t.env, id);
     const later = Date.now() + 1;
-    expect(await t.stores.snapshotAt(seed.incarnation, later)).toBeNull();
+    expect(await snapshotFor(t.env.files, t.env.db, seed.incarnation, later)).toBeNull();
     const recorded = await t.env.db.prepare("SELECT rev FROM snapshots WHERE incarnation = ? AND kind = 'baseline'").bind(seed.incarnation).first<number>('rev');
     expect(t.stores.inspect(seed.incarnation).exec<{ rev: number }>('SELECT rev FROM head')).toEqual([{ rev: recorded }]);
     expect(await t.daily(later)).toMatchObject({ snapshots: { outcome: 'ok' } });
-    expect(await t.stores.snapshotAt(seed.incarnation, later)).toEqual({ id: expect.any(String), takenAt: later });
+    expect(await snapshotFor(t.env.files, t.env.db, seed.incarnation, later)).toEqual({ id: expect.any(String), takenAt: later });
   });
 
   it('lets no write or answer of an old timeline back in across a rewind, revisions after it and its undo', async () => {

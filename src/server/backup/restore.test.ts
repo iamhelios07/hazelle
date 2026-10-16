@@ -86,10 +86,10 @@ async function leftAt(username: string, phase: RestorePhase) {
   const user = await signedUp(username);
   const write = (body: string, baseRev: number | null) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: X, kind: 'chat', parent: null, body, baseRev }], null);
   await write('old', null);
-  await t.stores.snapshot(user.incarnation, 'baseline');
+  await t.stores.snapshot(user.incarnation);
   t.clock.now = () => now - (5 * HOUR_MS) / 6;
   await write('mid', 1);
-  await t.stores.snapshot(user.incarnation, 'baseline');
+  await t.stores.snapshot(user.incarnation);
   t.clock.now = () => now - HOUR_MS / 2;
   await write('new', 2);
   t.clock.now = () => Date.now();
@@ -119,7 +119,7 @@ it.each(['disk', 'r2'] as const)('preserves a %s generation’s released picture
     const content = JSON.stringify({ file: { id, key: 'sealed-key' } });
     const write = (body: string | null, baseRev: number | null) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: X, kind: 'asset', parent: null, body, baseRev }], null);
     await write(content, null);
-    await t.stores.snapshot(user.incarnation, 'baseline');
+    await t.stores.snapshot(user.incarnation);
     await write(null, 1);
     t.clock.now = () => Date.now();
     await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
@@ -293,10 +293,10 @@ it('restores a version 3 delta baseline as its base with the delta applied', asy
   const now = Date.now();
   await write(X, 'in the base', null);
   t.clock.now = () => now - 2 * HOUR_MS;
-  await t.stores.snapshot(user.incarnation, 'baseline');
+  await t.stores.snapshot(user.incarnation);
   await write(crypto.randomUUID(), 'in the delta', null);
   t.clock.now = () => now - HOUR_MS;
-  const { taken } = (await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string };
+  const { taken } = (await t.stores.snapshot(user.incarnation)) as { taken: string };
   t.clock.now = () => Date.now();
   expect(await t.env.db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(taken).first('base')).not.toBeNull();
   const rows = 'SELECT id, rev, body FROM objects ORDER BY id';
@@ -328,7 +328,7 @@ it('takes the first snapshot after a disaster restore whole, though the catalog 
   const write = (body: string) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body, baseRev: null }], null);
   const snapshotAt = async (at: number) => {
     t.clock.now = () => at;
-    return ((await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string }).taken;
+    return ((await t.stores.snapshot(user.incarnation)) as { taken: string }).taken;
   };
   const day = dayStart(Date.now()) - DAY_MS;
   await write('in the base');
@@ -359,7 +359,7 @@ it('takes the first snapshot after a disaster restore whole, though the catalog 
   try {
     const timeline = (await db.prepare('SELECT timeline FROM accounts WHERE id = ?').bind(user.id).first<string>('timeline'))!;
     expect(await stores.getByName(user.incarnation).batch(user.incarnation, timeline, [{ id: X, kind: 'chat', parent: null, body: 'after the restore', baseRev: null }], null)).toMatchObject({ revs: [3] });
-    const { taken } = (await stores.snapshot(user.incarnation, 'baseline')) as { taken: string };
+    const { taken } = (await stores.snapshot(user.incarnation)) as { taken: string };
     expect(await db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(taken).first('base')).toBeNull();
     const target = join(dir, 'materialized.sqlite');
     await materializeSnapshot(diskBucket(dir), db, user.incarnation, taken, target);
@@ -382,7 +382,7 @@ it('names and restores the checkpoint of an account past its fence whose only ba
   const day = dayStart(Date.now()) - DAY_MS;
   await write('in the baseline');
   t.clock.now = () => day + HOUR_MS;
-  const baseline = ((await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string }).taken;
+  const baseline = ((await t.stores.snapshot(user.incarnation)) as { taken: string }).taken;
   await write('after the baseline, in the checkpoint');
   t.clock.now = () => day + 3 * HOUR_MS;
   expect((await t.post('reports', { text: 'restore' }, user.cookie)).status).toBe(204);
