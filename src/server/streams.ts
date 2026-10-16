@@ -1,13 +1,13 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { RETRY_MOST, type Retry } from '../contracts/streams';
-import { fail, ID, readObject, type AppEnv } from './http';
+import { fail, ID, isRecord, readObject, type AppEnv } from './http';
 import { botCalls, canCall, requireSession } from './session';
 
 const whole = (value: unknown, least: number, most: number) => Number.isInteger(value) && (value as number) >= least && (value as number) <= most;
 const isRetry = (value: unknown): value is Retry => {
-  if (typeof value !== 'object' || value === null) return false;
-  const { times, statuses } = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
+  const { times, statuses } = value;
   return whole(times, 1, RETRY_MOST) && Array.isArray(statuses) && statuses.length <= 20 && statuses.every((status) => whole(status, 100, 599));
 };
 

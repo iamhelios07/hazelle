@@ -1,5 +1,6 @@
 import type { AccountState, SnapshotKind } from '../contracts/admin';
 import type { Db } from './db/service-db';
+import { isRecord } from './http';
 // The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
 
 export type Life = { state: AccountState | 'gone'; timeline: string | null; operation: number | null };
@@ -335,8 +336,8 @@ function refusal(life: Life | Unavailable): Refused {
 }
 
 function readLife(row: unknown): Life | null {
-  if (typeof row !== 'object' || row === null) return null;
-  const { state, timeline, operation } = row as Record<string, unknown>;
+  if (!isRecord(row)) return null;
+  const { state, timeline, operation } = row;
   if (state !== 'active' && state !== 'restoring' && state !== 'leaving') return null;
   if (typeof timeline !== 'string' || (operation !== null && !Number.isSafeInteger(operation))) return null;
   return { state, timeline, operation: operation as number | null };
