@@ -38,10 +38,10 @@ export const SERVICE_TIER_WORDS: Record<ServiceTier, string> = { auto: '자동',
 
 const NAMED: Record<Exclude<Change['setting'], Field>, string> = { stop: '멈춤 문구', reasoning: '추론', cache: '캐시', verbosity: VERBOSITY_LABEL, serviceTier: SERVICE_TIER_LABEL, discount: DISCOUNT };
 const isField = (setting: Change['setting']): setting is Field => setting in NUMBER;
-export const settingLabel = (setting: Change['setting']) => (isField(setting) ? NUMBER[setting].label : NAMED[setting]);
+const settingLabel = (setting: Change['setting']) => (isField(setting) ? NUMBER[setting].label : NAMED[setting]);
 
 // The screens never say 묶음.
-export const NO_VALUES = '정한 값 없음';
+const NO_VALUES = '정한 값 없음';
 // Where no label beside it already says 모델 설정; under one, plain 없음.
 export const NO_PROFILE = `${MODEL_SETTINGS} 없음`;
 

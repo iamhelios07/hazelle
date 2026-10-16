@@ -111,7 +111,7 @@ export class SaveQueue<T extends object> {
   }
 }
 
-export type SaveView<T> = { status: SaveStatus | null; unsaved: Partial<T> };
+type SaveView<T> = { status: SaveStatus | null; unsaved: Partial<T> };
 const IDLE: SaveView<object> = { status: null, unsaved: {} };
 
 type Entry<T extends object> = { queue: SaveQueue<T>; view: SaveView<T>; write: Write<T>; failed: (failure: ApiFailure) => void };
