@@ -36,7 +36,7 @@ export function UsageRow() {
     <>
       <Row kind="spread">
         {totals
-          ? <Text variant="note">전체 사용량 · {count(totals.accounts)}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · ${count(totals.unread)}명은 읽지 못해 합계에서 빠짐` : ''}</Text>
+          ? <Text variant="note">전체 사용량 · {count(totals.accounts)}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · 읽지 못한 ${count(totals.unread)}명 제외` : ''}</Text>
           : <Text variant="note">전체 사용량 · {busy ? '집계 중…' : '집계 전'}</Text>}
         {busy
           ? <Button variant="secondary" size="sm" onClick={() => job.current?.abort()}>집계 멈추기</Button>

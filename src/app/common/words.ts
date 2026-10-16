@@ -26,14 +26,14 @@ export const BOT_MODELS_HELP = '봇 스크립트가 응답과 별도로 모델�
 // 캐릭터 편집's switch for scripts that rewrite the card, and what the card that asks it in the chat says first.
 export const CARD_WRITES = '스크립트의 카드 수정';
 export const CARD_WRITES_HELP = '스크립트가 이 캐릭터의 배경 HTML을 바꿔 저장해요. 이 캐릭터의 모든 채팅에 남아요.';
-export const CARD_WRITE_CONSENT = { character: '이 봇이 캐릭터 카드를 고치려고 해요', module: '이 모듈이 캐릭터 카드를 고치려고 해요' };
+export const CARD_WRITE_CONSENT = { character: '이 봇이 캐릭터 카드를 수정하려고 해요', module: '이 모듈이 캐릭터 카드를 수정하려고 해요' };
 export const CARD_WRITE_ASK_HELP = '허용하면 이 캐릭터의 배경 HTML이 바뀌어 모든 채팅에 남아요. 이 캐릭터에는 한 번만 물어요. 캐릭터 편집에서 바꿀 수 있어요.';
 export const BOT_STUCK = '봇 스크립트가 끝나지 않아 멈췄어요';
 
 export const TOOL = '도구';
 export const MODULE_MODELS = '모델 호출';
 export const MODULE_MODELS_HELP = '이 모듈이 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
-export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 따로 부르려고 해요' };
+export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 추가로 호출하려고 해요' };
 export const MEMORY_CLAIM = '이 모듈이 장기 기억을 대신 맡으려고 해요';
 export const MEMORY_CLAIM_HELP = '허용하면 이 모듈을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
 export const TOOL_LATE = '도구가 늦어서 이번엔 빼고 보냈어요';

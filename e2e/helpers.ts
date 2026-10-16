@@ -210,7 +210,7 @@ export async function enter(page: Page): Promise<boolean> {
   await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
   await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '아직 비어 있어요', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '비어 있어요', exact: true })).toBeVisible();
   return true;
 }
 

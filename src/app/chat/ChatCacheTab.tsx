@@ -59,7 +59,7 @@ export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenCha
               )}
             </Stack>
           ) : (
-            <Empty variant="section">아직 보낸 요청이 없어요.</Empty>
+            <Empty variant="section">보낸 요청이 없어요.</Empty>
           )}
         </Section>
     </>

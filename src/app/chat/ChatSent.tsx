@@ -133,7 +133,7 @@ function RequestBody({ request, unbuilt }: { request: Pick<HttpRequest, 'url' | 
   );
 }
 
-const QUERY = { primary: '키', secondary: '보조 키', additional: '추가 키' } as const;
+const QUERY = { primary: '키워드', secondary: '보조 키워드', additional: '추가 키워드' } as const;
 
 function why({ why }: Lore, names: Map<string, string>): string {
   switch (why.kind) {

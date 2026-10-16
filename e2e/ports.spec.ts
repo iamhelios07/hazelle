@@ -78,7 +78,7 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
     await expect(page.getByText('이 모듈이 장기 기억을 대신 맡으려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await send('The lamp is cold.');
-    await expect(page.getByText('이 모듈이 모델을 따로 부르려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 모듈이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect.poll(() => embedded.length).toBe(1);
     expect(summaries()).toHaveLength(1);

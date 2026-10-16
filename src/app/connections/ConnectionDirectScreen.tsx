@@ -74,7 +74,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
             kind="key"
             value={key}
             onChange={setKey}
-            hint={place.kind === 'generic-url' ? '키가 필요 없으면 비워 두세요.' : undefined}
+            hint={place.kind === 'generic-url' ? '키가 필요 없으면 비워 두어도 돼요.' : undefined}
           />
         )}
       </Stack>

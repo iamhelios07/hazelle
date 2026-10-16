@@ -18,7 +18,7 @@ export function HoldShareDialog({ onClose, onActed }: { onClose: () => void; onA
   const act = (hold: boolean) =>
     run(async () => {
       const done = await (hold ? holdShare(id) : releaseShare(id));
-      if (!done.ok) return done.error === 'not-found' ? (hold ? '없거나 이미 멈춘 링크예요.' : '없거나 차단된 링크예요.') : describeFailure(done);
+      if (!done.ok) return done.error === 'not-found' ? (hold ? '없거나 멈춘 링크예요.' : '없거나 차단된 링크예요.') : describeFailure(done);
       toast.show(hold ? '링크를 멈췄어요.' : '링크 보류를 풀었어요.', { detail: id });
       onActed();
       return null;

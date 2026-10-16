@@ -161,7 +161,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
         {begins && (
           <Section level={3} title="복원할 기록" help="텍스트, 캐릭터, 채팅, 설정을 그 기록 때로 돌려요. 10분 전부터 6일 전까지의 기록이 있어요.">
             {points.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: points.reload }}>{points.failure}</Callout>}
-            {points.data && points.data.length === 0 && <Empty variant="section">아직 복원할 기록이 없어요.</Empty>}
+            {points.data && points.data.length === 0 && <Empty variant="section">복원할 기록이 없어요.</Empty>}
             {points.data && points.data.length > 0 && (
               <List label="복원할 기록">
                 {points.data.map((point) => (

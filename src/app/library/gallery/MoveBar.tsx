@@ -13,7 +13,7 @@ export function MoveBar({ count, onCancel, onMove }: Props) {
   const { folders, byFolder } = useLibrary();
   return (
     <SelectionBar>
-      <span>{count ? `${count}명 선택됨` : '옮길 캐릭터를 선택하세요'}</span>
+      <span>{count ? `${count}명 선택됨` : '옮길 캐릭터를 선택해 주세요'}</span>
       <Button variant="secondary" size="sm" onClick={onCancel}>
         취소
       </Button>

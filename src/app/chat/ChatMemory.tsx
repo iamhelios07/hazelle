@@ -132,7 +132,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
       )}
       {owner?.kind === 'built-in' && !embeds && (
         <Row kind="spread">
-          <Text variant="note">{`${MODEL_ROLES.embed}을 고르면 지금 대화와 관련된 지난 기록을 찾아 넣어요.`}</Text>
+          <Text variant="note">{`${MODEL_ROLES.embed}을 선택하면 지금 대화와 관련된 지난 기록을 찾아 넣어요.`}</Text>
           <Button variant="link" size="sm" onClick={() => navigate({ kind: 'models' })}>
             {opens(inSettings('models'))}
           </Button>

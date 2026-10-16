@@ -13,7 +13,7 @@ export function Welcome() {
   const create = useNewCharacter();
   return (
     <Stack gap="section">
-      <Intro title={chats.length ? '어디서 이어 갈까요?' : '아직 비어 있어요'} />
+      <Intro title={chats.length ? '어디서 이어 갈까요?' : '비어 있어요'} />
       <Stack>
         {connections.length > 0 && (
           <ActionCard tone="accent" icon={MessageSquarePlus} title="새 채팅" description="캐릭터 없이 모델과 이야기해요" onClick={() => navigate({ kind: 'new-chat', character: null })} />

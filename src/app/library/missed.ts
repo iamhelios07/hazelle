@@ -23,7 +23,7 @@ const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   'regex-stage': (count) => `지원하지 않는 단계의 정규식 ${count}개`,
   'regex-off': (count) => `Risu에서 꺼 둔 정규식 ${count}개`,
   module: () => '읽지 못한 모듈',
-  'toggle-line': (count) => `읽지 못한 토글 줄 ${count}개(토글에서 고칠 수 있음)`,
+  'toggle-line': (count) => `읽지 못한 토글 줄 ${count}개(토글에서 수정할 수 있음)`,
   mcp: () => 'MCP 서버 연결',
   cjs: () => '모듈 자바스크립트(cjs)',
   hazelle: () => '파일이 바뀌어 읽지 않은 헤이젤 설정과 모듈',

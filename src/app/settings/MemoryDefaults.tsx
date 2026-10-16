@@ -18,7 +18,7 @@ export function MemoryDefaults() {
   const found = retrievalRoom(value.budget);
   const sum = value.budget + found + value.batch + value.window;
   return (
-    <MemoryFields value={value} onChange={save.change} help="새 채팅이 기억을 쓸지예요. 채팅마다 장기 기억 패널에서 바꿀 수 있어요.">
+    <MemoryFields value={value} onChange={save.change} help="새 채팅에서 장기 기억을 켤지 정해요.">
       {/* Off, a request fills no memory slot, so this split is not what it sends. */}
       {value.on && (
         <MemorySplit

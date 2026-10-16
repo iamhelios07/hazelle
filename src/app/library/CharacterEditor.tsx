@@ -173,7 +173,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       <ChoiceGroup layout="segmented" label="보기" options={READINGS} value={reading} onChange={setReading} />
     </Row>
   );
-  const untranslated = (source: string) => (translation.running.has(source) ? '번역 중…' : '아직 번역하지 않았어요.');
+  const untranslated = (source: string) => (translation.running.has(source) ? '번역 중…' : '번역하지 않았어요.');
   const translatorMissing = translated && !translation.translator.ok && <Callout tone="warn">{`번역할 수 없어요. ${describeTranslateFailure(translation.translator.failure)}`}</Callout>;
   // The stored card's text, as it was translated; a draft not saved yet is not.
   const translatedField = (label: string, source: string, lines: number) =>
@@ -315,7 +315,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           value={noteSave.unsaved.note ?? character.translatorNote ?? ''}
           onChange={(note) => noteSave.change({ note })}
           placeholder={NOTE_PLACEHOLDER}
-          help={{ text: '이 캐릭터의 번역에만 들어가요. 모든 번역에 들어가는 전역 노트는 따로 있어요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
+          help={{ text: '이 캐릭터의 번역에만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
         />
       </Section>
     ),

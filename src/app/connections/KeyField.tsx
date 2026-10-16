@@ -19,7 +19,7 @@ export function KeyField({ type, value, onChange }: { type: ConnectionType | nul
         value={value}
         onChange={onChange}
         help="키는 암호화해서 저장하고, 서버에 남기지 않아요."
-        hint={type ? undefined : '키가 필요 없으면 비워 두세요.'}
+        hint={type ? undefined : '키가 필요 없으면 비워 두어도 돼요.'}
         action={
           form && (
             <FileButton accept={form.accept} size="sm" icon={ACTS.import.icon} onFiles={([file]) => void file!.text().then(onChange)}>

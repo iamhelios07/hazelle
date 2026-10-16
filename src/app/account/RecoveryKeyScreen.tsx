@@ -29,7 +29,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
       '',
       recoveryKey,
       '',
-      '비밀번호를 잊었을 때 로그인 화면의 \'복구 키로 로그인\'에서 이 파일이나 위의 키를 입력하세요.',
+      '비밀번호를 잊었을 때 로그인 화면의 \'복구 키로 로그인\'에서 이 파일이나 위의 키를 입력해 주세요.',
       '비밀번호와 이 키를 둘 다 잃으면 백업 파일이 없는 한 누구도 데이터를 복원할 수 없어요.',
       `생성일: ${created}`,
       '',
@@ -54,7 +54,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
             시작하기
           </Button>
           <Text variant="note" align="center">
-            시작하기를 누르면 아래 두 문서에 동의하게 됩니다.
+            시작하기를 누르면 아래 두 문서에 동의하게 돼요.
           </Text>
           <Text variant="note" align="center">
             <Link href={TERMS.path}>{TERMS.title}</Link> · <Link href={PRIVACY.path}>{PRIVACY.title}</Link>

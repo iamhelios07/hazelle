@@ -168,7 +168,7 @@ async function importCard(page: Page) {
   await expect(mira(page)).toBeVisible();
 }
 
-const empty = (page: Page) => page.getByRole('heading', { name: '아직 비어 있어요', exact: true });
+const empty = (page: Page) => page.getByRole('heading', { name: '비어 있어요', exact: true });
 const mira = (page: Page) => page.getByText('Mira', { exact: true }).first();
 // keepSynced pulls when the window gains focus. Page code is passed as text: e2e/ compiles without the DOM types.
 const focus = (page: Page) => page.evaluate("window.dispatchEvent(new Event('focus'))");

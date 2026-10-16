@@ -103,7 +103,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
     await page.goto(chat);
     await page.getByLabel('메시지', { exact: true }).fill('The gate is open now.');
     await page.getByRole('button', { name: '보내기', exact: true }).click();
-    await expect(page.getByText('이 모듈이 모델을 따로 부르려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 모듈이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect(page.getByRole('article').last()).toContainText(summary(1));
     expect(aux()).toHaveLength(1);
@@ -201,7 +201,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await send('The lamp is cold.');
     await send('We light the lamp.');
-    await expect(page.getByText('이 모듈이 모델을 따로 부르려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 모듈이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect.poll(() => embedded.length).toBe(1);
     expect(embedded[0]).toMatchObject({ model: FAKE_EMBED, input: [node(1)] });

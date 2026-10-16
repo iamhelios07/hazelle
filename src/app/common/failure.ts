@@ -103,7 +103,7 @@ export function describeFailure(failure: ApiFailure, own: Partial<Record<ServerE
 
 const REFUSED: Record<string, string> = {
   'max-tokens-unknown': '이 모델의 최대 출력 길이를 알 수 없어서 보낼 수 없어요.',
-  'context-fit': '요청이 이 모델의 컨텍스트 길이를 넘을 것 같아서 보내지 않았어요. 컨텍스트가 더 긴 모델을 고르거나 프롬프트를 줄여 주세요.',
+  'context-fit': '요청이 이 모델의 컨텍스트 길이를 넘을 것 같아서 보내지 않았어요. 컨텍스트가 더 긴 모델을 선택하거나 프롬프트를 줄여 주세요.',
   tokenizer: '토큰 수를 계산하지 못해서 보내지 않았어요. 새로고침한 뒤 다시 시도해 주세요.',
   'unknown-connection-type': '지원하지 않는 연결 종류예요. 새로고침해 주세요.',
   'unreadable-key': '키를 읽지 못했어요. 키 파일의 내용을 그대로 붙여 넣어 주세요.',
@@ -311,7 +311,7 @@ const EMBED: Partial<Record<Extract<MemoryFailure, { kind: 'embed' }>['reason'],
   flood: '이 채팅의 모델 호출이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
 };
 
-const SCENE_INVALID = { ...INVALID, paragraph: '모델이 메시지에 없는 문단을 골랐어요.' } as const;
+const SCENE_INVALID = { ...INVALID, paragraph: '모델이 메시지에 없는 문단을 선택했어요.' } as const;
 
 export function describeIllustrateFailure(failure: IllustrateFailure): string {
   switch (failure.kind) {

@@ -214,7 +214,7 @@ function KeyDialog({ toggle, lines, uses, onClose, onSave }: { toggle: Toggle; l
         value={key}
         onChange={setKey}
         error={error ?? undefined}
-        hint={uses === null ? '이 키를 쓴 곳은 그대로예요.' : uses ? `조건 ${uses}곳도 바뀌어요.` : '이 키를 쓰는 조건이 없어요.'}
+        hint={uses === null ? '이 키를 쓴 곳은 바뀌지 않아요.' : uses ? `조건 ${uses}곳도 바뀌어요.` : '이 키를 쓰는 조건이 없어요.'}
       />
     </Dialog>
   );

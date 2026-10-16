@@ -212,7 +212,7 @@ function Call({ receipt }: { receipt: Receipt }) {
 const UNMEASURED = { preparation: '요청을 만들기 전에 멈춤', tokenizer: '토큰 수를 세지 못함' } as const;
 const UNLEARNED = { pictures: '이미지가 있어 배우지 않음', incomplete: '끝까지 받지 못해 배우지 않음', 'missing-input': '제공자가 입력 토큰을 알려 주지 않음', empty: '보낸 글이 없음' } as const;
 const SOURCE = { prior: '기본값', model: '이 모델의 기록', chat: '이 채팅의 기록', 'drift-reset': '바뀐 배율을 다시 배우는 중', unavailable: '맞추지 않음' } as const;
-const BOUND = { 'hard-upper': '모델 한도에 여유를 두고', 'hard-centre': '모델 한도 기준', 'user-centre': '설정한 컨텍스트 기준', refusal: '거절된 뒤 줄여서' } as const;
+const BOUND = { 'hard-upper': '모델 한도에 여유를 두고', 'hard-centre': '모델 한도 기준', 'user-centre': '컨텍스트 한도 기준', refusal: '거절된 뒤 줄여서' } as const;
 
 function Fitting({ receipt, title = '토큰 맞추기' }: { receipt: Receipt; title?: string }) {
   const { tokens: calibration } = useSession();
@@ -221,7 +221,7 @@ function Fitting({ receipt, title = '토큰 맞추기' }: { receipt: Receipt; ti
   if (fit.unavailable === 'historical') return null;
   const learned = fit.source === 'model' || fit.source === 'chat' || fit.source === 'drift-reset';
   return (
-    <Section level={3} title={title} help="모델마다 토큰을 세는 방식이 달라요. 응답마다 제공자가 알려 준 입력 토큰과 앱이 센 토큰을 비교해 배율을 배우고, 그 배율로 프롬프트를 모델 한도에 맞춰요.">
+    <Section level={3} title={title} help="제공자가 알려 준 입력 토큰과 앱이 센 토큰을 비교해 프롬프트를 모델 한도에 맞춰요.">
       <Facts
         variant="tiles"
         items={[

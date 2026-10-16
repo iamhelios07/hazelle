@@ -52,7 +52,7 @@ export function PortraitsEditor({ owner }: { owner: string }) {
         }
       >
         {run?.stage === 'failed' && <Callout tone="warn">{`프로필을 만들지 못했어요. ${describeLikenessFailure(run.failure)}`}</Callout>}
-        {!stored ? <Empty variant="section">아직 없어요.</Empty> : portraits.length === 0 && <Empty variant="section">삽화에 쓸 인물이 없어요.</Empty>}
+        {!stored ? <Empty variant="section">프로필이 없어요.</Empty> : portraits.length === 0 && <Empty variant="section">삽화에 쓸 인물이 없어요.</Empty>}
       </Section>
       {portraits.map((portrait) => (
         <PortraitTags key={portrait.name} owner={owner} portrait={portrait} onRemove={building ? undefined : () => void remove(portrait.name)} />

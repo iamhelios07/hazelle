@@ -116,7 +116,7 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
           {draws && (
             <>
               <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={again} />
-              <IconButton icon={SlidersHorizontal} size="xs" label="어떻게 바꿀까요?" onClick={() => onReshape({ message: message.id, version, scene, paragraphs: paragraphsOf(text).length })} />
+              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene, paragraphs: paragraphsOf(text).length })} />
             </>
           )}
           <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => onDrop(picture)} />
@@ -144,7 +144,7 @@ export function SceneDialog({ reshaping, onDraw, onClose }: { reshaping: Reshapi
   }
   return (
     <Dialog
-      title="어떻게 바꿀까요?"
+      title="장면 바꾸기"
       onClose={onClose}
       onSubmit={submit}
       actionsLayout="full"

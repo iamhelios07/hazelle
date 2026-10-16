@@ -66,7 +66,7 @@ export const vertex: ConnectionType = {
     placeholder: '{ "type": "service_account", … }',
     accept: '.json,application/json',
     parts: {
-      label: '프로젝트 ID, 이메일, 키 따로 입력',
+      label: '프로젝트 ID, 이메일, 키 직접 입력',
       fields: [
         { id: 'project', label: '프로젝트 ID', placeholder: 'my-project', help: '비워 두면 클라이언트 이메일에서 읽어요.' },
         { id: 'email', label: '클라이언트 이메일', placeholder: 'name@my-project.iam.gserviceaccount.com' },

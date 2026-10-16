@@ -120,7 +120,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '따로 켠 프롬프트가 없어요.' : '켠 프롬프트가 없어요.'}</Empty>
+          <Empty variant="section">{always ? '직접 켠 프롬프트가 없어요.' : '켠 프롬프트가 없어요.'}</Empty>
         )}
       </Section>
       <Section title={USED_BY}>
@@ -131,7 +131,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '따로 켠 캐릭터가 없어요.' : '켠 캐릭터가 없어요.'}</Empty>
+          <Empty variant="section">{always ? '직접 켠 캐릭터가 없어요.' : '켠 캐릭터가 없어요.'}</Empty>
         )}
       </Section>
       <Section title={PERSONAS_USING}>
@@ -142,7 +142,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '따로 켠 페르소나가 없어요.' : '켠 페르소나가 없어요.'}</Empty>
+          <Empty variant="section">{always ? '직접 켠 페르소나가 없어요.' : '켠 페르소나가 없어요.'}</Empty>
         )}
       </Section>
       <List box places label="토글">

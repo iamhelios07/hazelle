@@ -58,7 +58,7 @@ export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDo
       <Intro title={signup ? '계정 만들기' : '새 비밀번호 설정'}>
         {signup
           ? '서버는 비밀번호를 받지 않아서 채팅, 캐릭터, API 키를 볼 수 없어요.'
-          : '앞으로 쓸 새 비밀번호를 설정해 주세요.'}
+          : '새 비밀번호를 설정해 주세요.'}
       </Intro>
       <Stack>
         {signup && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}

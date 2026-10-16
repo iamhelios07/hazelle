@@ -126,7 +126,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
         )}
         {picked && (
           <SelectionBar>
-            <span>{picked.size ? `${picked.size}개 선택됨` : '삭제할 에셋을 선택하세요'}</span>
+            <span>{picked.size ? `${picked.size}개 선택됨` : '삭제할 에셋을 선택해 주세요'}</span>
             <Button variant="secondary" size="sm" onClick={() => setPicked(new Set(search.found.map(({ id }) => id)))}>
               모두 선택
             </Button>

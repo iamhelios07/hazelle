@@ -252,7 +252,7 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
         />
         <SettingRow
           label="우선순위"
-          help="로어북 예산이 모자라면 값이 큰 항목부터 넣어요."
+          help="로어북 최대 분량을 넘으면 값이 큰 항목부터 넣어요."
           changed={shown.priority !== null}
           error={priorityValid ? undefined : NUMBER_ERROR}
           control={<NumberInput label="우선순위" value={priority} placeholder="순서와 같음" invalid={!priorityValid} onChange={changePriority} />}

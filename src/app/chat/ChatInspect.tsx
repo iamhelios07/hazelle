@@ -83,7 +83,7 @@ function NextRequest({ chat, sending, request, editor, onEdit }: { chat: string;
   return (
     <Stack gap="group">
       <NextTokens sending={sending} />
-      {missing.length > 0 && <Text variant="note">{`보낼 때 실행돼서 여기에 아직 없어요: ${missing.join(', ')}`}</Text>}
+      {missing.length > 0 && <Text variant="note">{`보낼 때 실행돼서 여기에는 없어요: ${missing.join(', ')}`}</Text>}
       <RequestView prompt={sending.prompt} title="보낼 순서대로" request={request} unbuilt="이 연결은 본문을 미리 만들 수 없어요." editor={editor} onEdit={onEdit} />
     </Stack>
   );
@@ -215,7 +215,7 @@ function Variables({ chat, sending, busy }: { chat: string; sending: Sending | n
   );
 }
 
-const ATTACHED = { settings: '전체 설정', prompt: '프롬프트', character: '캐릭터', persona: '페르소나' } as const;
+const ATTACHED = { settings: '설정', prompt: '프롬프트', character: '캐릭터', persona: '페르소나' } as const;
 
 function moduleTags(module: ModuleContribution): string[] {
   const regex = Object.values(module.regex).reduce((sum, count) => sum + count, 0);
@@ -259,9 +259,9 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
       <Facts
         items={[
           { label: '입력 정규식', value: `${module.regex.input}개` },
-          { label: '출력 정규식', value: `${module.regex.output}개` },
+          { label: '응답 정규식', value: `${module.regex.output}개` },
           { label: '요청 정규식', value: `${module.regex.process}개` },
-          { label: '표시 정규식', value: `${module.regex.display}개` },
+          { label: '화면 정규식', value: `${module.regex.display}개` },
         ]}
       />
       {module.lore.length > 0 ? (
@@ -277,7 +277,7 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
   );
 }
 
-const STAGES: Record<string, string> = { load: '처음 실행', onInput: '입력', editInput: '입력 편집', onStart: '시작', editRequest: '요청 편집', editOutput: '출력 편집', onOutput: '출력', editDisplay: '표시 편집', button: '버튼' };
+const STAGES: Record<string, string> = { load: '처음 실행', onInput: '입력', editInput: '입력 편집', onStart: '시작', editRequest: '요청 편집', editOutput: '응답 편집', onOutput: '응답', editDisplay: '화면 편집', button: '버튼' };
 
 function Scripts({ chat }: { chat: string }) {
   const { scripts, store } = useSession();
@@ -291,7 +291,7 @@ function Scripts({ chat }: { chat: string }) {
   return (
     <Section title="실행 기록" help="이 페이지에서 실행된 봇 스크립트와 log() 출력이에요. 새로고침하면 사라져요.">
       {entries.length === 0 ? (
-        <Empty variant="section">아직 실행된 스크립트가 없어요.</Empty>
+        <Empty variant="section">실행된 스크립트가 없어요.</Empty>
       ) : (
         <Stack gap="related">
           <List label="실행 기록">

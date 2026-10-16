@@ -101,7 +101,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
           <PickCard
             label={MODEL_SETTINGS}
             value={defaultProfile ? defaultProfile.value.name : '없음'}
-            note={defaultProfile ? (defaultWords.length ? defaultWords.join(' · ') : `${NO_VALUES} · 모델이 권하는 값으로 응답해요`) : undefined}
+            note={defaultProfile ? (defaultWords.length ? defaultWords.join(' · ') : `${NO_VALUES} · 모델 기본값 사용`) : undefined}
             help={SETTINGS_HELP}
             tone={defaultProfile ? 'default' : 'warn'}
             onClick={() => navigate(defaultProfile ? { kind: 'profile', id: defaultProfile.id } : { kind: 'models' })}

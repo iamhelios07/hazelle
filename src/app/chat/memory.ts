@@ -3,7 +3,7 @@ import type { Chapter, Fact, Memory, MemoryRecord, Source, Written } from '../..
 import type { RecordStatus } from '../../runtime/memory';
 import { CHAPTER } from '../common/words';
 
-const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '예산 넘음', forgotten: '삭제됨', chaptered: `${CHAPTER}로 보냄`, 'recall-over': '요약 보냄' };
+const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '한도 넘음', forgotten: '삭제됨', chaptered: `${CHAPTER}로 보냄`, 'recall-over': '요약 보냄' };
 
 export const statusWord = (status: RecordStatus | undefined, stale: Staleness | undefined) =>
   status === undefined || status === 'sent' ? [] : [status === 'stale' && stale === 'records' ? '기록 바뀜' : STATUS_WORDS[status]];
