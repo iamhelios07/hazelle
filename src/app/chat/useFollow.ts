@@ -97,7 +97,6 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
     setSeek({ key, revision: Date.now(), align });
   }
 
-  // null while the view is at the bottom.
   const pill = !away ? null : streaming ? '생성 중' : unread ? '새 응답' : '맨 아래로';
 
   return { scrollRef, onScroll, follow, beforeTurn, seekTo, seek, pill, away };

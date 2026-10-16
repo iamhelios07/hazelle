@@ -11,7 +11,6 @@ import { ChatMessage } from './ChatMessage';
 import { foldTerm } from './search';
 import type { OpenChat } from './useChat';
 
-// Who the rows name: the chat's character, the persona the user plays, and the model a reply with no receipt names.
 export function speakers({ card, shelf, persona, route }: OpenChat) {
   return {
     character: card && { name: card.nickname || card.name, image: shelf!.face },

@@ -14,7 +14,6 @@ import { useToast } from '../toast';
 // scenes of a run it failed together.
 const told = new WeakSet<IllustrateFailure>();
 
-// A version's pictures, oldest first.
 function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap<string, Stored<'illustration'>[]> {
   const versions = new Map<string, Stored<'illustration'>[]>();
   for (const picture of [...illustrations].sort((a, b) => a.value.at - b.value.at)) {

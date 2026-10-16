@@ -152,7 +152,6 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     }
   };
 
-  // The paragraphs selected, when the text drawn holds them too.
   const findPart = (pieces: string[]) => {
     const side: EditPart['side'] = translation && !flipped ? 'translation' : 'text';
     const source = side === 'text' ? version.text : translation!.text;
@@ -451,7 +450,6 @@ function sameRow(previous: Props, next: Props): boolean {
   return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
 }
 
-// The name a row goes by: the persona's for the user's, else the character's, or with none the model's.
 export const speaker = (message: Message, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>
   message.role === 'user' ? (me?.name ?? NO_PERSONA) : (character?.name ?? shown(message).receipt?.modelName ?? modelName ?? '모델');
 

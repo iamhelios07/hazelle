@@ -134,8 +134,6 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
   );
 }
 
-// Typed values are saved after a pause in typing (common/useAutosave), not per key press; the box shows what is
-// still on its way over what is stored.
 function TextToggle({ toggle, value, owner, write }: { toggle: Extract<Toggle, { kind: 'text' }>; value: string; owner: string | null; write: Props['onWrite'] }) {
   const autosave = useAutosave<{ value: string }>(toggleSaveKey(owner, toggle.key), (patch) => write(toggle.key, patch.value!));
   return (
