@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { expect, it } from 'vitest';
+import { sha256Hex } from '../http';
 import { serviceDb } from './service-db';
 import { archiveSnapshot } from './snapshot';
 
@@ -20,7 +20,7 @@ it('archives an independent, compacted snapshot with hashes matching its gzip an
     raw.exec("UPDATE entries SET body = 'changed'");
     const archive = await archiveSnapshot(plain, gzip);
     const bytes = readFileSync(gzip);
-    expect(archive).toEqual({ bytes: bytes.length, expanded: statSync(plain).size, sha256: createHash('sha256').update(bytes).digest('hex') });
+    expect(archive).toEqual({ bytes: bytes.length, expanded: statSync(plain).size, sha256: sha256Hex(bytes) });
     expect(archive.expanded).toBeLessThan(before);
     const restored = join(dir, 'restored.sqlite');
     writeFileSync(restored, gunzipSync(bytes));

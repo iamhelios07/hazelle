@@ -7,7 +7,7 @@ import { uploadBudget } from './limits';
 import type { Bucket } from './files/bucket';
 import { fakeS3 } from './files/fake-s3';
 import { r2Bucket } from './files/r2-bucket';
-import { hex, type AppEnv } from './http';
+import { sha256Hex, type AppEnv } from './http';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -17,7 +17,6 @@ beforeAll(async () => {
 afterAll(() => t.dispose());
 beforeEach(() => t.reset());
 
-const idOf = async (bytes: Uint8Array<ArrayBuffer>) => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
 const signup = async (body = signupBody()) => {
   await t.env.db.prepare('UPDATE service SET signup_cap = signup_cap + 1').run();
   const cookie = sessionCookie(await t.post('signup', body));
@@ -50,8 +49,8 @@ describe('files', () => {
   it('keeps a separate copy and sum per account for the same content, and says which ids the asker lacks', async () => {
     const [jin, other] = [await signup(), await signup(signupBody('other'))];
     const bytes = new Uint8Array([1, 2, 3, 250]);
-    const id = await idOf(bytes);
-    const absent = await idOf(new Uint8Array([9]));
+    const id = sha256Hex(bytes);
+    const absent = sha256Hex(new Uint8Array([9]));
 
     const first = await put(id, bytes, jin.cookie);
     expect(first.headers.get('x-account-file-bytes')).toBe('4');
@@ -107,7 +106,7 @@ describe('files', () => {
 
   it('refuses a body that is not its id, a bad id, an oversized body and a missing session', async () => {
     const { cookie } = await signup();
-    const id = await idOf(new Uint8Array([1]));
+    const id = sha256Hex(new Uint8Array([1]));
     expect((await put(id, new Uint8Array([2]), cookie)).status).toBe(400);
     expect((await put('not-a-hash', new Uint8Array([1]), cookie)).status).toBe(400);
     expect((await put(id, new Uint8Array(25 * 1024 * 1024 + 1), cookie)).status).toBe(413);
@@ -119,7 +118,7 @@ describe('files', () => {
   it('finishes an upload cut after its reservation or after its bytes with one row and one charge', async () => {
     const jin = await signup();
     const [early, late] = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6, 7])];
-    const [earlyId, lateId] = [await idOf(early), await idOf(late)];
+    const [earlyId, lateId] = [sha256Hex(early), sha256Hex(late)];
     const files = t.env.files;
     await withFilesPut(
       () => Promise.reject(new Error('cut before the bytes')),
@@ -152,24 +151,24 @@ describe('files', () => {
     await t.env.db.prepare('UPDATE service SET account_file_bytes_cap = 5').run();
     const jin = await signup();
     const [kept, large] = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
-    expect((await put(await idOf(kept), kept, jin.cookie)).status).toBe(204);
-    expect(await (await t.post('files/missing', { ids: [await idOf(large)] }, jin.cookie)).json()).toMatchObject({ room: 2 });
+    expect((await put(sha256Hex(kept), kept, jin.cookie)).status).toBe(204);
+    expect(await (await t.post('files/missing', { ids: [sha256Hex(large)] }, jin.cookie)).json()).toMatchObject({ room: 2 });
 
-    const refused = await put(await idOf(large), large, jin.cookie);
+    const refused = await put(sha256Hex(large), large, jin.cookie);
     expect(refused.status).toBe(413);
     expect(await refused.json()).toEqual({ error: 'files-full' });
-    expect(await stored(jin.incarnation, await idOf(large))).toBeUndefined();
+    expect(await stored(jin.incarnation, sha256Hex(large))).toBeUndefined();
     expect(await sum(jin.incarnation)).toBe(3);
 
     await t.env.db.prepare('UPDATE accounts SET own_file_bytes_cap = 1, file_bytes_cap = 6 WHERE id = ?').bind(jin.id).run();
-    expect((await put(await idOf(large), large, jin.cookie)).headers.get('x-account-file-bytes')).toBe('6');
+    expect((await put(sha256Hex(large), large, jin.cookie)).headers.get('x-account-file-bytes')).toBe('6');
   });
 
   it('charges only one concurrent reservation near the cap and retries it after a cap reduction', async () => {
     const { cookie, incarnation } = await signup();
     await t.env.db.prepare('UPDATE service SET account_file_bytes_cap = 3').run();
     const bodies = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
-    const ids = await Promise.all(bodies.map(idOf));
+    const ids = bodies.map(sha256Hex);
     const replies = await Promise.all(bodies.map((body, index) => put(ids[index]!, body, cookie)));
     expect(replies.map(({ status }) => status).sort()).toEqual([204, 413]);
     expect(await sum(incarnation)).toBe(3);
@@ -189,7 +188,7 @@ describe('files', () => {
   it('refuses blocked content to every account that holds it, and brings every copy back when lifted', async () => {
     const [jin, other] = [await signup(), await signup(signupBody('other'))];
     const bytes = new Uint8Array([7, 7]);
-    const id = await idOf(bytes);
+    const id = sha256Hex(bytes);
     for (const { cookie } of [jin, other]) await put(id, bytes, cookie);
 
     expect((await block(id, true)).status).toBe(204);
@@ -217,7 +216,7 @@ describe('files', () => {
     t.env.limits.uploads = uploadBudget(16);
     const jin = await signup();
     const bytes = Array.from({ length: 9 }, (_, index) => new Uint8Array([index, 42]));
-    const ids = await Promise.all(bytes.map(idOf));
+    const ids = bytes.map(sha256Hex);
     const read = new Set<number>();
     const ends: (() => void)[] = [];
     const replies = bytes.map((body, index) =>
@@ -254,7 +253,7 @@ describe('files', () => {
     await signup(signupBody('operator'));
     const jin = await signup();
     const bytes = new Uint8Array([2, 7, 1]);
-    const id = await idOf(bytes);
+    const id = sha256Hex(bytes);
     let end: (() => void) | undefined;
     const reply = t.raw(`files/${id}`, {
       method: 'PUT',
@@ -285,7 +284,7 @@ describe('files', () => {
     await signup(signupBody('operator'));
     const jin = await signup();
     const bytes = new Uint8Array([3, 1, 4]);
-    const id = await idOf(bytes);
+    const id = sha256Hex(bytes);
     expect((await t.put(`files/${id}`, bytes, jin.cookie)).status).toBe(204);
     let end: (() => void) | undefined;
     const reply = t.raw(`files/${id}`, {
@@ -316,7 +315,7 @@ describe('files', () => {
     const body = signupBody();
     const old = await signup(body);
     const bytes = new Uint8Array([3, 1, 4]);
-    const id = await idOf(bytes);
+    const id = sha256Hex(bytes);
     const files = t.env.files;
     let reused!: Awaited<ReturnType<typeof signup>>;
     await withFilesPut(
@@ -349,7 +348,7 @@ describe('files', () => {
       await signup(signupBody('operator'));
       const gone = await signup();
       const bytes = new Uint8Array([2, 7]);
-      const id = await idOf(bytes);
+      const id = sha256Hex(bytes);
       expect((await put(id, bytes, gone.cookie)).status).toBe(204);
       const deleted = Date.now();
       expect((await t.delete('account', { method: 'password', proof: proof('password') }, gone.cookie)).status).toBe(204);
@@ -382,8 +381,8 @@ describe('files', () => {
     it('releases a settled file nothing names, but not one asked about within the hour, one a live link names, or any on another timeline', async () => {
       const jin = await signup();
       const bodies = [new Uint8Array([1]), new Uint8Array([2, 2]), new Uint8Array([3, 3, 3])];
-      const [loose, asked, linked] = await Promise.all(bodies.map(idOf));
-      for (const body of bodies) await put(await idOf(body), body, jin.cookie);
+      const [loose, asked, linked] = bodies.map(sha256Hex);
+      for (const body of bodies) await put(sha256Hex(body), body, jin.cookie);
       await settle(jin.incarnation);
       expect(await missing([asked!], jin.cookie)).toEqual([]);
       await t.env.db.batch([
@@ -403,7 +402,7 @@ describe('files', () => {
     it('takes a released file back when an object names it or it is uploaded again, and holds the upload while its bytes go', async () => {
       const jin = await signup();
       const body = new Uint8Array([4, 5]);
-      const id = await idOf(body);
+      const id = sha256Hex(body);
       await put(id, body, jin.cookie);
       const release = async () => {
         await settle(jin.incarnation);
@@ -428,7 +427,7 @@ describe('files', () => {
     it('keeps a released file recoverable when its reupload cannot reserve room', async () => {
       const jin = await signup();
       const body = new Uint8Array([7, 8, 9]);
-      const id = await idOf(body);
+      const id = sha256Hex(body);
       await put(id, body, jin.cookie);
       await settle(jin.incarnation);
       const line = await timeline(jin.incarnation);
@@ -444,7 +443,7 @@ describe('files', () => {
     it('does not release an unfinished reservation or turn it into a stored file', async () => {
       const jin = await signup();
       const body = new Uint8Array([8, 9]);
-      const id = await idOf(body);
+      const id = sha256Hex(body);
       await withFilesPut(async () => { throw new Error('storage unavailable'); }, async () => {
         expect((await put(id, body, jin.cookie)).status).toBe(500);
       });

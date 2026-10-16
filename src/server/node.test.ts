@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } from 'node:fs';
 import { createServer as httpServer, request } from 'node:http';
 import { once } from 'node:events';
@@ -11,6 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { buildSync } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MAX_FILE_BYTES } from './files';
+import { sha256Hex } from './http';
 import { CSP } from './static';
 import { sessionCookie, signupBody } from './testing';
 
@@ -292,7 +293,7 @@ describe('the server process', () => {
     const pictures = join(data, 'files', incarnation);
     const pictureOf = () => {
       const bytes = randomBytes(MAX_FILE_BYTES);
-      return { bytes, id: createHash('sha256').update(bytes).digest('hex') };
+      return { bytes, id: sha256Hex(bytes) };
     };
     // Sent as a browser sends a picture: with its length, here in 1 MiB pieces, `afterPiece` called after each.
     const upload = (picture: ReturnType<typeof pictureOf>, afterPiece: (piece: number) => Promise<void>) =>
@@ -355,7 +356,7 @@ describe('the server process', () => {
     expect(await upload(receiving, async () => {})).toBe(204);
     for (const { id } of [receiving, publishing]) {
       const read = await fetch(`http://127.0.0.1:${port}/api/files/${id}`, { headers: { cookie, 'x-account': body.accountId } });
-      expect(createHash('sha256').update(new Uint8Array(await read.arrayBuffer())).digest('hex')).toBe(id);
+      expect(sha256Hex(new Uint8Array(await read.arrayBuffer()))).toBe(id);
     }
     server.child.kill('SIGTERM');
     expect(await server.exited).toBe(0);

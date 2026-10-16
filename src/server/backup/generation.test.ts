@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -7,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { ACCOUNT_SCHEMA_VERSION } from '../db/account-db';
 import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
-import { DAY_MS, type Services } from '../http';
+import { DAY_MS, sha256Hex, type Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
 import { COPIED, expireGenerations, generationsDir, listGenerations, MANIFEST, POOL, readManifest, type Manifest } from './generation';
@@ -40,7 +39,6 @@ beforeEach(async () => {
   await t.env.db.prepare('UPDATE service SET signup_cap = 100').run();
 });
 
-const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const picture = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
 
 async function signedUp(username: string) {
@@ -51,8 +49,8 @@ async function signedUp(username: string) {
 }
 async function uploaded(cookie: string, text: string) {
   const bytes = picture(text);
-  expect((await t.put(`files/${sha(bytes)}`, bytes, cookie)).status).toBe(204);
-  return sha(bytes);
+  expect((await t.put(`files/${sha256Hex(bytes)}`, bytes, cookie)).status).toBe(204);
+  return sha256Hex(bytes);
 }
 const generation = async (id: string) => (await readManifest(join(generationsDir(t.dir), id)))!;
 const newest = async () => generation((await listGenerations(t.dir)).toSorted((a, b) => b.capturedAt - a.capturedAt)[0]!.id);
@@ -76,7 +74,7 @@ it('names R2 whole and delta archives in manifest v4 without linking them into t
     expect(manifest).toMatchObject({ version: 4, snapshotStore: { kind: 'r2', bucket: s3.config.bucket } });
     expect(manifest.snapshots).toHaveLength(2);
     expect(manifest.snapshots.map(({ id }) => id)).toContain(base);
-    for (const snapshot of manifest.snapshots) expect(sha(s3.objects.get(snapshot.path)!)).toBe(snapshot.sha256);
+    for (const snapshot of manifest.snapshots) expect(sha256Hex(s3.objects.get(snapshot.path)!)).toBe(snapshot.sha256);
     expect(existsSync(join(generationsDir(t.dir), manifest.id, 'snapshots'))).toBe(false);
   } finally {
     t.env.files = disk;
@@ -89,7 +87,7 @@ function serviceOf(manifest: Manifest) {
   const path = join(t.dir, 'scratch.sqlite');
   rmSync(path, { force: true });
   const bytes = readFileSync(join(generationsDir(t.dir), manifest.id, manifest.service.path));
-  expect(sha(bytes)).toBe(manifest.service.sha256);
+  expect(sha256Hex(bytes)).toBe(manifest.service.sha256);
   writeFileSync(path, gunzipSync(bytes));
   return new DatabaseSync(path, { readOnly: true });
 }
@@ -154,8 +152,8 @@ describe('a backup generation', () => {
     }
     expect(manifest.accounts.every(({ baseline }) => baseline !== null)).toBe(true);
     expect(manifest.pictures.toSorted()).toEqual([kept, left, late].toSorted());
-    for (const id of manifest.pictures) expect(sha(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
-    for (const snapshot of manifest.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
+    for (const id of manifest.pictures) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
+    for (const snapshot of manifest.snapshots) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
     for (const artifact of [manifest.service, ...manifest.snapshots]) {
       expect(artifact.expanded).toBe(gunzipSync(readFileSync(join(generationsDir(t.dir), manifest.id, artifact.path))).length);
     }
@@ -181,7 +179,7 @@ describe('a backup generation', () => {
     const cut = (await listGenerations(t.dir)).find(({ capturedAt }) => capturedAt === first + DAY_MS)!;
     expect(existsSync(join(generationsDir(t.dir), cut.id, MANIFEST))).toBe(false);
     expect(await generation(whole.id)).toEqual(whole);
-    for (const snapshot of whole.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), whole.id, snapshot.path)))).toBe(snapshot.sha256);
+    for (const snapshot of whole.snapshots) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), whole.id, snapshot.path)))).toBe(snapshot.sha256);
     expect(await expireGenerations(t.dir, first + DAY_MS + DAY_MS / 2)).toEqual({ removed: 0, pictures: 0 });
     expect(await expireGenerations(t.dir, first + 2 * DAY_MS)).toEqual({ removed: 1, pictures: 0 });
     expect((await listGenerations(t.dir)).map(({ id }) => id)).toEqual([whole.id]);
@@ -197,7 +195,7 @@ describe('a backup generation', () => {
     fault.cutPoolCopy = false;
     expect((await t.daily(first + DAY_MS / 2)).generation).toEqual({ outcome: 'ok', error: null });
     expect((await newest()).pictures).toEqual([id]);
-    expect(sha(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
+    expect(sha256Hex(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
   });
 
   it('names a baseline as of today for an account whose rewind was cut off before its checkpoint: a new one if it changed, its old one if not', async () => {
@@ -263,7 +261,7 @@ describe('a backup generation', () => {
     const named = (incarnation: string) => manifest.snapshots.filter((snapshot) => snapshot.incarnation === incarnation).map(({ id }) => id);
     expect(named(delta.incarnation)).toEqual([deltaBase, deltaBaseline].toSorted());
     expect(named(pinner.incarnation)).toEqual([pinnedBase, pinned, current].toSorted());
-    for (const snapshot of manifest.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
+    for (const snapshot of manifest.snapshots) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
     const entry = (id: string) => manifest.snapshots.find((snapshot) => snapshot.id === id)!;
     expect(entry(pinned).materialized).toBe(entry(pinnedBase).expanded + entry(pinned).expanded);
     expect(entry(current).materialized).toBe(entry(current).expanded);

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { forgetOldRecords, readAll } from './admin';
 import { MAX_DIAGNOSTICS_LENGTH } from '../contracts/admin';
 import { beginRestore } from './lifecycle';
-import { hex, type Services } from './http';
+import { sha256Hex, type Services } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -26,7 +26,7 @@ const operator = () => account('operator');
 const log = async (cookie: string) => ((await (await t.get('admin/log', cookie)).json()) as { log: { action: string; target: string; detail: unknown }[] }).log;
 
 async function stored(bytes: Uint8Array<ArrayBuffer>, cookie: string) {
-  const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+  const id = sha256Hex(bytes);
   await t.put(`files/${id}`, bytes, cookie);
   return id;
 }

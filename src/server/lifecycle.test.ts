@@ -8,7 +8,7 @@ import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
 import { snapshotKey, type Bucket } from './files/bucket';
 import { diskBucket } from './files/disk-bucket';
-import { hex, type Services } from './http';
+import { sha256Hex, type Services } from './http';
 import { beginRestore, cancelRestore, leaveAccount, restorePoints, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
 
@@ -414,7 +414,7 @@ describe('a restore', () => {
   it('leaves a failed upload retryable through a sweep and rewind instead of claiming its absent bytes are stored', async () => {
     const seed = await seeded();
     const body = new Uint8Array([8, 8, 8]);
-    const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body)));
+    const id = sha256Hex(body);
     const files = t.env.files;
     t.env.files = { ...files, put: async () => { throw new Error('upload interrupted'); } };
     try {
@@ -678,7 +678,7 @@ describe('a deletion', () => {
     const user = await signedUp();
     await t.batch([{ id: A, kind: 'chat', parent: null, body: 'sealed', baseRev: null }], user.cookie);
     const bytes = new Uint8Array([1, 2, 3]);
-    const file = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    const file = sha256Hex(bytes);
     expect((await t.put(`files/${file}`, bytes, user.cookie)).status).toBe(204);
     return { ...user, file, bytes };
   }
@@ -862,7 +862,7 @@ describe('an account id used again', () => {
   it('gets a new incarnation that sees nothing of the old one: no objects, pictures, usage or held files', async () => {
     const seed = await seeded();
     const bytes = new Uint8Array([7]);
-    const file = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    const file = sha256Hex(bytes);
     await t.put(`files/${file}`, bytes, seed.cookie);
     expect(await leave(t.env, seed.id, seed.incarnation, false)).toBe('left');
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { authorization, sha256Hex } from './sigv4';
+import { sha256Hex } from '../http';
+import { authorization } from './sigv4';
 
 // The AWS SigV4 test suite (awslabs/aws-c-auth tests/aws-signing-test-suite/v4), its shared credentials and time.
 const SUITE = { accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY', region: 'us-east-1', service: 'service' };

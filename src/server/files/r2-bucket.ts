@@ -2,7 +2,8 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { checkedKey, checkedPrefix, isKey, isPrefix, type R2Bucket } from './bucket';
-import { authorization, sha256Hex, type Signer } from './sigv4';
+import { sha256Hex } from '../http';
+import { authorization, type Signer } from './sigv4';
 
 // Objects in an R2 bucket through its S3 API, path-style: <endpoint>/<bucket>/<key>. A PUT that answered 200 is
 // durable, and an object is whole or absent. Only pictures use cached-r2-bucket.ts.

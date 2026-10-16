@@ -2,7 +2,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { accountPath } from '../db/account-db';
-import { DAY_MS } from '../http';
+import { DAY_MS, sha256Hex } from '../http';
 import { sessionCookie, signupBody, testApp } from '../testing';
 import { COPIED, generationsDir, listGenerations, readManifest } from './generation';
 import { dayStart } from './snapshots';
@@ -50,7 +50,7 @@ it('raises the banner and the webhook once a day for a failed night after a back
   const cookie = sessionCookie(await t.post('signup', body));
   const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!;
   const bytes = new TextEncoder().encode('a picture');
-  const id = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+  const id = sha256Hex(bytes);
   expect((await t.put(`files/${id}`, bytes, cookie)).status).toBe(204);
   const now = Date.now();
   expect((await t.daily(now - 40 * HOUR_MS)).generation).toEqual({ outcome: 'ok', error: null });

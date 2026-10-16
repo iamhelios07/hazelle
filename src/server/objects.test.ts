@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BATCH_LIMITS } from './objects';
-import { hex } from './http';
+import { sha256Hex } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -28,7 +28,7 @@ describe('objects', () => {
   it('reclaims files before publishing references, even over the cap, and publishes nothing for a deleting file', async () => {
     const { cookie } = await signedIn();
     const bytes = new Uint8Array([1, 2, 3]);
-    const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    const id = sha256Hex(bytes);
     await t.put(`files/${id}`, bytes, cookie);
     await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
     const inventory = await (await t.get('files', cookie)).json() as { timeline: string; rev: number };

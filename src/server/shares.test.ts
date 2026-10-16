@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VISITOR_HEADER } from '../contracts/http';
-import { hex } from './http';
+import { sha256Hex } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -20,7 +20,7 @@ async function account(username: string) {
 
 async function stored(bytes: number[], cookie: string) {
   const body = new Uint8Array(bytes);
-  const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body)));
+  const id = sha256Hex(body);
   await t.put(`files/${id}`, body, cookie);
   return id;
 }

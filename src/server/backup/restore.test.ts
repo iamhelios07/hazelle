@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -103,7 +102,6 @@ async function leftAt(username: string, phase: RestorePhase) {
 }
 
 const bytesOf = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
-const idOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 it.each(['disk', 'r2'] as const)('preserves a %s generation’s released pictures when its baseline still names them, and reclaims them on disaster restore', async (kind) => {
   const disk = t.env.files;
@@ -114,7 +112,7 @@ it.each(['disk', 'r2'] as const)('preserves a %s generation’s released picture
     const now = Date.now();
     const user = await signedUp('released');
     const bytes = bytesOf('released picture');
-    const id = idOf(bytes);
+    const id = sha256Hex(bytes);
     const key = `files/${user.incarnation}/${id}`;
     expect((await t.put(`files/${id}`, bytes, user.cookie)).status).toBe(204);
     t.clock.now = () => now - HOUR_MS;
@@ -199,13 +197,13 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   const operator = await signedUp('operator');
   const kept = bytesOf('a kept picture');
   const blocked = bytesOf('a blocked picture');
-  for (const bytes of [kept, blocked]) expect((await t.put(`files/${idOf(bytes)}`, bytes, operator.cookie)).status).toBe(204);
-  expect((await t.put(`admin/files/${idOf(blocked)}/blocked`, { blocked: true }, operator.cookie)).status).toBe(204);
+  for (const bytes of [kept, blocked]) expect((await t.put(`files/${sha256Hex(bytes)}`, bytes, operator.cookie)).status).toBe(204);
+  expect((await t.put(`admin/files/${sha256Hex(blocked)}/blocked`, { blocked: true }, operator.cookie)).status).toBe(204);
   const targeted = await leftAt('targeted', 'targeted');
   const armed = await leftAt('armed', 'armed');
   const rewound = await leftAt('rewound', 'rewound');
   const leaver = await signedUp('leaver');
-  expect((await t.put(`files/${idOf(bytesOf('leaving'))}`, bytesOf('leaving'), leaver.cookie)).status).toBe(204);
+  expect((await t.put(`files/${sha256Hex(bytesOf('leaving'))}`, bytesOf('leaving'), leaver.cookie)).status).toBe(204);
   await t.lifecycle(leaver.id, "state = 'leaving'");
 
   expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
@@ -258,8 +256,8 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     const contents = async (cookie: string) => ((await (await send('GET', 'objects?since=0', undefined, cookie)).json()) as { changes: { body: string }[] }).changes.map(({ body }) => body);
 
     const operatorCookie = await login('operator', 'password');
-    expect(new Uint8Array(await (await send('GET', `files/${idOf(kept)}`, undefined, operatorCookie)).arrayBuffer())).toEqual(kept);
-    expect((await send('GET', `files/${idOf(blocked)}`, undefined, operatorCookie)).status).toBe(403);
+    expect(new Uint8Array(await (await send('GET', `files/${sha256Hex(kept)}`, undefined, operatorCookie)).arrayBuffer())).toEqual(kept);
+    expect((await send('GET', `files/${sha256Hex(blocked)}`, undefined, operatorCookie)).status).toBe(403);
     expect((await send('GET', `objects?since=0&timeline=${operator.timeline}`, undefined, operatorCookie)).status).toBe(409);
     expect((await send('POST', 'login', { username: 'leaver', method: 'password', proof: proof('password') })).status).toBe(401);
     expect(existsSync(join(dir, 'files', leaver.incarnation))).toBe(false);
@@ -436,13 +434,13 @@ it('names R2 snapshots in v4, supports a local store restore and a pooled disast
   try {
     const operator = await signedUp('operator');
     const kept = bytesOf('a kept picture');
-    expect((await t.put(`files/${idOf(kept)}`, kept, operator.cookie)).status).toBe(204);
+    expect((await t.put(`files/${sha256Hex(kept)}`, kept, operator.cookie)).status).toBe(204);
     const leaver = await signedUp('leaver');
-    expect((await t.put(`files/${idOf(bytesOf('leaving'))}`, bytesOf('leaving'), leaver.cookie)).status).toBe(204);
+    expect((await t.put(`files/${sha256Hex(bytesOf('leaving'))}`, bytesOf('leaving'), leaver.cookie)).status).toBe(204);
     await t.lifecycle(leaver.id, "state = 'leaving'");
     expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
     const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
-    expect(await readManifest(generation)).toMatchObject({ version: 4, bucket: 'r2', snapshotStore: { kind: 'r2', bucket: s3.config.bucket }, pictures: [idOf(bytesOf('leaving')), idOf(kept)].sort() });
+    expect(await readManifest(generation)).toMatchObject({ version: 4, bucket: 'r2', snapshotStore: { kind: 'r2', bucket: s3.config.bucket }, pictures: [sha256Hex(bytesOf('leaving')), sha256Hex(kept)].sort() });
     expect(readdirSync(join(generationsDir(t.dir), POOL))).toEqual([]);
     expect(existsSync(join(generation, 'snapshots'))).toBe(false);
     // Local rollback explicitly reads the store; a disaster download below can restore after that store loses archives.
@@ -454,7 +452,7 @@ it('names R2 snapshots in v4, supports a local store restore and a pooled disast
     }
 
     await expect(restoreGeneration(generation, emptyDir(), 'migrations', diskBucket(emptyDir()))).rejects.toThrow(/HAZELLE_FILES_BUCKET=r2/);
-    const keptKey = `files/${operator.incarnation}/${idOf(kept)}`;
+    const keptKey = `files/${operator.incarnation}/${sha256Hex(kept)}`;
     const held = s3.objects.get(keptKey)!;
     s3.objects.delete(keptKey);
     const refused = emptyDir();
@@ -471,7 +469,7 @@ it('names R2 snapshots in v4, supports a local store restore and a pooled disast
     } finally {
       raw.close();
     }
-    expect([...s3.objects.keys()].filter((key) => key.startsWith('files/')).sort()).toEqual([keptKey, `files/${leaver.incarnation}/${idOf(bytesOf('leaving'))}`].sort());
+    expect([...s3.objects.keys()].filter((key) => key.startsWith('files/')).sort()).toEqual([keptKey, `files/${leaver.incarnation}/${sha256Hex(bytesOf('leaving'))}`].sort());
   } finally {
     t.env.files = disk;
     t.restartProcess();
@@ -484,15 +482,15 @@ it('restores a disk generation into the R2 bucket by putting its pooled pictures
   try {
     const operator = await signedUp('operator');
     const kept = bytesOf('a pooled picture');
-    expect((await t.put(`files/${idOf(kept)}`, kept, operator.cookie)).status).toBe(204);
+    expect((await t.put(`files/${sha256Hex(kept)}`, kept, operator.cookie)).status).toBe(204);
     const outcome = await t.daily(Date.now());
     expect(outcome.generation, JSON.stringify(await t.env.db.prepare('SELECT detail FROM backup_runs').all())).toEqual({ outcome: 'ok', error: null });
     const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
     expect((await readManifest(generation))!.bucket).toBe('disk');
     const dir = emptyDir();
     expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: 1, pictures: 1 });
-    expect([...s3.objects.keys()].filter((key) => key.startsWith('files/'))).toEqual([`files/${operator.incarnation}/${idOf(kept)}`]);
-    expect(s3.objects.get(`files/${operator.incarnation}/${idOf(kept)}`)).toEqual(kept);
+    expect([...s3.objects.keys()].filter((key) => key.startsWith('files/'))).toEqual([`files/${operator.incarnation}/${sha256Hex(kept)}`]);
+    expect(s3.objects.get(`files/${operator.incarnation}/${sha256Hex(kept)}`)).toEqual(kept);
     expect(existsSync(join(dir, 'files'))).toBe(false);
   } finally {
     await s3.close();
