@@ -1,7 +1,7 @@
 import type { PresetUnsupported } from '../../engine/import/preset';
 import type { MoveUnsupported, MoveUnsupportedKind, Unsupported, UnsupportedKind } from '../../engine/import/types';
 import type { Dropped } from '../../runtime/chat-log';
-import { SLOT_NAMES } from '../common/prompt-words';
+import { SLOT } from '../common/prompt-words';
 import { CAST, COMMAND, inSettings } from '../common/words';
 
 const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
@@ -60,7 +60,7 @@ const PRESET_UNSUPPORTED: Record<Exclude<PresetUnsupported['kind'], 'repeated-sl
 };
 
 export const presetMissed = (unsupported: PresetUnsupported[]): string[] =>
-  unsupported.map((item) => (item.kind === 'repeated-slot' ? `겹친 ${SLOT_NAMES[item.slot]} 블록 ${item.count}개(처음 것만 가져옴)` : PRESET_UNSUPPORTED[item.kind](item.count)));
+  unsupported.map((item) => (item.kind === 'repeated-slot' ? `겹친 ${SLOT[item.slot].name} 블록 ${item.count}개(처음 것만 가져옴)` : PRESET_UNSUPPORTED[item.kind](item.count)));
 
 export const cardMissed = (unsupported: Unsupported, faceless: boolean): string[] => [...(faceless ? ['이미지: 가져오지 못함'] : []), ...missedLines(unsupported)];
 

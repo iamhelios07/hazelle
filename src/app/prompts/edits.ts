@@ -1,5 +1,5 @@
 import { TOGGLE_GLOBAL } from '../../engine/cbs/tags';
-import { SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
+import { isWrapped, SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
 import { rekeyed } from '../../model/toggles';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockSource } from './blocks';
@@ -24,27 +24,11 @@ export const RECENT_MAX = 20;
 export function newBlock(kind: NewBlock): Block {
   const named = { id: crypto.randomUUID(), name: null };
   if ('text' in kind) return { ...named, kind: 'text', role: kind.text, text: '', mark: null };
-  switch (kind.slot) {
-    case 'description':
-    case 'persona':
-    case 'authorNote':
-    case 'note':
-    case 'illustrateNote':
-    case 'tool':
-    case 'memory':
-    case 'mascot':
-      return { ...named, kind: 'slot', slot: kind.slot, role: 'system', wrapper: null };
-    case 'span':
-      return { ...named, kind: 'slot', slot: 'span', role: 'user', wrapper: null };
-    case 'recent':
-      return { ...named, kind: 'slot', slot: 'recent', role: 'system', wrapper: null, count: RECENT_COUNT };
-    case 'source':
-      return { ...named, kind: 'slot', slot: 'source', role: 'user', wrapper: null };
-    case 'chat':
-      return { ...named, kind: 'slot', slot: 'chat', range: { from: 0, to: null } };
-    default:
-      return { ...named, kind: 'slot', slot: kind.slot };
-  }
+  const { slot } = kind;
+  if (slot === 'chat') return { ...named, kind: 'slot', slot, range: { from: 0, to: null } };
+  if (!isWrapped(slot)) return { ...named, kind: 'slot', slot };
+  if (slot === 'recent') return { ...named, kind: 'slot', slot, role: SLOTS.recent.role, wrapper: null, count: RECENT_COUNT };
+  return { ...named, kind: 'slot', slot, role: SLOTS[slot].role, wrapper: null };
 }
 
 export const placedOnce = (blocks: readonly Block[], slot: SlotKind): Block | undefined =>

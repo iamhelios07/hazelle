@@ -7,7 +7,7 @@ import type { Block } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import { chatModel, setPromptModel } from './assignment';
-import { setChatPrompt } from './chat-log';
+import { setChatOwn } from './chat-log';
 import { addDefaults, addPrompt, COMMENTATOR_ID, ILLUSTRATOR_ID, chatPrompt, copyPrompt, removePrompt, savePreset, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import starter from './starter-prompt.risup?inline';
 import { testConnection, testServer } from './testing';
@@ -149,10 +149,10 @@ describe('prompts', () => {
     const read = () => store.get('chat', chat)!.value;
 
     expect(chatModel(store, read(), 'main')).toMatchObject({ model: { id: 'm' } });
-    await setChatPrompt(store, chat, ownId!);
+    await setChatOwn(store, chat, 'prompt', ownId!);
     await removePrompt(store, ownId!);
     expect(chatPrompt(store, read())).toEqual({ kind: 'missing', own: true });
-    await setChatPrompt(store, chat, null);
+    await setChatOwn(store, chat, 'prompt', null);
     expect(chatPrompt(store, read())).toMatchObject({ kind: 'prompt', own: false, prompt: { id: defaultId } });
   });
 });

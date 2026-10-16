@@ -11,7 +11,7 @@ import { useToast } from '../toast';
 import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
 import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
-import { SLOT_NAMES } from './prompt-words';
+import { SLOT } from './prompt-words';
 import { typedText } from './typed';
 import { count, readOptional } from './typedNumber';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
@@ -20,9 +20,9 @@ import { LORE_BUDGET_LABEL, loreName } from './words';
 
 type Position = Lore['position'];
 const POSITIONS: { value: NonNullable<Position> | 'lorebook'; label: string }[] = [
-  { value: 'lorebook', label: `${SLOT_NAMES.lorebook} 블록` },
-  { value: 'before_char', label: `${SLOT_NAMES.description} 앞` },
-  { value: 'after_char', label: `${SLOT_NAMES.description} 뒤` },
+  { value: 'lorebook', label: `${SLOT.lorebook.name} 블록` },
+  { value: 'before_char', label: `${SLOT.description.name} 앞` },
+  { value: 'after_char', label: `${SLOT.description.name} 뒤` },
 ];
 const NUMBER_ERROR = '숫자를 입력해 주세요.';
 const NO_FOLDER = '폴더 없음';
@@ -259,7 +259,7 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
         />
         <SettingRow
           label="위치"
-          help={`${SLOT_NAMES.lorebook}을 프롬프트의 ${SLOT_NAMES.lorebook} 블록에 넣을지, 아니면 ${SLOT_NAMES.description} 블록의 맨 앞이나 맨 뒤에 넣을지 정해요.`}
+          help={`${SLOT.lorebook.name}을 프롬프트의 ${SLOT.lorebook.name} 블록에 넣을지, 아니면 ${SLOT.description.name} 블록의 맨 앞이나 맨 뒤에 넣을지 정해요.`}
           control={<ChoiceGroup label="위치" options={POSITIONS} value={shown.position ?? 'lorebook'} onChange={(value) => change({ position: value === 'lorebook' ? null : value })} />}
         />
         {folders.length > 0 && (

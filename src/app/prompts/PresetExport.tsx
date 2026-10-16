@@ -3,14 +3,14 @@ import { exportPreset } from '../../runtime/prompts';
 import { fileNamed } from '../common/download';
 import { runExport } from '../common/exporting';
 import { FileExport } from '../common/FileExport';
-import { SLOT_NAMES } from '../common/prompt-words';
+import { SLOT } from '../common/prompt-words';
 import { promptName } from '../common/words';
 import { useStore } from '../session';
 import { useToast } from '../toast';
 
 // Export spec §3 "Lost" and ruling 9: the prompt's models stay here, Risu keeps its own model settings, and top_p is the
 // one Risu resets.
-const LEFT = `Risu의 프리셋 가져오기로 열거나 Risu 창에 끌어다 놓으면 돼요. 이 프롬프트의 모델과 ${SLOT_NAMES.tool} 블록은 빠져요. Risu에서 이 프리셋을 선택하면 쓰던 모델과 설정은 그대로 유지되고, top_p 값만 1로 바뀌어요.`;
+const LEFT = `Risu의 프리셋 가져오기로 열거나 Risu 창에 끌어다 놓으면 돼요. 이 프롬프트의 모델과 ${SLOT.tool.name} 블록은 빠져요. Risu에서 이 프리셋을 선택하면 쓰던 모델과 설정은 그대로 유지되고, top_p 값만 1로 바뀌어요.`;
 
 export function PresetExport({ prompt, onClose }: { prompt: ConversationPrompt; onClose: () => void }) {
   const store = useStore();
@@ -20,7 +20,7 @@ export function PresetExport({ prompt, onClose }: { prompt: ConversationPrompt; 
 
   function save(show: (label: string | null) => void) {
     runExport(toast, file, (output) => exportPreset(store, prompt, output), show, ({ tools }) => {
-      toast.show(`'${name}' 프롬프트를 내보냈어요.`, tools ? { detail: `${SLOT_NAMES.tool} 블록 ${tools}개는 빼고 내보냈어요.` } : undefined);
+      toast.show(`'${name}' 프롬프트를 내보냈어요.`, tools ? { detail: `${SLOT.tool.name} 블록 ${tools}개는 빼고 내보냈어요.` } : undefined);
       onClose();
     });
   }

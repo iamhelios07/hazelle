@@ -7,32 +7,33 @@ export type Role = 'system' | 'user' | 'assistant';
 export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate' | 'mascot';
 
 // A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 텍스트 with
-// {{slot}} where its content goes.
+// {{slot}} where its content goes; role is the one a new block of it starts with (app/prompts/edits newBlock).
 export const SLOTS = {
-  tool: { wrapped: true, repeats: false, sorts: ['conversation'] },
+  tool: { wrapped: true, role: 'system', repeats: false, sorts: ['conversation'] },
   // 캐릭터 설명 repeats because Risu presets put it in two places and open one by a toggle (누렁이's 탈옥조정): with one
   // place, the other toggle state sends no description at all.
-  description: { wrapped: true, repeats: true, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
-  persona: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
+  description: { wrapped: true, role: 'system', repeats: true, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
+  persona: { wrapped: true, role: 'system', repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
   lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
-  authorNote: { wrapped: true, repeats: false, sorts: ['conversation'] },
+  authorNote: { wrapped: true, role: 'system', repeats: false, sorts: ['conversation'] },
   postEverything: { wrapped: false, repeats: false, sorts: ['conversation'] },
   chat: { wrapped: false, repeats: true, sorts: ['conversation'] },
-  note: { wrapped: true, repeats: false, sorts: ['translate'] },
+  note: { wrapped: true, role: 'system', repeats: false, sorts: ['translate'] },
   // 삽화 노트: a chat's own directions for its pictures (Chat.illustrateNote).
-  illustrateNote: { wrapped: true, repeats: false, sorts: ['illustrate'] },
-  recent: { wrapped: true, repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
+  illustrateNote: { wrapped: true, role: 'system', repeats: false, sorts: ['illustrate'] },
+  recent: { wrapped: true, role: 'system', repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
   // In a 삽화 task, the message's paragraphs, numbered (model/illustration paragraphsOf); in a 마스코트 task, the reply as
   // shown.
-  source: { wrapped: true, repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
+  source: { wrapped: true, role: 'user', repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
   // The mascot's own sheet, which the engine writes (engine/mascot): its voice, faces, last lines and answer shape.
-  mascot: { wrapped: true, repeats: false, sorts: ['mascot'] },
+  mascot: { wrapped: true, role: 'system', repeats: false, sorts: ['mascot'] },
   // 장기 기억: in a conversation, the chat's memory as sent; in a memory task, the memory the new records follow.
-  memory: { wrapped: true, repeats: false, sorts: ['conversation', 'memory'] },
-  span: { wrapped: true, repeats: false, sorts: ['memory'] },
-} as const satisfies Record<string, { wrapped: boolean; repeats: boolean; sorts: readonly PromptSort[] }>;
+  memory: { wrapped: true, role: 'system', repeats: false, sorts: ['conversation', 'memory'] },
+  span: { wrapped: true, role: 'user', repeats: false, sorts: ['memory'] },
+} as const satisfies Record<string, ({ wrapped: true; role: Role } | { wrapped: false; role?: never }) & { repeats: boolean; sorts: readonly PromptSort[] }>;
 export type SlotKind = keyof typeof SLOTS;
 type Wrapped = { [K in SlotKind]: (typeof SLOTS)[K]['wrapped'] extends true ? K : never }[SlotKind];
+export const isWrapped = (slot: SlotKind): slot is Wrapped => SLOTS[slot].wrapped;
 
 export const slotsOf = (sort: PromptSort) => (Object.keys(SLOTS) as SlotKind[]).filter((slot) => (SLOTS[slot].sorts as readonly PromptSort[]).includes(sort));
 

@@ -1,8 +1,9 @@
 import { isToggle, type Block, type ChatRange, type ChatSlot, type RecentSlot, type Role, type TextBlock, type Toggle, type ToggleLine, type ToggleMark, type UnreadLine, type WrappedSlot } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
-import { blockTitle, MARKS, SLOT } from './blocks';
+import { blockTitle, MARKS } from './blocks';
 import { moved } from '../../model/fields';
 import { keyInUse } from '../../model/toggles';
+import { SLOT } from '../common/prompt-words';
 import { lineTitle } from '../common/toggleWords';
 import { placedOnce, rekey, withMark, type Draft } from './edits';
 
