@@ -56,7 +56,6 @@ export function FolderTile({ folder, onName, dropInto }: { folder: FolderTree; o
   const { byFolder } = useLibrary();
   const { remove } = useFolderActions();
   const { characters } = byFolder.get(folder.id)!;
-  const deep = pathOf(byFolder, folder.id).length;
   const inner = folder.children.length;
   const note = [inner > 0 && `폴더 ${inner}개`, `${characters.length}명`].filter(Boolean).join(' · ');
   return (
@@ -66,13 +65,18 @@ export function FolderTile({ folder, onName, dropInto }: { folder: FolderTree; o
       faces={characters.slice(0, 4).map(({ face, character }) => ({ image: face, name: aliased(character.card.name, character.alias) }))}
       onClick={() => go(folder.id)}
       onDropCard={dropInto?.(folder.id)}
-      menu={
-        <MoreMenu of={`${folder.value.name} 폴더`}>
-          <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
-          {deep < FOLDER_DEPTH && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
-          <MenuItem icon={ACTS.remove.icon} label="폴더 삭제" tone="warn" onClick={() => remove(folder)} />
-        </MoreMenu>
-      }
+      menu={<FolderMenu folder={folder} onName={onName} onRemove={() => remove(folder)} />}
     />
+  );
+}
+
+export function FolderMenu({ folder, onName, onRemove }: { folder: FolderTree; onName: (naming: Naming) => void; onRemove: () => void }) {
+  const { byFolder } = useLibrary();
+  return (
+    <MoreMenu of={`${folder.value.name} 폴더`}>
+      <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
+      {pathOf(byFolder, folder.id).length < FOLDER_DEPTH && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
+      <MenuItem icon={ACTS.remove.icon} label="폴더 삭제" tone="warn" onClick={onRemove} />
+    </MoreMenu>
   );
 }

@@ -1,10 +1,10 @@
-import { FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
-import { FOLDER_DEPTH, pathOf, type FolderTree } from '../../../model/library';
-import { ACTS, newOf } from '../../common/acts';
+import { FolderPlus } from 'lucide-react';
+import { pathOf, type FolderTree } from '../../../model/library';
 import { BIN } from '../../common/words';
 import { useLibrary } from '../../session';
-import { IconButton, MenuItem, MoreMenu, Row, Stack, Tab, Tabs } from '../../ui';
+import { IconButton, Row, Stack, Tab, Tabs } from '../../ui';
 import { useFolderActions } from '../useFolderActions';
+import { FolderMenu } from './FolderPlace';
 import { useInBin } from './useInBin';
 
 // 'all', 'loose' (in no folder), 'deleted' (휴지통), or a folder's id.
@@ -45,11 +45,7 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
         </Tabs>
         {!binned && <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => onName({ id: null, name: '' })} />}
         {folder && (
-          <MoreMenu of={`${folder.value.name} 폴더`}>
-            <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
-            {path.length < FOLDER_DEPTH && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
-            <MenuItem icon={ACTS.remove.icon} label="폴더 삭제" tone="warn" onClick={() => drop(folder)} />
-          </MoreMenu>
+          <FolderMenu folder={folder} onName={onName} onRemove={() => drop(folder)} />
         )}
       </Row>
       {path.map((above, level) => above.children.length > 0 && (
