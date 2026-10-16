@@ -400,8 +400,7 @@ async function copyOf({ kind, parent, value }: { kind: string; parent: string | 
   return toBase64(new Uint8Array(digest));
 }
 
-function parse(text: string | undefined): unknown {
-  if (text === undefined) return undefined;
+function parse(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
   } catch {

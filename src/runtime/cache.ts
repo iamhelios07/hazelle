@@ -135,7 +135,7 @@ export function forecast(last: Prior | null, next: CacheSend): Forecast | null {
   const had = sums(before);
   const points = before.flatMap((message, index) => (message.point && caches(had[index]!) ? [index] : []));
   if (last && points.length) {
-    const of = points.length ? had[points.at(-1)!]! : 0;
+    const of = had[points.at(-1)!]!;
     const none = (broken: CacheBreak): CacheForecast => ({ read: 0, of, broken });
     const { print } = last;
     if (!last.live) against = none({ kind: 'expired' });
