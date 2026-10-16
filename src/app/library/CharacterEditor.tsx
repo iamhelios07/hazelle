@@ -361,7 +361,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     greetings: `${text.greetings.length}개`,
     lore: `${lore.length}개`,
     modules: `${modules.filter((module) => always.includes(module.id) || ownModules.includes(module.id)).length}개 켜짐`,
-    features: featureHolds(character.features),
+    features: featureHolds(store, { kind: 'character', id }, character.features),
     scripts: scriptHolds(card) || undefined,
     toggles: `${card.toggles.filter(isToggle).length}개`,
     assets: `${assets.length}개`,

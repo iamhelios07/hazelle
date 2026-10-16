@@ -3,7 +3,7 @@ import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import type { ProfileChoice } from '../../runtime/profiles';
 import { count } from './typedNumber';
-import { DISCOUNT, MODEL_SETTINGS, RETRY_COUNT, UNKNOWN } from './words';
+import { DISCOUNT, MODEL_SETTINGS, RETRY_COUNT, SCOPE, UNKNOWN } from './words';
 
 export const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일', embedding: '임베딩' };
 
@@ -66,8 +66,10 @@ export function profileLine(choice: ProfileChoice, defaultId: string | undefined
   return choice.profile.id === defaultId ? values : `${choice.profile.value.name} · ${values}`;
 }
 
-// An empty 실패하면 다시 보내기 follows the count above it, which the placeholder names.
-export const followsRetries = (retries: number) => `기본 ${retries}번`;
+// An empty 실패하면 다시 보내기 follows the count above it, which the placeholder names with its layer: a connection's
+// follows 공용, a 모델 설정's its connection.
+const RETRIES_FROM = { shared: SCOPE.default, connection: '연결' } as const;
+export const followsRetries = (from: keyof typeof RETRIES_FROM, retries: number) => `${RETRIES_FROM[from]} ${retries}번`;
 
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').
 export const NOT_CALLABLE = '지금 버전에서는 이 모델을 호출할 수 없어요';

@@ -121,7 +121,7 @@ it("goes back from a module's 토글 page to the module", () => {
   expect(up({ kind: 'module', id: CHAT, pane: 'toggles' })).toEqual({ kind: 'module', id: CHAT, pane: null });
 });
 
-it('opens a feature under 채팅 기본값, which stays lit and is the way back', () => {
+it('opens a feature under 설정 › 채팅, which stays lit and is the way back', () => {
   const route = { kind: 'feature', feature: 'memory' } as const;
   expect(href(route)).toBe('/settings/chat/memory');
   expect(up(route)).toEqual({ kind: 'chat-settings' });

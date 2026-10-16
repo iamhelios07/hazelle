@@ -5,7 +5,7 @@ import type { PictureSettings, PictureTags } from '../../model/prompt';
 import { drawingModels } from '../../runtime/illustrate';
 import { typedText } from '../common/typed';
 import { readTyped } from '../common/typedNumber';
-import { RESET, UNSET } from '../common/words';
+import { ORIGINAL, RESET, UNSET } from '../common/words';
 import { useConnections } from '../session';
 import { Button, ChipButton, MarkupArea, Menu, MenuHeading, MenuItem, NumberInput, Section, SettingGroup, SettingRow, Stack } from '../ui';
 
@@ -85,7 +85,7 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
           ))}
         </Stack>
       </Section>
-      <Section title="생성" help="비워 두면 이미지 모델의 기본값을 써요.">
+      <Section title="생성" help={`비워 두면 이미지 모델의 ${ORIGINAL}을 써요.`}>
         <SettingGroup label="생성">
           <SettingRow label="샘플러" changed={picture.sampler !== undefined} control={<SamplerMenu draws={draws} chosen={picture.sampler} onPick={(sampler) => onPicture({ ...picture, sampler })} />} />
           {numberRow('steps')}

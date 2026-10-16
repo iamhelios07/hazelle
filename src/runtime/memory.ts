@@ -33,7 +33,7 @@ export type { RecordStatus } from '../engine/memory';
 
 // The only writer of `memory` objects and of the memory settings (design §6.2).
 
-// null: 기본값으로 되돌리기.
+// null: 공용으로 되돌리기.
 export const setChatMemory = (store: ObjectStore, chat: string, settings: MemorySettings | null) =>
   store.update('chat', chat, (current) => (settings === null ? without(current, 'memory') : { ...current, memory: settings }));
 

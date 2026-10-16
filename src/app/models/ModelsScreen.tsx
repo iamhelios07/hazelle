@@ -7,7 +7,7 @@ import { findStarred, RoleCard } from '../common/RolePicker';
 import { defaultFirst, NO_PROFILE, profileLine, valuesLine } from '../common/settingWords';
 import { useSearch } from '../common/useSearch';
 import { ACTS, newOf } from '../common/acts';
-import { AUX_HELP, DEFAULT_MODELS, defaultMark, follows, MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, noStarred, PAGES, ROLE_TAGS } from '../common/words';
+import { AUX_HELP, DEFAULT_MODELS, defaultMark, follows, MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, noStarred, PAGES, ROLE_TAGS, SCOPE } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -17,7 +17,7 @@ import { Beside, Callout, Columns, Empty, List, ListItem, Menu, MenuItem, NavBar
 const STARRED = '즐겨찾기한 모델';
 
 // The bottom rung of every chat's settings: what a prompt, a character or a chat does not set reads from here.
-const DEFAULTS = '기본값';
+const DEFAULTS = SCOPE.default;
 const SETTINGS_HELP = '온도나 추론, 캐시 같은 값이에요. 모델마다 따로 정해 둘 수도 있어요.';
 export function ModelsScreen({ back }: { back: Back | null }) {
   const store = useStore();

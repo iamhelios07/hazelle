@@ -180,7 +180,7 @@ Answer inside one \`\`\`text code block, with every line, changed or not, as \`[
 - A line marked (설명) is help text and (제목) a title; do not copy the mark into your answer. Lines under one ## heading sit on the same screen.
 - Voice: short 해요체, the way Toss writes. Plain, specific words. It must not read as AI-written.
 - Keep names (헤이젤, RisuAI, Risu, model and company names), {{…}} syntax, and a path written as A › B.
-- Keep these words as they are: 대화 모델, 보조 모델, 임베딩 모델, 삭제, 이미지, 응답, 선택, 복원, 기본값, 키, 키워드, 내보내기, 가져오기, 스크립트, 챕터, 캐릭터 없이, 채팅 파일. These pairs mean different things and are never swapped: 빼기/삭제, 편집/수정, 다시 생성/다시 시도, 컨텍스트 길이/컨텍스트 한도, 사용 중/생성 중.
+- Keep these words as they are: 대화 모델, 보조 모델, 임베딩 모델, 삭제, 이미지, 응답, 선택, 복원, 기본값, 공용, 원래 값, 키, 키워드, 내보내기, 가져오기, 스크립트, 챕터, 캐릭터 없이, 채팅 파일. These pairs mean different things and are never swapped: 빼기/삭제, 편집/수정, 다시 생성/다시 시도, 컨텍스트 길이/컨텍스트 한도, 사용 중/생성 중.
 - Never use: 지우기, 지웠어요, 고치기, 고르기, 골라 주세요, 답장, 그림, 되살리기, 처음 값, 불러오기, 내려받기, 프로바이더, 금고, 열쇠, 복제, ‘ ’.
 `;
 

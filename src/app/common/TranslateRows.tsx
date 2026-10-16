@@ -14,14 +14,14 @@ type Props = {
   translate: TranslateSetup;
   translation: ReturnType<typeof translatorOf>;
   card: { name: string } | null;
-  // The chat's 번역가의 노트 row with its divider. 채팅 기본값's 번역 page edits the 전역 note under these rows instead.
+  // The chat's 번역가의 노트 row with its divider. 설정 › 채팅's 번역 page edits the 전역 note under these rows instead.
   note?: ReactNode;
   opens: 'up' | 'down';
   onChange: (change: Partial<TranslateSwitches>) => void;
   onEditPrompt: (door: PromptDoor) => void;
 };
 
-// 번역's shared values, the same rows in the chat's 번역 dialog and on 채팅 기본값's 번역 page.
+// 번역's shared values, the same rows in the chat's 번역 dialog and on 설정 › 채팅's 번역 page.
 export function TranslateRows({ translate, translation, card, note, opens, onChange, onEditPrompt }: Props) {
   const { store } = useSession();
   const prompt = translationPrompt(store, translate.prompt);

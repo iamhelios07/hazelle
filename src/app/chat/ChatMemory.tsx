@@ -13,7 +13,7 @@ import { tokens } from '../common/receipt';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, RESET, scopeTag, taskModelHelp } from '../common/words';
+import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, resetTo, SCOPE, scopeTag, taskModelHelp } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
@@ -183,7 +183,7 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
         action={
           setup.own && (
             <Button variant="link" onClick={() => void revert()}>
-              {RESET}
+              {resetTo(SCOPE.default)}
             </Button>
           )
         }

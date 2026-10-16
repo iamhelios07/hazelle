@@ -208,7 +208,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         <SettingGroup label="세부 설정">
           <RetriesRow
             value={connection.retries}
-            follows={followsRetries(shared ?? RETRIES)}
+            follows={followsRetries('shared', shared ?? RETRIES)}
             onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
           />
         </SettingGroup>

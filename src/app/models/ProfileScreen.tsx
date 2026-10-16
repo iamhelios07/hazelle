@@ -3,7 +3,7 @@ import { addProfile, modelProfile, removeProfile, restoreProfile, setDefaultProf
 import { ACTS, addOf } from '../common/acts';
 import { useSearch } from '../common/useSearch';
 import { SAVE_STATUS } from '../common/useAutosave';
-import { BIN_KEEPS, defaultMark, MODEL_SETTINGS, RESET } from '../common/words';
+import { BIN_KEEPS, defaultMark, MODEL_SETTINGS, ORIGINAL, resetTo } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -45,7 +45,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
   async function clearAll() {
     const previous = await clear();
-    if (previous) toast.undoable(`'${stored.value.name}' ${MODEL_SETTINGS}을 기본값으로 되돌렸어요.`, () => setProfileSettings(store, id, previous));
+    if (previous) toast.undoable(`'${stored.value.name}' ${MODEL_SETTINGS}을 ${ORIGINAL}으로 되돌렸어요.`, () => setProfileSettings(store, id, previous));
   }
 
   async function remove() {
@@ -88,7 +88,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                     onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}
                   />
                 )}
-                <MenuItem label={RESET} disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()} />
+                <MenuItem label={resetTo(ORIGINAL)} disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()} />
                 {!isDefault && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />}
               </>
             ),

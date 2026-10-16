@@ -34,8 +34,9 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
   const search = useSearch(all, '토글 검색', (row) => [row.toggle.label]);
   const found = new Set(search.found);
   const laying = filter === 'all' && !search.words;
-  // 캐릭터 없이's values hold for every chat without a character, which no layer word names.
-  const scope = toggles.changed === 0 ? 'default' : card ? 'character' : null;
+  // 캐릭터 없이's values hold for every chat without a character, which no layer word names. Unchanged, the toggles hold
+  // their starting values, 기본값: 공용 sets no toggle, so its tag would be wrong here.
+  const tag = toggles.changed === 0 ? ({ label: '기본값', tone: 'plain' } as const) : card ? scopeTag('character') : undefined;
   const visible = toggles.sections
     .map((section) => ({ ...section, shown: shownRows(section.rows, found, filter === 'changed', first) }))
     .filter((section) => section.shown.length > 0);
@@ -91,7 +92,7 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
         <Section
           level={3}
           title="설정"
-          tag={scope ? scopeTag(scope) : undefined}
+          tag={tag}
           note={toggles.changed ? `변경 ${toggles.changed}개` : undefined}
           help={card ? `바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.` : '바꾼 값은 캐릭터 없이 대화하는 모든 채팅에 적용돼요.'}
           action={

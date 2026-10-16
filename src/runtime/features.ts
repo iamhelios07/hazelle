@@ -34,6 +34,13 @@ export function inherited(store: Reader, owner: Exclude<FeatureOwner, { kind: 's
   return chat ? featuresOf(store, { ...chat, features: undefined }) : decided([settingsLayer(store)]);
 }
 
+// The layer one that sets nothing follows: the next one up 공용 → 프롬프트 → 캐릭터 → 채팅, past a chat with no character.
+export function above(store: Reader, owner: Exclude<FeatureOwner, { kind: 'settings' }>): 'settings' | 'prompt' | 'character' {
+  if (owner.kind === 'prompt') return 'settings';
+  if (owner.kind === 'character') return 'prompt';
+  return store.get('chat', owner.id)?.value.character ? 'character' : 'prompt';
+}
+
 // null clears the layer's entry; a layer left with none drops the field, so it sets nothing.
 export function setFeatureAt(store: ObjectStore, owner: FeatureOwner, feature: Feature, value: boolean | null): Promise<ApiResult<unknown>> {
   const set = <T extends { features?: FeatureSwitches }>(current: T): T => {

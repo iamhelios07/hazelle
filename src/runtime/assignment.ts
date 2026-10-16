@@ -28,7 +28,7 @@ export function chatModel(store: Pick<ObjectStore, 'get'>, chat: Chat, role: Rol
   return ref ? writes(routeOf(store, ref)) : { kind: 'no-model' };
 }
 
-// 임베딩 모델 is set in 기본값 alone (connectors/assignment ROLES). A model whose connection serves no embeddings is gone
+// 임베딩 모델 is set in 공용 alone (connectors/assignment ROLES). A model whose connection serves no embeddings is gone
 // for this role, as an unstarred one is.
 export function embedModel(store: Pick<ObjectStore, 'get'>): Route | RouteFailure {
   const ref = store.get('settings', SETTINGS_ID)?.value.models.embed;

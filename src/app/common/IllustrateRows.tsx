@@ -22,7 +22,7 @@ type Props = {
   onEditPrompt: (door: PromptDoor) => void;
 };
 
-// 삽화's shared values, the same rows in the chat's 삽화 dialog and on 채팅 기본값's 삽화 page.
+// 삽화's shared values, the same rows in the chat's 삽화 dialog and on 설정 › 채팅's 삽화 page.
 export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange, onEditPrompt }: Props) {
   const { store } = useSession();
   const routes = drawingModels(useConnections());
