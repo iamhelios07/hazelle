@@ -69,7 +69,7 @@ export async function startSession(db: Db, accountId: string, gated = false) {
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
   const insert = db
     .prepare(`INSERT INTO sessions (token_hash, account_id, expires_at) SELECT ?, ?, ?${gated ? ' WHERE changes() = 1' : ''}`)
-    .bind(await sha256Hex(token), accountId, Date.now() + SESSION_LIFETIME_MS);
+    .bind(sha256Hex(token), accountId, Date.now() + SESSION_LIFETIME_MS);
   return { token, insert };
 }
 
@@ -88,7 +88,7 @@ export function setSessionCookie(c: Context, token: string) {
 
 export async function endSession(c: Context<AppEnv>) {
   const token = getCookie(c, 'session', 'host');
-  if (token) await c.env.db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256Hex(token)).run();
+  if (token) await c.env.db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(sha256Hex(token)).run();
   dropSessionCookie(c);
 }
 
@@ -98,7 +98,7 @@ export function dropSessionCookie(c: Context) {
 
 async function readSession(db: Db, token: string): Promise<Account | null> {
   const now = Date.now();
-  const tokenHash = await sha256Hex(token);
+  const tokenHash = sha256Hex(token);
   const row = await db
     .prepare(
       `SELECT a.id, a.username, a.suspended_at, a.incarnation, a.state, ${CAP.bytes} AS cap, s.expires_at,

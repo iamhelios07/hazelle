@@ -6,7 +6,7 @@ import { RETENTION_MS } from './db/account-db';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fileKey } from './files/bucket';
 import { takeBackFiles } from './files/claims';
-import { fail, readObject, refused, RETRY_SECONDS, sha256Hex, type AppEnv } from './http';
+import { fail, hex, readObject, refused, RETRY_SECONDS, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
 
 // Counts sealed bytes, a few more than the file itself. worker.ts enforces it.
@@ -84,7 +84,9 @@ async function publish(c: Context<AppEnv>, id: string) {
     c.req.arrayBuffer(),
   ]);
   if (blocked) return fail(c, 403, 'file-blocked');
-  if (sha256Hex(new Uint8Array(body)) !== id) return fail(c, 400, 'bad-input');
+  // Off the main thread, not sha256Hex: a body is up to 25 MiB and several arrive at once; a sync hash would stall every
+  // other request for its whole run.
+  if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body))) !== id) return fail(c, 400, 'bad-input');
   // Read once the body is in, not beside it: the account may have begun leaving or be gone since the session check.
   if (!(await db.prepare(`SELECT ${ALIVE} AS alive`).bind(incarnation).first<number>('alive'))) return outlived(c);
   if (await db.prepare('UPDATE account_files SET claimed_at = ?3 WHERE incarnation = ?1 AND id = ?2 AND stored = 1 RETURNING id').bind(incarnation, id, Date.now()).first()) return c.body(null, 204);

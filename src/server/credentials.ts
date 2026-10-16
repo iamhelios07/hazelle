@@ -52,7 +52,7 @@ export function outsideVisitor(c: Context<AppEnv>): string | null {
 
 // Password change and deletion share the login's visitor+username key, not a session key a new login could bypass.
 export async function checkProof(c: Context<AppEnv>, username: string, account: StoredAccount | null, method: Method, proof: string): Promise<Response | null> {
-  const hash = await hashProof(proof);
+  const hash = hashProof(proof);
   const valid = account !== null && sameText(hash, method === 'password' ? account.login_hash : account.recovery_hash);
   const visitor = outsideVisitor(c);
   const retryAfter = visitor ? c.env.limits.visitors.proofs.check(visitor, username, valid) : 0;

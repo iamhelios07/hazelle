@@ -47,7 +47,7 @@ vaults.put('/password', async (c) => {
   if (refused) return refused;
 
   await db.batch([
-    db.prepare('UPDATE accounts SET login_hash = ? WHERE id = ?').bind(await hashProof(passwordProof), id),
+    db.prepare('UPDATE accounts SET login_hash = ? WHERE id = ?').bind(hashProof(passwordProof), id),
     db.prepare('UPDATE vaults SET password_wrap = ?, updated_at = ? WHERE account_id = ?').bind(passwordWrap, Date.now(), id),
   ]);
   return c.body(null, 204);
