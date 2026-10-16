@@ -74,10 +74,8 @@ export type Route = { type: ConnectionType | null; endpoint: Endpoint; codec: Co
 export type WireRoute = { provider: string | null; endpoint: Endpoint };
 export const wireRoute = ({ type, endpoint }: Route): WireRoute => ({ provider: type?.id ?? null, endpoint });
 export function requestRoute({ provider, endpoint }: WireRoute): Route {
-  const type = provider === null ? null : CONNECTION_TYPES.find(({ id }) => id === provider);
-  const codec = CODECS[endpoint.protocol];
-  if (type === undefined || !codec) throw new ConnectorError('unsupported-protocol');
-  return { type, endpoint, codec };
+  const type = provider === null ? null : CONNECTION_TYPES.find(({ id }) => id === provider)!;
+  return { type, endpoint, codec: CODECS[endpoint.protocol]! };
 }
 
 export type Resolved = Route | { type: ConnectionType; endpoint: null; codec: null; models: Model[] };
