@@ -16,6 +16,8 @@ export type Entry = {
   // an entry of its own and the two never overlap.
   parts?: [number, number][];
 };
+// What extract writes: a span is only good for the source it was read from, so apply finds each entry again.
+export type Listed = Omit<Entry, 'span' | 'parts'>;
 export type Source = { path: string; source: string };
 
 const KOREAN = /[ㄱ-ㆎ가-힣]/;
@@ -109,7 +111,6 @@ type Edit = { start: number; end: number; text: string };
 
 // Why an entry's new text cannot go back in its place, or its edits.
 function editsFor(entry: Entry, text: string, source: string): Edit[] | string {
-  if (source.slice(...entry.span) !== entry.text) return 'the source changed since extract';
   if (entry.kind === 'template') {
     const before = parseTemplate(entry.text);
     const after = parseTemplate(text);
@@ -122,22 +123,36 @@ function editsFor(entry: Entry, text: string, source: string): Edit[] | string {
   return [{ start: entry.span[0], end: entry.span[1], text }];
 }
 
-export function apply(sources: readonly Source[], original: readonly Entry[], revised: readonly Pick<Entry, 'id' | 'text'>[]) {
-  const byId = new Map(original.map((entry) => [entry.id, entry]));
+const pathOf = (id: string) => id.slice(0, id.indexOf(':'));
+
+// An entry is found again by what it says, not where it sat, so edits elsewhere in its file since extract do not
+// move it; the nth of identical entries in a file stays the nth.
+function keyed(entries: readonly Listed[]) {
+  const seen = new Map<string, number>();
+  return entries.map((entry) => {
+    const key = [pathOf(entry.id), entry.kind, entry.owner, entry.text].join('\0');
+    const nth = seen.get(key) ?? 0;
+    seen.set(key, nth + 1);
+    return [`${key}\0${nth}`, entry] as const;
+  });
+}
+
+export function apply(sources: readonly Source[], original: readonly Listed[], revised: readonly Pick<Entry, 'id' | 'text'>[]) {
+  const current = new Map(keyed(extract(sources)));
+  const byId = new Map(keyed(original).map(([key, entry]) => [entry.id, { entry, now: current.get(key) as Entry | undefined }]));
   const rejected: { id: string; reason: string }[] = [];
   const edits = new Map<string, Edit[]>();
   for (const { id, text } of revised) {
-    const entry = byId.get(id);
-    if (!entry) {
-      rejected.push({ id, reason: 'no such entry' });
-      continue;
+    const found = byId.get(id);
+    if (!found) rejected.push({ id, reason: 'no such entry' });
+    else if (found.entry.text === text) continue;
+    else if (!found.now) rejected.push({ id, reason: 'the source changed since extract' });
+    else {
+      const path = pathOf(id);
+      const result = editsFor(found.now, text, sources.find((each) => each.path === path)!.source);
+      if (typeof result === 'string') rejected.push({ id, reason: result });
+      else edits.set(path, [...(edits.get(path) ?? []), ...result]);
     }
-    if (entry.text === text) continue;
-    const path = id.slice(0, id.indexOf(':'));
-    const source = sources.find((each) => each.path === path)!.source;
-    const result = editsFor(entry, text, source);
-    if (typeof result === 'string') rejected.push({ id, reason: result });
-    else edits.set(path, [...(edits.get(path) ?? []), ...result]);
   }
   const written = [...edits].map(([path, list]) => {
     let source = sources.find((each) => each.path === path)!.source;
@@ -154,13 +169,13 @@ function read(paths: readonly string[]): Source[] {
 function main([command, out, revisedPath]: string[]) {
   const paths = [...globSync(SOURCES, { exclude: (path) => /\.test\.tsx?$|testing\.ts$/.test(path) }), ...PAGES].sort();
   if (command === 'extract' && out) {
-    const entries = extract(read(paths));
-    writeFileSync(out, JSON.stringify(entries, null, 1) + '\n');
-    console.log(`${entries.length} entries from ${new Set(entries.map((entry) => entry.id.slice(0, entry.id.indexOf(':')))).size} files → ${out}`);
+    const entries: Listed[] = extract(read(paths)).map(({ id, kind, owner, context, text }) => ({ id, kind, owner, context, text }));
+    writeFileSync(out, `[\n${entries.map((entry) => JSON.stringify(entry)).join(',\n')}\n]\n`);
+    console.log(`${entries.length} entries from ${new Set(entries.map((entry) => pathOf(entry.id))).size} files → ${out}`);
   } else if (command === 'apply' && out && revisedPath) {
-    const original = JSON.parse(readFileSync(out, 'utf8')) as Entry[];
+    const original = JSON.parse(readFileSync(out, 'utf8')) as Listed[];
     const revised = JSON.parse(readFileSync(revisedPath, 'utf8')) as Pick<Entry, 'id' | 'text'>[];
-    const { written, rejected } = apply(read([...new Set(original.map((entry) => entry.id.slice(0, entry.id.indexOf(':'))))]), original, revised);
+    const { written, rejected } = apply(read([...new Set(original.map((entry) => pathOf(entry.id)))]), original, revised);
     for (const { path, source } of written) writeFileSync(path, source);
     for (const { id, reason } of rejected) console.log(`rejected ${id}: ${reason}`);
     console.log(`${written.length} files written, ${rejected.length} entries rejected`);
