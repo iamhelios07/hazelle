@@ -1,7 +1,8 @@
 import { isRecord, list } from '../../connectors/values';
 import { SIGNATURE } from '../assets';
 import { imageType } from './card';
-import { add, convertModule, counted, record, text, type Json, type Tally } from './convert';
+import { add, counted, record, text, type Json, type Tally } from './convert';
+import { readModule } from './hazelle';
 import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
 import { risuPersonaFields } from './persona';
@@ -294,7 +295,7 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
 // backup lacks is counted as an asset the module names without holding, as for a module file.
 function risuModule(raw: Json, entry: Entry): ImportedModule {
   const tally: Tally = new Map();
-  const { assets: names, ...module } = convertModule(raw, tally);
+  const { assets: names, ...module } = readModule(raw, tally);
   const assets = list(raw.assets).flatMap((asset, index) => {
     const key = Array.isArray(asset) ? text(asset[1]) : '';
     // Any key other than a Risu asset key points outside the backup.

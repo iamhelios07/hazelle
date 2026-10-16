@@ -1,6 +1,7 @@
 import { gzipSync, strToU8 } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import { readBackup } from './backup';
+import { moduleSource } from './hazelle';
 import type { RisuBackup } from './types';
 
 const u32 = (value: number, little: boolean) => {
@@ -392,6 +393,15 @@ describe('readBackup', () => {
     ]);
     expect(character.card.regex[0]!.name).toBe('r');
     expect(character.card.triggers).toEqual([{ kind: 'lua', id: 'trigger-0', name: 'lua', code: 'print(1)' }]);
+  });
+
+  it('reads back the hazelle key of a .risum this app wrote that Risu then kept in its backup', async () => {
+    const off = { id: 'trigger-0', kind: 'lua' as const, name: 'main', code: 'return 1', off: true as const };
+    const source = moduleSource({ risu: 'm', name: '전화', description: '', namespace: null, likeness: null, lore: [], loreFolders: [], assets: [], pack: { regex: [], triggers: [off], toggles: [] } });
+    const result = await readBackup([bin([['database.risudat', database({ characters: [], modules: [source] })]])]);
+    if (!result.ok) throw new Error(result.failure.kind);
+    const module = await result.backup.module(result.backup.catalog.modules[0]!.key);
+    expect(module.pack.triggers).toEqual([off]);
   });
 
   it('reads a module with its pictures from the asset storage, and where Risu had it on as Risu ids', async () => {
