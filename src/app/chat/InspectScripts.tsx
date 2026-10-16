@@ -9,13 +9,11 @@ import { shownValue } from './InspectVariables';
 export const STAGES: Record<string, string> = { load: '처음 실행', onInput: '입력', editInput: '입력 편집', onStart: '시작', editRequest: '요청 편집', editOutput: '응답 편집', onOutput: '응답', editDisplay: '화면 편집', button: '버튼' };
 
 export function Scripts({ chat }: { chat: string }) {
-  const { scripts, store } = useSession();
+  const { scripts } = useSession();
   const log = useSyncExternalStore(
     (listener) => scripts.subscribeLog(chat, listener),
     () => scripts.log(chat),
   );
-  const [open, setOpen] = useState<string | null>(null);
-  const packName = (pack: PackOwner | null) => (pack === null ? null : pack.kind === 'module' ? store.get('module', pack.id)?.value.name : store.get('character', pack.id)?.value.card.name) ?? null;
   const entries = log.entries.map((entry, index) => ({ entry, key: `${entry.at}:${log.omitted + index}` })).reverse();
   return (
     <Section title="실행 기록" help="이 화면에서 실행된 봇 스크립트와 log() 출력 내용이에요. 새로고침하면 사라져요.">
@@ -23,24 +21,33 @@ export function Scripts({ chat }: { chat: string }) {
         <Empty variant="section">실행된 스크립트가 없어요.</Empty>
       ) : (
         <Stack gap="related">
-          <List label="실행 기록">
-            {entries.map(({ entry, key }) => (
-              <ListItem
-                key={key}
-                title={`${STAGES[entry.stage] ?? entry.stage} · ${entry.script || packName(entry.pack) || 'Lua'}`}
-                badge={entry.errors.length ? '오류' : undefined}
-                tags={hookTags(entry)}
-                aside={`${ago(entry.at)} · ${Math.round(entry.duration)}ms`}
-                expanded={open === key}
-                onClick={() => setOpen(open === key ? null : key)}
-                detail={open === key && <HookDetail entry={entry} />}
-              />
-            ))}
-          </List>
+          <HookList label="실행 기록" entries={entries} aside={(entry) => `${ago(entry.at)} · ${Math.round(entry.duration)}ms`} />
           {log.omitted > 0 && <Text variant="note">{`오래된 기록 ${log.omitted}개는 빠졌어요.`}</Text>}
         </Stack>
       )}
     </Section>
+  );
+}
+
+export function HookList({ label, entries, aside }: { label: string; entries: { entry: HookLog; key: string }[]; aside: (entry: HookLog) => string }) {
+  const { store } = useSession();
+  const [open, setOpen] = useState<string | null>(null);
+  const packName = (pack: PackOwner | null) => (pack === null ? null : pack.kind === 'module' ? store.get('module', pack.id)?.value.name : store.get('character', pack.id)?.value.card.name) ?? null;
+  return (
+    <List label={label}>
+      {entries.map(({ entry, key }) => (
+        <ListItem
+          key={key}
+          title={`${STAGES[entry.stage] ?? entry.stage} · ${entry.script || packName(entry.pack) || 'Lua'}`}
+          badge={entry.errors.length ? '오류' : undefined}
+          tags={hookTags(entry)}
+          aside={aside(entry)}
+          expanded={open === key}
+          onClick={() => setOpen(open === key ? null : key)}
+          detail={open === key && <HookDetail entry={entry} />}
+        />
+      ))}
+    </List>
   );
 }
 

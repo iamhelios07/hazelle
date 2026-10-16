@@ -69,9 +69,9 @@ it('sends event history tails in order across edits, truncation, chat switches a
   const shorter = { ...changed, messages: changed.messages.slice(0, 1) };
   const other = { ...scope, messages: [{ ...scope.messages[0]!, id: 'other' }] };
   try {
-    for (const next of [scope, scope, changed, shorter, other]) await runner.run(next === other ? 'other' : 'chat', [], next, { kind: 'start' }, host);
+    for (const next of [scope, scope, changed, shorter, other]) await runner.run(next === other ? 'other' : 'chat', [], next, { kind: 'start' }, host, 'event');
     crash!();
-    await runner.run('other', [], other, { kind: 'start' }, host);
+    await runner.run('other', [], other, { kind: 'start' }, host, 'event');
     expect(sent.filter(message => message.kind === 'run').map(({ input }) => [input.history.from, input.history.items.length])).toEqual([[0, 2], [2, 0], [1, 1], [1, 0], [0, 1], [0, 1]]);
     expect(histories).toEqual([scope.messages, scope.messages, changed.messages, shorter.messages, other.messages, other.messages]);
   } finally { runner.close(); }
@@ -93,8 +93,8 @@ it('keeps each pending host until completion and ignores old replies after a cra
   const other = { ...host, say: vi.fn() };
   const scope: ChatScope = { ...snapshot.scope, cast: [], packs: [], toggles: new Map() };
   try {
-    const first = runner.run('first', [], scope, { kind: 'start' }, host);
-    const second = runner.run('second', [], scope, { kind: 'start' }, other);
+    const first = runner.run('first', [], scope, { kind: 'start' }, host, 'event');
+    const second = runner.run('second', [], scope, { kind: 'start' }, other, 'event');
     const worker = made[0]!;
     worker.receive({ kind: 'failed', id: 1, message: 'script failed' });
     await expect(first).rejects.toThrow('script failed');
@@ -104,7 +104,7 @@ it('keeps each pending host until completion and ignores old replies after a cra
     expect(other.say).toHaveBeenCalledExactlyOnceWith('normal', 'still running', { kind: 'character', id: 'c' });
     worker.onerror!();
     await expect(second).rejects.toThrow('crashed');
-    const restarted = runner.run('third', [], scope, { kind: 'start' }, host);
+    const restarted = runner.run('third', [], scope, { kind: 'start' }, host, 'event');
     worker.receive({ kind: 'done', id: 2, result: null });
     const next = made[1]!;
     expect(next.postMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run', id: 3 }));

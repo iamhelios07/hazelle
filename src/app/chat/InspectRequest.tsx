@@ -1,26 +1,26 @@
+import { useEffect, useState } from 'react';
 import { tokenGroups, type From, type TokenSource } from '../../engine/pipeline';
-import { afterEnter, type AfterEnter, type Sending } from '../../runtime/turn-context';
-import { SLOT } from '../common/prompt-words';
+import type { Rehearsal } from '../../runtime/scripts';
+import { afterEnter, previewRequest, type AfterEnter, type Sending } from '../../runtime/turn-context';
+import { describeTurnFailure } from '../common/failure';
+import { MESSAGE_ROLES, SLOT } from '../common/prompt-words';
 import { tokens } from '../common/receipt';
 import { useSession } from '../session';
-import { Disclosure, Gauge, List, ListItem, Stack, Text } from '../ui';
+import { Callout, CodeBlock, Disclosure, Empty, Facts, Gauge, List, ListItem, Section, Stack, Text } from '../ui';
 import { partName, RequestView } from './ChatSent';
-import { STAGES } from './InspectScripts';
+import { HookList, STAGES } from './InspectScripts';
 import type { Side } from './panels';
 import type { SendNotes } from './useSendNotes';
 
 function later(steps: AfterEnter[]): string[] {
-  const hooks = steps.flatMap((step) => (step.kind === 'hook' ? [STAGES[step.stage]!] : []));
-  return steps.flatMap((step) => {
+  return steps.map((step) => {
     switch (step.kind) {
       case 'input-translation':
-        return ['입력 번역'];
-      case 'hook':
-        return step === steps.find((each) => each.kind === 'hook') ? [`봇 스크립트(${hooks.join(' · ')})`] : [];
+        return '입력 번역';
       case 'tools':
-        return ['도구의 새 답'];
+        return '도구의 새 답';
       case 'retrieval':
-        return ['기억 검색'];
+        return '기억 검색';
     }
   });
 }
@@ -32,7 +32,73 @@ export function NextRequest({ chat, sending, request, editor, onEdit }: { chat: 
     <Stack gap="group">
       <NextTokens sending={sending} />
       {missing.length > 0 && <Text variant="note">{`보낼 때 실행돼서 여기에는 없어요: ${missing.join(', ')}`}</Text>}
-      <RequestView prompt={sending.prompt} title="보낼 순서대로" request={request} unbuilt="이 연결 방식은 요청 본문을 미리 만들어 볼 수 없어요." editor={editor} onEdit={onEdit} />
+      <RequestView prompt={sending.prompt} title="보낼 순서대로" request={request} unbuilt={UNBUILT} editor={editor} onEdit={onEdit} />
+      <Rehearsed chat={chat} sending={sending} editor={editor} onEdit={onEdit} />
+    </Stack>
+  );
+}
+
+const UNBUILT = '이 연결 방식은 요청 본문을 미리 만들어 볼 수 없어요.';
+
+// Mounted only while the 요청 tab shows and no reply is being written (ChatInspect), so a send never waits on one.
+function Rehearsed({ chat, sending, editor, onEdit }: { chat: string; sending: Sending; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
+  const { scripts } = useSession();
+  const [rehearsal, setRehearsal] = useState<Rehearsal | null | 'failed' | undefined>(undefined);
+  useEffect(() => {
+    setRehearsal(undefined);
+    const controller = new AbortController();
+    scripts.rehearse(chat, sending, controller.signal).then(
+      (result) => !controller.signal.aborted && setRehearsal(result),
+      () => !controller.signal.aborted && setRehearsal('failed'),
+    );
+    return () => controller.abort();
+  }, [chat, sending]);
+  if (rehearsal === null) return null;
+  return (
+    <Section title="스크립트 실행 예상" help="보내기 전에 실행되는 봇 스크립트를 미리 실행해 본 결과예요. 저장하지 않고, 질문에는 답하지 않고, 모델도 호출하지 않아요.">
+      {rehearsal === undefined ? (
+        <Text variant="note">계산하는 중…</Text>
+      ) : rehearsal === 'failed' ? (
+        <Empty variant="section">스크립트를 미리 실행하지 못했어요.</Empty>
+      ) : (
+        <RehearsalView rehearsal={rehearsal} sending={sending} editor={editor} onEdit={onEdit} />
+      )}
+    </Section>
+  );
+}
+
+function RehearsalView({ rehearsal, sending, editor, onEdit }: { rehearsal: Rehearsal; sending: Sending; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
+  const { trace, stopped, said, asked, calls, input, prompt, request, changed } = rehearsal;
+  const facts = [
+    ...(input === null ? [] : [{ label: '입력이 바뀌어요', value: input }]),
+    ...(asked.length ? [{ label: '보낼 때 물어봐요', value: `${asked.length}개` }] : []),
+    ...(said.length ? [{ label: '보낼 때 알림을 띄워요', value: `${said.length}개` }] : []),
+    ...(calls.model ? [{ label: '보낼 때 모델을 호출해요', value: `${calls.model}번` }] : []),
+    ...(calls.embed ? [{ label: '보낼 때 임베딩을 만들어요', value: `${calls.embed}번` }] : []),
+    ...(calls.background ? [{ label: '보낼 때 배경을 바꿔요', value: `${calls.background}번` }] : []),
+  ];
+  return (
+    <Stack gap="related">
+      {trace.entries.length > 0 && <HookList label="스크립트 실행 예상" entries={trace.entries.map((entry, index) => ({ entry, key: String(index) }))} aside={(entry) => `${Math.round(entry.duration)}ms`} />}
+      {trace.omitted > 0 && <Text variant="note">{`앞선 기록 ${trace.omitted}개는 빠졌어요.`}</Text>}
+      {facts.length > 0 && <Facts items={facts} />}
+      {stopped !== null ? (
+        <Text variant="note">{`${STAGES[stopped]} 단계에서 멈춰서 요청을 보내지 않아요.`}</Text>
+      ) : !changed ? (
+        <Text variant="note">스크립트가 요청을 바꾸지 않아요.</Text>
+      ) : null}
+      {prompt !== null && ('kind' in prompt ? <Callout tone="warn">{describeTurnFailure(prompt)}</Callout> : <RequestView prompt={prompt} title="스크립트 실행 후" request={() => previewRequest({ ...sending, prompt })} unbuilt={UNBUILT} editor={editor} onEdit={onEdit} />)}
+      {request !== null && (
+        <Section level={3} title="요청 편집 후">
+          <Stack gap="related">
+            {request.map((message, index) => (
+              <Disclosure key={index} label={MESSAGE_ROLES[message.role]}>
+                <CodeBlock>{message.content}</CodeBlock>
+              </Disclosure>
+            ))}
+          </Stack>
+        </Section>
+      )}
     </Stack>
   );
 }
