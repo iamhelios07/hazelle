@@ -36,10 +36,13 @@ export function profileUsers(connections: readonly Stored<'connection'>[], defau
 
 // An account that has never had a default 묶음 gets an empty one, once. The session awaits it when it opens;
 // a failure is tried again next time.
+// The starter's name, which the default's mark leaves out (words defaultMark).
+export const FIRST_PROFILE_NAME = '기본';
+
 export async function addFirstProfile(store: ObjectStore): Promise<void> {
   if (store.get('settings', SETTINGS_ID)?.value.profile !== undefined) return;
   if (!store.get('profile', FIRST_PROFILE_ID)) {
-    const saved = await store.create('profile', { name: '기본', settings: {} }, { id: FIRST_PROFILE_ID });
+    const saved = await store.create('profile', { name: FIRST_PROFILE_NAME, settings: {} }, { id: FIRST_PROFILE_ID });
     if (!saved.ok) return;
   }
   await store.upsert('settings', (current = EMPTY_SETTINGS) => (current.profile === undefined ? { ...current, profile: FIRST_PROFILE_ID } : current));
@@ -72,6 +75,13 @@ export async function removeProfile(store: ObjectStore, id: string): Promise<Api
 export const restoreProfile = (store: ObjectStore, id: string) => markDeleted(store, 'profile', id, null);
 
 export const setDefaultProfile = (store: ObjectStore, id: string) => store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, profile: id }));
+
+// For an account whose every 모델 설정 was deleted: a new one under the starter's name becomes the default.
+export async function addDefaultProfile(store: ObjectStore) {
+  const id = crypto.randomUUID();
+  const made = await addProfile(store, { name: FIRST_PROFILE_NAME, settings: {} }, id);
+  return made.ok ? setDefaultProfile(store, id) : made;
+}
 
 // null leaves the model to the default 묶음.
 export function setModelProfile(store: ObjectStore, connection: string, model: string, profile: string | null): Promise<ApiResult<Stored<'connection'>>> {

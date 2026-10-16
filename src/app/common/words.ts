@@ -3,6 +3,7 @@ import type { Role } from '../../connectors/assignment';
 import type { RegexScript } from '../../engine/import/types';
 import type { Feature } from '../../model/features';
 import { KEEP_DAYS } from '../../model/library';
+import { FIRST_PROFILE_NAME } from '../../runtime/profiles';
 
 // Sentences stay in their screen and are built from these; the phrases these replaced are refused by lint
 // (RETIRED_COPY in eslint.config.js).
@@ -158,7 +159,7 @@ export const LORE_BUDGET_LABEL = '로어북 최대 분량';
 export const CHAT_LORE = '채팅 로어북';
 
 // The mark on the default 설정 묶음 or prompt, left off where its name already says it, as the starter 묶음's 기본 does.
-export const defaultMark = (isDefault: boolean, name: string) => (isDefault && name.trim() !== '기본' ? '기본' : undefined);
+export const defaultMark = (isDefault: boolean, name: string) => (isDefault && name.trim() !== FIRST_PROFILE_NAME ? '기본' : undefined);
 
 // The fold that keeps a page's rarely changed settings out of sight, saying how many of them are set.
 export const detailLabel = (set: number) => (set ? `세부 설정 · ${set}개 정함` : '세부 설정');

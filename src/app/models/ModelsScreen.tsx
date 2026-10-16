@@ -1,6 +1,6 @@
 import { sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
 import { imageOnly, setDefaultModel } from '../../runtime/assignment';
-import { addProfile, modelProfile, profileUsers, setDefaultProfile } from '../../runtime/profiles';
+import { addDefaultProfile, modelProfile, profileUsers, setDefaultProfile } from '../../runtime/profiles';
 import { TASK_NAMES } from '../common/prompt-words';
 import { ROLES } from '../../connectors/assignment';
 import { findStarred, RoleCard } from '../common/RolePicker';
@@ -33,11 +33,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
       if (!result.ok) toast.failed(result, `${DEFAULT_MODELS}을 바꾸지 못했어요.`);
     });
   const pickDefault = (id: string) => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
-  // Only when no 모델 설정 is left to pick: the new one becomes the default, and the default takes the starter's name.
-  const makeDefault = () => {
-    const id = crypto.randomUUID();
-    void addProfile(store, { name: '기본', settings: {} }, id).then((made) => (made.ok ? pickDefault(id) : toast.failed(made, `${MODEL_SETTINGS}을 만들지 못했어요.`)));
-  };
+  const makeDefault = () => void addDefaultProfile(store).then((done) => done.ok || toast.failed(done, `${MODEL_SETTINGS}을 만들지 못했어요.`));
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
   const rolesOf = (ref: ModelRef) => (Object.keys(ROLES) as Role[]).filter((role) => settings.models[role] && sameModelRef(settings.models[role]!, ref));
   const cardOf = (ref: ModelRef | undefined) => {
