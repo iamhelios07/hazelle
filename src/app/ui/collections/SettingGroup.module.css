@@ -23,8 +23,10 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+/* The last column even where the control is empty, so every row's ⋯ stands at one edge. */
 .menu {
   display: flex;
+  grid-column: -2 / -1;
   align-items: center;
 }
 
