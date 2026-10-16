@@ -2,6 +2,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import type { PictureUrl } from '../../engine/assets';
 import { parseScene, sceneText, SIZES, type SceneInvalid } from '../../engine/illustrate';
+import { shown } from '../../model/chat';
 import { byParagraph, paragraphsOf, type Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import type { Drawing, IllustrateFailure } from '../../runtime/illustrate';
@@ -84,7 +85,7 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
   const { version, scene, sent } = picture.value;
   const at = pictures.indexOf(picture);
   const step = (by: -1 | 1) => onPage(pictures[(at + by + pictures.length) % pictures.length]!.id);
-  const text = message.versions.find(({ id }) => id === version)?.text ?? '';
+  const text = shown(message).text;
   const again = () => {
     onPage(null);
     onDraw(message.id, version, scene);

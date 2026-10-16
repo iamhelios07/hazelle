@@ -14,6 +14,7 @@ import { ChatNote } from './ChatNote';
 import { ChatPinnedToggles } from './ChatPinnedToggles';
 import { ChatPersonaPicker } from './ChatPersonaPicker';
 import { ChatTranslate } from './ChatTranslate';
+import { promptEditor } from './panels';
 import type { OpenChat } from './useChat';
 
 const LEAVING = '가장 오래된 메시지가 요청에서 빠지는데, 장기 기억에도 없어서 모델이 그 내용을 알 수 없어요.';
@@ -40,7 +41,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
     profile: { onClick: () => navigate(profilePage) },
   };
   const input = useRef<HTMLTextAreaElement>(null);
-  const editPrompt = (door: PromptDoor) => actions.side(door ? { kind: 'prompts', ...door } : { kind: 'prompts', id: null, pane: null });
+  const editPrompt = (door: PromptDoor) => actions.side(promptEditor(door));
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (pressed(event, SHORTCUTS.send.keys)) {

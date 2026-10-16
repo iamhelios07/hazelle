@@ -49,7 +49,7 @@ const clock = (ms: number) => {
 };
 
 // The ticking lives here, so only this note draws each second.
-function useNow(until: number | null) {
+export function useNow(until: number | null) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (until === null) return;
@@ -65,8 +65,6 @@ function useNow(until: number | null) {
   return now;
 }
 
-// 캐시 (design §4.4): the time left on what the chat's last call cached, and a warning when sending now would not read
-// it. Pressed, it opens the chat's 캐시 panel.
 export function ChatCache({ cache, onOpen }: { cache: CacheNotes; onOpen: () => void }) {
   const store = useStore();
   const now = useNow(cache.until);

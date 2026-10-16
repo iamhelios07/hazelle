@@ -2,7 +2,7 @@ import type { Badges, ToolChatData } from '../../model/tool';
 import type { ToolField } from '../../tool-api/manifest';
 import type { ToolMenu } from '../../runtime/tools/facade';
 
-export type ToolAction = { module: string; name: string; label: string } & ({ kind: 'page' } | { kind: 'menu'; item: string });
+type ToolAction = { module: string; name: string; label: string } & ({ kind: 'page' } | { kind: 'menu'; item: string });
 
 export const toolMenu = (tools: ToolMenu[]): ToolAction[] => tools.flatMap(({ module, manifest }) => [
   ...(manifest.page ? [{ kind: 'page' as const, module, name: manifest.displayName, label: manifest.page.label }] : []),

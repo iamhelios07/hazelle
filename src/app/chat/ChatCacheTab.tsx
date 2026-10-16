@@ -36,8 +36,6 @@ function rows(parts: ForecastPart[]): Row[] {
   return out;
 }
 
-// 캐시 (design §4.4): what sending the draft now would read, write and leave out of the cache, kept up as the draft, the
-// prompt or a lorebook changes; and what each earlier call read, with why its send expected less.
 export function CacheTab({ cache, messages, busy, editor, onEdit }: Pick<OpenChat, 'messages' | 'busy'> & { cache: CacheNotes; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
   const turns = useMemo(() => cacheTurns(messages), [messages]);
   const [more, setMore] = useState(PAGE);

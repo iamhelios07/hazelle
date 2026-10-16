@@ -59,10 +59,8 @@ export function ChatInspect({ chat, character, tab, notes, messages, busy, promp
   );
 }
 
-const HOOKS = { onInput: '입력', editInput: '입력 편집', onStart: '시작', editRequest: '요청 편집' } as const;
-
 function later(steps: AfterEnter[]): string[] {
-  const hooks = steps.flatMap((step) => (step.kind === 'hook' ? [HOOKS[step.stage]] : []));
+  const hooks = steps.flatMap((step) => (step.kind === 'hook' ? [STAGES[step.stage]!] : []));
   return steps.flatMap((step) => {
     switch (step.kind) {
       case 'input-translation':
@@ -217,9 +215,11 @@ function Variables({ chat, sending, busy }: { chat: string; sending: Sending | n
 
 const ATTACHED = { settings: '설정', prompt: '프롬프트', character: '캐릭터', persona: '페르소나' } as const;
 
+const entryTokens = ({ parts }: ModuleContribution['lore'][number]) => parts.reduce((sum, part) => sum + part.tokens, 0);
+
 function moduleTags(module: ModuleContribution): string[] {
   const regex = Object.values(module.regex).reduce((sum, count) => sum + count, 0);
-  const fired = module.lore.reduce((sum, entry) => sum + entry.parts.reduce((each, part) => each + part.tokens, 0), 0);
+  const fired = module.lore.reduce((sum, entry) => sum + entryTokens(entry), 0);
   return [
     ...(module.lore.length ? [`로어북 ${module.lore.length}개 · ${tokens(fired)} 토큰`] : []),
     ...(regex ? [`정규식 ${regex}개`] : []),
@@ -267,7 +267,7 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
       {module.lore.length > 0 ? (
         <List label={`${module.name} 로어북`}>
           {module.lore.map((entry) => (
-            <ListItem key={entry.id} title={entry.name} aside={entry.parts.length ? tokens(entry.parts.reduce((sum, part) => sum + part.tokens, 0)) : '안 들어감'} />
+            <ListItem key={entry.id} title={entry.name} aside={entry.parts.length ? tokens(entryTokens(entry)) : '안 들어감'} />
           ))}
         </List>
       ) : (

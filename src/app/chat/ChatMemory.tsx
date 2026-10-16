@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import type { Chat } from '../../model/chat';
+import type { Chat, ChatItem } from '../../model/chat';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
 import { embedModel } from '../../runtime/assignment';
 import { memoryOwner, memorySetup } from '../../runtime/memory-read';
@@ -10,14 +10,14 @@ import { ACTS, addOf } from '../common/acts';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, MemorySplit, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
-import type { PromptDoor } from '../common/TaskPrompt';
+import { TaskModelRow, type PromptDoor } from '../common/TaskPrompt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, resetTo, SCOPE, scopeTag, taskModelHelp } from '../common/words';
+import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, resetTo, SCOPE, scopeTag } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
-import { Button, Callout, ConfirmDialog, Empty, IconButton, List, MenuItem, MoreMenu, Row, Section, SettingRow, SidePanel, Stack, Text, TextField } from '../ui';
+import { Button, Callout, ConfirmDialog, Empty, IconButton, List, MenuItem, MoreMenu, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
 import { MemoryRow, type ChatMemoryRecord } from './ChatMemoryRecord';
 import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
@@ -44,8 +44,8 @@ function useView(id: string, busy: boolean, inputs: unknown[]): MemoryView | nul
 
 // 장기 기억 (design §6.2). Without memoryView's answer nothing is said about what is sent: no status, no tokens, no missing
 // slot.
-type Props = Pick<OpenChat, 'item' | 'messages' | 'busy'> & {
-  id: string;
+type Props = Pick<OpenChat, 'messages' | 'busy'> & {
+  item: ChatItem;
   record: string | null;
   onClose: () => void;
   onTool: (id: string) => void;
@@ -55,7 +55,8 @@ type Props = Pick<OpenChat, 'item' | 'messages' | 'busy'> & {
   renderRecord: (record: Omit<ComponentProps<typeof ChatMemoryRecord>, 'actions'>) => ReactNode;
 };
 
-export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, onEditPrompt, onEditTaskPrompt, onRecord, renderRecord }: Props) {
+export function ChatMemory({ record, item, messages, busy, onClose, onTool, onEditPrompt, onEditTaskPrompt, onRecord, renderRecord }: Props) {
+  const { id, chat: own } = item;
   const session = useSession();
   const { store } = session;
   const toast = useToast();
@@ -65,8 +66,6 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
   const { running, failed, chapterFailed, indexing, indexFailed } = useRemembering();
   const [messagePositions] = useState(() => new MessagePositions());
   const positions = messagePositions.read(messages);
-  // The panel opens only from a saved chat, whose item is there.
-  const own = item!.chat;
   const setup = memorySetup(store, own);
   // A tool holding the slot leaves these records as they are, readable, until the slot is theirs again (design §6.10).
   const owner = memoryOwner(store, own);
@@ -232,16 +231,14 @@ function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (door: Pr
   const store = useStore();
   const writer = memoryWriter(store, chat);
   const prompt = memoryPrompt(store);
-  const model = taskModelHelp('기억', prompt.kind === 'prompt');
   return (
-    <SettingRow
+    <TaskModelRow
       label="기억 모델"
-      help={{
-        text: model.text,
-        open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => onEditPrompt(null) },
-      }}
+      noun="기억"
+      choice={prompt}
       sub={prompt.kind === 'prompt' && !prompt.prompt.value.model ? follows(MODEL_ROLES.aux) : undefined}
-      control={<Text variant="note">{'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}</Text>}
+      model={'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}
+      onEdit={onEditPrompt}
     />
   );
 }

@@ -20,7 +20,7 @@ import { ChatSearch } from './ChatSearch';
 import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useEditBeside } from './editBeside';
-import { toggleEditor, type Panel, type Side } from './panels';
+import { promptEditor, toggleEditor, type Panel, type Side } from './panels';
 import { useChat } from './useChat';
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
@@ -49,7 +49,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
   useEditBeside(shelf?.id ?? null, () => shelf && actions.side({ kind: 'character', id: shelf.id, part: null }));
   useShortcut('status', () => {
     if (!chat.status.length) return false;
-    actions.toggleStatus();
+    actions.hold(!chat.held);
   });
   useShortcut('find', () => actions.openSearch());
   // Ctrl+U is held even in a chat not saved yet, where it opens nothing: passed on, it is the browser's view-source.
@@ -57,7 +57,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
     if (chat.inspect) actions.closeInspect();
     else if (chat.id !== null) actions.openInspect('request');
   });
-  const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null, module: null };
+  const inUse = prompt.kind === 'prompt' ? prompt.prompt.id : null;
   const inspect = chat.inspect && chat.id !== null && <ChatInspect chat={chat.id} tab={chat.inspect.tab} notes={chat.sendNotes} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onTab={actions.switchInspectTab} onClose={actions.closeInspect} onEdit={actions.side} />;
   const paired = usePanelsBeside() && !!panel && !!chat.inspect;
   useEffect(() => {
@@ -78,9 +78,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
           ) : panel?.kind === 'info' ? (
             <ChatInfo id={id} shelf={shelf} messages={chat.messages} infoPick={chat.infoPick} tab={panel.tab} onTab={actions.switchInfoTab} onPick={actions.pickInfo} onRecord={chat.features.memory ? actions.memory : undefined} onEdit={actions.side} onClose={actions.closePanel} />
           ) : panel?.kind === 'memory' ? (
-            // The panel opens only from a saved chat.
-            id && <ChatMemory
-              id={id}
+            chat.item && <ChatMemory
               record={panel.record}
               item={chat.item}
               messages={chat.messages}
@@ -88,18 +86,18 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
               onClose={actions.closePanel}
               onTool={actions.tool}
               onEditPrompt={prompt.kind === 'prompt' ? () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null }) : undefined}
-              onEditTaskPrompt={(door) => actions.side(door ? { kind: 'prompts', ...door } : { kind: 'prompts', id: null, pane: null })}
+              onEditTaskPrompt={(door) => actions.side(promptEditor(door))}
               onRecord={actions.memory}
               renderRecord={(record) => <ChatMemoryRecord {...record} actions={actions} />}
             />
           ) : panel?.kind === 'bookmarks' ? (
-            id && <ChatBookmarks id={id} item={chat.item} messages={chat.messages} texts={chat.texts} names={speakers(chat)} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
+            chat.item && <ChatBookmarks item={chat.item} messages={chat.messages} texts={chat.texts} names={speakers(chat)} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
           ) : panel?.kind === 'lore' ? (
             id && <ChatLore id={id} onClose={actions.closePanel} />
           ) : panel?.kind === 'tool' ? (
             id && <ChatToolPanel key={panel.module} chat={id} module={panel.module} onClose={actions.closePanel} />
           ) : panel ? (
-            side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
+            side({ open: panel, inUse, onOpen: actions.side, onClose: actions.closePanel })
           ) : (
             inspect
           )

@@ -1,5 +1,5 @@
 import { Bookmark, Bot, Info, Languages, Pin, PinOff, SquarePen } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
@@ -20,6 +20,7 @@ import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { useNow } from './ChatCache';
 import { ChatPicture, slotsOf } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
 import type { ToolActions } from './toolMenu';
@@ -151,7 +152,6 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     }
   };
 
-  // The paragraphs selected, when the text drawn holds them too.
   const findPart = (pieces: string[]) => {
     const side: EditPart['side'] = translation && !flipped ? 'translation' : 'text';
     const source = side === 'text' ? version.text : translation!.text;
@@ -161,6 +161,16 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   };
   const selected = useSelectedPart(story, findPart, editing === null && !live && !message.unstored && !opening && !failed && !empty);
 
+  const cancel = (
+    <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
+      취소
+    </Button>
+  );
+  const save = (
+    <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
+      저장
+    </Button>
+  );
   let body = null;
   if (editing !== null && !part) {
     body = (
@@ -177,17 +187,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         onKeyDown={editKeys}
         actions={
           <>
-            <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
-              취소
-            </Button>
+            {cancel}
             {replyNext && (
               <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.saveEdit(message, true)}>
                 저장하고 다시 생성
               </Button>
             )}
-            <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
-              저장
-            </Button>
+            {save}
           </>
         }
       />
@@ -340,12 +346,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
 
   const tools = live || message.unstored ? undefined : part ? (
     <>
-      <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
-        취소
-      </Button>
-      <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
-        저장
-      </Button>
+      {cancel}
+      {save}
     </>
   ) : editing !== null ? undefined : opening ? (
     <>
@@ -376,7 +378,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
               disabled={running}
               onClick={() => {
                 setPages(new Map());
-                actions.illustrate(message);
+                actions.draw(message.id, version.id);
               }}
             />
           )}
@@ -427,14 +429,10 @@ function Remark({ remark, fresh, onSeen }: { remark: Stored<'remark'>; fresh: bo
   return <MascotRemark face={pictures.face} picture={pictures.expressions[expression]} name={MASCOTS[mascot].name} line={line} fresh={fresh} onSeen={onSeen} />;
 }
 
-// The ticking lives here, so only this note draws each second. It counts from when this page began to wait.
+// It counts from when this page began to wait.
 function Elapsed({ thinking }: { thinking: boolean }) {
   const [start] = useState(Date.now);
-  const [now, setNow] = useState(start);
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const now = useNow(Infinity);
   const seconds = Math.floor((now - start) / 1000);
   return <Text variant="note">{`${thinking ? '추론 중' : '기다리는 중'} · ${seconds}초`}</Text>;
 }
@@ -452,7 +450,6 @@ function sameRow(previous: Props, next: Props): boolean {
   return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
 }
 
-// The name a row goes by: the persona's for the user's, else the character's, or with none the model's.
 export const speaker = (message: Message, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>
   message.role === 'user' ? (me?.name ?? NO_PERSONA) : (character?.name ?? shown(message).receipt?.modelName ?? modelName ?? '모델');
 

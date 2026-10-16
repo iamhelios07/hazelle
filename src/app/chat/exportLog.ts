@@ -13,7 +13,7 @@ export type LogText = 'translation' | 'original' | 'both';
 // from, to: message numbers, from 1, both included.
 export type LogChoices = { pictures: boolean; hideMe: boolean; text: LogText; from: number; to: number };
 // pictures: by pictureRef.
-export type LogDraft = { rows: LogRow[]; css: string; pictures: Map<string, { kind: PictureKind; id: string }> };
+type LogDraft = { rows: LogRow[]; css: string; pictures: Map<string, { kind: PictureKind; id: string }> };
 
 const ME_HIDDEN = '나';
 
@@ -25,7 +25,7 @@ export const untranslated = (messages: Shown[], view: Display, { from, to }: Pic
 
 // The pictures the chat shows besides its display: by index, the shown text with its 삽화 marks, and by version its 삽화,
 // oldest first (useChat).
-export type Illustrated = { placed: ReadonlyMap<number, string>; pictures: ReadonlyMap<string, Stored<'illustration'>[]> };
+type Illustrated = { placed: ReadonlyMap<number, string>; pictures: ReadonlyMap<string, Stored<'illustration'>[]> };
 
 // The rows a log draws, as the chat draws them, their pictures still named by pictureRef. A reply being written, a
 // failed one and an empty one are left out, and a message's boxes stand in it as they did when it was written. A
@@ -33,7 +33,7 @@ export type Illustrated = { placed: ReadonlyMap<number, string>; pictures: Reado
 export function logDraft(messages: Shown[], view: Display, { placed, pictures: drawn }: Illustrated, flipped: ReadonlySet<string>, bot: boolean, names: ReturnType<typeof speakers>, { hideMe, text, from, to }: LogChoices): LogDraft {
   const decor = { bot, url: pictureRef };
   const rows: LogRow[] = [];
-  for (let index = Math.max(from, 1) - 1; index < Math.min(to, messages.length); index++) {
+  for (let index = from - 1; index < Math.min(to, messages.length); index++) {
     const message = messages[index]!;
     const version = shown(message);
     if (unlogged(message)) continue;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { storySelection, type SelectionEnd } from '../ui';
 import type { EditPart } from './useMessageEdit';
 
-export type SelectedPart = { part: Omit<EditPart, 'value'>; end: SelectionEnd };
+type SelectedPart = { part: Omit<EditPart, 'value'>; end: SelectionEnd };
 
 // The part selected in a story while active, read again as the selection or the view moves; null while what is
 // selected is no part find knows.

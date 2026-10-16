@@ -29,7 +29,6 @@ export function useChatTranslation(chatId: string, chat: Chat, messages: Shown[]
   const latest = useRef({ chat, messages });
   latest.current = { chat, messages };
 
-  // Answers why it did not translate, once it has settled.
   async function translateMessage(message: Shown): Promise<TranslatorFailure | null> {
     const { chat, messages } = latest.current;
     const index = messages.findIndex(({ id }) => id === message.id);
@@ -45,7 +44,6 @@ export function useChatTranslation(chatId: string, chat: Chat, messages: Shown[]
     setFlipped(next);
   }
 
-  // An edit's version shows the side its version showed.
   function carryFlip(from: string, to: string) {
     setFlipped((current) => (current.has(from) ? new Set([...current, to]) : current));
   }

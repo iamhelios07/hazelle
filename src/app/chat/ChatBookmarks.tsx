@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { previewLine, shown } from '../../model/chat';
+import { previewLine, shown, type ChatItem } from '../../model/chat';
 import { versionTree } from '../../runtime/chat-log';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
@@ -11,8 +11,8 @@ import { speaker } from './ChatMessage';
 import type { speakers } from './ChatLog';
 import type { OpenChat } from './useChat';
 
-type Props = Pick<OpenChat, 'item' | 'messages' | 'texts'> & {
-  id: string;
+type Props = Pick<OpenChat, 'messages' | 'texts'> & {
+  item: ChatItem;
   names: ReturnType<typeof speakers>;
   onShow: OpenChat['actions']['showBookmark'];
   onUnmark: (id: string) => void;
@@ -20,12 +20,12 @@ type Props = Pick<OpenChat, 'item' | 'messages' | 'texts'> & {
   onClose: () => void;
 };
 
-export function ChatBookmarks({ id, item, messages, texts, names, onShow, onUnmark, onRename, onClose }: Props) {
+export function ChatBookmarks({ item, messages, texts, names, onShow, onUnmark, onRename, onClose }: Props) {
   const { store } = useSession();
   const wide = useWide();
   const [naming, setNaming] = useState<BookmarkRow | null>(null);
-  const tree = useMemo(() => versionTree(store, id), [item?.messages]);
-  const rows = bookmarkRows(item?.chat.bookmarks ?? [], tree);
+  const tree = useMemo(() => versionTree(store, item.id), [item.messages]);
+  const rows = bookmarkRows(item.chat.bookmarks ?? [], tree);
   const { character, me, modelName } = names;
   // Off the line shown, a message has no displayed text: its stored one stands in, as in the version switcher.
   const start = ({ message }: BookmarkRow) => {
