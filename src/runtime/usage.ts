@@ -16,7 +16,7 @@ export const ledgerId = (call: string) => `${call.slice(0, 14)}8${call.slice(15)
 
 export type CallPlace = { chat: string | null; character: string | null };
 
-export function callRow({ at, call }: UsageCall, { chat, character }: CallPlace): Write {
+function callRow({ at, call }: UsageCall, { chat, character }: CallPlace): Write {
   const row = { at, call: call.calibration === undefined ? { ...call, calibration: unavailableCalibration('historical') } : call, chat, character };
   return { type: 'create', kind: 'ledger', id: ledgerId(call.id), parent: SETTINGS_ID, value: call.calibration?.refusal ? { type: 'input-refusal', ...row } : { type: 'call', ...row } };
 }

@@ -12,7 +12,7 @@ import type { Route } from './assignment';
 import type { ObjectStore } from './store';
 import type { Usage } from './usage';
 
-export const calibrationKey = (connection: string, requestClass: RequestClass, prepared: PreparedChat) => JSON.stringify([connection, requestClass, prepared.identity]);
+const calibrationKey = (connection: string, requestClass: RequestClass, prepared: PreparedChat) => JSON.stringify([connection, requestClass, prepared.identity]);
 
 export function providerFit(route: Route, settings: ModelSettings, allowance: number | null): ProviderFit {
   const resolved = resolveConnection(route.connection.value);

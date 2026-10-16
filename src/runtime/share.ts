@@ -87,7 +87,7 @@ export async function setShareCover(store: ObjectStore, share: Stored<'share'>, 
 export type ShareSource = { id: string; operator: boolean };
 const base = ({ id, operator }: ShareSource) => (operator ? `admin/shares/${id}` : `shares/${id}`);
 
-export async function readSharedFile(source: ShareSource, ref: FileRef): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
+async function readSharedFile(source: ShareSource, ref: FileRef): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
   const body = await api<Uint8Array<ArrayBuffer>>('GET', `${base(source)}/files/${ref.id}`);
   if (!body.ok) return body;
   const bytes = await openFile(ref, body.data);
