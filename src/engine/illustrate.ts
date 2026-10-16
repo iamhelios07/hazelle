@@ -48,7 +48,7 @@ export const severalScenes = (count: number) =>
 // profile's own names.
 export const profileNames = (portraits: readonly Pick<Portrait, 'name' | 'aliases' | 'outfits'>[]) =>
   [
-    'These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them. When the story has one of them in an outfit named here, give its "outfit" as that name alone, exactly as written; otherwise write their clothes as tags.',
+    'These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them. When the story has one of them in an outfit named here, put that name, exactly as written, as a tag in its "outfit", with any change to it as further tags; otherwise write their clothes as tags.',
     ...portraits.map(({ name, aliases, outfits }) => {
       const named = outfits.filter(({ name }) => name.trim());
       return `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}${named.length ? `, outfits: ${named.map(({ name }) => `"${name.trim()}"`).join(', ')}` : ''}`;
@@ -125,8 +125,8 @@ const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((pa
 // Artist tags lead the base caption (design §6.6): the 삽화 prompt's, else the first drawn portrait's. random: the seed
 // of a prompt that fixes none. portraits: the chat's packs' in pack order (runtime/likeness), the character's own first;
 // the scene call is told their names after the prompt (profileNames). A figure whose name is a portrait's name or alias
-// takes the portrait's look in place of its own, and the portrait's outfit whose name the scene's outfit is, the first
-// when the scene gives none, its own tags otherwise.
+// takes the portrait's look in place of its own; each tag of its outfit that is a portrait outfit's name becomes that
+// outfit's tags, and an empty outfit the first outfit's.
 export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Model, random: number, portraits: readonly Portrait[]): PictureRequest {
   const { artist, quality, negative } = prompt.tags ?? PICTURE_DEFAULTS;
   const { steps = null, scale = null, rescale = null, sampler = null, seed = random } = prompt.picture ?? {};
@@ -134,10 +134,8 @@ export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Mo
   for (const portrait of portraits) for (const key of namesOf(portrait)) if (!byName.has(key)) byName.set(key, portrait);
   const matched = scene.characters.map(({ name }) => byName.get(nameKey(name)) ?? null);
   const drawn = portraits.find((portrait) => matched.includes(portrait) && portrait.artist.trim());
-  const wornBy = (portrait: Portrait, outfit: string) => {
-    const key = nameKey(outfit);
-    return key ? (portrait.outfits.find((each) => nameKey(each.name) === key)?.tags ?? outfit) : (portrait.outfits[0]?.tags ?? '');
-  };
+  const wornBy = (portrait: Portrait, outfit: string) =>
+    outfit.trim() ? tags(...outfit.split(',').map((tag) => portrait.outfits.find((each) => nameKey(each.name) === nameKey(tag))?.tags ?? tag)) : (portrait.outfits[0]?.tags ?? '');
   return {
     model,
     prompt: tags(artist.trim() ? artist : (drawn?.artist ?? ''), scene.setting, scene.framing, quality),

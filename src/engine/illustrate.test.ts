@@ -91,9 +91,9 @@ describe('pictureRequest with portraits', () => {
     expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, Ari uniform, smile', 'girl, from scene, smile']);
   });
 
-  it("dresses a matched figure in the portrait's outfit the scene names, after trim, NFC and case, and in the scene's own tags when it names none", () => {
-    const request = prompts([{ name: 'Ari', outfit: ' NIGHT ' }, { name: 'Ari', outfit: 'night, torn' }], [portrait('Ari')]);
-    expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, pajamas, smile', 'girl, Ari look, night, torn, smile']);
+  it("swaps each outfit tag that is a portrait outfit's name, after trim, NFC and case, for its tags, keeping the rest", () => {
+    const request = prompts([{ name: 'Ari', outfit: ' NIGHT ' }, { name: 'Ari', outfit: 'night, torn' }, { name: 'Ari', outfit: 'red night' }], [portrait('Ari')]);
+    expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, pajamas, smile', 'girl, Ari look, pajamas, torn, smile', 'girl, Ari look, red night, smile']);
   });
 
   it('tells the scene writer each portrait’s names and its named outfits', () => {
