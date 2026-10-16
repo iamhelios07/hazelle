@@ -43,13 +43,13 @@ it('sends sentences as numbered lines with {n} slots, and reads an answer back i
     "const C = '저장';",
   ].join('\n');
   const list = extract([{ path: 'x.ts', source }]);
-  const [body] = toText(list).map((batch) => batch.body.split('\n').filter((line) => /^\d/.test(line)));
-  expect(body).toEqual(["1. 설정에서 '모델'을 선택해 주세요.", '2. {1} 캐릭터를 {2}개 옮겼어요.']);
-  const { revised, problems } = fromText(list, ["1. '모델'을 설정에서 선택해 주세요.\n2. {1} 캐릭터 {2}개를 옮겼어요.", '1. 새 목록\n2. 지어낸 줄\n3. 저장하기']);
+  const [body] = toText(list).map((batch) => batch.body.split('\n').filter((line) => /^\[\d/.test(line)));
+  expect(body).toEqual(["[1] 설정에서 '모델'을 선택해 주세요.", '[2] {1} 캐릭터를 {2}개 옮겼어요.']);
+  const { revised, problems } = fromText(list, ["```text\n[1] '모델'을 설정에서 선택해 주세요.\n[2] {1} 캐릭터 {2}개를 옮겼어요.\n```", '[1] 새 목록\n[2] 지어낸 줄\n[3] 저장하기']);
   expect(revised).toEqual([
     { id: list[0]!.id, text: "\\'모델\\'을 설정에서 선택해 주세요." },
     { id: list[1]!.id, text: '${name} 캐릭터 ${count}개를 옮겼어요.' },
   ]);
   expect(problems).toEqual(['answer 2: 1 of 3 lines were never sent (first 3), so none of it is read']);
-  expect(fromText(list, ['2. {2}개의 {1} 캐릭터를 옮겼어요.']).problems).toEqual([`2 ${list[1]!.id}: the {n} slots changed`]);
+  expect(fromText(list, ['[2] {2}개의 {1} 캐릭터를 옮겼어요.']).problems).toEqual([`2 ${list[1]!.id}: the {n} slots changed`]);
 });

@@ -164,7 +164,8 @@ export function apply(sources: readonly Source[], original: readonly Listed[], r
 }
 
 // The text-only round: a model sees numbered sentences and nothing else, since ids, code and context gave it room to
-// invent. A line's number is its entry's place in the extract list, and each ${…} reads {1}, {2}… in order.
+// invent. A line's number is its entry's place in the extract list, written [N] because a chat app renders "N." as a
+// list and renumbers it, and each ${…} reads {1}, {2}… in order.
 const SYNTAX_OWNER = /(?:^|› )(?:form|example|written|result|card|name|variables|toggle|SAMPLE_NOTE)$/;
 const BATCH_LINES = 150;
 const ROLE: [RegExp, string][] = [
@@ -173,7 +174,7 @@ const ROLE: [RegExp, string][] = [
 ];
 const PREAMBLE = `Rewrite each numbered Korean line below so it is easier to read and understand. Keep exactly the same meaning and the same information: add nothing, drop nothing.
 
-Answer with every line, changed or not, as \`N. text\`, in the same order, and nothing else: no headings, no notes, no code fences. Never merge, split or renumber lines.
+Answer inside one \`\`\`text code block, with every line, changed or not, as \`[N] text\`, in the same order, and nothing else in the block: no headings, no notes. Keep each [N] exactly as given; never merge, split or renumber lines.
 
 - {1}, {2}… mark where something is inserted (a name, a number, another phrase). Keep each one, in the same order.
 - A line marked (설명) is help text and (제목) a title; do not copy the mark into your answer. Lines under one ## heading sit on the same screen.
@@ -254,7 +255,7 @@ export function toText(list: readonly Listed[]): { name: string; body: string }[
         const entry = list[index]!;
         const file = pathOf(entry.id).replace(/^src\/(app\/)?/, '');
         const role = ROLE.find(([owner]) => owner.test(entry.owner))?.[1] ?? '';
-        const line = `${index + 1}. ${role}${shownLine(entry)}`;
+        const line = `[${index + 1}] ${role}${shownLine(entry)}`;
         if (file === heading) return [line];
         heading = file;
         return ['', `## ${file}`, line];
@@ -272,7 +273,7 @@ export function fromText(list: readonly Listed[], answers: readonly string[]) {
   const review: string[] = [];
   const seen = new Set<number>();
   answers.forEach((answer, place) => {
-    const matches = [...answer.matchAll(/^(\d+)\.[ \t]*(?:\((?:설명|제목)\)[ \t]*)?(.*?)\s*$/gm)];
+    const matches = [...answer.matchAll(/^\[(\d+)\][ \t]*(?:\((?:설명|제목)\)[ \t]*)?(.*?)\s*$/gm)];
     // Sent numbers have gaps, so one that was never sent means the model renumbered or wrote its own list, and the
     // lines whose numbers happen to match are not answers to them either.
     const unsent = matches.map((match) => Number(match[1])).filter((number) => !list[number - 1] || !isSentence(list[number - 1]!));
