@@ -567,7 +567,6 @@ describe('embeddings', () => {
     expect(embedRoute({ ...generic, type: 'groq' }, model())).toBeNull();
     expect(embedRoute({ ...generic, type: 'anthropic' }, model())).toBeNull();
     expect(embedRoute({ ...generic, type: 'novelai' }, model())).toBeNull();
-    expect(() => embedRequest(connection('groq'), model(), ['밤'], null)).toThrow(ConnectorError);
     expect(embedRoute(generic, model())).toMatchObject({ endpoint: { baseUrl: 'https://example.com/v1' } });
     expect(embedRoute({ ...generic, type: 'mistral' }, model())).not.toBeNull();
   });

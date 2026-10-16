@@ -1,5 +1,5 @@
 import { embedAnswer, embedRequest, embedRoute, withCredential } from '../connectors/registry';
-import { ConnectorError, type EmbedPurpose, type Usage } from '../connectors/types';
+import type { EmbedPurpose, Usage } from '../connectors/types';
 import type { Receipt } from '../model/chat';
 import type { Route } from './assignment';
 import type { Credentials } from './credential';
@@ -37,13 +37,7 @@ export async function embedTexts(
   if ((await deps.count(texts)).some((tokens) => tokens > EMBED_TOKENS)) return unsent('too-large');
   const route = embedRoute(connection.value, model);
   if (!route) return unsent('failed');
-  let request;
-  try {
-    request = embedRequest(route, model, texts, as);
-  } catch (error) {
-    if (error instanceof ConnectorError) return unsent('failed');
-    throw error;
-  }
+  const request = embedRequest(route, model, texts, as);
   const { credentials } = deps;
   const picked = await credentials.pool.pick(connection.value);
   if (!picked.ok) return unsent('failed');
