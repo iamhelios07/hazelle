@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import type { ExecutionContext } from 'hono';
-import type { RestorePhase } from '../../contracts/admin';
+import { BEFORE_ARMED, type RestorePhase } from '../../contracts/admin';
 import { serviceReads } from '../account-store';
 import { accountPath, accountRegistry, installSnapshot, materializeSnapshot } from '../db/account-db';
 import { digest, fsyncPath } from '../db/durable';
@@ -31,7 +31,6 @@ import { generationPictures, POOL, readManifest, type Manifest } from './generat
 // operations are then resolved through the live server's own lifecycle code, and every account gets a fresh timeline,
 // so a device holding an older one re-pulls.
 
-const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 const HEADS = 16;
 
 async function verify(generation: string, manifest: Manifest, files: Bucket, source: Bucket) {

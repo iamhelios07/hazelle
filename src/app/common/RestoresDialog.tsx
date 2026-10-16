@@ -1,6 +1,6 @@
 import { History, Play, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase } from '../../contracts/admin';
+import { BEFORE_ARMED, SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase } from '../../contracts/admin';
 import type { ServerError } from '../../contracts/http';
 import type { Report } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
@@ -52,8 +52,6 @@ const REFUSED: Partial<Record<ServerError, string>> = {
   'cannot-cancel': '이미 복원이 적용돼서 취소할 수 없어요. 이어서 하기를 눌러 끝까지 완료해 주세요.',
 };
 
-// Up to targeted nothing has changed, so resuming from there arms the restore, which cannot be taken back.
-const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 const ENDED: RestorePhase[] = ['done', 'failed', 'cancelled'];
 
 // The operation under way while a request runs, read every second. The server runs the whole operation inside the
@@ -129,6 +127,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
       return null;
     });
 
+  // Up to targeted nothing has changed, so resuming from there arms the restore, which cannot be taken back.
   const act = (restore: Restore, action: RestoreAction) =>
     action === 'resume' && BEFORE_ARMED.includes(restore.phase) ? setAsking({ kind: 'resume', restore }) : void go(() => continueRestore(whose, restore.id, action));
 

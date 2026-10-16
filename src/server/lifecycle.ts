@@ -1,5 +1,5 @@
 import type { Context, ExecutionContext } from 'hono';
-import { SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase, type SnapshotKind } from '../contracts/admin';
+import { BEFORE_ARMED, SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase, type SnapshotKind } from '../contracts/admin';
 import type { Life, Unavailable } from './account-store';
 import { landing, RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
@@ -124,8 +124,6 @@ type Operation = {
   verified: number;
   error: string | null;
 };
-
-const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
 // The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the report (null: the account
 // asks itself), ?3 the time asked for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a

@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { RestorePhase } from '../contracts/admin';
+import { BEFORE_ARMED, type RestorePhase } from '../contracts/admin';
 import type { Write } from './account-store';
 import { expireSnapshots } from './backup/snapshots';
 import { snapshotFor, type Stores } from './db/account-db';
@@ -32,7 +32,6 @@ const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const BEFORE: Record<string, string> = { [A]: 'new', [B]: 'b' };
 const AT_TARGET: Record<string, string> = { [A]: 'old' };
-const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
 class Crash extends Error {}
 
