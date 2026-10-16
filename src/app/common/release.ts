@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.11',
+    date: '2026-10-16',
+    lines: [
+      'Risu 프리셋을 가져오면 프리셋의 정규식도 모듈로 만들어 가져온 프롬프트에 켜요. 가져오기를 되돌리면 그 모듈도 함께 휴지통으로 가요.',
+      '모델 설정을 이름 대신 담긴 값으로 보여 줘요. 채팅 모델 메뉴, API 연결, 설정 › 모델에 같은 요약이 보여요.',
+      '설정 이름만 말하던 안내에 그 자리로 바로 가는 버튼이 생겼어요. 번역, 삽화, 장기 기억의 모델 안내는 모델을 정하는 칸으로 바로 열려요.',
+      '로어북이 최대 분량을 넘으면 응답 정보의 로어북 탭에서 빠진 항목과 그 응답이 쓴 최대 분량을 보여 줘요. 분량을 정하는 곳으로 가는 버튼도 있어요.',
+      '앱 곳곳의 문구를 더 쉬운 말로 다듬었어요. 번역, 삽화, 장기 기억을 모아 둔 설정 페이지의 이름은 이제 채팅이에요.',
+    ],
+  },
+  {
     version: 'v0.2.10',
     date: '2026-10-16',
     lines: [
