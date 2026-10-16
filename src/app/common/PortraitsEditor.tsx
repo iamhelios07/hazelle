@@ -42,6 +42,7 @@ export function PortraitsEditor({ owner }: { owner: string }) {
   }
 
   async function removeAll() {
+    await settle();
     const removed = await removeLikeness(store, owner);
     if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
     toast.undoable('삽화 프로필을 삭제했어요.', () => restoreLikeness(store, removed.data));
@@ -79,7 +80,8 @@ export function PortraitsEditor({ owner }: { owner: string }) {
       {portraits.map((portrait, index) => (
         <PortraitFields key={index} owner={owner} index={index} portrait={portrait} onRemove={building ? undefined : () => void remove(index, portrait.name)} />
       ))}
-      {!building && portraits.length < PORTRAITS_MOST && (
+      {/* Not before the first build: a pack holding a likeness gets none built by the next 삽화. */}
+      {stored && !building && portraits.length < PORTRAITS_MOST && (
         <div>
           <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add()}>
             {addOf('인물')}

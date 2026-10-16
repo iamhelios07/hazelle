@@ -75,12 +75,10 @@ export function editPortrait(store: ObjectStore, owner: string, at: PortraitAt, 
   });
 }
 
-// A pack with no profiles yet gets them with this one alone, so the next 삽화 builds none until 다시 만들기.
+// Into profiles already made: a pack given its first portrait by hand would get none built by the next 삽화.
 export function addPortrait(store: ObjectStore, owner: string): Promise<ApiResult<Stored<'likeness'>>> {
   const added: Portrait = { name: '', aliases: [], look: '', outfits: [], artist: '', source: 'user' };
-  const id = likenessId(owner);
-  if (!store.get('likeness', id)) return store.create('likeness', { portraits: [added], at: Date.now(), receipt: null }, { id, parent: owner });
-  return store.update('likeness', id, (current) => (current.portraits.length < PORTRAITS_MOST ? { ...current, portraits: [...current.portraits, added] } : null));
+  return store.update('likeness', likenessId(owner), (current) => (current.portraits.length < PORTRAITS_MOST ? { ...current, portraits: [...current.portraits, added] } : null));
 }
 
 // Both answer what was there, for 되돌리기 (restoreLikeness). A portrait goes until 다시 만들기, since the pack still has
