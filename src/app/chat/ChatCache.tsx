@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { CacheBreak, CacheForecast } from '../../model/cache';
+import type { Route } from '../../runtime/assignment';
+import { modelProfile } from '../../runtime/profiles';
 import { tokens } from '../common/receipt';
+import { MODEL_SETTINGS } from '../common/words';
+import { useStore } from '../session';
 import { SendNote } from '../ui';
 import { partName } from './ChatSent';
 import type { CacheNotes } from './useSendNotes';
@@ -8,7 +12,8 @@ import type { CacheNotes } from './useSendNotes';
 const TITLE = '캐시가 남은 시간';
 export const BROKEN = '깨짐 예상';
 
-export function why(broken: CacheBreak): string {
+// profile: the 모델 설정 the send goes out with, which 'off' names; null for an earlier request, whose 모델 설정 is not kept.
+export function why(broken: CacheBreak, profile: string | null): string {
   switch (broken.kind) {
     case 'model':
       return '직전 요청과 모델이나 연결이 달라요.';
@@ -17,7 +22,7 @@ export function why(broken: CacheBreak): string {
     case 'reasoning':
       return '직전 요청과 추론 설정이 달라요.';
     case 'off':
-      return '이 모델 설정에서는 캐시가 꺼져 있어요.';
+      return profile === null ? '이 모델 설정에서는 캐시가 꺼져 있어요.' : `'${profile}' ${MODEL_SETTINGS}에서는 캐시가 꺼져 있어요.`;
     case 'expired':
       return '캐시 유지 시간이 지났어요.';
     case 'far':
@@ -29,6 +34,11 @@ export function why(broken: CacheBreak): string {
     case 'added':
       return `'${partName(broken.from, broken.role)}' 부분이 추가돼요.`;
   }
+}
+
+export function profileName(store: Parameters<typeof modelProfile>[0], route: Route): string | null {
+  const choice = modelProfile(store, route.model);
+  return choice.kind === 'profile' ? choice.profile.value.name : null;
 }
 
 export const reads = ({ read, of }: CacheForecast) => (read > 0 ? `캐시된 ${tokens(of)} 토큰 중 약 ${tokens(read)} 토큰만 읽어요.` : '캐시를 읽지 못했어요.');
@@ -58,8 +68,10 @@ function useNow(until: number | null) {
 // 캐시 (design §4.4): the time left on what the chat's last call cached, and a warning when sending now would not read
 // it. Pressed, it opens the chat's 캐시 panel.
 export function ChatCache({ cache, onOpen }: { cache: CacheNotes; onOpen: () => void }) {
+  const store = useStore();
   const now = useNow(cache.until);
   if (cache.until === null || now >= cache.until) return null;
-  const against = cache.next?.forecast.against;
-  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={against?.broken ? { words: BROKEN, why: `${why(against.broken)} ${reads(against)}` } : undefined} onClick={onOpen} />;
+  const { next } = cache;
+  const against = next?.forecast.against;
+  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={next && against?.broken ? { words: BROKEN, why: `${why(against.broken, profileName(store, next.route))} ${reads(against)}` } : undefined} onClick={onOpen} />;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { Card } from '../../engine/import/types';
 import type { Block } from '../../model/prompt';
-import { inspectShown, editorOf, NO_PANELS, opened } from './panels';
+import { inspectShown, editorOf, loreBudgetEditor, NO_PANELS, opened } from './panels';
 
 describe('the panels beside the story', () => {
   const editor = { kind: 'character', id: 'c', part: null } as const;
@@ -32,5 +33,15 @@ describe('the editor a cache row opens', () => {
     expect(editorOf({ kind: 'lore', id: 'theirs', name: 'x', slot: 'lorebook' }, prompt, 'c', owner)).toBeNull();
     expect(editorOf({ kind: 'block', id: 'utility:main', name: null, slot: null }, prompt, 'c', owner)).toBeNull();
     expect(editorOf({ kind: 'block', name: null, slot: 'description' }, prompt, null, owner)).toBeNull();
+  });
+});
+
+describe('where the lorebook budget that cut entries is set', () => {
+  const card = (tokenBudget: number | null) => ({ loreSettings: { scanDepth: null, tokenBudget, recursive: null, fullWordMatching: null } }) as Card;
+
+  it('opens the character’s 로어북 part when it holds its own budget, and the account’s otherwise', () => {
+    expect(loreBudgetEditor({ id: 'c', card: card(500) })).toEqual({ kind: 'character', id: 'c', part: 'lore' });
+    expect(loreBudgetEditor({ id: 'c', card: card(null) })).toBeNull();
+    expect(loreBudgetEditor(null)).toBeNull();
   });
 });
