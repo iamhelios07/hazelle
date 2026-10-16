@@ -4,8 +4,8 @@ import { Icon } from '../foundation/Icon';
 import styles from './Disclosure.module.css';
 
 // What is folded is made only while open, so a long list of them stays light.
-export function Disclosure({ label, startOpen = false, children }: { label: string; startOpen?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(startOpen);
+export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
   const id = useId();
   return (
     <div className={styles.disclosure}>

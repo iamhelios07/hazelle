@@ -99,7 +99,7 @@ export function useAnchored(open: boolean, popover: RefObject<HTMLElement | null
   }, [open]);
 }
 
-const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
+export const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 export function useFocusTrap(box: RefObject<HTMLElement | null>) {
   useEffect(() => {

@@ -1,6 +1,6 @@
 // One stretch of a tag field and the weight NovelAI reads it with; null for the syntax itself. The pieces joined give
 // back the text exactly, as markup's do.
-export type WeightPiece = { text: string; weight: number | null };
+type WeightPiece = { text: string; weight: number | null };
 
 // As docs.novelai.net/en/image/strengthening-weakening states it: each { multiplies by 1.05 and each [ divides, nested
 // ones compound; `1.5::` sets a weight (V4+, below 0 on V4.5+) until a bare `::`, which also closes every open bracket.

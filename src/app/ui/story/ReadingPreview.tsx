@@ -6,8 +6,7 @@ import { StoryMessage } from './StoryMessage';
 
 export type PreviewRow = { name: string; mine: boolean; html: string };
 
-// Sample messages drawn as the chat draws them, under the reading settings given. The reading width is the chat
-// column's, so it does not show here.
+// The reading width is the chat column's, so it does not show here.
 export function ReadingPreview({ label, reading, rows }: { label: string; reading: Reading; rows: PreviewRow[] }) {
   const scope = readingScope(reading);
   return (

@@ -46,15 +46,6 @@
   gap: var(--space-12);
 }
 
-.sticky {
-  position: sticky;
-  bottom: 0;
-  margin-bottom: calc(var(--space-32) * -1);
-  padding: var(--space-16) 0 var(--space-24);
-  border-top: var(--border-thin) solid var(--color-divider);
-  background: var(--color-bg);
-}
-
 .fill .body {
   flex-grow: 1;
 }
@@ -127,10 +118,6 @@
 
   .actions {
     margin-top: var(--space-8);
-  }
-
-  .sticky {
-    margin-bottom: calc(var(--space-32) * -1);
   }
 }
 

@@ -155,7 +155,3 @@
 .accent {
   background: var(--color-accent);
 }
-
-.warn {
-  background: var(--color-warn);
-}

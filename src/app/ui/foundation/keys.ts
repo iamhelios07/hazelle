@@ -17,7 +17,6 @@ const sameKey = (event: Press, key: string) =>
 const matches = (event: Press, { key, shift, mod }: Chord) =>
   sameKey(event, key) && (shift === undefined || shift === event.shiftKey) && (mod === undefined || mod === (event.ctrlKey || event.metaKey));
 
-// Which of the chords was pressed, or -1.
 export function pressedKey(event: Press, chords: readonly Chord[]): number {
   if (isComposing(event.nativeEvent)) return -1;
   return chords.findIndex((chord) => matches(event, chord));

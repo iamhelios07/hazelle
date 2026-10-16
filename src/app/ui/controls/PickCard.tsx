@@ -18,7 +18,6 @@ type Props = {
   onClick: () => void;
 };
 
-// A choice that leads its page, as a card: what it is, what is chosen and where that comes from.
 export function PickCard({ label, value, note, help, tone = 'default', popup, expanded, ref, onClick }: Props) {
   // The ⓘ is a button of its own, so it stands over the card's corner, not inside the card's button.
   return (

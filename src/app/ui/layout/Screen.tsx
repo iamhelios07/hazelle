@@ -8,7 +8,6 @@ type Props = {
   // page: 설정's pages, which use the column beside the settings sidebar.
   width?: 'narrow' | 'form' | 'wide' | 'page';
   actions?: ReactNode;
-  stickyActions?: boolean;
   // One child takes the rest of the window's height and scrolls itself.
   fill?: boolean;
   // A column beside the body once the screen is wide enough for both; above the body when it is not.
@@ -17,7 +16,7 @@ type Props = {
   children: ReactNode;
 };
 
-export function Screen({ top, align = 'start', width = 'narrow', actions, stickyActions = false, fill = false, aside, onSubmit, children }: Props) {
+export function Screen({ top, align = 'start', width = 'narrow', actions, fill = false, aside, onSubmit, children }: Props) {
   const pane = usePane();
   // A page has one main landmark; beside a list, a screen is one section of it.
   const Root = pane ? 'section' : 'main';
@@ -32,7 +31,7 @@ export function Screen({ top, align = 'start', width = 'narrow', actions, sticky
       ) : (
         <div className={styles.body}>{children}</div>
       )}
-      {actions && <div className={stickyActions ? `${styles.actions} ${styles.sticky}` : styles.actions}>{actions}</div>}
+      {actions && <div className={styles.actions}>{actions}</div>}
     </>
   );
   return (

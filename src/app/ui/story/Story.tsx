@@ -117,7 +117,6 @@ function groundRules(rules: CSSRuleList) {
 }
 
 let base: CSSStyleSheet | null = null;
-// The sheets a story's root holds besides the app's own.
 export const botSheets = (shadow: ShadowRoot) => shadow.adoptedStyleSheets.filter((sheet) => sheet !== base);
 const sheets = new Map<string, CSSStyleSheet>();
 function sheetFor(css: string, veiled: boolean): CSSStyleSheet {
@@ -152,7 +151,6 @@ function coverFor(source: string, what: Veiled): HTMLButtonElement {
   return button;
 }
 
-// The app's own source a video plays: its src, else its first source child's.
 const videoSource = (video: Element) => [video, ...video.querySelectorAll('source')].map((element) => element.getAttribute('src') ?? '').find((source) => OWN_SOURCE.test(source)) ?? null;
 
 // The one mark inlaid left: a paragraph of its own becomes the slot, a mark inside the bot's HTML gives the slot its

@@ -71,7 +71,7 @@ export function Rail({ fold, actions, children }: RailProps) {
   );
 }
 
-type FaceButtonProps = { label: string; current?: boolean; dot?: 'accent' | 'warn'; onClick: () => void; children: ReactNode };
+type FaceButtonProps = { label: string; current?: boolean; dot?: 'accent'; onClick: () => void; children: ReactNode };
 
 export function FaceButton({ label, current = false, dot, onClick, children }: FaceButtonProps) {
   return (
