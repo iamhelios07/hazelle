@@ -13,6 +13,7 @@ import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
+import type { PromptPane } from '../shell/routes';
 import { typing, useShortcut } from '../shortcuts';
 import { useOwnUndo, useToast } from '../toast';
 import { Button, Callout, Divider, MenuHeading, MenuItem, NavRow, Outline, Row, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
@@ -51,9 +52,9 @@ import { withParticle } from '../common/particles';
 import { lineTitle } from '../common/toggleWords';
 import { EMPTY_USE, usePromptUse } from '../common/usePromptUse';
 
-const MODEL = 'model';
-const TOGGLES = 'toggles';
-const PICTURE = 'picture';
+const MODEL = 'model' satisfies PromptPane;
+const TOGGLES = 'toggles' satisfies PromptPane;
+const PICTURE = 'picture' satisfies PromptPane;
 const SORT_WORDS = {
   conversation: { default: '기본 프롬프트', makeDefault: '새 채팅을 시작할 때 이 프롬프트를 써요' },
   translate: { default: '기본 번역 프롬프트', makeDefault: '번역 프롬프트를 따로 선택하지 않은 채팅에 써요' },
@@ -61,8 +62,6 @@ const SORT_WORDS = {
   illustrate: { default: '기본 삽화 프롬프트', makeDefault: '삽화 프롬프트를 따로 선택하지 않은 채팅에 써요' },
 } satisfies Record<PromptSort, { default: string; makeDefault: string }>;
 const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
-
-type Pane = 'toggles' | null;
 
 const CACHE_WORDS = { set: '여기까지 캐시', auto: '자동 캐시' } as const;
 const UNDO = { did: '되돌렸어요', failed: '되돌리지 못했어요' };
@@ -72,9 +71,9 @@ type Props = {
   stored: Stored<'prompt'>;
   // The caller decides, since a side panel is narrow on any screen.
   layout: 'split' | 'drill';
-  // The 토글 pane is open: a page keeps it in its address, a panel in its own state.
-  pane: Pane;
-  onPane: (pane: Pane) => void;
+  // The pane open in place of a block, drilled into: a page keeps it in its address, a panel in its own state.
+  pane: PromptPane | null;
+  onPane: (pane: PromptPane | null) => void;
   // The block it opens at, drilled into; read once, as it mounts.
   block?: string;
   // Where the 토글 pane goes back to when it was opened from outside the editor; the outline is a link under its head.
@@ -110,12 +109,15 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   };
 
   const firstText = () => latest.current.blocks.find(isText)?.id ?? MODEL;
-  const [picked, setPicked] = useState<string>(() => openAt ?? firstText());
-  const [drilled, setDrilled] = useState(pane === TOGGLES || openAt !== undefined);
+  // A block only: the pane open in its place is the pane prop's.
+  const [picked, setPicked] = useState(openAt);
+  const [drilled, setDrilled] = useState(openAt !== undefined);
   const [reordering, setReordering] = useState(false);
   const [addingToggle, setAddingToggle] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const open = pane === TOGGLES ? TOGGLES : picked === MODEL || picked === PICTURE || draft.blocks.some((block) => block.id === picked) ? picked : firstText();
+  // 이미지 is an illustration prompt's only; an address naming it on another opens as if it named none.
+  const shownPane = pane === PICTURE && sort !== 'illustrate' ? null : pane;
+  const open = shownPane ?? (picked !== undefined && draft.blocks.some((block) => block.id === picked) ? picked : firstText());
   const index = draft.blocks.findIndex((block) => block.id === open);
   const block = draft.blocks[index];
 
@@ -139,7 +141,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
 
   const pick = (id: string) => {
     if (!split) setDrilled(true);
-    if (id === TOGGLES) return onPane(TOGGLES);
+    if (id === MODEL || id === PICTURE || id === TOGGLES) return onPane(id);
     setPicked(id);
     if (pane) onPane(null);
   };
@@ -193,7 +195,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
     const next = latest.current.blocks[at + 1] ?? latest.current.blocks[at - 1];
     const step = perform(removeBlock(gone, at));
     if (!step) return;
-    if (open === id) setPicked(next?.id ?? MODEL);
+    if (open === id && next) setPicked(next.id);
     undoable(`'${blockTitle(gone).title}' 블록을 뺐어요.`, () => undo(step));
   };
   const mark = (target: TextBlock, value: TextBlock['mark']) => {
@@ -397,7 +399,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
     );
 
   const status = save.status ? SAVE_STATUS[save.status] : undefined;
-  if (!split && drilled) {
+  if (!split && (drilled || shownPane !== null)) {
     const title = open === MODEL ? '모델' : open === PICTURE ? '이미지' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
     if (open === TOGGLES && paneBack) {
       const toOutline = (

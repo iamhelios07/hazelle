@@ -10,6 +10,7 @@ import { ACTS, addOf } from '../common/acts';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, MemorySplit, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
+import type { PromptDoor } from '../common/TaskPrompt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
 import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, PAGES, RESET, scopeTag, taskModelHelp } from '../common/words';
@@ -49,7 +50,7 @@ type Props = Pick<OpenChat, 'item' | 'messages' | 'busy'> & {
   onClose: () => void;
   onTool: (id: string) => void;
   onEditPrompt: (() => void) | undefined;
-  onEditTaskPrompt: (id: string | null) => void;
+  onEditTaskPrompt: (door: PromptDoor) => void;
   onRecord: (id: string | null) => void;
   renderRecord: (record: Omit<ComponentProps<typeof ChatMemoryRecord>, 'actions'>) => ReactNode;
 };
@@ -227,7 +228,7 @@ function MemoryFill({ view }: { view: MemoryView }) {
   );
 }
 
-function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (id: string | null) => void }) {
+function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (door: PromptDoor) => void }) {
   const store = useStore();
   const writer = memoryWriter(store, chat);
   const prompt = memoryPrompt(store);
@@ -236,7 +237,7 @@ function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (id: stri
       label="기억 모델"
       help={{
         text: taskModelHelp('기억'),
-        open: prompt.kind === 'prompt' ? { label: opens('기억 프롬프트'), onClick: () => onEditPrompt(prompt.prompt.id) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
+        open: prompt.kind === 'prompt' ? { label: opens('기억 프롬프트'), onClick: () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
       }}
       sub={prompt.kind === 'prompt' && !prompt.prompt.value.model ? follows(MODEL_ROLES.aux) : undefined}
       control={<Text variant="note">{'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}</Text>}

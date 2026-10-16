@@ -6,6 +6,8 @@ import type { Shelf } from '../../model/library';
 
 const ACCOUNT_SECTIONS = ['notices', 'news'] as const;
 export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
+const PROMPT_PANES = ['toggles', 'model', 'picture'] as const;
+export type PromptPane = (typeof PROMPT_PANES)[number];
 
 // These paths are what a reload, a bookmark and the browser's back button land on, so an existing one never changes.
 export type Route =
@@ -22,12 +24,13 @@ export type Route =
   // '' when there was none.
   | { kind: 'connect-direct'; address: string }
   | { kind: 'connection'; id: string }
-  // pane opens the editor on its 토글 pane, which the chat's toggle panel links to; a module's, its 토글 page.
+  // pane: the prompt editor's pane that is open, which a door to a prompt's 토글, 모델 or 이미지 names; null, a block.
   | { kind: 'prompts' }
-  | { kind: 'prompt'; id: string; pane: 'toggles' | null }
+  | { kind: 'prompt'; id: string; pane: PromptPane | null }
   | { kind: 'personas' }
   | { kind: 'persona'; id: string }
   | { kind: 'modules' }
+  // pane opens a module on its 토글 page, which the chat's toggle panel links to.
   | { kind: 'module'; id: string; pane: 'toggles' | null }
   | { kind: 'tool-page'; module: string }
   | { kind: 'models' }
@@ -103,7 +106,8 @@ export function parseRoute(at: string): Route {
   if (top === 'prompts') {
     if (id === undefined) return { kind: 'prompts' };
     if (!ID.test(id) || sub !== undefined) return HOME;
-    return { kind: 'prompt', id, pane: params.get('pane') === 'toggles' ? 'toggles' : null };
+    const pane = params.get('pane');
+    return { kind: 'prompt', id, pane: PROMPT_PANES.find((each) => each === pane) ?? null };
   }
   if (top === 'personas' && sub === undefined) {
     if (id === undefined) return { kind: 'personas' };

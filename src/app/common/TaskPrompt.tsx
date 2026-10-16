@@ -1,10 +1,13 @@
 import { ofSort, translationPrompt, illustrationPrompt } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
+import type { PromptPane } from '../shell/routes';
 import { defaultMark, DELETED_PROMPT, follows } from './words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag } from '../ui';
 type NamedCharacter = { name: string } | null;
 type Reader = Pick<ObjectStore, 'get'>;
+// A prompt and the editor pane a door names; null, the prompt list.
+export type PromptDoor = { id: string; pane: PromptPane | null } | null;
 
 export const appliesTo = (card: NamedCharacter, own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '캐릭터별 설정이 없는 모든 채팅에 적용돼요.');
 
@@ -21,8 +24,8 @@ export function PerCharacter({ card, own, onChange }: { card: NamedCharacter; ow
 }
 
 const TASKS = {
-  translate: { noun: '번역', setting: 'translatePrompt', choose: translationPrompt },
-  illustrate: { noun: '삽화', setting: 'illustratePrompt', choose: illustrationPrompt },
+  translate: { noun: '번역', setting: 'translatePrompt', choose: translationPrompt, pane: null },
+  illustrate: { noun: '삽화', setting: 'illustratePrompt', choose: illustrationPrompt, pane: 'picture' },
 } as const;
 
 // The prompt a task's switches run, by name; a deleted or absent one is named as such, never as another prompt.
@@ -34,8 +37,8 @@ export function chosenPrompt(store: Reader, task: keyof typeof TASKS, chosen: st
 }
 
 // Without its own choice the switches follow the task's default prompt live.
-export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }: { task: keyof typeof TASKS; chosen: string | undefined; heading: string; opens: 'up' | 'down'; onPick: (prompt: string | undefined) => void; onEdit: (id: string | null) => void }) {
-  const { noun, setting } = TASKS[task];
+export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }: { task: keyof typeof TASKS; chosen: string | undefined; heading: string; opens: 'up' | 'down'; onPick: (prompt: string | undefined) => void; onEdit: (door: PromptDoor) => void }) {
+  const { noun, setting, pane } = TASKS[task];
   const { store } = useSession();
   const settings = useSettings();
   const prompts = usePrompts()
@@ -56,7 +59,7 @@ export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }:
         return <MenuItem key={item.id} label={item.value.name} tag={mark && <Tag tone="accent">{mark}</Tag>} checked={item.id === chosen} onClick={() => onPick(item.id)} />;
       })}
       <Divider variant="menu" />
-      {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => onEdit(choice.prompt.id)} />}
+      {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => onEdit({ id: choice.prompt.id, pane })} />}
       <MenuItem label="프롬프트 관리…" onClick={() => onEdit(null)} />
     </Menu>
   );
