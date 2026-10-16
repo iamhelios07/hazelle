@@ -202,7 +202,7 @@ export type ModuleContribution = {
   kind: 'character' | 'module';
   name: string;
   attached: PackAttachment[];
-  lore: (NonNullable<Assembled['lore']>[number] & { tokens: number | null; parts: { index: number; tokens: number }[] })[];
+  lore: (NonNullable<Assembled['lore']>[number] & { parts: { index: number; tokens: number }[] })[];
   regex: Record<'input' | 'output' | 'process' | 'display', number>;
   triggers: { lua: number; blocks: number };
   toggles: Toggle[];
@@ -233,7 +233,6 @@ export function moduleContributions({ store }: Reader, chat: Chat, preview: Asse
       attached: pack.module ? attachments.filter(({ modules }) => modules.includes(pack.id)).map(({ kind, id }) => ({ kind, id, own: false })) : [{ kind: 'character', id: pack.id, own: true }],
       lore: (preview.lore ?? []).filter(({ id }) => store.get('lore', id)?.parent === pack.id).map((entry) => ({
         ...entry,
-        tokens: 'tokens' in entry.fate ? entry.fate.tokens : null,
         parts: preview.parts.flatMap(({ from, tokens }, index) => (from.kind === 'lore' || from.kind === 'depth') && from.id === entry.id ? [{ index, tokens }] : []),
       })),
       regex,
