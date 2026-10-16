@@ -420,8 +420,7 @@ export class Scripts {
   }
 
   pageContext(chat: string, module: string, signal?: AbortSignal): { scope: ChatScope; host: Host } | null {
-    const stored = live(this.session.store.get('chat', chat));
-    if (this.closing.signal.aborted || !stored || !toolsOf(this.session.store, stored.value).some((unit) => unit.module === module)) return null;
+    if (this.closing.signal.aborted || !this.unit(chat, module)) return null;
     const scope = this.scope(chat);
     return { scope, host: this.host(chat, scope, signal) };
   }
