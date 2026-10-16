@@ -9,8 +9,8 @@ export function ReadingDialog({ onClose }: { onClose: () => void }) {
     <Dialog title="읽기 설정" onClose={onClose}>
       <Stack gap="related">
         <HidePicturesRow />
-        <ReadingRows  />
-        <ReplyRow  />
+        <ReadingRows />
+        <ReplyRow />
         <Row kind="actions">
           <Button variant="link" size="sm" onClick={reset}>
             {RESET}
