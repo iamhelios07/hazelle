@@ -1,16 +1,18 @@
-import { useRef, useState, type CSSProperties, type Key, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type Key, type PointerEvent, type ReactNode } from 'react';
 import styles from './ToastStack.module.css';
 
 type Props = {
   // Newest first: the first is in front, and the others wait behind it until the stack is pointed at. onClose: a
   // finger sliding the notice sideways puts it away.
   items: { key: Key; toast: ReactNode; onClose?: () => void }[];
-  // Held, the stack is open and its notices' time stopped; the caller owns it, since it outlives the stack.
+  // Held while a mouse is over the stack or the focus is in it: open, its notices' time stopped. The caller keeps it,
+  // since the time it stops outlives the stack.
   held: boolean;
   onHold: (held: boolean) => void;
 };
 
 export function ToastStack({ items, held: open, onHold: hold }: Props) {
+  const holding = useHold(open, hold);
   const [heights, setHeights] = useState<ReadonlyMap<Key, number>>(() => new Map());
   // One lasting ref per notice: a new one each render would detach and measure again, and render again, forever. It
   // stays after a detach too, which StrictMode runs on every mount; the refs of notices gone are dropped here.
@@ -45,10 +47,7 @@ export function ToastStack({ items, held: open, onHold: hold }: Props) {
     <div
       className={open ? `${styles.stack} ${styles.open}` : styles.stack}
       style={{ '--front': `${front}px`, '--total': `${total}px`, '--count': items.length } as CSSProperties}
-      onPointerEnter={(event) => event.pointerType === 'mouse' && hold(true)}
-      onPointerLeave={(event) => event.pointerType === 'mouse' && hold(false)}
-      onFocus={() => hold(true)}
-      onBlur={(event) => event.currentTarget.contains(event.relatedTarget) || hold(false)}
+      {...holding}
     >
       {items.map(({ key, toast, onClose }, index) => (
         <div
@@ -64,6 +63,34 @@ export function ToastStack({ items, held: open, onHold: hold }: Props) {
       ))}
     </div>
   );
+}
+
+export function useHold(held: boolean, hold: (held: boolean) => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  const pointed = useRef(false);
+  const focused = () => ref.current?.contains(document.activeElement) ?? false;
+  // A notice its own button took away takes the focus with it, and no blur reaches the stack: React drops the events of
+  // a node it detaches. The last notice leaving takes the pointer too, with no pointer leave. So both are read again
+  // after every render.
+  useEffect(() => {
+    if (!ref.current) pointed.current = false;
+    if (held && !pointed.current && !focused()) hold(false);
+  });
+  return {
+    ref,
+    onPointerEnter: (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      pointed.current = true;
+      hold(true);
+    },
+    onPointerLeave: (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      pointed.current = false;
+      hold(focused());
+    },
+    onFocus: () => hold(true),
+    onBlur: (event: FocusEvent) => event.currentTarget.contains(event.relatedTarget) || hold(pointed.current),
+  };
 }
 
 // Past this a finger's move is a slide, not a press: 되돌리기 under it is not pressed, and a vertical move is left to
