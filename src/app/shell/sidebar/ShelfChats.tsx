@@ -11,16 +11,16 @@ import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useWritingChats } from '../../session';
 import { Button, Empty, ItemRow, NavRow, SideTitle, Sidebar, Viewport } from '../../ui';
 import { navigate, useRoute } from '../router';
+import { HOME } from '../routes';
 import { SettingsButton } from './SettingsButton';
 
 type Props = {
   page: boolean;
   shelf: Shelf<ChatSummary>;
-  onUp: () => void;
 };
 
 // Keyed by its character, so the search starts empty in each.
-export function ShelfChats({ page, shelf, onUp }: Props) {
+export function ShelfChats({ page, shelf }: Props) {
   const { field, found, none } = useSearch(shelf.chats, '채팅 검색', (item) => [item.title, item.preview ?? '']);
   const writing = useWritingChats();
   const { pickChats } = useImport();
@@ -35,7 +35,7 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
       actions={
         <>
           {/* Wide screens go back by the rail's 캐릭터 둘러보기. */}
-          {page && <NavRow icon={ChevronLeft} label="모든 캐릭터" onClick={onUp} />}
+          {page && <NavRow icon={ChevronLeft} label="모든 캐릭터" onClick={() => navigate(HOME)} />}
           <SideTitle
             avatar={<ShelfFace shelf={shelf} />}
             name={shelfName(shelf)}
