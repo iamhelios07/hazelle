@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
-import type { MascotFailure } from '../../runtime/mascot';
 import { describeMascotFailure } from '../common/failure';
 import { useChildren, useCommenting } from '../session';
 import { useToast } from '../toast';
 
-// Said once, though the chat is left and opened again.
-const told = new WeakSet<MascotFailure>();
+// A failure is said once per chat on this page, though every later reply fails the same way (a model that cannot
+// answer the format): the line is a garnish, and a toast each turn would cover the composer.
+const told = new Set<string>();
 // Fresh (design §6.11: the mark sways until opened once): written after this page loaded and not opened since.
 // Page memory only, so a reload counts every line as seen.
 const loaded = Date.now();
@@ -31,8 +31,8 @@ export function useChatRemarks(chatId: string, id: string | null) {
 
   useEffect(() => {
     for (const entry of commenting.values()) {
-      if (entry.chat !== chatId || !entry.failure || told.has(entry.failure)) continue;
-      told.add(entry.failure);
+      if (entry.chat !== chatId || !entry.failure || told.has(chatId)) continue;
+      told.add(chatId);
       toast.error(describeMascotFailure(entry.failure));
     }
   }, [commenting]);
