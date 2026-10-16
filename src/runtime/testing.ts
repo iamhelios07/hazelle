@@ -169,7 +169,7 @@ export function testServer() {
       const { accountId, vaultKey } = await harness.account();
       const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { tools: typeof tools === 'function' ? tools : tools && (() => ({ ...tools, warm: async () => {}, menus: () => [], page: () => () => {} })), lua: async () => {
         const machine = await lua;
-        return { run: (chat, units, scope, event, host) => runEvent(machine, chat, units, scope, event, host), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
+        return { run: (chat, units, scope, event, host, lane) => runEvent(machine, chat, units, scope, event, host, lane), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
       } });
       if (!opened.ok) throw new Error(opened.error);
       try {

@@ -49,7 +49,7 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
   const { id } = data;
   lua
     .then<ScriptOutcome | DisplayBatch | null>(async (machine) => {
-      if (data.kind === 'run') return runEvent(machine, data.owner, data.triggers, eventScope!, data.event, host(id));
+      if (data.kind === 'run') return runEvent(machine, data.owner, data.triggers, eventScope!, data.event, host(id), data.lane);
       if (data.kind === 'display') return machine.display(data.owner, data.revision, data.size);
       const previous = displays.get(data.owner)?.snapshot;
       const { install } = data;

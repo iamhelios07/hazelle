@@ -23,7 +23,7 @@ import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 import { evaluateChat } from './chat-context';
-import { SCRIPT_LOG_LIMITS, triggersOf } from './scripts';
+import { NOT_REHEARSED, SCRIPT_LOG_LIMITS, triggersOf } from './scripts';
 import type { TurnContext } from './turn-context';
 import { takeTurn } from './turn';
 
@@ -813,3 +813,48 @@ it('keeps bounded per-chat hook logs with Lua output and writes, notifies reader
     expect(session.scripts.log(chat)).toEqual({ entries: [], omitted: 0 });
   } finally { stop(); lease.release(); }
 }));
+
+describe('a rehearsal of the pre-send scripts', () => {
+  it('saves nothing and keeps no page log, handing back what each stage did and the request as it would be', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(
+        session,
+        `function onInput(id) setChatVar(id, 'order', 'input') end
+        listenEdit('editInput', function(id, value) return value .. ' [' .. getChatVar(id, 'order') .. ']' end)
+        function onStart(id)
+          setChatVar(id, 'turn', getChat(id, -1).data)
+          addChat(id, 'char', 'narration')
+          upsertLocalLoreBook(id, 'Gate', 'the gate is shut', { alwaysActive = true })
+        end
+        listenEdit('editRequest', function(id, value) value[#value + 1] = { role = 'system', content = 'from lua' } return value end)`,
+      );
+      const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
+      const entries = session.store.children('entry', chat).length;
+      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      expect(session.store.children('entry', chat)).toHaveLength(entries);
+      expect(session.store.children('lore', chat)).toEqual([]);
+      expect(messages()).toHaveLength(1);
+      expect(session.scripts.log(chat).entries).toEqual([]);
+      expect(rehearsal.trace.entries.map(({ stage }) => stage)).toEqual(['onInput', 'editInput', 'onStart', 'editRequest']);
+      expect(rehearsal).toMatchObject({ stopped: null, input: '안녕 [input]', changed: true });
+      expect(rehearsal.scope.messages.slice(-2).map(({ text, before }) => [text, before])).toEqual([['안녕 [input]', [['order', 'input']]], ['narration', undefined]]);
+      expect(rehearsal.scope.pending).toEqual([['turn', '안녕 [input]']]);
+      expect(rehearsal.scope.lore.map(({ parent, value }) => [parent, value.name])).toContainEqual([chat, 'Gate']);
+      const after = rehearsal.prompt!;
+      if ('kind' in after) throw new Error(after.kind);
+      expect(JSON.stringify(after.messages)).toContain('narration');
+      expect(JSON.stringify(after.messages)).toContain('the gate is shut');
+      expect(rehearsal.request!.at(-1)).toEqual({ role: 'system', content: 'from lua' });
+    }));
+
+  it('calls no model, answering the script with a refusal and counting the call', () =>
+    server.withSession(async (session) => {
+      const { chat } = await chatWith(session, `onStart = async(function(id) setChatVar(id, 'answer', LLM(id, { { role = 'user', content = 'hi' } }).result) end)`);
+      const log = stubRelay(() => saying('never'));
+      const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
+      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      expect(log).toHaveLength(0);
+      expect(rehearsal.calls).toEqual({ model: 1, embed: 0, background: 0 });
+      expect(rehearsal.scope.pending).toEqual([['answer', NOT_REHEARSED]]);
+    }));
+});

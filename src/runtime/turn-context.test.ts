@@ -53,7 +53,7 @@ it('prepares the preview without credentials for every chat connector, with the 
   expect(previewRequest(sending)!.url).not.toContain('PATH.[SECRET]$');
 }));
 
-it('lists only the post-Enter work selected by the real translation, trigger, tool and retrieval facts', () => server.withSession(async (session) => {
+it('lists only the post-Enter work selected by the real translation, tool and retrieval facts, and no script hook', () => server.withSession(async (session) => {
   await answerable(session);
   const card = blankCard('bot');
   card.triggers = [{ id: 'live', kind: 'lua', name: 'live', code: 'function onStart(id) end' }, { id: 'off', kind: 'lua', name: 'off', code: 'x()', off: true }];
@@ -65,21 +65,19 @@ it('lists only the post-Enter work selected by the real translation, trigger, to
   const turn = gatherTurn(session, chat, { kind: 'send', text: 'question' });
   if (!turn || 'kind' in turn) throw new Error('not sendable');
   await setTranslate(session.store, null, { input: true });
-  expect(afterEnter(session, chat, turn).map((item) => item.kind === 'hook' ? item.stage : item.kind)).toEqual(['input-translation', 'onInput', 'editInput', 'onStart', 'editRequest']);
+  expect(afterEnter(session, chat, turn).map(({ kind }) => kind)).toEqual(['input-translation']);
   await setTranslate(session.store, null, { reverse: true });
   expect(afterEnter(session, chat, turn).some(({ kind }) => kind === 'input-translation')).toBe(false);
   await setDefaultModel(session.store, 'embed', { connection: turn.route.connection.id, model: turn.route.model.id });
   await session.store.create('vectors', { model: turn.route.model.id, items: { record: { at: 0, data: 'AQ==', scale: 1 } } }, { id: vectorsId(chat), parent: chat });
   turn.memory = { kind: 'built-in', memory: emptyMemory(), budget: 100, shown: [], found: [] };
-  expect(afterEnter(session, chat, turn).map((item) => item.kind === 'hook' ? item.stage : item.kind)).toEqual(['onInput', 'editInput', 'onStart', 'retrieval', 'editRequest']);
+  expect(afterEnter(session, chat, turn).map(({ kind }) => kind)).toEqual(['retrieval']);
   const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name test\n//@author tester'));
   if (!parsed.ok) throw new Error('fixture');
   const tool = await importTool(session.store, session.files, parsed.tool);
   if (!tool.ok) throw new Error(tool.error);
   await setModuleAlways(session.store, tool.data.id, true);
   expect(afterEnter(session, chat, turn)).toContainEqual({ kind: 'tools', modules: [tool.data.id] });
-  turn.said = null;
-  expect(afterEnter(session, chat, turn).filter((item) => item.kind === 'hook').map((item) => item.stage)).toEqual(['onStart', 'editRequest']);
   turn.memory = null;
   expect(afterEnter(session, chat, turn).some(({ kind }) => kind === 'retrieval')).toBe(false);
 }));
