@@ -78,8 +78,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
           ) : panel?.kind === 'info' ? (
             <ChatInfo id={id} shelf={shelf} messages={chat.messages} infoPick={chat.infoPick} tab={panel.tab} onTab={actions.switchInfoTab} onPick={actions.pickInfo} onRecord={chat.features.memory ? actions.memory : undefined} onEdit={actions.side} onClose={actions.closePanel} />
           ) : panel?.kind === 'memory' ? (
-            id && <ChatMemory
-              id={id}
+            chat.item && <ChatMemory
               record={panel.record}
               item={chat.item}
               messages={chat.messages}
@@ -92,7 +91,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
               renderRecord={(record) => <ChatMemoryRecord {...record} actions={actions} />}
             />
           ) : panel?.kind === 'bookmarks' ? (
-            id && <ChatBookmarks id={id} item={chat.item} messages={chat.messages} texts={chat.texts} names={speakers(chat)} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
+            chat.item && <ChatBookmarks item={chat.item} messages={chat.messages} texts={chat.texts} names={speakers(chat)} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
           ) : panel?.kind === 'lore' ? (
             id && <ChatLore id={id} onClose={actions.closePanel} />
           ) : panel?.kind === 'tool' ? (

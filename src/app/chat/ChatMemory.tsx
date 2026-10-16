@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import type { Chat } from '../../model/chat';
+import type { Chat, ChatItem } from '../../model/chat';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
 import { embedModel } from '../../runtime/assignment';
 import { memoryOwner, memorySetup } from '../../runtime/memory-read';
@@ -44,8 +44,8 @@ function useView(id: string, busy: boolean, inputs: unknown[]): MemoryView | nul
 
 // 장기 기억 (design §6.2). Without memoryView's answer nothing is said about what is sent: no status, no tokens, no missing
 // slot.
-type Props = Pick<OpenChat, 'item' | 'messages' | 'busy'> & {
-  id: string;
+type Props = Pick<OpenChat, 'messages' | 'busy'> & {
+  item: ChatItem;
   record: string | null;
   onClose: () => void;
   onTool: (id: string) => void;
@@ -55,7 +55,8 @@ type Props = Pick<OpenChat, 'item' | 'messages' | 'busy'> & {
   renderRecord: (record: Omit<ComponentProps<typeof ChatMemoryRecord>, 'actions'>) => ReactNode;
 };
 
-export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, onEditPrompt, onEditTaskPrompt, onRecord, renderRecord }: Props) {
+export function ChatMemory({ record, item, messages, busy, onClose, onTool, onEditPrompt, onEditTaskPrompt, onRecord, renderRecord }: Props) {
+  const { id, chat: own } = item;
   const session = useSession();
   const { store } = session;
   const toast = useToast();
@@ -65,8 +66,6 @@ export function ChatMemory({ id, record, item, messages, busy, onClose, onTool, 
   const { running, failed, chapterFailed, indexing, indexFailed } = useRemembering();
   const [messagePositions] = useState(() => new MessagePositions());
   const positions = messagePositions.read(messages);
-  // The panel opens only from a saved chat, whose item is there.
-  const own = item!.chat;
   const setup = memorySetup(store, own);
   // A tool holding the slot leaves these records as they are, readable, until the slot is theirs again (design §6.10).
   const owner = memoryOwner(store, own);
