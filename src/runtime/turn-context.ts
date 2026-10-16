@@ -203,6 +203,7 @@ export type ModuleContribution = {
   name: string;
   attached: PackAttachment[];
   lore: (NonNullable<Assembled['lore']>[number] & { parts: { index: number; tokens: number }[] })[];
+  silent: NonNullable<Assembled['silent']>;
   invalidKeys: { entry: string; name: string; keys: string[] }[];
   regex: Record<'input' | 'output' | 'process' | 'display', number>;
   triggers: { lua: number; blocks: number };
@@ -236,6 +237,7 @@ export function moduleContributions({ store }: Reader, chat: Chat, preview: Asse
         ...entry,
         parts: preview.parts.flatMap(({ from, tokens }, index) => (from.kind === 'lore' || from.kind === 'depth') && from.id === entry.id ? [{ index, tokens }] : []),
       })),
+      silent: (preview.silent ?? []).filter(({ id }) => store.get('lore', id)?.parent === pack.id),
       invalidKeys: preview.invalidKeys.filter(({ entry }) => store.get('lore', entry)?.parent === pack.id).reduce<ModuleContribution['invalidKeys']>((list, { entry, name, key }) => {
         const held = list.find((each) => each.entry === entry);
         if (held) held.keys.push(key);

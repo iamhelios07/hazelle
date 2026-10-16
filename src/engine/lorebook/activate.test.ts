@@ -200,6 +200,31 @@ describe('activate', () => {
     expect(ids(run(entries, chat('a', 'b', 'c'), { greeting: 0 }))).toEqual(['even', 'late']);
   });
 
+  it('lists in lorebook order each entry that did not fire with the first reason, leaving out those that matched and dropped', () => {
+    const entries = [
+      lore('fires', { keys: ['a'] }),
+      lore('off', { constant: true, enabled: false }),
+      lore('never', { constant: true, content: '@@dont_activate\nnever' }),
+      lore('once', { constant: true, content: '@@dont_activate_after_match\n@@activate_only_after 4\nonce' }),
+      lore('late', { constant: true, content: '@@activate_only_after 4\nlate' }),
+      lore('even', { constant: true, content: '@@activate_only_every 2\neven' }),
+      lore('second', { constant: true, content: '@@is_greeting 2\nsecond' }),
+      lore('keyless', {}),
+      lore('missing', { keys: ['zebra'] }),
+      lore('unlucky', { keys: ['a'], content: '@@probability 0\nunlucky' }),
+    ];
+    expect(run(entries, chat('a', 'b'), { afterMatch: ['once'] }).silent).toEqual([
+      { id: 'off', why: { kind: 'closed', cause: 'disabled' } },
+      { id: 'never', why: { kind: 'closed', cause: 'never' } },
+      { id: 'once', why: { kind: 'closed', cause: 'after-match' } },
+      { id: 'late', why: { kind: 'closed', cause: 'only-after', from: 4 } },
+      { id: 'even', why: { kind: 'closed', cause: 'only-every', every: 2 } },
+      { id: 'second', why: { kind: 'closed', cause: 'greeting' } },
+      { id: 'keyless', why: { kind: 'keyless' } },
+      { id: 'missing', why: { kind: 'unmatched' } },
+    ]);
+  });
+
   it('skips by priority what does not fit the budget, then lists by insertion order, ties last-fired first', () => {
     const entries = [
       lore('low', { constant: true, insertionOrder: 1, content: 'x'.repeat(50) }),
