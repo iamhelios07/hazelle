@@ -11,7 +11,8 @@ export const SETTINGS_ID = '00000000-0000-4000-8000-000000000000';
 export const EMPTY_SETTINGS: Settings = { models: {} };
 
 // prompt: the default prompt, absent only until the starter prompt is added; translatePrompt the default translation
-// prompt, memoryPrompt the default memory prompt and illustratePrompt the default 삽화 prompt, likewise. persona: the default persona, absent for none. toggles:
+// prompt, memoryPrompt the default memory prompt, illustratePrompt the default 삽화 prompt and mascotPrompt the default 마스코트
+// prompt, likewise. persona: the default persona, absent for none. toggles:
 // those of 캐릭터 없이's chats. translate: every chat's translation switches but those of a character with its own
 // (Character.ownTranslate). illustrate: likewise every chat's 삽화
 // switches (Character.ownIllustrate). profile: the default 설정 묶음, absent only until the first is added.
@@ -33,6 +34,7 @@ export type Settings = {
   translatePrompt?: string;
   memoryPrompt?: string;
   illustratePrompt?: string;
+  mascotPrompt?: string;
   persona?: string;
   toggles?: ToggleValues;
   // 입력창에 고정: toggle keys shown beside the composer of every chat whose prompt, card or modules declare them.

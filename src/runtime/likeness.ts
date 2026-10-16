@@ -14,8 +14,8 @@ import { packsOf } from './chat-context';
 import { chatPersona } from './personas';
 import { refreshStarred, retriesOf } from './connections';
 import { gather, generate } from './generate';
-import { illustrateWriter } from './illustrate';
 import { shownPicture } from './picture';
+import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
@@ -207,7 +207,7 @@ export class Likenesses {
     };
     const empty = { portraits: [], at: Date.now(), receipt: null };
     if (!material.files.length && !material.held.length && !texts.some(({ text }) => text.trim()) && !lore.some(({ content }) => content.trim())) return null;
-    const writer = illustrateWriter(store, chat, prompt);
+    const writer = taskWriter(store, chat, prompt.model);
     if ('kind' in writer) return writer;
 
     const read = await Promise.all(material.files.map(async (picture) => ({ picture, read: await files.read(picture.file, { signal }) })));

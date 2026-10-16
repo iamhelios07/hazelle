@@ -23,6 +23,7 @@ const FEATURE_TERMS: Record<Feature, string[]> = {
   translate: ['응답 번역', '내 메시지 번역', '반전 모드', TRANSLATOR_NOTE, '번역 프롬프트', '번역 모델'],
   illustrate: ['자동 삽화', '무료가 아니어도 만들기', '이미지 모델', '삽화 프롬프트'],
   memory: ['기록 최대 분량', '임베딩 모델로 찾는 기록', '원문으로 보낼 최근 대화', '한 번에 정리할 분량'],
+  mascot: ['마스코트 프롬프트'],
 };
 
 // A page's own pages, a feature's under 설정 › 채팅: a hit on one of their labels or terms opens that page.

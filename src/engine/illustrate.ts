@@ -3,6 +3,7 @@ import { isRecord } from '../connectors/values';
 import type { Figure, Scene, Shape } from '../model/illustration';
 import type { Portrait } from '../model/likeness';
 import type { IllustratePrompt, PictureTags } from '../model/prompt';
+import { answerJson } from './answer-json';
 
 // The scene format below, the parser and the request builder are one contract: a field the prompt asks for is read
 // here, and one read here is asked for there.
@@ -60,15 +61,6 @@ function figure(value: unknown): Figure | null {
 // A scene as the writer answers it, for the user to change (어떻게 바꿀까요?) and parseScene to read back.
 export const sceneText = ({ paragraph, ...rest }: Scene) => JSON.stringify({ after: paragraph + 1, ...rest }, null, 2);
 
-function readJson(text: string): { ok: true; value: unknown } | { ok: false } {
-  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```$/.exec(text.trim());
-  try {
-    return { ok: true, value: JSON.parse(fenced ? fenced[1]! : text.trim()) };
-  } catch {
-    return { ok: false };
-  }
-}
-
 type SceneRead = { ok: true; scene: Scene } | { ok: false; reason: SceneInvalid };
 
 function readScene(value: unknown, paragraphs: number): SceneRead {
@@ -83,14 +75,14 @@ function readScene(value: unknown, paragraphs: number): SceneRead {
 
 // paragraphs: how many the message holds. A field left out fails the scene; none is filled in.
 export function parseScene(text: string, paragraphs: number): SceneRead {
-  const read = readJson(text);
+  const read = answerJson(text);
   return read.ok ? readScene(read.value, paragraphs) : { ok: false, reason: 'unreadable' };
 }
 
 // The writer's answer to severalScenes, or to the prompt alone: an array or one scene. One scene that fails fails the
 // answer. A writer that gives fewer is drawn as given; past count, or on a paragraph already taken, a scene is dropped.
 export function parseScenes(text: string, paragraphs: number, count: number): { ok: true; scenes: Scene[] } | { ok: false; reason: SceneInvalid } {
-  const read = readJson(text);
+  const read = answerJson(text);
   if (!read.ok) return { ok: false, reason: 'unreadable' };
   const scenes: Scene[] = [];
   for (const value of Array.isArray(read.value) ? read.value : [read.value]) {

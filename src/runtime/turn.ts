@@ -7,7 +7,7 @@ import type { TooLong } from '../engine/prompt-budget';
 import { fold, shown, type Chat } from '../model/chat';
 import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
-import { chatIllustrate, chatTranslate } from './features';
+import { chatIllustrate, chatTranslate, featuresOf } from './features';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { Halted } from './scripts';
@@ -107,17 +107,21 @@ export async function receiveReply(session: Session, chat: string, reply: Writte
     }
   }
   await translateReceived(session, chat, reply);
-  illustrateReceived(session, chat, reply);
+  const received = shownReceived(session, chat, reply);
+  if (!received) return;
+  if (chatIllustrate(session.store, received.chat).auto) session.illustrator.draw(chat, received.message, received.version, { auto: true });
+  if (featuresOf(session.store, received.chat).mascot) session.commentator.comment(chat, received.message, received.version);
 }
 
-// 삽화 on auto draws for a reply received here, as 응답 번역 translates it: the version shown once the bot's onOutput
-// ran, after any continuation, never the cut one it continued.
-function illustrateReceived(session: Pick<Session, 'store' | 'illustrator'>, chat: string, reply: Written) {
-  const stored = live(session.store.get('chat', chat));
-  if (reply.receipt.state === 'failed' || !stored || !chatIllustrate(session.store, stored.value).auto) return;
-  const message = fold(session.store.children('entry', chat)).find(({ id }) => id === (reply.message ?? reply.id));
+// What 삽화 on auto draws for and the mascot speaks on, as 응답 번역 translates it: the version of a reply received here
+// shown once the bot's onOutput ran, after any continuation, never the cut one it continued. null for a failed reply, a
+// chat gone, or a version with no text.
+function shownReceived({ store }: Pick<Session, 'store'>, chat: string, reply: Written): { chat: Chat; message: string; version: string } | null {
+  const stored = live(store.get('chat', chat));
+  if (reply.receipt.state === 'failed' || !stored) return null;
+  const message = fold(store.children('entry', chat)).find(({ id }) => id === (reply.message ?? reply.id));
   const version = message && shown(message);
-  if (version?.text.trim()) session.illustrator.draw(chat, message!.id, version.id, { auto: true });
+  return version?.text.trim() ? { chat: stored.value, message: message!.id, version: version.id } : null;
 }
 
 // A new chat's save, which the turn is shown in while it runs, and the greeting it saved selected, which the turn

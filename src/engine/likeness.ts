@@ -2,6 +2,7 @@ import type { ChatMessage, InputPicture } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Outfit, Portrait, PortraitSource } from '../model/likeness';
 import type { PicturePrompt } from './import/picture-prompt';
+import { answerJson } from './answer-json';
 
 // The material below, the answer format and parseLikeness are one contract, as the scene's are (engine/illustrate).
 
@@ -134,13 +135,8 @@ function portrait(value: unknown, sources: readonly PortraitSource[], artist: st
 // artist: the pack's, from its pictures' metadata (artistOf), set on every portrait; the model writes none. Nothing
 // left out is filled in.
 export function parseLikeness(text: string, { sources, artist, most }: { sources: readonly PortraitSource[]; artist: string; most: number }): { ok: true; portraits: Portrait[] } | { ok: false; reason: LikenessInvalid } {
-  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```$/.exec(text.trim());
-  let value: unknown;
-  try {
-    value = JSON.parse(fenced ? fenced[1]! : text.trim());
-  } catch {
-    return { ok: false, reason: 'unreadable' };
-  }
+  const read = answerJson(text);
+  const value = read.ok ? read.value : null;
   if (!isRecord(value)) return { ok: false, reason: 'unreadable' };
   if (!Array.isArray(value.characters) || value.characters.length > most) return { ok: false, reason: 'fields' };
   const portraits = value.characters.map((each) => portrait(each, sources, artist));

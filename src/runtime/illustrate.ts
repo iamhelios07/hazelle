@@ -3,7 +3,6 @@ import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
 import { parseScenes, pictureRequest, type SceneInvalid } from '../engine/illustrate';
-import type { ModelSettings } from '../connectors/settings';
 import type { RanAway } from '../engine/pipeline';
 import { fold, type Chat, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
@@ -13,13 +12,13 @@ import { live } from '../model/library';
 import type { Portrait } from '../model/likeness';
 import type { IllustratePrompt } from '../model/prompt';
 import type { ApiFailure } from './api';
-import { taskModel, type Route, type RouteFailure } from './assignment';
+import type { Route, RouteFailure } from './assignment';
 import { chatIllustrate } from './features';
 import { pinned, scopeOf } from './chat-context';
 import { retriesOf } from './connections';
 import { evaluationFailure } from './evaluation';
 import { gather, generate, type ReplyError } from './generate';
-import { modelProfile } from './profiles';
+import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
 import { relayBytes, relayJson } from './relay';
 import type { Session } from './session';
@@ -81,17 +80,9 @@ export const runs = (drawing: Drawing) => drawing.writing || drawing.sketches.so
 type Stopped = { kind: 'stopped' };
 type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'files' | 'likenesses'>;
 
-// The 삽화 prompt's own model, else the chat's 보조, with its 설정 묶음: what writes a scene and a pack's profiles.
-export function illustrateWriter(store: Deps['store'], chat: Chat, prompt: IllustratePrompt): { route: Route; settings: ModelSettings } | RouteFailure | { kind: 'profile-missing'; own: boolean } {
-  const route = taskModel(store, chat, prompt.model);
-  if ('kind' in route) return route;
-  const profile = modelProfile(store, route.model);
-  return profile.kind === 'missing' ? { kind: 'profile-missing', own: profile.own } : { route, settings: profile.profile.value.settings };
-}
-
-export function sceneWriterOf(store: Deps['store'], chat: Chat): ReturnType<typeof illustrateWriter> | { kind: 'prompt-missing'; own: boolean } {
+export function sceneWriterOf(store: Deps['store'], chat: Chat): ReturnType<typeof taskWriter> | { kind: 'prompt-missing'; own: boolean } {
   const prompt = illustrationPrompt(store, chatIllustrate(store, chat).prompt);
-  return prompt.kind === 'missing' ? { kind: 'prompt-missing', own: prompt.own } : illustrateWriter(store, chat, prompt.prompt.value);
+  return prompt.kind === 'missing' ? { kind: 'prompt-missing', own: prompt.own } : taskWriter(store, chat, prompt.prompt.value.model);
 }
 
 function imageRoute(store: Deps['store'], ref: ModelRef | undefined): ImageRoute | { kind: 'no-image-model' } | { kind: 'image-model-gone' } {
@@ -248,7 +239,7 @@ export class Illustrator {
   // device would draw the picture again and pay for it twice.
   private async scenes(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
     const { store, credentials } = this.deps;
-    const writer = illustrateWriter(store, value, prompt);
+    const writer = taskWriter(store, value, prompt.model);
     if ('kind' in writer) return writer;
     const { route, settings } = writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };

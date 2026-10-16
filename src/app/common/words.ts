@@ -98,7 +98,7 @@ export const SCOPE = { default: '공용', chat: '이 채팅만', character: '이
 export const scopeTag = (scope: keyof typeof SCOPE) => ({ label: SCOPE[scope], tone: scope === 'default' ? 'plain' : 'accent' }) as const;
 
 export const FEATURES_TITLE = '기능';
-export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억' };
+export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억', mascot: '마스코트' };
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;

@@ -1,4 +1,4 @@
-import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, MessageSquare, MessagesSquare, NotebookPen, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, MessageSquare, MessagesSquare, NotebookPen, PenLine, Smile, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
 import { autoCachePoints } from '../../engine/cache-points';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
@@ -44,6 +44,7 @@ export const SLOT = {
   },
   span: { name: SLOT_NAMES.span, hint: '기억으로 정리할 메시지', line: '이번에 장기 기억으로 정리할 메시지가 여기에 들어가요.', kind: 'chat', icon: ScrollText },
   source: { name: SLOT_NAMES.source, hint: '번역할 텍스트', line: '번역할 원문 텍스트가 여기에 들어가요.', kind: 'chat', icon: Languages },
+  mascot: { name: SLOT_NAMES.mascot, hint: '마스코트의 말투와 표정', line: '마스코트의 말투와 표정, 최근 대사, 답하는 형식이 여기에 들어가요.', kind: 'char', icon: Smile },
 } satisfies Record<SlotKind, { name: string; hint: string; line: string; kind: OutlineKind; icon: LucideIcon }>;
 
 export const ROLES: { value: Role; label: string }[] = (['system', 'user', 'assistant'] as const).map((value) => ({ value, label: MESSAGE_ROLES[value] }));

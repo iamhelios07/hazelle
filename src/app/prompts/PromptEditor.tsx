@@ -60,6 +60,7 @@ const SORT_WORDS = {
   translate: { default: '기본 번역 프롬프트', makeDefault: '번역 프롬프트를 따로 선택하지 않은 채팅에 써요' },
   memory: { default: '기본 기억 프롬프트', makeDefault: '장기 기억을 이 프롬프트로 정리해요' },
   illustrate: { default: '기본 삽화 프롬프트', makeDefault: '삽화 프롬프트를 따로 선택하지 않은 채팅에 써요' },
+  mascot: { default: '기본 마스코트 프롬프트', makeDefault: '마스코트가 이 프롬프트로 대사를 써요' },
 } satisfies Record<PromptSort, { default: string; makeDefault: string }>;
 const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
 

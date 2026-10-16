@@ -1,4 +1,4 @@
-import { ofSort, translationPrompt, illustrationPrompt } from '../../runtime/prompts';
+import { ofSort, translationPrompt, illustrationPrompt, mascotPrompt } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import type { PromptPane } from '../shell/routes';
 import { defaultMark, DELETED_PROMPT, follows } from './words';
@@ -23,9 +23,12 @@ export function PerCharacter({ card, own, onChange }: { card: NamedCharacter; ow
   );
 }
 
+// switches: a chat's switches choose their own prompt, else follow the default. The mascot's is the account's default
+// alone (design §6.11), so its menu sets that default and has nothing to follow.
 const TASKS = {
-  translate: { noun: '번역', setting: 'translatePrompt', choose: translationPrompt, pane: null },
-  illustrate: { noun: '삽화', setting: 'illustratePrompt', choose: illustrationPrompt, pane: 'picture' },
+  translate: { noun: '번역', setting: 'translatePrompt', choose: translationPrompt, pane: null, switches: true },
+  illustrate: { noun: '삽화', setting: 'illustratePrompt', choose: illustrationPrompt, pane: 'picture', switches: true },
+  mascot: { noun: '마스코트', setting: 'mascotPrompt', choose: mascotPrompt, pane: null, switches: false },
 } as const;
 
 // The prompt a task's switches run, by name; a deleted or absent one is named as such, never as another prompt.
@@ -38,7 +41,7 @@ export function chosenPrompt(store: Reader, task: keyof typeof TASKS, chosen: st
 
 // Without its own choice the switches follow the task's default prompt live.
 export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }: { task: keyof typeof TASKS; chosen: string | undefined; heading: string; opens: 'up' | 'down'; onPick: (prompt: string | undefined) => void; onEdit: (door: PromptDoor) => void }) {
-  const { noun, setting, pane } = TASKS[task];
+  const { noun, setting, pane, switches } = TASKS[task];
   const { store } = useSession();
   const settings = useSettings();
   const prompts = usePrompts()
@@ -53,7 +56,7 @@ export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }:
       trigger={(opener) => <ChipButton variant="field" opens={opens} label={label} title={`${noun} 프롬프트`} tone={choice.kind === 'missing' ? 'warn' : 'default'} {...opener} />}
     >
       <MenuHeading>{heading}</MenuHeading>
-      <MenuItem label={follows(`기본 ${noun} 프롬프트`)} sub={fallback?.value.name ?? missing} checked={chosen === undefined} onClick={() => onPick(undefined)} />
+      {switches && <MenuItem label={follows(`기본 ${noun} 프롬프트`)} sub={fallback?.value.name ?? missing} checked={chosen === undefined} onClick={() => onPick(undefined)} />}
       {prompts.map((item) => {
         const mark = defaultMark(item.id === settings[setting], item.value.name);
         return <MenuItem key={item.id} label={item.value.name} tag={mark && <Tag tone="accent">{mark}</Tag>} checked={item.id === chosen} onClick={() => onPick(item.id)} />;

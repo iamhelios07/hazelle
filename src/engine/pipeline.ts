@@ -3,7 +3,8 @@ import { cachePoints, type CachePart, type Sent } from './cache-points';
 import { fitChat, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
-import type { Block, ConversationPrompt, IllustratePrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
+import type { MascotId } from '../model/mascot';
+import type { Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -13,6 +14,7 @@ import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, recordsTarget, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import { retrieval, retrievalRoom } from './retrieval';
 import { numbered, severalScenes } from './illustrate';
+import { mascotSheet } from './mascot';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
@@ -169,6 +171,7 @@ type Filling =
   | { sort: 'conversation'; note: string; memory: string; tools: PromptInput['tools'] }
   | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'illustrate'; recent: (block: RecentSlot) => string; source: string }
+  | { sort: 'mascot'; recent: (block: RecentSlot) => string; source: string; sheet: string }
   | { sort: 'memory'; memory: string; span: string };
 
 const loreMessage = ({ entry }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: entry(id, body) });
@@ -235,10 +238,10 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
           if (filling.sort === 'translate') wrapped(block, filling.note);
           break;
         case 'recent':
-          if (filling.sort === 'translate' || filling.sort === 'illustrate') verbatim(block, filling.recent(block));
+          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot') verbatim(block, filling.recent(block));
           break;
         case 'source':
-          if (filling.sort === 'translate' || filling.sort === 'illustrate') verbatim(block, filling.source);
+          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot') verbatim(block, filling.source);
           break;
         case 'memory':
           if (filling.sort === 'conversation' || filling.sort === 'memory') memory = verbatim(block, filling.memory);
@@ -248,6 +251,9 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
           break;
         case 'span':
           if (filling.sort === 'memory') verbatim(block, filling.span);
+          break;
+        case 'mascot':
+          if (filling.sort === 'mascot') verbatim(block, filling.sheet);
           break;
       }
     if (block.cache) parts.push({ cache: true });
@@ -405,6 +411,30 @@ function illustration({ scope, take, prompt, index, paragraphs, count, seed, cou
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
   const messages = taskMessages(parts);
   return { messages: count > 1 ? [...messages, { role: 'user', content: severalScenes(count) }] : messages };
+}
+
+export type MascotInput = {
+  // The chat's, its messages as shown, up to the reply.
+  scope: ChatScope;
+  take: ReadonlySet<number>;
+  prompt: MascotPrompt;
+  // The reply's place in scope.messages.
+  index: number;
+  mascot: MascotId;
+  // The mascot's last lines in the chat, oldest first (engine/mascot mascotSheet).
+  said: string[];
+  seed: string;
+  countTokens: (text: string) => number;
+};
+
+// Like a translation, a 마스코트 task holds no chat, and its source is the reply as displayed.
+export const assembleMascot = (input: MascotInput): { messages: ChatMessage[] } | RanAway => stoppable(() => remark(input));
+
+function remark({ scope, take, prompt, index, mascot, said, seed, countTokens }: MascotInput): { messages: ChatMessage[] } {
+  const { texts, variables } = renderChat('display', scope, take);
+  const laid = lay(scope, prompt.blocks, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'mascot', recent: recentOf(scope, texts, index, []), source: texts[index]!, sheet: mascotSheet(mascot, said) });
+  return { messages: taskMessages(parts) };
 }
 
 export type MemoryTaskInput = {

@@ -8,7 +8,7 @@ import { testServer } from './testing';
 const server = testServer();
 
 describe('features', () => {
-  it('reads the nearest layer that sets a feature, chat, character, prompt, then 공용, and is on where none does', () =>
+  it('reads the nearest layer that sets a feature, chat, character, prompt, then 공용, and starts as FEATURE_STARTS has it where none does', () =>
     server.withSession(async ({ store }) => {
       const character = await store.create('character', { card: blankCard('루나'), folder: null, loreFolders: [] });
       const prompt = await addPrompt(store, '짝', 'conversation');
@@ -18,7 +18,10 @@ describe('features', () => {
       const chat = () => store.get('chat', created.data.id)!.value;
       const at = { settings: { kind: 'settings' }, prompt: { kind: 'prompt', id: prompt.data.id }, character: { kind: 'character', id: character.data.id }, chat: { kind: 'chat', id: created.data.id } } as const;
 
-      expect(featuresOf(store, chat())).toEqual({ translate: true, illustrate: true, memory: true });
+      expect(featuresOf(store, chat())).toEqual({ translate: true, illustrate: true, memory: true, mascot: false });
+      await setFeatureAt(store, at.character, 'mascot', true);
+      expect(featuresOf(store, chat()).mascot).toBe(true);
+      await setFeatureAt(store, at.character, 'mascot', null);
       expect([above(store, at.prompt), above(store, at.character), above(store, at.chat)]).toEqual(['settings', 'prompt', 'character']);
 
       for (const layer of ['settings', 'prompt', 'character', 'chat'] as const) {

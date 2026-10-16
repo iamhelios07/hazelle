@@ -1,5 +1,5 @@
 import type { Chat } from '../model/chat';
-import { FEATURES, type Feature, type FeatureSwitches } from '../model/features';
+import { FEATURE_STARTS, FEATURES, type Feature, type FeatureSwitches } from '../model/features';
 import { without } from '../model/fields';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
@@ -12,9 +12,10 @@ type Reader = Pick<ObjectStore, 'get'>;
 type Place = Pick<Chat, 'character' | 'prompt' | 'features'>;
 export type FeatureOwner = { kind: 'settings' } | { kind: 'prompt' | 'character' | 'chat'; id: string };
 
-// Nearest first: the first layer that sets a feature decides it (가까운 쪽을 따른다); one no layer sets is on.
+// Nearest first: the first layer that sets a feature decides it (가까운 쪽을 따른다); one no layer sets starts as
+// FEATURE_STARTS has it.
 const decided = (layers: (FeatureSwitches | undefined)[]): Features =>
-  Object.fromEntries(FEATURES.map((feature) => [feature, layers.find((layer) => layer?.[feature] !== undefined)?.[feature] ?? true])) as Features;
+  Object.fromEntries(FEATURES.map((feature) => [feature, layers.find((layer) => layer?.[feature] !== undefined)?.[feature] ?? FEATURE_STARTS[feature]])) as Features;
 
 const settingsLayer = (store: Reader) => store.get('settings', SETTINGS_ID)?.value.features;
 const characterLayer = (store: Reader, character: string | null) => (character === null ? undefined : store.get('character', character)?.value.features);
@@ -25,13 +26,16 @@ function promptLayer(store: Reader, chat: Pick<Chat, 'prompt'>) {
 
 export const featuresOf = (store: Reader, chat: Place): Features => decided([chat.features, characterLayer(store, chat.character), promptLayer(store, chat), settingsLayer(store)]);
 
+// 공용's, the farthest layer, which follows nothing.
+export const sharedFeatures = (store: Reader): Features => decided([settingsLayer(store)]);
+
 // What a layer that sets nothing reads: the layers past it. A character's is what a new chat of it reads, through the
 // default prompt.
 export function inherited(store: Reader, owner: Exclude<FeatureOwner, { kind: 'settings' }>): Features {
-  if (owner.kind === 'prompt') return decided([settingsLayer(store)]);
+  if (owner.kind === 'prompt') return sharedFeatures(store);
   if (owner.kind === 'character') return decided([promptLayer(store, {}), settingsLayer(store)]);
   const chat = store.get('chat', owner.id)?.value;
-  return chat ? featuresOf(store, { ...chat, features: undefined }) : decided([settingsLayer(store)]);
+  return chat ? featuresOf(store, { ...chat, features: undefined }) : sharedFeatures(store);
 }
 
 // The layer one that sets nothing follows: the next one up 공용 → 프롬프트 → 캐릭터 → 채팅, past a chat with no character.

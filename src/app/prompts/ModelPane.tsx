@@ -44,7 +44,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
   );
 }
 
-const TASK_LABELS = { translate: '번역 모델', memory: '기억 모델', illustrate: '장면 모델' } satisfies Record<Task, string>;
+const TASK_LABELS = { translate: '번역 모델', memory: '기억 모델', illustrate: '장면 모델', mascot: '대사 모델' } satisfies Record<Task, string>;
 
 type TaskProps = { task: Task; own: ModelRef | undefined; connections: readonly Stored<'connection'>[]; onPick: (ref: ModelRef | null) => void };
 

@@ -16,12 +16,13 @@ import { useImport } from '../common/importing';
 import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
 import { byLastUse, byPromptName, groupPrompts } from '../common/promptCopies';
 
-const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트', illustrate: '새 삽화 프롬프트' } satisfies Record<PromptSort, string>;
+const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트', illustrate: '새 삽화 프롬프트', mascot: '새 마스코트 프롬프트' } satisfies Record<PromptSort, string>;
 const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] = [
   { sort: 'conversation', label: '대화', none: '대화 프롬프트가 없어요.' },
   { sort: 'translate', label: '번역', hint: '받은 응답과 보낼 메시지를 번역할 때 쓰는 프롬프트예요.', none: '번역 프롬프트가 없어요.' },
   { sort: 'memory', label: '기억', hint: '지난 대화를 장기 기억으로 정리할 때 쓰는 프롬프트예요.', none: '기억 프롬프트가 없어요.' },
   { sort: 'illustrate', label: '삽화', hint: '메시지에 넣을 삽화의 장면을 정할 때 쓰는 프롬프트예요.', none: '삽화 프롬프트가 없어요.' },
+  { sort: 'mascot', label: '마스코트', hint: '응답마다 마스코트가 한마디 할 때 쓰는 프롬프트예요.', none: '마스코트 프롬프트가 없어요.' },
 ];
 type Order = 'name' | 'recent';
 

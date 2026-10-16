@@ -419,3 +419,44 @@ describe('채팅 로어북', () => {
     expect(lore(branched.data.id)).toEqual(lore(id));
   });
 });
+
+describe('마스코트 대사', () => {
+  it("goes with a chat file and a branch on its version's copy, and stays behind with a message the branch leaves out", async () => {
+    const { store, files } = await server.account();
+    const source = crypto.randomUUID();
+    await server.hold(store, source);
+    await startChat(store, source, { title: null, character: null, models: {} }, null);
+    await appendUserMessage(store, source, { id: crypto.randomUUID(), text: '안녕' });
+    const receipt: Receipt = { id: crypto.randomUUID(), connection: 'c', source: 'S', model: 'm', modelName: 'M', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 1, totalMs: 2, cache: null };
+    const [first, swipe, later] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    await appendReply(store, source, { id: first, message: null, replaces: null, at: 1, text: '첫 답', receipt });
+    await appendReply(store, source, { id: swipe, message: first, replaces: null, at: 2, text: '둘째 답', receipt });
+    await appendUserMessage(store, source, { id: later, text: '그리고' });
+    const remark = (message: string, version: string, line: string) =>
+      store.create('remark', { message, version, mascot: 'yeongae', expression: 'calm', line, receipt, model: { connection: 'c', model: 'm' }, at: 3 }, { parent: source });
+    await remark(first, first, '첫 줄');
+    await remark(first, swipe, '둘째 줄');
+    await remark(later, later, '나중 줄');
+    // Each copy's line by the text of the version it names.
+    const lines = (chat: string) => {
+      const texts = new Map(fold(store.children('entry', chat)).flatMap((message) => message.versions.map(({ id, text }) => [`${message.id}/${id}`, text])));
+      return store.children('remark', chat).map(({ value }) => [texts.get(`${value.message}/${value.version}`), value.line]).sort();
+    };
+
+    const written = await chatFile({ store, files }, source);
+    if (!written.ok) throw new Error(written.error);
+    const read = readChatFile(JSON.parse(written.data));
+    if (!read.ok) throw new Error(read.error);
+    const imported = await importChat({ store, files }, read.file, null);
+    if (!imported.ok) throw new Error(imported.error);
+    await server.hold(store, imported.data.id);
+    expect(lines(imported.data.id)).toEqual(lines(source));
+
+    const messages = fold(store.children('entry', source));
+    const item: ChatItem = { id: source, chat: store.get('chat', source)!.value, messages, count: messages.length, title: '', preview: '', at: null, order: 0 };
+    const branched = await branchChat(store, item, first);
+    if (!branched.ok) throw new Error(branched.error);
+    await server.hold(store, branched.data.id);
+    expect(lines(branched.data.id)).toEqual([['둘째 답', '둘째 줄'], ['첫 답', '첫 줄']]);
+  });
+});

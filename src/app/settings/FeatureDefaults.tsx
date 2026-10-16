@@ -1,6 +1,7 @@
 import { FEATURES, type Feature } from '../../model/features';
+import { MASCOT, MASCOTS } from '../../model/mascot';
 import { illustrateSwitches, translateSwitches } from '../../runtime/characters';
-import { setFeatureAt } from '../../runtime/features';
+import { setFeatureAt, sharedFeatures } from '../../runtime/features';
 import { drawingModels } from '../../runtime/illustrate';
 import { defaultMemory } from '../../runtime/memory-read';
 import type { ObjectStore } from '../../runtime/store';
@@ -19,29 +20,33 @@ export const FEATURE_HELP = '끄면 채팅에서 보이지 않고 작동하지 �
 const state = (on: boolean) => (on ? '켜짐' : '꺼짐');
 
 // One line of what a new chat with no character of its own gets, read through the same setups the chat reads.
-function lineOf(store: ObjectStore, feature: Feature, routes: ReturnType<typeof drawingModels>): string {
-  if (feature === 'translate') {
+const LINES: Record<Feature, (store: ObjectStore, routes: ReturnType<typeof drawingModels>) => string> = {
+  translate: (store) => {
     const translate = translateSwitches(store, null);
     return [`응답 번역 ${state(translate.replies)}`, languageLabel(translate.replyLanguage), chosenPrompt(store, 'translate', translate.prompt).label].join(' · ');
-  }
-  if (feature === 'illustrate') {
+  },
+  illustrate: (store, routes) => {
     const illustrate = illustrateSwitches(store, null);
     const model = routes.length ? (imageModelOf(routes, illustrate)?.model.name ?? NOT_STARRED) : '이미지 모델 없음';
     return `자동 삽화 ${state(illustrate.auto)} · ${model}`;
-  }
-  const memory = defaultMemory(store);
-  return `새 채팅에서 ${state(memory.on)} · 기록 ${count(memory.budget)} 토큰`;
-}
+  },
+  memory: (store) => {
+    const memory = defaultMemory(store);
+    return `새 채팅에서 ${state(memory.on)} · 기록 ${count(memory.budget)} 토큰`;
+  },
+  mascot: (store) => `${MASCOTS[MASCOT].name} · ${chosenPrompt(store, 'mascot', undefined).label}`,
+};
 
 // 공용's availability, the bottom rung of the 기능 ladder: a switch with no layer above it to follow.
 export function FeatureSwitch({ feature }: { feature: Feature }) {
   const store = useStore();
   const toast = useToast();
-  const { features } = useSettings();
+  // Subscribed for sharedFeatures, which reads the settings from the store.
+  useSettings();
   return (
     <Switch
       label={FEATURE_NAMES[feature]}
-      checked={features?.[feature] ?? true}
+      checked={sharedFeatures(store)[feature]}
       onChange={(on) => void setFeatureAt(store, { kind: 'settings' }, feature, on).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'))}
     />
   );
@@ -49,7 +54,7 @@ export function FeatureSwitch({ feature }: { feature: Feature }) {
 
 export function FeatureDefaults() {
   const store = useStore();
-  // Subscribed for lineOf, which reads the settings, the prompts and the image models from the store.
+  // Subscribed for LINES, which read the settings, the prompts and the image models from the store.
   useSettings();
   usePrompts();
   const routes = drawingModels(useConnections());
@@ -60,7 +65,7 @@ export function FeatureDefaults() {
           <ListItem
             key={feature}
             title={FEATURE_NAMES[feature]}
-            description={lineOf(store, feature, routes)}
+            description={LINES[feature](store, routes)}
             control={<FeatureSwitch feature={feature} />}
             onClick={() => navigate({ kind: 'feature', feature })}
           />
