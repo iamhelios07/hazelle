@@ -8,7 +8,7 @@ import type { Kind, Stored } from '../model/kinds';
 import type { AccountFacts, Standing } from '../runtime/account';
 import type { Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
-import type { Illustrating, Illustrator } from '../runtime/illustrate';
+import type { Illustrating } from '../runtime/illustrate';
 import type { Commenting } from '../runtime/mascot';
 import type { Likenesses, LikenessRuns } from '../runtime/likeness';
 import type { Remembering } from '../runtime/memory';
@@ -17,8 +17,8 @@ import type { Session } from '../runtime/session';
 import type { ChatScopeRead, Opening } from '../runtime/read-model';
 import type { ScriptsState } from '../runtime/script-interactions';
 import type { ObjectStore } from '../runtime/store';
-import type { Talk, Turn } from '../runtime/talk';
-import type { Translating, Translator } from '../runtime/translate';
+import type { Turn } from '../runtime/talk';
+import type { Translating } from '../runtime/translate';
 import { Saves } from './common/saveQueue';
 
 // admin, localProviders: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
@@ -62,9 +62,6 @@ export function useStanding(): Standing {
   const { facts } = useAccount();
   return useSyncExternalStore(facts.subscribe, facts.snapshot);
 }
-export const useTalk = (): Talk => useSession().talk;
-export const useTranslator = (): Translator => useSession().translator;
-export const useIllustrator = (): Illustrator => useSession().illustrator;
 export const useLikenesses = (): Likenesses => useSession().likenesses;
 
 // What this session's open chats of the character asked for by name and found no picture for (runtime/assets).
@@ -132,7 +129,6 @@ function useKind<K extends Kind>(kind: K) {
 }
 
 export const useConnections = () => useKind('connection');
-// The account's share links, each its character's (model/share).
 export const useShares = () => useKind('share');
 // all is the memo's key only: it is a new array exactly when one changed.
 function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {
@@ -223,41 +219,37 @@ export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['
 }
 
 export function useTurn(chat: string): Turn | null {
-  const talk = useTalk();
+  const { talk } = useSession();
   return useSyncExternalStore(talk.subscribe, () => talk.snapshot(chat));
 }
 
 export function useWritingChats(): ReadonlySet<string> {
-  const talk = useTalk();
+  const { talk } = useSession();
   return useSyncExternalStore(talk.subscribe, talk.writing);
 }
 
 export function useTranslating(): Translating {
-  const translator = useTranslator();
+  const { translator } = useSession();
   return useSyncExternalStore(translator.subscribe, translator.snapshot);
 }
 
-// null while it has none.
 export function useChatMemory(id: string | null): Memory | null {
   const { read } = useSession();
   const model = id === null ? null : read.memory(id);
   return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
 }
 
-// 삽화 runs by message: a 그리는 중 slot, or a failure with its retry.
 export function useIllustrating(): Illustrating {
-  const illustrator = useIllustrator();
+  const { illustrator } = useSession();
   return useSyncExternalStore(illustrator.subscribe, illustrator.snapshot);
 }
 
-// 마스코트 대사 by version: a line being written, or why the last try wrote none.
 export function useCommenting(): Commenting {
   const { commentator } = useSession();
   return useSyncExternalStore(commentator.subscribe, commentator.snapshot);
 }
 
-// 삽화 profiles by pack: one being made, or the failure of the last try. The profiles themselves:
-// useStored('likeness', likenessId(owner)).
+// The profiles themselves: useStored('likeness', likenessId(owner)).
 export function useLikenessRuns(): LikenessRuns {
   const likenesses = useLikenesses();
   return useSyncExternalStore(likenesses.subscribe, likenesses.snapshot);
