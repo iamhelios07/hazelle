@@ -8,7 +8,7 @@ import type { PreviousMessages } from './history';
 import { parse, type Block, type Legacy, type Node, type Tag } from './parse';
 import { bool, handlerFor, isErrorText, items, normalize, readToggle, readVar, Return, truthy, type Env, type Erase } from './tags';
 
-// unknown-tag: a tag or block no handler takes, as written back. error-text: Risu's error text a tag gave ({{iserror}}).
+// unknown-tag: a tag or block no handler takes, as written back, unless its name is prose. error-text: Risu's error text a tag gave ({{iserror}}).
 export type CbsProblem = { kind: 'unknown-tag' | 'error-text'; text: string };
 
 export type CbsContext = {
@@ -123,6 +123,9 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
 
 const asWritten = (content: string) => `{{${content}}}`;
 
+// Read only after the lookup fails: (, ), <, >, : and ; name handlers too.
+const isProse = (name: string) => !/[a-z]/i.test(name);
+
 // At `::`, or at `:` when the first colon is single, so {{getvar:x}} works.
 export function separatorOf(content: string): string | null {
   const colon = content.indexOf(':');
@@ -148,7 +151,7 @@ function evaluateTag(tag: Tag, frame: Frame): string | Erase {
   const handler = handlerFor(name!);
   const { problems } = frame.run.context;
   if (!handler) {
-    problems?.push({ kind: 'unknown-tag', text: asWritten(content) });
+    if (!isProse(name!)) problems?.push({ kind: 'unknown-tag', text: asWritten(content) });
     return asWritten(content);
   }
   // Not a problem: a wrapper's {{slot}} takes no argument so that it stays as written (pipeline verbatim).
@@ -218,7 +221,7 @@ function evaluateBlock(block: Block, frame: Frame): string {
       return '';
     }
     default:
-      frame.run.context.problems?.push({ kind: 'unknown-tag', text: asWritten(head) });
+      if (!isProse(name)) frame.run.context.problems?.push({ kind: 'unknown-tag', text: asWritten(head) });
       return unknown();
   }
 }

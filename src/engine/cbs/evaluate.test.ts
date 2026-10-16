@@ -72,6 +72,12 @@ describe('evaluate', () => {
     ]);
   });
 
+  it('reports no problem for a tag or block whose name has no letter, and leaves it as written', () => {
+    const problems: CbsProblem[] = [];
+    expect(run('not a {{...}} macro {{#--}}y{{/--}}', { problems })).toBe('not a {{...}} macro {{#--}}y{{/--}}');
+    expect(problems).toEqual([]);
+  });
+
   it('re-emits an unclosed tag or block as written and evaluates the tags after it', () => {
     expect(run('a {{ b {{user}}')).toBe('a {{ b jin');
     expect(run('{{#if 1}}x {{user}}')).toBe('{{#if 1}}x jin');
