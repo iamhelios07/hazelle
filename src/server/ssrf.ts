@@ -36,7 +36,7 @@ export function isPublicAddress(address: string): boolean {
   return false;
 }
 
-export type TargetRefusal = 'not-https' | 'not-public';
+type TargetRefusal = 'not-https' | 'not-public';
 
 // The outbound refused a destination (outbound.ts): by this URL check before any connection, or by the lookup of a
 // connection whose host name answered a private address. Not a network failure.

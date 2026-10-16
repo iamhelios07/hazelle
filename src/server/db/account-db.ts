@@ -67,7 +67,7 @@ const CORRUPT_CODES = new Set([11, 26]);
 export const accountPath = (dataDir: string, incarnation: string) => join(dataDir, 'accounts', `${incarnation}.sqlite`);
 
 // Thrown inside a store call for a file the rules cannot be answered from; the registry turns it into { unavailable }.
-export class StoreUnavailable extends Error {
+class StoreUnavailable extends Error {
   constructor(readonly why: 'missing' | 'newer-schema' | 'snapshot-missing' | 'snapshot-corrupt' | 'corrupt') {
     super(`account store unavailable: ${why}`);
   }
@@ -343,7 +343,7 @@ export class AccountDb implements StoreDb {
   }
 }
 
-export type StoreStub = { [M in keyof StoreRules]: StoreRules[M] } & { restart(incarnation: string): Promise<never> };
+type StoreStub = { [M in keyof StoreRules]: StoreRules[M] } & { restart(incarnation: string): Promise<never> };
 
 export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.

@@ -27,7 +27,7 @@ const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 
 // bytes: the gzip on disk. expanded: what it gunzips to, measured on the plain file before it was gzipped (the gzip
 // trailer holds that only modulo 4 GiB).
-export type Artifact = { path: string } & SnapshotArchive;
+type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the snapshot its file is restored from: its current
 // baseline, or, once its operation holds a checkpoint, that checkpoint, which is newer than any baseline and holds the
 // file as it was at the fence: a restore cancels the operation before `armed` and from `armed` on finishes it, installing

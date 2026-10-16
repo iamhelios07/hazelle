@@ -142,7 +142,7 @@ export const undoable = (operation: string, now: string) =>
   `${operation} = (SELECT id FROM restores WHERE incarnation = accounts.incarnation AND phase = 'done' AND verified = 1 ORDER BY id DESC LIMIT 1)
    AND (SELECT ended_at FROM restores WHERE id = ${operation}) > ${now} - ${RETENTION_MS}`;
 
-export type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'too-many-restores' | 'bad-time' | 'cannot-undo' };
+type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'too-many-restores' | 'bad-time' | 'cannot-undo' };
 
 // The operation's row and the account's hold on it commit together or not at all: the hold is gated on the insert.
 // An undo's target, the undone restore's checkpoint, is recorded with the row, so it is pinned from the begin on.
@@ -349,7 +349,7 @@ function run({ id, phase, verified, error }: Pick<Operation, 'id' | 'phase' | 'v
   return { id, phase, verified: Boolean(verified), error };
 }
 
-export function restoreActions(phase: RestorePhase, verified: boolean): RestoreAction[] {
+function restoreActions(phase: RestorePhase, verified: boolean): RestoreAction[] {
   if (phase === 'done' || phase === 'cancelled' || phase === 'failed') return verified ? [] : ['finalize'];
   return BEFORE_ARMED.includes(phase) ? ['resume', 'cancel'] : ['resume'];
 }

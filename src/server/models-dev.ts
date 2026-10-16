@@ -13,7 +13,7 @@ const RETRY_MS = 10 * 60 * 1000;
 // A fetch is background work the shutdown drain waits for, so it is bounded.
 const FETCH_MS = 60 * 1000;
 
-export type ListedRow = ListedModel & { list: string; model: string };
+type ListedRow = ListedModel & { list: string; model: string };
 
 const rate = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
 

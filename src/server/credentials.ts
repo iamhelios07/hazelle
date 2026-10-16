@@ -5,7 +5,7 @@ import type { Db } from './db/service-db';
 import { fail, sha256Hex, type AppEnv } from './http';
 
 export type Method = 'password' | 'recovery';
-export type StoredAccount = {
+type StoredAccount = {
   id: string;
   username: string;
   login_hash: string;
