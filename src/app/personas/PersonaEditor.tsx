@@ -7,27 +7,21 @@ import { thumbnail } from '../../runtime/picture';
 import { useChats, useLibrary, useSettings, useStore } from '../session';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
-import type { Frame } from '../common/frame';
+import { framePage } from '../common/frame';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { PersonaPickDialog } from '../common/PersonaPickDialog';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, CHANGE_IMAGE, UNREADABLE_IMAGE } from '../common/words';
+import { navigate } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Avatar, FaceRow, Facts, FileButton, MenuItem, TextField } from '../ui';
 import { PersonaExport } from './PersonaExport';
 
-type Props = {
-  stored: Stored<'persona'>;
-  backLabel: string;
-  onBack: () => void;
-  onRemoved: () => void;
-  frame: Frame;
-};
-
 // A caller leaves by unmounting it, which saves.
-export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: Props) {
+export function PersonaEditor({ stored, back }: { stored: Stored<'persona'>; back: Back }) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
@@ -60,7 +54,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요. 다른 페르소나를 현재 페르소나로 정한 뒤 삭제해 주세요.');
       return toast.failed(removed, '삭제하지 못했어요.');
     }
-    onRemoved();
+    navigate({ kind: 'personas' });
     toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => restorePersona(store, id), BIN_KEEPS);
   }
 
@@ -110,5 +104,5 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   };
   const exportDialog = exporting && <PersonaExport persona={persona} onClose={() => setExporting(false)} />;
   const moveDialog = moving && <PersonaPickDialog title="채팅을 옮길 페르소나" using={id} onChoose={moveChats} onClose={() => setMoving(false)} />;
-  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body: <>{body}{exportDialog}{moveDialog}</> });
+  return framePage({ head: { title: aliased(persona.name, persona.alias), backLabel: back.label, onBack: () => navigate(back.to), status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body: <>{body}{exportDialog}{moveDialog}</> });
 }

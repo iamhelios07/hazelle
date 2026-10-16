@@ -14,7 +14,7 @@ export type Command = {
   uses?: Partial<Record<PromptSort, string>>;
 };
 // sorts: the prompts it works in, when not every one.
-export type CommandGroup = { title: string; guide?: GuideId; sorts?: readonly PromptSort[]; commands: readonly Command[] };
+type CommandGroup = { title: string; guide?: GuideId; sorts?: readonly PromptSort[]; commands: readonly Command[] };
 
 export const COMMANDS: readonly CommandGroup[] = [
   {

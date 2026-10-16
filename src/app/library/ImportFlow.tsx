@@ -1,6 +1,6 @@
 import { importTool, undoToolImport } from '../../runtime/tools/store';
 import { useToast } from '../toast';
-import { Check, FileText, MessageSquare, MessageSquarePlus, Package, UserRound } from 'lucide-react';
+import { Check, FileText, MessageSquare, MessageSquarePlus, Package, UserRound, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { PRESET_EXTENSIONS } from '../../engine/import/preset';
 import { mergeUnsupported, type ImportFailure } from '../../engine/import/types';
@@ -34,6 +34,12 @@ import { stepOf } from './saving';
 
 const PRESETS = PRESET_EXTENSIONS.join(',');
 const ACCEPT = `.png,.charx,.jpg,.jpeg,.json,.risum,.bin,.js,${PRESETS}`;
+const OPENS: { kind: Exclude<ImportOutcome['kind'], 'character'>; icon: LucideIcon; label: string; route: (id: string) => Route }[] = [
+  { kind: 'chat', icon: MessageSquare, label: '열기', route: (id) => ({ kind: 'chat', id }) },
+  { kind: 'module', icon: Package, label: '모듈 보기', route: (id) => ({ kind: 'module', id, pane: null }) },
+  { kind: 'prompt', icon: FileText, label: '프롬프트 보기', route: (id) => ({ kind: 'prompt', id, pane: null }) },
+  { kind: 'persona', icon: UserRound, label: '페르소나 보기', route: (id) => ({ kind: 'persona', id }) },
+];
 
 type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed: string[] };
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
@@ -258,7 +264,6 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         break;
       }
     }
-    // One 되돌리기 for the whole batch.
     if (undos.length === 1) toast.undoable(undos[0]!.message, undos[0]!.run);
     else if (undos.length > 1) toast.undoable(`${undos.length}개를 가져왔어요.`, () => undoAll(undos));
     setState(results.length > 0 ? { busy: null, results, ask: null } : null);
@@ -277,11 +282,8 @@ export function ImportProvider({ children }: { children: ReactNode }) {
 
   const dragging = useFileDrop((dropped) => asked(() => void take(dropped, undefined)));
 
-  const done = state?.results.flatMap((result) => result.kind === 'character' ? [result.id] : []) ?? [];
-  const chats = state?.results.flatMap((result) => result.kind === 'chat' ? [result.id] : []) ?? [];
-  const modules = state?.results.flatMap((result) => result.kind === 'module' ? [result.id] : []) ?? [];
-  const prompts = state?.results.flatMap((result) => result.kind === 'prompt' ? [result.id] : []) ?? [];
-  const personas = state?.results.flatMap((result) => result.kind === 'persona' ? [result.id] : []) ?? [];
+  const idsOf = (kind: ImportOutcome['kind']) => state?.results.flatMap((result) => (result.kind === kind ? [result.id] : [])) ?? [];
+  const done = idsOf('character');
   const go = (to: Route) => {
     setState(null);
     navigate(to);
@@ -341,42 +343,14 @@ export function ImportProvider({ children }: { children: ReactNode }) {
                 채팅 시작
               </Button>
             )}
-            {!state.busy && chats.length === 1 && chats[0] !== null && (
-              <Button
-                variant={done.length === 1 ? 'secondary' : 'primary'}
-                icon={MessageSquare}
-                onClick={() => go({ kind: 'chat', id: chats[0]! })}
-              >
-                열기
-              </Button>
-            )}
-            {!state.busy && modules.length === 1 && (
-              <Button
-                variant={done.length === 1 ? 'secondary' : 'primary'}
-                icon={Package}
-                onClick={() => go({ kind: 'module', id: modules[0]!, pane: null })}
-              >
-                모듈 보기
-              </Button>
-            )}
-            {!state.busy && prompts.length === 1 && (
-              <Button
-                variant={done.length === 1 ? 'secondary' : 'primary'}
-                icon={FileText}
-                onClick={() => go({ kind: 'prompt', id: prompts[0]!, pane: null })}
-              >
-                프롬프트 보기
-              </Button>
-            )}
-            {!state.busy && personas.length === 1 && (
-              <Button
-                variant={done.length === 1 ? 'secondary' : 'primary'}
-                icon={UserRound}
-                onClick={() => go({ kind: 'persona', id: personas[0]! })}
-              >
-                페르소나 보기
-              </Button>
-            )}
+            {!state.busy && OPENS.map(({ kind, icon, label, route }) => {
+              const ids = idsOf(kind);
+              return ids.length === 1 && ids[0] !== null && (
+                <Button key={kind} variant={done.length === 1 ? 'secondary' : 'primary'} icon={icon} onClick={() => go(route(ids[0]!))}>
+                  {label}
+                </Button>
+              );
+            })}
           </Stack>
         </Dialog>
       )}

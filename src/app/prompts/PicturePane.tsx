@@ -14,7 +14,7 @@ type Props = { tags: PictureTags | undefined; picture: PictureSettings | undefin
 type NumberField = Exclude<keyof PictureSettings, 'sampler'>;
 
 // Bounds only where a source states them; NovelAI answers a value past its own with a refusal the 삽화 slot shows.
-const NUMBERS: Record<NumberField, { label: string; help?: string; whole: boolean; check?: (value: number) => boolean; error?: string; unset: string }> = {
+const NUMBERS: Record<NumberField, { label: string; help?: string; whole: boolean; check: (value: number) => boolean; error: string; unset: string }> = {
   steps: { label: '스텝', whole: true, check: (value) => value >= 1, error: '1 이상의 값을 입력해 주세요.', unset: UNSET },
   scale: { label: '프롬프트 가이던스', whole: false, check: (value) => value >= 0, error: '0 이상의 값을 입력해 주세요.', unset: UNSET },
   rescale: { label: '가이던스 리스케일', whole: false, check: (value) => value >= 0 && value <= 1, error: '0부터 1 사이의 값을 입력해 주세요.', unset: UNSET },
@@ -38,7 +38,7 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
   const read = (field: NumberField, text: string) => {
     const typed = readTyped(text, NUMBERS[field].whole);
     if (!typed.ok) return typed;
-    return NUMBERS[field].check?.(typed.value) === false ? { ok: false as const, error: NUMBERS[field].error! } : typed;
+    return NUMBERS[field].check(typed.value) ? typed : { ok: false as const, error: NUMBERS[field].error };
   };
   const numberRow = (field: NumberField) => {
     const { label, help, unset } = NUMBERS[field];

@@ -9,12 +9,11 @@ import { Missing, type Absent } from '../common/Missing';
 import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
 import { NO_CHARACTER } from '../common/words';
-import { useImport } from '../common/importing';
 import { ShareArrival } from '../library/ShareArrival';
 import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
-import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
+import { backTo, HOME, listOf, up, type Back, type Below, type Route } from './routes';
 import { SettingsList, settingsEntry } from './settings/SettingsNav';
 
 
@@ -35,8 +34,8 @@ const ProfileScreen = lazy(() => import('../models/ProfileScreen').then(({ Profi
 const ModelsScreen = lazy(() => import('../models/ModelsScreen').then(({ ModelsScreen }) => ({ default: ModelsScreen })));
 const ModuleScreen = lazy(() => import('../modules/ModuleScreen').then(({ ModuleScreen }) => ({ default: ModuleScreen })));
 const ModulesScreen = lazy(() => import('../modules/ModulesScreen').then(({ ModulesScreen }) => ({ default: ModulesScreen })));
-const PersonaScreen = lazy(() => import('../personas/PersonaScreen').then(({ PersonaScreen }) => ({ default: PersonaScreen })));
-const PersonasScreen = lazy(() => import('../personas/PersonasScreen').then(({ PersonasScreen }) => ({ default: PersonasScreen })));
+const PersonaEditor = lazy(() => import('../personas/PersonaEditor').then(({ PersonaEditor }) => ({ default: PersonaEditor })));
+const PersonaList = lazy(() => import('../personas/PersonaList').then(({ PersonaList }) => ({ default: PersonaList })));
 const PromptScreen = lazy(() => import('../prompts/PromptScreen').then(({ PromptScreen }) => ({ default: PromptScreen })));
 const PromptsScreen = lazy(() => import('../prompts/PromptsScreen').then(({ PromptsScreen }) => ({ default: PromptsScreen })));
 const AccountScreen = lazy(() => import('../settings/AccountScreen').then(({ AccountScreen }) => ({ default: AccountScreen })));
@@ -50,7 +49,7 @@ const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ defau
 
 const side = (at: SideAt) => <ScreenLoad><ChatSide {...at} /></ScreenLoad>;
 type At<K extends Route['kind']> = Extract<Route, { kind: K }>;
-const missing = (at: Route, what: Absent, wide: boolean) => <Missing what={what} back={backTo(upFromMissing(at), wide)} />;
+const missing = (what: Absent, wide: boolean) => <Missing what={what} back={backTo(HOME, wide)} />;
 type ItemKind = 'character' | 'prompt' | 'persona' | 'module' | 'profile';
 const absentItem = <K extends ItemKind>(kind: K, stored: Stored<K> | null): K | `deleted-${K}` =>
   stored && isBinned(stored.value) ? `deleted-${kind}` : kind;
@@ -100,11 +99,11 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'prompt':
         return <ItemPage at={at} back={back(at)}>{(stored) => <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'personas':
-        return <PersonasScreen back={sideBack(at)} />;
+        return <PersonaList back={sideBack(at)} />;
       case 'persona':
-        return <ItemPage at={at} back={back(at)}>{(stored) => <PersonaScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
+        return <ItemPage at={at} back={back(at)}>{(stored) => <PersonaEditor key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'modules':
-        return <ModulesPage back={sideBack(at)} />;
+        return <ModulesScreen back={sideBack(at)} />;
       case 'module':
         return <ItemPage at={at} back={back(at)}>{(stored) => <ModuleScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'tool-page':
@@ -181,7 +180,7 @@ function CharacterPage({ at, wide }: { at: At<'shelf' | 'edit'>; wide: boolean }
       <Button icon={MessageSquarePlus} onClick={() => navigate({ kind: 'new-chat', character: null })}>새 채팅</Button>
     </Screen>
   );
-  if (!shelf) return missing(at, absentItem('character', stored), wide);
+  if (!shelf) return missing(absentItem('character', stored), wide);
   return <CharacterEditScreen key={shelf.id} shelf={shelf} back={wide ? null : backTo(up(at), wide)} />;
 }
 
@@ -204,11 +203,11 @@ function ChatPage({ at, wide, onPaired }: { at: At<'new-chat' | 'chat'>; wide: b
   }
   const back = backTo(up(at, summary?.chat.character), wide);
   if (at.kind === 'new-chat') {
-    if (at.character !== null && !shelf) return missing(at, absentItem('character', characterStored), wide);
+    if (at.character !== null && !shelf) return missing(absentItem('character', characterStored), wide);
     return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={wide ? null : back} side={side} onPaired={onPaired} />;
   }
   if (!summary) {
-    return missing(at, stored && binsChat(stored.value, () => shelf !== null) ? 'deleted-chat' : 'chat', wide);
+    return missing(stored && binsChat(stored.value, () => shelf !== null) ? 'deleted-chat' : 'chat', wide);
   }
   const item = chatModel.model;
   if (!item || chatModel.state !== 'loaded') return (
@@ -222,7 +221,7 @@ function ChatPage({ at, wide, onPaired }: { at: At<'new-chat' | 'chat'>; wide: b
       )}
     </Screen>
   );
-  if (character !== null && !shelf) return missing(at, 'orphaned-chat', wide);
+  if (character !== null && !shelf) return missing('orphaned-chat', wide);
   return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={wide ? null : back} side={side} onPaired={onPaired} />;
 }
 
@@ -242,11 +241,6 @@ function ModelPage({ at, back }: { at: At<'model'>; back: Back }) {
   const connection = useStored('connection', at.connection);
   const model = connection?.value.starred.find((candidate) => candidate.id === at.model);
   return connection && model ? <ModelScreen key={`${connection.id}/${model.id}`} connection={connection} model={model} back={back} /> : <Missing what="model" back={back} />;
-}
-
-function ModulesPage({ back }: { back: Back | null }) {
-  const { pick } = useImport();
-  return <ModulesScreen back={back} onImport={pick} />;
 }
 
 function AdminPage({ back, closeSettings }: { back: Back | null; closeSettings: () => void }) {

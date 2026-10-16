@@ -11,7 +11,7 @@ import { Callout, Progress, Screen } from '../ui';
 import { clearPending, pendingFor } from '../common/sharePending';
 
 // 헤이젤로 가져오기, after the page load and any sign-in: the link's charx, made here as 파일로 받기 makes it, goes in as a
-// dropped file would, through the import's own questions and outcome. The waiting key is taken once.
+// dropped file would, through the import's own questions and outcome.
 export function ShareArrival({ id }: { id: string }) {
   const { bring } = useImport();
   const [step, setStep] = useState<{ done: number; total: number } | null>(null);

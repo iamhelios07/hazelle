@@ -78,6 +78,23 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
       </Screen>
     );
 
+  const usedBy = [
+    {
+      title: PROMPTS_USING,
+      items: prompts.map(({ id: prompt, value: { name } }) => <ListItem key={prompt} title={promptName(name)} onClick={() => navigate({ kind: 'prompt', id: prompt, pane: null })} />),
+      none: always ? '직접 켠 프롬프트가 없어요.' : '켜 둔 프롬프트가 없어요.',
+    },
+    {
+      title: USED_BY,
+      items: users.map(({ id: character, character: { card, alias }, face }) => <ListItem key={character} leading={<Avatar face={card.name} image={face} />} title={aliased(card.name, alias)} onClick={() => navigate(characterPage(character, wide))} />),
+      none: always ? '직접 켠 캐릭터가 없어요.' : '켜 둔 캐릭터가 없어요.',
+    },
+    {
+      title: PERSONAS_USING,
+      items: personas.map(({ id: persona, value: { name, alias, picture } }) => <ListItem key={persona} leading={<Avatar face={name} image={picture} tone="you" />} title={aliased(name, alias)} onClick={() => navigate({ kind: 'persona', id: persona })} />),
+      none: always ? '직접 켠 페르소나가 없어요.' : '켜 둔 페르소나가 없어요.',
+    },
+  ];
   return (
     <Screen
       width="form"
@@ -112,39 +129,11 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
         />
       </SettingGroup>
       <ToolSection module={stored} />
-      <Section title={PROMPTS_USING}>
-        {prompts.length > 0 ? (
-          <List label={PROMPTS_USING}>
-            {prompts.map(({ id: prompt, value: { name } }) => (
-              <ListItem key={prompt} title={promptName(name)} onClick={() => navigate({ kind: 'prompt', id: prompt, pane: null })} />
-            ))}
-          </List>
-        ) : (
-          <Empty variant="section">{always ? '직접 켠 프롬프트가 없어요.' : '켜 둔 프롬프트가 없어요.'}</Empty>
-        )}
-      </Section>
-      <Section title={USED_BY}>
-        {users.length > 0 ? (
-          <List label={USED_BY}>
-            {users.map(({ id: character, character: { card, alias }, face }) => (
-              <ListItem key={character} leading={<Avatar face={card.name} image={face} />} title={aliased(card.name, alias)} onClick={() => navigate(characterPage(character, wide))} />
-            ))}
-          </List>
-        ) : (
-          <Empty variant="section">{always ? '직접 켠 캐릭터가 없어요.' : '켜 둔 캐릭터가 없어요.'}</Empty>
-        )}
-      </Section>
-      <Section title={PERSONAS_USING}>
-        {personas.length > 0 ? (
-          <List label={PERSONAS_USING}>
-            {personas.map(({ id: persona, value: { name, alias, picture } }) => (
-              <ListItem key={persona} leading={<Avatar face={name} image={picture} tone="you" />} title={aliased(name, alias)} onClick={() => navigate({ kind: 'persona', id: persona })} />
-            ))}
-          </List>
-        ) : (
-          <Empty variant="section">{always ? '직접 켠 페르소나가 없어요.' : '켜 둔 페르소나가 없어요.'}</Empty>
-        )}
-      </Section>
+      {usedBy.map(({ title, items, none }) => (
+        <Section key={title} title={title}>
+          {items.length > 0 ? <List label={title}>{items}</List> : <Empty variant="section">{none}</Empty>}
+        </Section>
+      ))}
       <List box places label="토글">
         <ListItem title="토글" aside={`${value.toggles.filter(isToggle).length}개`} onClick={() => navigate({ kind: 'module', id, pane: 'toggles' })} />
       </List>

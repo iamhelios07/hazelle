@@ -71,7 +71,6 @@ export function useCharacterActions() {
     );
   }
 
-  // Risu's risuAllChats file of the character's chats, streamed to disk chat by chat.
   function exportChats({ id, character }: Shelf) {
     runExport(
       toast,

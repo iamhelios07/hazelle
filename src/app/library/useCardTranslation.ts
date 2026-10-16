@@ -29,7 +29,6 @@ export function useCardTranslation(id: string, character: Character) {
   const translationOf = (source: string) => textTranslation(character, source, language)?.text;
   const missing = sources.filter((source) => translationOf(source) === undefined);
 
-  // Only the texts not translated yet, or every one again once all are.
   async function start() {
     const queue = [...(missing.length > 0 ? missing : sources)];
     const controller = new AbortController();

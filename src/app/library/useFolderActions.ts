@@ -31,7 +31,6 @@ export function useFolderActions() {
     return removal;
   }
 
-  // to null takes them out of every folder.
   function move(ids: string[], to: string | null) {
     void moveCharacters(store, ids, to).then((moved) => moved.ok || toast.failed(moved));
     const name = to === null ? undefined : byFolder.get(to)?.folder.value.name;

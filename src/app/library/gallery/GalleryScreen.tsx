@@ -41,7 +41,6 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
   const { create, rename, move } = useFolderActions();
   const [filter, setFilter] = useState<Filter>('all');
   const [order, setOrder] = useState<'recent' | 'name'>('recent');
-  // The characters picked to move, or null while not picking.
   const [picking, setPicked] = useState<Set<string> | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
   const [purging, setPurging] = useState<Binned | null>(null);

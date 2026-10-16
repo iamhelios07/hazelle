@@ -54,7 +54,7 @@ export const HOME: Route = { kind: 'home' };
 export const BIN_PLACE = 'bin';
 
 type Kind<K extends Route['kind']> = Extract<Route, { kind: K }>;
-export type Below = Exclude<Route, Kind<'home'>>;
+export type Below = Exclude<Route, Kind<'home' | 'settings' | 'share'>>;
 
 const ID = /^[0-9a-f-]{36}$/;
 const NONE = 'none';
@@ -307,9 +307,6 @@ export function up(route: Below, chatShelf?: string | null): Route {
       const shelf = shelfOf(route, chatShelf);
       return shelf === undefined ? HOME : { kind: 'shelf', character: shelf };
     }
-    case 'settings':
-    case 'share':
-      return HOME;
     case 'connections':
     case 'prompts':
     case 'personas':
@@ -345,8 +342,6 @@ export function up(route: Below, chatShelf?: string | null): Route {
       return { kind: 'models' };
   }
 }
-
-export const upFromMissing = (route: Route): Route => (route.kind === 'tool-page' ? { kind: 'modules' } : route.kind === 'prompt' ? { kind: 'prompts' } : (listOf(route) ?? HOME));
 
 export type Back = { to: Route; label: string };
 
