@@ -138,14 +138,13 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
 
 const holdsData = (memory: unknown) => isRecord(memory) && Object.values(memory).some((value) => Array.isArray(value) && value.length > 0);
 
-// Risu's own export of a database character (createBaseV3, spec §6), so the one card converter reads it. Scripts and
-// triggers stay in extensions.risuai, where a JSON card holds them. Export quirks are not reproduced: an unset
-// character_version stays unset rather than "undefined", and no ccdefault: icon is added, since the avatar comes
-// from the character's image.
+// The fields of Risu's own export of a database character (createBaseV3, spec §6) that the one card converter reads;
+// the rest of the export is left out. Scripts and triggers stay in extensions.risuai, where a JSON card holds them.
+// Export quirks are not reproduced: an unset character_version stays unset rather than "undefined", and no ccdefault:
+// icon is added, since the avatar comes from the character's image.
 function cardJson(char: Json): Json {
   const settings = record(char.loreSettings);
   const extras = record(char.additionalData);
-  const other = Object.entries(record(char.extentions)).filter(([key]) => key !== 'risuai' && key !== 'depth_prompt');
   return {
     spec: 'chara_card_v3',
     spec_version: '3.0',
@@ -164,49 +163,34 @@ function cardJson(char: Json): Json {
         scan_depth: settings.scanDepth,
         token_budget: settings.tokenBudget,
         recursive_scanning: settings.recursiveScanning,
-        extensions: { ...record(char.loreExt), risu_fullWordMatching: settings.fullWordMatching ?? false },
+        extensions: { risu_fullWordMatching: settings.fullWordMatching ?? false },
       },
       tags: char.tags,
       creator: extras.creator,
       character_version: extras.character_version,
       extensions: {
-        ...Object.fromEntries(other),
         risuai: {
           bias: char.bias,
-          viewScreen: char.viewScreen,
           customScripts: char.customscript,
           utilityBot: char.utilityBot,
-          sdData: char.sdData,
           backgroundHTML: char.backgroundHTML,
-          license: char.license,
           triggerscript: char.triggerscript,
           additionalText: char.additionalText,
-          largePortrait: char.largePortrait,
-          lorePlus: char.lorePlus,
-          inlayViewScreen: char.inlayViewScreen,
-          newGenData: char.newGenData,
           defaultVariables: char.defaultVariables,
           prebuiltAssetCommand: char.prebuiltAssetCommand,
-          prebuiltAssetExclude: char.prebuiltAssetExclude,
-          prebuiltAssetStyle: char.prebuiltAssetStyle,
           toggles: char.customModuleToggle,
-          moduleNamespace: char.moduleNamespace,
-          hideChatIcon: char.hideChatIcon,
         },
         depth_prompt: char.depth_prompt,
       },
-      group_only_greetings: char.group_only_greetings,
       nickname: char.nickname,
-      source: char.source,
-      creation_date: char.creation_date,
       assets: [
         ...list(char.ccAssets),
         ...list(char.additionalAssets)
           .filter(Array.isArray)
-          .map(([name, uri, ext]) => ({ type: 'x-risu-asset', uri, name, ext: text(ext) || 'png' })),
+          .map(([name, uri]) => ({ type: 'x-risu-asset', uri, name })),
         ...list(char.emotionImages)
           .filter(Array.isArray)
-          .map(([name, uri]) => ({ type: 'emotion', uri, name, ext: 'png' })),
+          .map(([name, uri]) => ({ type: 'emotion', uri, name })),
       ],
     },
   };
