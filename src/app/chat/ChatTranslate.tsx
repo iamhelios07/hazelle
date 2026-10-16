@@ -2,7 +2,7 @@ import { Languages } from 'lucide-react';
 import { sendsNotes, type translatorOf } from '../../runtime/translate';
 import { PerCharacter, type PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
-import { inFeature, NOTE_UNSENT, noteLines, opens, scopeTag, TRANSLATOR_NOTE } from '../common/words';
+import { inFeature, NOTE_UNSENT, opens, scopeTag, TRANSLATOR_NOTE } from '../common/words';
 import { useSettings } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Divider, Menu, Section, SettingRow, Stack, ToolButton } from '../ui';
@@ -54,16 +54,25 @@ export function ChatTranslate({ translate, translation, card, note, onChange, on
   );
 }
 
+// Each note's first line, named as the help names it, so the two notes are told apart. Not model/chat's firstLine: that
+// strips tags from message HTML, and a note is plain text where `<char>` is meant literally.
+export function notePreview(global: string | undefined, own: string | undefined): string[] {
+  const line = (name: string, note: string | undefined) => {
+    const first = (note ?? '').split('\n').map((each) => each.trim()).find(Boolean);
+    return first ? [`${name} · ${first}`] : [];
+  };
+  return [...line('전역', global), ...line('캐릭터', own)];
+}
+
 function NoteRow({ note, translation, onEdit }: { note: string | undefined; translation: Translator; onEdit: (() => void) | undefined }) {
-  const global = noteLines(useSettings().translatorNote);
-  const own = noteLines(note);
-  const counts = [global > 0 && `전역 ${global}줄`, own && `캐릭터 ${own}줄`].filter(Boolean).join(' · ');
-  const unsent = counts !== '' && translation.ok && !sendsNotes(translation.prompt);
+  const preview = notePreview(useSettings().translatorNote, note);
+  const unsent = preview.length > 0 && translation.ok && !sendsNotes(translation.prompt);
   return (
     <SettingRow
       label={TRANSLATOR_NOTE}
       help={{ text: '전역 노트는 모든 번역에 들어가고, 캐릭터 노트는 이 캐릭터를 번역할 때만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
-      sub={counts || '없음'}
+      sub={preview.length ? undefined : '없음'}
+      preview={preview}
       error={unsent ? NOTE_UNSENT : undefined}
       control={
         onEdit && (

@@ -21,6 +21,8 @@ type RowProps = {
   // What the reader who does not know it needs, behind an ⓘ. A label it only restates is left out.
   help?: Help;
   sub?: ReactNode;
+  // Text the row's value holds, a line each, cut to the row's width.
+  preview?: readonly string[];
   control: ReactNode;
   // A small button after the label, such as a pin.
   action?: ReactNode;
@@ -31,7 +33,7 @@ type RowProps = {
   note?: string;
 };
 
-export function SettingRow({ label, sentence, changed = false, help, sub, control, action, wide = false, error, note }: RowProps) {
+export function SettingRow({ label, sentence, changed = false, help, sub, preview, control, action, wide = false, error, note }: RowProps) {
   const id = useId();
   const grouped = useContext(Grouped);
   const className = [styles.row, grouped ? styles.ruled : styles.panel, wide && styles.wide].filter(Boolean).join(' ');
@@ -47,6 +49,11 @@ export function SettingRow({ label, sentence, changed = false, help, sub, contro
           {action}
         </span>
         {sub && <span className={styles.sub}>{sub}</span>}
+        {preview?.map((line, at) => (
+          <span key={at} className={styles.preview}>
+            {line}
+          </span>
+        ))}
       </div>
       <div className={styles.control}>{control}</div>
       {error && (
