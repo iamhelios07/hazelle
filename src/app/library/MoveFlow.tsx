@@ -294,12 +294,12 @@ function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
   const missed = [
     ...moved.characters.flatMap((character) => {
       const lines = [...cardMissed(character.unsupported, character.faceless), ...moveMissed(character.missed)];
-      return lines.length ? [{ tone: 'missed' as const, title: character.name, note: lines.join(' · ') }] : [];
+      return lines.length ? [{ title: character.name, note: lines.join(' · ') }] : [];
     }),
-    ...backup.presets.flatMap((preset) => (preset.failure === null ? [] : [{ tone: 'missed' as const, title: preset.name, note: `프롬프트 · ${PRESET_FAILURE[preset.failure]}` }])),
+    ...backup.presets.flatMap((preset) => (preset.failure === null ? [] : [{ title: preset.name, note: `프롬프트 · ${PRESET_FAILURE[preset.failure]}` }])),
     ...moved.modules.flatMap(({ name, unsupported }) => {
       const lines = missedLines(unsupported);
-      return lines.length ? [{ tone: 'missed' as const, title: moduleName(name), note: `모듈 · ${lines.join(' · ')}` }] : [];
+      return lines.length ? [{ title: moduleName(name), note: `모듈 · ${lines.join(' · ')}` }] : [];
     }),
   ];
   const totals = new Map<Unused['kind'], number>();

@@ -1,16 +1,16 @@
-import { Check, Minus } from 'lucide-react';
+import { Minus } from 'lucide-react';
 import { Icon } from '../foundation/Icon';
 import styles from './Outcome.module.css';
 
-type Item = { tone: 'done' | 'missed'; title: string; note?: string };
+type Item = { title: string; note?: string };
 
 export function Outcome({ label, items }: { label: string; items: Item[] }) {
   return (
     <ul className={styles.outcome} aria-label={label}>
       {items.map((item, index) => (
-        <li key={index} className={`${styles.item} ${styles[item.tone]}`}>
+        <li key={index} className={styles.item}>
           <span className={styles.icon}>
-            <Icon icon={item.tone === 'done' ? Check : Minus} size="xs" />
+            <Icon icon={Minus} size="xs" />
           </span>
           <span className={styles.text}>
             <span className={styles.title}>{item.title}</span>

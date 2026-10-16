@@ -16,13 +16,6 @@
 .icon {
   display: flex;
   padding-top: var(--space-2);
-}
-
-.done .icon {
-  color: var(--color-success);
-}
-
-.missed .icon {
   color: var(--color-warn);
 }
 
