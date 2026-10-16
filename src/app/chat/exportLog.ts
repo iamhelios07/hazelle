@@ -33,7 +33,7 @@ export type Illustrated = { placed: ReadonlyMap<number, string>; pictures: Reado
 export function logDraft(messages: Shown[], view: Display, { placed, pictures: drawn }: Illustrated, flipped: ReadonlySet<string>, bot: boolean, names: ReturnType<typeof speakers>, { hideMe, text, from, to }: LogChoices): LogDraft {
   const decor = { bot, url: pictureRef };
   const rows: LogRow[] = [];
-  for (let index = Math.max(from, 1) - 1; index < Math.min(to, messages.length); index++) {
+  for (let index = from - 1; index < Math.min(to, messages.length); index++) {
     const message = messages[index]!;
     const version = shown(message);
     if (unlogged(message)) continue;
