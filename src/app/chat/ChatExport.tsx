@@ -9,7 +9,8 @@ import type { TranslatorFailure } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
 import { download, fileNamed } from '../common/download';
 import { describeTranslateFailure } from '../common/failure';
-import { languageLabel, withRo } from '../common/languages';
+import { languageLabel } from '../common/languages';
+import { withParticle } from '../common/particles';
 import { sizeText } from '../common/size';
 import { useCopyHtml } from '../common/useCopy';
 import { ARCA_LOG, CHAT_FILE, EXPORT, RISU_CHAT_FILE, RISU_LOSES, risuLeftOut, STOP } from '../common/words';
@@ -173,7 +174,7 @@ export function ChatExport({ item, messages, view, placed, pictures, flipped, bu
                     </Button>
                   ) : (
                     <Button variant="secondary" size="sm" onClick={() => void translateMissing(onTranslate)}>
-                      {`${withRo(languageLabel(replyLanguage))} 번역`}
+                      {`${withParticle(languageLabel(replyLanguage), '으로/로')} 번역`}
                     </Button>
                   )
                 }

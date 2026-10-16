@@ -17,17 +17,17 @@ describe('chatWarning', () => {
   });
 
   it('names what no slot sends', () => {
-    expect(chatWarning([chat(-1, null)])).toBe("'채팅' 블록의 범위에서 앞부분이(가) 빠져요.");
-    expect(chatWarning([chat(0, -1)])).toBe("'채팅' 블록의 범위에서 마지막 메시지이(가) 빠져요.");
-    expect(chatWarning([chat(0, -2), chat(-1, null)])).toBe("'채팅' 블록의 범위에서 끝에서 2번째 메시지이(가) 빠져요.");
-    expect(chatWarning([chat(2, null)])).toBe("'채팅' 블록의 범위에서 앞부분이(가) 빠져요.");
-    expect(chatWarning([chat(0, 3)])).toBe("'채팅' 블록의 범위에서 뒷부분이(가) 빠져요.");
+    expect(chatWarning([chat(-1, null)])).toBe("'채팅' 블록의 범위에서 앞부분이 빠져요.");
+    expect(chatWarning([chat(0, -1)])).toBe("'채팅' 블록의 범위에서 마지막 메시지가 빠져요.");
+    expect(chatWarning([chat(0, -2), chat(-1, null)])).toBe("'채팅' 블록의 범위에서 끝에서 2번째 메시지가 빠져요.");
+    expect(chatWarning([chat(2, null)])).toBe("'채팅' 블록의 범위에서 앞부분이 빠져요.");
+    expect(chatWarning([chat(0, 3)])).toBe("'채팅' 블록의 범위에서 뒷부분이 빠져요.");
   });
 
   it('reads ranges whose ends are far past any chat', () => {
     const far = 2147483647;
     expect(chatWarning([chat(0, -far), chat(-far, null)])).toBeNull();
-    expect(chatWarning([chat(far, null)])).toBe("'채팅' 블록의 범위에서 앞부분이(가) 빠져요.");
-    expect(chatWarning([chat(0, far), chat(-far, null)])).toBe("'채팅' 블록의 범위에서 중간 메시지이(가) 빠져요.");
+    expect(chatWarning([chat(far, null)])).toBe("'채팅' 블록의 범위에서 앞부분이 빠져요.");
+    expect(chatWarning([chat(0, far), chat(-far, null)])).toBe("'채팅' 블록의 범위에서 중간 메시지가 빠져요.");
   });
 });

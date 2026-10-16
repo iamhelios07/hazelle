@@ -47,6 +47,7 @@ import { chatWarning } from './ranges';
 import { PicturePane } from './PicturePane';
 import { PresetExport } from './PresetExport';
 import { TogglePane } from '../common/TogglePane';
+import { withParticle } from '../common/particles';
 import { lineTitle } from '../common/toggleWords';
 import { EMPTY_USE, usePromptUse } from '../common/usePromptUse';
 
@@ -217,7 +218,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
     if (!gone) return;
     const step = perform(removeLine(gone, at));
     if (!step) return;
-    undoable(`${lineTitle(gone)}을 삭제했어요.`, () => undo(step));
+    undoable(`${withParticle(lineTitle(gone), '을/를')} 삭제했어요.`, () => undo(step));
   };
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);

@@ -1,7 +1,7 @@
 import { useRef, type KeyboardEvent } from 'react';
 import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
-import { withRo } from '../common/languages';
+import { withParticle } from '../common/particles';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { Button, Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
@@ -78,7 +78,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         value={draft.text}
         onChange={draft.set}
         onKeyDown={onKey}
-        placeholder={translate.input ? `${withRo(sendLanguage)} 번역해서 보내요` : '메시지'}
+        placeholder={translate.input ? `${withParticle(sendLanguage, '으로/로')} 번역해서 보내요` : '메시지'}
         tools={
           <>
             <ChatPersonaPicker persona={chat.persona} open={chat.dialog === 'persona'} onOpen={() => actions.openDialog('persona')} />

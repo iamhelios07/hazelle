@@ -9,6 +9,7 @@ import { accountName } from '../../runtime/pool';
 import { ACTS, addOf } from '../common/acts';
 import { describeMetersFailure } from '../common/failure';
 import { NameDialog } from '../common/NameDialog';
+import { withParticle } from '../common/particles';
 import { monthDay } from '../common/time';
 import { useSession } from '../session';
 import { useToast } from '../toast';
@@ -166,7 +167,7 @@ function AccountRow({ connection, account, group, at, turn, waiting, change, onS
           <MenuItem icon={ArrowUp} label="위로" disabled={at === 0} onClick={() => change((turns) => moveAccountOrder(turns, account.id, -1))} />
           <MenuItem icon={ArrowDown} label="아래로" disabled={at === group.accounts.length - 1} onClick={() => change((turns) => moveAccountOrder(turns, account.id, 1))} />
           {others.map((other) => (
-            <MenuItem key={other.id} label={`${other.name}으로 옮기기`} onClick={() => change((turns) => moveAccount(turns, account.id, other.id))} />
+            <MenuItem key={other.id} label={`${withParticle(other.name, '으로/로')} 옮기기`} onClick={() => change((turns) => moveAccount(turns, account.id, other.id))} />
           ))}
           <MenuItem icon={ACTS.retry.icon} label="사용량 다시 확인" onClick={retry} />
           <MenuItem icon={LogIn} label="다시 로그인" onClick={onSignIn} />

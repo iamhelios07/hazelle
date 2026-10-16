@@ -12,7 +12,8 @@ import type { Translating } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
 import { BOOKMARK } from '../common/words';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
-import { languageLabel, withRo } from '../common/languages';
+import { languageLabel } from '../common/languages';
+import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
 import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
@@ -270,7 +271,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   );
   const translateAgain = canTranslate && translation && !sentTranslated && <MenuItem label="다시 번역" disabled={translatingText !== null} onClick={translateHere} />;
   // The language it went out in, not the setting now.
-  const mark = !translation || editing !== null ? undefined : sentTranslated ? `${withRo(languageLabel(translation.sentIn!))} 보냄` : flipped ? '원문' : '번역';
+  const mark = !translation || editing !== null ? undefined : sentTranslated ? `${withParticle(languageLabel(translation.sentIn!), '으로/로')} 보냄` : flipped ? '원문' : '번역';
 
   const count = message.versions.length;
   // No call writes a greeting: its versions go round.

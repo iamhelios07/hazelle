@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, ChipButton, Divider, Menu, MenuItem, Row, TextField, useMenuClose } from '../ui';
-import { LANGUAGES, languageLabel, withRo } from './languages';
+import { LANGUAGES, languageLabel } from './languages';
+import { particleOf } from './particles';
 
 // The language a translation goes into, picked inside its sentence: "응답을 [한국어]로 번역해서 보기".
 export function IntoLanguage({ before, after, label, value, opens, onPick }: { before: string; after: string; label: string; value: string; opens: 'up' | 'down'; onPick: (name: string) => void }) {
@@ -9,7 +10,7 @@ export function IntoLanguage({ before, after, label, value, opens, onPick }: { b
     <>
       {before}
       <LanguageMenu label={label} value={value} opens={opens} onPick={onPick} />
-      {`${withRo(word).slice(word.length)} ${after}`}
+      {`${particleOf(word, '으로/로')} ${after}`}
     </>
   );
 }

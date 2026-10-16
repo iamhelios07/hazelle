@@ -1,4 +1,5 @@
 import type { Block, ChatRange, ChatSlot } from '../../model/prompt';
+import { withParticle } from '../common/particles';
 
 // Where a range starts and ends in a chat of `length` messages, as a slice reads it: negative counts from the end.
 function span({ from, to }: ChatRange, length: number): [number, number] {
@@ -28,7 +29,7 @@ export function chatWarning(blocks: readonly Block[]): string | null {
     next = end;
   }
   if (next < length) missed.push(describeRun(next, length - 1, length, reach));
-  return missed.length ? `'채팅' 블록의 범위에서 ${missed.join(', ')}이(가) 빠져요.` : null;
+  return missed.length ? `'채팅' 블록의 범위에서 ${withParticle(missed.join(', '), '이/가')} 빠져요.` : null;
 }
 
 function describeRun(first: number, last: number, length: number, reach: number): string {

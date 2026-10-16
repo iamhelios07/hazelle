@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, GitBranch, X } from 'lucide-react';
 import type { Ref } from 'react';
 import { ACTS, addOf, newOf } from '../common/acts';
+import { withParticle } from '../common/particles';
 import { SHORTCUTS } from '../shortcuts';
 import type { Block, ChatRange, ChatSlot, PromptSort, RecentSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
 import { Button, ChoiceGroup, Divider, Empty, Hint, MarkupArea, Menu, MenuHeading, MenuItem, MoreMenu, Row, Section, SettingRow, Stack, Stepper, Switch, Tag, Text, TitleField } from '../ui';
@@ -56,7 +57,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
           {block.kind === 'text' && block.mark && (
             <>
               <Tag tone="accent">{MARKS[block.mark].label}</Tag>
-              <Hint label={MARKS[block.mark].label}>{`캐릭터 카드에 '${MARKS[block.mark].card}'가 있으면 그 내용으로 대체되고, 이 텍스트는 카드의 {{original}} 자리에 들어가요.`}</Hint>
+              <Hint label={MARKS[block.mark].label}>{`캐릭터 카드에 ${withParticle(`'${MARKS[block.mark].card}'`, '이/가')} 있으면 그 내용으로 대체되고, 이 텍스트는 카드의 {{original}} 자리에 들어가요.`}</Hint>
             </>
           )}
           {block.kind === 'text' && (
