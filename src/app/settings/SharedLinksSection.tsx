@@ -11,8 +11,7 @@ import { useShares, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, Empty, List, ListItem, Panel } from '../ui';
 
-// 설정 › 계정 › 공유한 링크: the server's links joined to the characters this account's vault names them by. A link no
-// character here names, its character purged, is listed by what the server knows.
+// A link no character here names, its character purged, is listed by what the server knows.
 export function SharedLinksSection() {
   const store = useStore();
   const toast = useToast();

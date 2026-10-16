@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ApiResult } from '../../runtime/api';
 import type { Page } from '../../runtime/pages';
+import { Button, Callout } from '../ui';
+import { ACTS } from './acts';
 import { describeFailure } from './failure';
 
 // A failed reload keeps what was shown.
@@ -47,14 +49,16 @@ export function usePages<T extends { id: number }>(load: (before: number | null)
     };
   }, []);
 
+  // Rows are kept only on success, so none yet means the first page failed and some means an older one did.
+  const retry = () => void fetch(rows === null ? null : (rows.at(-1)?.id ?? null));
   return {
     rows,
-    more,
-    busy,
-    failure,
-    older: () => void fetch(rows!.at(-1)!.id),
-    // Rows are kept only on success, so none yet means the first page failed and some means an older one did.
-    retry: () => void fetch(rows === null ? null : (rows.at(-1)?.id ?? null)),
+    failure: failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: retry }}>{failure}</Callout>,
+    more: more && (
+      <Button variant="ghost" size="sm" busy={busy} onClick={() => void fetch(rows!.at(-1)!.id)}>
+        더 보기
+      </Button>
+    ),
     // After an act that changed rows not in hand, such as every report on one share: the first page again.
     reload: () => void fetch(null),
     patch: (id: number, change: Partial<T>) => setRows((shown) => shown && shown.map((row) => (row.id === id ? { ...row, ...change } : row))),

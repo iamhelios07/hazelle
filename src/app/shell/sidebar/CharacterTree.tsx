@@ -14,7 +14,6 @@ import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, V
 import { navigate } from '../router';
 import { SettingsButton } from './SettingsButton';
 
-// The phone's home page; wide screens leave every character to 캐릭터 둘러보기 and the rail.
 type Props = {
   typing: (shelf: Shelf<ChatSummary>) => boolean;
   onEnter: (shelf: Shelf<ChatSummary>) => void;

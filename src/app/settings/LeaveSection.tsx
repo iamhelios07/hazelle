@@ -7,7 +7,6 @@ import { useAttempt } from '../common/useAttempt';
 import { useAccount, useSession } from '../session';
 import { Button, ConfirmDialog, Panel, SettingGroup, SettingRow, Stack, TextField } from '../ui';
 
-// 탈퇴. The server asks the password or the recovery key again, as login does.
 export function LeaveSection() {
   const [asking, setAsking] = useState(false);
   return (

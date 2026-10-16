@@ -63,10 +63,6 @@ export const addProfile = (store: ObjectStore, profile: Profile, id?: string) =>
 
 export const renameProfile = (store: ObjectStore, id: string, name: string) => store.update('profile', id, (current) => ({ ...current, name }));
 
-// Each change is merged into the current copy on every try, so a field changed meanwhile on another device survives.
-const updateSettings = (store: ObjectStore, id: string, change: (settings: ModelSettings) => ModelSettings) =>
-  store.update('profile', id, (current) => ({ ...current, settings: change(current.settings) }));
-
 // A setting given as undefined is cleared: nothing is sent for it.
 export function withSettings(settings: ModelSettings, values: ModelSettings): ModelSettings {
   const next = { ...settings, ...values };
@@ -74,7 +70,9 @@ export function withSettings(settings: ModelSettings, values: ModelSettings): Mo
   return next;
 }
 
-export const setProfileSettings = (store: ObjectStore, id: string, values: ModelSettings) => updateSettings(store, id, (settings) => withSettings(settings, values));
+// Each change is merged into the current copy on every try, so a field changed meanwhile on another device survives.
+export const setProfileSettings = (store: ObjectStore, id: string, values: ModelSettings) =>
+  store.update('profile', id, (current) => ({ ...current, settings: withSettings(current.settings, values) }));
 
 // To 휴지통 (model/library Mark). As with prompts, the default goes only once another 묶음 is the default. A model that
 // used a deleted 묶음 reads as missing until it is given another, or the 묶음 comes back.
@@ -94,10 +92,11 @@ export async function addDefaultProfile(store: ObjectStore) {
   return made.ok ? setDefaultProfile(store, id) : made;
 }
 
-// null leaves the model to the default 묶음.
-export function setModelProfile(store: ObjectStore, connection: string, model: string, profile: string | null): Promise<ApiResult<Stored<'connection'>>> {
+// The default 묶음 is what a model without its own uses, so putting a model on it clears the model's own.
+export function setModelProfile(store: ObjectStore, connection: string, model: string, profile: string): Promise<ApiResult<Stored<'connection'>>> {
+  const isDefault = profile === store.get('settings', SETTINGS_ID)?.value.profile;
   return store.update('connection', connection, (current) => ({
     ...current,
-    starred: current.starred.map((entry) => (entry.id !== model ? entry : profile === null ? without(entry, 'profile') : { ...entry, profile })),
+    starred: current.starred.map((entry) => (entry.id !== model ? entry : isDefault ? without(entry, 'profile') : { ...entry, profile })),
   }));
 }

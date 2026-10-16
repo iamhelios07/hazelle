@@ -4,7 +4,7 @@ import { fit } from '../../connectors/settings';
 import type { Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { modelUsage } from '../../model/usage';
-import { ROLES, sameModelRef, type Role } from '../../connectors/assignment';
+import { rolesOf } from '../../connectors/assignment';
 import { imageOnly } from '../../runtime/assignment';
 import { retriesOf } from '../../runtime/connections';
 import { addProfile, modelProfile, profileUsers, setModelProfile } from '../../runtime/profiles';
@@ -86,11 +86,10 @@ function ChatModelScreen({ connection, model, back }: Props) {
   const schema = modelSettings(connection.value, model);
   const sorted = defaultFirst(profiles, settings.profile);
   const ref = { connection: connection.id, model: model.id };
-  const roles = (Object.keys(ROLES) as Role[]).filter((role) => settings.models[role] && sameModelRef(settings.models[role]!, ref));
+  const roles = rolesOf(settings.models, ref);
 
-  // The default is what a model without its own uses, so picking it clears the model's own.
   async function choose(id: string) {
-    const saved = await setModelProfile(store, connection.id, model.id, id === settings.profile ? null : id);
+    const saved = await setModelProfile(store, connection.id, model.id, id);
     if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
   }
 

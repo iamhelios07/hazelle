@@ -6,7 +6,7 @@ import { usePersisted } from '../../common/usePersisted';
 import { useCharacter, useChatSummary, useLibrary, useWritingChats } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
-import { enterShelf, HOME, shelfOf } from '../routes';
+import { enterShelf, shelfOf } from '../routes';
 import { CharacterTree } from './CharacterTree';
 import { ShelfChats } from './ShelfChats';
 import { SidebarRail } from './SidebarRail';
@@ -18,7 +18,6 @@ const openFolderIds = (stored: string): string[] => {
 };
 
 type Props = {
-  // Phones: the list is the home screen.
   page: boolean;
   collapsed: boolean;
   onCollapse: (collapsed: boolean) => void;
@@ -58,7 +57,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   // Picking a character goes inside it, even when its latest chat is the page already open.
   const enter = (shelf: Shelf<ChatSummary>) => navigate(enterShelf(shelf, wide));
 
-  const chats = current && <ShelfChats key={current.id ?? 'none'} page={page} shelf={current} onUp={() => navigate(HOME)} />;
+  const chats = current && <ShelfChats key={current.id ?? 'none'} page={page} shelf={current} />;
   if (page) return chats || (
     <CharacterTree
       typing={typing}

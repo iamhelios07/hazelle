@@ -9,7 +9,7 @@ const model: Model = { id: 'm', name: 'M', input: null, output: null, contextLen
 const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [model, { ...model, id: 'other' }] };
 
 describe('설정 묶음', () => {
-  it('gives a model the default 묶음 until it names its own, reads a deleted one as missing, and keeps the default', async () => {
+  it('gives a model the default 묶음 until it names its own, reads a deleted one as missing, keeps the default, and clears its own when put on the default', async () => {
     const { store } = await server.account();
     const created = await store.create('connection', openRouter);
     const id = created.ok ? created.data.id : '';
@@ -24,6 +24,8 @@ describe('설정 묶음', () => {
     await removeProfile(store, claude);
     expect(modelProfile(store, starred())).toEqual({ kind: 'missing', own: true });
     expect(await removeProfile(store, FIRST_PROFILE_ID)).toEqual({ ok: false, error: 'default' });
+    await setModelProfile(store, id, 'm', FIRST_PROFILE_ID);
+    expect(starred()).not.toHaveProperty('profile');
   });
 
   it('merges each change into what is stored, so another device’s change to another field survives', async () => {

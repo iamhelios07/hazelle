@@ -7,8 +7,6 @@ import { count } from '../common/typedNumber';
 import { Button, Callout, Row, Text } from '../ui';
 import { moment } from '../common/time';
 
-// Whole-service totals are intentionally independent of list navigation and account/notice actions. A refresh
-// walks bounded usage pages, retains just their sums and can stop without issuing the next page.
 export function UsageRow() {
   const job = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);

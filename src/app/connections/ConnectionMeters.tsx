@@ -15,13 +15,11 @@ import { Callout, Empty, Gauge, Link, Panel, Stack, Text } from '../ui';
 const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${monthDay(resets.at)} 초기화`);
 
-// At a glance: whole numbers from ten up, so 812.4 reads 812.
 const plain = (value: number) => (value >= 10 ? count(Math.round(value)) : creditAmount(value));
 const UNITS: Record<Exclude<MeterUnit, 'usd'>, string> = { credit: ' 크레딧', requests: '회', tokens: ' 토큰', concurrency: '', percent: '%' };
 const figure = (unit: MeterUnit, value: number) => (unit === 'usd' ? usd(value) : `${plain(value)}${UNITS[unit]}`);
 const amount = (unit: MeterUnit, value: number) => (unit === 'usd' || unit === 'percent' ? figure(unit, value) : plain(value));
 
-// What is left of an allowance as a Gauge reads it; no share where it has no limit.
 function remaining(meter: Extract<Meter, { kind: 'left' }>) {
   const left = amount(meter.unit, meter.amount);
   if (meter.limit === null) return { amount: left, of: '남음' };

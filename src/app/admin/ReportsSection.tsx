@@ -3,12 +3,11 @@ import { useState } from 'react';
 import { readReports, resolveReport, type Report } from '../../runtime/admin';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
-import { Button, Callout, Dialog, Empty, List, ListItem, Panel, Stack, Text, TextField } from '../ui';
+import { Button, Dialog, Empty, List, ListItem, Panel, Stack, Text, TextField } from '../ui';
 import { NoticeDialog } from './NoticeDialog';
 import { ShareReportDialog } from './ShareReportDialog';
 import { shareTags } from './shareTags';
 import { usePages } from '../common/useLoaded';
-import { ACTS } from '../common/acts';
 
 export type AccountReport = Report & { accountId: string; username: string };
 
@@ -20,7 +19,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   const { rows } = pages;
   return (
     <Panel title={NOTICES.received}>
-      {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
+      {pages.failure}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.received}이 없어요.</Empty>}
       {rows && rows.length > 0 && (
         <List label={NOTICES.received} box>
@@ -36,11 +35,7 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
           ))}
         </List>
       )}
-      {pages.more && (
-        <Button variant="ghost" size="sm" busy={pages.busy} onClick={pages.older}>
-          더 보기
-        </Button>
-      )}
+      {pages.more}
       {open?.share != null && (
         <ShareReportDialog
           report={open as Report & { share: string; shareVersion: number; link: string }}

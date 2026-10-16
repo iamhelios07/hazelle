@@ -1,4 +1,5 @@
 import { EMPTY_SETTINGS } from '../../model/settings';
+import { switched } from '../../runtime/modules';
 import { LABS, type LabId } from '../common/labs';
 import { PAGES } from '../common/words';
 import { useSettings, useStore } from '../session';
@@ -16,10 +17,7 @@ export function LabsScreen({ back }: { back: Back | null }) {
   const toast = useToast();
 
   async function flip(id: LabId, next: boolean) {
-    const saved = await store.upsert('settings', (settings = EMPTY_SETTINGS) => {
-      const kept = (settings.labs ?? []).filter((other) => other !== id);
-      return { ...settings, labs: next ? [...kept, id] : kept };
-    });
+    const saved = await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, labs: switched(settings.labs, id, next) }));
     if (!saved.ok) toast.failed(saved);
   }
 

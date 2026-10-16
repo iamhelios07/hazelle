@@ -2,11 +2,10 @@ import { readLog, type LogRow } from '../../runtime/admin';
 import { sizeText } from '../common/size';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
-import { Button, Callout, Empty, List, ListItem, Panel } from '../ui';
+import { Empty, List, ListItem, Panel } from '../ui';
 import { restoreError } from '../common/RestoresDialog';
 import { moment } from '../common/time';
 import { usePages } from '../common/useLoaded';
-import { ACTS } from '../common/acts';
 
 // The actions server/admin logs. One it does not list shows as the server wrote it.
 const ACTIONS: Record<string, string> = {
@@ -57,7 +56,7 @@ export function LogSection() {
   const { rows } = pages;
   return (
     <Panel title="기록">
-      {pages.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: pages.retry }}>{pages.failure}</Callout>}
+      {pages.failure}
       {rows && rows.length === 0 && <Empty variant="section">아직 기록이 없어요.</Empty>}
       {rows && rows.length > 0 && (
         <List label="기록" box>
@@ -66,11 +65,7 @@ export function LogSection() {
           ))}
         </List>
       )}
-      {pages.more && (
-        <Button variant="ghost" size="sm" busy={pages.busy} onClick={pages.older}>
-          더 보기
-        </Button>
-      )}
+      {pages.more}
     </Panel>
   );
 }

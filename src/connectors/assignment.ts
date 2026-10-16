@@ -16,6 +16,8 @@ export type Assignment = Partial<Record<Role, ModelRef>>;
 
 export const sameModelRef = (a: ModelRef, b: ModelRef): boolean => a.connection === b.connection && a.model === b.model;
 
+export const rolesOf = (assignment: Assignment, ref: ModelRef): Role[] => (Object.keys(ROLES) as Role[]).filter((role) => assignment[role] && sameModelRef(assignment[role], ref));
+
 // Layers run from the most specific to 공용. Every layer is asked for the role before the chain
 // moves on, so a 보조 모델 set in 공용 outranks a 대화 모델 set in the chat.
 export function resolveRole(role: Role, layers: Assignment[]): ModelRef | null {

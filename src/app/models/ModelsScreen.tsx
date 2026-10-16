@@ -1,8 +1,7 @@
-import { sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
+import { rolesOf, type ModelRef, type Role } from '../../connectors/assignment';
 import { imageOnly, setDefaultModel } from '../../runtime/assignment';
 import { addDefaultProfile, modelProfile, profileUsers, setDefaultProfile } from '../../runtime/profiles';
 import { TASK_NAMES } from '../common/prompt-words';
-import { ROLES } from '../../connectors/assignment';
 import { findStarred, RoleCard } from '../common/RolePicker';
 import { defaultFirst, NO_PROFILE, profileLine, valuesLine } from '../common/settingWords';
 import { useSearch } from '../common/useSearch';
@@ -35,7 +34,6 @@ export function ModelsScreen({ back }: { back: Back | null }) {
   const pickDefault = (id: string) => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
   const makeDefault = () => void addDefaultProfile(store).then((done) => done.ok || toast.failed(done, `${MODEL_SETTINGS}을 만들지 못했어요.`));
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
-  const rolesOf = (ref: ModelRef) => (Object.keys(ROLES) as Role[]).filter((role) => settings.models[role] && sameModelRef(settings.models[role]!, ref));
   const cardOf = (ref: ModelRef | undefined) => {
     const found = ref && models.find(({ connection, model }) => connection.id === ref.connection && model.id === ref.model);
     if (!found) return {};
@@ -124,7 +122,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
                   <ListItem
                     key={`${connection.id}/${model.id}`}
                     title={model.name}
-                    tags={rolesOf(ref).map((role) => ROLE_TAGS[role])}
+                    tags={rolesOf(settings.models, ref).map((role) => ROLE_TAGS[role])}
                     description={connection.value.label}
                     aside={apart}
                     onClick={() => navigate({ kind: 'model', ...ref })}

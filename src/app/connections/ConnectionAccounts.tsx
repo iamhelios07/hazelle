@@ -73,7 +73,7 @@ export function ConnectionAccounts({ id, connection, signIn, level }: { id: stri
               title={group.name}
               tags={index === 0 ? ['지금 차례'] : []}
               description={index === 0 ? undefined : `${monthDay(startsAt)}부터`}
-              trailing={<GroupMenu turns={connection.turns} group={group} current={index === 0} change={turns} onRename={() => setRenaming(group)} />}
+              trailing={<GroupMenu turns={connection.turns} group={group} position={index} change={turns} onRename={() => setRenaming(group)} />}
             >
               {group.accounts.length ? (
                 group.accounts.map((accountId, at) => {
@@ -178,14 +178,13 @@ function AccountRow({ connection, account, group, at, turn, waiting, change, onS
   );
 }
 
-type GroupMenuProps = { turns: Turns; group: Group; current: boolean; change: (change: (turns: Turns) => Turns | null) => void; onRename: () => void };
+type GroupMenuProps = { turns: Turns; group: Group; position: number; change: (change: (turns: Turns) => Turns | null) => void; onRename: () => void };
 
-function GroupMenu({ turns, group, current, change, onRename }: GroupMenuProps) {
-  const position = schedule(turns, Date.now()).timeline.findIndex((entry) => entry.group.id === group.id);
+function GroupMenu({ turns, group, position, change, onRename }: GroupMenuProps) {
   return (
     <MoreMenu of={group.name}>
       <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={onRename} />
-      <MenuItem label="지금 차례로" disabled={current} onClick={() => change((current) => takeTurn(current, group.id, Date.now()))} />
+      <MenuItem label="지금 차례로" disabled={position === 0} onClick={() => change((current) => takeTurn(current, group.id, Date.now()))} />
       <MenuItem icon={ArrowUp} label="앞 차례로" disabled={position < 2} onClick={() => change((current) => moveGroup(current, group.id, -1, Date.now()))} />
       <MenuItem icon={ArrowDown} label="뒤 차례로" disabled={position < 1 || position === turns.groups.length - 1} onClick={() => change((current) => moveGroup(current, group.id, 1, Date.now()))} />
       <MenuItem icon={ACTS.remove.icon} label="그룹 삭제" tone="warn" disabled={group.accounts.length > 0 || turns.groups.length === 1} onClick={() => change((current) => removeGroup(current, group.id, Date.now()))} />
