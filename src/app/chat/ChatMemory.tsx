@@ -13,7 +13,7 @@ import { tokens } from '../common/receipt';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, PAGES, RESET, scopeTag, taskModelHelp } from '../common/words';
+import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, RESET, scopeTag, taskModelHelp } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
@@ -232,12 +232,13 @@ function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (door: Pr
   const store = useStore();
   const writer = memoryWriter(store, chat);
   const prompt = memoryPrompt(store);
+  const model = taskModelHelp('기억', prompt.kind === 'prompt');
   return (
     <SettingRow
       label="기억 모델"
       help={{
-        text: taskModelHelp('기억'),
-        open: prompt.kind === 'prompt' ? { label: opens('기억 프롬프트'), onClick: () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) } : { label: opens(PAGES.prompts), onClick: () => onEditPrompt(null) },
+        text: model.text,
+        open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => navigate({ kind: 'models' }) },
       }}
       sub={prompt.kind === 'prompt' && !prompt.prompt.value.model ? follows(MODEL_ROLES.aux) : undefined}
       control={<Text variant="note">{'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}</Text>}

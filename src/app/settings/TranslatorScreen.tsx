@@ -10,7 +10,7 @@ import { LanguageMenu } from '../common/IntoLanguage';
 import { count } from '../common/typedNumber';
 import { useCopy } from '../common/useCopy';
 import { usePersisted } from '../common/usePersisted';
-import { DEFAULT_MODELS, NOTE_UNSENT, noteLines, PAGES, STOP, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
+import { NOTE_UNSENT, noteLines, PAGES, STOP, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
 import { useConnections, usePrompts, useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -47,6 +47,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
 
   const prompt = translationPrompt(store, translateSwitches(store, null).prompt);
   const translator = translatorOf(store, TRANSLATOR_CHAT);
+  const model = taskModelHelp('번역', prompt.kind === 'prompt');
   const running = run.kind === 'running';
   const ready = translator.ok && source.trim() !== '' && !running;
   const lines = noteLines(settings.translatorNote);
@@ -95,9 +96,8 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
                 />
               )}
             >
-              <MenuHeading>{translator.ok ? taskModelHelp('번역') : describeTranslateFailure(translator.failure)}</MenuHeading>
-              {prompt.kind === 'prompt' && <MenuItem label={`'${prompt.prompt.value.name}' 열기…`} onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: 'model' })} />}
-              <MenuItem label={`${DEFAULT_MODELS} 열기…`} onClick={() => navigate({ kind: 'models' })} />
+              <MenuHeading>{translator.ok ? model.text : describeTranslateFailure(translator.failure)}</MenuHeading>
+              <MenuItem label={model.door} onClick={() => navigate(prompt.kind === 'prompt' ? { kind: 'prompt', id: prompt.prompt.id, pane: 'model' } : { kind: 'models' })} />
               <MenuHeading>여기서 번역한 내용은 저장되지 않아요.</MenuHeading>
             </Menu>
             <Icon icon={ArrowRight} size="xs" />

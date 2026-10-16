@@ -68,6 +68,11 @@
   composes: note from '../foundation/type.module.css';
 }
 
+.preview {
+  composes: note from '../foundation/type.module.css';
+  composes: ellipsis from '../foundation/a11y.module.css';
+}
+
 .control {
   display: flex;
   align-items: center;

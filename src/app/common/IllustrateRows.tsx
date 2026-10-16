@@ -11,7 +11,7 @@ import { ACTS, addOf, newOf } from './acts';
 import { describeIllustrateFailure } from './failure';
 import { readTyped } from './typedNumber';
 import { appliesTo, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
-import { follows, NOT_STARRED, opens as door, PAGES, taskModelHelp } from './words';
+import { follows, NOT_STARRED, taskModelHelp } from './words';
 
 type Props = {
   illustrate: IllustrateSetup;
@@ -27,6 +27,7 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
   const { store } = useSession();
   const routes = drawingModels(useConnections());
   const prompt = illustrationPrompt(store, illustrate.prompt);
+  const model = taskModelHelp('삽화', prompt.kind === 'prompt');
   return (
     <>
       <SettingRow
@@ -60,8 +61,8 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
       <SettingRow
         label="장면 모델"
         help={{
-          text: taskModelHelp('삽화'),
-          open: prompt.kind === 'prompt' ? { label: door('삽화 프롬프트'), onClick: () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) } : { label: door(PAGES.prompts), onClick: () => onEditPrompt(null) },
+          text: model.text,
+          open: { label: model.door, onClick: prompt.kind === 'prompt' ? () => onEditPrompt({ id: prompt.prompt.id, pane: 'model' }) : () => navigate({ kind: 'models' }) },
         }}
         control={<Text variant="note">{'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name}</Text>}
       />
