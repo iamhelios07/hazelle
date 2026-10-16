@@ -364,7 +364,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),
       side: (panel: Panel) => open(panel),
       closePanel: () => setPanels((current) => ({ ...current, panel: null })),
-      openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt' | 'export') => setDialog(which),
+      openDialog: (which: NonNullable<typeof dialog>) => setDialog(which),
       closeDialog: () => setDialog(null),
       flip,
       writeToggle,
