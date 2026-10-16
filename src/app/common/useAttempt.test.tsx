@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { expect, it, vi } from 'vitest';
 import { useAttempt } from './useAttempt';
-import { probeRoot } from './probe';
+import { probeRoot } from '../ui/probe';
 
 it('stops the signal its task was given when the screen is left', async () => {
   let attempt: ReturnType<typeof useAttempt>;

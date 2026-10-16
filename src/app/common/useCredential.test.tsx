@@ -2,7 +2,7 @@ import { act } from 'react';
 import { expect, it, vi } from 'vitest';
 import { useAttempt } from './useAttempt';
 import { useCredential } from './useCredential';
-import { probeRoot } from './probe';
+import { probeRoot } from '../ui/probe';
 
 it('owns both input modes and clears the previous secret and failure on every method switch', async () => {
   let credential: ReturnType<typeof useCredential>;

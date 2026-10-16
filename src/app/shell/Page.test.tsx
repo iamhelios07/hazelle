@@ -11,7 +11,7 @@ import type { StoreChange } from '../../runtime/object-index';
 import { SessionProvider, type Account } from '../session';
 import { Page } from './Page';
 import type { Route } from './routes';
-import { probeRoot } from '../common/probe';
+import { probeRoot } from '../ui/probe';
 
 const seen = vi.hoisted(() => ({ chats: [] as string[], mounts: 0, unmounts: 0, prompts: [] as string[], missing: [] as string[] }));
 vi.mock('../chat/ChatScreen', () => ({ ChatScreen: ({ id }: { id: string }) => {

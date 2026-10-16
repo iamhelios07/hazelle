@@ -6,8 +6,8 @@ import type { PromptPane, Route } from '../shell/routes';
 import type { ToggleSection } from './toggles';
 
 // block: the prompt block the editor opens at, absent for its list. fromToggles: opened from the chat's 토글 panel,
-// which its 토글 pane goes back to.
-export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null };
+// which the prompt's 토글 pane and the character's 토글 part go back to.
+export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null; fromToggles?: true };
 export type InspectTab = 'request' | 'cache' | 'variables' | 'modules' | 'scripts';
 export type InspectPanel = { kind: 'inspect'; tab: InspectTab };
 export type InfoTab = 'reply' | 'lore' | 'memory' | 'request' | 'response';
@@ -55,7 +55,7 @@ export function toggleEditor({ from, id }: Pick<ToggleSection, 'from' | 'id'>): 
     case 'prompt':
       return { kind: 'prompts', id, pane: 'toggles', fromToggles: true };
     case 'card':
-      return { kind: 'character', id, part: 'toggles' };
+      return { kind: 'character', id, part: 'toggles', fromToggles: true };
     case 'module':
       return { kind: 'module', id, pane: 'toggles' };
   }

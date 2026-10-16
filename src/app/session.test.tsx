@@ -11,7 +11,7 @@ import type { Turn } from '../runtime/talk';
 import * as display from '../runtime/chat-context';
 import { randomBytes } from '../vault/aead';
 import { SessionProvider, useChatDisplay } from './session';
-import { probeRoot } from './common/probe';
+import { probeRoot } from './ui/probe';
 
 const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, localProviders: [] });
 

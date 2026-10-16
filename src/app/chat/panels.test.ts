@@ -47,9 +47,9 @@ describe('where the lorebook budget that cut entries is set', () => {
 });
 
 describe('the editor a toggle section opens', () => {
-  it('opens the prompt’s 토글 pane that goes back to the panel, the character’s 토글 part, and a module’s 토글 page', () => {
+  it('opens the prompt’s 토글 pane and the character’s 토글 part, both going back to the panel, and a module’s 토글 page', () => {
     expect(toggleEditor({ from: 'prompt', id: 'p' })).toEqual({ kind: 'prompts', id: 'p', pane: 'toggles', fromToggles: true });
-    expect(toggleEditor({ from: 'card', id: 'c' })).toEqual({ kind: 'character', id: 'c', part: 'toggles' });
+    expect(toggleEditor({ from: 'card', id: 'c' })).toEqual({ kind: 'character', id: 'c', part: 'toggles', fromToggles: true });
     expect(toggleEditor({ from: 'module', id: 'm' })).toEqual({ kind: 'module', id: 'm', pane: 'toggles' });
   });
 });

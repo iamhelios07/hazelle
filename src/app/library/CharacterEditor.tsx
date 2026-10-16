@@ -79,13 +79,15 @@ type Props = {
   layout: 'split' | 'drill';
   part: CharacterPart | null;
   onPart: (part: CharacterPart | null) => void;
+  // Where the part goes back to when it was opened from outside the editor; the list is a link under its head.
+  partBack?: { label: string; onBack: () => void };
   frame: Frame;
 };
 
 // The character's one screen: beside its chat, or a page elsewhere. Only the fields changed here go to editCharacter.
 // A caller leaves by unmounting it, which saves; moving between parts keeps it mounted, so nothing typed is lost.
 // shelf: the stored character as it is now, on every render. The editor shows it, under what waits to be saved.
-export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
+export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }: Props) {
   const { id, character, face } = shelf;
   const { card, origin } = character;
   const store = useStore();
@@ -411,6 +413,16 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       </NavGroup>
     ));
     return frame({ head: { title, subtitle, status: state, menu }, side, body: <>{pages[open]}{shareDialog}</>, open });
+  }
+  if (part && partBack) {
+    const toList = (
+      <Row kind="actions">
+        <Button variant="link" size="xs" onClick={() => onPart(null)}>
+          캐릭터 열기
+        </Button>
+      </Row>
+    );
+    return frame({ head: { title, onBack: partBack.onBack, backLabel: partBack.label, status: state }, body: <>{toList}{pages[part]}</>, open: part });
   }
   if (part) return frame({ head: { title, onBack: () => onPart(null), backLabel: LIST, status: state }, body: pages[part], open: part });
   const list = (

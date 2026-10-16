@@ -1,6 +1,6 @@
 import { act, type ReactElement } from 'react';
 import { expect, it, vi } from 'vitest';
-import { probeRoot } from './probe';
+import { probeRoot } from '../ui/probe';
 import { SEARCH_FROM } from './search';
 import { useSearch } from './useSearch';
 

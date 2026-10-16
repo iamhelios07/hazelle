@@ -5,7 +5,7 @@ import { translateSwitches } from '../../runtime/characters';
 import type { Drawing } from '../../runtime/illustrate';
 import { pickVersion } from '../../runtime/message-acts';
 import type { Shown } from '../../runtime/talk';
-import { probeRoot } from '../common/probe';
+import { probeRoot } from '../ui/probe';
 import { useChatBookmarks } from './useChatBookmarks';
 import { useChatIllustrations } from './useChatIllustrations';
 import { useChatSearch } from './useChatSearch';

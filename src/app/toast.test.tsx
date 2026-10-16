@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { expect, it, vi } from 'vitest';
 import { ToastProvider, useOwnUndo, useToast, type Toasts } from './toast';
-import { probeRoot } from './common/probe';
+import { probeRoot } from './ui/probe';
 
 let shown: unknown[] = [];
 vi.mock('./ui', () => ({

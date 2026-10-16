@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { navigate } from '../shell/router';
-import { probeRoot } from '../common/probe';
+import { probeRoot } from '../ui/probe';
 import { useNewChat } from './useNewChat';
 
 let projected: () => void = () => {};

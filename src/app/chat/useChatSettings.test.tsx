@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Chat } from '../../model/chat';
 import type { ApiFailure, ApiResult } from '../../runtime/api';
 import type { Stored } from '../../model/kinds';
-import { probeRoot } from '../common/probe';
+import { probeRoot } from '../ui/probe';
 import { useChatSettings } from './useChatSettings';
 
 let stored: Chat;

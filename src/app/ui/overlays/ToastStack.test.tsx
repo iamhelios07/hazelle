@@ -1,6 +1,6 @@
 import { act, type PointerEvent } from 'react';
 import { expect, it, vi } from 'vitest';
-import { probeRoot } from '../../common/probe';
+import { probeRoot } from '../probe';
 import { useHold } from './ToastStack';
 
 // The stack's element, with the focus in it while it is on its one button.
