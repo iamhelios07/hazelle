@@ -8,8 +8,17 @@ export type Binding<U, E extends Event = Event> = { run(chat: string, units: U, 
 export type LuaRunner = Binding<ScriptUnit[]> & Pick<Lua, 'installDisplay' | 'display' | 'forgetDisplay'>;
 
 export class ToolStuck extends Error {
-  constructor(readonly disabled = false) { super(); }
+  constructor(readonly disabled: boolean) { super(); }
 }
 export class ToolLate extends Error {}
 export class ToolStopped extends Error {}
+export const aborted = (signal: AbortSignal): Error => signal.reason instanceof ToolLate || signal.reason instanceof ToolStuck ? signal.reason : new ToolStopped();
+
+export function until<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(aborted(signal));
+  let stop = () => {};
+  const stopped = new Promise<never>((_, reject) => { stop = () => reject(aborted(signal)); signal.addEventListener('abort', stop, { once: true }); });
+  return Promise.race([promise, stopped]).finally(() => signal.removeEventListener('abort', stop));
+}
 export const noOutcome = (): ScriptOutcome => ({ value: undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, lore: [], errors: [], missing: [] });

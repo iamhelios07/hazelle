@@ -57,7 +57,6 @@ export function translateText(session: Pick<Session, 'store' | 'credentials' | '
 // bot's onOutput may have edited or removed its message since, so the message is read again. Its chat must stay
 // loaded until this returns (session).
 async function translateReceived(session: Pick<Session, 'store' | 'read' | 'translator'>, chat: string, reply: Written) {
-  if (reply.receipt.state === 'failed') return;
   const view = await displayed(session, chat);
   if (!view || !chatTranslate(session.store, view.chat).replies) return;
   const index = view.messages.findIndex((message) => message.id === (reply.message ?? reply.id));
@@ -96,6 +95,7 @@ const idle = (talk: Session['talk'], chat: string) =>
 // its own save calls, on the finished version. takeTurn answers null as well when a turn its chat began meanwhile turned it
 // away, and the cut reply then stays untranslated. Its chat must stay loaded until this returns (session).
 export async function receiveReply(session: Session, chat: string, reply: Written) {
+  if (reply.receipt.state === 'failed') return;
   if (autoContinue(reply)) {
     // The reply's own turn still holds its chat in Talk when its save calls the hook.
     await idle(session.talk, chat);
@@ -114,11 +114,11 @@ export async function receiveReply(session: Session, chat: string, reply: Writte
 }
 
 // What 삽화 on auto draws for and the mascot speaks on, as 응답 번역 translates it: the version of a reply received here
-// shown once the bot's onOutput ran, after any continuation, never the cut one it continued. null for a failed reply, a
-// chat gone, or a version with no text.
+// shown once the bot's onOutput ran, after any continuation, never the cut one it continued. null for a chat gone or a
+// version with no text.
 function shownReceived({ store }: Pick<Session, 'store'>, chat: string, reply: Written): { chat: Chat; message: string; version: string } | null {
   const stored = live(store.get('chat', chat));
-  if (reply.receipt.state === 'failed' || !stored) return null;
+  if (!stored) return null;
   const message = fold(store.children('entry', chat)).find(({ id }) => id === (reply.message ?? reply.id));
   const version = message && shown(message);
   return version?.text.trim() ? { chat: stored.value, message: message!.id, version: version.id } : null;

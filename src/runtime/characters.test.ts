@@ -16,7 +16,7 @@ import { Files } from './files';
 import { thumbnail } from './picture';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
-import { BATCH_LIMITS, testServer } from './testing';
+import { BATCH_LIMITS, png, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 
 const server = testServer();
@@ -24,8 +24,6 @@ const server = testServer();
 const unswept = { sweep: async () => {} } as unknown as Files;
 vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 
-// The bytes of a picture as far as the import reads one: a PNG's signature.
-const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 // An MP4's box header naming its brand.
 const mp4 = () => new Uint8Array([0, 0, 0, 24, ...new TextEncoder().encode('ftypisom'), ...randomBytes(16)]);
 const picture = () => ({ bytes: randomBytes(64), type: 'image/png' });

@@ -51,7 +51,6 @@ export const addRegex = (store: ObjectStore, owner: PackOwner, id: string) =>
 export const addLua = (store: ObjectStore, owner: PackOwner, id: string) =>
   updatePack(store, owner, ({ triggers }) => ({ triggers: holds(triggers, id) ? triggers : [...triggers, { kind: 'lua', id, name: '', code: '' }] }));
 
-// Only the fields given.
 export const editRegex = (store: ObjectStore, owner: PackOwner, id: string, patch: Partial<Omit<RegexScript, 'id' | 'off'>>) =>
   updatePack(store, owner, ({ regex }) => {
     const edited = patched(regex, id, (script) => ({ ...script, ...patch }));
@@ -119,6 +118,4 @@ export const setTakesMemory = (store: ObjectStore, module: string, takesMemory: 
   store.update('module', module, (current) => current.deleted === undefined ? { ...current, takesMemory } : null);
 
 export const setModels = (store: ObjectStore, { kind, id }: PackOwner, botModels: boolean): Promise<ApiResult<unknown>> =>
-  kind === 'character'
-    ? store.update('character', id, (current) => current.deleted === undefined ? { ...current, botModels } : null)
-    : store.update('module', id, (current) => current.deleted === undefined ? { ...current, botModels } : null);
+  store.update(kind, id, (current) => current.deleted === undefined ? { ...current, botModels } : null);

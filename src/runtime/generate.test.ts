@@ -9,11 +9,11 @@ import type { ObjectStore } from './store';
 import type { Stored } from '../model/kinds';
 import { firstTurns } from '../model/turns';
 import { stopStream, stream, type StreamCall } from './relay';
-import { saying, stubRelay, testServer, upstream } from './testing';
+import { saying, stubRelay, testConnection, testServer, upstream } from './testing';
 import { streamKey } from '../vault/streams';
 
 const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
-const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] };
+const openRouter: Connection = { ...testConnection, starred: [] };
 
 const server = testServer();
 beforeEach(() => server.account());
@@ -111,7 +111,7 @@ describe('generate', () => {
   });
 
   it('sends the 묶음’s settings, leaving out one the catalog says the model does not take', async () => {
-    const log = answer(200, 'data: {"choices":[{"delta":{"content":"네"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
+    const log = stubRelay(() => saying('네'));
     const listed: Starred = { ...model, takes: { settings: ['temperature'], reasoning: null } };
     await run(openRouter, listed, undefined, { temperature: 0.7, topP: 0.9 });
     expect(JSON.parse(log[0]!.sent.body!)).toMatchObject({ temperature: 0.7 });
@@ -133,7 +133,7 @@ describe('a connection that trades its key for a token', () => {
         ? unlimited()
         : url === EXCHANGE
         ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + lasts })
-        : new Response('data: {"choices":[{"delta":{"content":"네"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { 'x-relay': 'upstream' } }),
+        : saying('네'),
     );
     return () => log.map((call) => call.sent);
   }

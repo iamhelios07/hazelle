@@ -16,7 +16,7 @@ import { addDefaults, addPrompt, removePrompt } from './prompts';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
 import { SUMMARY_WINDOW, summaryId, summaryStale } from './summary';
-import { testServer } from './testing';
+import { png, testConnection, testServer } from './testing';
 
 const server = testServer();
 vi.mock('./picture', () => ({ thumbnail: async () => 'data:thumb' }));
@@ -83,7 +83,7 @@ async function oldAccount({ profile = true } = {}) {
   const { store, files } = await open('jin', { profile });
   if (profile) await setProfileSettings(store, FIRST_PROFILE_ID, { temperature: 0.4 });
   const image = randomBytes(256);
-  const smile = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
+  const smile = png();
   const assets = [
     { name: 'smile', read: async () => smile },
     { name: 'grin', read: async () => smile },
@@ -97,7 +97,7 @@ async function oldAccount({ profile = true } = {}) {
   await startChat(store, chat, opened, greetings);
   const said = crypto.randomUUID();
   await appendUserMessage(store, chat, { id: said, text: '등대에 가자' });
-  const drawn = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
+  const drawn = png();
   const stored = await files.save([drawn]);
   const sent = { prompt: 'lighthouse', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
   const scene = { paragraph: 0, shape: 'square' as const, setting: 'lighthouse', framing: '', characters: [] };
@@ -106,7 +106,7 @@ async function oldAccount({ profile = true } = {}) {
   await startChat(store, gone, opened, null);
   await appendUserMessage(store, gone, { id: crypto.randomUUID(), text: '지울 채팅' });
   await removeChat(store, gone);
-  await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
+  await store.create('connection', { ...testConnection, starred: [] });
   return { store, files, image, smile, drawn, chat, gone };
 }
 

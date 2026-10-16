@@ -10,7 +10,7 @@ import { chatModel, setPromptModel } from './assignment';
 import { setChatPrompt } from './chat-log';
 import { addDefaults, addPrompt, COMMENTATOR_ID, ILLUSTRATOR_ID, chatPrompt, copyPrompt, removePrompt, savePreset, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import starter from './starter-prompt.risup?inline';
-import { testServer } from './testing';
+import { testConnection, testServer } from './testing';
 
 const server = testServer();
 
@@ -139,8 +139,7 @@ describe('prompts', () => {
 
   it('gives a chat its prompt’s model under its own layer, and reads a deleted prompt of its own as missing', async () => {
     const { store } = await server.account();
-    const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
-    const connection = await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [model] });
+    const connection = await store.create('connection', testConnection);
     const [byDefault, own] = await Promise.all([addPrompt(store, '기본', 'conversation'), addPrompt(store, '따로', 'conversation')]);
     const [defaultId, ownId] = [byDefault, own].map((added) => (added.ok ? added.data.id : ''));
     await setDefaultPrompt(store, defaultId!);

@@ -4,7 +4,8 @@ import type { Binding } from './script-binding';
 import type { ToolUnit } from '../model/tool';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { RELAY_HEADER } from '../contracts/http';
-import type { HttpRequest } from '../connectors/types';
+import { bareModel } from '../connectors/chat-completions';
+import type { Connection, HttpRequest, Model } from '../connectors/types';
 import { Lua } from '../engine/lua/run';
 export { BATCH_LIMITS } from '../server/objects';
 import type { Upstream } from '../server/relay';
@@ -96,11 +97,16 @@ export const inTurn = (answers: (Response | null)[]): Relay => () => answers.shi
 export const saying = (text: string) =>
   new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { headers: { [RELAY_HEADER]: 'upstream' } });
 
+// The bytes of a picture as far as the import reads one: a PNG's signature.
+export const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
+
+export const testModel: Model = { ...bareModel('m'), name: 'M' };
+export const testConnection: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [testModel] };
+
 export async function answerable(session: Session): Promise<void> {
-  const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
-  const connection = await session.store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [model] });
+  const connection = await session.store.create('connection', testConnection);
   if (!connection.ok) throw new Error(connection.error);
-  await setDefaultModel(session.store, 'main', { connection: connection.data.id, model: model.id });
+  await setDefaultModel(session.store, 'main', { connection: connection.data.id, model: testModel.id });
 }
 
 // Gives each test in the file a server with no accounts. account() signs one up; each open() is one

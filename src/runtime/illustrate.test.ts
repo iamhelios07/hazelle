@@ -4,7 +4,7 @@ import { fold, shown } from '../model/chat';
 import { setIllustrate } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import type { Session } from './session';
-import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
+import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { blankCard } from '../engine/import/card';
 import { placeMark } from '../model/illustration';
 import { severalScenes } from '../engine/illustrate';
@@ -41,7 +41,7 @@ const server = testServer();
 
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
 const picture = () => new Response(PNG, { headers: { 'x-relay': 'upstream', 'content-type': 'image/png' } });
-const free = (answer: boolean) => Response.json({ free: answer }, { headers: { 'x-relay': 'upstream' } });
+const free = (answer: boolean) => upstream(200, { free: answer });
 const scene = { after: 2, shape: 'portrait', setting: '1girl, indoors, night', framing: 'cowboy shot', characters: [{ name: 'Ari', look: 'girl, silver hair', outfit: 'white dress', action: 'smile', x: 0.5, y: 0.5 }] };
 const REPLY = 'She opened the door.\nThe room was dark.\n\nShe smiled.';
 const SCENE = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
@@ -298,7 +298,7 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
     server.withSession(async (session) => {
       const { draw } = await drawing(session, JSON.stringify(looks));
       const listed = { data: [{ id: 'm', name: 'M', architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] } }] };
-      stubRelay((sent) => (sent.url.endsWith('/models') ? Response.json(listed, { headers: { 'x-relay': 'upstream' } }) : answering(JSON.stringify(looks))(sent)));
+      stubRelay((sent) => (sent.url.endsWith('/models') ? upstream(200, listed) : answering(JSON.stringify(looks))(sent)));
       await draw();
       const connection = session.store.list('connection').find(({ value }) => value.type === 'openrouter')!;
       expect(connection.value.starred[0]!.input).toEqual(['text', 'image']);

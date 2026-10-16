@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { blankCard } from '../engine/import/card';
-import { randomBytes } from '../vault/aead';
 import { holdAccount } from './api';
 import { exportCharacter } from './card-file';
 import { importCharacter, setDeleted } from './characters';
 import { purgeNow } from './removal';
 import { openVersion, publishShare, writeShared } from './share';
 import { agreeToShare, readShareLink, readShareState, shareLink } from './share-link';
-import { testServer } from './testing';
+import { png, testServer } from './testing';
 import type { Files } from './files';
 
 const server = testServer();
@@ -15,7 +14,6 @@ const server = testServer();
 const unswept = { sweep: async () => {} } as unknown as Files;
 vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 
-const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 const collected = () => {
   const chunks: Uint8Array<ArrayBuffer>[] = [];
   return { chunks, output: { write: async (chunk: Uint8Array<ArrayBuffer>) => void chunks.push(chunk), close: async () => {}, abort: async () => {} } };

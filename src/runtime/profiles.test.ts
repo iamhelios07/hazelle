@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Connection, Model } from '../connectors/types';
+import type { Connection } from '../connectors/types';
 import { addFirstProfile, addProfile, FIRST_PROFILE_ID, modelProfile, profileUsers, removeProfile, setModelProfile, setProfileSettings } from './profiles';
-import { testServer } from './testing';
+import { testConnection, testModel as model, testServer } from './testing';
 
 const server = testServer();
 
-const model: Model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
-const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [model, { ...model, id: 'other' }] };
+const openRouter: Connection = { ...testConnection, starred: [model, { ...model, id: 'other' }] };
 
 describe('설정 묶음', () => {
   it('gives a model the default 묶음 until it names its own, reads a deleted one as missing, keeps the default, and clears its own when put on the default', async () => {

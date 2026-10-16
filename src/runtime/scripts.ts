@@ -3,7 +3,7 @@ import type { HookLog, HookTrace } from '../engine/lua/run';
 import type { Tokens } from './token-calibration';
 import { ScriptInteractions } from './script-interactions';
 import { ScriptSchedule } from './script-schedule';
-import { noOutcome, ToolLate, ToolStopped, type Binding, type LuaRunner } from './script-binding';
+import { noOutcome, ToolLate, ToolStopped, until, type Binding, type LuaRunner } from './script-binding';
 import { live, type PackOwner } from '../model/library';
 import type { ToolUnit } from '../model/tool';
 import type { Assembled, MemoryFill, PromptInput } from '../engine/pipeline';
@@ -420,8 +420,7 @@ export class Scripts {
   }
 
   pageContext(chat: string, module: string, signal?: AbortSignal): { scope: ChatScope; host: Host } | null {
-    const stored = live(this.session.store.get('chat', chat));
-    if (this.closing.signal.aborted || !stored || !toolsOf(this.session.store, stored.value).some((unit) => unit.module === module)) return null;
+    if (this.closing.signal.aborted || !this.unit(chat, module)) return null;
     const scope = this.scope(chat);
     return { scope, host: this.host(chat, scope, signal) };
   }
@@ -452,7 +451,6 @@ export class Scripts {
     return (await this.now(chat, event, onLast)) ?? false;
   }
 
-  // null: the chat has no triggers.
   private now(chat: string, event: Event, anchor: (scope: ChatScope) => Anchor | null): Promise<boolean | null> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? triggersOf(packsOf(this.session.store, stored.value)) : [];
@@ -526,13 +524,7 @@ export class Scripts {
       const running = 'lua' in units
         ? this.bindings.lua().then((runner) => runner.run(chat, units.lua, scope, event, host))
         : this.bindings.tools.run(chat, units.tool, scope, units.event, host, signal);
-      let stop = () => {};
-      const stopped = new Promise<never>((_, reject) => {
-        stop = () => reject(signal?.reason instanceof ToolLate ? signal.reason : new ToolStopped());
-        signal?.addEventListener('abort', stop, { once: true });
-        if (signal?.aborted) stop();
-      });
-      const outcome = await Promise.race([running, stopped]).finally(() => signal?.removeEventListener('abort', stop));
+      const outcome = await until(running, signal);
       this.report(chat, outcome, from);
       if ('tool' in units) this.keepLog(chat, [{ stage: event.kind, pack: from, script: units.tool.tool.manifest.displayName, at, duration: performance.now() - began, logs: [], writes: outcome.writes, errors: outcome.errors, missing: outcome.missing, stopped: outcome.stop, changed: outcome.value !== undefined, handled: outcome.handled, truncated: false }]);
       return outcome;

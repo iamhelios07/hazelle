@@ -103,8 +103,7 @@ export class ScriptInteractions {
   // Under a deadline an unanswered one is no, without a card; the next run with time to wait asks.
   async allowed(chat: string, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<boolean> {
     const { store } = this;
-    const spender = live(store.get(from.kind, from.id));
-    if (!spender) return false;
+    const spender = live(store.get(from.kind, from.id))!;
     if (spender.value.botModels !== undefined) return spender.value.botModels;
     if (deadline) return false;
     return this.decide(`${from.kind}:${from.id}`, chat, { kind: 'model' }, from, (yes) => setModels(store, from, yes), signal);
