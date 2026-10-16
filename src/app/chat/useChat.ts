@@ -287,6 +287,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     prompt,
     persona,
     note: chat.note,
+    illustrateNote: chat.illustrateNote,
     cast: chat.cast ?? [],
     toggles,
     toggleOwner: chat.character,

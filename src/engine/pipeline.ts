@@ -171,7 +171,7 @@ function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) 
 type Filling =
   | { sort: 'conversation'; note: string; memory: string; tools: PromptInput['tools'] }
   | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
-  | { sort: 'illustrate'; recent: (block: RecentSlot) => string; source: string }
+  | { sort: 'illustrate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'mascot'; recent: (block: RecentSlot) => string; source: string; sheet: string }
   | { sort: 'memory'; memory: string; span: string };
 
@@ -237,6 +237,9 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
           break;
         case 'note':
           if (filling.sort === 'translate') wrapped(block, filling.note);
+          break;
+        case 'illustrateNote':
+          if (filling.sort === 'illustrate') wrapped(block, filling.note);
           break;
         case 'recent':
           if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot') verbatim(block, filling.recent(block));
@@ -402,6 +405,8 @@ export type IllustrationInput = {
   count: number;
   // The portraits the pictures are drawn with (runtime/likeness).
   portraits: Told[];
+  // The chat's 삽화 노트, '' for none.
+  note: string;
   seed: string;
   countTokens: (text: string) => number;
 };
@@ -409,10 +414,10 @@ export type IllustrationInput = {
 // Like a translation, a 삽화 task holds no chat, so entries placed at a depth are not sent in it.
 export const assembleIllustration = (input: IllustrationInput): { messages: ChatMessage[] } | RanAway => stoppable(() => illustration(input));
 
-function illustration({ scope, take, prompt, index, paragraphs, count, portraits, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
+function illustration({ scope, take, prompt, index, paragraphs, count, portraits, note, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
   const { texts, variables } = renderChat('display', scope, take);
   const laid = lay(scope, prompt.blocks, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
-  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', note, recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
   const asked = [...(portraits.length ? [profileNames(portraits)] : []), ...(count > 1 ? [severalScenes(count)] : [])];
   return { messages: [...taskMessages(parts), ...asked.map((content) => ({ role: 'user' as const, content }))] };
 }

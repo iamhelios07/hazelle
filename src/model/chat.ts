@@ -20,6 +20,8 @@ export type Chat = Mark & {
   prompt?: string;
   persona?: string;
   note?: string;
+  // 삽화 노트, sent to the scene writer through the 삽화 prompt's slot; absent is none.
+  illustrateNote?: string;
   // Named as it was then so a renamed or deleted one still reads.
   origin?: { id: string; name: string; after: string };
   // A branch keeps its original's, so the history it copied reads the same.

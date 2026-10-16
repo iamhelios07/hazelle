@@ -19,6 +19,8 @@ export const SLOTS = {
   postEverything: { wrapped: false, repeats: false, sorts: ['conversation'] },
   chat: { wrapped: false, repeats: true, sorts: ['conversation'] },
   note: { wrapped: true, repeats: false, sorts: ['translate'] },
+  // 삽화 노트: a chat's own directions for its pictures (Chat.illustrateNote).
+  illustrateNote: { wrapped: true, repeats: false, sorts: ['illustrate'] },
   recent: { wrapped: true, repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
   // In a 삽화 task, the message's paragraphs, numbered (model/illustration paragraphsOf); in a 마스코트 task, the reply as
   // shown.

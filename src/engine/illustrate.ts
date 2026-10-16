@@ -31,6 +31,7 @@ export function illustratorPrompt(): IllustratePrompt {
       { ...named('삽화 지시'), kind: 'text', role: 'system', text: INSTRUCTIONS, mark: null },
       { ...named(), kind: 'slot', slot: 'description', role: 'system', wrapper: 'The characters, for reference only.\n---\nThe character: {{char}}.\n{{slot}}' },
       { ...named(), kind: 'slot', slot: 'persona', role: 'system', wrapper: "The user's character, for reference only: {{user}}.\n{{slot}}" },
+      { ...named(), kind: 'slot', slot: 'illustrateNote', role: 'system', wrapper: "The user's notes for this chat's pictures, which outrank the message: what to draw, how, and who wears what.\n---\n{{slot}}" },
       { ...named(), kind: 'slot', slot: 'recent', role: 'system', count: 2, translations: false, wrapper: 'The messages right before, for who is where and wearing what, oldest first.\n---\n{{slot}}' },
       { ...named(), kind: 'slot', slot: 'source', role: 'user', wrapper: 'The message, its paragraphs numbered:\n\n{{slot}}' },
     ],

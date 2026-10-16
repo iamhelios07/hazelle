@@ -103,7 +103,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
               onEditPrompt={editPrompt}
               onEditCharacter={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: 'instructions' }) : undefined}
             />}
-            {chat.features.illustrate && <ChatIllustrate illustrate={chat.illustrate} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} sceneWriter={chat.sceneWriter} onEditPrompt={editPrompt} />}
+            {chat.features.illustrate && <ChatIllustrate id={chat.id} illustrate={chat.illustrate} note={chat.illustrateNote} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} onSaveNote={actions.setIllustrateNote} sceneWriter={chat.sceneWriter} onEditPrompt={editPrompt} />}
             <ChatComposerTools tools={chat.composerTools} onOpen={actions.tool} />
             <ChatPinnedToggles toggles={chat.toggles} onFlip={actions.flip} />
           </>

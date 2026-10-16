@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionType } from '../connectors/types';
 import { fold, shown } from '../model/chat';
 import { setIllustrate } from './characters';
-import { appendUserMessage, startChat } from './chat-log';
+import { appendUserMessage, setChatIllustrateNote, startChat } from './chat-log';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { blankCard } from '../engine/import/card';
@@ -317,12 +317,16 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
 
   it('tells the scene call the profiles’ names, then the outfit each was last drawn in, and 다시 만들기 keeps a portrait edited by hand, answering what it replaced', () =>
     server.withSession(async (session) => {
-      const { owner, log, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
+      const { owner, chat, log, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
       await draw();
       await draw();
       const sceneCalls = log.filter(({ sent }) => sent.body?.includes('You direct the illustrations'));
       expect(sceneCalls[0]!.sent.body).toMatch(/- Ari \(also called 아리\), outfits: \\"usual\\""\}/);
+      expect(sceneCalls[0]!.sent.body).not.toContain("notes for this chat's pictures");
       expect(sceneCalls[1]!.sent.body).toContain('- Ari (also called 아리), outfits: \\"usual\\"; last drawn in \\"usual\\" in this message');
+      expect((await setChatIllustrateNote(session.store, chat, 'Ari wears the usual, rainy night')).ok).toBe(true);
+      await draw();
+      expect(log.filter(({ sent }) => sent.body?.includes('You direct the illustrations'))[2]!.sent.body).toContain("notes for this chat's pictures, which outrank the message: what to draw, how, and who wears what.\\n---\\nAri wears the usual, rainy night");
       expect(await editPortrait(session.store, owner, { index: 0, name: 'Nobody' }, { look: 'boy' })).toMatchObject({ ok: false, error: 'gone' });
       expect((await editPortrait(session.store, owner, { index: 0, name: 'Ari' }, { outfits: [{ name: 'usual', tags: 'swimsuit' }] })).ok).toBe(true);
       const edited = session.store.get('likeness', likenessId(owner))!;

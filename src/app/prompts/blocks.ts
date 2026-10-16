@@ -28,6 +28,7 @@ export const SLOT = {
     kind: 'note',
     icon: NotebookPen,
   },
+  illustrateNote: { name: SLOT_NAMES.illustrateNote, hint: '채팅별 삽화 메모', line: '채팅의 삽화 메뉴에 적어 둔 삽화 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
   recent: {
     name: SLOT_NAMES.recent,
     hint: '번역할 메시지 바로 앞의 메시지와 그 번역',

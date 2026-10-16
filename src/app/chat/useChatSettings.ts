@@ -4,14 +4,14 @@ import type { Chat } from '../../model/chat';
 import type { Stored } from '../../model/kinds';
 import type { ApiFailure, ApiResult } from '../../runtime/api';
 import { chatModel, setChatModel, withMainModel } from '../../runtime/assignment';
-import { setCast, setChatNote, setChatPersona, setChatPrompt, withCast, withOwn, type Own } from '../../runtime/chat-log';
+import { setCast, setChatIllustrateNote, setChatNote, setChatPersona, setChatPrompt, withCast, withOwn, type Own } from '../../runtime/chat-log';
 import { chatPersona, pinPersona, setCurrentPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 
 type Draft = Omit<Chat, 'title' | 'character'>;
-const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
+const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote, illustrateNote: setChatIllustrateNote };
 export type ChatSettingsActions = ReturnType<typeof useChatSettings>['actions'];
 
 export function useChatSettings(id: string | null, saved: Chat | null, character: string | null) {
@@ -54,6 +54,7 @@ export function useChatSettings(id: string | null, saved: Chat | null, character
       pickModel,
       setPrompt: (value: string | null) => setOwn('prompt', value),
       setNote: (value: string | null) => setOwn('note', value),
+      setIllustrateNote: (value: string | null) => setOwn('illustrateNote', value),
       choosePersona,
       pinPersona: (persona: string | null) => pinPersona(store, chat.character!, persona),
       setCast: changeCast,

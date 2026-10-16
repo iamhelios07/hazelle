@@ -263,7 +263,7 @@ export const removeChat = (store: ObjectStore, id: string) => markDeleted(store,
 
 export const restoreChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, null);
 
-export type Own = 'prompt' | 'persona' | 'note';
+export type Own = 'prompt' | 'persona' | 'note' | 'illustrateNote';
 
 // null clears it, and the chat follows the default again.
 export const withOwn = <T extends Pick<Chat, Own>>(chat: T, field: Own, value: string | null): T => (value === null ? without(chat, field) : { ...chat, [field]: value });
@@ -275,6 +275,8 @@ export const setChatPrompt = (store: ObjectStore, chat: string, prompt: string |
 export const setChatPersona = (store: ObjectStore, chat: string, persona: string | null) => setOwn(store, chat, 'persona', persona);
 
 export const setChatNote = (store: ObjectStore, chat: string, note: string | null) => setOwn(store, chat, 'note', note);
+
+export const setChatIllustrateNote = (store: ObjectStore, chat: string, note: string | null) => setOwn(store, chat, 'illustrateNote', note);
 
 export function withCast<T extends Pick<Chat, 'cast'>>(chat: T, character: string | null, ids: string[]): T {
   const cast = [...new Set(ids)].filter((id) => id !== character).slice(0, CAST_MAX);

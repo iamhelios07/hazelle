@@ -29,6 +29,7 @@ export function newBlock(kind: NewBlock): Block {
     case 'persona':
     case 'authorNote':
     case 'note':
+    case 'illustrateNote':
     case 'tool':
     case 'memory':
     case 'mascot':

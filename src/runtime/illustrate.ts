@@ -83,6 +83,8 @@ export function sceneWriterOf(store: Deps['store'], chat: Chat): ReturnType<type
   return prompt.kind === 'missing' ? { kind: 'prompt-missing', own: prompt.own } : taskWriter(store, chat, prompt.prompt.value.model);
 }
 
+export const sendsIllustrateNote = (prompt: IllustratePrompt) => prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'illustrateNote');
+
 function imageRoute(store: Deps['store'], ref: ModelRef | undefined): ImageRoute | { kind: 'no-image-model' } | { kind: 'image-model-gone' } {
   const routes = drawingModels(store.list('connection'));
   if (!ref) return routes[0] ?? { kind: 'no-image-model' };
@@ -239,7 +241,7 @@ export class Illustrator {
     if ('kind' in writer) return writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: toldProfiles(portraits, this.drawnBefore(store, chat, history)), seed: crypto.randomUUID() }, signal));
+    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: toldProfiles(portraits, this.drawnBefore(store, chat, history)), note: value.illustrateNote ?? '', seed: crypto.randomUUID() }, signal));
     if ('kind' in assembled) return assembled;
     const answer = await pageAnswer(this.deps, writer, 'illustration', chat, assembled.messages, signal);
     if ('kind' in answer) return answer;
