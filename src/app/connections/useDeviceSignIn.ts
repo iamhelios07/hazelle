@@ -5,7 +5,7 @@ import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
 import { describeSignInFailure } from '../common/failure';
 import { useToast } from '../toast';
 
-export type SignInStage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
+type SignInStage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
 
 // The device flow from its code to the signed-in account. approved answers a failure in words, or null.
 // attempt: a new value starts it again.
