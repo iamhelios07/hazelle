@@ -37,7 +37,7 @@ function store(objects: Stored<Kind>[] = []) {
     batch: async (writes, progress = () => {}) => {
       for (const write of writes) {
         if (write.type === 'remove') held.delete(write.id);
-        else {
+        else if ('value' in write) {
           const { id, kind, parent, value } = write;
           held.set(id, { id, kind, parent, value, rev: held.size + 1 } as Stored<Kind>);
           written.push(write.id);

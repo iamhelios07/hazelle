@@ -99,17 +99,23 @@ describe('upgradeValue', () => {
     expect(third.takeUpgraded()).toEqual([]);
   });
 
-  it('writes a module whose scripts had no ids back once, with them', async () => {
+  it('writes modules whose scripts had no ids back once, with them, in one request', async () => {
     const { store, open } = await server.account();
     const old = { name: 'Bell', description: '', namespace: null, regex: [{ name: 'a', find: 'a', replace: '', stage: 'display', flags: null }], triggers: [], toggles: '', loreFolders: [] };
-    const created = await store.create('module', old as never);
-    if (!created.ok) throw new Error(created.error);
+    const ids = await Promise.all([1, 2, 3].map(async () => {
+      const created = await store.create('module', old as never);
+      if (!created.ok) throw new Error(created.error);
+      return created.data.id;
+    }));
     const other = await open();
     await other.pull();
+    const sent = vi.spyOn(globalThis, 'fetch');
     await saveUpgraded(other);
+    expect(sent.mock.calls.filter(([url]) => String(url).endsWith('objects/batch'))).toHaveLength(1);
+    sent.mockRestore();
     const third = await open();
     await third.pull();
-    expect(third.get('module', created.data.id)?.value.regex).toEqual([{ ...old.regex[0], id: 'regex-0' }]);
+    for (const id of ids) expect(third.get('module', id)?.value.regex).toEqual([{ ...old.regex[0], id: 'regex-0' }]);
     expect(third.takeUpgraded()).toEqual([]);
   });
 
@@ -149,9 +155,9 @@ it('upgrades old encrypted ledger and stream values through the backup/restore r
   expect(upgradeValue('stream', readRow(oldStream)!.value)).toBeNull();
   const { store } = await server.account();
   const take = vi.spyOn(store, 'takeUpgraded').mockReturnValue([{ id: oldLedger.id, kind: 'ledger' }]);
-  const update = vi.spyOn(store, 'update');
+  const batch = vi.spyOn(store, 'batch');
   await saveUpgraded(store);
-  expect(update).not.toHaveBeenCalled();
+  expect(batch).not.toHaveBeenCalled();
   take.mockRestore();
-  update.mockRestore();
+  batch.mockRestore();
 });

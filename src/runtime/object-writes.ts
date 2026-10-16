@@ -9,10 +9,12 @@ import type { Held, ObjectIndex, StoreChange } from './object-index';
 
 export type Limits = NonNullable<CacheState['limits']>;
 type ObjectValue = Omit<Stored<Kind>, 'rev' | 'pending'>;
-export type Write = (ObjectValue & { type: 'create' | 'restore' }) | { type: 'remove'; id: string };
+// rewrite: the object written back as it is held then (runtime/upgrade's write-back).
+type Put = ObjectValue & { type: 'create' | 'restore' };
+export type Write = Put | { type: 'remove'; id: string } | { type: 'rewrite'; id: string };
 export type Pending = { id: string; kind: string; parent: string | null; value: unknown; baseRev: number | null };
 export type Resolved = { pending: Pending | null; held: Held | null };
-// derived: a write the store makes on its own (a summary), which is not counted among the person's dropped writes and
+// derived: a write the store makes on its own (a summary, a rewrite), which is not counted among the person's dropped writes and
 // not shown before its answer. at: the copy a change applies to, live when sent and what reads show when previewed.
 export type WriteStep = { id: string; resolve: (at: (id: string) => Held | undefined) => ApiResult<Resolved>; derived?: boolean };
 
@@ -20,17 +22,17 @@ type SealedWrite = StoreChange & { baseRev: number | null; body: string | null; 
 type Prepared = { resolved: Resolved[]; writes: SealedWrite[]; files: string[] };
 
 const encoder = new TextEncoder();
+const isPut = (write: Write): write is Put => write.type === 'create' || write.type === 'restore';
 
 export class ObjectWrites {
   constructor(private readonly objects: ObjectIndex, private readonly codec: ObjectCodec) {}
 
   arrange(writes: Write[], unheld: boolean) {
-    const puts = orderOwned(writes.filter((write) => write.type !== 'remove'));
-    const ordered = [...puts, ...writes.filter((write) => write.type === 'remove')];
+    const ordered = [...orderOwned(writes.filter(isPut)), ...writes.filter((write) => !isPut(write))];
     const chats = new Set<string>();
     const created = new Set<string>();
     for (const write of unheld ? [] : ordered) {
-      if (write.type === 'remove') {
+      if (write.type === 'remove' || write.type === 'rewrite') {
         const held = this.objects.get(write.id);
         if (held && SCOPED.has(held.kind) && held.parent) chats.add(held.parent);
       } else if (write.kind === 'chat') {
@@ -72,9 +74,11 @@ export class ObjectWrites {
   step(write: Write): WriteStep {
     return {
       id: write.id,
-      derived: write.type !== 'remove' && write.kind === 'summary',
+      derived: write.type === 'rewrite' || (isPut(write) && write.kind === 'summary'),
       resolve: (at) => {
         const held = at(write.id);
+        // One gone, not loaded or unreadable by then has nothing to write back, and does not fail the others.
+        if (write.type === 'rewrite') return { ok: true, data: { pending: held && held.value !== undefined ? { ...held, baseRev: held.rev } : null, held: null } };
         if (write.type === 'remove') {
           if (!held && this.objects.deletedRevision(write.id) === undefined) return { ok: false, error: 'not-loaded' };
           return { ok: true, data: { pending: held ? { ...held, value: undefined, baseRev: held.rev } : null, held: null } };

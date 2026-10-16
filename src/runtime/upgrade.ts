@@ -14,9 +14,6 @@ import type { ObjectStore } from './store';
 const ACCOUNT = 'account-1';
 const GROUP = 'group-1';
 
-// The kinds upgradeValue upgrades, and so the only ones the store holds as upgraded.
-type Upgraded = 'connection' | 'character' | 'module' | 'memory' | 'stream';
-
 // Every decrypted value and every backup line passes here before anything reads it. null for a value already current.
 // No step is retired: an E2E value is upgraded only when a client reads it, so the server can still hold any old shape.
 export function upgradeValue(kind: string, value: unknown): Record<string, unknown> | null {
@@ -142,8 +139,10 @@ function upgradeMemory(value: Record<string, unknown>) {
 }
 
 // The stored copies of what the store upgraded as it read them, written back once, so the old shape leaves the
-// account. Each is written as it is held then, so a change another device made meanwhile is kept. A chat's memory
-// read after this ran is written back by its next change.
+// account: one action, so a first login after an upgrade sends a few requests, not one per object. Each is written as it
+// is held then, so a change another device made meanwhile is kept. A chat's memory read after this ran is written back
+// by its next change. A failed write-back is not reported: the old shape is upgraded again on the next read.
 export async function saveUpgraded(store: ObjectStore): Promise<void> {
-  await Promise.all(store.takeUpgraded().filter(({ kind }) => kind !== 'ledger').map(({ id, kind }) => store.update(kind as Upgraded, id, (current) => current)));
+  const rewrites = store.takeUpgraded().filter(({ kind }) => kind !== 'ledger').map(({ id }) => ({ type: 'rewrite' as const, id }));
+  if (rewrites.length) await store.batch(rewrites);
 }

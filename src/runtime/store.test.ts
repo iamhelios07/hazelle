@@ -398,7 +398,7 @@ describe('object store', () => {
       expect(new TextEncoder().encode(JSON.stringify(batch)).length).toBeLessThanOrEqual(BATCH_LIMITS.bytes);
       expect(batch.writes.every(({ body }) => body.length <= BATCH_LIMITS.body)).toBe(true);
     }
-    expect(store.children('entry', id).map(({ value }) => value)).toEqual(writes.slice(1).map((write) => write.type !== 'remove' && write.value));
+    expect(store.children('entry', id).map(({ value }) => value)).toEqual(writes.slice(1).map((write) => 'value' in write && write.value));
     expect(store.get('chat', id)?.rev).toBe(4);
   });
 });
