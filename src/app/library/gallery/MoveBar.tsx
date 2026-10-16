@@ -5,7 +5,6 @@ import { Button, Divider, Menu, MenuItem, SelectionBar } from '../../ui';
 type Props = {
   count: number;
   onCancel: () => void;
-  // to null takes them out of their folders.
   onMove: (to: string | null) => void;
 };
 

@@ -20,7 +20,7 @@ type PathProps = {
   here: FolderContents<ChatSummary> | null;
   binned: boolean;
   onName: (naming: Naming) => void;
-  // What a card dragged onto a part does, there to (null: the top); absent where cards do not drag.
+  // What a card dragged onto a part does, there to; absent where cards do not drag.
   dropInto?: Drop;
 };
 
@@ -52,7 +52,6 @@ export function FolderPath({ here, binned, onName, dropInto }: PathProps) {
   );
 }
 
-// A folder's card in 캐릭터 둘러보기, which opens it.
 export function FolderTile({ folder, onName, dropInto }: { folder: FolderTree; onName: (naming: Naming) => void; dropInto?: Drop }) {
   const { byFolder } = useLibrary();
   const { remove } = useFolderActions();

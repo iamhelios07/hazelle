@@ -258,7 +258,6 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         break;
       }
     }
-    // One 되돌리기 for the whole batch.
     if (undos.length === 1) toast.undoable(undos[0]!.message, undos[0]!.run);
     else if (undos.length > 1) toast.undoable(`${undos.length}개를 가져왔어요.`, () => undoAll(undos));
     setState(results.length > 0 ? { busy: null, results, ask: null } : null);

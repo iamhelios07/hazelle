@@ -1,6 +1,5 @@
 import { useBin, useLibrary } from '../../session';
 
-// How many rows 휴지통 lists, characters, chats and everything else together.
 export function useInBin() {
   const { deleted, deletedChats } = useLibrary();
   const bin = useBin();
