@@ -43,7 +43,7 @@ export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: P
       <Viewport keys={shelves.map((shelf) => shelf.id ?? 'none')} variant="rail" current={current && (current.id ?? 'none')}>{(index) => {
         const shelf = shelves[index]!;
         return (
-        <FaceButton key={shelf.id ?? 'none'} label={shelfName(shelf)} current={shelf === current} dot={typing(shelf) ? 'accent' : undefined} onClick={() => onEnter(shelf)}>
+        <FaceButton key={shelf.id ?? 'none'} label={shelfName(shelf)} current={shelf === current} dot={typing(shelf)} onClick={() => onEnter(shelf)}>
           <ShelfFace shelf={shelf} size="rail" />
         </FaceButton>
         );

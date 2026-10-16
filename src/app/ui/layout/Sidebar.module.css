@@ -150,8 +150,5 @@
   height: calc(var(--dot) + 2 * var(--border-thick));
   border: var(--border-thick) solid var(--color-sidebar);
   border-radius: var(--radius-full);
-}
-
-.accent {
   background: var(--color-accent);
 }

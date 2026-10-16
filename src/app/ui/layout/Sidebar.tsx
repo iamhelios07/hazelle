@@ -71,13 +71,13 @@ export function Rail({ fold, actions, children }: RailProps) {
   );
 }
 
-type FaceButtonProps = { label: string; current?: boolean; dot?: 'accent'; onClick: () => void; children: ReactNode };
+type FaceButtonProps = { label: string; current?: boolean; dot?: boolean; onClick: () => void; children: ReactNode };
 
 export function FaceButton({ label, current = false, dot, onClick, children }: FaceButtonProps) {
   return (
     <button type="button" className={current ? `${styles.faceButton} ${styles.current}` : styles.faceButton} aria-label={label} title={label} aria-current={current || undefined} onClick={onClick}>
       {children}
-      {dot && <span className={`${styles.dot} ${styles[dot]}`} />}
+      {dot && <span className={styles.dot} />}
     </button>
   );
 }
