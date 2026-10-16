@@ -15,9 +15,9 @@ import { EMPTY_SETTINGS } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import { retriesOf } from './connections';
 import { evaluationFailure } from './evaluation';
-import { taskModel, type Route, type RouteFailure } from './assignment';
+import type { Route, RouteFailure } from './assignment';
 import { gather, generate, resume, type Reply } from './generate';
-import { modelProfile } from './profiles';
+import { taskWriter } from './profiles';
 import { memoryPrompt } from './prompts';
 import type { Session } from './session';
 import { without } from '../model/fields';
@@ -240,11 +240,11 @@ export type MemoryFailure =
   | { kind: 'embed'; reason: Extract<Indexed, { ok: false }>['reason']; receipt: Receipt | null }
   | RanAway;
 
-export function memoryWriter(store: Pick<ObjectStore, 'get'>, chat: Chat): { prompt: MemoryPrompt; route: Route } | MemoryFailure {
+export function memoryWriter(store: Pick<ObjectStore, 'get'>, chat: Chat): Tools | MemoryFailure {
   const prompt = memoryPrompt(store);
   if (prompt.kind === 'missing') return { kind: 'prompt-missing' };
-  const route = taskModel(store, chat, prompt.prompt.value.model);
-  return 'kind' in route ? route : { prompt: prompt.prompt.value, route };
+  const writer = taskWriter(store, chat, prompt.prompt.value.model);
+  return 'kind' in writer ? writer : { prompt: prompt.prompt.value, ...writer };
 }
 
 // failed: why a chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
@@ -447,7 +447,7 @@ export class Rememberer {
     const reaches = async () => (slot ??= (await wouldSend(this.session, chat, { kind: 'answer' }, undefined, 'memory'))?.prompt.memory?.slot === true);
     const again = member ?? asked ?? (stale.length && await reaches() ? stale[0] : undefined);
     const span = !again && this.schedule.includesNew(chat) && await reaches() ? await this.span(chat, sent.tokens, coveredBy(memory, places), setup) : null;
-    const tools = this.tools(sent.chat);
+    const tools = memoryWriter(this.session.store, sent.chat);
     let chapters: ReturnType<typeof nextChapters> = [];
     if (!('kind' in tools) && !again && !span && this.schedule.includesNew(chat) && await reaches()) {
       const snapshot = await this.session.tokens.snapshot(tools.route, tools.settings, tokenLimits(tools.route.model, sentSettings(store, tools.route)), 'memory', chat, new AbortController().signal);
@@ -472,15 +472,6 @@ export class Rememberer {
     const target = next ? next.target : chapter && chapterTarget(chapter.map((id) => held.costs.get(id)!));
     const waiting = span ? Math.ceil(span.waiting / setup.batch) : 0;
     return { job, sent, from, to, memory, before, chapter: target === null ? null : { target }, ...tools, left: Math.max(stale.length + waiting + chapters.length, 1) };
-  }
-
-  private tools(chat: Chat): Tools | MemoryFailure {
-    const { store } = this.session;
-    const writer = memoryWriter(store, chat);
-    if ('kind' in writer) return writer;
-    const profile = modelProfile(store, writer.route.model);
-    if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
-    return { prompt: writer.prompt, route: writer.route, settings: profile.profile.value.settings };
   }
 
   // Earlier than batch when the next request drops messages for want of room.
