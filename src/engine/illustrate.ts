@@ -1,7 +1,7 @@
 import type { Model, PictureRequest } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Figure, Scene, Shape } from '../model/illustration';
-import type { Portrait } from '../model/likeness';
+import type { Outfit, Portrait } from '../model/likeness';
 import { nameKey, namesOf } from './likeness';
 import type { IllustratePrompt, PictureTags } from '../model/prompt';
 import { answerJson } from './answer-json';
@@ -43,17 +43,52 @@ export function illustratorPrompt(): IllustratePrompt {
 export const severalScenes = (count: number) =>
   `This time pick ${count} moments instead of one, each after a different paragraph, spread through the message. Answer with only a JSON array of ${count} objects, each in the shape above, in the order of their paragraphs.`;
 
+// What the scene call is told of a portrait: its names, its outfits' names, and worn, the named outfit it was last
+// drawn in, null when never in one (toldProfiles).
+export type Told = Pick<Portrait, 'name' | 'aliases' | 'outfits'> & { worn: string | null };
+
 // Sent after the 삽화 prompt, the engine's for the same reason as severalScenes: a figure is matched to its profile by
 // name or alias and its outfit to one of the profile's by name (pictureRequest), so the scene is asked to use the
 // profile's own names.
-export const profileNames = (portraits: readonly Pick<Portrait, 'name' | 'aliases' | 'outfits'>[]) =>
+export const profileNames = (portraits: readonly Told[]) =>
   [
-    'These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them. When the story has one of them in an outfit named here, put that name, exactly as written, as a tag in its "outfit", with any change to it as further tags; otherwise write their clothes as tags.',
-    ...portraits.map(({ name, aliases, outfits }) => {
+    'These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them. When the story has one of them in an outfit named here, put that name, exactly as written, as a tag in its "outfit", with any change to it as further tags; otherwise write their clothes as tags. One last drawn in a named outfit still wears it unless the story has changed their clothes since.',
+    ...portraits.map(({ name, aliases, outfits, worn }) => {
       const named = outfits.filter(({ name }) => name.trim());
-      return `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}${named.length ? `, outfits: ${named.map(({ name }) => `"${name.trim()}"`).join(', ')}` : ''}`;
+      return `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}${named.length ? `, outfits: ${named.map(({ name }) => `"${name.trim()}"`).join(', ')}` : ''}${worn ? `; last drawn in "${worn}"` : ''}`;
     }),
   ].join('\n');
+
+const portraitsByName = (portraits: readonly Portrait[]) => {
+  const byName = new Map<string, Portrait>();
+  for (const portrait of portraits) for (const key of namesOf(portrait)) if (!byName.has(key)) byName.set(key, portrait);
+  return byName;
+};
+
+// The portrait's outfit a scene's outfit tag names, if any.
+const namedOutfit = (portrait: Portrait, tag: string) => {
+  const key = nameKey(tag);
+  return key ? portrait.outfits.find((each) => nameKey(each.name) === key) : undefined;
+};
+
+// The outfits a figure matched to a portrait is drawn in: each tag of its outfit that is a portrait outfit's name
+// becomes that outfit, the rest stay tags; an empty outfit is the portrait's first.
+const outfitsWorn = (portrait: Portrait, outfit: string): (Outfit | string)[] =>
+  outfit.trim() ? outfit.split(',').map((tag) => namedOutfit(portrait, tag) ?? tag) : portrait.outfits.slice(0, 1);
+
+// scenes: those of the chat's pictures in their order; a later one's figure overrides.
+export function toldProfiles(portraits: readonly Portrait[], scenes: readonly Scene[]): Told[] {
+  const byName = portraitsByName(portraits);
+  const worn = new Map<Portrait, string>();
+  for (const { characters } of scenes) {
+    for (const { name, outfit } of characters) {
+      const portrait = byName.get(nameKey(name));
+      const named = portrait && outfitsWorn(portrait, outfit).find((each): each is Outfit => typeof each !== 'string' && each.name.trim() !== '');
+      if (portrait && named) worn.set(portrait, named.name.trim());
+    }
+  }
+  return portraits.map((portrait) => ({ name: portrait.name, aliases: portrait.aliases, outfits: portrait.outfits, worn: worn.get(portrait) ?? null }));
+}
 
 export const numbered = (paragraphs: readonly string[]) => paragraphs.map((paragraph, index) => `[${index + 1}] ${paragraph}`).join('\n');
 
@@ -73,6 +108,10 @@ function figure(value: unknown): Figure | null {
 
 // A scene as the writer answers it, for the user to change (어떻게 바꿀까요?) and parseScene to read back.
 export const sceneText = ({ paragraph, ...rest }: Scene) => JSON.stringify({ after: paragraph + 1, ...rest }, null, 2);
+
+// What a picture was drawn from, beside its scene: the base caption, then each figure by the scene's name for it.
+export const sentText = (scene: Scene, sent: Pick<PictureRequest, 'prompt' | 'characters'>) =>
+  [sent.prompt, ...sent.characters.map(({ prompt }, index) => `${scene.characters[index]?.name ?? ''}: ${prompt}`)].join('\n');
 
 type SceneRead = { ok: true; scene: Scene } | { ok: false; reason: SceneInvalid };
 
@@ -125,17 +164,14 @@ const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((pa
 // Artist tags lead the base caption (design §6.6): the 삽화 prompt's, else the first drawn portrait's. random: the seed
 // of a prompt that fixes none. portraits: the chat's packs' in pack order (runtime/likeness), the character's own first;
 // the scene call is told their names after the prompt (profileNames). A figure whose name is a portrait's name or alias
-// takes the portrait's look in place of its own; each tag of its outfit that is a portrait outfit's name becomes that
-// outfit's tags, and an empty outfit the first outfit's.
+// takes the portrait's look in place of its own and the outfits its outfit names (outfitsWorn).
 export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Model, random: number, portraits: readonly Portrait[]): PictureRequest {
   const { artist, quality, negative } = prompt.tags ?? PICTURE_DEFAULTS;
   const { steps = null, scale = null, rescale = null, sampler = null, seed = random } = prompt.picture ?? {};
-  const byName = new Map<string, Portrait>();
-  for (const portrait of portraits) for (const key of namesOf(portrait)) if (!byName.has(key)) byName.set(key, portrait);
+  const byName = portraitsByName(portraits);
   const matched = scene.characters.map(({ name }) => byName.get(nameKey(name)) ?? null);
   const drawn = portraits.find((portrait) => matched.includes(portrait) && portrait.artist.trim());
-  const wornBy = (portrait: Portrait, outfit: string) =>
-    outfit.trim() ? tags(...outfit.split(',').map((tag) => portrait.outfits.find((each) => nameKey(each.name) === nameKey(tag))?.tags ?? tag)) : (portrait.outfits[0]?.tags ?? '');
+  const wornBy = (portrait: Portrait, outfit: string) => tags(...outfitsWorn(portrait, outfit).map((each) => (typeof each === 'string' ? each : each.tags)));
   return {
     model,
     prompt: tags(artist.trim() ? artist : (drawn?.artist ?? ''), scene.setting, scene.framing, quality),

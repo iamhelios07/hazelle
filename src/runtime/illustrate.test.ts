@@ -315,11 +315,14 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       expect(profileCalls()).toHaveLength(2);
     }));
 
-  it('tells the scene call the profiles’ names, and 다시 만들기 keeps a portrait edited by hand, answering what it replaced', () =>
+  it('tells the scene call the profiles’ names, then the outfit each was last drawn in, and 다시 만들기 keeps a portrait edited by hand, answering what it replaced', () =>
     server.withSession(async (session) => {
       const { owner, log, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
       await draw();
-      expect(log.find(({ sent }) => sent.body?.includes('You direct the illustrations'))!.sent.body).toContain('- Ari (also called 아리)');
+      await draw();
+      const sceneCalls = log.filter(({ sent }) => sent.body?.includes('You direct the illustrations'));
+      expect(sceneCalls[0]!.sent.body).toMatch(/- Ari \(also called 아리\), outfits: \\"usual\\""\}/);
+      expect(sceneCalls[1]!.sent.body).toContain('- Ari (also called 아리), outfits: \\"usual\\"; last drawn in \\"usual\\"');
       expect(await editPortrait(session.store, owner, { index: 0, name: 'Nobody' }, { look: 'boy' })).toMatchObject({ ok: false, error: 'gone' });
       expect((await editPortrait(session.store, owner, { index: 0, name: 'Ari' }, { outfits: [{ name: 'usual', tags: 'swimsuit' }] })).ok).toBe(true);
       const edited = session.store.get('likeness', likenessId(owner))!;

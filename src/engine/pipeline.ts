@@ -2,7 +2,6 @@ import type { TokenEstimate, TokenFit } from '../model/token-calibration';
 import { cachePoints, type CachePart, type Sent } from './cache-points';
 import { fitChat, remembered, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
 import type { ChatMessage } from '../connectors/types';
-import type { Portrait } from '../model/likeness';
 import type { Memory, Written } from '../model/memory';
 import type { MascotId } from '../model/mascot';
 import type { Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
@@ -14,7 +13,7 @@ import { prepareLore, merge, type Activation, type Fired, type LoreBook, type Lo
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, recordsTarget, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import { retrieval, retrievalRoom } from './retrieval';
-import { numbered, profileNames, severalScenes } from './illustrate';
+import { numbered, profileNames, severalScenes, type Told } from './illustrate';
 import { mascotSheet } from './mascot';
 import type { TranslationRequest } from './translate';
 
@@ -402,7 +401,7 @@ export type IllustrationInput = {
   // How many scenes to write (model/illustration pictureCount).
   count: number;
   // The portraits the pictures are drawn with (runtime/likeness).
-  portraits: Pick<Portrait, 'name' | 'aliases' | 'outfits'>[];
+  portraits: Told[];
   seed: string;
   countTokens: (text: string) => number;
 };

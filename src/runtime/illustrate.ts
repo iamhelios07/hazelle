@@ -2,9 +2,9 @@ import { ChangeSignal } from '../change-signal';
 import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
-import { parseScenes, pictureRequest, type SceneInvalid } from '../engine/illustrate';
+import { parseScenes, pictureRequest, toldProfiles, type SceneInvalid } from '../engine/illustrate';
 import type { RanAway } from '../engine/pipeline';
-import { fold, type Chat, type Receipt } from '../model/chat';
+import { fold, shown, type Chat, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
 import { paragraphsOf, pictureCount, type Illustration, type Scene } from '../model/illustration';
 import type { Stored } from '../model/kinds';
@@ -239,13 +239,27 @@ export class Illustrator {
     if ('kind' in writer) return writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: portraits.map(({ name, aliases, outfits }) => ({ name, aliases, outfits })), seed: crypto.randomUUID() }, signal));
+    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: toldProfiles(portraits, this.drawnScenes(store, chat, history)), seed: crypto.randomUUID() }, signal));
     if ('kind' in assembled) return assembled;
     const answer = await pageAnswer(this.deps, writer, 'illustration', chat, assembled.messages, signal);
     if ('kind' in answer) return answer;
     const { receipt } = answer;
     const parsed = parseScenes(answer.text, paragraphs.length, count);
     return parsed.ok ? { scenes: parsed.scenes, receipt } : { kind: 'invalid', receipt, reason: parsed.reason };
+  }
+
+  // The scenes of the chat's pictures for the shown version of each message up to the one drawn, by message, paragraph
+  // and time: what each figure was last drawn in (toldProfiles).
+  private drawnScenes(store: ObjectStore, chat: string, history: ReturnType<typeof fold>): Scene[] {
+    const order = new Map(history.map((message, index) => [`${message.id}/${shown(message).id}`, index]));
+    return store
+      .children('illustration', chat)
+      .flatMap(({ value }) => {
+        const at = order.get(`${value.message}/${value.version}`);
+        return at === undefined ? [] : [{ at, value }];
+      })
+      .sort((a, b) => a.at - b.at || a.value.scene.paragraph - b.value.scene.paragraph || a.value.at - b.value.at)
+      .map(({ value }) => value.scene);
   }
 
   // Straight through the relay: a picture is one answer, not a stream to pick up.

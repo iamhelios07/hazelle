@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Chat } from '../../model/chat';
-import type { IllustrateSwitches, Scene } from '../../model/illustration';
+import type { Illustration, IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { setIllustrate, setOwnIllustrate } from '../../runtime/characters';
 import { chatIllustrate } from '../../runtime/features';
@@ -23,8 +23,9 @@ function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap
   return versions;
 }
 
-// 어떻게 바꿀까요?: the scene a picture or a failed run had, drawn again once changed. paragraphs: how many its version holds.
-export type Reshaping = { message: string; version: string; scene: Scene; paragraphs: number };
+// 어떻게 바꿀까요?: the scene a picture had and what it was drawn from, drawn again once the scene is changed. paragraphs:
+// how many its version holds.
+export type Reshaping = { message: string; version: string; scene: Scene; sent: Illustration['sent']; paragraphs: number };
 export type IllustrationActions = ReturnType<typeof useChatIllustrations>['actions'];
 
 export function useChatIllustrations(chatId: string, id: string | null, chat: Chat) {

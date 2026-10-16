@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import type { PictureUrl } from '../../engine/assets';
-import { parseScene, sceneText, SIZES, type SceneInvalid } from '../../engine/illustrate';
+import { parseScene, sceneText, sentText, SIZES, type SceneInvalid } from '../../engine/illustrate';
 import { shown } from '../../model/chat';
 import { byParagraph, paragraphsOf, type Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
@@ -117,7 +117,7 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
           {draws && (
             <>
               <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={again} />
-              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene, paragraphs: paragraphsOf(text).length })} />
+              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene, sent, paragraphs: paragraphsOf(text).length })} />
             </>
           )}
           <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => onDrop(picture)} />
@@ -156,6 +156,7 @@ export function SceneDialog({ reshaping, onDraw, onClose }: { reshaping: Reshapi
       }
     >
       <TextField label="장면" kind="key" lines={14} value={text} onChange={setText} error={error} help="after는 삽화가 들어갈 문단 번호이고, 나머지는 Danbooru 태그예요." />
+      <TextField label="보낸 태그" kind="key" lines={6} readOnly value={sentText(reshaping.scene, reshaping.sent)} onChange={() => {}} help="이름이 프로필과 같은 인물은 외모와 옷을 프로필의 태그로 바꿔 보내요. 장면을 고쳐 다시 그려도 같은 규칙을 거쳐요." />
     </Dialog>
   );
 }

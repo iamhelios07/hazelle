@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Model } from '../connectors/types';
 import type { Portrait } from '../model/likeness';
-import { illustratorPrompt, parseScene, pictureRequest, PICTURE_DEFAULTS, profileNames, sceneText } from './illustrate';
+import { illustratorPrompt, parseScene, pictureRequest, PICTURE_DEFAULTS, profileNames, sceneText, sentText, toldProfiles } from './illustrate';
 
 const answer = {
   after: 2,
@@ -96,10 +96,18 @@ describe('pictureRequest with portraits', () => {
     expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, pajamas, smile', 'girl, Ari look, pajamas, torn, smile', 'girl, Ari look, red night, smile']);
   });
 
-  it('tells the scene writer each portrait’s names and its named outfits', () => {
-    const told = profileNames([portrait('Ari', { aliases: ['Lotta'] }), portrait('Mina', { outfits: [{ name: ' ', tags: 'unnamed' }] })]);
-    expect(told).toContain('- Ari (also called Lotta), outfits: "usual", "night"');
-    expect(told).toMatch(/\n- Mina$/);
+  it('tells the scene writer each portrait’s names, its named outfits and the one it was last drawn in', () => {
+    const portraits = [portrait('Ari', { aliases: ['Lotta'] }), portrait('Mina', { outfits: [{ name: ' ', tags: 'unnamed' }] })];
+    const told = toldProfiles(portraits, [scene([{ name: 'lotta', outfit: 'night, torn' }, { name: 'Mina', outfit: '' }]), scene([{ name: 'Ari', outfit: 'red night' }])]);
+    expect(told.map(({ worn }) => worn)).toEqual(['night', null]);
+    expect(profileNames(told)).toContain('- Ari (also called Lotta), outfits: "usual", "night"; last drawn in "night"');
+    expect(profileNames(told)).toMatch(/\n- Mina$/);
+    expect(toldProfiles(portraits, [scene([{ name: 'Ari', outfit: ' ' }])])[0]!.worn).toBe('usual');
+  });
+
+  it('writes what a picture was sent as, each figure under the scene’s name for it', () => {
+    const drawn = scene([{ name: 'Ari', outfit: 'night' }, { name: 'Stranger', outfit: 'coat' }]);
+    expect(sentText(drawn, pictureRequest(drawn, illustratorPrompt(), model, 1, [portrait('Ari')]))).toBe(`indoors, ${PICTURE_DEFAULTS.quality}\nAri: girl, Ari look, pajamas, smile\nStranger: girl, from scene, coat, smile`);
   });
 
   it("leads with the prompt's artist tags, else the first drawn portrait's in pack order", () => {
