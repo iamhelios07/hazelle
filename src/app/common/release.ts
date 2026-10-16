@@ -8,6 +8,14 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.15',
+    date: '2026-10-17',
+    lines: [
+      '아무것도 입력하지 않고 보내면 응답을 받아요. 봇의 메시지 뒤에서도 다음 응답이 이어져요. 따로 있던 응답 받기 버튼은 보내기 버튼으로 합쳐졌어요.',
+      '입력 없이 보낼 때 요청에 붙는 문장은 설정 › 채팅 › 세부 설정의 응답 받기 지시에서 바꿀 수 있어요.',
+    ],
+  },
+  {
     version: 'v0.2.14',
     date: '2026-10-17',
     lines: [
