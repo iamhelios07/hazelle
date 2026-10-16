@@ -3,7 +3,7 @@ import { prepareChat, contextRefusal, type ContextRefusal } from '../connectors/
 import type { CallCalibration } from '../model/token-calibration';
 import { completedCalibration } from './token-calibration';
 import { retryWait } from '../contracts/streams';
-import { batchLane, cacheView, laneBusy, resolveConnection, resolveModel, retryOf, RETRYABLE, withCredential, type CacheView, type Route } from '../connectors/registry';
+import { batchLane, cacheView, laneBusy, resolveConnection, resolveModel, RETRYABLE, withCredential, type CacheView, type Route } from '../connectors/registry';
 import { decodeStream, type InlineThoughts, type Outcome } from '../connectors/stream';
 import type { ModelSettings } from '../connectors/settings';
 import { ConnectorError, type Account, type Batches, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase, type Starred } from '../connectors/types';
@@ -134,7 +134,7 @@ export async function generate({ credentials, connection, model, settings, retri
     firstText ??= performance.now();
     onText(phase, text);
   };
-  const retry = retryOf(retries);
+  const retry = retries ? { times: retries, statuses: RETRYABLE } : null;
   if (batches) {
     const { cancel } = batching!;
     const asking: Asking = { route, model, batches, ask: (each) => withCredential(route, each, credential.credential), signal, cancel, onText, inline };
