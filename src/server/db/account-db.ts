@@ -83,10 +83,10 @@ function prepareAccountFile(dataDir: string, incarnation: string, timeline: stri
   if (existsSync(path)) throw new Error(`account file exists: ${incarnation}`);
   const db = openDatabase(path);
   try {
-    db.exec('BEGIN');
-    for (const statement of SCHEMA) db.exec(statement);
-    db.prepare('INSERT INTO head (id, rev, bytes, timeline, schema_version) VALUES (1, 0, 0, ?, ?)').run(timeline, ACCOUNT_SCHEMA_VERSION);
-    db.exec('COMMIT');
+    transaction(db, () => {
+      for (const statement of SCHEMA) db.exec(statement);
+      db.prepare('INSERT INTO head (id, rev, bytes, timeline, schema_version) VALUES (1, 0, 0, ?, ?)').run(timeline, ACCOUNT_SCHEMA_VERSION);
+    });
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   } finally {
     db.close();

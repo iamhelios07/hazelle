@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
+import { transaction } from './transaction';
 
 // Applies migrations/*.sql in name order, each whole file in one transaction with its ledger row. The ledger must be an
 // ordered prefix of the files this build ships: a changed applied file, a ledger row this build does not know (a
@@ -28,13 +29,12 @@ export function migrate(db: DatabaseSync, directory: string): { applied: string[
   });
   const applied: string[] = [];
   for (const file of files.slice(ledger.length)) {
-    db.exec('BEGIN');
     try {
-      db.exec(file.sql);
-      db.prepare('INSERT INTO migrations (name, checksum, applied_at) VALUES (?, ?, ?)').run(file.name, file.checksum, Date.now());
-      db.exec('COMMIT');
+      transaction(db, () => {
+        db.exec(file.sql);
+        db.prepare('INSERT INTO migrations (name, checksum, applied_at) VALUES (?, ?, ?)').run(file.name, file.checksum, Date.now());
+      });
     } catch (error) {
-      db.exec('ROLLBACK');
       throw new Error(`migrations: ${file.name} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
     applied.push(file.name);
