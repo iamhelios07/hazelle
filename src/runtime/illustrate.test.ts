@@ -322,7 +322,7 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       await draw();
       const sceneCalls = log.filter(({ sent }) => sent.body?.includes('You direct the illustrations'));
       expect(sceneCalls[0]!.sent.body).toMatch(/- Ari \(also called 아리\), outfits: \\"usual\\""\}/);
-      expect(sceneCalls[1]!.sent.body).toContain('- Ari (also called 아리), outfits: \\"usual\\"; last drawn in \\"usual\\"');
+      expect(sceneCalls[1]!.sent.body).toContain('- Ari (also called 아리), outfits: \\"usual\\"; last drawn in \\"usual\\" in this message');
       expect(await editPortrait(session.store, owner, { index: 0, name: 'Nobody' }, { look: 'boy' })).toMatchObject({ ok: false, error: 'gone' });
       expect((await editPortrait(session.store, owner, { index: 0, name: 'Ari' }, { outfits: [{ name: 'usual', tags: 'swimsuit' }] })).ok).toBe(true);
       const edited = session.store.get('likeness', likenessId(owner))!;

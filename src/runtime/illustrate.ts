@@ -239,7 +239,7 @@ export class Illustrator {
     if ('kind' in writer) return writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: toldProfiles(portraits, this.drawnScenes(store, chat, history)), seed: crypto.randomUUID() }, signal));
+    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: toldProfiles(portraits, this.drawnBefore(store, chat, history)), seed: crypto.randomUUID() }, signal));
     if ('kind' in assembled) return assembled;
     const answer = await pageAnswer(this.deps, writer, 'illustration', chat, assembled.messages, signal);
     if ('kind' in answer) return answer;
@@ -249,8 +249,8 @@ export class Illustrator {
   }
 
   // The scenes of the chat's pictures for the shown version of each message up to the one drawn, by message, paragraph
-  // and time: what each figure was last drawn in (toldProfiles).
-  private drawnScenes(store: ObjectStore, chat: string, history: ReturnType<typeof fold>): Scene[] {
+  // and time, each with its distance from the message drawn: what each figure was last drawn in (toldProfiles).
+  private drawnBefore(store: ObjectStore, chat: string, history: ReturnType<typeof fold>): { scene: Scene; ago: number }[] {
     const order = new Map(history.map((message, index) => [`${message.id}/${shown(message).id}`, index]));
     return store
       .children('illustration', chat)
@@ -259,7 +259,7 @@ export class Illustrator {
         return at === undefined ? [] : [{ at, value }];
       })
       .sort((a, b) => a.at - b.at || a.value.scene.paragraph - b.value.scene.paragraph || a.value.at - b.value.at)
-      .map(({ value }) => value.scene);
+      .map(({ at, value }) => ({ scene: value.scene, ago: history.length - 1 - at }));
   }
 
   // Straight through the relay: a picture is one answer, not a stream to pick up.

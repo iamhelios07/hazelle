@@ -44,18 +44,20 @@ export const severalScenes = (count: number) =>
   `This time pick ${count} moments instead of one, each after a different paragraph, spread through the message. Answer with only a JSON array of ${count} objects, each in the shape above, in the order of their paragraphs.`;
 
 // What the scene call is told of a portrait: its names, its outfits' names, and worn, the named outfit it was last
-// drawn in, null when never in one (toldProfiles).
-export type Told = Pick<Portrait, 'name' | 'aliases' | 'outfits'> & { worn: string | null };
+// drawn in and how many messages before the one drawn, null when never in one (toldProfiles).
+export type Told = Pick<Portrait, 'name' | 'aliases' | 'outfits'> & { worn: { outfit: string; ago: number } | null };
+
+const messagesAgo = (ago: number) => (ago === 0 ? 'in this message' : ago === 1 ? '1 message ago' : `${ago} messages ago`);
 
 // Sent after the 삽화 prompt, the engine's for the same reason as severalScenes: a figure is matched to its profile by
 // name or alias and its outfit to one of the profile's by name (pictureRequest), so the scene is asked to use the
 // profile's own names.
 export const profileNames = (portraits: readonly Told[]) =>
   [
-    'These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them. When the story has one of them in an outfit named here, put that name, exactly as written, as a tag in its "outfit", with any change to it as further tags; otherwise write their clothes as tags. One last drawn in a named outfit still wears it unless the story has changed their clothes since.',
+    'These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them. When the story has one of them in an outfit named here, put that name, exactly as written, as a tag in its "outfit", with any change to it as further tags; otherwise write their clothes as tags. One last drawn in a named outfit likely still wears it; the more messages ago that was, the more what the story shows now outweighs it.',
     ...portraits.map(({ name, aliases, outfits, worn }) => {
       const named = outfits.filter(({ name }) => name.trim());
-      return `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}${named.length ? `, outfits: ${named.map(({ name }) => `"${name.trim()}"`).join(', ')}` : ''}${worn ? `; last drawn in "${worn}"` : ''}`;
+      return `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}${named.length ? `, outfits: ${named.map(({ name }) => `"${name.trim()}"`).join(', ')}` : ''}${worn ? `; last drawn in "${worn.outfit}" ${messagesAgo(worn.ago)}` : ''}`;
     }),
   ].join('\n');
 
@@ -76,15 +78,16 @@ const namedOutfit = (portrait: Portrait, tag: string) => {
 const outfitsWorn = (portrait: Portrait, outfit: string): (Outfit | string)[] =>
   outfit.trim() ? outfit.split(',').map((tag) => namedOutfit(portrait, tag) ?? tag) : portrait.outfits.slice(0, 1);
 
-// scenes: those of the chat's pictures in their order; a later one's figure overrides.
-export function toldProfiles(portraits: readonly Portrait[], scenes: readonly Scene[]): Told[] {
+// drawn: the scenes of the chat's pictures in their order, each with how many messages before the one drawn it is;
+// a later one's figure overrides.
+export function toldProfiles(portraits: readonly Portrait[], drawn: readonly { scene: Scene; ago: number }[]): Told[] {
   const byName = portraitsByName(portraits);
-  const worn = new Map<Portrait, string>();
-  for (const { characters } of scenes) {
-    for (const { name, outfit } of characters) {
+  const worn = new Map<Portrait, Told['worn']>();
+  for (const { scene, ago } of drawn) {
+    for (const { name, outfit } of scene.characters) {
       const portrait = byName.get(nameKey(name));
       const named = portrait && outfitsWorn(portrait, outfit).find((each): each is Outfit => typeof each !== 'string' && each.name.trim() !== '');
-      if (portrait && named) worn.set(portrait, named.name.trim());
+      if (portrait && named) worn.set(portrait, { outfit: named.name.trim(), ago });
     }
   }
   return portraits.map((portrait) => ({ name: portrait.name, aliases: portrait.aliases, outfits: portrait.outfits, worn: worn.get(portrait) ?? null }));

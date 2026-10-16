@@ -96,13 +96,14 @@ describe('pictureRequest with portraits', () => {
     expect(request.characters.map(({ prompt }) => prompt)).toEqual(['girl, Ari look, pajamas, smile', 'girl, Ari look, pajamas, torn, smile', 'girl, Ari look, red night, smile']);
   });
 
-  it('tells the scene writer each portrait’s names, its named outfits and the one it was last drawn in', () => {
+  it('tells the scene writer each portrait’s names, its named outfits, and the one it was last drawn in and how long ago', () => {
     const portraits = [portrait('Ari', { aliases: ['Lotta'] }), portrait('Mina', { outfits: [{ name: ' ', tags: 'unnamed' }] })];
-    const told = toldProfiles(portraits, [scene([{ name: 'lotta', outfit: 'night, torn' }, { name: 'Mina', outfit: '' }]), scene([{ name: 'Ari', outfit: 'red night' }])]);
-    expect(told.map(({ worn }) => worn)).toEqual(['night', null]);
-    expect(profileNames(told)).toContain('- Ari (also called Lotta), outfits: "usual", "night"; last drawn in "night"');
+    const told = toldProfiles(portraits, [{ scene: scene([{ name: 'lotta', outfit: 'night, torn' }, { name: 'Mina', outfit: '' }]), ago: 12 }, { scene: scene([{ name: 'Ari', outfit: 'red night' }]), ago: 3 }]);
+    expect(told.map(({ worn }) => worn)).toEqual([{ outfit: 'night', ago: 12 }, null]);
+    expect(profileNames(told)).toContain('- Ari (also called Lotta), outfits: "usual", "night"; last drawn in "night" 12 messages ago');
     expect(profileNames(told)).toMatch(/\n- Mina$/);
-    expect(toldProfiles(portraits, [scene([{ name: 'Ari', outfit: ' ' }])])[0]!.worn).toBe('usual');
+    expect(profileNames(toldProfiles(portraits, [{ scene: scene([{ name: 'Ari', outfit: ' ' }]), ago: 0 }]))).toContain('last drawn in "usual" in this message');
+    expect(profileNames(toldProfiles(portraits, [{ scene: scene([{ name: 'Ari', outfit: 'night' }]), ago: 1 }]))).toContain('last drawn in "night" 1 message ago');
   });
 
   it('writes what a picture was sent as, each figure under the scene’s name for it', () => {
