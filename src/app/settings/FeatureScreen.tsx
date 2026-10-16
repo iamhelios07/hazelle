@@ -6,12 +6,12 @@ import { TRANSLATOR_CHAT } from '../../runtime/turn';
 import { IllustrateRows } from '../common/IllustrateRows';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
-import { FEATURE_NAMES, NOTE_UNSENT, noteLines, PAGES, SCOPE } from '../common/words';
+import { FEATURE_NAMES, NOTE_UNSENT, noteLines, PAGES } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { NavBar, Screen, Section, SettingGroup, SettingRow } from '../ui';
+import { NavBar, Screen, SettingGroup, SettingRow } from '../ui';
 import { FEATURE_HELP, FeatureSwitch } from './FeatureDefaults';
 import { GlobalNoteField } from './GlobalNoteField';
 import { MemoryDefaults } from './MemoryDefaults';
@@ -26,7 +26,7 @@ export function FeatureScreen({ feature, back }: { feature: Feature; back: Back 
       <SettingGroup label={name}>
         <SettingRow label={name} help={FEATURE_HELP} control={<FeatureSwitch feature={feature} />} />
       </SettingGroup>
-      <Section title={SCOPE.default}>{feature === 'translate' ? <TranslateDefaults /> : feature === 'illustrate' ? <IllustrateDefaults /> : <MemoryDefaults />}</Section>
+      {feature === 'translate' ? <TranslateDefaults /> : feature === 'illustrate' ? <IllustrateDefaults /> : <MemoryDefaults />}
     </Screen>
   );
 }

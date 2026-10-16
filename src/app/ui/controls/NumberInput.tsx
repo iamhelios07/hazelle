@@ -1,6 +1,6 @@
 import styles from './NumberInput.module.css';
 
-// placeholder: what an empty field stands for, such as 기본값 where empty means unset. placeholderTone value: the
+// placeholder: what an empty field stands for, such as 원래 값 where empty means unset. placeholderTone value: the
 // placeholder is the number in effect, read as a value rather than a hint.
 type Props = { label: string; value: string; onChange: (value: string) => void; invalid?: boolean; unit?: string; placeholder?: string; placeholderTone?: 'hint' | 'value' };
 

@@ -33,7 +33,7 @@ function lineOf(store: ObjectStore, feature: Feature, routes: ReturnType<typeof 
   return `새 채팅에서 ${state(memory.on)} · 기록 ${count(memory.budget)} 토큰`;
 }
 
-// 공용's availability, the bottom rung of the 기능 ladder: a switch with no 기본값 of its own.
+// 공용's availability, the bottom rung of the 기능 ladder: a switch with no layer above it to follow.
 export function FeatureSwitch({ feature }: { feature: Feature }) {
   const store = useStore();
   const toast = useToast();

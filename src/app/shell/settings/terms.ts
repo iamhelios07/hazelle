@@ -25,7 +25,7 @@ const FEATURE_TERMS: Record<Feature, string[]> = {
   memory: ['기록 최대 분량', '임베딩 모델로 찾는 기록', '원문으로 보낼 최근 대화', '한 번에 정리할 분량'],
 };
 
-// A page's own pages, a feature's under 채팅 기본값: a hit on one of their labels or terms opens that page.
+// A page's own pages, a feature's under 설정 › 채팅: a hit on one of their labels or terms opens that page.
 export const SUBPAGES: Partial<Record<SettingsPage, { label: string; route: Route; terms: string[] }[]>> = {
   chat: FEATURES.map((feature) => ({ label: FEATURE_NAMES[feature], route: { kind: 'feature', feature }, terms: FEATURE_TERMS[feature] })),
 };

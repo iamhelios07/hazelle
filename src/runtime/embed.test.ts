@@ -56,7 +56,7 @@ it('refuses a connection that serves no embeddings before the network', async ()
   expect(fetch).not.toHaveBeenCalled();
 });
 
-it('takes 임베딩 모델 from 기본값 alone, and counts one whose connection serves none as gone', () => {
+it('takes 임베딩 모델 from 공용 alone, and counts one whose connection serves none as gone', () => {
   const groq: Stored<'connection'> = { ...connection, id: 'g', value: { ...connection.value, type: 'groq' } };
   const store = (embed?: { connection: string; model: string }) => ({
     get: ((kind: string, id: string) => (kind === 'settings' ? { value: { models: { main: { connection: 'c', model: model.id }, ...(embed && { embed }) } } } : [connection, groq].find((each) => each.id === id))) as never,

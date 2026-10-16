@@ -42,7 +42,7 @@ type Props = {
   own: ModelRef | undefined;
   // What leaving it unset means here; null where it cannot be left unset. It names no model: 대화 모델 differs by
   // chat, so a model named here would be wrong in any chat that picked another. 보조 모델 too: a chat's
-  // conversation prompt outranks 기본값's, and with neither set it falls back to the chat's 대화 모델.
+  // conversation prompt outranks 공용's, and with neither set it falls back to the chat's 대화 모델.
   follow: string | null;
   connections: readonly Stored<'connection'>[];
   onPick: (ref: ModelRef | null) => void;

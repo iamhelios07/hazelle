@@ -68,7 +68,7 @@ export const noteLines = (note: string | undefined) => (note ?? '').split('\n').
 export const NOTE_UNSENT = `번역 프롬프트에 '${TRANSLATOR_NOTE}' 블록을 추가해야 노트가 적용돼요.`;
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
-export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅 기본값', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', labs: '실험실', translator: '번역기', account: '계정', usage: '사용량', admin: '운영' };
+export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', labs: '실험실', translator: '번역기', account: '계정', usage: '사용량', admin: '운영' };
 
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집's and a prompt's 모듈 section (항상 켜짐).
@@ -85,15 +85,16 @@ export const MODEL_SETTINGS = '모델 설정';
 export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
 
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
-// A feature's page under 채팅 기본값.
+// A feature's page under 설정 › 채팅.
 export const inFeature = (feature: Feature) => `${inSettings('chat')} › ${FEATURE_NAMES[feature]}`;
 
 // A hint's door to the place it names: the thing itself, or a settings page by inSettings when it lands on the page.
 export const opens = (place: string) => `${place} 열기`;
 
 // The only words for a layer's state, a tag beside the title of a panel that overrides a shared value (design, Secondary
-// screens; user 2026-10-15).
-export const SCOPE = { default: '기본값', chat: '이 채팅만', character: '이 캐릭터만' } as const;
+// screens; user 2026-10-15). default: the shared layer's word, re-ruled 2026-10-16 to 공용, leaving 기본값 a field's
+// starting value only.
+export const SCOPE = { default: '공용', chat: '이 채팅만', character: '이 캐릭터만' } as const;
 export const scopeTag = (scope: keyof typeof SCOPE) => ({ label: SCOPE[scope], tone: scope === 'default' ? 'plain' : 'accent' }) as const;
 
 export const FEATURES_TITLE = '기능';
@@ -145,9 +146,10 @@ export const risuLeftOut = ({ greetings, lore, unread }: LeftOut) =>
     unread ? `열리지 않는 채팅 ${unread}개는 빠졌어요.` : '',
   ].filter(Boolean).join(' ');
 
-// An empty model setting is unset: nothing is sent, and the provider's default applies. It is never shown as a number.
-// Not 기본값, which reads as the default 설정 named 기본.
-export const UNSET = '모델 원래 값';
+// Nothing set, so the thing behaves as it would untouched. An empty model setting is unset: nothing is sent, and the
+// provider's default applies. It is never shown as a number. Not 기본값, which reads as the default 설정 named 기본.
+export const ORIGINAL = '원래 값';
+export const UNSET = `모델 ${ORIGINAL}`;
 
 // A 설정 묶음's discount lane (design §6.7), a reply waiting on its batch, and one whose batch 멈추기 canceled, which
 // shows an answer made before the cancel landed.
@@ -171,7 +173,9 @@ export const detailLabel = (set: number) => (set ? `세부 설정 · ${set}개 �
 
 // A value nobody reported, said as such rather than as a made-up figure.
 export const UNKNOWN = '알 수 없음';
-export const RESET = '기본값으로 되돌리기';
+// 으로, not 로: every word it takes ends in a consonant, 기본값, 공용 and 원래 값.
+export const resetTo = (value: string) => `${value}으로 되돌리기`;
+export const RESET = resetTo('기본값');
 export const UNDO = '되돌리기';
 export const STOP = '멈추기';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankCard } from '../engine/import/card';
-import { chatIllustrate, chatTranslate, featuresOf, inherited, setFeatureAt } from './features';
+import { above, chatIllustrate, chatTranslate, featuresOf, inherited, setFeatureAt } from './features';
 import { addPrompt } from './prompts';
 import { setIllustrate, setTranslate } from './characters';
 import { testServer } from './testing';
@@ -19,6 +19,7 @@ describe('features', () => {
       const at = { settings: { kind: 'settings' }, prompt: { kind: 'prompt', id: prompt.data.id }, character: { kind: 'character', id: character.data.id }, chat: { kind: 'chat', id: created.data.id } } as const;
 
       expect(featuresOf(store, chat())).toEqual({ translate: true, illustrate: true, memory: true });
+      expect([above(store, at.prompt), above(store, at.character), above(store, at.chat)]).toEqual(['settings', 'prompt', 'character']);
 
       for (const layer of ['settings', 'prompt', 'character', 'chat'] as const) {
         await setFeatureAt(store, at[layer], 'memory', false);

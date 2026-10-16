@@ -44,5 +44,5 @@ export function editorOf(from: From, prompt: { id: string; blocks: Block[] } | n
 }
 
 // Where a chat's 로어북 최대 분량 is set, as chat-context reads it: the character's own, in its editor's
-// 로어북 part; null for the account's, in 설정 › 채팅 기본값.
+// 로어북 part; null for the account's, in 설정 › 채팅.
 export const loreBudgetEditor = (character: { id: string; card: Card } | null): Side | null => (character && character.card.loreSettings.tokenBudget !== null ? { kind: 'character', id: character.id, part: 'lore' } : null);

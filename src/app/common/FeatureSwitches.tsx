@@ -1,9 +1,10 @@
 import { FEATURES, type Feature, type FeatureSwitches as Switches } from '../../model/features';
-import { inherited, setFeatureAt, type FeatureOwner } from '../../runtime/features';
+import { above, inherited, setFeatureAt, type FeatureOwner } from '../../runtime/features';
+import type { ObjectStore } from '../../runtime/store';
 import { useLibrary, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { ChoiceGroup, Section, SettingGroup, SettingRow } from '../ui';
-import { FEATURE_NAMES, FEATURES_TITLE, SCOPE, scopeTag } from './words';
+import { FEATURE_NAMES, FEATURES_TITLE, follows, SCOPE, scopeTag } from './words';
 
 type Owner = Exclude<FeatureOwner, { kind: 'settings' }>;
 type Choice = 'default' | 'on' | 'off';
@@ -14,13 +15,17 @@ const WORKS: Record<Owner['kind'], string> = {
   chat: '지금 이 채팅에만 적용돼요.',
 };
 
-// A layer's line in a list of parts: 기본값 while it sets nothing, else what it sets, 번역 끔 · 삽화 켬.
-export const featureHolds = (own: Switches | undefined) =>
-  own ? FEATURES.flatMap((feature) => (own[feature] === undefined ? [] : [`${FEATURE_NAMES[feature]} ${own[feature] ? '켬' : '끔'}`])).join(' · ') : SCOPE.default;
+// Not 공용 for every layer: a character's follows the prompt, a chat's its character.
+const ABOVE: Record<ReturnType<typeof above>, string> = { settings: SCOPE.default, prompt: '프롬프트', character: '캐릭터' };
+const followsAbove = (store: ObjectStore, owner: Owner) => follows(ABOVE[above(store, owner)]);
+
+// A layer's line in a list of parts: what it follows while it sets nothing, else what it sets, 번역 끔 · 삽화 켬.
+export const featureHolds = (store: ObjectStore, owner: Owner, own: Switches | undefined) =>
+  own ? FEATURES.flatMap((feature) => (own[feature] === undefined ? [] : [`${FEATURE_NAMES[feature]} ${own[feature] ? '켬' : '끔'}`])).join(' · ') : followsAbove(store, owner);
 
 const choiceOf = (value: boolean | undefined): Choice => (value === undefined ? 'default' : value ? 'on' : 'off');
 
-// own: the owner's features as stored. 공용's own switches are settings/FeatureDefaults' FeatureSwitch, with no 기본값.
+// own: the owner's features as stored. 공용's own switches are settings/FeatureDefaults' FeatureSwitch, which follows nothing.
 export function FeatureSwitches({ owner, own }: { owner: Owner; own: Switches | undefined }) {
   const store = useStore();
   const toast = useToast();
@@ -36,7 +41,7 @@ export function FeatureSwitches({ owner, own }: { owner: Owner; own: Switches | 
   }
 
   return (
-    <Section level={owner.kind === 'chat' ? 3 : undefined} title={FEATURES_TITLE} help={WORKS[owner.kind]} tag={owner.kind === 'prompt' ? undefined : scopeTag(own ? owner.kind : 'default')}>
+    <Section level={owner.kind === 'chat' ? 3 : undefined} title={FEATURES_TITLE} help={WORKS[owner.kind]} tag={owner.kind === 'prompt' || !own ? undefined : scopeTag(owner.kind)}>
       <SettingGroup label={FEATURES_TITLE}>
         {FEATURES.map((feature) => (
           <SettingRow
@@ -47,7 +52,7 @@ export function FeatureSwitches({ owner, own }: { owner: Owner; own: Switches | 
                 layout="fit"
                 label={FEATURE_NAMES[feature]}
                 options={[
-                  { value: 'default', label: `${SCOPE.default} (${from[feature] ? '켜짐' : '꺼짐'})` },
+                  { value: 'default', label: `${followsAbove(store, owner)} (${from[feature] ? '켜짐' : '꺼짐'})` },
                   { value: 'on', label: '켜기' },
                   { value: 'off', label: '끄기' },
                 ]}

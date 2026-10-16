@@ -272,7 +272,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
           {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동으로 두면 Anthropic 계정에 우선 처리 용량이 남아 있을 때 그 용량부터 먼저 써요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
           {systemRow}
           {streamingRow}
-          <RetriesRow value={shown.retries} follows={retries === undefined ? '연결 설정' : followsRetries(retries)} onChange={(value) => change({ retries: value })} />
+          <RetriesRow value={shown.retries} follows={retries === undefined ? '연결 설정' : followsRetries('connection', retries)} onChange={(value) => change({ retries: value })} />
         </SettingGroup>
       </Disclosure>
     </>
