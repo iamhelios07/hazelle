@@ -40,7 +40,7 @@ export const modulesOf = (store: Pick<ObjectStore, 'list'>): Stored<'module'>[] 
     .filter(({ value }) => value.deleted === undefined)
     .sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
 
-const switched = (ids: string[] | undefined, id: string, on: boolean) => [...(ids ?? []).filter((each) => each !== id), ...(on ? [id] : [])];
+export const switched = (ids: string[] | undefined, id: string, on: boolean) => [...(ids ?? []).filter((each) => each !== id), ...(on ? [id] : [])];
 
 export function editModule(store: ObjectStore, id: string, patch: { name?: string; description?: string }): Promise<ApiResult<Stored<'module'>>> {
   return store.update('module', id, (current) => ({ ...current, ...patch }));
