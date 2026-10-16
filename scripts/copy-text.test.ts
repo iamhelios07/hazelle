@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { apply, extract } from './copy-text';
+import { apply, extract, fromText, toText } from './copy-text';
 
 it('writes revised Korean back where it now sits, keeping each template expression and refusing text that would break the code', () => {
   const source = [
@@ -34,4 +34,22 @@ it('writes revised Korean back where it now sits, keeping each template expressi
   ]);
   expect(written[0]!.source.split('\n').slice(2, 4)).toEqual(['const B = `${count}개 남음 ${on ? `켬` : \'끔\'}`;', 'const C = <p title="이름">설명이에요</p>;']);
   expect(apply(sources, entries, [{ id: a!.id, text: "저장'했어요" }, { id: b!.id, text: '${total}개 남았어요' }]).rejected.map((each) => each.reason)).toEqual(['not one string literal in its quotes', 'the ${…} expressions changed']);
+});
+
+it('sends sentences as numbered lines with {n} slots, and reads an answer back into source text, refusing moved slots', () => {
+  const source = [
+    "const A = '설정에서 \\'모델\\'을 선택해 주세요.';",
+    'const B = `${name} 캐릭터를 ${count}개 옮겼어요.`;',
+    "const C = '저장';",
+  ].join('\n');
+  const list = extract([{ path: 'x.ts', source }]);
+  const [body] = toText(list).map((batch) => batch.body.split('\n').filter((line) => /^\d/.test(line)));
+  expect(body).toEqual(["1. 설정에서 '모델'을 선택해 주세요.", '2. {1} 캐릭터를 {2}개 옮겼어요.']);
+  const { revised, problems } = fromText(list, ["1. '모델'을 설정에서 선택해 주세요.\n2. {1} 캐릭터 {2}개를 옮겼어요.\n3. 저장하기"]);
+  expect(revised).toEqual([
+    { id: list[0]!.id, text: "\\'모델\\'을 설정에서 선택해 주세요." },
+    { id: list[1]!.id, text: '${name} 캐릭터 ${count}개를 옮겼어요.' },
+  ]);
+  expect(problems).toEqual(['3: not a line that was sent']);
+  expect(fromText(list, ['2. {2}개의 {1} 캐릭터를 옮겼어요.']).problems).toEqual([`2 ${list[1]!.id}: the {n} slots changed`]);
 });

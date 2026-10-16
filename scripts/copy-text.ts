@@ -1,9 +1,10 @@
-import { globSync, readFileSync, writeFileSync } from 'node:fs';
+import { globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
-// Every piece of Korean the source shows, for a model to rewrite: `extract <out.json>` lists them, the model edits only
-// `text`, and `apply <out.json> <revised.json>` writes the changed ones back where they were found.
+// Every piece of Korean the source shows, for a model to rewrite: `extract <out.json>` lists them, `text` turns the
+// sentences among them into numbered lines and `untext` reads the model's answer back into entries, and
+// `apply <out.json> <revised.json>` writes the changed ones back where they were found.
 
 export type Entry = {
   id: string;
@@ -162,11 +163,144 @@ export function apply(sources: readonly Source[], original: readonly Listed[], r
   return { written, rejected };
 }
 
+// The text-only round: a model sees numbered sentences and nothing else, since ids, code and context gave it room to
+// invent. A line's number is its entry's place in the extract list, and each ${…} reads {1}, {2}… in order.
+const SYNTAX_OWNER = /(?:^|› )(?:form|example|written|result|card|name|variables|toggle|SAMPLE_NOTE)$/;
+const BATCH_LINES = 150;
+const ROLE: [RegExp, string][] = [
+  [/(?:help|hint|HELP)$/, '(설명) '],
+  [/(?:title|heading)$/, '(제목) '],
+];
+const PREAMBLE = `Rewrite each numbered Korean line below so it is easier to read and understand. Keep exactly the same meaning and the same information: add nothing, drop nothing.
+
+Answer with every line, changed or not, as \`N. text\`, in the same order, and nothing else: no headings, no notes, no code fences. Never merge, split or renumber lines.
+
+- {1}, {2}… mark where something is inserted (a name, a number, another phrase). Keep each one, in the same order.
+- A line marked (설명) is help text and (제목) a title; do not copy the mark into your answer. Lines under one ## heading sit on the same screen.
+- Voice: short 해요체, the way Toss writes. Plain, specific words. It must not read as AI-written.
+- Keep names (헤이젤, RisuAI, Risu, model and company names), {{…}} syntax, and a path written as A › B.
+- Keep these words as they are: 대화 모델, 보조 모델, 임베딩 모델, 삭제, 이미지, 응답, 선택, 복원, 기본값, 키, 키워드, 내보내기, 가져오기, 스크립트, 챕터, 캐릭터 없이, 채팅 파일. These pairs mean different things and are never swapped: 빼기/삭제, 편집/수정, 다시 생성/다시 시도, 컨텍스트 길이/컨텍스트 한도, 사용 중/생성 중.
+- Never use: 지우기, 지웠어요, 고치기, 고르기, 골라 주세요, 답장, 그림, 되살리기, 처음 값, 불러오기, 내려받기, 프로바이더, 금고, 열쇠, 복제, ‘ ’.
+`;
+
+function isSentence(entry: Listed): boolean {
+  if (/^src\/app\/common\/(legal|release)\.ts:/.test(entry.id)) return false;
+  if (/^src\/app\/prompts\/(commands|guides)\.ts:/.test(entry.id) && SYNTAX_OWNER.test(entry.owner)) return false;
+  const line = shownLine(entry);
+  if (!line || line.includes('\n')) return false;
+  const words = line.replace(/(?:\s*\{\d+\})+$/, '');
+  return words.includes(' ') && /[.?!…요]$/.test(words);
+}
+
+// Edge spaces join a piece to the sentence around it; they are kept off the line and put back.
+const edges = (text: string) => [text.match(/^\s*/)![0], text.match(/\s*$/)![0]] as const;
+
+function shownLine(entry: Listed): string | null {
+  return untrimmed(entry)?.trim() ?? null;
+}
+
+function untrimmed(entry: Listed): string | null {
+  if (entry.kind === 'jsx') return entry.text.replace(/\s*\n\s*/g, ' ');
+  if (entry.kind === 'string') return entry.text.replace(/\\(['"])/g, '$1');
+  if (entry.kind === 'html') return entry.text;
+  const template = parseTemplate(entry.text);
+  return template && template.literals.map((literal, index) => (index ? `{${index}}${literal}` : literal)).join('');
+}
+
+// The entry's source text for a line, or why the line cannot be one.
+function fromLine(entry: Listed, line: string): string | { reason: string } {
+  const [lead, trail] = edges(entry.text);
+  const text = sourceOf(entry, line);
+  return typeof text === 'string' ? `${lead}${text}${trail}` : text;
+}
+
+function sourceOf(entry: Listed, line: string): string | { reason: string } {
+  if (entry.kind === 'string') {
+    let text = line;
+    if (entry.text.includes("\\'")) text = text.replace(/(?<!\\)'/g, "\\'");
+    if (entry.text.includes('\\"')) text = text.replace(/(?<!\\)"/g, '\\"');
+    return text;
+  }
+  if (entry.kind !== 'template') return line;
+  const { expressions } = parseTemplate(entry.text)!;
+  const pieces = line.split(/\{(\d+)\}/);
+  const slots = pieces.filter((_, index) => index % 2).map(Number);
+  if (slots.join() !== expressions.map((_, index) => index + 1).join()) return { reason: 'the {n} slots changed' };
+  return pieces.map((piece, index) => (index % 2 ? `\${${expressions[Number(piece) - 1]}}` : piece)).join('');
+}
+
+export function toText(list: readonly Listed[]): { name: string; body: string }[] {
+  const areas = new Map<string, number[]>();
+  list.forEach((entry, index) => {
+    if (!isSentence(entry)) return;
+    const [top, layer, folder, file] = pathOf(entry.id).split('/');
+    const area = top !== 'src' ? 'pages' : layer !== 'app' ? layer! : file ? `app-${folder}` : 'app';
+    areas.set(area, [...(areas.get(area) ?? []), index]);
+  });
+  const batches: { name: string; body: string }[] = [];
+  for (const [area, indexes] of areas) {
+    // Even chunks, cut only between files.
+    const size = Math.ceil(indexes.length / Math.ceil(indexes.length / BATCH_LINES));
+    const chunks: number[][] = [[]];
+    for (const index of indexes) {
+      const chunk = chunks.at(-1)!;
+      const last = chunk.at(-1);
+      if (chunk.length >= size && last !== undefined && pathOf(list[last]!.id) !== pathOf(list[index]!.id)) chunks.push([index]);
+      else chunk.push(index);
+    }
+    chunks.forEach((chunk, part) => {
+      let heading = '';
+      const lines = chunk.flatMap((index) => {
+        const entry = list[index]!;
+        const file = pathOf(entry.id).replace(/^src\/(app\/)?/, '');
+        const role = ROLE.find(([owner]) => owner.test(entry.owner))?.[1] ?? '';
+        const line = `${index + 1}. ${role}${shownLine(entry)}`;
+        if (file === heading) return [line];
+        heading = file;
+        return ['', `## ${file}`, line];
+      });
+      const name = `${String(batches.length + 1).padStart(2, '0')}-${area}${chunks.length > 1 ? `-${part + 1}` : ''}.txt`;
+      batches.push({ name, body: `${PREAMBLE}${lines.join('\n')}\n` });
+    });
+  }
+  return batches;
+}
+
+export function fromText(list: readonly Listed[], answers: readonly string[]) {
+  const revised: Pick<Entry, 'id' | 'text'>[] = [];
+  const problems: string[] = [];
+  const review: string[] = [];
+  const seen = new Set<number>();
+  for (const answer of answers) {
+    for (const match of answer.matchAll(/^(\d+)\.[ \t]*(?:\((?:설명|제목)\)[ \t]*)?(.*?)\s*$/gm)) {
+      const number = Number(match[1]);
+      const entry = list[number - 1];
+      if (!entry || !isSentence(entry)) {
+        problems.push(`${number}: not a line that was sent`);
+        continue;
+      }
+      if (seen.has(number)) {
+        problems.push(`${number}: answered twice`);
+        continue;
+      }
+      seen.add(number);
+      if (match[2] === shownLine(entry)) continue;
+      const text = fromLine(entry, match[2]!);
+      if (typeof text !== 'string') problems.push(`${number} ${entry.id}: ${text.reason}`);
+      else {
+        revised.push({ id: entry.id, text });
+        review.push(`${number} ${entry.id}\n   was: ${shownLine(entry)}\n   now: ${match[2]}`);
+      }
+    }
+  }
+  return { revised, problems, review, read: seen.size };
+}
+
 function read(paths: readonly string[]): Source[] {
   return paths.map((path) => ({ path, source: readFileSync(path, 'utf8') }));
 }
 
-function main([command, out, revisedPath]: string[]) {
+function main([command, out, revisedPath, ...answerPaths]: string[]) {
   const paths = [...globSync(SOURCES, { exclude: (path) => /\.test\.tsx?$|testing\.ts$/.test(path) }), ...PAGES].sort();
   if (command === 'extract' && out) {
     const entries: Listed[] = extract(read(paths)).map(({ id, kind, owner, context, text }) => ({ id, kind, owner, context, text }));
@@ -179,8 +313,17 @@ function main([command, out, revisedPath]: string[]) {
     for (const { path, source } of written) writeFileSync(path, source);
     for (const { id, reason } of rejected) console.log(`rejected ${id}: ${reason}`);
     console.log(`${written.length} files written, ${rejected.length} entries rejected`);
+  } else if (command === 'text' && out && revisedPath) {
+    const batches = toText(JSON.parse(readFileSync(out, 'utf8')) as Listed[]);
+    mkdirSync(revisedPath, { recursive: true });
+    for (const { name, body } of batches) writeFileSync(`${revisedPath}/${name}`, body);
+    console.log(`${batches.length} files → ${revisedPath}`);
+  } else if (command === 'untext' && out && revisedPath && answerPaths.length) {
+    const { revised, problems, review, read: count } = fromText(JSON.parse(readFileSync(out, 'utf8')) as Listed[], answerPaths.map((path) => readFileSync(path, 'utf8')));
+    writeFileSync(revisedPath, JSON.stringify(revised, null, 1) + '\n');
+    console.log([...review, ...problems.map((problem) => `problem ${problem}`), `${count} lines read, ${revised.length} changed, ${problems.length} problems → ${revisedPath}`].join('\n'));
   } else {
-    console.log('usage: copy-text extract <out.json> | copy-text apply <out.json> <revised.json>');
+    console.log('usage: copy-text extract <out.json> | apply <out.json> <revised.json> | text <out.json> <dir> | untext <out.json> <revised.json> <answer.txt>...');
     process.exitCode = 1;
   }
 }
