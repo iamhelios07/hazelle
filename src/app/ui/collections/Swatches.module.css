@@ -41,6 +41,7 @@
   padding: var(--space-12) var(--space-16);
   overflow: hidden;
   border-bottom: var(--border-thin) solid var(--color-divider);
+  font-family: var(--prose-font);
   font-size: var(--swatch-size);
   line-height: var(--leading-normal);
   -webkit-box-orient: vertical;
@@ -48,14 +49,6 @@
   line-clamp: 2;
   background: var(--color-bg);
   color: var(--color-text);
-}
-
-.serif {
-  font-family: var(--font-serif);
-}
-
-.sans {
-  font-family: var(--font-sans);
 }
 
 .meta {

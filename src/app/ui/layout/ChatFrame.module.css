@@ -45,17 +45,21 @@
   border-radius: var(--radius-md);
 }
 
-/* 읽기 설정: ChatFrame.tsx readingScope sets --reading-size and one class of each kind. */
+/* 읽기 설정: ChatFrame.tsx readingScope sets --reading-size, --prose-font and one class of each kind; the face's kind
+   (fonts.ts) picks its metrics here. */
 .serif {
-  --prose-font: var(--font-serif);
   --prose-size: var(--reading-size);
   --prose-leading: var(--reading-leading);
 }
 
 .sans {
-  --prose-font: var(--font-sans);
   --prose-size: calc(var(--reading-size) - var(--prose-sans-shrink));
   --prose-leading: calc(var(--reading-leading) - var(--prose-sans-tighten));
+}
+
+.hand {
+  --prose-size: calc(var(--reading-size) + var(--prose-grow));
+  --prose-leading: var(--reading-leading);
 }
 
 .leadingNarrow {

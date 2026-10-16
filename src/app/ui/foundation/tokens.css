@@ -256,6 +256,17 @@
   --font-sans: 'IBM Plex Sans KR', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'IBM Plex Sans KR', monospace;
   --font-brand: 'NanumSquareRound', var(--font-sans);
+  --font-nanum-myeongjo: 'Nanum Myeongjo', var(--font-serif);
+  --font-noto-serif: 'Noto Serif KR', var(--font-serif);
+  --font-hahmlet: 'Hahmlet', var(--font-serif);
+  --font-pretendard: 'Pretendard Variable', var(--font-sans);
+  --font-noto-sans: 'Noto Sans KR', var(--font-sans);
+  --font-gowun-dodum: 'Gowun Dodum', var(--font-sans);
+  --font-system: system-ui, sans-serif;
+  --font-nanum-pen: 'Nanum Pen Script', var(--font-sans);
+  --font-gaegu: 'Gaegu', var(--font-sans);
+  --font-nanum-pen-grow: 6px;
+  --font-gaegu-grow: 3px;
   --weight-brand: 800;
   --brand-mark: 26px;
   --hero-mark: 96px;

@@ -2,6 +2,7 @@ export { Button } from './Button';
 export { Checkbox } from './Checkbox';
 export { ChipButton } from './ChipButton';
 export { ChoiceGroup } from './ChoiceGroup';
+export { FontPicker } from './FontPicker';
 export { Composer } from './Composer';
 export { EditBox } from './EditBox';
 export { FileButton, pickFiles } from './FileButton';

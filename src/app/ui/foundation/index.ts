@@ -2,6 +2,7 @@ export { Avatar } from './Avatar';
 export { Brand } from './Brand';
 export { ColorDot } from './ColorDot';
 export { Divider } from './Divider';
+export { FONT_IDS, FONT_KIND, FONTS, type FontId } from './fonts';
 export { Icon } from './Icon';
 export { formatKeys, pressed, pressedKey, type Chord } from './keys';
 export { hasFinePointer, usePanelsBeside, useSplit, useViewport, useWide } from './media';

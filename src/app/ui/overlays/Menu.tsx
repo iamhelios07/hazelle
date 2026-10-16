@@ -4,6 +4,7 @@ import { ChangeSignal } from '../../../change-signal';
 import { Item } from '../collections/Item';
 import { ButtonSlot } from '../controls/Button';
 import { Icon } from '../foundation/Icon';
+import { faceStyle, type FontId } from '../foundation/fonts';
 import { keepOnScreen, useLayer } from './layers';
 import styles from './Menu.module.css';
 
@@ -102,9 +103,14 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
   }, [open, place]);
   const side = place === 'end' ? (upward ? 'above-end' : 'below-end') : place;
 
+  // A menu taller than the room on its side scrolls within that room instead of running off the screen.
   useLayoutEffect(() => {
-    if (panel.current) keepOnScreen(panel.current);
-  }, [open]);
+    if (!panel.current) return;
+    keepOnScreen(panel.current);
+    const box = panel.current.getBoundingClientRect();
+    const edge = parseFloat(getComputedStyle(panel.current).getPropertyValue('--menu-edge'));
+    panel.current.style.setProperty('--room', `${side.startsWith('above') ? box.bottom - edge : window.innerHeight - box.top - edge}px`);
+  }, [open, side]);
 
   return (
     <div className={styles.anchor} ref={anchor}>
@@ -125,6 +131,8 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
 type ItemProps = {
   label: string;
   sub?: string;
+  // face: the label drawn in that font.
+  face?: FontId;
   icon?: LucideIcon;
   avatar?: ReactNode;
   tag?: ReactNode;
@@ -137,7 +145,7 @@ type ItemProps = {
 
 // The menu closes before onClick runs, so a dialog it opens takes the button that opened the menu as the place to
 // give the focus back to.
-export function MenuItem({ label, sub, icon, avatar, tag, checked, multiple, tone, disabled, onClick }: ItemProps) {
+export function MenuItem({ label, sub, face, icon, avatar, tag, checked, multiple, tone, disabled, onClick }: ItemProps) {
   const close = useContext(CloseMenu);
   return (
     <Item
@@ -148,7 +156,7 @@ export function MenuItem({ label, sub, icon, avatar, tag, checked, multiple, ton
       tone={tone}
       disabled={disabled}
       leading={avatar ?? (icon && <Icon icon={icon} size="xs" />)}
-      title={label}
+      title={face === undefined ? label : <span className={styles.face} style={faceStyle(face)}>{label}</span>}
       meta={tag}
       preview={sub}
       trailing={

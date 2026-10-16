@@ -1,19 +1,18 @@
 import { moved } from '../../model/fields';
 import { PICTURE_PERCENT } from '../../model/library';
 import type { SavedLook } from '../../model/settings';
-import { ACCENT, BG, DIALOGUE, INK, QUOTE_SHAPE, THEME, type QuoteShape, type Reading, type Scheme, type StageSide } from '../ui';
+import { ACCENT, BG, DIALOGUE, FONTS, INK, QUOTE_SHAPE, THEME, type QuoteShape, type Reading, type Scheme, type StageSide } from '../ui';
 
 export const SIZE = { min: 14, max: 21 };
 
-export const FONT: Record<Reading['font'], string> = { serif: '명조', sans: '고딕' };
 export const SPACING: Record<Reading['leading'], string> = { narrow: '좁게', normal: '보통', wide: '넓게' };
 export const REPLY: Record<Reading['reply'], string> = { follow: '자동 스크롤', stay: '스크롤 고정' };
 export const SIDE: Record<StageSide, string> = { right: '오른쪽', left: '왼쪽' };
 
 export const choices = <T extends string>(labels: Record<T, string>) => (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }));
 
-const named = <T extends string>(labels: Record<T, string>, value: unknown) => (typeof value === 'string' && Object.hasOwn(labels, value) ? (value as T) : undefined);
-const known = <T extends string>(labels: Record<T, string>, value: unknown, otherwise: T) => named(labels, value) ?? otherwise;
+const named = <T extends string>(labels: Record<T, unknown>, value: unknown) => (typeof value === 'string' && Object.hasOwn(labels, value) ? (value as T) : undefined);
+const known = <T extends string>(labels: Record<T, unknown>, value: unknown, otherwise: T) => named(labels, value) ?? otherwise;
 const sized = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value >= SIZE.min && value <= SIZE.max ? value : undefined);
 const percent = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value >= PICTURE_PERCENT.min && value <= PICTURE_PERCENT.max ? value : undefined);
 const flag = (value: unknown, otherwise: boolean) => (typeof value === 'boolean' ? value : otherwise);
@@ -28,7 +27,7 @@ function fields<K extends string>(stored: string): Partial<Record<K, unknown>> {
 export function parseReading(stored: string, fallback: Reading): Reading {
   const read = fields<keyof Reading>(stored);
   return {
-    font: known(FONT, read.font, fallback.font),
+    font: known(FONTS, read.font, fallback.font),
     size: sized(read.size) ?? fallback.size,
     leading: known(SPACING, read.leading, fallback.leading),
     width: known(SPACING, read.width, fallback.width),
@@ -97,7 +96,7 @@ export function presetOf(list: Preset[], reading: Reading, display: Display): Pr
 
 export function describeLook({ theme, bg, ink, accent, dialogue, font, size, leading, width }: Look) {
   const picks = [bg !== 'base' && `배경 ${BG[bg]}`, ink !== 'base' && `글자 ${INK[ink]}`, dialogue !== 'base' && `대사 ${DIALOGUE[dialogue]}`, accent !== 'base' && `강조 ${ACCENT[accent]}`].filter(Boolean);
-  return [THEME[theme], ...picks, `${FONT[font]} ${size}`, `줄 간격 ${SPACING[leading]}`, `읽기 폭 ${SPACING[width]}`].join(' · ');
+  return [THEME[theme], ...picks, `${FONTS[font].label} ${size}`, `줄 간격 ${SPACING[leading]}`, `읽기 폭 ${SPACING[width]}`].join(' · ');
 }
 
 // Written by this app, but another version may know a value this one does not: such a preset is counted as unread,
@@ -118,7 +117,7 @@ function parseLook(look: SavedLook['look']): Look | null {
     accent: named(ACCENT, look.accent),
     // Looks saved by v0.1.73 predate 대사.
     dialogue: look.dialogue === undefined ? 'base' : named(DIALOGUE, look.dialogue),
-    font: named(FONT, look.font),
+    font: named(FONTS, look.font),
     size: sized(look.size),
     leading: named(SPACING, look.leading),
     width: named(SPACING, look.width),

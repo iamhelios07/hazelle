@@ -1,6 +1,6 @@
 import { useDisplay } from '../display';
-import { ChoiceGroup, SettingRow, Stepper, Switch } from '../ui';
-import { choices, FONT, REPLY, SIZE, SPACING } from './reading';
+import { ChoiceGroup, FontPicker, SettingRow, Stepper, Switch } from '../ui';
+import { choices, REPLY, SIZE, SPACING } from './reading';
 
 export function ReadingRows() {
   const { reading, changeReading } = useDisplay();
@@ -8,7 +8,7 @@ export function ReadingRows() {
     <>
       <SettingRow
         label="글꼴"
-        control={<ChoiceGroup layout="segmented" label="글꼴" options={choices(FONT)} value={reading.font} onChange={(font) => changeReading({ font })} />}
+        control={<FontPicker label="글꼴" value={reading.font} onChange={(font) => changeReading({ font })} />}
       />
       <SettingRow
         label="글자 크기"

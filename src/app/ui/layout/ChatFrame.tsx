@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
+import { faceStyle, FONTS, type FontId } from '../foundation/fonts';
 import { usePanelsBeside } from '../foundation/media';
 import { useReadingRail } from '../story/readingRail';
 import styles from './ChatFrame.module.css';
@@ -8,7 +9,7 @@ import styles from './ChatFrame.module.css';
 type Spacing = 'narrow' | 'normal' | 'wide';
 
 // How the story reads (읽기 설정). tokens.css holds each look; reply is how the view meets a reply (useFollow).
-export type Reading = { font: 'serif' | 'sans'; size: number; leading: Spacing; width: Spacing; reply: 'follow' | 'stay' };
+export type Reading = { font: FontId; size: number; leading: Spacing; width: Spacing; reply: 'follow' | 'stay' };
 
 // The look before any reading setting. The size is read from tokens.css, not repeated here, since Story keeps it
 // outside the chat.
@@ -24,7 +25,7 @@ const LEADING: Record<Spacing, string> = { narrow: styles.leadingNarrow, normal:
 const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: styles.widthNormal, wide: styles.widthWide };
 
 // The reading settings on the element a story sits in: the chat's column, or an exported log (LogExport).
-export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[font]} ${LEADING[leading]} ${WIDTH[width]}`, style: { '--reading-size': `${size}px` } as CSSProperties });
+export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[FONTS[font].kind]} ${LEADING[leading]} ${WIDTH[width]}`, style: { ...faceStyle(font), '--reading-size': `${size}px` } as CSSProperties });
 
 // Which side of the story the stage stands on.
 export type StageSide = 'right' | 'left';

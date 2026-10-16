@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
+import { faceStyle } from '../foundation/fonts';
 import { Icon } from '../foundation/Icon';
 import { schemeAttributes, type Scheme } from '../foundation/theme';
 import type { Reading } from '../layout/ChatFrame';
@@ -23,7 +24,7 @@ export function Swatches({ label, sample, items, onMove }: { label: string; samp
           onDragOver={(event) => order.over(event, index)}
         >
           <button type="button" className={styles.pick} aria-pressed={current} onClick={onPick} draggable={onMove !== undefined} onDragStart={(event) => order.start(event, index, name)} onDragEnd={order.end}>
-            <span className={`${styles.sample} ${styles[font]}`} {...schemeAttributes({ theme, bg, ink, accent, dialogue })} style={{ '--swatch-size': `${size}px` } as CSSProperties} aria-hidden>
+            <span className={styles.sample} {...schemeAttributes({ theme, bg, ink, accent, dialogue })} style={{ ...faceStyle(font), '--swatch-size': `${size}px` } as CSSProperties} aria-hidden>
               {sample}
             </span>
             <span className={styles.meta}>
