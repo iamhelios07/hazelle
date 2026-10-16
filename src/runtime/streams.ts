@@ -44,8 +44,9 @@ export async function pageCall(session: Pick<Session, 'store' | 'tokens'>, route
   return { id: crypto.randomUUID(), key: key.private, public: key.public, ...calibrate(session, route, requestClass, chat), ...(requestClass === 'script' && chat !== null && { bot: chat }) };
 }
 
-// A 삽화 scene (runtime/illustrate), a likeness (runtime/likeness) or a mascot's line (runtime/mascot); the caller parses
-// the text.
+// A 삽화 scene (runtime/illustrate), a likeness (runtime/likeness) or a mascot's line (runtime/mascot), read through the
+// server's stream like any model call but with no marker: a pick-up on another device would make it again and pay for
+// it twice. The caller parses the text.
 export async function pageAnswer(session: Pick<Session, 'store' | 'tokens' | 'credentials'>, { route, settings }: { route: Route; settings: ModelSettings }, requestClass: 'illustration' | 'likeness' | 'mascot', chat: string | null, messages: GenerateInput['messages'], signal: AbortSignal): Promise<{ kind: 'stopped' } | { kind: 'failed'; receipt: Receipt } | { text: string; receipt: Receipt }> {
   const { store, credentials } = session;
   const text = gather();

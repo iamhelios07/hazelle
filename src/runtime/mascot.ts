@@ -92,8 +92,6 @@ export class Commentator {
     for (const abort of this.aborts.values()) abort.abort();
   }
 
-  // The line is read through the server's stream like any model call, but leaves no marker: a pick-up on another
-  // device would write it again and pay for it twice.
   private async run(chat: string, message: string, version: string, signal: AbortSignal): Promise<MascotFailure | Stopped | null> {
     const { store } = this.deps;
     const stored = live(store.get('chat', chat));

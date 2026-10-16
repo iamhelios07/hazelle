@@ -151,8 +151,8 @@ export const restoreAssets = (store: ObjectStore, removed: readonly Stored<'asse
 // A moved character's id is already named by its staged entries; chats: their roots (runtime/chat-log chatWrites).
 export type Brought = { id: string; folder: string | null; risu: string; toggles: ToggleValues; chats: Write[] };
 
-// modules: those on for it: a moved character's, by Risu's ids (runtime/move), or a card file's bundled ones, saved before
-// it (runtime/card-file).
+// modules: those on for it: a moved character's, the ids its Risu modules were moved to (runtime/move), or a card file's
+// bundled ones, saved before it (runtime/card-file).
 export async function importCharacter(
   store: ObjectStore,
   files: Files,

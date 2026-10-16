@@ -233,8 +233,6 @@ export class Illustrator {
     return created.ok ? null : { kind: 'unsaved', failure: created };
   }
 
-  // The scene call reads through the server's stream like any model call, but leaves no marker: a pick-up on another
-  // device would draw the picture again and pay for it twice.
   private async scenes(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, portraits: Portrait[], prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
     const { store } = this.deps;
     const writer = taskWriter(store, value, prompt.model);

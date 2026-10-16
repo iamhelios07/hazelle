@@ -177,5 +177,4 @@ export class Files {
   }
 }
 
-// The read failures a retry will not fix.
 export const PERMANENT = new Set(['not-found', 'unreadable']);
