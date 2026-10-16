@@ -2,6 +2,7 @@ import { useRef, type KeyboardEvent } from 'react';
 import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
+import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { Button, Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
@@ -39,7 +40,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
     profile: { onClick: () => navigate(profilePage) },
   };
   const input = useRef<HTMLTextAreaElement>(null);
-  const editPrompt = (id: string | null) => actions.side({ kind: 'prompts', id, pane: null });
+  const editPrompt = (door: PromptDoor) => actions.side(door ? { kind: 'prompts', ...door } : { kind: 'prompts', id: null, pane: null });
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (pressed(event, SHORTCUTS.send.keys)) {
@@ -101,7 +102,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
               onEditPrompt={editPrompt}
               onEditCharacter={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: 'instructions' }) : undefined}
             />}
-            {chat.features.illustrate && <ChatIllustrate illustrate={chat.illustrate} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} onEditPrompt={editPrompt} />}
+            {chat.features.illustrate && <ChatIllustrate illustrate={chat.illustrate} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} sceneWriter={chat.sceneWriter} onEditPrompt={editPrompt} />}
             <ChatComposerTools tools={chat.composerTools} onOpen={actions.tool} />
             <ChatPinnedToggles toggles={chat.toggles} onFlip={actions.flip} />
           </>
