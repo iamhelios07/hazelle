@@ -1,6 +1,6 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, Link2, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Square, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Square, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -11,7 +11,6 @@ import { isToggle } from '../../model/prompt';
 import { editCharacter, setAvatar, setCardWrites, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
-import { ACTS, exportOf } from '../common/acts';
 import { aliased } from '../common/alias';
 import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
@@ -29,15 +28,16 @@ import type { Frame } from '../common/frame';
 import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, RISU_CHAT_FILE, SCRIPTS, SHARE, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
+import { CharacterActionItems } from './gallery/CharacterCard';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
@@ -101,7 +101,8 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const ownModules = character.modules ?? [];
-  const { busy, copy, exportFile, exportChats, remove, sharing, share, stopSharing } = useCharacterActions();
+  const actions = useCharacterActions();
+  const { busy, sharing, stopSharing } = actions;
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
   const { display } = useDisplay();
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
@@ -381,24 +382,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const working = busy?.id === id ? busy.label : null;
   const menu = {
     of: '캐릭터',
-    items: (
-      <>
-        <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={busy !== null} onClick={() => void copy(shelf)} />
-        <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} disabled={busy !== null} onClick={() => exportFile(shelf)} />
-        <MenuItem icon={ACTS.export.icon} label={exportOf(RISU_CHAT_FILE)} disabled={busy !== null} onClick={() => exportChats(shelf)} />
-        <MenuItem icon={Link2} label={SHARE.act} disabled={busy !== null} onClick={() => share(shelf)} />
-        <MenuItem
-          icon={ACTS.remove.icon}
-          label={ACTS.remove.label}
-          tone="warn"
-          disabled={busy !== null}
-          onClick={() => {
-            remove(shelf);
-            navigate(HOME);
-          }}
-        />
-      </>
-    ),
+    items: <CharacterActionItems shelf={shelf} actions={actions} disabled={busy !== null} onRemoved={() => navigate(HOME)} />,
   };
   const title = aliased(text.name, text.alias);
   const shareDialog = sharing && <ShareDialog character={id} name={text.name} onClose={stopSharing} />;

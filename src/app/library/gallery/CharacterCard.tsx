@@ -41,11 +41,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       ) : (
         <>
           <MenuItem icon={SquarePen} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
-          <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void actions.copy(shelf)} />
-          <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => actions.exportFile(shelf)} />
-          <MenuItem icon={ACTS.export.icon} label={exportOf(RISU_CHAT_FILE)} onClick={() => actions.exportChats(shelf)} />
-          <MenuItem icon={Link2} label={SHARE.act} onClick={() => actions.share(shelf)} />
-          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => actions.remove(shelf)} />
+          <CharacterActionItems shelf={shelf} actions={actions} />
         </>
       )}
     </MoreMenu>
@@ -61,5 +57,26 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       drag={drag ? shelf.id : undefined}
       {...press}
     />
+  );
+}
+
+export function CharacterActionItems({ shelf, actions, disabled, onRemoved }: { shelf: CharacterShelf<ChatSummary>; actions: CharacterActions; disabled?: boolean; onRemoved?: () => void }) {
+  return (
+    <>
+      <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={disabled} onClick={() => void actions.copy(shelf)} />
+      <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} disabled={disabled} onClick={() => actions.exportFile(shelf)} />
+      <MenuItem icon={ACTS.export.icon} label={exportOf(RISU_CHAT_FILE)} disabled={disabled} onClick={() => actions.exportChats(shelf)} />
+      <MenuItem icon={Link2} label={SHARE.act} disabled={disabled} onClick={() => actions.share(shelf)} />
+      <MenuItem
+        icon={ACTS.remove.icon}
+        label={ACTS.remove.label}
+        tone="warn"
+        disabled={disabled}
+        onClick={() => {
+          actions.remove(shelf);
+          onRemoved?.();
+        }}
+      />
+    </>
   );
 }
