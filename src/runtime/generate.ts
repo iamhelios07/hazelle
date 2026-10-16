@@ -71,30 +71,23 @@ export async function generate({ credentials, connection, model, settings, retri
   let tries: number | null = null;
   let protocol = "";
   let answered: (() => string) | null = null;
-  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => {
-    const refusal = error?.kind === 'provider' ? contextRefusal(protocol, error) : null;
-    const calibration = completedCalibration(call.calibration ?? unavailableCalibration('preparation'), outcome);
-    return {
-      ...outcome,
-      ...(refusal && { usage: null, cost: null }),
-      calibration: refusal ? { ...calibration, eligible: false, refusal } : calibration,
-      contextRefusal: refusal,
-      call: call.id,
-      account: account?.id ?? null,
-      tries,
-      error,
-      firstTextMs: firstText === null ? null : Math.round(firstText - started),
-      totalMs: Math.round(performance.now() - started),
-      request: built,
-      response: answered?.() ?? null,
-      cache: cached,
-    };
-  };
-  const empty = { finishReason: null, usage: null, cost: null, replyId: null };
+  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
+    ...outcome,
+    ...refusalFields(protocol, outcome, error, call.calibration ?? unavailableCalibration('preparation')),
+    call: call.id,
+    account: account?.id ?? null,
+    tries,
+    error,
+    firstTextMs: firstText === null ? null : Math.round(firstText - started),
+    totalMs: Math.round(performance.now() - started),
+    request: built,
+    response: answered?.() ?? null,
+    cache: cached,
+  });
 
   // Refusals the connector can see coming are made here, before anything is sent.
   const resolved = resolveConnection(connection);
-  if (!resolved) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'unknown-connection-type' });
+  if (!resolved) return reply(...failedWith({ kind: 'refused', code: 'unknown-connection-type' }));
   let route: Route;
   let request: HttpRequest;
   let batches: Batches | null;
@@ -109,31 +102,31 @@ export async function generate({ credentials, connection, model, settings, retri
     if (call.measure) call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), measurement: await call.measure(prepared) };
     if (call.preflight) {
       const checked = await call.preflight(settings, signal);
-      if (!checked.ok) return checked.error === 'stopped' ? reply(...STOPPED) : reply({ state: 'failed', cut: null, ...empty }, { kind: 'app', code: checked.error });
+      if (!checked.ok) return checked.error === 'stopped' ? reply(...STOPPED) : reply(...failedWith({ kind: 'app', code: checked.error }));
       call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), fit: checked.data };
     }
     const calibration = call.calibration;
     if (calibration?.fit) {
-      if (calibration.measurement.kind !== 'measured') return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'tokenizer' });
-      if (calibration.fit.allowance !== null && calibration.measurement.o200k > calibration.fit.allowance) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'context-fit' });
+      if (calibration.measurement.kind !== 'measured') return reply(...failedWith({ kind: 'refused', code: 'tokenizer' }));
+      if (calibration.fit.allowance !== null && calibration.measurement.o200k > calibration.fit.allowance) return reply(...failedWith({ kind: 'refused', code: 'context-fit' }));
     }
     built = { url: request.url, body: request.body };
     cached = cacheView(route, asked);
   } catch (error) {
-    if (error instanceof ConnectorError) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: error.code });
+    if (error instanceof ConnectorError) return reply(...failedWith({ kind: 'refused', code: error.code }));
     throw error;
   }
 
   const picked = await credentials.pool.pick(connection);
-  if (!picked.ok) return reply({ state: 'failed', cut: null, ...empty }, picked.failure);
+  if (!picked.ok) return reply(...failedWith(picked.failure));
   const serving = picked.account;
   account = serving;
   // A reply that failed leaves the account's meters to be read again before the next pick; it is never sent again on
   // another account: every try goes with the credential picked here.
   const failed = (failure: CredentialFailure | { kind: 'refused'; code: string }) => {
-    if (failure.kind === 'stopped') return reply({ state: 'cut', cut: 'stopped', ...empty }, null);
+    if (failure.kind === 'stopped') return reply(...STOPPED);
     credentials.pool.stale(connection, serving);
-    return reply({ state: 'failed', cut: null, ...empty }, failure);
+    return reply(...failedWith(failure));
   };
   const credential = await credentials.get(resolved, serving.secret, signal);
   if (!credential.ok) return failed(credential.failure);
@@ -203,6 +196,12 @@ type Answered = [Omit<Outcome, 'error'>, Reply['error']];
 const EMPTY = { finishReason: null, usage: null, cost: null, replyId: null };
 const STOPPED: Answered = [{ state: 'cut', cut: 'stopped', ...EMPTY }, null];
 const failedWith = (error: NonNullable<Reply['error']>): Answered => [{ state: 'failed', cut: null, ...EMPTY }, error];
+
+function refusalFields(protocol: string, outcome: Answered[0], error: Reply['error'], calibration: CallCalibration) {
+  const refusal = error?.kind === 'provider' ? contextRefusal(protocol, error) : null;
+  const completed = completedCalibration(calibration, outcome);
+  return { ...(refusal && { usage: null, cost: null }), calibration: refusal ? { ...completed, eligible: false, refusal } : completed, contextRefusal: refusal };
+}
 
 // ask: a request with the account's credential added. cancel: absent for a reader that cannot cancel the batch.
 type Asking = { route: Route; model: Model; batches: Batches; ask: (request: HttpRequest) => HttpRequest; signal: AbortSignal; cancel?: AbortSignal; onText: GenerateInput['onText']; inline?: InlineThoughts };
@@ -300,11 +299,7 @@ export async function resume({ store, credentials }: { store: ObjectStore; crede
   let took = 0;
   let tries: number | null = null;
   let protocol = '';
-  const reply = ([outcome, error]: Answered): Reply => {
-    const refusal = error?.kind === 'provider' ? contextRefusal(protocol, error) : null;
-    const calibration = completedCalibration(value.calibration, outcome);
-    return { ...outcome, ...(refusal && { usage: null, cost: null }), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, response: null, cache: null, calibration: refusal ? { ...calibration, eligible: false, refusal } : calibration, contextRefusal: refusal };
-  };
+  const reply = ([outcome, error]: Answered): Reply => ({ ...outcome, ...refusalFields(protocol, outcome, error, value.calibration), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, response: null, cache: null });
   const route = routeOf(store, value.call);
   const resolved = 'kind' in route ? null : resolveConnection(route.connection.value);
   if ('kind' in route || !resolved) return reply(failedWith({ kind: 'refused', code: 'model-gone' }));
