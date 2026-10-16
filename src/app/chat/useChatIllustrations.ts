@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { shown, type Chat } from '../../model/chat';
+import type { Chat } from '../../model/chat';
 import type { IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { setIllustrate, setOwnIllustrate } from '../../runtime/characters';
 import { chatIllustrate } from '../../runtime/features';
 import { removeIllustration, restoreIllustration, sceneWriterOf, type IllustrateFailure } from '../../runtime/illustrate';
-import type { Shown } from '../../runtime/talk';
 import { describeIllustrateFailure } from '../common/failure';
 import { useChildren, useIllustrating, useSession } from '../session';
 import { useToast } from '../toast';
@@ -75,7 +74,6 @@ export function useChatIllustrations(chatId: string, id: string | null, chat: Ch
     actions: {
       setIllustrate: setIllustrateSwitches,
       setOwnIllustrate: setOwnIllustrateSwitches,
-      illustrate: (message: Shown) => draw(message.id, shown(message).id),
       draw,
       dismissIllustration: (message: string, scene: Scene | null) => illustrator.dismiss(message, scene),
       dropPicture,

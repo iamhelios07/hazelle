@@ -48,8 +48,6 @@ export function useChatStatus(chat: Chat, settings: Character | null, view: Disp
     peeking,
     actions: {
       hold,
-      // The key shows or hides the drawer for now, storing nothing.
-      toggleStatus: () => hold(!held),
       markStatus,
       watch,
     },

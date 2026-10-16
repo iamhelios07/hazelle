@@ -40,7 +40,6 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
   const stale = view?.stale.get(item.id) ?? null;
   const holder = chapter ? undefined : memory.chapters.find(({ records }) => records.some(({ id }) => id === item.id));
   const back = () => actions.memory(holder?.id ?? null);
-  const change = (patch: RecordPatch) => save.change(patch);
 
   // A narrow panel covers the story, so it steps aside for the messages it points at.
   function find() {
@@ -70,7 +69,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
   }
 
   const text = (field: 'when' | 'where', label: string) => (
-    <TextField label={label} value={shown[field] ?? ''} placeholder="이야기에 나오지 않음" onChange={(value) => change({ [field]: value === '' ? null : value })} />
+    <TextField label={label} value={shown[field] ?? ''} placeholder="이야기에 나오지 않음" onChange={(value) => save.change({ [field]: value === '' ? null : value })} />
   );
   const kept = chapter ? `이 ${CHAPTER}는 계속 보내요.` : '이 기록은 계속 보내요.';
   const dropped = chapter ? `이 ${CHAPTER} 대신 기록을 보내요.` : '이 기록은 보내지 않아요.';
@@ -105,11 +104,11 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
           </Button>
         )}
       </Row>
-      <TextField label="무슨 일" lines={5} value={shown.what} onChange={(what) => change({ what })} />
+      <TextField label="무슨 일" lines={5} value={shown.what} onChange={(what) => save.change({ what })} />
       {text('when', '언제')}
       {text('where', '어디서')}
       <SettingGroup label={noun}>
-        <SettingRow label="누가" wide control={<PhraseField label="누가" phrases={shown.who} onChange={(who) => change({ who })} />} />
+        <SettingRow label="누가" wide control={<PhraseField label="누가" phrases={shown.who} onChange={(who) => save.change({ who })} />} />
         <SettingRow label="고정" help="원문이 바뀌어도 다른 기록보다 먼저 보내요." control={<Switch label="고정" checked={item.pinned === true} onChange={pin} />} />
         {record && (
           <SettingRow
@@ -124,7 +123,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
         <Stack gap="related">
           <EntryList
             entries={shown.lines}
-            onChange={(lines) => change({ lines })}
+            onChange={(lines) => save.change({ lines })}
             name={(index) => `대사 ${index + 1}`}
             blank={{ speaker: '', text: '' }}
             addLabel="대사 추가"
@@ -139,7 +138,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
           </EntryList>
         </Stack>
       </Section>
-      <TextField label="결과" lines={3} value={shown.outcome} onChange={(outcome) => change({ outcome })} />
+      <TextField label="결과" lines={3} value={shown.outcome} onChange={(outcome) => save.change({ outcome })} />
       {chapter && (
         <Section level={3} title="기록" note={`${chapter.records.length}개`}>
           <List label="기록">

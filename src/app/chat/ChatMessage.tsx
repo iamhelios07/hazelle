@@ -378,7 +378,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
               disabled={running}
               onClick={() => {
                 setPages(new Map());
-                actions.illustrate(message);
+                actions.draw(message.id, version.id);
               }}
             />
           )}

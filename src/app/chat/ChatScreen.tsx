@@ -49,7 +49,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
   useEditBeside(shelf?.id ?? null, () => shelf && actions.side({ kind: 'character', id: shelf.id, part: null }));
   useShortcut('status', () => {
     if (!chat.status.length) return false;
-    actions.toggleStatus();
+    actions.hold(!chat.held);
   });
   useShortcut('find', () => actions.openSearch());
   // Ctrl+U is held even in a chat not saved yet, where it opens nothing: passed on, it is the browser's view-source.
@@ -57,7 +57,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
     if (chat.inspect) actions.closeInspect();
     else if (chat.id !== null) actions.openInspect('request');
   });
-  const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null, module: null };
+  const inUse = prompt.kind === 'prompt' ? prompt.prompt.id : null;
   const inspect = chat.inspect && chat.id !== null && <ChatInspect chat={chat.id} tab={chat.inspect.tab} notes={chat.sendNotes} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onTab={actions.switchInspectTab} onClose={actions.closeInspect} onEdit={actions.side} />;
   const paired = usePanelsBeside() && !!panel && !!chat.inspect;
   useEffect(() => {
@@ -98,7 +98,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
           ) : panel?.kind === 'tool' ? (
             id && <ChatToolPanel key={panel.module} chat={id} module={panel.module} onClose={actions.closePanel} />
           ) : panel ? (
-            side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
+            side({ open: panel, inUse, onOpen: actions.side, onClose: actions.closePanel })
           ) : (
             inspect
           )
