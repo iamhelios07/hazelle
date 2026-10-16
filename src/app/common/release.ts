@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.12',
+    date: '2026-10-16',
+    lines: [
+      '설정 › 채팅에서 마스코트를 켜면 응답마다 영애가 한마디를 남겨요. 메시지 도구 줄 왼쪽의 얼굴을 누르거나 마우스를 올리면 대사가 보여요.',
+      '디스플레이 › 텍스트의 대사 모양에서 대사를 색만, 줄바꿈, 상자로 보여 줄 수 있어요. 작은따옴표 속 말은 속마음 색으로 보여요.',
+      '채팅 토글 패널에서 캐릭터와 모듈 토글의 기본값을 채팅 옆에서 바로 고쳐요.',
+      '캐릭터 편집기의 긴 칸도 크게 편집으로 열려요.',
+      '삽화 프로필을 직접 고칠 수 있어요. 다시 만들기를 해도 직접 고친 프로필은 그대로 남아요.',
+    ],
+  },
+  {
     version: 'v0.2.11',
     date: '2026-10-16',
     lines: [
