@@ -30,7 +30,7 @@ import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { budgetCut, pickStarted } from './infoReply';
 import { toggleRows, toggleSaveKey } from './toggles';
-import { useFollow } from './useFollow';
+import { anchorOf, useFollow } from './useFollow';
 import { useChatSearch } from './useChatSearch';
 import { useChatStatus } from './useChatStatus';
 import { useMessageEdit } from './useMessageEdit';
@@ -100,12 +100,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const answerable = id !== null && last !== undefined;
 
   const replyTarget = busy ? (turn.reply.message ?? turn.reply.id) : null;
-  // 이어 쓰기 answers none, since it goes on under text already read.
-  const replyAt = messages.findIndex((message) => message.id === replyTarget);
-  const answered = busy && replyAt > 0 && !turn.reply.continues ? messages[replyAt - 1]!.id : null;
+  const anchor = busy && !turn.reply.continues ? anchorOf(messages, turn.reply.message ?? turn.reply.id) : null;
 
   const draft = useDraft(id, chat.character);
-  const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, answered, reply === 'stay');
+  const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, anchor, reply === 'stay');
   const memory = useChatMemory(id);
   const sendNotes = useSendNotes(id, chat, messages, memory, draft.text, busy || displayPending === true);
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);

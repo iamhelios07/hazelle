@@ -5,9 +5,18 @@ import { READER_RESIZED, ROWS_RESIZED, type Seek } from '../ui';
 // band does not snap it down.
 export const atEnd = (distance: number, was: boolean) => distance < (was ? 48 : 1);
 
-// stay (보낸 자리에 멈추기): a reply starting here puts answered, the message it answers, at the top, and from then on nothing
+// The message 보낸 자리에 멈추기 puts at the top once a reply shows: the user's message it answers, or after the model's own
+// message (응답 받기, 다시 생성 of one) the reply itself, since the message before it was read already. null until the
+// reply shows. 이어 쓰기 places none: it goes on under text already read.
+export function anchorOf(messages: readonly { id: string; role: string }[], reply: string): string | null {
+  const at = messages.findIndex(({ id }) => id === reply);
+  if (at < 1) return null;
+  return messages[at - 1]!.role === 'user' ? messages[at - 1]!.id : reply;
+}
+
+// stay (보낸 자리에 멈추기): a reply starting here puts anchor at the top, and from then on nothing
 // the story gains moves the view, not even at its end, until the pill takes it down (follow).
-export function useFollow(count: number, streaming: boolean, answered: string | null, stay: boolean) {
+export function useFollow(count: number, streaming: boolean, anchor: string | null, stay: boolean) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const held = useRef(false);
@@ -16,7 +25,7 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
   const placed = useRef<number | null>(null);
   // A screen mounted while its reply is still being written (the chat left and come back to) treats that reply as
   // starting now, so stay holds it too.
-  const seen = useRef({ count, streaming: false, answered: null as string | null });
+  const seen = useRef({ count, streaming: false, anchor: null as string | null });
   const [away, setAway] = useState(false);
   const [unread, setUnread] = useState(false);
   const [seek, setSeek] = useState<Seek | null>(null);
@@ -32,14 +41,14 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
     // Before following, which would take the view down first.
     if (stay && streaming && !seen.current.streaming) held.current = true;
     // The story shows the reply's messages a render or more after it starts.
-    if (stay && answered !== null && answered !== seen.current.answered) {
+    if (stay && anchor !== null && anchor !== seen.current.anchor) {
       held.current = true;
-      seekTo(answered, 'top');
+      seekTo(anchor, 'top');
     }
     toBottom();
     const ended = seen.current.streaming && !streaming;
     if ((count > seen.current.count || ended) && !stick.current) setUnread(true);
-    seen.current = { count, streaming, answered };
+    seen.current = { count, streaming, anchor };
   });
 
   // A reply grows between the renders of the story as it is revealed (useReveal), so the view follows its size too, a
