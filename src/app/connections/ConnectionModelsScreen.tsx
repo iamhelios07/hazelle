@@ -12,6 +12,7 @@ import { describeCatalogFailure } from '../common/failure';
 import { NameDialog } from '../common/NameDialog';
 import { useSearch } from '../common/useSearch';
 import { RetriesRow } from '../common/RetriesRow';
+import { followsRetries, profileLine } from '../common/settingWords';
 import { detailLabel, MODEL_SETTINGS } from '../common/words';
 import { useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -42,7 +43,7 @@ function tags(model: Model): string[] {
 
 export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'connection'>; back: Back }) {
   const { store, catalogs } = useSession();
-  const shared = useSettings().retries;
+  const { retries: shared, profile: defaultProfile } = useSettings();
   const toast = useToast();
   const { id, value: connection } = stored;
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
@@ -106,15 +107,9 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     const listed = !listedIds || listedIds.has(model.id);
     const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
     const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
-    const opens = choice && (choice.kind === 'profile' ? `${MODEL_SETTINGS} · ${choice.profile.value.name}` : `${MODEL_SETTINGS} 없음`);
     const settings = choice && (
-      <Button
-        variant="ghost"
-        size="sm"
-        label={`${opens} · ${model.name}`}
-        onClick={() => navigate({ kind: 'model', connection: id, model: model.id })}
-      >
-        {opens}
+      <Button variant="ghost" size="sm" label={`${MODEL_SETTINGS} · ${model.name}`} onClick={() => navigate({ kind: 'model', connection: id, model: model.id })}>
+        {MODEL_SETTINGS}
       </Button>
     );
     return (
@@ -122,6 +117,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         key={model.id}
         title={model.name}
         code={model.id}
+        description={choice ? profileLine(choice, defaultProfile) : undefined}
         tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['지원 안 됨', ...tags(model)] : tags(model)}
         trailing={
           <Row kind="actions">
@@ -212,7 +208,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         <SettingGroup label="세부 설정">
           <RetriesRow
             value={connection.retries}
-            follows={`기본 ${shared ?? RETRIES}번`}
+            follows={followsRetries(shared ?? RETRIES)}
             onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
           />
         </SettingGroup>
