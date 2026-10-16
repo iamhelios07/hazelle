@@ -1,9 +1,9 @@
 import type { Context, ExecutionContext } from 'hono';
-import { SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase, type SnapshotKind } from '../contracts/admin';
+import { BEFORE_ARMED, SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase, type SnapshotKind } from '../contracts/admin';
 import type { Life, Unavailable } from './account-store';
 import { landing, RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
-import { fail, refused, type AppEnv, type Services } from './http';
+import { DAY_MS, fail, refused, type AppEnv, type Services } from './http';
 import { removePictures } from './reconcile';
 import { takeBackFiles } from './files/claims';
 
@@ -14,7 +14,6 @@ import { takeBackFiles } from './files/claims';
 // that is gone can never touch a newer account holding the same id.
 
 const MINUTE_MS = 60_000;
-const DAY_MS = 24 * 60 * MINUTE_MS;
 // A restore asks for a time at least this far back, so the snapshot chosen for it lies before the restore's own mark.
 const NEWEST_MS = 10 * MINUTE_MS;
 // Snapshots are kept for RETENTION_MS (db/account-db.ts). A day less leaves an operation time to choose its target, which
@@ -126,8 +125,6 @@ type Operation = {
   error: string | null;
 };
 
-const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
-
 // The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the report (null: the account
 // asks itself), ?3 the time asked for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a
 // refused one read the same text.
@@ -145,7 +142,7 @@ export const undoable = (operation: string, now: string) =>
   `${operation} = (SELECT id FROM restores WHERE incarnation = accounts.incarnation AND phase = 'done' AND verified = 1 ORDER BY id DESC LIMIT 1)
    AND (SELECT ended_at FROM restores WHERE id = ${operation}) > ${now} - ${RETENTION_MS}`;
 
-export type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'too-many-restores' | 'bad-time' | 'cannot-undo' };
+type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'too-many-restores' | 'bad-time' | 'cannot-undo' };
 
 // The operation's row and the account's hold on it commit together or not at all: the hold is gated on the insert.
 // An undo's target, the undone restore's checkpoint, is recorded with the row, so it is pinned from the begin on.
@@ -352,7 +349,7 @@ function run({ id, phase, verified, error }: Pick<Operation, 'id' | 'phase' | 'v
   return { id, phase, verified: Boolean(verified), error };
 }
 
-export function restoreActions(phase: RestorePhase, verified: boolean): RestoreAction[] {
+function restoreActions(phase: RestorePhase, verified: boolean): RestoreAction[] {
   if (phase === 'done' || phase === 'cancelled' || phase === 'failed') return verified ? [] : ['finalize'];
   return BEFORE_ARMED.includes(phase) ? ['resume', 'cancel'] : ['resume'];
 }

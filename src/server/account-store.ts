@@ -1,5 +1,6 @@
-import type { AccountState, SnapshotKind } from '../contracts/admin';
+import type { AccountState } from '../contracts/admin';
 import type { Db } from './db/service-db';
+import { isRecord } from './http';
 // The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
 
 export type Life = { state: AccountState | 'gone'; timeline: string | null; operation: number | null };
@@ -29,7 +30,7 @@ export type StoreDb = {
   size(): number;
   snapshots: {
     // Answers the snapshot's id once its file is durable and catalogued.
-    take(kind: SnapshotKind, operation: number | null): Promise<string>;
+    take(operation: number): Promise<string>;
     // The snapshot a rewind to the time lands on (db/account-db.ts snapshotFor); null when there is none.
     forTime(at: number): Promise<string | null>;
     // Throws when the snapshot's file is gone or no longer what its catalog row recorded.
@@ -216,7 +217,7 @@ export class StoreRules {
   }
 
   async checkpoint(incarnation: string, operation: number): Promise<Refused | WrongPhase | { checkpoint: string }> {
-    return (await this.restoring(incarnation, operation)) ?? { checkpoint: await this.db.snapshots.take('checkpoint', operation) };
+    return (await this.restoring(incarnation, operation)) ?? { checkpoint: await this.db.snapshots.take(operation) };
   }
 
   async target(incarnation: string, operation: number, from: { at: number } | { snapshot: string }): Promise<Refused | WrongPhase | { target: string } | { tooEarly: true }> {
@@ -335,8 +336,8 @@ function refusal(life: Life | Unavailable): Refused {
 }
 
 function readLife(row: unknown): Life | null {
-  if (typeof row !== 'object' || row === null) return null;
-  const { state, timeline, operation } = row as Record<string, unknown>;
+  if (!isRecord(row)) return null;
+  const { state, timeline, operation } = row;
   if (state !== 'active' && state !== 'restoring' && state !== 'leaving') return null;
   if (typeof timeline !== 'string' || (operation !== null && !Number.isSafeInteger(operation))) return null;
   return { state, timeline, operation: operation as number | null };

@@ -293,7 +293,6 @@ admin.delete('/accounts/:id', async (c) => {
   return c.body(null, 204);
 });
 
-// The operation runs in this request (lifecycle.ts).
 admin.post('/accounts/:id/restores', async (c) => {
   const id = c.req.param('id');
   const body = await readObject(c);

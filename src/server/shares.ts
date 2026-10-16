@@ -7,7 +7,7 @@ import { FILE_ID } from '../contracts/files';
 import { ACCOUNT_USAGE_HEADERS, VISITOR_HEADER } from '../contracts/http';
 import { COVER_LENGTH, MAX_SHARE_FILES, MAX_SHARE_LINK, SHARE_CONSENT, SHARE_ID, type ShareCover, type ShareState } from '../contracts/shares';
 import { fileKey } from './files/bucket';
-import { fail, isRecord, readObject, refused as refuseStore, type AppEnv } from './http';
+import { fail, isRecord, readObject, refused as refuseStore, RETRY_SECONDS, type AppEnv } from './http';
 import { canWrite, currentAccount, requireSession } from './session';
 
 // A share is sealed content an account publishes under one link (migrations/0003_shares.sql). The server holds the
@@ -65,7 +65,7 @@ async function refusal(c: Context<AppEnv>, manifest: string, files: string[]) {
   if (consent !== SHARE_CONSENT) return fail(c, 403, 'no-consent');
   const claimed = await claimFiles(c.env.db, incarnation, [manifest, ...files]);
   c.header(ACCOUNT_USAGE_HEADERS.fileBytes, String(claimed.fileBytes));
-  if (claimed.removing) return fail(c, 503, 'busy', { retryAfter: 5 });
+  if (claimed.removing) return fail(c, 503, 'busy', { retryAfter: RETRY_SECONDS });
   if (claimed.blocked) return fail(c, 403, 'file-blocked');
   if (claimed.missing) return fail(c, 400, 'bad-input');
   return null;

@@ -6,9 +6,8 @@ import type { AccountState } from '../contracts/admin';
 import { ACCOUNT_HEADER, BOT_HEADER } from '../contracts/http';
 import { CAP } from './caps';
 import type { Db } from './db/service-db';
-import { fail, hex, ID, sha256Hex, type Account, type AppEnv } from './http';
+import { DAY_MS, fail, hex, ID, sha256Hex, type Account, type AppEnv } from './http';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIFETIME_MS = 30 * DAY_MS;
 
 // A leaving account has no session: its deletion has begun (lifecycle.ts), and only 탈퇴 itself, run again to finish

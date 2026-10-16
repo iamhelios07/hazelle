@@ -1,9 +1,10 @@
-import { readdir, rm, stat } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { generationsDir, listGenerations, readManifest } from './backup/generation';
 import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
 import { fileKey, filePrefix, type Bucket } from './files/bucket';
+import { entries, mtime } from './files/disk-bucket';
 
 // The hourly sweep of what a crash or a late request left behind: the picture store, the account databases and the
 // snapshots; and the trim of the R2 store's copy on disk (files/cached-r2-bucket.ts).
@@ -17,25 +18,6 @@ const ACCOUNT_DB = /^([0-9a-f]{32})\.sqlite(?:-wal|-shm)?$/;
 export async function removePictures(files: Bucket, db: Db, incarnation: string, now: number): Promise<void> {
   if (files.kind === 'disk') return files.deletePrefix(filePrefix(incarnation));
   await db.prepare('INSERT INTO picture_removals (incarnation, due_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(incarnation, now + RETENTION_MS).run();
-}
-
-// ENOENT answers nothing: an account's deletion removes its files while the sweep walks them.
-async function entries(dir: string): Promise<string[]> {
-  try {
-    return await readdir(dir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
-  }
-}
-
-async function mtime(path: string): Promise<number> {
-  try {
-    return (await stat(path)).mtimeMs;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return Infinity;
-    throw error;
-  }
 }
 
 const running = new WeakMap<Db, Promise<{ removed: string[] }>>();

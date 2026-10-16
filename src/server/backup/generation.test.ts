@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -7,11 +6,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { ACCOUNT_SCHEMA_VERSION } from '../db/account-db';
 import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
-import type { Services } from '../http';
+import { DAY_MS, sha256Hex, type Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
-import { proof, sessionCookie, signupBody, testApp } from '../testing';
+import { proof, signupBody, testApp } from '../testing';
 import { COPIED, expireGenerations, generationsDir, listGenerations, MANIFEST, POOL, readManifest, type Manifest } from './generation';
-import { DAY_MS, dayStart } from './snapshots';
+import { dayStart } from './snapshots';
 
 // crossDevice: every link answers EXDEV, as when files/ and backup/ are separate filesystems. cutPoolCopy: a copy into
 // the pool writes part of the picture and throws, as a capture cut off mid-copy leaves it.
@@ -40,19 +39,12 @@ beforeEach(async () => {
   await t.env.db.prepare('UPDATE service SET signup_cap = 100').run();
 });
 
-const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const picture = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
 
-async function signedUp(username: string) {
-  const body = signupBody(username);
-  const cookie = sessionCookie(await t.post('signup', body));
-  const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(body.accountId).first<string>('incarnation'))!;
-  return { id: body.accountId, cookie, incarnation, body };
-}
 async function uploaded(cookie: string, text: string) {
   const bytes = picture(text);
-  expect((await t.put(`files/${sha(bytes)}`, bytes, cookie)).status).toBe(204);
-  return sha(bytes);
+  expect((await t.put(`files/${sha256Hex(bytes)}`, bytes, cookie)).status).toBe(204);
+  return sha256Hex(bytes);
 }
 const generation = async (id: string) => (await readManifest(join(generationsDir(t.dir), id)))!;
 const newest = async () => generation((await listGenerations(t.dir)).toSorted((a, b) => b.capturedAt - a.capturedAt)[0]!.id);
@@ -63,20 +55,20 @@ it('names R2 whole and delta archives in manifest v4 without linking them into t
   t.env.files = r2Bucket(s3.config);
   t.restartProcess();
   try {
-    const user = await signedUp('operator');
+    const user = await t.signUp('operator');
     const now = Date.now();
     t.clock.now = () => now - 60_000;
-    const base = ((await t.stores.snapshot(user.incarnation, 'baseline')) as { taken: string }).taken;
+    const base = ((await t.stores.snapshot(user.incarnation)) as { taken: string }).taken;
     const timeline = (await t.env.db.prepare('SELECT timeline FROM accounts WHERE incarnation = ?').bind(user.incarnation).first<string>('timeline'))!;
     await t.stores.getByName(user.incarnation).batch(user.incarnation, timeline, [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'changed', baseRev: null }], null);
     t.clock.now = () => now - 30_000;
-    await t.stores.snapshot(user.incarnation, 'baseline');
+    await t.stores.snapshot(user.incarnation);
     expect((await t.daily(now)).generation).toEqual({ outcome: 'ok', error: null });
     const manifest = await newest();
     expect(manifest).toMatchObject({ version: 4, snapshotStore: { kind: 'r2', bucket: s3.config.bucket } });
     expect(manifest.snapshots).toHaveLength(2);
     expect(manifest.snapshots.map(({ id }) => id)).toContain(base);
-    for (const snapshot of manifest.snapshots) expect(sha(s3.objects.get(snapshot.path)!)).toBe(snapshot.sha256);
+    for (const snapshot of manifest.snapshots) expect(sha256Hex(s3.objects.get(snapshot.path)!)).toBe(snapshot.sha256);
     expect(existsSync(join(generationsDir(t.dir), manifest.id, 'snapshots'))).toBe(false);
   } finally {
     t.env.files = disk;
@@ -89,7 +81,7 @@ function serviceOf(manifest: Manifest) {
   const path = join(t.dir, 'scratch.sqlite');
   rmSync(path, { force: true });
   const bytes = readFileSync(join(generationsDir(t.dir), manifest.id, manifest.service.path));
-  expect(sha(bytes)).toBe(manifest.service.sha256);
+  expect(sha256Hex(bytes)).toBe(manifest.service.sha256);
   writeFileSync(path, gunzipSync(bytes));
   return new DatabaseSync(path, { readOnly: true });
 }
@@ -112,14 +104,14 @@ function pausedAtSnapshot() {
 
 describe('a backup generation', () => {
   it('holds lifecycle steps out while it captures, lets password changes and uploads through, and names only what is durable', async () => {
-    await signedUp('operator');
-    const keeper = await signedUp('keeper');
-    const leaver = await signedUp('leaver');
-    const rewinder = await signedUp('rewinder');
+    await t.signUp('operator');
+    const keeper = await t.signUp('keeper');
+    const leaver = await t.signUp('leaver');
+    const rewinder = await t.signUp('rewinder');
     const kept = await uploaded(keeper.cookie, 'kept picture');
     const left = await uploaded(leaver.cookie, 'leaver picture');
     t.clock.now = () => Date.now() - 60 * 60_000;
-    await t.stores.snapshot(rewinder.incarnation, 'baseline');
+    await t.stores.snapshot(rewinder.incarnation);
     t.clock.now = () => Date.now();
     expect((await t.post('reports', { text: 'restore' }, rewinder.cookie)).status).toBe(204);
     const report = (await t.env.db.prepare('SELECT id FROM reports').first<number>('id'))!;
@@ -154,8 +146,8 @@ describe('a backup generation', () => {
     }
     expect(manifest.accounts.every(({ baseline }) => baseline !== null)).toBe(true);
     expect(manifest.pictures.toSorted()).toEqual([kept, left, late].toSorted());
-    for (const id of manifest.pictures) expect(sha(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
-    for (const snapshot of manifest.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
+    for (const id of manifest.pictures) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
+    for (const snapshot of manifest.snapshots) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
     for (const artifact of [manifest.service, ...manifest.snapshots]) {
       expect(artifact.expanded).toBe(gunzipSync(readFileSync(join(generationsDir(t.dir), manifest.id, artifact.path))).length);
     }
@@ -169,8 +161,8 @@ describe('a backup generation', () => {
   });
 
   it('leaves the previous generation whole when one is cut off, and removes the cut-off one after a day', async () => {
-    await signedUp('operator');
-    const lost = await signedUp('lost');
+    await t.signUp('operator');
+    const lost = await t.signUp('lost');
     const lostPicture = await uploaded(lost.cookie, 'its bytes will vanish');
     const first = Date.now() - 2 * DAY_MS;
     expect((await t.daily(first)).generation).toEqual({ outcome: 'ok', error: null });
@@ -181,14 +173,14 @@ describe('a backup generation', () => {
     const cut = (await listGenerations(t.dir)).find(({ capturedAt }) => capturedAt === first + DAY_MS)!;
     expect(existsSync(join(generationsDir(t.dir), cut.id, MANIFEST))).toBe(false);
     expect(await generation(whole.id)).toEqual(whole);
-    for (const snapshot of whole.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), whole.id, snapshot.path)))).toBe(snapshot.sha256);
+    for (const snapshot of whole.snapshots) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), whole.id, snapshot.path)))).toBe(snapshot.sha256);
     expect(await expireGenerations(t.dir, first + DAY_MS + DAY_MS / 2)).toEqual({ removed: 0, pictures: 0 });
     expect(await expireGenerations(t.dir, first + 2 * DAY_MS)).toEqual({ removed: 1, pictures: 0 });
     expect((await listGenerations(t.dir)).map(({ id }) => id)).toEqual([whole.id]);
   });
 
   it('puts a picture copied across filesystems into the pool only whole: a copy cut off leaves nothing under its name, and the next generation copies it again', async () => {
-    const operator = await signedUp('operator');
+    const operator = await t.signUp('operator');
     const id = await uploaded(operator.cookie, 'copied, not linked');
     Object.assign(fault, { crossDevice: true, cutPoolCopy: true });
     const first = Date.now() - DAY_MS;
@@ -197,16 +189,16 @@ describe('a backup generation', () => {
     fault.cutPoolCopy = false;
     expect((await t.daily(first + DAY_MS / 2)).generation).toEqual({ outcome: 'ok', error: null });
     expect((await newest()).pictures).toEqual([id]);
-    expect(sha(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
+    expect(sha256Hex(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
   });
 
   it('names a baseline as of today for an account whose rewind was cut off before its checkpoint: a new one if it changed, its old one if not', async () => {
-    await signedUp('operator');
+    await t.signUp('operator');
     const now = Date.now();
     const paused = async (username: string, operation: number, change: boolean) => {
-      const account = await signedUp(username);
+      const account = await t.signUp(username);
       t.clock.now = () => now - 2 * DAY_MS;
-      const old = ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+      const old = ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
       if (change) expect((await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'since', baseRev: null }], account.cookie)).status).toBe(200);
       await t.env.db.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (?, ?, 1, 1, 't', 'fenced', 1, 1)").bind(operation, account.incarnation).run();
       await t.lifecycle(account.id, `state = 'restoring', operation = ${operation}`);
@@ -222,10 +214,10 @@ describe('a backup generation', () => {
   });
 
   it('names the baseline of the account’s timeline, not one of an older timeline stamped later by a clock put back', async () => {
-    const account = await signedUp('rewound');
+    const account = await t.signUp('rewound');
     const day = dayStart(Date.now()) - DAY_MS;
     t.clock.now = () => day + 60 * 60_000;
-    const current = ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+    const current = ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
     await t.env.db
       .prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256, timeline, schema_version) VALUES ('old-timeline', ?1, 'baseline', ?2, 1, 1, 1, 'x', 'old', ?3)")
       .bind(account.incarnation, day + 2 * 60 * 60_000, ACCOUNT_SCHEMA_VERSION)
@@ -235,20 +227,20 @@ describe('a backup generation', () => {
   });
 
   it('names the base of a delta baseline and of a pinned delta beside them, and sizes a delta with its base', async () => {
-    await signedUp('operator');
+    await t.signUp('operator');
     const now = Date.now();
-    const baselineAt = async (account: Awaited<ReturnType<typeof signedUp>>, at: number) => {
+    const baselineAt = async (account: Awaited<ReturnType<typeof t.signUp>>, at: number) => {
       expect((await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: String(at), baseRev: null }], account.cookie)).status).toBe(200);
       t.clock.now = () => at;
-      return ((await t.stores.snapshot(account.incarnation, 'baseline')) as { taken: string }).taken;
+      return ((await t.stores.snapshot(account.incarnation)) as { taken: string }).taken;
     };
     const base = async (id: string) => t.env.db.prepare('SELECT base FROM snapshots WHERE id = ?').bind(id).first<string | null>('base');
-    const delta = await signedUp('delta');
+    const delta = await t.signUp('delta');
     const deltaBase = await baselineAt(delta, now - 2 * 60 * 60_000);
     const deltaBaseline = await baselineAt(delta, now - 60 * 60_000);
     expect(await base(deltaBaseline)).toBe(deltaBase);
     // Past the base window, so its current baseline is whole and names neither the pinned delta nor its base.
-    const pinner = await signedUp('pinner');
+    const pinner = await t.signUp('pinner');
     const pinnedBase = await baselineAt(pinner, now - 6.5 * DAY_MS);
     const pinned = await baselineAt(pinner, now - 6.4 * DAY_MS);
     const current = await baselineAt(pinner, now - 60 * 60_000);
@@ -263,7 +255,7 @@ describe('a backup generation', () => {
     const named = (incarnation: string) => manifest.snapshots.filter((snapshot) => snapshot.incarnation === incarnation).map(({ id }) => id);
     expect(named(delta.incarnation)).toEqual([deltaBase, deltaBaseline].toSorted());
     expect(named(pinner.incarnation)).toEqual([pinnedBase, pinned, current].toSorted());
-    for (const snapshot of manifest.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
+    for (const snapshot of manifest.snapshots) expect(sha256Hex(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
     const entry = (id: string) => manifest.snapshots.find((snapshot) => snapshot.id === id)!;
     expect(entry(pinned).materialized).toBe(entry(pinnedBase).expanded + entry(pinned).expanded);
     expect(entry(current).materialized).toBe(entry(current).expanded);
@@ -288,9 +280,9 @@ describe('a backup generation', () => {
   });
 
   it('collects a generation at 7 days and with it only the pictures no kept generation names', async () => {
-    await signedUp('operator');
-    const keeper = await signedUp('keeper');
-    const leaver = await signedUp('leaver');
+    await t.signUp('operator');
+    const keeper = await t.signUp('keeper');
+    const leaver = await t.signUp('leaver');
     const shared = await uploaded(keeper.cookie, 'both hold this');
     expect(await uploaded(leaver.cookie, 'both hold this')).toBe(shared);
     const kept = await uploaded(keeper.cookie, 'kept');

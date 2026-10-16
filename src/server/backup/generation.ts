@@ -8,8 +8,9 @@ import { ACCOUNT_SCHEMA_VERSION, CURRENT_BASELINE, RETENTION_MS } from '../db/ac
 import { fsyncPath, makeDirs } from '../db/durable';
 import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
 import { fileKey, snapshotKey, type Bucket, type DiskBucket } from '../files/bucket';
-import type { Services } from '../http';
-import { DAY_MS, dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
+import { entries } from '../files/disk-bucket';
+import { DAY_MS, type Services } from '../http';
+import { dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
 // Backup generations (docs/research/docker-port-plan.md §10.2): backup/<id>/ holds the service snapshot, the
 // snapshots its manifest names and, written last, manifest.json; with the disk bucket, pictures go once each into the
@@ -26,7 +27,7 @@ const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 
 // bytes: the gzip on disk. expanded: what it gunzips to, measured on the plain file before it was gzipped (the gzip
 // trailer holds that only modulo 4 GiB).
-export type Artifact = { path: string } & SnapshotArchive;
+type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the snapshot its file is restored from: its current
 // baseline, or, once its operation holds a checkpoint, that checkpoint, which is newer than any baseline and holds the
 // file as it was at the fence: a restore cancels the operation before `armed` and from `armed` on finishes it, installing
@@ -238,14 +239,7 @@ export async function readManifest(root: string): Promise<Manifest | null> {
 }
 
 export async function listGenerations(dataDir: string): Promise<{ id: string; capturedAt: number }[]> {
-  let names: string[];
-  try {
-    names = await readdir(generationsDir(dataDir));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
-  }
-  return names.flatMap((name) => {
+  return (await entries(generationsDir(dataDir))).flatMap((name) => {
     const at = GENERATION.exec(name)?.[1];
     return at === undefined ? [] : [{ id: name, capturedAt: Number(at) }];
   });

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VISITOR_HEADER } from '../contracts/http';
-import { hex } from './http';
-import { sessionCookie, signupBody, testApp } from './testing';
+import { sha256Hex } from './http';
+import { testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -13,14 +13,9 @@ beforeEach(async () => {
   await t.env.db.prepare('UPDATE service SET signup_cap = 3').run();
 });
 
-async function account(username: string) {
-  const body = signupBody(username);
-  return { id: body.accountId, cookie: sessionCookie(await t.post('signup', body)) };
-}
-
 async function stored(bytes: number[], cookie: string) {
   const body = new Uint8Array(bytes);
-  const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body)));
+  const id = sha256Hex(body);
   await t.put(`files/${id}`, body, cookie);
   return id;
 }
@@ -28,8 +23,8 @@ async function stored(bytes: number[], cookie: string) {
 // The operator first (the installation's first signup), then a sharer who has agreed and published a manifest naming
 // one picture.
 async function published() {
-  const operator = await account('operator');
-  const sharer = await account('sharer');
+  const operator = await t.signUp('operator');
+  const sharer = await t.signUp('sharer');
   await t.put('shares/consent', undefined, sharer.cookie);
   const manifest = await stored([1, 1, 1], sharer.cookie);
   const picture = await stored([2, 2, 2], sharer.cookie);
@@ -49,7 +44,7 @@ const state = async (share: string) => ((await (await t.get(`shares/${share}`)).
 
 describe('a share link', () => {
   it('reclaims a released picture on publication and excludes a concurrent sweep through the publication', async () => {
-    const sharer = await account('sharer');
+    const sharer = await t.signUp('sharer');
     await t.put('shares/consent', undefined, sharer.cookie);
     const manifest = await stored([1, 1, 1], sharer.cookie);
     const picture = await stored([2, 2], sharer.cookie);

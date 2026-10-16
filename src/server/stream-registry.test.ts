@@ -2,16 +2,17 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DAY_MS } from './http';
 import type { Upstream } from './relay';
 import { relayBudget } from './limits';
 import { streamRegistry as registryWithBudget } from './stream-registry';
 import { streamStore, type StreamStore } from './db/streams-db';
+import { replyKey } from './testing';
 
 const streamRegistry = (store: StreamStore, upstream: Upstream) => registryWithBudget(store, upstream, relayBudget());
 
 const CHUNK = 64 * 1024;
 const staying = new AbortController().signal;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // A provider that gives chunks bytes at once and then answers only when the call is aborted. calls: how many calls
 // reached it; aborted: how many of them were aborted.
@@ -35,8 +36,7 @@ function provider(chunks = 0) {
 }
 
 async function body() {
-  const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
-  const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+  const { key } = await replyKey();
   return { id: crypto.randomUUID(), key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } };
 }
 

@@ -1,11 +1,9 @@
 import { CURRENT_BASELINE, RETENTION_MS, TAKES_BASELINE } from '../db/account-db';
 import { snapshotKey } from '../files/bucket';
-import type { Services } from '../http';
+import { DAY_MS, type Services } from '../http';
 
 // The daily baselines and the retention of every snapshot (docs/research/docker-port-plan.md §10.1). Day boundaries
 // are UTC. Work goes one account at a time with a yield between, so the event loop keeps serving requests.
-
-export const DAY_MS = 24 * 60 * 60 * 1000;
 
 // The pin rule, over a snapshots row aliased `s` and the time `now` (a bind or literal): an operation pins its
 // checkpoint and target until it ends and for RETENTION_MS after, whichever way it ended: a finished rewind's undo lives
@@ -45,7 +43,7 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
   const failed: string[] = [];
   for (const incarnation of incarnations) {
     try {
-      const outcome = await env.stores.snapshot(incarnation, 'baseline');
+      const outcome = await env.stores.snapshot(incarnation);
       if ('taken' in outcome) taken++;
       else if ('unchanged' in outcome) unchanged++;
       else skipped++;

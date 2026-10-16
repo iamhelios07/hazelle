@@ -1,5 +1,6 @@
 import { RELAY_HEADER, type ServerError } from '../contracts/http';
 import { HELLO, HEAD, DATA, END, PING, WAIT, retryWait, type Retry } from '../contracts/streams';
+import { isRecord } from './http';
 import type { RelayAllowance } from './limits';
 import { forward, RelayTrafficLimit, type Upstream } from './relay';
 
@@ -88,7 +89,7 @@ const json = (status: number, error: ServerError) => Response.json({ error }, { 
 async function passing(response: Response, statuses: Retry['statuses']): Promise<boolean> {
   if (response.headers.get(RELAY_HEADER) === 'upstream') return statuses.includes(response.status);
   const body: unknown = await response.clone().json().catch(() => null);
-  return typeof body === 'object' && body !== null && (body as { error?: unknown }).error === 'upstream-unreachable';
+  return isRecord(body) && body.error === 'upstream-unreachable';
 }
 
 const sleep = (ms: number, signal: AbortSignal) =>

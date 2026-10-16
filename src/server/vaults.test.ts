@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ACCOUNT_HEADER, VISITOR_HEADER } from '../contracts/http';
-import { proof, sessionCookie, signupBody, testApp } from './testing';
+import { proof, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -13,8 +13,7 @@ const login = (method: string, value: string) => t.post('login', { username: 'ji
 
 describe('password change', () => {
   it('replaces the login proof and the password wrap together, and keeps the recovery key working', async () => {
-    const body = signupBody();
-    const cookie = sessionCookie(await t.post('signup', body));
+    const { body, cookie } = await t.signUp('jin');
     const change = { method: 'recovery', proof: body.recoveryProof, passwordProof: proof('new password'), passwordWrap: 'bmV3IHdyYXA=' };
 
     expect((await t.put('vault/password', change, cookie)).status).toBe(204);
@@ -25,8 +24,7 @@ describe('password change', () => {
   });
 
   it('keys authenticated proof failures by visitor and account, sharing backoff with login but not another address', async () => {
-    const body = signupBody();
-    const cookie = sessionCookie(await t.post('signup', body));
+    const { body, cookie } = await t.signUp('jin');
     const change = (visitor: string, value: string) => t.raw('vault/password', {
       method: 'PUT', headers: { 'content-type': 'application/json', cookie, [ACCOUNT_HEADER]: body.accountId, [VISITOR_HEADER]: visitor },
       body: JSON.stringify({ method: 'recovery', proof: value, passwordProof: proof('new password'), passwordWrap: 'bmV3IHdyYXA=' }),
@@ -43,8 +41,7 @@ describe('password change', () => {
   });
 
   it('needs the current password or recovery key, not only a session', async () => {
-    const body = signupBody();
-    const cookie = sessionCookie(await t.post('signup', body));
+    const { body, cookie } = await t.signUp('jin');
     const change = { method: 'password', proof: proof('guess'), passwordProof: proof('new password'), passwordWrap: 'bmV3IHdyYXA=' };
 
     expect((await t.put('vault/password', change, cookie)).status).toBe(401);

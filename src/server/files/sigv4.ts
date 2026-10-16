@@ -1,10 +1,10 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHmac } from 'node:crypto';
+import { sha256Hex } from '../http';
 
 // AWS Signature Version 4 in the Authorization header, as R2's S3 API takes it.
 
 export type Signer = { accessKeyId: string; secretAccessKey: string; region: string; service: string };
 
-export const sha256Hex = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
 const hmac = (key: string | Buffer, data: string) => createHmac('sha256', key).update(data).digest();
 
 // RFC 3986 unreserved characters stay; encodeURIComponent leaves five more.

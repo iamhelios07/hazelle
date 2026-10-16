@@ -2,8 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { forgetOldRecords, readAll } from './admin';
 import { MAX_DIAGNOSTICS_LENGTH } from '../contracts/admin';
 import { beginRestore } from './lifecycle';
-import { hex, type Services } from './http';
-import { sessionCookie, signupBody, testApp } from './testing';
+import { sha256Hex, type Services } from './http';
+import { signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -15,18 +15,13 @@ beforeEach(async () => {
   await t.env.db.prepare('UPDATE service SET signup_cap = 3').run();
 });
 
-async function account(username: string) {
-  const body = signupBody(username);
-  return { id: body.accountId, cookie: sessionCookie(await t.post('signup', body)) };
-}
-
-// The first signup of an installation is its operator, so a test calls this before account().
-const operator = () => account('operator');
+// The first signup of an installation is its operator, so a test calls this before t.signUp().
+const operator = () => t.signUp('operator');
 
 const log = async (cookie: string) => ((await (await t.get('admin/log', cookie)).json()) as { log: { action: string; target: string; detail: unknown }[] }).log;
 
 async function stored(bytes: Uint8Array<ArrayBuffer>, cookie: string) {
-  const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+  const id = sha256Hex(bytes);
   await t.put(`files/${id}`, bytes, cookie);
   return id;
 }
@@ -34,7 +29,7 @@ async function stored(bytes: Uint8Array<ArrayBuffer>, cookie: string) {
 describe('the operator', () => {
   it('is the first account signed up: the session says so, nobody else passes, and the installation keeps naming it', async () => {
     const admin = await operator();
-    const other = await account('other');
+    const other = await t.signUp('other');
     expect(await (await t.get('session', admin.cookie)).json()).toMatchObject({ session: { admin: true } });
     expect(await (await t.get('session', other.cookie)).json()).toMatchObject({ session: { admin: false } });
 
@@ -47,8 +42,8 @@ describe('the operator', () => {
 
   it("lists each account with its store's bytes, its pictures and its own caps, and separately totals what the stores answered", async () => {
     const admin = await operator();
-    const other = await account('other');
-    const leaving = await account('leaving');
+    const other = await t.signUp('other');
+    const leaving = await t.signUp('leaving');
     await stored(new Uint8Array([1, 2, 3]), other.cookie);
     const writes = ['a', 'b'].map((body) => ({ id: crypto.randomUUID(), kind: 'asset', parent: null, body: body.repeat(10), baseRev: null }));
     await t.batch(writes, other.cookie);
@@ -125,7 +120,7 @@ describe('the operator', () => {
 
   it('suspends an account, lifts it and deletes the account, logging each with the username', async () => {
     const admin = await operator();
-    const other = await account('other');
+    const other = await t.signUp('other');
     const timeline = await t.timeline(other.cookie);
     const write = () => t.post('objects/batch', { timeline, files: [], writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }, other.cookie);
 
@@ -158,7 +153,7 @@ describe('the operator', () => {
 
   it("gives an account its own caps in place of the service's, none among them, and logs each", async () => {
     const admin = await operator();
-    const other = await account('other');
+    const other = await t.signUp('other');
     await t.env.db.prepare('UPDATE service SET account_bytes_cap = 0, account_file_bytes_cap = 0').run();
     const write = async () => (await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }], other.cookie)).status;
     const session = async () => ((await (await t.get('session', other.cookie)).json()) as { session: { storage: unknown } }).session.storage;
@@ -180,7 +175,7 @@ describe('the operator', () => {
 
   it('lists the reports accounts send, a suspended one too, and resolves one once', async () => {
     const admin = await operator();
-    const other = await account('other');
+    const other = await t.signUp('other');
     await t.env.db.prepare('UPDATE accounts SET suspended_at = 1 WHERE id = ?').bind(other.id).run();
     expect((await t.post('reports', { text: '  이 봇이 이상해요  ' }, other.cookie)).status).toBe(204);
     expect((await t.post('reports', { text: 'x'.repeat(4001) }, other.cookie)).status).toBe(400);
@@ -197,14 +192,14 @@ describe('the operator', () => {
 
   it('keeps the 문제 진단 a report was sent with, up to its cap', async () => {
     const admin = await operator();
-    const other = await account('other');
+    const other = await t.signUp('other');
     expect((await t.post('reports', { text: '안 열려요', diagnostics: 'x'.repeat(MAX_DIAGNOSTICS_LENGTH + 1) }, other.cookie)).status).toBe(400);
     expect((await t.post('reports', { text: '안 열려요', diagnostics: '헤이젤 진단 정보' }, other.cookie)).status).toBe(204);
     expect(await (await t.get('admin/reports', admin.cookie)).json()).toMatchObject({ reports: [{ text: '안 열려요', diagnostics: '헤이젤 진단 정보' }] });
   });
 
   it('keeps a report eligible for its account when the wall clock moves backwards after signup', async () => {
-    const other = await account('other');
+    const other = await t.signUp('other');
     const created = (await t.env.db.prepare('SELECT created_at FROM accounts WHERE id = ?').bind(other.id).first<number>('created_at'))!;
     const clock = vi.spyOn(Date, 'now').mockReturnValue(created - 645);
     try {
@@ -219,14 +214,14 @@ describe('the operator', () => {
   });
 
   it('refuses an account another report while it has twenty unresolved', async () => {
-    const other = await account('other');
+    const other = await t.signUp('other');
     const sent = await Promise.all(Array.from({ length: 21 }, () => t.post('reports', { text: 'again' }, other.cookie)));
     expect(sent.map(({ status }) => status).sort()).toEqual([...Array<number>(20).fill(204), 429]);
   });
 
   it('blocks a stored file for every account: no read, no upload, and an import is told the server does not hold it', async () => {
     const admin = await operator();
-    const other = await account('other');
+    const other = await t.signUp('other');
     const bytes = new Uint8Array([4, 5, 6]);
     const id = await stored(bytes, other.cookie);
     const put = () => t.put(`files/${id}`, bytes, other.cookie);

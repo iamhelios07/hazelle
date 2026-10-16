@@ -67,7 +67,7 @@ const CORRUPT_CODES = new Set([11, 26]);
 export const accountPath = (dataDir: string, incarnation: string) => join(dataDir, 'accounts', `${incarnation}.sqlite`);
 
 // Thrown inside a store call for a file the rules cannot be answered from; the registry turns it into { unavailable }.
-export class StoreUnavailable extends Error {
+class StoreUnavailable extends Error {
   constructor(readonly why: 'missing' | 'newer-schema' | 'snapshot-missing' | 'snapshot-corrupt' | 'corrupt') {
     super(`account store unavailable: ${why}`);
   }
@@ -83,10 +83,10 @@ function prepareAccountFile(dataDir: string, incarnation: string, timeline: stri
   if (existsSync(path)) throw new Error(`account file exists: ${incarnation}`);
   const db = openDatabase(path);
   try {
-    db.exec('BEGIN');
-    for (const statement of SCHEMA) db.exec(statement);
-    db.prepare('INSERT INTO head (id, rev, bytes, timeline, schema_version) VALUES (1, 0, 0, ?, ?)').run(timeline, ACCOUNT_SCHEMA_VERSION);
-    db.exec('COMMIT');
+    transaction(db, () => {
+      for (const statement of SCHEMA) db.exec(statement);
+      db.prepare('INSERT INTO head (id, rev, bytes, timeline, schema_version) VALUES (1, 0, 0, ?, ?)').run(timeline, ACCOUNT_SCHEMA_VERSION);
+    });
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   } finally {
     db.close();
@@ -324,7 +324,7 @@ export class AccountDb implements StoreDb {
 
   readonly snapshots = {
     // A checkpoint stays on the queue through publication: a rewind must have its durable undo before advancing.
-    take: async (kind: SnapshotKind, operation: number | null): Promise<string> => (await this.captureSnapshot(kind, operation))(),
+    take: async (operation: number): Promise<string> => (await this.captureSnapshot('checkpoint', operation))(),
     forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.files, this.service, this.incarnation, at))?.id ?? null,
     verify: async (id: string) => {
       await verifySnapshot(this.files, this.service, this.incarnation, id);
@@ -343,7 +343,7 @@ export class AccountDb implements StoreDb {
   }
 }
 
-export type StoreStub = { [M in keyof StoreRules]: StoreRules[M] } & { restart(incarnation: string): Promise<never> };
+type StoreStub = { [M in keyof StoreRules]: StoreRules[M] } & { restart(incarnation: string): Promise<never> };
 
 export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.
@@ -355,9 +355,7 @@ export type Stores = {
   // A session the snapshot had to open is closed after capture, so archiving holds no otherwise idle handles. refused: the
   // account takes no baseline now (TAKES_BASELINE). unchanged: its file still holds the revision its current baseline
   // (CURRENT_BASELINE) recorded, so that baseline is its state and no copy is taken.
-  snapshot(incarnation: string, kind: 'baseline'): Promise<{ taken: string } | { refused: true } | { unchanged: true }>;
-  // What a rewind of the account to `at` would land on now; throws StoreUnavailable for a catalogued file gone or altered.
-  snapshotAt(incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null>;
+  snapshot(incarnation: string): Promise<{ taken: string } | { refused: true } | { unchanged: true }>;
   evictIdle(now?: number): void;
   close(): void;
   // A separate read of the account's file, for tests and the operator's tools: never through a session.
@@ -455,7 +453,7 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
       }
     }),
     prepare: async (incarnation, timeline) => prepareAccountFile(dataDir, incarnation, timeline),
-    snapshot: async (incarnation, kind) => {
+    snapshot: async (incarnation) => {
       const held = entry(incarnation);
       const captured = await enqueue(held, async () => {
         // Read here, not from the session's lifecycle: that is cached, and says restoring until the store next
@@ -469,7 +467,7 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
         const { db } = await session(incarnation, held);
         try {
           if (db.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev === row.rev) return { unchanged: true as const };
-          return await db.captureSnapshot(kind, null);
+          return await db.captureSnapshot('baseline', null);
         } finally {
           if (opened) closeSession(held);
         }
@@ -477,7 +475,6 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
       // The caller still waits for publication, so fresh() and the capture gate never name an unfinished baseline.
       return typeof captured === 'function' ? { taken: await captured() } : captured;
     },
-    snapshotAt: (incarnation, at) => snapshotFor(files, service, incarnation, at),
     evictIdle: (now = clock()) => {
       for (const held of entries.values()) if (held.session && held.pending === 0 && now - held.lastUsed >= IDLE_MS) closeSession(held);
     },

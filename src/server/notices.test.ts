@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-import { sessionCookie, signupBody, testApp } from './testing';
+import { testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -11,12 +11,8 @@ beforeEach(async () => {
   await t.env.db.prepare('UPDATE service SET signup_cap = 5').run();
 });
 
-async function account(username: string, accountId: string = crypto.randomUUID()) {
-  return { id: accountId, cookie: sessionCookie(await t.post('signup', { ...signupBody(username), accountId })) };
-}
-
-// The first signup of an installation is its operator, so a test calls this before account().
-const operator = () => account('operator');
+// The first signup of an installation is its operator, so a test calls this before t.signUp().
+const operator = () => t.signUp('operator');
 
 type Notice = { id: number; reportId: number | null; text: string; createdAt: number };
 const read = async (cookie: string) => ((await (await t.get('notices', cookie)).json()) as { notices: Notice[] }).notices;
@@ -26,8 +22,8 @@ const stored = async () => (await t.env.db.prepare('SELECT COUNT(*) AS count FRO
 
 it('sends a notice to one account, which that account reads and no other does, and logs it', async () => {
   const admin = await operator();
-  const to = await account('to');
-  const other = await account('other');
+  const to = await t.signUp('to');
+  const other = await t.signUp('other');
 
   expect((await t.post('admin/notices', { to: to.id, text: '  점검이 끝났어요  ' }, admin.cookie)).status).toBe(204);
   expect((await t.post('admin/notices', { to: to.id, text: 'x'.repeat(2001) }, admin.cookie)).status).toBe(400);
@@ -40,9 +36,9 @@ it('sends a notice to one account, which that account reads and no other does, a
 
 it('lists a notice to everyone to the accounts there when it was sent, not to one created after', async () => {
   const admin = await operator();
-  const before = await account('before');
+  const before = await t.signUp('before');
   expect((await t.post('admin/notices', { to: null, text: '내일 점검해요' }, admin.cookie)).status).toBe(204);
-  const after = await account('after');
+  const after = await t.signUp('after');
   // Strictly later than the notice, which a signup in the same millisecond is not.
   await t.env.db.prepare('UPDATE accounts SET created_at = created_at + 1 WHERE id = ?').bind(after.id).run();
 
@@ -54,7 +50,7 @@ it('lists a notice to everyone to the accounts there when it was sent, not to on
 
 it('counts the unread notices on the session and marks them seen up to the one the page showed', async () => {
   const admin = await operator();
-  const to = await account('to');
+  const to = await t.signUp('to');
   await t.post('admin/notices', { to: to.id, text: '하나' }, admin.cookie);
   await t.post('admin/notices', { to: null, text: '둘' }, admin.cookie);
   expect(await unread(to.cookie)).toBe(2);
@@ -70,7 +66,7 @@ it('counts the unread notices on the session and marks them seen up to the one t
 
 it('replies on resolving a report in the one batch: a resolve that fails leaves no notice', async () => {
   const admin = await operator();
-  const sender = await account('sender');
+  const sender = await t.signUp('sender');
   await t.post('reports', { text: '그림이 안 열려요' }, sender.cookie);
   const report = (await t.env.db.prepare('SELECT id FROM reports').first<number>('id'))!;
 
@@ -90,7 +86,7 @@ it('replies on resolving a report in the one batch: a resolve that fails leaves 
 
 it('sends a suspension reason as a notice with the suspension, and suspends no one without a reason', async () => {
   const admin = await operator();
-  const to = await account('to');
+  const to = await t.signUp('to');
   for (const body of [{ suspended: true }, { suspended: true, reason: '  ' }]) expect((await t.put(`admin/accounts/${to.id}/suspended`, body, admin.cookie)).status).toBe(400);
   expect(await t.env.db.prepare('SELECT suspended_at FROM accounts WHERE id = ?').bind(to.id).first('suspended_at')).toBeNull();
   expect((await t.put(`admin/accounts/${to.id}/suspended`, { suspended: true, reason: '도배 때문에 멈춰요' }, admin.cookie)).status).toBe(204);
@@ -101,7 +97,7 @@ it('sends a suspension reason as a notice with the suspension, and suspends no o
 
 it("goes with the account it is to, so an account reusing its id reads nothing of the old one's", async () => {
   const admin = await operator();
-  const gone = await account('gone');
+  const gone = await t.signUp('gone');
   await t.post('admin/notices', { to: gone.id, text: '안녕히' }, admin.cookie);
   await t.post('admin/notices', { to: null, text: '모두에게' }, admin.cookie);
   expect(await stored()).toBe(2);
@@ -109,7 +105,7 @@ it("goes with the account it is to, so an account reusing its id reads nothing o
   expect((await t.delete(`admin/accounts/${gone.id}`, undefined, admin.cookie)).status).toBe(204);
   expect(await stored()).toBe(1);
 
-  const again = await account('again', gone.id);
+  const again = await t.signUp('again', gone.id);
   await t.env.db.prepare('UPDATE accounts SET created_at = created_at + 1 WHERE id = ?').bind(again.id).run();
   expect(await read(again.cookie)).toEqual([]);
 });

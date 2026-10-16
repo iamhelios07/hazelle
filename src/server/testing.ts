@@ -103,6 +103,12 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env, ctx),
     settle,
     timeline,
+    signUp: async (username = `u${crypto.randomUUID().slice(0, 8)}`, accountId: string = crypto.randomUUID()) => {
+      const body = { ...signupBody(username), accountId };
+      const cookie = sessionCookie(await send('POST', 'signup', body));
+      const { incarnation, timeline } = (await env.db.prepare('SELECT incarnation, timeline FROM accounts WHERE id = ?').bind(accountId).first<{ incarnation: string; timeline: string }>())!;
+      return { id: accountId, body, cookie, incarnation, timeline };
+    },
     reconcile: (now = Date.now()) => reconcile(dir, env.db, env.files, now),
     // The account's row changed in the service, then its store restarted, as every lifecycle change is made
     // (server/lifecycle).
@@ -138,3 +144,10 @@ export const signupBody = (username = 'jin') => ({
   passwordWrap: 'cGFzc3dvcmQgd3JhcA==',
   recoveryWrap: 'cmVjb3Zlcnkgd3JhcA==',
 });
+
+// A stream's reply key as the client makes it (vault/streams.ts).
+export async function replyKey() {
+  const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
+  const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+  return { pair, key };
+}

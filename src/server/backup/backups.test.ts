@@ -2,9 +2,10 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { accountPath } from '../db/account-db';
-import { sessionCookie, signupBody, testApp } from '../testing';
+import { DAY_MS, sha256Hex } from '../http';
+import { testApp } from '../testing';
 import { COPIED, generationsDir, listGenerations, readManifest } from './generation';
-import { DAY_MS, dayStart } from './snapshots';
+import { dayStart } from './snapshots';
 
 const HOUR_MS = 60 * 60 * 1000;
 const sent: { url: string; body: unknown }[] = [];
@@ -27,7 +28,7 @@ beforeEach(async () => {
 });
 
 it('sends each standing alert once when a tick comes while another waits on the webhook', async () => {
-  sessionCookie(await t.post('signup', signupBody('operator')));
+  await t.signUp('operator');
   const at = dayStart(Date.now() + 3 * DAY_MS) + 4 * HOUR_MS;
   t.clock.now = () => at;
   let answer = () => {};
@@ -45,11 +46,9 @@ it('sends each standing alert once when a tick comes while another waits on the 
 });
 
 it('raises the banner and the webhook once a day for a failed night after a backup older than 36 hours', async () => {
-  const body = signupBody('operator');
-  const cookie = sessionCookie(await t.post('signup', body));
-  const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!;
+  const { cookie, incarnation } = await t.signUp('operator');
   const bytes = new TextEncoder().encode('a picture');
-  const id = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+  const id = sha256Hex(bytes);
   expect((await t.put(`files/${id}`, bytes, cookie)).status).toBe(204);
   const now = Date.now();
   expect((await t.daily(now - 40 * HOUR_MS)).generation).toEqual({ outcome: 'ok', error: null });
@@ -77,7 +76,7 @@ it('raises the banner and the webhook once a day for a failed night after a back
 });
 
 it('captures a generation of its own for a fresh ask that comes while a daily job runs', async () => {
-  sessionCookie(await t.post('signup', signupBody('operator')));
+  await t.signUp('operator');
   const running = t.env.backups.daily(t.env, Date.now());
   const fresh = t.env.backups.fresh(t.env);
   await running;
@@ -86,9 +85,7 @@ it('captures a generation of its own for a fresh ask that comes while a daily jo
 });
 
 it('names, for a fresh ask, a baseline of every account written since today’s, and publishes no generation when one of them cannot be taken', async () => {
-  const body = signupBody('operator');
-  const cookie = sessionCookie(await t.post('signup', body));
-  const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!;
+  const { cookie, incarnation } = await t.signUp('operator');
   await t.daily(Math.max(dayStart(Date.now()), Date.now() - 60_000));
   t.clock.now = () => Date.now();
   const write = { id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'after the morning', baseRev: null };
@@ -106,7 +103,7 @@ it('names, for a fresh ask, a baseline of every account written since today’s,
 });
 
 it('records each step at its own start and end, including the baseline time before generation', async () => {
-  sessionCookie(await t.post('signup', signupBody('operator')));
+  await t.signUp('operator');
   const started = Date.now();
   let now = started;
   const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);

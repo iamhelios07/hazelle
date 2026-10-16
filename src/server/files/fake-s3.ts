@@ -2,7 +2,8 @@ import { once } from 'node:events';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { R2Config } from './r2-bucket';
-import { authorization, sha256Hex } from './sigv4';
+import { sha256Hex } from '../http';
+import { authorization } from './sigv4';
 
 // For tests: the part of R2's S3 API r2-bucket.ts calls, in memory on a local port. Every request's signature is
 // checked against the headers that actually arrived, and a listing answers `page` entries at a time so paging runs.

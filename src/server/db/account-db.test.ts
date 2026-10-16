@@ -12,8 +12,8 @@ import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
-import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, type Stores } from './account-db';
-import { DAY_MS } from '../backup/snapshots';
+import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, snapshotFor, type Stores } from './account-db';
+import { DAY_MS } from '../http';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
 import * as snapshots from './snapshot';
@@ -48,7 +48,7 @@ async function signup(state = 'active', timeline = 't1') {
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline) VALUES (?, 'jin', 'h', 1, ?, ?, ?)").run(A, INC, state, timeline);
 }
 const store = () => stores.getByName(INC);
-const baseline = async () => ((await stores.snapshot(INC, 'baseline')) as { taken: string }).taken;
+const baseline = async () => ((await stores.snapshot(INC)) as { taken: string }).taken;
 const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
 const B = '22222222-2222-4222-8222-222222222222';
 const C = '33333333-3333-4333-8333-333333333333';
@@ -192,9 +192,9 @@ describe('the account registry', () => {
     } finally {
       copy.close();
     }
-    expect(await stores.snapshotAt(INC, 2_500_000)).toEqual({ id, takenAt: 2_000_000 });
-    expect(await stores.snapshotAt(INC, now)).toBeNull();
-    expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
+    expect(await snapshotFor(diskBucket(dir), db, INC, 2_500_000)).toEqual({ id, takenAt: 2_000_000 });
+    expect(await snapshotFor(diskBucket(dir), db, INC, now)).toBeNull();
+    expect(await stores.snapshot(INC)).toEqual({ taken: expect.any(String) });
     expect(readdirSync(join(dir, 'accounts')).some((name) => name.startsWith('.tmp-'))).toBe(false);
   });
 
@@ -230,8 +230,8 @@ describe('the account registry', () => {
     const before = await baseline();
     raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't2', 1900000, 'done', 1, 1, 4000000)").run(INC);
     now = 5_000_000;
-    expect(await stores.snapshotAt(INC, 3_000_000)).toEqual({ id: before, takenAt: 1_500_000 });
-    expect(await stores.snapshotAt(INC, 4_500_000)).toBeNull();
+    expect(await snapshotFor(diskBucket(dir), db, INC, 3_000_000)).toEqual({ id: before, takenAt: 1_500_000 });
+    expect(await snapshotFor(diskBucket(dir), db, INC, 4_500_000)).toBeNull();
   });
 
   it('answers unavailable, not too early, when a catalogued snapshot has lost its file or no longer matches its row, for a time and for an explicit target', async () => {
@@ -245,7 +245,7 @@ describe('the account registry', () => {
     bytes[bytes.length - 1]! ^= 1;
     writeFileSync(path, bytes);
     now = 2_000_000;
-    await expect(stores.snapshotAt(INC, 1_600_000)).rejects.toThrow(/snapshot-corrupt/);
+    await expect(snapshotFor(diskBucket(dir), db, INC, 1_600_000)).rejects.toThrow(/snapshot-corrupt/);
     expect(await store().target(INC, 3, { at: 1_600_000 })).toEqual({ unavailable: true });
     expect(await store().target(INC, 3, { snapshot: altered })).toEqual({ unavailable: true });
     expect(await store().target(INC, 3, { at: 1_400_000 })).toEqual({ tooEarly: true });
@@ -278,7 +278,7 @@ describe('the account registry', () => {
     await write(put(A, 'x'));
     const failing: Db = { ...db, prepare: (sql) => (sql.startsWith('INSERT INTO snapshots') ? ({ bind: () => ({ run: () => Promise.reject(new Error('insert failed')) }) } as never) : db.prepare(sql)) };
     const dying = accountRegistry(dir, failing, serviceReads(db), () => now, diskBucket(dir));
-    await expect(dying.snapshot(INC, 'baseline')).rejects.toThrow('insert failed');
+    await expect(dying.snapshot(INC)).rejects.toThrow('insert failed');
     dying.close();
     const [orphan, ...more] = readdirSync(join(dir, 'snapshots', INC));
     expect(more).toEqual([]);
@@ -360,13 +360,13 @@ describe('the account registry', () => {
     raw.prepare('UPDATE accounts SET operation = 3').run();
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (3, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
     expect(await store().status(INC)).toMatchObject({ state: 'restoring' });
-    expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
+    expect(await stores.snapshot(INC)).toEqual({ taken: expect.any(String) });
     raw.prepare("UPDATE restores SET phase = 'checkpointed' WHERE id = 3").run();
-    expect(await stores.snapshot(INC, 'baseline')).toEqual({ refused: true });
+    expect(await stores.snapshot(INC)).toEqual({ refused: true });
     now = 2_000_000;
     raw.prepare("UPDATE restores SET phase = 'done', ended_at = ? WHERE id = 3").run(now);
     raw.prepare("UPDATE accounts SET state = 'active', operation = NULL, timeline = 't2'").run();
-    expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
+    expect(await stores.snapshot(INC)).toEqual({ taken: expect.any(String) });
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 2 });
   });
 
@@ -430,7 +430,7 @@ describe('the account registry', () => {
     raw.prepare("UPDATE accounts SET timeline = 't2'").run();
     await store().restart(INC).catch(() => {});
     now = 3_500_000;
-    expect(await stores.snapshot(INC, 'baseline')).toMatchObject({ taken: expect.any(String) });
+    expect(await stores.snapshot(INC)).toMatchObject({ taken: expect.any(String) });
   });
 
   it('answers corrupt for a delta that does not materialize to the rev its row recorded', async () => {
@@ -445,9 +445,9 @@ describe('the account registry', () => {
     const bytes = readFileSync(path);
     bytes[bytes.length - 1]! ^= 1;
     writeFileSync(path, bytes);
-    await expect(stores.snapshotAt(INC, 3_000_000)).rejects.toThrow(/snapshot-corrupt/);
+    await expect(snapshotFor(diskBucket(dir), db, INC, 3_000_000)).rejects.toThrow(/snapshot-corrupt/);
     rmSync(path);
-    await expect(stores.snapshotAt(INC, 3_000_000)).rejects.toThrow(/snapshot-missing/);
+    await expect(snapshotFor(diskBucket(dir), db, INC, 3_000_000)).rejects.toThrow(/snapshot-missing/);
   });
 
   it('installs a rewind to a delta as its materialized file', async () => {

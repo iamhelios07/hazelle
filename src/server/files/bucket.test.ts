@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { sha256Hex } from '../http';
 import { snapshotKey, type Bucket } from './bucket';
 import { cachedR2Bucket } from './cached-r2-bucket';
 import { chooseBucket } from './choose';
@@ -113,7 +113,6 @@ it('the r2 bucket answers a key’s size, and a refusal names the request', asyn
 describe('the cache in front of R2', () => {
   const HOUR_MS = 60 * 60 * 1000;
   const NOW = 1_800_000_000_000;
-  const idOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
   const fresh = (cap = 1 << 20) => {
     dir = mkdtempSync(join(tmpdir(), 'hazelle-'));
     return cachedR2Bucket(r2Bucket(s3.config), dir, cap);
@@ -125,7 +124,7 @@ describe('the cache in front of R2', () => {
   it('reads a miss from R2 once, then serves every account holding the id from disk; only a whole read counts as use', async () => {
     const bucket = fresh();
     const bytes = new Uint8Array([1, 2, 3]);
-    const id = idOf(bytes);
+    const id = sha256Hex(bytes);
     s3.objects.set(`${PREFIX}${id}`, bytes);
     expect(await read(bucket, `${PREFIX}${id}`)).toEqual(bytes);
     expect(await read(bucket, `files/${OTHER}/${id}`)).toEqual(bytes);
@@ -146,7 +145,7 @@ describe('the cache in front of R2', () => {
     expect(await read(bucket, wrong)).toEqual(new Uint8Array([9]));
 
     const whole = new Uint8Array([4, 5]);
-    const at = `${PREFIX}${idOf(whole)}`;
+    const at = `${PREFIX}${sha256Hex(whole)}`;
     s3.objects.set(at, whole);
     const cancelled = (await bucket.get(at))!.getReader();
     await cancelled.read();
@@ -172,7 +171,7 @@ describe('the cache in front of R2', () => {
 
   it('copies and reads back a picture that arrives in many chunks', async () => {
     const bytes = Uint8Array.from({ length: 200_000 }, (_, at) => at % 251);
-    const at = `${PREFIX}${idOf(bytes)}`;
+    const at = `${PREFIX}${sha256Hex(bytes)}`;
     dir = mkdtempSync(join(tmpdir(), 'hazelle-'));
     let fetched = 0;
     const bucket = cachedR2Bucket(
@@ -201,7 +200,7 @@ describe('the cache in front of R2', () => {
   it('writes a put through to R2 and keeps the copy it reads next', async () => {
     const bucket = fresh();
     const bytes = new Uint8Array([6, 7]);
-    const at = `${PREFIX}${idOf(bytes)}`;
+    const at = `${PREFIX}${sha256Hex(bytes)}`;
     await bucket.put(at, bytes);
     expect(s3.objects.get(at)).toEqual(bytes);
     expect(await read(bucket, at)).toEqual(bytes);
@@ -228,7 +227,7 @@ describe('the cache in front of R2', () => {
     mkdirSync(join(dir, 'cache'));
     writeFileSync(join(dir, 'cache', 'e'.repeat(64)), 'x');
     const bytes = new Uint8Array([8]);
-    const at = `${PREFIX}${idOf(bytes)}`;
+    const at = `${PREFIX}${sha256Hex(bytes)}`;
     await bucket.put(at, bytes);
     await read(bucket, at);
     await read(bucket, at);

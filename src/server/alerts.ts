@@ -11,7 +11,7 @@ const TEXTS = {
   'job-failed': '오늘 백업 작업 실패',
   'server-slow': '서버 응답 지연: 1시간 안에 이벤트 루프가 여러 번 0.25초 넘게 밀림',
 };
-export type AlertCondition = keyof typeof TEXTS;
+type AlertCondition = keyof typeof TEXTS;
 
 export type Alerts = {
   // A send that fails is not recorded, so a later call tries it again. One already on its way is not sent again.

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BATCH_LIMITS } from './objects';
-import { hex } from './http';
-import { sessionCookie, signupBody, testApp } from './testing';
+import { sha256Hex } from './http';
+import { testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -14,11 +14,6 @@ const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const C = '33333333-3333-4333-8333-333333333333';
 
-async function signedIn() {
-  const body = signupBody();
-  return { id: body.accountId, cookie: sessionCookie(await t.post('signup', body)) };
-}
-
 async function write(cookie: string, id: string, input: Record<string, unknown>) {
   const response = await t.batch([{ id, parent: null, baseRev: null, ...input }], cookie);
   return { status: response.status, json: (await response.json()) as { revs?: number[]; error?: string } };
@@ -26,9 +21,9 @@ async function write(cookie: string, id: string, input: Record<string, unknown>)
 
 describe('objects', () => {
   it('reclaims files before publishing references, even over the cap, and publishes nothing for a deleting file', async () => {
-    const { cookie } = await signedIn();
+    const { cookie } = await t.signUp();
     const bytes = new Uint8Array([1, 2, 3]);
-    const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    const id = sha256Hex(bytes);
     await t.put(`files/${id}`, bytes, cookie);
     await t.env.db.prepare('UPDATE account_files SET claimed_at = 0').run();
     const inventory = await (await t.get('files', cookie)).json() as { timeline: string; rev: number };
@@ -57,7 +52,7 @@ describe('objects', () => {
   });
 
   it('creates, updates with a version check and syncs from a cursor, stating the timeline and the bytes held', async () => {
-    const { cookie } = await signedIn();
+    const { cookie } = await t.signUp();
     const timeline = await t.timeline(cookie);
     expect(timeline).toMatch(/^[0-9a-f]{32}$/);
     expect(await write(cookie, A, { kind: 'settings', body: 'b25l' })).toEqual({ status: 200, json: { revs: [1], timeline } });
@@ -81,7 +76,7 @@ describe('objects', () => {
   });
 
   it('answers 409 cache-reset to another timeline, a cursor past the account, or a later page without a timeline, and writes nothing', async () => {
-    const { cookie } = await signedIn();
+    const { cookie } = await t.signUp();
     const timeline = await t.timeline(cookie);
     const other = '0'.repeat(32);
     const sent = [
@@ -99,7 +94,7 @@ describe('objects', () => {
   });
 
   it("holds an account to the cap its session read, creating nothing at it while changes may grow it a little", async () => {
-    const { cookie } = await signedIn();
+    const { cookie } = await t.signUp();
     await write(cookie, A, { kind: 'settings', body: '가'.repeat(10) });
     await t.env.db.prepare('UPDATE service SET account_bytes_cap = 30').run();
     expect(await write(cookie, B, { kind: 'chat', body: 'x' })).toEqual({ status: 413, json: { error: 'storage-full' } });
@@ -109,7 +104,7 @@ describe('objects', () => {
   });
 
   it('answers 503 with a wait while the account restores or its store cannot load, and 401 once it is leaving', async () => {
-    const { id, cookie } = await signedIn();
+    const { id, cookie } = await t.signUp();
     const timeline = await t.timeline(cookie);
     const both = () => Promise.all([t.get(`objects?since=0&timeline=${timeline}`, cookie), t.post('objects/batch', { timeline, files: [], writes: [{ id: A, kind: 'chat', parent: null, body: 'eA==', baseRev: null }] }, cookie)]);
 
@@ -126,7 +121,7 @@ describe('objects', () => {
   });
 
   it('refuses malformed writes, an oversized body and a missing session', async () => {
-    const { cookie } = await signedIn();
+    const { cookie } = await t.signUp();
     expect((await write(cookie, 'not-a-uuid', { kind: 'settings', body: 'eA==' })).status).toBe(400);
     expect((await write(cookie, A, { kind: 'Settings', body: 'eA==' })).status).toBe(400);
     expect((await write(cookie, A, { kind: 'lore', parent: 'x', body: 'eA==' })).status).toBe(400);
@@ -139,7 +134,7 @@ describe('objects', () => {
   });
 
   it('enforces item and UTF-8 body budgets, including a streamed request without content-length', async () => {
-    const { cookie } = await signedIn();
+    const { cookie } = await t.signUp();
     const timeline = await t.timeline(cookie);
     const item = () => ({ id: crypto.randomUUID(), kind: 'entry', parent: null, body: 'x', baseRev: null });
     expect((await t.batch([], cookie)).status).toBe(400);

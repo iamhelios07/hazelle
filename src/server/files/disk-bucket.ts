@@ -7,17 +7,17 @@ import { checkedKey, checkedPrefix, isKey, isPrefix, type DiskBucket } from './b
 
 const ID = /^[0-9a-f]{64}$/;
 
-async function syncDir(dir: string): Promise<void> {
-  const folder = await open(dir, 'r');
+async function syncPath(path: string): Promise<void> {
+  const handle = await open(path, 'r');
   try {
-    await folder.sync();
+    await handle.sync();
   } finally {
-    await folder.close();
+    await handle.close();
   }
 }
 
-// ENOENT answers nothing: an account's deletion removes its directory while a listing walks it.
-async function entries(dir: string): Promise<string[]> {
+// ENOENT answers nothing: a deletion removes a directory or a file while a listing or a sweep walks it.
+export async function entries(dir: string): Promise<string[]> {
   try {
     return await readdir(dir);
   } catch (error) {
@@ -26,7 +26,7 @@ async function entries(dir: string): Promise<string[]> {
   }
 }
 
-async function mtime(path: string): Promise<number> {
+export async function mtime(path: string): Promise<number> {
   try {
     return (await stat(path)).mtimeMs;
   } catch (error) {
@@ -47,14 +47,9 @@ export function diskBucket(dataDir: string): DiskBucket {
     const temp = join(dir, `.tmp-${randomBytes(8).toString('hex')}`);
     try {
       await write(temp);
-      const file = await open(temp, 'r');
-      try {
-        await file.sync();
-      } finally {
-        await file.close();
-      }
+      await syncPath(temp);
       await rename(temp, target);
-      await syncDir(dir);
+      await syncPath(dir);
     } finally {
       await rm(temp, { force: true });
     }

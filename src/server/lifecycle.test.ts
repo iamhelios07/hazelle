@@ -1,14 +1,14 @@
 import { rmSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { RestorePhase } from '../contracts/admin';
+import { BEFORE_ARMED, type RestorePhase } from '../contracts/admin';
 import type { Write } from './account-store';
 import { expireSnapshots } from './backup/snapshots';
-import type { Stores } from './db/account-db';
+import { snapshotFor, type Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
 import { snapshotKey, type Bucket } from './files/bucket';
 import { diskBucket } from './files/disk-bucket';
-import { hex, type Services } from './http';
+import { sha256Hex, type Services } from './http';
 import { beginRestore, cancelRestore, leaveAccount, restorePoints, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
 
@@ -20,11 +20,11 @@ afterAll(() => t.dispose());
 beforeEach(fresh);
 
 // The installation's sole operator: the first signup after every reset, so any other account can be deleted.
-let operator: Awaited<ReturnType<typeof signedUp>>;
+let operator: Awaited<ReturnType<typeof t.signUp>>;
 async function fresh() {
   await t.reset();
   await t.env.db.prepare('UPDATE service SET signup_cap = 1000').run();
-  operator = await signedUp('operator');
+  operator = await t.signUp('operator');
 }
 
 const HOUR_MS = 3_600_000;
@@ -32,7 +32,6 @@ const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const BEFORE: Record<string, string> = { [A]: 'new', [B]: 'b' };
 const AT_TARGET: Record<string, string> = { [A]: 'old' };
-const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
 class Crash extends Error {}
 
@@ -152,24 +151,17 @@ function pausing(at: (what: string, count: number) => boolean, reads = false) {
   return { ...watching, reached, release };
 }
 
-async function signedUp(username = `u${crypto.randomUUID().slice(0, 8)}`) {
-  const body = signupBody(username);
-  const cookie = sessionCookie(await t.post('signup', body));
-  const { incarnation, timeline } = (await account(body.accountId))!;
-  return { id: body.accountId, body, cookie, incarnation, timeline };
-}
-
 // An account whose store holds A 'old' from an hour ago, kept in a baseline snapshot, then A 'new' and B from half an
 // hour ago, and an open report. at: a time between the two, so a restore to it leaves A 'old' alone.
 async function seeded() {
   const now = Date.now();
   t.clock.now = () => now - HOUR_MS;
-  const user = await signedUp();
+  const user = await t.signUp();
   const { incarnation, timeline } = user;
   // Straight to the store, as the batch route would: these tests are about what happens around it.
   const write = (...writes: Write[]) => t.stores.getByName(incarnation).batch(incarnation, timeline, writes, null);
   await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
-  await t.stores.snapshot(incarnation, 'baseline');
+  await t.stores.snapshot(incarnation);
   t.clock.now = () => now - HOUR_MS / 2;
   await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 }, { id: B, kind: 'chat', parent: null, body: 'b', baseRev: null });
   t.clock.now = () => Date.now();
@@ -378,22 +370,22 @@ describe('a restore', () => {
   });
 
   it('lists what a restore can land on: each snapshot in the window at its own time, and an older one at the window edge', async () => {
-    const user = await signedUp();
+    const user = await t.signUp();
     const now = Date.now();
     const write = (...writes: Write[]) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, writes, null);
     t.clock.now = () => now - 8 * 24 * HOUR_MS;
     await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
-    await t.stores.snapshot(user.incarnation, 'baseline');
+    await t.stores.snapshot(user.incarnation);
     t.clock.now = () => now - HOUR_MS;
     await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 });
-    await t.stores.snapshot(user.incarnation, 'baseline');
+    await t.stores.snapshot(user.incarnation);
     t.clock.now = () => Date.now();
     const points = (await restorePoints(t.env.db, user.id, now))!;
     expect(points).toEqual([
       { at: now - HOUR_MS, takenAt: now - HOUR_MS, kind: 'baseline' },
       { at: expect.any(Number), takenAt: now - 8 * 24 * HOUR_MS, kind: 'baseline' },
     ]);
-    for (const point of points) expect((await t.stores.snapshotAt(user.incarnation, point.at))?.takenAt).toBe(point.takenAt);
+    for (const point of points) expect((await snapshotFor(t.env.files, t.env.db, user.incarnation, point.at))?.takenAt).toBe(point.takenAt);
   });
 
   it('takes back the pictures released since the snapshot it lands on, with their bytes counted again, and leaves older releases', async () => {
@@ -414,7 +406,7 @@ describe('a restore', () => {
   it('leaves a failed upload retryable through a sweep and rewind instead of claiming its absent bytes are stored', async () => {
     const seed = await seeded();
     const body = new Uint8Array([8, 8, 8]);
-    const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body)));
+    const id = sha256Hex(body);
     const files = t.env.files;
     t.env.files = { ...files, put: async () => { throw new Error('upload interrupted'); } };
     try {
@@ -576,11 +568,11 @@ describe('a restore', () => {
     const id = await begin(seed);
     await runRestore(t.env, id);
     const later = Date.now() + 1;
-    expect(await t.stores.snapshotAt(seed.incarnation, later)).toBeNull();
+    expect(await snapshotFor(t.env.files, t.env.db, seed.incarnation, later)).toBeNull();
     const recorded = await t.env.db.prepare("SELECT rev FROM snapshots WHERE incarnation = ? AND kind = 'baseline'").bind(seed.incarnation).first<number>('rev');
     expect(t.stores.inspect(seed.incarnation).exec<{ rev: number }>('SELECT rev FROM head')).toEqual([{ rev: recorded }]);
     expect(await t.daily(later)).toMatchObject({ snapshots: { outcome: 'ok' } });
-    expect(await t.stores.snapshotAt(seed.incarnation, later)).toEqual({ id: expect.any(String), takenAt: later });
+    expect(await snapshotFor(t.env.files, t.env.db, seed.incarnation, later)).toEqual({ id: expect.any(String), takenAt: later });
   });
 
   it('lets no write or answer of an old timeline back in across a rewind, revisions after it and its undo', async () => {
@@ -675,10 +667,10 @@ describe('a restore', () => {
 
 describe('a deletion', () => {
   async function holding() {
-    const user = await signedUp();
+    const user = await t.signUp();
     await t.batch([{ id: A, kind: 'chat', parent: null, body: 'sealed', baseRev: null }], user.cookie);
     const bytes = new Uint8Array([1, 2, 3]);
-    const file = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    const file = sha256Hex(bytes);
     expect((await t.put(`files/${file}`, bytes, user.cookie)).status).toBe(204);
     return { ...user, file, bytes };
   }
@@ -807,7 +799,7 @@ describe('a deletion', () => {
       expect(await logged('delete-account')).toBe(0);
     };
     await refusedAll();
-    const other = await signedUp();
+    const other = await t.signUp();
     await refusedAll();
     expect((await t.delete(`admin/accounts/${other.id}`, undefined, operator.cookie)).status).toBe(204);
     expect(await account(other.id)).toBeNull();
@@ -862,7 +854,7 @@ describe('an account id used again', () => {
   it('gets a new incarnation that sees nothing of the old one: no objects, pictures, usage or held files', async () => {
     const seed = await seeded();
     const bytes = new Uint8Array([7]);
-    const file = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    const file = sha256Hex(bytes);
     await t.put(`files/${file}`, bytes, seed.cookie);
     expect(await leave(t.env, seed.id, seed.incarnation, false)).toBe('left');
 

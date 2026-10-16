@@ -1,4 +1,5 @@
 import { RELAY_HEADER, type RelayError } from '../contracts/http';
+import { isRecord } from './http';
 import { PolicyRefusal } from './ssrf';
 import type { RelayAllowance } from './limits';
 
@@ -151,8 +152,8 @@ export async function forward(upstream: Upstream, body: unknown, signal: AbortSi
 }
 
 function parseEnvelope(value: unknown): Envelope | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const { url, method, headers, body } = value as Record<string, unknown>;
+  if (!isRecord(value)) return null;
+  const { url, method, headers, body } = value;
   if (typeof url !== 'string' || !URL.canParse(url)) return null;
   if (typeof method !== 'string' || !METHODS.has(method)) return null;
   if (typeof headers !== 'object' || headers === null) return null;
