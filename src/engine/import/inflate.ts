@@ -1,4 +1,5 @@
 import { Gunzip, Inflate } from 'fflate';
+import { concat } from './png';
 
 // How much packed data each step takes. DEFLATE unpacks to at most 1032 times its size, so an output past the size
 // declared for it is refused within one step of passing it.
@@ -16,13 +17,7 @@ function drain(stream: Inflate | Gunzip, packed: Uint8Array, size: number): Uint
   };
   for (let at = 0; at < packed.length; at += STEP) stream.push(packed.subarray(at, at + STEP), at + STEP >= packed.length);
   if (total !== size) throw new RangeError('less data than declared');
-  const out = new Uint8Array(size);
-  let at = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, at);
-    at += chunk.length;
-  }
-  return out;
+  return concat(chunks);
 }
 
 // A raw DEFLATE stream, as a ZIP entry holds one; size is what the archive's directory declares for its output.

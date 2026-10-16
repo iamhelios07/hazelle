@@ -1,3 +1,5 @@
+import { concat } from './png';
+
 // Not fatal: msgpackr writes a lone surrogate in a short string as three bytes and reads them back, so one cut
 // emoji in a Risu chat must not make the whole database unreadable.
 const utf8 = new TextDecoder();
@@ -159,11 +161,5 @@ export function writeMsgpack(value: unknown): Uint8Array<ArrayBuffer> {
   }
 
   write(value);
-  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
-  let at = 0;
-  for (const part of parts) {
-    out.set(part, at);
-    at += part.length;
-  }
-  return out;
+  return concat(parts);
 }

@@ -69,7 +69,7 @@ export function withText(png: Uint8Array, key: string, value: string): Uint8Arra
   return concat([png.subarray(0, end), chunk, png.subarray(end)]);
 }
 
-function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
+export function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let at = 0;
   for (const part of parts) {
