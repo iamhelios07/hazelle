@@ -11,7 +11,7 @@ import { useAutosave } from '../common/useAutosave';
 import { detailLabel, DISCOUNT, UNSET } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import { ChoiceGroup, Disclosure, NumberInput, PhraseField, Section, SettingGroup, SettingRow, Switch } from '../ui';
-import { CACHE, changeLine, DETAIL, LEVELS, levelName, MAIN, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
+import { CACHE, changeLine, followsRetries, DETAIL, LEVELS, levelName, MAIN, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from '../common/settingWords';
 import { count, readOptional, readTyped } from '../common/typedNumber';
 
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
@@ -32,8 +32,9 @@ const split = ({ name, ...settings }: Partial<Saved>): { name?: string; settings
 // The editing of one 모델 설정: its autosave, drafts and rows. ProfileScreen frames it with the 설정's own header and the
 // models on it; a model's page frames it with the model. One of the two mounts per route, so one autosave queue per 설정.
 // model: the page's own model. Its page says once, above the rows, what that model leaves out or caps, so no row notes
-// it of the others; and an empty field shows that model's own number where the catalog gave one.
-export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?: Starred } = {}) {
+// it of the others; and an empty field shows that model's own number where the catalog gave one. retries: the count its
+// connection gives, which an empty 실패하면 다시 보내기 follows; the 모델 설정's own page serves many connections, so no one number.
+export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: { model?: Starred; retries?: number } = {}) {
   const store = useStore();
   const settings = useSettings();
   const connections = useConnections();
@@ -271,7 +272,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model }: { model?:
           {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동으로 두면 Anthropic 계정에 우선 처리 용량이 남아 있을 때 그 용량부터 먼저 써요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
           {systemRow}
           {streamingRow}
-          <RetriesRow value={shown.retries} follows="연결 설정" onChange={(retries) => change({ retries })} />
+          <RetriesRow value={shown.retries} follows={retries === undefined ? '연결 설정' : followsRetries(retries)} onChange={(value) => change({ retries: value })} />
         </SettingGroup>
       </Disclosure>
     </>

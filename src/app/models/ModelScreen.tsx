@@ -6,6 +6,7 @@ import type { Stored } from '../../model/kinds';
 import { modelUsage } from '../../model/usage';
 import { ROLES, sameModelRef, type Role } from '../../connectors/assignment';
 import { imageOnly } from '../../runtime/assignment';
+import { retriesOf } from '../../runtime/connections';
 import { addProfile, modelProfile, profileUsers, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
 import { LedgerWait, useLedger } from '../common/useLedger';
@@ -19,7 +20,7 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Tag } from '../ui';
-import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE } from './settingWords';
+import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE } from '../common/settingWords';
 import { useProfileEditor } from './useProfileEditor';
 import { count } from '../common/typedNumber';
 
@@ -27,7 +28,7 @@ type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
 
 export const ModelScreen = (props: Props) => (imageOnly(props.model) ? <ImageModelScreen {...props} /> : <ChatModelScreen {...props} />);
 
-// A model that only draws takes no 설정 묶음 and leaves no reply to count: how it draws is the 삽화 prompt's (design §6.6),
+// A model that only draws takes no 모델 설정 and leaves no reply to count: how it draws is the 삽화 prompt's (design §6.6),
 // and its allowance is its connection's meter.
 function ImageModelScreen({ connection, model, back }: Props) {
   const { store } = useSession();
@@ -98,7 +99,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
     const id = crypto.randomUUID();
     // The model takes the profile only once it exists: a create that fails must leave no model pointing at it.
     void addProfile(store, { name: `${model.name}용`, settings: current?.value.settings ?? {} }, id).then(async (made) => {
-      if (!made.ok) return toast.failed(made, '설정을 만들지 못했어요.');
+      if (!made.ok) return toast.failed(made, `${MODEL_SETTINGS}을 만들지 못했어요.`);
       const saved = await setModelProfile(store, connection.id, model.id, id);
       if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
     });
@@ -194,11 +195,12 @@ function ChatModelScreen({ connection, model, back }: Props) {
     </Screen>
   );
 
-  return current ? <Editing stored={current} model={model} frame={frame} /> : frame(null, null);
+  // The model's own 모델 설정 is left out: the count shown is what an empty field falls to.
+  return current ? <Editing stored={current} model={model} retries={retriesOf(store, connection.value, {})} frame={frame} /> : frame(null, null);
 }
 
 // The hook needs a 설정 to edit, so a model whose 설정 is gone renders the frame without it.
-function Editing({ stored, model, frame }: { stored: Stored<'profile'>; model: Starred; frame: (status: SaveStatus | null, rows: ReactNode) => ReactNode }) {
-  const { status, rows } = useProfileEditor(stored, { model });
+function Editing({ stored, model, retries, frame }: { stored: Stored<'profile'>; model: Starred; retries: number; frame: (status: SaveStatus | null, rows: ReactNode) => ReactNode }) {
+  const { status, rows } = useProfileEditor(stored, { model, retries });
   return frame(status, rows);
 }

@@ -1,8 +1,9 @@
 import type { Cache, Change, ModelSettings, NumberSetting, ServiceTier, Verbosity } from '../../connectors/settings';
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
-import { count } from '../common/typedNumber';
-import { DISCOUNT, RETRY_COUNT, UNKNOWN } from '../common/words';
+import type { ProfileChoice } from '../../runtime/profiles';
+import { count } from './typedNumber';
+import { DISCOUNT, MODEL_SETTINGS, RETRY_COUNT, UNKNOWN } from './words';
 
 export const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일', embedding: '임베딩' };
 
@@ -39,8 +40,13 @@ const NAMED: Record<Exclude<Change['setting'], Field>, string> = { stop: '멈춤
 const isField = (setting: Change['setting']): setting is Field => setting in NUMBER;
 export const settingLabel = (setting: Change['setting']) => (isField(setting) ? NUMBER[setting].label : NAMED[setting]);
 
-// In the order the editor shows them; empty when none is.
-export function valueWords(settings: ModelSettings): string[] {
+// The screens never say 묶음.
+export const NO_VALUES = '정한 값 없음';
+// Where no label beside it already says 모델 설정; under one, plain 없음.
+export const NO_PROFILE = `${MODEL_SETTINGS} 없음`;
+
+// What a 모델 설정 sets, in the order the editor shows them.
+export function valuesLine(settings: ModelSettings): string {
   const { reasoning, stop, systemAsUser, streaming, cache, verbosity, serviceTier, discount, retries } = settings;
   const number = (field: Field) => {
     const value = settings[field];
@@ -49,8 +55,19 @@ export function valueWords(settings: ModelSettings): string[] {
   const thinking = !reasoning
     ? []
     : [`추론 ${reasoning.kind === 'off' ? '끔' : reasoning.kind === 'budget' ? `예산 ${count(reasoning.tokens)}` : reasoning.kind === 'adaptive' ? (reasoning.level === null ? '적응형' : `적응형 · ${levelName(reasoning.level)}`) : levelName(reasoning.level)}`];
-  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...(discount ? [DISCOUNT] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(verbosity ? [`${VERBOSITY_LABEL} ${VERBOSITY_WORDS[verbosity]}`] : []), ...(serviceTier ? [`${SERVICE_TIER_LABEL} ${SERVICE_TIER_WORDS[serviceTier]}`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : []), ...(retries === undefined ? [] : [`${RETRY_COUNT} ${retries}번`])];
+  const words = [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...(discount ? [DISCOUNT] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(verbosity ? [`${VERBOSITY_LABEL} ${VERBOSITY_WORDS[verbosity]}`] : []), ...(serviceTier ? [`${SERVICE_TIER_LABEL} ${SERVICE_TIER_WORDS[serviceTier]}`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : []), ...(retries === undefined ? [] : [`${RETRY_COUNT} ${retries}번`])];
+  return words.length ? words.join(' · ') : NO_VALUES;
 }
+
+// A model's 모델 설정 in one line: what it sets, led by its name only when it is not the default one.
+export function profileLine(choice: ProfileChoice, defaultId: string | undefined): string {
+  if (choice.kind !== 'profile') return NO_PROFILE;
+  const values = valuesLine(choice.profile.value.settings);
+  return choice.profile.id === defaultId ? values : `${choice.profile.value.name} · ${values}`;
+}
+
+// An empty 실패하면 다시 보내기 follows the count above it, which the placeholder names.
+export const followsRetries = (retries: number) => `기본 ${retries}번`;
 
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').
 export const NOT_CALLABLE = '지금 버전에서는 이 모델을 호출할 수 없어요';

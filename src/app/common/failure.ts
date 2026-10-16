@@ -82,6 +82,8 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
 };
 
 const SERVER_TROUBLE = '서버에 문제가 생겼어요. 잠시 뒤에 다시 시도해 주세요.';
+// model: the subject of 쓰던, particle and all.
+const profileGone = (model: string) => `${model} 쓰던 ${MODEL_SETTINGS}이 삭제됐어요. ${inSettings('models')}에서 다른 ${MODEL_SETTINGS}을 선택해 주세요.`;
 const NO_DEFAULT_PROFILE = `기본으로 지정한 ${MODEL_SETTINGS}이 없어요. ${inSettings('models')}에서 ${MODEL_SETTINGS} 하나를 기본으로 지정해 주세요.`;
 
 const SECRET = { password: '비밀번호가', recovery: '복구 키가' } as const;
@@ -228,14 +230,14 @@ export function describeTurnFailure(failure: TurnFailure): string {
         current: '현재 페르소나가 삭제됐어요. 다른 페르소나를 선택해 주세요.',
       }[failure.from];
     case 'profile-missing':
-      return failure.own ? `이 모델의 설정이 삭제됐어요. ${inSettings('models')}에서 다른 설정을 선택해 주세요.` : NO_DEFAULT_PROFILE;
+      return failure.own ? profileGone('이 모델이') : NO_DEFAULT_PROFILE;
     case 'runaway':
       return runaway('보내기 전에');
     case 'tokenizer':
       return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 보내 주세요.';
     case 'too-long':
       if (failure.budget <= 0) return `응답 최대 길이가 컨텍스트 길이만큼 커서 프롬프트를 넣을 수 없어요. ${inSettings('models')}에서 이 모델의 응답 최대 길이를 줄여 주세요.`;
-      return `마지막 메시지만 넣어도 프롬프트가 약 ${count(failure.tokens)} 토큰이라, 이 모델에 넣을 수 있는 한도(${count(failure.budget)} 토큰)를 넘어요. 프롬프트나 로어북 내용을 줄이거나, ${inSettings('models')}에서 이 모델의 설정을 바꿔 주세요.`;
+      return `마지막 메시지만 넣어도 프롬프트가 약 ${count(failure.tokens)} 토큰이라, 이 모델에 넣을 수 있는 한도(${count(failure.budget)} 토큰)를 넘어요. 프롬프트나 로어북 내용을 줄이거나, ${inSettings('models')}에서 이 모델이 쓰는 ${MODEL_SETTINGS}을 바꿔 주세요.`;
     case 'unstarted':
       return `채팅을 만들지 못했어요. ${describeFailure(failure.failure)}`;
     case 'unpulled':
@@ -266,7 +268,7 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
     case 'image-only':
       return `선택한 번역 모델은 이미지만 만들 수 있어요. 번역 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
     case 'profile-missing':
-      return failure.own ? `번역 모델의 설정이 삭제됐어요. ${inSettings('models')}에서 다른 설정을 선택해 주세요.` : NO_DEFAULT_PROFILE;
+      return failure.own ? profileGone('번역 모델이') : NO_DEFAULT_PROFILE;
     case 'failed':
       return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 내용이 비어 있는 번역 결과를 보냈어요.';
     case 'unsaved':
@@ -290,7 +292,7 @@ export function describeMemoryFailure(failure: MemoryFailure): string {
     case 'prompt-missing':
       return `기본 기억 프롬프트가 없어요. ${inSettings('prompts')}에서 기억 프롬프트 하나를 기본으로 지정해 주세요.`;
     case 'profile-missing':
-      return failure.own ? `기억 정리 모델의 설정이 삭제됐어요. ${inSettings('models')}에서 다른 설정을 선택해 주세요.` : NO_DEFAULT_PROFILE;
+      return failure.own ? profileGone('기억 정리 모델이') : NO_DEFAULT_PROFILE;
     case 'runaway':
       return runaway('기억을 정리하기 전에');
     case 'tokenizer':
@@ -324,7 +326,7 @@ export function describeIllustrateFailure(failure: IllustrateFailure): string {
     case 'prompt-missing':
       return failure.own ? '선택한 삽화 프롬프트가 삭제됐어요. 채팅의 삽화 메뉴에서 다른 프롬프트를 선택해 주세요.' : `기본 삽화 프롬프트가 없어요. ${inSettings('prompts')}에서 삽화 프롬프트 하나를 기본으로 지정해 주세요.`;
     case 'profile-missing':
-      return failure.own ? `장면 모델의 설정이 삭제됐어요. ${inSettings('models')}에서 다른 설정을 선택해 주세요.` : NO_DEFAULT_PROFILE;
+      return failure.own ? profileGone('장면 모델이') : NO_DEFAULT_PROFILE;
     case 'tokenizer':
       return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
     case 'runaway':

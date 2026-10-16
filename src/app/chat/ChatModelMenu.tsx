@@ -3,9 +3,10 @@ import { sameModelRef, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
 import { modelProfile } from '../../runtime/profiles';
 import { byConnection, starredModels } from '../common/RolePicker';
+import { profileLine } from '../common/settingWords';
 import { useSearch } from '../common/useSearch';
-import { noStarred } from '../common/words';
-import { useSummaries, useConnections, useStore } from '../session';
+import { MODEL_SETTINGS, noStarred } from '../common/words';
+import { useSummaries, useConnections, useSettings, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { ChipButton, Divider, Empty, Icon, Menu, MenuHeading, MenuItem, type MenuHandle } from '../ui';
 
@@ -34,11 +35,11 @@ export function ChatModelMenu({ current, label, onPick, handle }: Props) {
 function ProfileItem({ current }: { current: ModelRef }) {
   const store = useStore();
   const connections = useConnections();
+  const settings = useSettings();
   const starred = connections.find((connection) => connection.id === current.connection)?.value.starred.find((model) => model.id === current.model);
   if (!starred) return null;
   const choice = modelProfile(store, starred);
-  const name = choice.kind === 'profile' ? choice.profile.value.name : '없음';
-  return <MenuItem tone="muted" label={`모델 설정 · ${name}`} onClick={() => navigate({ kind: 'model', ...current })} />;
+  return <MenuItem tone="muted" label={MODEL_SETTINGS} sub={choice.kind === 'profile' ? profileLine(choice, settings.profile) : '없음'} onClick={() => navigate({ kind: 'model', ...current })} />;
 }
 
 // Mounted only while the menu is open, so each opening starts with an empty search.

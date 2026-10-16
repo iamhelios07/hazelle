@@ -9,8 +9,11 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Empty, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, Screen, Section, Tag } from '../ui';
-import { changeWords, NOT_CALLABLE } from './settingWords';
+import { changeWords, NOT_CALLABLE } from '../common/settingWords';
 import { useProfileEditor, type User } from './useProfileEditor';
+
+// Under the page's own 모델 설정, so it needs no 이 설정.
+const USERS = '쓰는 모델';
 
 export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; back: Back }) {
   const store = useStore();
@@ -42,19 +45,19 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
   async function clearAll() {
     const previous = await clear();
-    if (previous) toast.undoable(`'${stored.value.name}' 설정을 기본값으로 되돌렸어요.`, () => setProfileSettings(store, id, previous));
+    if (previous) toast.undoable(`'${stored.value.name}' ${MODEL_SETTINGS}을 기본값으로 되돌렸어요.`, () => setProfileSettings(store, id, previous));
   }
 
   async function remove() {
     const removed = await removing(() => removeProfile(store, id));
     if (!removed) return;
     if (!removed.ok) {
-      if (removed.error === 'default') return toast.error('기본 설정은 삭제할 수 없어요.', { detail: '다른 설정을 기본으로 지정한 뒤에 삭제해 주세요.' });
+      if (removed.error === 'default') return toast.error(`기본 ${MODEL_SETTINGS}은 삭제할 수 없어요.`, { detail: `다른 ${MODEL_SETTINGS}을 기본으로 지정한 뒤에 삭제해 주세요.` });
       return toast.failed(removed, '삭제하지 못했어요.');
     }
     navigate({ kind: 'models' });
-    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 선택해야 쓸 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
-    toast.undoable(`'${removed.data.value.name}' 설정을 삭제했어요.`, () => restoreProfile(store, id), note);
+    const note = users.length ? `이 ${MODEL_SETTINGS}을 쓰던 모델 ${users.length}개는 다른 ${MODEL_SETTINGS}을 선택해야 쓸 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
+    toast.undoable(`'${removed.data.value.name}' ${MODEL_SETTINGS}을 삭제했어요.`, () => restoreProfile(store, id), note);
   }
 
   const mark = defaultMark(isDefault, stored.value.name);
@@ -65,7 +68,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       top={
         <NavBar
           title={name}
-          rename={{ label: '설정 이름', placeholder: stored.value.name, onChange: rename }}
+          rename={{ label: `${MODEL_SETTINGS} 이름`, placeholder: stored.value.name, onChange: rename }}
           subtitle={
             <>
               {MODEL_SETTINGS} {mark && <Tag tone="accent">{mark}</Tag>}
@@ -81,7 +84,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                 {!isDefault && (
                   <MenuItem
                     label="기본으로 정하기"
-                    sub="따로 설정을 선택하지 않은 모델은 이 설정을 써요"
+                    sub={`${MODEL_SETTINGS}을 따로 선택하지 않은 모델은 이걸 써요`}
                     onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}
                   />
                 )}
@@ -95,7 +98,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     >
 
       <Section
-        title="이 설정을 쓰는 모델"
+        title={USERS}
         note={users.length ? `${users.length}개` : undefined}
         action={
           others.length > 0 && (
@@ -115,7 +118,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         }
       >
         {users.length > 0 ? (
-          <List label="이 설정을 쓰는 모델">
+          <List label={USERS}>
             {users.map((user) => (
               <ListItem
                 key={`${user.connection.id}/${user.model.id}`}
@@ -127,7 +130,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
             ))}
           </List>
         ) : (
-          <Empty variant="section">이 설정을 쓰는 모델이 없어요.</Empty>
+          <Empty variant="section">쓰는 모델이 없어요.</Empty>
         )}
       </Section>
 
