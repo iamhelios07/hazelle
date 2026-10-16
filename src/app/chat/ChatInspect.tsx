@@ -59,10 +59,8 @@ export function ChatInspect({ chat, character, tab, notes, messages, busy, promp
   );
 }
 
-const HOOKS = { onInput: '입력', editInput: '입력 편집', onStart: '시작', editRequest: '요청 편집' } as const;
-
 function later(steps: AfterEnter[]): string[] {
-  const hooks = steps.flatMap((step) => (step.kind === 'hook' ? [HOOKS[step.stage]] : []));
+  const hooks = steps.flatMap((step) => (step.kind === 'hook' ? [STAGES[step.stage]!] : []));
   return steps.flatMap((step) => {
     switch (step.kind) {
       case 'input-translation':
