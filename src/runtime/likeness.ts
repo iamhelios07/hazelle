@@ -1,7 +1,7 @@
 import { ChangeSignal } from '../change-signal';
 import { seesPictures, type InputPicture, type Model } from '../connectors/types';
 import { artistTags, picturePrompt } from '../engine/import/picture-prompt';
-import { artistOf, likenessRequest, parseLikeness, sample, SAMPLE_MOST, SHOWN_MOST, sourcesOf, type LikenessInvalid } from '../engine/likeness';
+import { artistOf, likenessRequest, parseLikeness, rebuiltPortraits, sample, SAMPLE_MOST, SHOWN_MOST, sourcesOf, type LikenessInvalid } from '../engine/likeness';
 import type { Chat, Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live, type Asset } from '../model/library';
@@ -53,43 +53,43 @@ type Material = { name: string; user: boolean; texts: { label: string; text: str
 // A file gone or not opening is left out; any other failure ends the build.
 const PERMANENT = new Set(['not-found', 'unreadable']);
 
-// Replaces what is there: 다시 만들기, or another device's build met in a conflict.
+// Replaces what is there but the user's portraits (rebuiltPortraits): 다시 만들기, or another device's build met in a
+// conflict.
 async function writeLikeness(store: ObjectStore, owner: string, value: Likeness): Promise<ApiResult<Stored<'likeness'>>> {
   const id = likenessId(owner);
   if (!store.get('likeness', id)) {
     const created = await store.create('likeness', value, { id, parent: owner });
     if (created.ok || created.error !== 'conflict' || !store.get('likeness', id)) return created;
   }
-  return store.update('likeness', id, () => value);
+  return store.update('likeness', id, (current) => ({ ...value, portraits: rebuiltPortraits(current.portraits, value.portraits, PORTRAITS_MOST) }));
 }
 
-// Only tags are edited (the 삽화 part); a portrait or outfit gone meanwhile is not written back ('gone').
-export type PortraitEdit = { look: string } | { artist: string } | { outfit: string; tags: string };
+// A portrait by its place and the name it had when shown, so an edit never lands on another one moved there ('gone').
+export type PortraitAt = { index: number; name: string };
 
-export function editPortrait(store: ObjectStore, owner: string, name: string, edit: PortraitEdit): Promise<ApiResult<Stored<'likeness'>>> {
+// Any edit makes the portrait the user's, which 다시 만들기 keeps.
+export function editPortrait(store: ObjectStore, owner: string, at: PortraitAt, edit: Partial<Omit<Portrait, 'source'>>): Promise<ApiResult<Stored<'likeness'>>> {
   return store.update('likeness', likenessId(owner), (current) => {
-    const at = current.portraits.findIndex((portrait) => portrait.name === name);
-    const portrait = current.portraits[at];
-    if (!portrait) return null;
-    let edited: Portrait;
-    if ('look' in edit) edited = { ...portrait, look: edit.look };
-    else if ('artist' in edit) edited = { ...portrait, artist: edit.artist };
-    else {
-      const outfit = portrait.outfits.findIndex(({ name: named }) => named === edit.outfit);
-      if (outfit === -1) return null;
-      edited = { ...portrait, outfits: portrait.outfits.with(outfit, { ...portrait.outfits[outfit]!, tags: edit.tags }) };
-    }
-    return { ...current, portraits: current.portraits.with(at, edited) };
+    const portrait = current.portraits[at.index];
+    return portrait?.name === at.name ? { ...current, portraits: current.portraits.with(at.index, { ...portrait, ...edit, source: 'user' }) } : null;
   });
+}
+
+// A pack with no profiles yet gets them with this one alone, so the next 삽화 builds none until 다시 만들기.
+export function addPortrait(store: ObjectStore, owner: string): Promise<ApiResult<Stored<'likeness'>>> {
+  const added: Portrait = { name: '', aliases: [], look: '', outfits: [], artist: '', source: 'user' };
+  const id = likenessId(owner);
+  if (!store.get('likeness', id)) return store.create('likeness', { portraits: [added], at: Date.now(), receipt: null }, { id, parent: owner });
+  return store.update('likeness', id, (current) => (current.portraits.length < PORTRAITS_MOST ? { ...current, portraits: [...current.portraits, added] } : null));
 }
 
 // Both answer what was there, for 되돌리기 (restoreLikeness). A portrait goes until 다시 만들기, since the pack still has
 // its profiles; the whole pack's are made again by the next 삽화 that needs them.
-export async function removePortrait(store: ObjectStore, owner: string, name: string): Promise<ApiResult<Stored<'likeness'>>> {
+export async function removePortrait(store: ObjectStore, owner: string, at: PortraitAt): Promise<ApiResult<Stored<'likeness'>>> {
   const before = store.get('likeness', likenessId(owner));
   if (!before) return { ok: false, error: 'gone' };
   const removed = await store.update('likeness', before.id, (current) =>
-    current.portraits.some((portrait) => portrait.name === name) ? { ...current, portraits: current.portraits.filter((portrait) => portrait.name !== name) } : null,
+    current.portraits[at.index]?.name === at.name ? { ...current, portraits: current.portraits.toSpliced(at.index, 1) } : null,
   );
   return removed.ok ? { ok: true, data: before } : removed;
 }
@@ -134,14 +134,20 @@ export class Likenesses {
   }
 
   // 다시 만들기, from the owner's own screen: written as a new chat of the character would draw (a module's or a
-  // persona's as a new 캐릭터 없이 chat's), and replacing what is there. One under way is not started again.
-  rebuild(owner: string) {
+  // persona's as a new 캐릭터 없이 chat's), and replacing what is there but the user's portraits. One under way is not
+  // started again. Answers what it replaced, for 되돌리기, or null when nothing was replaced.
+  async rebuild(owner: string): Promise<Stored<'likeness'> | null> {
     const { store } = this.deps;
     const character = live(store.get('character', owner)) ? owner : null;
     const persona = live(store.get('persona', owner)) ? { persona: owner } : {};
     const prompt = illustrationPrompt(store, illustrateSwitches(store, character).prompt);
-    if (prompt.kind === 'missing') return this.change(owner, { stage: 'failed', failure: { kind: 'prompt-missing', own: prompt.own } });
-    void this.start(owner, { title: null, character, models: {}, ...persona }, prompt.prompt.value, this.closing.signal);
+    if (prompt.kind === 'missing') {
+      this.change(owner, { stage: 'failed', failure: { kind: 'prompt-missing', own: prompt.own } });
+      return null;
+    }
+    const before = store.get('likeness', likenessId(owner));
+    await this.start(owner, { title: null, character, models: {}, ...persona }, prompt.prompt.value, this.closing.signal);
+    return before && store.get('likeness', likenessId(owner))?.value !== before.value ? before : null;
   }
 
   close() {

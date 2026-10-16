@@ -4,8 +4,9 @@ import type { Receipt } from './chat';
 // alike. One object per pack at likenessId(owner), made on the first 삽화 that needs it and again only on 다시 만들기.
 
 // metadata: read from NovelAI's own prompt kept in the pack's pictures; vision: a model looked at them; text: written
-// from the description and lorebook alone.
-export type PortraitSource = 'metadata' | 'vision' | 'text';
+// from the description and lorebook alone; user: added or edited by hand, which 다시 만들기 keeps.
+export type BuiltSource = 'metadata' | 'vision' | 'text';
+export type PortraitSource = BuiltSource | 'user';
 export type Outfit = { name: string; tags: string };
 
 // aliases: other names the story calls them by, matched like name. outfits: the first is what they wear unless a scene

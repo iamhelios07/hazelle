@@ -185,20 +185,20 @@ export class Illustrator {
     // A given scene draws with the tags and settings of the prompt chosen now, as a written one does.
     const prompt = illustrationPrompt(store, switches.prompt);
     if (prompt.kind === 'missing') return { kind: 'prompt-missing', own: prompt.own };
-    // Built beside the scene call; a pack whose build fails is drawn without its portraits.
-    const portraits = this.deps.likenesses.portraits(stored.value, prompt.prompt.value, signal);
+    // Before the scene call, which is told their names; a pack whose build fails is drawn without its portraits.
+    const portraits = await this.deps.likenesses.portraits(stored.value, prompt.prompt.value, signal);
     let scenes = given ? [given] : [];
     let receipt: Receipt | null = null;
     if (!given) {
       const paragraphs = paragraphsOf(text);
       if (!paragraphs.length) return { kind: 'empty' };
       const history = [...messages.slice(0, index), { ...messages[index]!, selected }];
-      const written = await this.scenes(chat, stored.value, history, paragraphs, pictureCount(switches.ladder, text), prompt.prompt.value, auto, signal);
+      const written = await this.scenes(chat, stored.value, history, paragraphs, pictureCount(switches.ladder, text), portraits, prompt.prompt.value, auto, signal);
       if ('kind' in written) return written;
       ({ scenes, receipt } = written);
       this.update(message, (drawing) => ({ ...drawing, writing: false, sketches: scenes.map((scene) => ({ scene, failure: null })) }));
     }
-    const drawn = { chat, message, version, route, prompt: prompt.prompt.value, portraits: await portraits, spend: spend || switches.spend, signal };
+    const drawn = { chat, message, version, route, prompt: prompt.prompt.value, portraits, spend: spend || switches.spend, signal };
     // The scene call's row goes into the ledger once, with the first picture saved.
     let logged = false;
     // In turn: an image connection draws one picture at a time.
@@ -237,14 +237,14 @@ export class Illustrator {
 
   // The scene call reads through the server's stream like any model call, but leaves no marker: a pick-up on another
   // device would draw the picture again and pay for it twice.
-  private async scenes(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
+  private async scenes(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, portraits: Portrait[], prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
     const { store, credentials } = this.deps;
     const writer = taskWriter(store, value, prompt.model);
     if ('kind' in writer) return writer;
     const { route, settings } = writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
+    const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: portraits.map(({ name, aliases }) => ({ name, aliases })), seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
       const failure = evaluationFailure(error);
       return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
     });

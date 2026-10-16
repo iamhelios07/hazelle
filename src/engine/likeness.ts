@@ -1,6 +1,6 @@
 import type { ChatMessage, InputPicture } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { Outfit, Portrait, PortraitSource } from '../model/likeness';
+import type { BuiltSource, Outfit, Portrait } from '../model/likeness';
 import type { PicturePrompt } from './import/picture-prompt';
 import { answerJson } from './answer-json';
 
@@ -44,7 +44,7 @@ export type LikenessInput = {
   most: number;
 };
 
-const SOURCES: Record<PortraitSource, string> = {
+const SOURCES: Record<BuiltSource, string> = {
   metadata: 'the prompts the pictures were drawn with',
   vision: 'the pictures themselves',
   text: 'the description and lorebook',
@@ -78,7 +78,7 @@ function bounded({ texts, lore, prompts }: Pick<LikenessInput, 'texts' | 'lore' 
 }
 
 // The sources the build has, in the order the model is told of them. Empty: nothing to read, so no call is made.
-export function sourcesOf(input: Pick<LikenessInput, 'texts' | 'lore' | 'prompts' | 'pictures'>): PortraitSource[] {
+export function sourcesOf(input: Pick<LikenessInput, 'texts' | 'lore' | 'prompts' | 'pictures'>): BuiltSource[] {
   const kept = bounded(input);
   return [...(kept.prompts.length ? ['metadata' as const] : []), ...(input.pictures.length ? ['vision' as const] : []), ...(kept.texts.length || kept.lore.length ? ['text' as const] : [])];
 }
@@ -123,24 +123,37 @@ function outfit(value: unknown): Outfit | null {
   return isRecord(value) && isText(value.name) && isText(value.tags) ? { name: value.name.trim(), tags: value.tags.trim() } : null;
 }
 
-function portrait(value: unknown, sources: readonly PortraitSource[], artist: string): Portrait | null {
+function portrait(value: unknown, sources: readonly BuiltSource[], artist: string): Portrait | null {
   if (!isRecord(value)) return null;
   const { name, aliases, look, outfits, source } = value;
-  if (!isText(name) || !name.trim() || !Array.isArray(aliases) || !aliases.every(isText) || !isText(look) || !Array.isArray(outfits) || !sources.includes(source as PortraitSource)) return null;
+  if (!isText(name) || !name.trim() || !Array.isArray(aliases) || !aliases.every(isText) || !isText(look) || !Array.isArray(outfits) || !sources.includes(source as BuiltSource)) return null;
   const read = outfits.map(outfit);
   if (read.some((each) => each === null)) return null;
-  return { name: name.trim(), aliases: aliases.map((alias) => alias.trim()).filter(Boolean), look: look.trim(), outfits: read as Outfit[], artist, source: source as PortraitSource };
+  return { name: name.trim(), aliases: aliases.map((alias) => alias.trim()).filter(Boolean), look: look.trim(), outfits: read as Outfit[], artist, source: source as BuiltSource };
 }
 
 // artist: the pack's, from its pictures' metadata (artistOf), set on every portrait; the model writes none. Nothing
 // left out is filled in.
-export function parseLikeness(text: string, { sources, artist, most }: { sources: readonly PortraitSource[]; artist: string; most: number }): { ok: true; portraits: Portrait[] } | { ok: false; reason: LikenessInvalid } {
+export function parseLikeness(text: string, { sources, artist, most }: { sources: readonly BuiltSource[]; artist: string; most: number }): { ok: true; portraits: Portrait[] } | { ok: false; reason: LikenessInvalid } {
   const read = answerJson(text);
   const value = read.ok ? read.value : null;
   if (!isRecord(value)) return { ok: false, reason: 'unreadable' };
   if (!Array.isArray(value.characters) || value.characters.length > most) return { ok: false, reason: 'fields' };
   const portraits = value.characters.map((each) => portrait(each, sources, artist));
   return portraits.some((each) => each === null) ? { ok: false, reason: 'fields' } : { ok: true, portraits: portraits as Portrait[] };
+}
+
+// Exact after these, never fuzzy: a figure a scene names otherwise is drawn from its own tags (engine/illustrate).
+export const nameKey = (name: string) => name.trim().normalize('NFC').toLowerCase();
+
+export const namesOf = (portrait: Portrait) => [portrait.name, ...portrait.aliases].map(nameKey).filter(Boolean);
+
+// What a build writes over the portraits there (runtime/likeness): the user's stay, first, and a built one sharing a
+// name or alias with one of them is left out.
+export function rebuiltPortraits(before: readonly Portrait[], built: readonly Portrait[], most: number): Portrait[] {
+  const kept = before.filter(({ source }) => source === 'user');
+  const taken = new Set(kept.flatMap(namesOf));
+  return [...kept, ...built.filter((portrait) => !namesOf(portrait).some((key) => taken.has(key)))].slice(0, most);
 }
 
 // The artist stretches the most pictures share, as one tag list; a tie goes to the earlier picture (the card's own is

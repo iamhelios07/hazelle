@@ -2,6 +2,7 @@ import type { Model, PictureRequest } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Figure, Scene, Shape } from '../model/illustration';
 import type { Portrait } from '../model/likeness';
+import { nameKey, namesOf } from './likeness';
 import type { IllustratePrompt, PictureTags } from '../model/prompt';
 import { answerJson } from './answer-json';
 
@@ -41,6 +42,11 @@ export function illustratorPrompt(): IllustratePrompt {
 // parseScenes reads the array asked for here.
 export const severalScenes = (count: number) =>
   `This time pick ${count} moments instead of one, each after a different paragraph, spread through the message. Answer with only a JSON array of ${count} objects, each in the shape above, in the order of their paragraphs.`;
+
+// Sent after the 삽화 prompt, the engine's for the same reason as severalScenes: a figure is matched to its profile by
+// name or alias (pictureRequest), so the scene is asked to use the profile's own name.
+export const profileNames = (portraits: readonly Pick<Portrait, 'name' | 'aliases'>[]) =>
+  `These characters have fixed looks. When one of them is in a picture, give its "name" exactly as written here, whatever the story calls them:\n${portraits.map(({ name, aliases }) => `- ${name}${aliases.length ? ` (also called ${aliases.join(', ')})` : ''}`).join('\n')}`;
 
 export const numbered = (paragraphs: readonly string[]) => paragraphs.map((paragraph, index) => `[${index + 1}] ${paragraph}`).join('\n');
 
@@ -109,19 +115,15 @@ export const PICTURE_DEFAULTS: PictureTags = {
 
 const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 
-// Exact after these, never fuzzy: a figure the scene names otherwise is drawn from its own tags.
-const nameKey = (name: string) => name.trim().normalize('NFC').toLowerCase();
-
 // Artist tags lead the base caption (design §6.6): the 삽화 prompt's, else the first drawn portrait's. random: the seed
 // of a prompt that fixes none. portraits: the chat's packs' in pack order (runtime/likeness), the character's own first;
-// the scene format does not name them, since each account keeps its own copy of the 삽화 prompt. A figure whose name
-// is a portrait's name or alias takes the portrait's look in place of its own, and its first outfit when the scene
+// the scene call is told their names after the prompt (profileNames). A figure whose name is a portrait's name or alias takes the portrait's look in place of its own, and its first outfit when the scene
 // gives none.
 export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Model, random: number, portraits: readonly Portrait[]): PictureRequest {
   const { artist, quality, negative } = prompt.tags ?? PICTURE_DEFAULTS;
   const { steps = null, scale = null, rescale = null, sampler = null, seed = random } = prompt.picture ?? {};
   const byName = new Map<string, Portrait>();
-  for (const portrait of portraits) for (const name of [portrait.name, ...portrait.aliases]) if (nameKey(name) && !byName.has(nameKey(name))) byName.set(nameKey(name), portrait);
+  for (const portrait of portraits) for (const key of namesOf(portrait)) if (!byName.has(key)) byName.set(key, portrait);
   const matched = scene.characters.map(({ name }) => byName.get(nameKey(name)) ?? null);
   const drawn = portraits.find((portrait) => matched.includes(portrait) && portrait.artist.trim());
   return {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { artistOf, likenessRequest, parseLikeness, sample, sourcesOf, TEXT_MOST, type LikenessInput } from './likeness';
+import type { Portrait } from '../model/likeness';
+import { artistOf, likenessRequest, parseLikeness, rebuiltPortraits, sample, sourcesOf, TEXT_MOST, type LikenessInput } from './likeness';
 
 const answer = { characters: [{ name: ' Ari ', aliases: ['아리', ' '], look: 'girl, silver hair', outfits: [{ name: 'usual', tags: 'white dress' }], source: 'text' }] };
 const reading = { sources: ['text' as const], artist: 'artist:a', most: 2 };
@@ -60,4 +61,13 @@ it('takes the artist tags most pictures share, the earlier on a tie', () => {
   expect(artistOf([[], ['artist:a'], ['artist:b', 'artist:c'], ['artist:b', 'artist:c']])).toBe('artist:b, artist:c');
   expect(artistOf([['artist:a'], ['artist:b']])).toBe('artist:a');
   expect(artistOf([[]])).toBe('');
+});
+
+it('a rebuild keeps the user’s portraits first and leaves out a built one sharing a name or alias with them', () => {
+  const made = (name: string, aliases: string[], source: Portrait['source']): Portrait => ({ name, aliases, look: '', outfits: [], artist: '', source });
+  const lotta = made('Charlotte Grandellia', ['Lotta'], 'user');
+  const before = [made('Mina', [], 'text'), lotta];
+  const built = [made('Lotta', [], 'vision'), made('Mina', [], 'vision'), made('Rei', [], 'vision')];
+  expect(rebuiltPortraits(before, built, 8)).toEqual([lotta, built[1], built[2]]);
+  expect(rebuiltPortraits(before, built, 2)).toEqual([lotta, built[1]]);
 });

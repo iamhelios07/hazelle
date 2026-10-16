@@ -209,7 +209,7 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
   const PROFILES = 'You write character profiles';
   const looks = { characters: [{ name: 'Ari', aliases: ['아리'], look: 'girl, profile silver hair', outfits: [{ name: 'usual', tags: 'maid uniform' }], source: 'metadata' }] };
   const bare = { ...scene, characters: [{ ...scene.characters[0]!, outfit: '' }] };
-  // By what each request asks, since the profiles' call and the scene's run side by side.
+  // By what each request asks.
   const answering = (profiles: string) => (sent: { url: string; body: string | null }) =>
     sent.body?.includes(PROFILES) ? saying(profiles) : sent.body?.includes('You direct the illustrations') ? saying(JSON.stringify(bare)) : sent.url.endsWith('/free') ? free(true) : sent.url.endsWith('/generate') ? picture() : saying(REPLY);
 
@@ -315,24 +315,26 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       expect(profileCalls()).toHaveLength(2);
     }));
 
-  it('다시 만들기 replaces the profiles, and a tag edit changes only its own field', () =>
+  it('tells the scene call the profiles’ names, and 다시 만들기 keeps a portrait edited by hand, answering what it replaced', () =>
     server.withSession(async (session) => {
-      const { owner, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
+      const { owner, log, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
       await draw();
-      expect((await editPortrait(session.store, owner, 'Ari', { outfit: 'usual', tags: 'swimsuit' })).ok).toBe(true);
-      expect(session.store.get('likeness', likenessId(owner))!.value.portraits[0]).toMatchObject({ look: 'girl, profile silver hair', outfits: [{ name: 'usual', tags: 'swimsuit' }] });
-      expect(await editPortrait(session.store, owner, 'Nobody', { look: 'boy' })).toMatchObject({ ok: false, error: 'gone' });
-      session.likenesses.rebuild(owner);
-      await vi.waitFor(() => expect(session.likenesses.snapshot().size).toBe(0));
+      expect(log.find(({ sent }) => sent.body?.includes('You direct the illustrations'))!.sent.body).toContain('- Ari (also called 아리)');
+      expect(await editPortrait(session.store, owner, { index: 0, name: 'Nobody' }, { look: 'boy' })).toMatchObject({ ok: false, error: 'gone' });
+      expect((await editPortrait(session.store, owner, { index: 0, name: 'Ari' }, { outfits: [{ name: 'usual', tags: 'swimsuit' }] })).ok).toBe(true);
+      const edited = session.store.get('likeness', likenessId(owner))!;
+      expect(edited.value.portraits[0]).toMatchObject({ look: 'girl, profile silver hair', outfits: [{ name: 'usual', tags: 'swimsuit' }], source: 'user' });
+      const replaced = await session.likenesses.rebuild(owner);
       expect(profileCalls()).toHaveLength(2);
-      expect(session.store.get('likeness', likenessId(owner))!.value.portraits[0]!.outfits[0]!.tags).toBe('maid uniform');
+      expect(replaced?.value).toBe(edited.value);
+      expect(session.store.get('likeness', likenessId(owner))!.value.portraits).toEqual(edited.value.portraits);
     }));
 
   it('a removed portrait stays gone on the next draw, the whole profiles are made again, and 되돌리기 writes back what was there', () =>
     server.withSession(async (session) => {
       const { owner, draw, profileCalls } = await drawing(session, JSON.stringify(looks));
       await draw();
-      const removed = await removePortrait(session.store, owner, 'Ari');
+      const removed = await removePortrait(session.store, owner, { index: 0, name: 'Ari' });
       expect(session.store.get('likeness', likenessId(owner))!.value.portraits).toEqual([]);
       await draw();
       expect(profileCalls()).toHaveLength(1);
