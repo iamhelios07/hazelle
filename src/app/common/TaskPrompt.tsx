@@ -2,6 +2,7 @@ import type { PromptSort } from '../../model/prompt';
 import { ofSort, translationPrompt, illustrationPrompt, mascotPrompt, type PromptChoice } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import type { PromptPane } from '../shell/routes';
+import { byPromptName } from './promptCopies';
 import { defaultMark, DELETED_PROMPT, follows, taskModelHelp } from './words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag, Text } from '../ui';
@@ -47,7 +48,7 @@ export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }:
   const settings = useSettings();
   const prompts = usePrompts()
     .filter((each) => ofSort(each, task))
-    .sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
+    .sort(byPromptName);
   const { choice, label, missing } = chosenPrompt(store, task, chosen);
   const fallback = prompts.find(({ id }) => id === settings[setting]);
   return (
