@@ -30,7 +30,7 @@ export function NextRequest({ chat, sending, request, editor, onEdit }: { chat: 
   const missing = later(afterEnter(session, chat, sending.turn));
   return (
     <Stack gap="section">
-      <Section title="토큰">
+      <Section title="보낼 입력">
         <NextTokens sending={sending} />
       </Section>
       <RequestView
@@ -89,15 +89,15 @@ function RehearsalView({ rehearsal, sending, editor, onEdit }: { rehearsal: Rehe
   ];
   return (
     <Stack gap="related">
-      {trace.entries.length > 0 && <HookList label="스크립트 실행 예상" entries={trace.entries.map((entry, index) => ({ entry, key: String(index) }))} aside={(entry) => `${Math.round(entry.duration)}ms`} />}
-      {trace.omitted > 0 && <Text variant="note">{`앞선 기록 ${trace.omitted}개는 빠졌어요.`}</Text>}
-      {facts.length > 0 && <Facts items={facts} />}
+      {facts.length > 0 && <Facts items={facts} variant="tiles" />}
       {loreRanAway && <Callout tone="warn">{runaway('로어북을 스크립트에 넘기기 전에')}</Callout>}
       {stopped !== null ? (
         <Text variant="note">{`${STAGES[stopped]} 단계에서 멈춰서 요청을 보내지 않아요.`}</Text>
       ) : !changed ? (
         <Text variant="note">스크립트가 요청을 바꾸지 않아요.</Text>
       ) : null}
+      {trace.entries.length > 0 && <HookList label="스크립트 실행 예상" entries={trace.entries.map((entry, index) => ({ entry, key: String(index) }))} aside={(entry) => `${Math.round(entry.duration)}ms`} />}
+      {trace.omitted > 0 && <Text variant="note">{`앞선 기록 ${trace.omitted}개는 빠졌어요.`}</Text>}
       {prompt !== null && ('kind' in prompt ? <Callout tone="warn">{describeTurnFailure(prompt)}</Callout> : <RequestView prompt={prompt} title="스크립트 실행 후" request={() => previewRequest({ ...sending, prompt })} unbuilt={UNBUILT} editor={editor} onEdit={onEdit} sameAs={sending.prompt.problems} />)}
       {request !== null && (
         <Section level={3} title="요청 편집 후">
@@ -134,7 +134,6 @@ function NextTokens({ sending }: { sending: Sending }) {
   return (
     <Stack gap="group">
       <Gauge
-        label="보낼 입력"
         share={fit.allowance ? total / fit.allowance : undefined}
         tone={fit.allowance && total > fit.allowance ? 'warn' : 'plain'}
         amount={`약 ${tokens(total)}`}

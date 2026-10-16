@@ -134,7 +134,8 @@ export function RequestView({ prompt, title, level = 3, lead, request, unbuilt, 
     />
   );
   return (
-    <Section level={level} title={title} note={`약 ${tokens(total)} 토큰 · 앱 추정`} action={switcher}>
+    <Section level={level} title={title} note={`약 ${tokens(total)} 토큰 · 앱 추정`}>
+      <Row kind="toolbar">{switcher}</Row>
       {view === 'parts' ? (
         <Stack gap="related">
           {lead}
