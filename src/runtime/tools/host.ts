@@ -22,6 +22,7 @@ import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
 import { readToolAsset, saveToolAsset, setToolSettings, toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
 import { fieldValue } from '../../engine/import/tool';
+import { RISU_DECLINED } from '../../tool-api/risu-methods';
 import { SETTINGS_ID } from '../../model/settings';
 import { chatPersona } from '../personas';
 import { limitsOf, packsOf } from '../chat-context';
@@ -470,7 +471,9 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         if (!own || typeof first !== 'string') break;
         const from = { kind: 'module', id: entry.module } as const;
         const log = { stage: 'call', pack: from, script: entry.tool.manifest.displayName, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [first], stopped: false, changed: false, handled: false, truncated: false };
-        this.scripts().report(entry.chat ?? '', { errors: [], missing: [first], trace: { entries: [log], omitted: 0 } }, from);
+        // A declined name is told when read, which a plugin's typeof guard does too: 점검 lists it, no toast, since a
+        // guard is not a failure and a call to it fails as an error anyway.
+        this.scripts().report(entry.chat ?? '', { errors: [], missing: RISU_DECLINED.has(first) ? [] : [first], trace: { entries: [log], omitted: 0 } }, from);
         return;
       }
       case 'storage.get': if (typeof first === 'string') return toolData(this.session.store, entry.module, first); break;

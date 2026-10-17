@@ -659,8 +659,9 @@ it('runs the porting sample as imported: the reply\'s picture is kept by its mod
     await vi.waitFor(() => expect(transport.frames).toHaveLength(2));
     await vi.waitFor(() => expect(host.hears(module, 'showing')).toBe(true));
     expect((await run({ kind: 'showing', shown: [{ at: null, text: replied }] })).value).toEqual([picture]);
-    // Its RisuAI page part stays behind the guard: each frame tells 점검 once, and nothing calls it.
+    // Its RisuAI page part stays behind the guard: each frame tells 점검 once, nothing calls it, and no toast is raised.
     const told = transport.frames.flatMap((frame) => (frame.sandbox.sent as Up[]).flatMap((message) => message.kind === 'call' && message.method === 'frame.missing' ? [message.args[0]] : []));
     expect(told).toEqual(['getRootDocument', 'getRootDocument']);
+    expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'missing')).toEqual([]);
   } finally { host.close(); }
 }));

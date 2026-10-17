@@ -28,7 +28,7 @@ export function BotNotes() {
           toast.error(`${from?.name ?? '봇'} 스크립트가 오류로 멈췄어요`, { detail: note.message });
           break;
         case 'missing':
-          toast.show('이 봇이 쓰는 기능 중 지원하지 않는 기능이 있어요', { detail: note.names.join(', ') });
+          toast.show(`${from?.name ?? '봇'} · 지원하지 않는 기능을 썼어요`, { detail: note.names.join(', ') });
           break;
         case 'stuck':
           toast.error(note.disabled ? TOOL_DISABLED : note.from?.kind === 'module' ? TOOL_STUCK : BOT_STUCK, { detail: from?.name });
