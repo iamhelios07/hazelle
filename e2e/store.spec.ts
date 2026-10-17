@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { ROW_BYTES } from '../src/server/caps';
 
 // The account stores over HTTP on the built server (npm run e2e builds first), which this spec starts on a data
 // directory of its own so it can stop, kill and start it again, and whose account files and pictures it reads on disk.
@@ -180,7 +181,7 @@ test('a 1,500,000-byte body survives the HTTP round trip', async ({ request }) =
   const item = write(body);
   const response = await batch(request, account, [item]);
   expect(await json(response)).toEqual({ revs: [1], timeline: account.timeline });
-  expect(response.headers()['x-account-bytes']).toBe('1500000');
+  expect(response.headers()['x-account-bytes']).toBe(String(1_500_000 + ROW_BYTES.object));
   const page = await json<FeedPage>(await feed(request, account, { timeline: account.timeline }));
   expect(page.changes).toHaveLength(1);
   expect(page.changes[0]).toMatchObject({ id: item.id, rev: 1 });
@@ -195,7 +196,7 @@ test('a Korean feed includes the row crossing four megabytes and continues on th
   expect(Buffer.byteLength(body)).toBe(1_500_000);
   for (const item of writes) await json(await batch(request, account, [item]));
   const response = await feed(request, account, { timeline: account.timeline });
-  expect(response.headers()['x-account-bytes']).toBe('4500004');
+  expect(response.headers()['x-account-bytes']).toBe(String(4_500_004 + 4 * ROW_BYTES.object));
   expect(Buffer.byteLength(await response.body())).toBeGreaterThan(4_000_000);
   const page = await json<FeedPage>(response);
   expect(page).toMatchObject({ cursor: 3, until: 4, more: true, timeline: account.timeline });
@@ -241,10 +242,10 @@ test('an account above its lowered cap can still delete an object', async ({ req
   expect(await json(await batch(request, account, [write('new')]), 413)).toEqual({ error: 'storage-full' });
   const deleted = await batch(request, account, [{ ...item, body: null, baseRev: 1 }]);
   expect(await json(deleted)).toEqual({ revs: [2], timeline: account.timeline });
-  expect(deleted.headers()['x-account-bytes']).toBe('0');
+  expect(deleted.headers()['x-account-bytes']).toBe(String(ROW_BYTES.object));
   const page = await json<FeedPage>(await feed(request, account, { timeline: account.timeline }));
   expect(page.changes).toEqual([{ id: item.id, kind: item.kind, parent: null, rev: 2, body: null }]);
-  expect((await listing(request)).find((each) => each.accountId === account.accountId)).toMatchObject({ bytes: 0 });
+  expect((await listing(request)).find((each) => each.accountId === account.accountId)).toMatchObject({ bytes: ROW_BYTES.object });
 });
 
 test('leaving invalidates the old cookie and a late batch stores nothing', async ({ request }) => {
@@ -377,7 +378,7 @@ test('the operator reads bounded account pages and separately refreshes usage to
     for (const account of accounts) {
       const body = `fan-out-${added.length}-한`;
       await json(await batch(request, account, [write(body)]));
-      added.push({ account, bytes: Buffer.byteLength(body) });
+      added.push({ account, bytes: Buffer.byteLength(body) + ROW_BYTES.object });
     }
   }
   const started = Date.now();

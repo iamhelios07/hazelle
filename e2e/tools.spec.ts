@@ -122,7 +122,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
     await page.getByRole('menuitem', { name: '응답 정보', exact: true }).click();
     const panel = page.getByRole('complementary', { name: '응답 정보', exact: true });
     await panel.getByRole('button', { name: '요청 원문', exact: true }).click();
-    await panel.getByRole('button', { name: /^도구 · 간단 기억 · 시스템/ }).click();
+    await panel.getByRole('button', { name: /^도구 · 간단 기억 / }).click();
     await expect(panel).toContainText(summary(1));
     await page.getByRole('button', { name: '응답 정보 닫기', exact: true }).click();
   });
