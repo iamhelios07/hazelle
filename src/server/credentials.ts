@@ -41,8 +41,9 @@ export function findAccount(db: Db, column: 'id' | 'username', value: string) {
     .first<StoredAccount>();
 }
 
-// This machine's own requests are not counted: loopback (e2e against a local server; the load harness, behind docker's
-// port, names itself loopback) and none named at all (in process). The hosted machine's Caddy names every outside visitor, so neither reaches it from outside.
+// This machine's own requests are not counted: loopback (e2e against a local server) and none named at all (in
+// process). The visitor is the connection's peer unless a trusted proxy names it (frontend-worker.ts), so neither
+// reaches it from outside.
 const LOCAL = /^(?:127\.|::1$|::ffff:127\.)/;
 
 export function outsideVisitor(c: Context<AppEnv>): string | null {

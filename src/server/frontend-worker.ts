@@ -1,14 +1,15 @@
 import { getRequestListener } from '@hono/node-server';
 import { Agent, createServer, request, type ClientRequest } from 'node:http';
+import { isIPv6, type BlockList } from 'node:net';
 import { parentPort, workerData } from 'node:worker_threads';
 import { VISITOR_HEADER } from '../contracts/http';
 import type { ShareCover } from '../contracts/shares';
 import { endToEnd } from './hop-by-hop';
 import { clientFiles } from './static';
 
-export type FrontendOptions = { port: number; apiPort: number; clientDir: string };
+export type FrontendOptions = { port: number; apiPort: number; clientDir: string; trustedProxies: BlockList };
 
-const { port, apiPort, clientDir } = workerData as FrontendOptions;
+const { port, apiPort, clientDir, trustedProxies } = workerData as FrontendOptions;
 // A share page's embed text, asked of the API, which owns the database; a failure leaves the page without one.
 async function cover(id: string): Promise<ShareCover | null> {
   try {
@@ -32,10 +33,13 @@ const server = createServer((incoming, outgoing) => {
   const started = performance.now();
   let connectedMs: number | null = null;
   let sentMs: number | null = null;
-  // The visitor is the last X-Forwarded-For entry when a proxy is in front (Caddy, the hosted machine's only way in,
-  // writes it), else the connection's peer. Written over whatever the request says, so no one names their own key.
+  // The visitor is the connection's peer, unless the peer is a trusted proxy (Caddy, the hosted machine's only way in):
+  // then the last X-Forwarded-For entry, which that proxy wrote. Written over whatever the request says, so no one
+  // names their own key, and loopback, which credentials.ts does not count, only comes from this machine.
+  const peer = incoming.socket.remoteAddress;
   const forwarded = incoming.headers['x-forwarded-for'];
-  const visitor = (Array.isArray(forwarded) ? forwarded.join(',') : forwarded)?.split(',').at(-1)?.trim() || incoming.socket.remoteAddress || 'unknown';
+  const proxied = peer !== undefined && trustedProxies.check(peer, isIPv6(peer) ? 'ipv6' : 'ipv4');
+  const visitor = (proxied && (Array.isArray(forwarded) ? forwarded.join(',') : forwarded)?.split(',').at(-1)?.trim()) || peer || 'unknown';
   // After endToEnd: a header the request's Connection names could otherwise remove the visitor.
   const headers = { ...endToEnd(incoming.headers), [VISITOR_HEADER]: visitor };
   const failed = (error: NodeJS.ErrnoException, reusedSocket: boolean | null) => {
