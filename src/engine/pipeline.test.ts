@@ -736,4 +736,10 @@ describe('inspect projections', () => {
     const clipped = inspectVariables({ ...chat, pending: [['n', 'x'.repeat(VARIABLE_LIMITS.value + 1)]] });
     expect(clipped.variables[0]!.last).toMatchObject({ value: 'x'.repeat(VARIABLE_LIMITS.value), truncated: true });
   });
+
+  it('sets a hand edit after the writes standing with its message, as the user\'s', () => {
+    const chat = scope({ card: card({ greetings: [], variables: [] }), greeting: null, messages: [{ ...message('v', 'user', 'go'), after: [['n', '1']], byHand: [['n', '2']] }] });
+    expect(inspectVariables(chat).variables[0]!.history.map(({ writer }) => writer)).toEqual([{ kind: 'script', version: 'v', message: 'v', index: 0, phase: 'after' }, { kind: 'hand', version: 'v', message: 'v', index: 0 }]);
+    expect(renderChat('prompt', chat).variables.get('n')).toBe('2');
+  });
 });

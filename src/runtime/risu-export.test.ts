@@ -5,7 +5,7 @@ import { openZip } from '../engine/import/zip';
 import { fold, type Receipt } from '../model/chat';
 import { indexZip, readEntry, type BackupOutput } from './backup-zip';
 import { importCharacter } from './characters';
-import { appendReply, appendUserMessage, editMessage, setBookmark, startChat } from './chat-log';
+import { appendReply, appendUserMessage, editMessage, setBookmark, setVariableByHand, startChat } from './chat-log';
 import { projectGreetings } from './greetings';
 import { exportEveryCharacter, exportRisuChat } from './risu-export';
 import { testServer } from './testing';
@@ -32,6 +32,7 @@ it('zips every character as its charx and its chats in Risu form, the line past 
   await appendReply(store, chat, { id: reply, message: null, replaces: null, follows: said, at: 5, text: '어서 와', receipt: receipt(), reasoning: '반긴다.' });
   await appendReply(store, chat, { id: crypto.randomUUID(), message: null, replaces: null, follows: reply, at: 6, text: '', receipt: { ...receipt(), state: 'failed' } });
   await setBookmark(store, chat, reply, true, '첫 인사');
+  await setVariableByHand(store, chat, reply, 'mood', '평온');
 
   const edited = crypto.randomUUID();
   await server.hold(store, edited);
@@ -54,7 +55,7 @@ it('zips every character as its charx and its chats in Risu form, the line past 
 
   const chats = (name: string) => readEntry(zip, entries.get(name)!, signal).then((bytes) => risuChatFile(JSON.parse(new TextDecoder().decode(bytes)))!.chats);
   const [first] = await chats('루나_all_chats.json');
-  expect(first).toMatchObject({ title: '바닷가', greeting: 1, variables: [['hp', '10'], ['mood', '기쁨']] });
+  expect(first).toMatchObject({ title: '바닷가', greeting: 1, variables: [['hp', '10'], ['mood', '평온']] });
   expect(first!.messages).toEqual([
     { role: 'user', text: '안녕', at: expect.any(Number) },
     { role: 'assistant', text: '어서 와', at: 5, reasoning: '반긴다.', bookmark: { name: '첫 인사' } },

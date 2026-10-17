@@ -229,14 +229,15 @@ describe("fold with the bot's Lua writes", () => {
     const entries = [
       entry('b1', { type: 'message', role: 'assistant', at: rev, text: '하나', receipt: receipt(), before: [['turn', '1']] }),
       entry('w1', { type: 'vars', version: 'b1', set: [['hp', '9']], at: rev }),
+      entry('h1', { type: 'vars', version: 'b1', set: [['hp', '5']], at: rev, byHand: true }),
       edit('e1', 'b1', [['mood', 'calm']]),
       entry('w2', { type: 'vars', version: 'b1', set: [['hp', '8']], at: rev }),
       edit('e2', 'e1'),
       entry('w3', { type: 'vars', version: 'e1', set: [['hp', '7']], at: rev }),
     ];
-    expect(shown(fold(entries)[0]!)).toMatchObject({ id: 'e2', before: [['turn', '1'], ['mood', 'calm']], after: [['hp', '9'], ['hp', '8'], ['hp', '7']] });
+    expect(shown(fold(entries)[0]!)).toMatchObject({ id: 'e2', before: [['turn', '1'], ['mood', 'calm']], after: [['hp', '9'], ['hp', '8'], ['hp', '7']], byHand: [['hp', '5']] });
     const retried = shown(fold([...entries, version('r1', 'b1', '다시', 'e2')])[0]!);
-    expect([retried.before, retried.after]).toEqual([undefined, undefined]);
+    expect([retried.before, retried.after, retried.byHand]).toEqual([undefined, undefined, undefined]);
   });
 
   it('leads every id a version stood under through its edits to it, and none through a retry', () => {

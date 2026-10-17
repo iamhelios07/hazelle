@@ -157,7 +157,7 @@ export function renderChat(
     if (shown.stopped) { stopped ??= shown.stopped; failures.display.set(index, shown.stopped); }
     return shown;
   };
-  const texts = scope.messages.map(({ id, message, role, text, staged, before = [], after = [] }, index) => {
+  const texts = scope.messages.map(({ id, message, role, text, staged, before = [], after = [], byHand = [] }, index) => {
     states?.begin();
     progressed();
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
@@ -168,17 +168,19 @@ export function renderChat(
     const written = !(greeting || staged);
     trace?.at({ kind: 'script', version: id, message, index, phase: 'before' });
     for (const [name, value] of before) variables.set(name, value);
-    if (greeting) {
+    const kept = () => {
       trace?.at({ kind: 'script', version: id, message, index, phase: 'after' });
       for (const [name, value] of after) variables.set(name, value);
-    }
+      trace?.at({ kind: 'hand', version: id, message, index });
+      for (const [name, value] of byHand) variables.set(name, value);
+    };
+    if (greeting) kept();
     trace?.at({ kind: 'cbs', version: id, message, index, stage: greeting ? 'greeting' : staged ? 'staged' : role === 'user' ? 'input' : 'output' });
     variables.log = [];
     const replayed = guarded(index, () => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { index, cbs: cbs(variables) }).text : cbs(variables)(text), text);
     wrote.push(variables.log);
     variables.log = null;
-    trace?.at({ kind: 'script', version: id, message, index, phase: 'after' });
-    for (const [name, value] of after) variables.set(name, value);
+    kept();
     past.push(unescapeCbs(replayed));
     if (greeting && later) { drawn.push([]); boxes.push([]); return replayed; }
     // A pass is made again when its message's place or the state as of it changes, and for the last LATEST
@@ -277,6 +279,7 @@ export type VariableWriter =
   | { kind: 'card' | 'chat' | 'pending' }
   // Stored writes retain the version and phase, not whether Lua or a tool made them.
   | { kind: 'script'; version: string; message: string; index: number; phase: 'before' | 'after' }
+  | { kind: 'hand'; version: string; message: string; index: number }
   | { kind: 'cbs'; version: string; message: string; index: number; stage: 'input' | 'output' | 'greeting' | 'staged' };
 export type VariableWrite = { writer: VariableWriter; value: string; truncated: boolean };
 export type InspectedVariable = { name: string; nameTruncated: boolean; last: VariableWrite; history: VariableWrite[]; omitted: number };

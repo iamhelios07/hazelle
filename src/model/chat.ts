@@ -149,7 +149,8 @@ export type Entry =
   // read. What the reply's end wrote follows the version into its edits and no further: a retried, continued or new
   // reply runs the bot's Lua again. stays: what a button wrote is the user's own act at that place in the story, so
   // it stays with the message whichever version is shown, and moves to the message before when its own is deleted.
-  | { type: 'vars'; version: string; set: Writes; at: number; stays?: true }
+  // byHand: the user's own value typed in 점검 › 변수, held by the version (Version byHand), never with stays.
+  | { type: 'vars'; version: string; set: Writes; at: number; stays?: true; byHand?: true }
   // The message now continues follows instead: a bot's insertChat puts a new message ahead of one already saved, so
   // this one names a version saved after it. The latest one stands; one that would loop a line is passed over.
   | { type: 'follow'; message: string; follows: string; at: number }
@@ -161,7 +162,9 @@ export type Entry =
 export type Writes = [string, string][];
 
 // earlier: the ids it stood under before its edits, oldest first; a retry, a continuation or a new version has none.
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; calls?: BotCall[]; reasoning?: string; greeting?: number; earlier?: string[] };
+// byHand: the user's own writes (Entry vars byHand), set after the message's after, so they win over every write
+// standing with the message; every reader takes this order (runtime/chat-context scopeOf, engine/render renderChat).
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; byHand?: Writes; calls?: BotCall[]; reasoning?: string; greeting?: number; earlier?: string[] };
 export type BotCall = { receipt: Receipt; at: number };
 // after: the writes that stay with the message (Entry vars), set after its shown version's own.
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number; after?: Writes };
@@ -221,6 +224,10 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
     }
     if (entry.type === 'vars') {
       const version = edits.get(entry.version);
+      if (entry.byHand) {
+        if (version) version.byHand = [...(version.byHand ?? []), ...entry.set];
+        continue;
+      }
       const holder = entry.stays ? version && home.get(version) : version;
       if (holder) holder.after = [...(holder.after ?? []), ...entry.set];
       continue;
@@ -248,6 +255,7 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
       if (edited) {
         if (edited.before) version.before = [...edited.before, ...(entry.before ?? [])];
         if (edited.after) version.after = edited.after;
+        if (edited.byHand) version.byHand = edited.byHand;
         if (edited.calls) version.calls = edited.calls;
         if (edited.reasoning) version.reasoning = edited.reasoning;
         version.earlier = ids.get(edited)!;

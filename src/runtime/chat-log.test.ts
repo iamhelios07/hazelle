@@ -4,7 +4,7 @@ import { cachePrintId } from '../model/cache';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatPrint } from './cache';
 import { chatFile, readChatFile } from './chat-file';
-import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, nameBookmark, removeMessage, removeMessages, restoreMessages, selectVersion, setBookmark, setCast, setChatOwn, startChat, withOwn } from './chat-log';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, nameBookmark, removeMessage, removeMessages, restoreMessages, selectVersion, setBookmark, setCast, setChatOwn, setVariableByHand, startChat, withOwn } from './chat-log';
 import { setChatModel, withMainModel } from './assignment';
 import type { Files } from './files';
 import { summaryId } from './summary';
@@ -160,8 +160,9 @@ describe('branchChat', () => {
     const folded = () => fold(store.children('entry', source));
     await appendScripted(store, source, { edits: [{ message: folded()[0]!, text: '안녕!', wrote: [['typed', '1']] }], removed: [], added: [{ follows: said, ahead: null, messages: [{ role: 'assistant', text: 'narration' }] }], vars: { version: said, set: [['hp', '9']] } });
     await appendScripted(store, source, { edits: [], removed: [], added: [], vars: { version: said, set: [['door', 'open']], stays: true } });
-    const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after, message.after]);
-    expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']], [['door', 'open']]], ['narration', true, undefined, undefined, undefined]]);
+    await setVariableByHand(store, source, said, 'hp', '5');
+    const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after, message.after, shown(message).byHand]);
+    expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']], [['door', 'open']], [['hp', '5']]], ['narration', true, undefined, undefined, undefined, undefined]]);
 
     const module = crypto.randomUUID();
     await store.create('module', { name: '기억', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: [] }, { id: module });

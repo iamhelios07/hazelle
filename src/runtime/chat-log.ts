@@ -1,6 +1,7 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
+import { VARIABLE_LIMITS } from '../engine/render';
 import { CAST_MAX, foldTree, shown, standing, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import type { Illustration } from '../model/illustration';
@@ -252,6 +253,7 @@ function copied(id: string, { role, at, versions, selected, after }: Message, fo
   });
   if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
   for (const version of versions) if (version.after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(version.id)!, set: version.after, at: version.at }]);
+  for (const version of versions) if (version.byHand) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(version.id)!, set: version.byHand, at: version.at, byHand: true }]);
   if (after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(versions[selected]!.id)!, set: after, at, stays: true }]);
   return { entries, versions: made };
 }
@@ -375,6 +377,13 @@ export async function keepCall({ store, read, costs }: Pick<Session, 'store' | '
   const at = Date.now();
   const saved = await append(store, chat, { type: 'call', version: shown(last).id, receipt, at }, undefined, [receiptRow(receipt, at, chatPlace(store, chat))]);
   if (saved.ok) costs.settle(chat, receipt);
+}
+
+// A value the user typed in 점검 › 변수, on the version whose state 점검 showed: the last message's shown one. Its
+// limits are those 점검 shows a variable whole within (engine/render VARIABLE_LIMITS): past them it is refused, never cut.
+export async function setVariableByHand(store: ObjectStore, chat: string, version: string, name: string, value: string) {
+  if (name.length > VARIABLE_LIMITS.name || value.length > VARIABLE_LIMITS.value) return { ok: false, error: 'too-long' } as const;
+  return append(store, chat, { type: 'vars', version, set: [[name, value]], at: Date.now(), byHand: true });
 }
 
 export const appendCost = (store: ObjectStore, chat: string, { id, replyId }: Receipt, cost: Cost | null) => append(store, chat, { type: 'cost', replyId: replyId!, cost, at: Date.now() }, undefined, [costRow(id, cost)]);
