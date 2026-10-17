@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http';
 
 // Each describes one connection, as does every header Connection names, so a proxy ends them at itself. A Trailer
-// forwarded on a bodyless request makes ClientRequest.end() throw where no error listener sees it.
+// forwarded on a bodyless request makes ClientRequest.end() throw, and the request fails instead of being answered.
 const HOP_BY_HOP = ['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade'];
 
 export function endToEnd(headers: IncomingHttpHeaders): IncomingHttpHeaders {
