@@ -4,6 +4,7 @@ import { holdAccount } from '../../runtime/api';
 import { forgetVault } from '../../runtime/device-cache';
 import { lockVault, recallVault, rememberVault } from '../../vault/device';
 import { canonicalUsername, createVault, openVault, passwordCredential, wrapWithPassword, type Credential, type VaultKey } from '../../vault/keys';
+import { clearDownloads } from '../common/download';
 import { describeFailure, wrongSecret } from '../common/failure';
 import type { Account } from '../session';
 import { Brand, Progress, Screen } from '../ui';
@@ -33,6 +34,7 @@ const ELSEWHERE = '다른 탭에서 다른 계정으로 로그인해서 로그�
 
 // Signed out, the page opens on signup while there is room, unless it came from leaving an account.
 async function loadState(notice: string | null = null, prefer: 'signup' | 'login' = 'signup'): Promise<State> {
+  void clearDownloads();
   const result = await loadSession();
   if (!result.ok) return { kind: 'unreachable', message: describeFailure(result) };
   const boot = result.data;
