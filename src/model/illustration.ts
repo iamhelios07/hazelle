@@ -20,18 +20,21 @@ export type Scene = { paragraph: number; shape: Shape; setting: string; framing:
 // sampler, and drew with the model's own. No cost: the image call reports none.
 type Tuning = 'steps' | 'scale' | 'rescale' | 'sampler';
 
-export type Illustration = {
-  message: string;
-  version: string;
+type Placed = { message: string; version: string; file: FileRef; type: string; size: number; at: number };
+export type Drawn = Placed & {
   scene: Scene;
   receipt: Receipt | null;
   model: ModelRef;
   sent: Omit<PictureRequest, 'model' | Tuning> & Partial<Pick<PictureRequest, Tuning>>;
-  file: FileRef;
-  type: string;
-  size: number;
-  at: number;
 };
+// A picture a tool put on a version (Hazelle.Chat.picture): no scene and nothing drawn here, so the app never redraws
+// it. paragraph: its version's last when it came, the message's end. tool: the module that made it, its name kept
+// since the module may go while the chat keeps the picture.
+export type Attached = Placed & { paragraph: number; width: number; height: number; tool: { module: string; name: string }; caption?: string };
+// Told apart by tool, which no drawn picture holds.
+export type Illustration = Drawn | Attached;
+
+export const paragraphOf = (picture: Illustration) => ('tool' in picture ? picture.paragraph : picture.scene.paragraph);
 
 // Shared by every chat, or a character's own (Character.ownIllustrate). auto: draw after each reply received, off by default since every
 // picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
@@ -83,12 +86,12 @@ export const withoutMarks = (text: string, keep: ReadonlySet<number> = new Set()
 
 // A version's pictures by the paragraph each stands after, in paragraph order, each place's oldest first: a place shows
 // one picture and pages through the others.
-export function byParagraph<T extends { value: Pick<Illustration, 'scene' | 'at'> }>(pictures: readonly T[]): Map<number, T[]> {
+export function byParagraph<T extends { value: Illustration }>(pictures: readonly T[]): Map<number, T[]> {
   const places = new Map<number, T[]>();
-  for (const picture of [...pictures].sort((a, b) => a.value.scene.paragraph - b.value.scene.paragraph || a.value.at - b.value.at)) {
-    const place = places.get(picture.value.scene.paragraph);
+  for (const picture of [...pictures].sort((a, b) => paragraphOf(a.value) - paragraphOf(b.value) || a.value.at - b.value.at)) {
+    const place = places.get(paragraphOf(picture.value));
     if (place) place.push(picture);
-    else places.set(picture.value.scene.paragraph, [picture]);
+    else places.set(paragraphOf(picture.value), [picture]);
   }
   return places;
 }

@@ -93,7 +93,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { actions: remarkActions, ...remark } = useChatRemarks(chatId, id);
   const toolData = useChildren('toolchat', id);
   const badges = useMemo(() => badgesByVersion(toolData, tools), [toolData, tools]);
-  const messageTools = useMemo(() => toolActions(tools), [tools]);
+  const frames = useToolFrames();
+  const messageTools = useMemo(() => toolActions(tools, session.tools.actions), [tools, frames]);
   const composerTools = useMemo(() => toolComposer(tools), [tools]);
   const busy = turn !== null;
   const last = messages.at(-1);
@@ -118,7 +119,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     open({ kind: 'info', tab });
   };
   // A frame tool of this chat that asks to be shown opens in the tool panel.
-  const frames = useToolFrames();
   const askingTool = id === null ? undefined : tools.find(({ module }) => frames.get(module)?.asking && frames.get(module)?.chat === id)?.module;
   useEffect(() => { if (askingTool) setPanels((current) => opened(current, { kind: 'tool', module: askingTool }, pairs)); }, [askingTool, pairs]);
   const flipPanel = (next: Panel, same: (current: Panel) => boolean) => setPanels((current) => (current.panel && same(current.panel) ? { ...current, panel: null } : opened(current, next, pairs)));

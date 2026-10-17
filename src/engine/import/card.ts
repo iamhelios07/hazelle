@@ -225,6 +225,50 @@ export function imageType(bytes: Uint8Array): string | null {
   return null;
 }
 
+// A picture's type and size in pixels, read from its header; null when imageType knows no such picture or the header
+// holds no size.
+export function imageSize(bytes: Uint8Array): { type: string; width: number; height: number } | null {
+  const type = imageType(bytes);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  const read = (): [number, number] | null => {
+    switch (type) {
+      case 'image/png': return [view.getUint32(16), view.getUint32(20)];
+      case 'image/gif': return [view.getUint16(6, true), view.getUint16(8, true)];
+      case 'image/webp': {
+        const chunk = ascii(12, 16);
+        if (chunk === 'VP8 ') return [view.getUint16(26, true) & 0x3fff, view.getUint16(28, true) & 0x3fff];
+        if (chunk === 'VP8L') { const bits = view.getUint32(21, true); return [(bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1]; }
+        if (chunk === 'VP8X') return [(view.getUint32(24, true) & 0xffffff) + 1, (view.getUint32(27, true) & 0xffffff) + 1];
+        return null;
+      }
+      case 'image/avif': {
+        const at = ascii(0, Math.min(bytes.length, 4096)).indexOf('ispe');
+        return at === -1 ? null : [view.getUint32(at + 8), view.getUint32(at + 12)];
+      }
+      case 'image/jpeg': {
+        for (let at = 2; at + 9 <= bytes.length;) {
+          if (bytes[at] !== 0xff) return null;
+          const marker = bytes[at + 1]!;
+          // The start-of-frame markers, which hold the size; C4, C8 and CC share the range but are tables.
+          if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return [view.getUint16(at + 7), view.getUint16(at + 5)];
+          at += marker === 0xff ? 1 : 2 + view.getUint16(at + 2);
+        }
+        return null;
+      }
+      default: return null;
+    }
+  };
+  try {
+    const size = read();
+    return type && size && size[0] > 0 && size[1] > 0 ? { type, width: size[0], height: size[1] } : null;
+  } catch (error) {
+    // A header cut short reads past the bytes.
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
+}
+
 // MP4's major brands for video. An audio-only file names M4A or M4B and stays out, as audio is not kept (user,
 // 2026-10-15: video only).
 const MP4_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'dash', 'mmp4']);

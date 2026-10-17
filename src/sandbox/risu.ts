@@ -6,6 +6,7 @@ import { RISU_DECLINED, RISU_REPLACERS } from '../tool-api/risu-methods';
 // as on a Risu without it, so a plugin's typeof guard takes its other branch. Either is told to 점검, never passed silently.
 
 type Callback = () => unknown;
+type MessageAction = (message: { chatId: string; index: number }) => unknown;
 type Replacer = (content: never, type: string) => unknown;
 type Handler = (content: string) => unknown;
 type Listener = (arg: { char: unknown; chat: unknown; characterIndex: number; chatIndex: number; messageIndex: number }) => unknown;
@@ -80,6 +81,8 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     throw new Error(`Risu API '${name}' is not available in Hazelle`);
   };
   const buttons = new Map<string, { label: string; run: Callback }>();
+  const messageActions = new Map<string, { label: string; run: MessageAction }>();
+  const listedActions = () => [...messageActions].map(([id, { label }]) => ({ id, label }));
   const settings = new Map<string, Callback>();
   const replacers = { beforeRequest: new Set<Replacer>(), afterRequest: new Set<Replacer>() };
   const handlers: Record<Mode, Set<Handler>> = { display: new Set(), output: new Set(), input: new Set(), process: new Set() };
@@ -301,6 +304,10 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   };
 
   api.on('menu', (_chat, item) => press(buttons.get(item)?.run));
+  api.on('action', (_chat, item, message) => {
+    const action = messageActions.get(item);
+    if (action) press(() => action.run({ chatId: message.id, index: message.index }));
+  });
   api.on('open', () => press(settings.values().next().value));
   api.on('reply', async (chat, reply) => {
     if (!listeners.size) return;
@@ -311,6 +318,31 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
 
   scope.Risuai = risu;
   scope.risuai = risu;
+  // PluginSlots, version 1 (research/risu-plugin-adapter-plan.md §9): what a ported plugin calls where it would touch
+  // Risu's page, which a piece pasted into the plugin fills on Risu. It is not Risu's, so it maps over the Hazelle API
+  // here like the rest, and never through Risuai. A message is named by the chatId Risu's chat reads carry.
+  scope.PluginSlots = {
+    version: 1,
+    // Through the chat open for the frame, not an event's: the picture often comes after the reply's event has ended.
+    attachPicture: async (chatId: string, bytes: Uint8Array, options: { caption?: string } = {}) => {
+      const chat = await frame.chat();
+      const message = chat && (await chat.messages()).find(({ id }) => id === chatId);
+      if (!message) throw new Error(`PluginSlots.attachPicture: the open chat has no message ${chatId}`);
+      await chat.picture({ index: message.index, id: message.id, version: message.version }, bytes, options);
+    },
+    registerMessageAction: async ({ id, label }: { id: string; label: string }, callback: MessageAction) => {
+      const previous = messageActions.get(id);
+      messageActions.set(id, { label, run: callback });
+      try {
+        await frame.actions(listedActions());
+      } catch (error) {
+        if (previous) messageActions.set(id, previous);
+        else messageActions.delete(id);
+        throw error;
+      }
+    },
+    removeMessageAction: async (id: string) => { if (messageActions.delete(id)) await frame.actions(listedActions()); },
+  };
   // Hazelle's sandbox has no allow-modals. alert becomes the tool's say; confirm and prompt answer at once, so they
   // cannot be mapped and are only told to 점검.
   scope.alert = (message?: unknown) => { void frame.chat().then((chat) => chat ? chat.say(String(message)) : console.log(message)); };

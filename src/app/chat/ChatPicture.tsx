@@ -8,9 +8,11 @@ import type { Stored } from '../../model/kinds';
 import type { Drawing, IllustrateFailure } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import { ACTS } from '../common/acts';
+import { moduleName } from '../common/words';
 import { describeIllustrateFailure } from '../common/failure';
+import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
-import { Button, Dialog, Failure, IconButton, StoryPicture, Switcher, TextField } from '../ui';
+import { Button, Dialog, Failure, IconButton, StoryPicture, Switcher, Text, TextField } from '../ui';
 import type { IllustrationActions, Reshaping } from './useChatIllustrations';
 
 // What a place of a message holds: a scene being drawn or failed comes before the picture paged to there. A run that
@@ -82,21 +84,22 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
     );
   }
   const { picture, pictures } = slot;
-  const { scene, sent } = picture.value;
+  const { value } = picture;
   const at = pictures.indexOf(picture);
   const step = (by: -1 | 1) => onPage(pictures[(at + by + pictures.length) % pictures.length]!.id);
   // The picture's own version may be one its message's edits replaced since.
   const { id: version, text } = shown(message);
-  const again = () => {
+  const again = (scene: Scene) => {
     onPage(null);
     onDraw(message.id, version, scene);
   };
+  const { width, height } = 'tool' in value ? value : value.sent;
   return (
     <StoryPicture
       src={url('illustration', picture.id)}
-      label={LABEL}
-      width={sent.width}
-      height={sent.height}
+      label={'tool' in value ? (value.caption ?? LABEL) : LABEL}
+      width={width}
+      height={height}
       foot={
         <>
           {pictures.length > 1 && (
@@ -115,10 +118,13 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
               onPick={(index) => onPage(pictures[index]!.id)}
             />
           )}
-          {draws && (
+          {/* A tool's picture is redrawn by its tool, never here. */}
+          {'tool' in value ? (
+            <Text variant="note">{`${withParticle(moduleName(value.tool.name), '이/가')} 만든 이미지`}</Text>
+          ) : draws && (
             <>
-              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={again} />
-              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene, sent, paragraphs: paragraphsOf(text).length })} />
+              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={() => again(value.scene)} />
+              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene: value.scene, sent: value.sent, paragraphs: paragraphsOf(text).length })} />
             </>
           )}
           <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => onDrop(picture)} />
