@@ -65,6 +65,11 @@ const IDLE_MS = 10 * 60 * 1000;
 const CORRUPT_CODES = new Set([11, 26]);
 
 export const accountPath = (dataDir: string, incarnation: string) => join(dataDir, 'accounts', `${incarnation}.sqlite`);
+// A whole snapshot's ids with a body, one SQLite file per snapshot (writeBaseIds). Outside everything a backup generation
+// captures and a restore writes (backup/generation.ts, restore.ts): ids only, never bodies, so not a copy of anything the
+// account deleted, and a directory restored without them only reads more archives (deletesFromBase).
+export const BASE_IDS_DIR = 'base-ids';
+export const baseIdsPath = (dataDir: string, incarnation: string, id: string) => join(dataDir, BASE_IDS_DIR, `${incarnation}-${id}.sqlite`);
 
 // Thrown inside a store call for a file the rules cannot be answered from; the registry turns it into { unavailable }.
 class StoreUnavailable extends Error {
@@ -314,6 +319,7 @@ export class AccountDb implements StoreDb {
     return async () => {
       try {
         const stored = base !== null && (await this.deletesFromBase(base, plain, join(dir, `.tmp-${id}-whole.sqlite`))) ? null : base;
+        if (stored === null) writeBaseIds(this.dataDir, this.incarnation, id, plain);
         const { bytes, expanded, sha256 } = await archiveSnapshot(plain, gz);
         await this.files.putFile(snapshotKey(this.incarnation, id), gz);
         // The row follows the durable artifact. A crash before publication leaves a .tmp-* or uncatalogued gzip
@@ -335,9 +341,17 @@ export class AccountDb implements StoreDb {
   // capture is stored whole instead: its base and delta materialized at the captured rev, replacing `plain`. A delta
   // deleting only rows written since its base stays a delta.
   private async deletesFromBase(base: string, plain: string, merged: string): Promise<boolean> {
+    const ids = baseIdsPath(this.dataDir, this.incarnation, base);
     const probe = new DatabaseSync(plain, { readOnly: true });
     try {
       if (probe.prepare('SELECT 1 FROM objects WHERE body IS NULL LIMIT 1').get() === undefined) return false;
+      // The store does not cache archives, and a base can be tens of MB, so the base's id list answers here. A missing
+      // list (a restored directory, a crash before it was written, a base from before the lists) is a cache miss, not a
+      // second model: the base archive below answers, and is the only read of it for this decision.
+      if (existsSync(ids)) {
+        probe.prepare('ATTACH DATABASE ? AS base').run(ids);
+        if (probe.prepare('SELECT 1 FROM main.objects d JOIN base.ids b ON b.id = d.id WHERE d.body IS NULL LIMIT 1').get() === undefined) return false;
+      }
     } finally {
       probe.close();
     }
@@ -373,6 +387,28 @@ export class AccountDb implements StoreDb {
     }
     this.handle.close();
     this.handle = null;
+  }
+}
+
+// On the disk that stages the archive's gzip, before publication: a disk refusing this list refuses that gzip too, so a
+// failure fails the capture. The fsync comes before the rename: a name over a torn list would answer that the base holds
+// no body the delta deletes.
+function writeBaseIds(dataDir: string, incarnation: string, id: string, whole: string): void {
+  const dir = join(dataDir, BASE_IDS_DIR);
+  makeDirs(dir);
+  const temp = join(dir, `.tmp-${incarnation}-${id}.sqlite`);
+  try {
+    const db = new DatabaseSync(temp);
+    try {
+      db.prepare('ATTACH DATABASE ? AS whole').run(whole);
+      db.exec('CREATE TABLE ids (id TEXT PRIMARY KEY); INSERT INTO ids SELECT id FROM whole.objects WHERE body IS NOT NULL');
+    } finally {
+      db.close();
+    }
+    fsyncPath(temp);
+    renameSync(temp, baseIdsPath(dataDir, incarnation, id));
+  } finally {
+    rmSync(temp, { force: true });
   }
 }
 

@@ -13,6 +13,9 @@ files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written. Wi
                                  live in an R2 bucket instead (src/server/files/, infra/README.md "Pictures in R2")
 cache/<sha256>                   with the R2 bucket, a copy of pictures read or put, by id alone; .tmp-* while being written.
                                  Never fsynced, captured or restored; trimmed hourly (src/server/files/cached-r2-bucket.ts)
+base-ids/<incarnation>-<id>.sqlite   a whole snapshot's ids with a body (one table, ids), read by a later delta's capture in place
+                                 of the archive; .tmp-* while being written. Never captured or restored; goes with its snapshots row;
+                                 one left without a row is swept hourly (reconcile.ts)
 streams.sqlite                   reply stream pages and their alarms (the alarm row is a stream's reservation); meta(version), a newer one is refused
 snapshots/<incarnation>/<id>.sqlite.gz   point-in-time copies of an account file (baselines and operation checkpoints), whole files
                                  or deltas against one whole snapshot; in the file store, never the picture cache
@@ -57,7 +60,7 @@ current account schema version and younger than 6 days, a day short of expiry so
 the capture's row names it (none: the snapshot taken is whole), never against another delta; a whole snapshot stays as long as a delta
 names it. A capture that deletes a body its base holds is stored whole instead (the base and the delta materialized at the captured
 rev), so a base never holds a body deleted after it and may live as long as its deltas; a capture deleting only rows written since its
-base stays a delta. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
+base stays a delta. The base's id list (`base-ids/`, written with every whole) answers which it is; only a base without one is read back. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
 for 7 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
 recoverable by hand. A live account keeps its floor, its newest baseline 7 days old or older of any timeline, whatever its age: a time inside the
 window may land on it, also one from before a rewind. Pins are read from `restores`, so a deleted account
