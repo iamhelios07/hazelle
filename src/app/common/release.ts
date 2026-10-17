@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.20',
+    date: '2026-10-18',
+    lines: [
+      'Risu 플러그인(API 3.0)을 모듈로 가져와 쓸 수 있어요. 대화를 앱 밖으로 보낼 수 있는 플러그인은 처음 켤 때 허용할지 물어요.',
+      '삽화를 누르면 크게 볼 수 있어요. 여러 장이면 크게 본 채로 넘겨 볼 수 있어요.',
+      '채팅 ⋯ 메뉴에 오토파일럿이 생겼어요. 보낼 메시지를 한 줄에 하나씩 적어 두면 차례로 보내요. 시작하기 전에 예상 비용을 알려 줘요.',
+      '점검에 기록 탭이 생겨 보낸 요청을 차례로 볼 수 있어요. 변수 탭에서는 값을 바로 고칠 수 있어요.',
+      '봇 HTML에서 이미지만 있는 줄, 줄 맨 앞의 이미지도 이미지 최대 폭과 접기 설정을 따라요.',
+    ],
+  },
+  {
     version: 'v0.2.19',
     date: '2026-10-18',
     lines: [
