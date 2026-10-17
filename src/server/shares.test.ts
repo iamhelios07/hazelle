@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VISITOR_HEADER } from '../contracts/http';
+import { SHARE_LIMITS } from '../contracts/shares';
+import { forgetOldRecords } from './admin';
+import { ROW_BYTES } from './caps';
 import { sha256Hex } from './http';
 import { testApp } from './testing';
 
@@ -41,6 +44,8 @@ const report = (share: string, from = `visitor-${++visitor}`) =>
     body: JSON.stringify({ text: '미성년자로 보여요', link: `https://hazelle.app/s/${share}#key`, version: 1 }),
   });
 const state = async (share: string) => ((await (await t.get(`shares/${share}`)).json()) as { state: string }).state;
+const billed = async (cookie: string) => ((await (await t.get('session', cookie)).json()) as { session: { storage: { bytes: number } } }).session.storage.bytes;
+const rows = async (share: string) => (await t.env.db.prepare('SELECT (SELECT COUNT(*) FROM shares WHERE id = ?1) AS links, (SELECT COUNT(*) FROM share_versions WHERE share = ?1) AS versions, (SELECT COUNT(*) FROM share_files WHERE share = ?1) AS files').bind(share).first())!;
 
 describe('a share link', () => {
   it('reclaims a released picture on publication and excludes a concurrent sweep through the publication', async () => {
@@ -124,7 +129,7 @@ describe('a share link', () => {
     expect([refused.status, await refused.json()]).toEqual([403, { error: 'file-blocked' }]);
   });
 
-  it('keeps its manifest for the operator when the sharer cuts it under an open report', async () => {
+  it('keeps its manifest for the operator when the sharer cuts it under an open report, until the report is resolved', async () => {
     const { operator, sharer, manifest, id } = await published();
     await report(id);
     expect((await t.delete(`shares/${id}`, undefined, sharer.cookie)).status).toBe(204);
@@ -132,6 +137,39 @@ describe('a share link', () => {
     expect((await t.get(`shares/${id}/files/${manifest}`)).status).toBe(404);
     const opened = await t.get(`admin/shares/${id}/files/${manifest}`, operator.cookie);
     expect([opened.status, [...new Uint8Array(await opened.arrayBuffer())]]).toEqual([200, [1, 1, 1]]);
+    const reported = await t.env.db.prepare('SELECT id FROM reports WHERE share = ?').bind(id).first<number>('id');
+    expect((await t.post(`admin/reports/${reported}/resolve`, {}, operator.cookie)).status).toBe(204);
+    await forgetOldRecords(t.env.db);
+    // The resolved report still names the link, so its own row stays.
+    expect(await rows(id)).toEqual({ links: 1, versions: 0, files: 0 });
+    expect(await billed(sharer.cookie)).toBe(ROW_BYTES.share);
+  });
+
+  it("bills a link's rows to its sharer, refuses a publish past the cap, and forgets them when cut", async () => {
+    const { sharer, manifest, picture, id } = await published();
+    expect(await billed(sharer.cookie)).toBe(ROW_BYTES.share + 2 * ROW_BYTES.shareFile);
+    const second = await t.post(`shares/${id}/versions`, { manifest, files: [picture], cover: null }, sharer.cookie);
+    expect(second.headers.get('x-account-bytes')).toBe(String(ROW_BYTES.share + 4 * ROW_BYTES.shareFile));
+    await t.env.db.prepare('UPDATE service SET account_bytes_cap = ?').bind(ROW_BYTES.share + 5 * ROW_BYTES.shareFile).run();
+    const refused = await t.post(`shares/${id}/versions`, { manifest, files: [picture], cover: null }, sharer.cookie);
+    expect([refused.status, await refused.json()]).toEqual([413, { error: 'storage-full' }]);
+    expect((await t.delete(`shares/${id}`, undefined, sharer.cookie)).status).toBe(204);
+    expect(await rows(id)).toEqual({ links: 0, versions: 0, files: 0 });
+    expect(await billed(sharer.cookie)).toBe(0);
+  });
+
+  it('limits the links an account holds, the versions of a link and the publishes an hour', async () => {
+    const { sharer, manifest, picture, id } = await published();
+    const version = () => t.post(`shares/${id}/versions`, { manifest, files: [picture], cover: null }, sharer.cookie);
+    const from = (last: number) => JSON.stringify(Array.from({ length: last - 1 }, (_, at) => at + 2));
+    await t.env.db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) SELECT ?1, value, ?2, 0 FROM json_each(?3)').bind(id, manifest, from(SHARE_LIMITS.versions)).run();
+    expect(await (await version()).json()).toEqual({ error: 'too-many-versions' });
+    await t.env.db.prepare("INSERT INTO shares (id, incarnation, created_at) SELECT printf('%016d', value), ?1, 0 FROM json_each(?2)").bind(sharer.incarnation, from(SHARE_LIMITS.links)).run();
+    const link = await t.post('shares', { manifest, files: [picture], cover: null }, sharer.cookie);
+    expect([link.status, await link.json()]).toEqual([429, { error: 'too-many-shares' }]);
+    for (let sent = 3; sent < SHARE_LIMITS.publishesPerHour; sent++) await t.post('shares', 'not a version', sharer.cookie);
+    const throttled = await t.post('shares', 'not a version', sharer.cookie);
+    expect([throttled.status, await throttled.json()]).toEqual([429, { error: 'too-many-publishes', retryAfter: expect.any(Number) }]);
   });
 
   it("reads as held, cover and files too, while its sharer is suspended, and comes back when the suspension lifts", async () => {

@@ -5,9 +5,12 @@ import { createMiddleware } from 'hono/factory';
 import { MAX_REPORT_LENGTH } from '../contracts/admin';
 import { FILE_ID } from '../contracts/files';
 import { ACCOUNT_USAGE_HEADERS, VISITOR_HEADER } from '../contracts/http';
-import { COVER_LENGTH, MAX_SHARE_FILES, MAX_SHARE_LINK, SHARE_CONSENT, SHARE_ID, type ShareCover, type ShareState } from '../contracts/shares';
+import { COVER_LENGTH, MAX_SHARE_FILES, MAX_SHARE_LINK, SHARE_CONSENT, SHARE_ID, SHARE_LIMITS, type ShareCover, type ShareState } from '../contracts/shares';
+import { ROW_BYTES } from './caps';
+import type { Db, SqlValue, Statement } from './db/service-db';
 import { fileKey } from './files/bucket';
 import { fail, isRecord, readObject, refused as refuseStore, RETRY_SECONDS, type AppEnv } from './http';
+import { tokenBucket } from './limits';
 import { canWrite, currentAccount, requireSession } from './session';
 
 // A share is sealed content an account publishes under one link (migrations/0003_shares.sql). The server holds the
@@ -57,12 +60,23 @@ async function readVersion(c: Context<AppEnv>) {
   return { manifest, files: [...new Set(files)], cover };
 }
 
-// Each refusal by name: the account has not agreed to the current consent, a named file is not the sharer's, or a
-// picture was blocked, which would otherwise be published again under a new link.
-async function refusal(c: Context<AppEnv>, manifest: string, files: string[]) {
-  const { incarnation } = c.get('account');
+// Per account, links and versions together, refused before the body is read, as is an account that has not agreed
+// to the current consent.
+const publishes = tokenBucket(SHARE_LIMITS.publishesPerHour, 60 * 60_000);
+const publishable = createMiddleware<AppEnv>(async (c, next) => {
+  const { id, incarnation } = c.get('account');
+  const taken = publishes.limit(id);
+  if (!taken.success) return fail(c, 429, 'too-many-publishes', { retryAfter: taken.retryAfter });
   const consent = await c.env.db.prepare('SELECT share_consent FROM accounts WHERE incarnation = ?').bind(incarnation).first<number>('share_consent');
-  if (consent !== SHARE_CONSENT) return fail(c, 403, 'no-consent');
+  return consent === SHARE_CONSENT ? next() : fail(c, 403, 'no-consent');
+});
+
+// Each refusal by name: the rows the publish adds do not fit under the account's cap (caps.ts SHARED_BYTES), a named
+// file is not the sharer's, or a picture was blocked, which would otherwise be published again under a new link.
+// billed: what the account is billed once the publish lands.
+async function refusal(c: Context<AppEnv>, billed: number, manifest: string, files: string[]) {
+  const { incarnation, bytesCap } = c.get('account');
+  if (bytesCap !== null && billed > bytesCap) return fail(c, 413, 'storage-full');
   const claimed = await claimFiles(c.env.db, incarnation, [manifest, ...files]);
   c.header(ACCOUNT_USAGE_HEADERS.fileBytes, String(claimed.fileBytes));
   if (claimed.removing) return fail(c, 503, 'busy', { retryAfter: RETRY_SECONDS });
@@ -71,11 +85,15 @@ async function refusal(c: Context<AppEnv>, manifest: string, files: string[]) {
   return null;
 }
 
-async function publishing(c: Context<AppEnv>, write: () => Promise<Response>): Promise<Response> {
+// bytes: what the account is billed, read on the queue its object writes take.
+// link: the publish makes a new link.
+const added = (link: boolean, files: string[]) => (link ? ROW_BYTES.share : 0) + ROW_BYTES.shareFile * (1 + files.length);
+
+async function publishing(c: Context<AppEnv>, write: (bytes: number) => Promise<Response>): Promise<Response> {
   const { incarnation } = c.get('account');
   const result = await c.env.backups.hold(() => c.env.stores.withStore(incarnation, async (store) => {
-    const head = await store.revision(incarnation);
-    return 'rev' in head ? write() : refuseStore(c, head);
+    const usage = await store.usage(incarnation);
+    return 'bytes' in usage ? write(usage.bytes) : refuseStore(c, usage);
   }));
   return 'unavailable' in result ? refuseStore(c, result) : result;
 }
@@ -105,13 +123,16 @@ shares.get('/mine', requireSession, async (c) => {
   return c.json({ consent, shares: results.map((row) => ({ ...row, held: Boolean(row.held), removed: Boolean(row.removed), covered: Boolean(row.covered) })) });
 });
 
-shares.post('/', requireSession, canWrite, async (c) => {
+shares.post('/', requireSession, canWrite, publishable, async (c) => {
   const version = await readVersion(c);
   if (!version) return fail(c, 400, 'bad-input');
-  return publishing(c, async () => {
-    const refused = await refusal(c, version.manifest, version.files);
-    if (refused) return refused;
+  return publishing(c, async (bytes) => {
     const db = c.env.db;
+    const links = await db.prepare('SELECT COUNT(*) AS n FROM shares WHERE incarnation = ? AND cut_at IS NULL').bind(c.get('account').incarnation).first<number>('n');
+    if (links! >= SHARE_LIMITS.links) return fail(c, 429, 'too-many-shares');
+    const billed = bytes + added(true, version.files);
+    const refused = await refusal(c, billed, version.manifest, version.files);
+    if (refused) return refused;
     const id = newShareId();
     const now = Date.now();
     await db.batch([
@@ -119,17 +140,18 @@ shares.post('/', requireSession, canWrite, async (c) => {
       db.prepare('INSERT INTO share_versions (share, version, manifest, created_at) VALUES (?, 1, ?, ?)').bind(id, version.manifest, now),
       db.prepare('INSERT INTO share_files (share, version, file) SELECT ?1, 1, value FROM json_each(?2)').bind(id, JSON.stringify(version.files)),
     ]);
+    c.header(ACCOUNT_USAGE_HEADERS.bytes, String(billed));
     return c.json({ id, version: 1 }, 201);
   });
 });
 
 // 새 버전으로 바꾸기: the link stays and opens this version from now on. A held link takes none until the operator has
 // looked: the version the report showed is the one under review.
-shares.post('/:id/versions', requireSession, canWrite, async (c) => {
+shares.post('/:id/versions', requireSession, canWrite, publishable, async (c) => {
   const id = c.req.param('id');
   const version = await readVersion(c);
   if (!SHARE_ID.test(id) || !version) return fail(c, 400, 'bad-input');
-  return publishing(c, async () => {
+  return publishing(c, async (bytes) => {
     const db = c.env.db;
     const row = await db
       .prepare(`SELECT s.held_at IS NOT NULL AS held, s.cut_at IS NULL AND s.removed_at IS NULL AS open, (SELECT MAX(version) FROM share_versions WHERE share = s.id) AS version FROM shares s WHERE s.id = ? AND s.incarnation = ?`)
@@ -137,7 +159,9 @@ shares.post('/:id/versions', requireSession, canWrite, async (c) => {
       .first<{ held: number; open: number; version: number }>();
     if (!row?.open) return fail(c, 404, 'not-found');
     if (row.held) return fail(c, 403, 'share-held');
-    const refused = await refusal(c, version.manifest, version.files);
+    if (row.version >= SHARE_LIMITS.versions) return fail(c, 429, 'too-many-versions');
+    const billed = bytes + added(false, version.files);
+    const refused = await refusal(c, billed, version.manifest, version.files);
     if (refused) return refused;
     const next = row.version + 1;
     await db.batch([
@@ -146,6 +170,7 @@ shares.post('/:id/versions', requireSession, canWrite, async (c) => {
       // A review covers the version reviewed: a new one is held again by its first report.
       db.prepare('UPDATE shares SET cover = ?, reviewed_at = NULL WHERE id = ?').bind(version.cover && JSON.stringify(version.cover), id),
     ]);
+    c.header(ACCOUNT_USAGE_HEADERS.bytes, String(billed));
     return c.json({ id, version: next });
   });
 });
@@ -159,14 +184,29 @@ shares.put('/:id/cover', requireSession, canWrite, async (c) => {
   return set ? c.body(null, 204) : fail(c, 404, 'not-found');
 });
 
-// 링크 끊기. Nothing is deleted: the versions stay among the sharer's files as every file does while its account lives,
-// so a report still open on the link keeps what it reported.
+// 링크 끊기. The link's rows go at once unless a report still open names it, which keeps what it reported; the hourly
+// pass (admin.ts forgetOldRecords) takes them once it is resolved. The files stay among the sharer's files.
 shares.delete('/:id', requireSession, async (c) => {
   const id = c.req.param('id');
   if (!SHARE_ID.test(id)) return fail(c, 400, 'bad-input');
-  const cut = await c.env.db.prepare('UPDATE shares SET cut_at = ? WHERE id = ? AND incarnation = ? AND cut_at IS NULL RETURNING id').bind(Date.now(), id, c.get('account').incarnation).first();
-  return cut ? c.body(null, 204) : fail(c, 404, 'not-found');
+  const db = c.env.db;
+  const [cut] = await db.batch([
+    db.prepare('UPDATE shares SET cut_at = ? WHERE id = ? AND incarnation = ? AND cut_at IS NULL RETURNING id').bind(Date.now(), id, c.get('account').incarnation),
+    ...forgetCut(db, 's.id = ?1 AND s.incarnation = ?2', id, c.get('account').incarnation),
+  ]);
+  return cut!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
 });
+
+// The rows of cut links that no open report names: their versions and the files those name, then the link's own row
+// once no report names it at all, so a resolved report still shows the link it was about. over: a condition on the
+// shares row s, with its values from ?1 on.
+export function forgetCut(db: Db, over: string, ...values: SqlValue[]): Statement[] {
+  return [
+    db.prepare(`DELETE FROM share_versions WHERE share IN (SELECT s.id FROM shares s WHERE s.cut_at IS NOT NULL AND ${over}
+      AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.share = s.id AND r.resolved_at IS NULL))`).bind(...values),
+    db.prepare(`DELETE FROM shares AS s WHERE s.cut_at IS NOT NULL AND ${over} AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.share = s.id)`).bind(...values),
+  ];
+}
 
 // Anonymous from here on.
 

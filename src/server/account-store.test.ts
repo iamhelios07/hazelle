@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreRules, type FeedPage, type FeedQuery, type StoreDb, type StoreReads, type Write } from './account-store';
+import { ROW_BYTES } from './caps';
 import { AccountDb, accountRegistry, type Stores } from './db/account-db';
 import { diskBucket } from './files/disk-bucket';
 import { migrate } from './db/migrate';
@@ -13,6 +14,7 @@ const INC = 'a'.repeat(32);
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const C = '33333333-3333-4333-8333-333333333333';
+const R = ROW_BYTES.object;
 
 const active = (timeline = 't1') => ({ state: 'active', timeline, operation: null });
 const restoring = (operation: number) => ({ state: 'restoring', timeline: 't1', operation });
@@ -48,7 +50,7 @@ beforeEach(async () => {
   row = active();
   phase = null;
   now = 1_000_000;
-  reads = { life: vi.fn(async () => row), phase: vi.fn(async () => phase) };
+  reads = { life: vi.fn(async () => row), phase: vi.fn(async () => phase), shared: vi.fn(async () => 0) };
   dir = mkdtempSync(join(tmpdir(), 'hazelle-rules-'));
   raw = new DatabaseSync(':memory:');
   raw.exec('PRAGMA foreign_keys = ON');
@@ -149,7 +151,7 @@ describe('feed', () => {
 
 describe('batch', () => {
   it('creates, updates by rev, refuses conflicts and moves, deletes and undeletes', async () => {
-    expect(await write(put(A, { kind: 'settings', body: 'one' }))).toEqual({ revs: [1], bytes: 3, timeline: 't1' });
+    expect(await write(put(A, { kind: 'settings', body: 'one' }))).toEqual({ revs: [1], bytes: 3 + R, timeline: 't1' });
     expect(await write(put(A, { kind: 'settings', body: 'two', baseRev: 1 }))).toMatchObject({ revs: [2] });
     expect(await write(put(A, { kind: 'settings', body: 'old', baseRev: 1 }))).toEqual({ refused: 'conflict' });
     expect(await write(put(A, { kind: 'settings', body: 'again' }))).toEqual({ refused: 'conflict' });
@@ -171,9 +173,9 @@ describe('batch', () => {
 
   it('answers a once create already there with its rev, writing only the rest', async () => {
     await write(put(A, { kind: 'settings', body: 's' }));
-    expect(await write(put(B, { kind: 'ledger', parent: A, body: 'row', once: true }))).toMatchObject({ revs: [2], bytes: 4 });
-    expect(await write([put(B, { kind: 'ledger', parent: A, body: 'sealed again', once: true }), put(C, { kind: 'ledger', parent: A, body: 'next', once: true })])).toEqual({ revs: [2, 3], bytes: 8, timeline: 't1' });
-    expect(await write(put(B, { kind: 'ledger', parent: A, body: 'row', once: true }))).toEqual({ revs: [2], bytes: 8, timeline: 't1' });
+    expect(await write(put(B, { kind: 'ledger', parent: A, body: 'row', once: true }))).toMatchObject({ revs: [2], bytes: 4 + 2 * R });
+    expect(await write([put(B, { kind: 'ledger', parent: A, body: 'sealed again', once: true }), put(C, { kind: 'ledger', parent: A, body: 'next', once: true })])).toEqual({ revs: [2, 3], bytes: 8 + 3 * R, timeline: 't1' });
+    expect(await write(put(B, { kind: 'ledger', parent: A, body: 'row', once: true }))).toEqual({ revs: [2], bytes: 8 + 3 * R, timeline: 't1' });
     expect(await write(put(B, { kind: 'ledger', parent: C, body: 'row', once: true }))).toEqual({ refused: 'conflict' });
     expect(await revs()).toEqual([1, 2, 3]);
   });
@@ -183,37 +185,47 @@ describe('batch', () => {
     const first = put(B, { kind: 'entry', parent: A, body: 'new' });
     expect(await write([first, put(A, { body: 'changed', baseRev: 2 })])).toEqual({ refused: 'conflict' });
     expect(await write([first, put(A, { body: 'changed', parent: B, baseRev: 1 })])).toEqual({ refused: 'bad-input' });
-    expect(await feed()).toMatchObject({ bytes: 8, cursor: 1, changes: [{ id: A, rev: 1, body: 'original' }] });
+    expect(await feed()).toMatchObject({ bytes: 8 + R, cursor: 1, changes: [{ id: A, rev: 1, body: 'original' }] });
     expect(await write([first, put(A, { body: 'changed', baseRev: 1 })])).toMatchObject({ revs: [2, 3] });
   });
 
-  it('holds UTF-8 bytes under the cap, lets updates grow within the margin, and lets a full account delete', async () => {
+  it('holds UTF-8 bytes and rows under the cap, lets updates grow within the margin, and lets a full account delete', async () => {
+    const full = 50 + 2 * R;
     await write(put(A, { kind: 'settings', body: '가'.repeat(10) }));
-    expect(await write(put(B, { body: 'x'.repeat(20) }))).toMatchObject({ bytes: 50 });
-    expect(await write(put(C, { body: 'x' }), 50)).toEqual({ refused: 'storage-full' });
-    expect(await write(put(A, { kind: 'settings', body: '가'.repeat(11), baseRev: 1 }), 50)).toMatchObject({ revs: [3], bytes: 53 });
-    expect(await write(put(A, { kind: 'settings', body: 'x'.repeat(1_000_051), baseRev: 3 }), 50)).toEqual({ refused: 'storage-full' });
-    expect(await write([put(A, { kind: 'settings', body: 'x'.repeat(40), baseRev: 3 }), put(C, { body: 'x' })], 50)).toEqual({ refused: 'storage-full' });
-    expect(await write(put(B, { body: null, baseRev: 2 }), 0)).toMatchObject({ revs: [4], bytes: 33 });
-    expect(await write(put(C, { body: 'x'.repeat(17) }), 50)).toMatchObject({ bytes: 50 });
-    expect(await write(put(C, { body: 'y'.repeat(17), baseRev: 5 }), 0)).toMatchObject({ bytes: 50 });
-    expect(await store().usage(INC)).toMatchObject({ bytes: 50 });
+    expect(await write(put(B, { body: 'x'.repeat(20) }))).toMatchObject({ bytes: full });
+    expect(await write(put(C, { body: 'x' }), full)).toEqual({ refused: 'storage-full' });
+    expect(await write(put(A, { kind: 'settings', body: '가'.repeat(11), baseRev: 1 }), full)).toMatchObject({ revs: [3], bytes: full + 3 });
+    expect(await write(put(A, { kind: 'settings', body: 'x'.repeat(1_000_051), baseRev: 3 }), full)).toEqual({ refused: 'storage-full' });
+    expect(await write([put(A, { kind: 'settings', body: 'x'.repeat(40), baseRev: 3 }), put(C, { body: 'x' })], full)).toEqual({ refused: 'storage-full' });
+    expect(await write(put(B, { body: null, baseRev: 2 }), 0)).toMatchObject({ revs: [4], bytes: full - 17 });
+    // The deletion freed its body, not its row.
+    expect(await write(put(C, { body: 'x'.repeat(17) }), full)).toEqual({ refused: 'storage-full' });
+    expect(await write(put(C, { body: 'x'.repeat(17) }), full + R)).toMatchObject({ bytes: full + R });
+    expect(await write(put(C, { body: 'y'.repeat(17), baseRev: 5 }), 0)).toMatchObject({ bytes: full + R });
+    expect(await store().usage(INC)).toMatchObject({ bytes: full + R });
+  });
+
+  it("bills the account's links beside its objects", async () => {
+    reads.shared = vi.fn(async () => 1000);
+    expect(await write(put(A, { body: 'x' }), 1001 + R)).toEqual({ revs: [1], bytes: 1001 + R, timeline: 't1' });
+    expect(await write(put(B, { body: 'x' }), 1001 + 2 * R)).toEqual({ refused: 'storage-full' });
+    expect(await store().usage(INC)).toMatchObject({ bytes: 1001 + R });
   });
 
   it('leaves both updates and the head untouched when the later update exceeds the margin by one byte', async () => {
     await write([put(A), put(B)]);
     const first = put(A, { body: 'x'.repeat(500_001), baseRev: 1 });
-    expect(await write([first, put(B, { body: 'x'.repeat(500_002), baseRev: 2 })], 2)).toEqual({ refused: 'storage-full' });
-    expect(await feed()).toMatchObject({ bytes: 2, cursor: 2, changes: [{ id: A, rev: 1, body: 'x' }, { id: B, rev: 2, body: 'x' }] });
-    expect(await write([first, put(B, { body: 'x'.repeat(500_001), baseRev: 2 })], 2)).toEqual({ revs: [3, 4], bytes: 1_000_002, timeline: 't1' });
-    expect(await store().usage(INC)).toMatchObject({ bytes: 1_000_002 });
+    expect(await write([first, put(B, { body: 'x'.repeat(500_002), baseRev: 2 })], 2 + 2 * R)).toEqual({ refused: 'storage-full' });
+    expect(await feed()).toMatchObject({ bytes: 2 + 2 * R, cursor: 2, changes: [{ id: A, rev: 1, body: 'x' }, { id: B, rev: 2, body: 'x' }] });
+    expect(await write([first, put(B, { body: 'x'.repeat(500_001), baseRev: 2 })], 2 + 2 * R)).toEqual({ revs: [3, 4], bytes: 1_000_002 + 2 * R, timeline: 't1' });
+    expect(await store().usage(INC)).toMatchObject({ bytes: 1_000_002 + 2 * R });
   });
 
   it('allows an undelete paid for by a later delete even when the cap has fallen to zero', async () => {
     await write([put(A, { body: '가' }), put(B, { body: '가' })]);
     await write(put(A, { body: null, baseRev: 1 }));
-    expect(await write([put(A, { body: '가', baseRev: 3 }), put(B, { body: null, baseRev: 2 })], 0)).toEqual({ revs: [4, 5], bytes: 3, timeline: 't1' });
-    expect(await feed()).toMatchObject({ bytes: 3, cursor: 5, changes: [{ id: A, rev: 4, body: '가' }, { id: B, rev: 5, body: null }] });
+    expect(await write([put(A, { body: '가', baseRev: 3 }), put(B, { body: null, baseRev: 2 })], 0)).toEqual({ revs: [4, 5], bytes: 3 + 2 * R, timeline: 't1' });
+    expect(await feed()).toMatchObject({ bytes: 3 + 2 * R, cursor: 5, changes: [{ id: A, rev: 4, body: '가' }, { id: B, rev: 5, body: null }] });
   });
 });
 
@@ -268,7 +280,7 @@ describe('timeline', () => {
     expect(await store().status(INC)).toEqual(active('t2'));
     expect(stores.inspect(INC).exec('SELECT timeline FROM head')).toEqual([{ timeline: 't2' }]);
     expect(await write(put(B), null, 't1')).toEqual({ stale: true });
-    expect(await write(put(B), null, 't2')).toEqual({ revs: [2], bytes: 2, timeline: 't2' });
+    expect(await write(put(B), null, 't2')).toEqual({ revs: [2], bytes: 2 + 2 * R, timeline: 't2' });
   });
 
   it('refuses old work after a rewind even when the head passes its cursor and the object regains its revision', async () => {
@@ -292,7 +304,7 @@ describe('timeline', () => {
     expect(await feed({ bootstrap: true, since: 1, known: 2, until: 2 })).toEqual({ stale: true });
     expect(await write(put(A, { body: 'late overwrite', baseRev: 2 }))).toEqual({ stale: true });
     expect(await write(put(C, { body: 'late create' }))).toEqual({ stale: true });
-    expect(await feed({ timeline: 't2' })).toMatchObject({ cursor: 3, bytes: 11, changes: [{ id: A, rev: 2, body: 'new branch' }, { id: B, rev: 3, body: 'x' }] });
+    expect(await feed({ timeline: 't2' })).toMatchObject({ cursor: 3, bytes: 11 + 2 * R, changes: [{ id: A, rev: 2, body: 'new branch' }, { id: B, rev: 3, body: 'x' }] });
   });
 });
 

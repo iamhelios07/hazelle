@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { forgetOldRecords, readAll } from './admin';
+import { ROW_BYTES } from './caps';
 import { MAX_DIAGNOSTICS_LENGTH } from '../contracts/admin';
 import { beginRestore } from './lifecycle';
 import { sha256Hex, type Services } from './http';
@@ -53,12 +54,12 @@ describe('the operator', () => {
     const answer = (await (await t.get('admin/accounts', admin.cookie)).json()) as { accounts: Record<string, unknown>[]; next: string | null };
     const row = { createdAt: expect.any(Number), suspended: false, state: 'active', disk: expect.any(Number), bytesCap: 'default', fileBytesCap: 'default' };
     expect(answer.accounts).toEqual([
-      { ...row, accountId: admin.id, username: 'operator', bytes: 20, fileBytes: 0 },
-      { ...row, accountId: other.id, username: 'other', bytes: 20, fileBytes: 3 },
+      { ...row, accountId: admin.id, username: 'operator', bytes: 20 + 2 * ROW_BYTES.object, fileBytes: 0 },
+      { ...row, accountId: other.id, username: 'other', bytes: 20 + 2 * ROW_BYTES.object, fileBytes: 3 },
       { ...row, accountId: leaving.id, username: 'leaving', state: 'leaving', bytes: null, disk: null, fileBytes: 0 },
     ]);
     expect(answer.next).toBeNull();
-    expect(await (await t.get('admin/usage', admin.cookie)).json()).toEqual({ accounts: 3, totals: { bytes: 40, disk: expect.any(Number), unread: 1, readAt: expect.any(Number) }, next: null });
+    expect(await (await t.get('admin/usage', admin.cookie)).json()).toEqual({ accounts: 3, totals: { bytes: 40 + 4 * ROW_BYTES.object, disk: expect.any(Number), unread: 1, readAt: expect.any(Number) }, next: null });
     expect(await (await t.get('admin/service', admin.cookie)).json()).toMatchObject({ accounts: 3, people: 2 });
   });
 
@@ -140,9 +141,12 @@ describe('the operator', () => {
   it('reads the service values with their totals and sets them, which opens signup again', async () => {
     const admin = await operator();
     await stored(new Uint8Array([1, 2, 3]), admin.cookie);
-    expect(await (await t.get('admin/service', admin.cookie)).json()).toEqual({
-      signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, people: 1, pending: 0, fileBytes: 3, backupAgeHours: null, diskFreePercent: 50, warnings: [],
+    const service = (await (await t.get('admin/service', admin.cookie)).json()) as { databaseBytes: number };
+    expect(service).toEqual({
+      signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, people: 1, pending: 0, fileBytes: 3, links: 0,
+      databaseBytes: expect.any(Number), backupAgeHours: null, diskFreePercent: 50, warnings: [],
     });
+    expect(service.databaseBytes).toBeGreaterThan(0);
 
     expect((await t.put('admin/service', { signupCap: 1, accountBytesCap: 1000, accountFileBytesCap: 2000 }, admin.cookie)).status).toBe(204);
     expect((await t.post('signup', signupBody('late'))).status).toBe(403);
@@ -161,11 +165,11 @@ describe('the operator', () => {
 
     expect((await t.put(`admin/accounts/${other.id}/caps`, { bytesCap: null, fileBytesCap: 5 }, admin.cookie)).status).toBe(204);
     expect(await write()).toBe(200);
-    expect(await session()).toEqual({ bytes: 6, bytesCap: null, fileBytes: 0, fileBytesCap: 5 });
+    expect(await session()).toEqual({ bytes: 6 + ROW_BYTES.object, bytesCap: null, fileBytes: 0, fileBytesCap: 5 });
 
     expect((await t.put(`admin/accounts/${other.id}/caps`, { bytesCap: 'default', fileBytesCap: 'default' }, admin.cookie)).status).toBe(204);
     expect(await write()).toBe(413);
-    expect(await session()).toEqual({ bytes: 6, bytesCap: 0, fileBytes: 0, fileBytesCap: 0 });
+    expect(await session()).toEqual({ bytes: 6 + ROW_BYTES.object, bytesCap: 0, fileBytes: 0, fileBytesCap: 0 });
     expect((await t.put(`admin/accounts/${other.id}/caps`, { bytesCap: -1, fileBytesCap: 'default' }, admin.cookie)).status).toBe(400);
     expect(await log(admin.cookie)).toMatchObject([
       { action: 'set-caps', target: other.id, detail: { username: 'other', bytesCap: 'default', fileBytesCap: 'default' } },

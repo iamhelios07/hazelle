@@ -8,7 +8,8 @@ import { page } from './pages';
 // The caps every account has unless given its own; null is no cap. accounts: the rows the signup cap counts, a leaving one
 // too, since it holds its seat until removed. people: the accounts not leaving. pending: open reports plus held shares,
 // a held share counted again with its report, so it is only ever zero or not. fileBytes: every account's pictures
-// together. backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says
+// together. links: the links not cut. databaseBytes: the service database, which every backup copies whole.
+// backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says
 // needs the operator (server/backup/freshness).
 export type Service = {
   signupCap: number;
@@ -18,6 +19,8 @@ export type Service = {
   people: number;
   pending: number;
   fileBytes: number;
+  links: number;
+  databaseBytes: number;
   backupAgeHours: number | null;
   diskFreePercent: number;
   warnings: BackupWarning[];

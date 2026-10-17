@@ -49,10 +49,14 @@ export type ServerError =
   | 'too-many-attempts'
   | 'too-many-bot-calls'
   | 'too-many-calls'
+  | 'too-many-publishes'
   | 'too-many-reports'
   | 'too-many-restores'
+  | 'too-many-shares'
   | 'too-many-signups'
+  | 'too-many-versions'
   | 'too-many-visits'
+  | 'too-many-writes'
   | 'username-taken'
   | 'wrong-login';
 // The relay's own refusals, answered marked RELAY_HEADER: error (server/relay).

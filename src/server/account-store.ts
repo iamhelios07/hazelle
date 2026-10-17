@@ -1,4 +1,5 @@
 import type { AccountState } from '../contracts/admin';
+import { ROW_BYTES, SHARED_BYTES } from './caps';
 import type { Db } from './db/service-db';
 import { isRecord } from './http';
 // The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
@@ -43,11 +44,13 @@ export type StoreDb = {
 export type StoreReads = {
   life(incarnation: string): Promise<unknown>;
   phase(incarnation: string, operation: number): Promise<unknown>;
+  shared(incarnation: string): Promise<unknown>;
 };
 
 export const serviceReads = (db: Db): StoreReads => ({
   life: (incarnation) => db.prepare('SELECT state, timeline, operation FROM accounts WHERE incarnation = ?').bind(incarnation).first(),
   phase: (incarnation, operation) => db.prepare('SELECT phase FROM restores WHERE id = ? AND incarnation = ?').bind(operation, incarnation).first('phase'),
+  shared: (incarnation) => db.prepare(SHARED_BYTES).bind(incarnation).first('bytes'),
 });
 
 const PAGE_ROWS = 500;
@@ -92,6 +95,8 @@ export class StoreRules {
   async feed(incarnation: string, query: FeedQuery): Promise<Refused | { stale: true } | { reset: true } | FeedPage> {
     const life = await this.lifecycle(incarnation);
     if (!active(life)) return refusal(life);
+    const shared = await this.shared(incarnation);
+    if (shared === null) return unavailable();
     return this.db.transaction(() => {
       const head = this.head();
       // No timeline: a device that holds nothing yet, and only its first page may come without one.
@@ -142,7 +147,7 @@ export class StoreRules {
       return {
         ...(total === undefined ? {} : { total }),
         timeline: head.timeline,
-        bytes: head.bytes,
+        bytes: this.billed(head.bytes, shared),
         until,
         changes: page.map((row): Change => ({ id: row.id, kind: row.kind, parent: row.parent_id, rev: row.rev, ...(row.omitted ? { omitted: true } : { body: row.deleted ? null : row.body }) })),
         cursor: page.at(-1)?.rev ?? query.since,
@@ -155,13 +160,16 @@ export class StoreRules {
   // the object's parent: one naming another parent is bad input, not a conflict, since pulling and trying again could
   // never make it fit. A deleted object stays as a row without a body, so other devices learn of the deletion by sync;
   // writing it again with its current rev restores it (되돌리기).
-  // The same transaction keeps head.bytes, the bytes of the account's bodies, and holds it under the cap the request
-  // read with its session: a batch that creates an object must fit under it, one that only changes or deletes objects
-  // under it plus FULL_MARGIN, and one that does not grow the account always passes, so a full account can still delete.
-  // A null cap is no cap.
+  // The same transaction keeps head.bytes, the bytes of the account's bodies, and holds what the account is billed
+  // (billed) under the cap the request read with its session: a batch that creates an object must fit under it, one
+  // that only changes or deletes objects under it plus FULL_MARGIN, and one that does not grow the account always
+  // passes, so a full account can still delete. A null cap is no cap.
   async batch(incarnation: string, timeline: string, writes: Write[], cap: number | null): Promise<Refused | { stale: true } | { refused: 'bad-input' | 'conflict' | 'storage-full' } | { revs: number[]; bytes: number; timeline: string }> {
     const life = await this.lifecycle(incarnation);
     if (!active(life)) return refusal(life);
+    // Read on the account's queue, which share publication also takes, so no link lands between it and the write.
+    const shared = await this.shared(incarnation);
+    if (shared === null) return unavailable();
     // No read outside this transaction decides whether to write; a later item's conflict must leave even head.rev
     // untouched.
     return this.db.transaction(() => {
@@ -174,7 +182,7 @@ export class StoreRules {
         if (row) landed.set(id, row.rev);
       }
       const fresh = writes.filter(({ id }) => !landed.has(id));
-      if (!fresh.length) return { revs: writes.map(({ id }) => landed.get(id)!), bytes: head.bytes, timeline: head.timeline };
+      if (!fresh.length) return { revs: writes.map(({ id }) => landed.get(id)!), bytes: this.billed(head.bytes, shared), timeline: head.timeline };
       const checks = JSON.stringify(fresh.map(({ id, kind, parent, baseRev, body }) => ({ id, kind, parent, baseRev, remove: body === null })));
       const moved = `o.id IS NOT NULL AND o.parent_id IS NOT json_extract(w.value, '$.parent')`;
       // replaced: the bytes of the bodies these writes replace, counted as the migration counted them.
@@ -194,8 +202,11 @@ export class StoreRules {
       const encoder = new TextEncoder();
       const added = fresh.reduce((sum, { body }) => sum + (body === null ? 0 : encoder.encode(body).length), 0);
       const bytes = head.bytes + added - found!.replaced;
-      const margin = fresh.some(({ baseRev }) => baseRev === null) ? 0 : FULL_MARGIN;
-      if (added > found!.replaced && cap !== null && bytes > cap + margin) return { refused: 'storage-full' };
+      // A create is the only write that adds a row: a delete keeps it, a restore and an update reuse it.
+      const rows = fresh.filter(({ baseRev }) => baseRev === null).length * ROW_BYTES.object;
+      const billed = this.billed(bytes, shared) + rows;
+      const margin = rows ? 0 : FULL_MARGIN;
+      if (added + rows > found!.replaced && cap !== null && billed > cap + margin) return { refused: 'storage-full' };
       this.db.exec('UPDATE head SET rev = ?, bytes = ?', head.rev + fresh.length, bytes);
       const written = fresh.map((_, index) => head.rev + index + 1);
       fresh.forEach(({ id, kind, parent, body }, index) =>
@@ -206,14 +217,16 @@ export class StoreRules {
         ),
       );
       let next = 0;
-      return { revs: writes.map(({ id }) => landed.get(id) ?? written[next++]!), bytes, timeline: head.timeline };
+      return { revs: writes.map(({ id }) => landed.get(id) ?? written[next++]!), bytes: billed, timeline: head.timeline };
     });
   }
 
   async usage(incarnation: string): Promise<Refused | { bytes: number; disk: number }> {
     const life = await this.lifecycle(incarnation);
     if (!active(life)) return refusal(life);
-    return { bytes: this.head().bytes, disk: this.db.size() };
+    const shared = await this.shared(incarnation);
+    if (shared === null) return unavailable();
+    return { bytes: this.billed(this.head().bytes, shared), disk: this.db.size() };
   }
 
   async checkpoint(incarnation: string, operation: number): Promise<Refused | WrongPhase | { checkpoint: string }> {
@@ -284,6 +297,21 @@ export class StoreRules {
 
   private head() {
     return this.db.exec<Head>('SELECT rev, bytes, timeline FROM head')[0]!;
+  }
+
+  // head.bytes stays the bodies alone, as every existing file holds it: the rows and the links are counted when read,
+  // so no file needs an upgrade.
+  private billed(bodies: number, shared: number) {
+    return bodies + ROW_BYTES.object * this.db.exec<{ n: number }>('SELECT COUNT(*) AS n FROM objects')[0]!.n + shared;
+  }
+
+  private async shared(incarnation: string): Promise<number | null> {
+    try {
+      const bytes = await settles(this.reads.shared(incarnation));
+      return Number.isSafeInteger(bytes) ? (bytes as number) : null;
+    } catch {
+      return null;
+    }
   }
 
   private async lifecycle(incarnation: string): Promise<Life | Unavailable> {

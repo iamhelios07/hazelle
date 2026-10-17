@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ROW_BYTES } from './caps';
 import { BATCH_LIMITS } from './objects';
 import { sha256Hex } from './http';
 import { testApp } from './testing';
@@ -62,7 +63,7 @@ describe('objects', () => {
     expect(await write(cookie, B, { kind: 'entry', body: 'Yw==', baseRev: 3 })).toEqual({ status: 400, json: { error: 'bad-input' } });
 
     const feed = await t.get(`objects?since=1&timeline=${timeline}`, cookie);
-    expect(feed.headers.get('x-account-bytes')).toBe('8');
+    expect(feed.headers.get('x-account-bytes')).toBe(String(8 + 2 * ROW_BYTES.object));
     expect(await feed.json()).toEqual({
       limits: BATCH_LIMITS,
       timeline,
@@ -96,11 +97,20 @@ describe('objects', () => {
   it("holds an account to the cap its session read, creating nothing at it while changes may grow it a little", async () => {
     const { cookie } = await t.signUp();
     await write(cookie, A, { kind: 'settings', body: '가'.repeat(10) });
-    await t.env.db.prepare('UPDATE service SET account_bytes_cap = 30').run();
+    await t.env.db.prepare('UPDATE service SET account_bytes_cap = ?').bind(30 + ROW_BYTES.object).run();
     expect(await write(cookie, B, { kind: 'chat', body: 'x' })).toEqual({ status: 413, json: { error: 'storage-full' } });
     const changed = await write(cookie, A, { kind: 'settings', body: '가'.repeat(11), baseRev: 1 });
     expect(changed.status).toBe(200);
-    expect((await t.batch([{ id: A, kind: 'settings', parent: null, body: null, baseRev: 2 }], cookie)).headers.get('x-account-bytes')).toBe('0');
+    expect((await t.batch([{ id: A, kind: 'settings', parent: null, body: null, baseRev: 2 }], cookie)).headers.get('x-account-bytes')).toBe(String(ROW_BYTES.object));
+  });
+
+  it("throttles an account's batches before reading their bodies", async () => {
+    const { cookie } = await t.signUp();
+    const sent = await Promise.all(Array.from({ length: 2000 }, () => t.post('objects/batch', 'not a batch', cookie)));
+    const throttled = sent.filter(({ status }) => status === 429);
+    expect(throttled.length).toBeGreaterThan(0);
+    expect(sent.length - throttled.length).toBeGreaterThanOrEqual(1200);
+    expect(await throttled[0]!.json()).toEqual({ error: 'too-many-writes', retryAfter: 1 });
   });
 
   it('answers 503 with a wait while the account restores or its store cannot load, and 401 once it is leaving', async () => {
