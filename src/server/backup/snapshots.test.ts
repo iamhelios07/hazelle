@@ -9,7 +9,7 @@ import { diskBucket } from '../files/disk-bucket';
 import { snapshotKey } from '../files/bucket';
 import { DAY_MS } from '../http';
 import { testApp } from '../testing';
-import { captureGeneration, generationsDir, listGenerations, readManifest } from './generation';
+import { captureGeneration, generationsDir, listGenerations, namedArchives, readManifest } from './generation';
 import { dayStart, expireSnapshots } from './snapshots';
 
 const POINT = {
@@ -139,7 +139,7 @@ describe('retention', () => {
     await t.env.db.prepare("UPDATE accounts SET timeline = 'new' WHERE incarnation = ?").bind(incarnation).run();
     t.clock.now = () => now - DAY_MS;
     expect(await t.stores.snapshot(incarnation)).toEqual({ taken: expect.any(String) });
-    expect(await expireSnapshots(t.env, now)).toBe(0);
+    expect(await expireSnapshots(t.env, now, await namedArchives(t.dir))).toBe(0);
     expect(await snapshotFor(t.env.files, t.env.db, incarnation, now - 5 * DAY_MS)).toEqual({ id: floor, takenAt: now - 11 * DAY_MS });
   });
 
@@ -161,11 +161,11 @@ describe('retention', () => {
       },
     });
     const db: Db = { ...t.env.db, prepare: (sql) => sql.startsWith('DELETE FROM snapshots') ? stopping(t.env.db.prepare(sql)) : t.env.db.prepare(sql) };
-    await expect(expireSnapshots({ ...t.env, db }, now)).rejects.toThrow('stopped after expiry commit');
+    await expect(expireSnapshots({ ...t.env, db }, now, await namedArchives(t.dir))).rejects.toThrow('stopped after expiry commit');
     expect(await t.env.db.prepare('SELECT id FROM snapshots WHERE id = ?').bind(old).first()).toBeNull();
     expect(existsSync(diskBucket(t.dir).path(snapshotKey(incarnation, old)))).toBe(true);
     t.restartProcess();
-    expect(await expireSnapshots(t.env, now)).toBe(0);
+    expect(await expireSnapshots(t.env, now, await namedArchives(t.dir))).toBe(0);
     expect((await t.reconcile(now + 61 * 60_000)).removed).toContain(`snapshots/${incarnation}/${old}.sqlite.gz`);
     expect(existsSync(diskBucket(t.dir).path(snapshotKey(incarnation, floor)))).toBe(true);
     expect(await snapshotFor(t.env.files, t.env.db, incarnation, now - DAY_MS)).toEqual({ id: floor, takenAt: now - 9 * DAY_MS });
@@ -207,11 +207,11 @@ describe('retention', () => {
     await restore('cancelled', POINT.cancelled, null, now - DAY_MS);
     await restore('failed', POINT.failed, null, now - 8 * DAY_MS);
 
-    expect(await expireSnapshots(t.env, now)).toBe(4);
+    expect(await expireSnapshots(t.env, now, await namedArchives(t.dir))).toBe(4);
     const left = (await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id);
     expect(left).toEqual([POINT.cancelled, POINT.goneYoung, POINT.newest, POINT.openTarget, POINT.undo, POINT.young].sort());
     for (const [id, incarnation] of snapshots) expect(existsSync(diskBucket(t.dir).path(snapshotKey(incarnation, id)))).toBe(left.includes(id));
-    expect(await expireSnapshots(t.env, now + 3 * DAY_MS)).toBe(2);
+    expect(await expireSnapshots(t.env, now + 3 * DAY_MS, await namedArchives(t.dir))).toBe(2);
     expect((await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id)).toEqual([POINT.cancelled, POINT.newest, POINT.openTarget, POINT.young].sort());
   });
 
@@ -227,16 +227,16 @@ describe('retention', () => {
       await t.env.files.put(snapshotKey(gone, id), new Uint8Array([120]));
     }
     const left = async () => (await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id);
-    expect(await expireSnapshots(t.env, now)).toBe(0);
-    expect(await expireSnapshots(t.env, now + 4 * DAY_MS)).toBe(1);
+    expect(await expireSnapshots(t.env, now, await namedArchives(t.dir))).toBe(0);
+    expect(await expireSnapshots(t.env, now + 4 * DAY_MS, await namedArchives(t.dir))).toBe(1);
     expect(await left()).toEqual([POINT.base]);
-    expect(await expireSnapshots(t.env, now + 4 * DAY_MS)).toBe(1);
+    expect(await expireSnapshots(t.env, now + 4 * DAY_MS, await namedArchives(t.dir))).toBe(1);
     expect(await left()).toEqual([]);
     expect(existsSync(diskBucket(t.dir).path(snapshotKey(gone, POINT.base)))).toBe(false);
   });
 });
 
-it('defers an expired R2 archive for a generation retention, then deletes it from the store', async () => {
+it('queues an expired R2 archive due when the newest local generation naming it expires, and deletes it once that generation is gone', async () => {
   const s3 = await fakeS3();
   const disk = t.env.files;
   t.env.files = r2Bucket(s3.config);
@@ -251,15 +251,12 @@ it('defers an expired R2 archive for a generation retention, then deletes it fro
     t.clock.now = () => now - 9 * DAY_MS;
     const floor = ((await t.stores.snapshot(incarnation)) as { taken: string }).taken;
     const key = snapshotKey(incarnation, old);
-    await t.env.db.prepare('INSERT INTO snapshot_removals VALUES (?, ?)').bind(key, now - 1).run();
-    expect(await expireSnapshots(t.env, now)).toBe(1);
-    expect(await t.env.db.prepare('SELECT * FROM snapshot_removals').all()).toMatchObject({ results: [{ key, due_at: now + 7 * DAY_MS }] });
-    await t.reconcile(now + 7 * DAY_MS - 1);
-    expect(s3.objects.has(key)).toBe(true);
-    await t.reconcile(now + 7 * DAY_MS);
+    expect(await expireSnapshots(t.env, now, await namedArchives(t.dir))).toBe(1);
+    expect(await t.env.db.prepare('SELECT * FROM snapshot_removals').all()).toMatchObject({ results: [{ key, due_at: generation.manifest.capturedAt + 7 * DAY_MS }] });
+    await t.reconcile(now);
     expect(s3.objects.has(key)).toBe(true);
     rmSync(join(generationsDir(t.dir), generation.id), { recursive: true });
-    await t.reconcile(now + 7 * DAY_MS + 1);
+    await t.reconcile(now + 1);
     expect(s3.objects.has(key)).toBe(false);
     expect(s3.objects.has(snapshotKey(incarnation, floor))).toBe(true);
     expect(await t.env.db.prepare('SELECT * FROM snapshot_removals').all()).toMatchObject({ results: [] });

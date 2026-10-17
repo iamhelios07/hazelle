@@ -193,21 +193,7 @@ export async function materializeSnapshot(files: Bucket, service: Db, incarnatio
   const delta = `${target}.delta`;
   try {
     await readSnapshot(files, incarnation, id, snapshot, delta);
-    const db = new DatabaseSync(target);
-    try {
-      db.prepare('ATTACH DATABASE ? AS delta').run(delta);
-      try {
-        transaction(db, () => {
-          db.exec(`INSERT OR REPLACE INTO objects (id, kind, parent_id, rev, body, deleted_at) SELECT id, kind, parent_id, rev, body, deleted_at FROM delta.objects;
-            DELETE FROM kv; INSERT INTO kv SELECT * FROM delta.kv;
-            DELETE FROM head; INSERT INTO head SELECT * FROM delta.head;`);
-        });
-      } finally {
-        db.exec('DETACH DATABASE delta');
-      }
-    } finally {
-      db.close();
-    }
+    withDelta(target, delta, applyDelta);
   } finally {
     rmSync(delta, { force: true });
   }
@@ -218,6 +204,27 @@ export async function materializeSnapshot(files: Bucket, service: Db, incarnatio
     check.close();
   }
 }
+
+function withDelta<T>(whole: string, delta: string, work: (db: DatabaseSync) => T): T {
+  const db = new DatabaseSync(whole);
+  try {
+    db.prepare('ATTACH DATABASE ? AS delta').run(delta);
+    try {
+      return work(db);
+    } finally {
+      db.exec('DETACH DATABASE delta');
+    }
+  } finally {
+    db.close();
+  }
+}
+
+const applyDelta = (db: DatabaseSync) =>
+  transaction(db, () => {
+    db.exec(`INSERT OR REPLACE INTO objects (id, kind, parent_id, rev, body, deleted_at) SELECT id, kind, parent_id, rev, body, deleted_at FROM delta.objects;
+      DELETE FROM kv; INSERT INTO kv SELECT * FROM delta.kv;
+      DELETE FROM head; INSERT INTO head SELECT * FROM delta.head;`);
+  });
 
 // Exported for tests that wrap a StoreDb; production code reaches a file only through the registry.
 export class AccountDb implements StoreDb {
@@ -306,13 +313,14 @@ export class AccountDb implements StoreDb {
     }
     return async () => {
       try {
+        const stored = base !== null && (await this.deletesFromBase(base, plain, join(dir, `.tmp-${id}-whole.sqlite`))) ? null : base;
         const { bytes, expanded, sha256 } = await archiveSnapshot(plain, gz);
         await this.files.putFile(snapshotKey(this.incarnation, id), gz);
         // The row follows the durable artifact. A crash before publication leaves a .tmp-* or uncatalogued gzip
         // for reconciliation; the capture's time and revision never advance to publication time.
         await this.service
           .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256, base, timeline, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256, base, timeline, ACCOUNT_SCHEMA_VERSION)
+          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256, stored, timeline, ACCOUNT_SCHEMA_VERSION)
           .run();
       } finally {
         rmSync(plain, { force: true });
@@ -320,6 +328,31 @@ export class AccountDb implements StoreDb {
       }
       return id;
     };
+  }
+
+  // A delta that deletes a body its base holds would keep that body in the base for as long as the delta, or the floor
+  // it becomes, is kept, and in every generation naming it, past the 7 days the privacy text promises (legal.ts). Such a
+  // capture is stored whole instead: its base and delta materialized at the captured rev, replacing `plain`. A delta
+  // deleting only rows written since its base stays a delta.
+  private async deletesFromBase(base: string, plain: string, merged: string): Promise<boolean> {
+    const probe = new DatabaseSync(plain, { readOnly: true });
+    try {
+      if (probe.prepare('SELECT 1 FROM objects WHERE body IS NULL LIMIT 1').get() === undefined) return false;
+    } finally {
+      probe.close();
+    }
+    try {
+      await materializeSnapshot(this.files, this.service, this.incarnation, base, merged);
+      const held = withDelta(merged, plain, (db) => {
+        const found = db.prepare('SELECT 1 FROM delta.objects d JOIN main.objects b ON b.id = d.id WHERE d.body IS NULL AND b.body IS NOT NULL LIMIT 1').get() !== undefined;
+        if (found) applyDelta(db);
+        return found;
+      });
+      if (held) renameSync(merged, plain);
+      return held;
+    } finally {
+      rmSync(merged, { force: true });
+    }
   }
 
   readonly snapshots = {

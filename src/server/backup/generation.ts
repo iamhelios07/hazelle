@@ -10,6 +10,7 @@ import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
 import { fileKey, snapshotKey, type Bucket, type DiskBucket } from '../files/bucket';
 import { entries } from '../files/disk-bucket';
 import { DAY_MS, type Services } from '../http';
+import { expireDepartures } from './departures';
 import { dayStart, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
 // Backup generations (docs/research/docker-port-plan.md §10.2): backup/<id>/ holds the service snapshot, the
@@ -166,6 +167,7 @@ export async function captureGeneration(
       SELECT 1 FROM snapshots s WHERE s.incarnation = file_removals.incarnation AND s.taken_at <= file_removals.released_at)`)
       .bind(clock() + RETENTION_MS).run();
     await env.db.snapshot(plain);
+    expireDepartures(generationsDir(dataDir), clock());
     const { named, sources } = readNamed(plain, clock());
     const dirs = new Set<string>([pool]);
     const files = env.files;
@@ -243,6 +245,18 @@ export async function listGenerations(dataDir: string): Promise<{ id: string; ca
     const at = GENERATION.exec(name)?.[1];
     return at === undefined ? [] : [{ id: name, capturedAt: Number(at) }];
   });
+}
+
+// Every R2 archive a local version 4 generation names, with the time the newest of those generations expires
+// (expireGenerations). A --snapshots-from-store restore reads these from the store, so none may go before then.
+export async function namedArchives(dataDir: string): Promise<Map<string, number>> {
+  const named = new Map<string, number>();
+  for (const { id, capturedAt } of await listGenerations(dataDir)) {
+    const manifest = await readManifest(join(generationsDir(dataDir), id));
+    if (manifest?.version !== 4 || manifest.snapshotStore.kind !== 'r2') continue;
+    for (const { path } of manifest.snapshots) named.set(path, Math.max(named.get(path) ?? 0, capturedAt + RETENTION_MS));
+  }
+  return named;
 }
 
 // A generation goes at RETENTION_MS, one without a manifest (cut off before it was written) after a day, and a whole one

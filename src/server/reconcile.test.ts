@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { migrate } from './db/migrate';
 import { serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
+import { fakeS3 } from './files/fake-s3';
+import { r2Bucket } from './files/r2-bucket';
 import { reconcile } from './reconcile';
 
 const NOW = 1_800_000_000_000;
@@ -125,5 +127,22 @@ describe('reconcile', () => {
     ]);
     const { removed } = await reconcile(dir, db, diskBucket(dir), NOW);
     expect(removed.sort()).toEqual([`snapshots/${GONE}`, `snapshots/${GONE}/1-000000000001.sqlite.gz`, `snapshots/${LIVE}/1-000000000001.sqlite.gz`].sort());
+  });
+
+  it('removes an uncatalogued R2 archive no local generation names once it has settled, and leaves one that may be a capture in flight', async () => {
+    const db = setup();
+    const s3 = await fakeS3();
+    try {
+      const key = `snapshots/${GONE}/1-000000000001.sqlite.gz`;
+      s3.objects.set(key, new Uint8Array([1]));
+      const now = Date.now();
+      await reconcile(dir, db, r2Bucket(s3.config), now);
+      expect(s3.objects.has(key)).toBe(true);
+      expect((await db.prepare('SELECT key FROM snapshot_removals').all()).results).toEqual([]);
+      expect((await reconcile(dir, db, r2Bucket(s3.config), now + 2 * 60 * 60 * 1000)).removed).toEqual([key]);
+      expect(s3.objects.has(key)).toBe(false);
+    } finally {
+      await s3.close();
+    }
   });
 });

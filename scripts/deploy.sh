@@ -28,7 +28,7 @@
 #   mkdir /data /var/tmp/hazelle-restore && chown 1000:1000 /data /var/tmp/hazelle-restore
 #   sed -i "s|^HAZELLE_IMAGE=.*|HAZELLE_IMAGE=$previous|" /etc/hazelle/env
 #   fetch() { hazelle-compose run --rm --no-deps -v /var/tmp/hazelle-restore:/restore --entrypoint /bin/sh backup -c "$1" "$generation"; }
-#   fetch 'rclone copy "$HAZELLE_BACKUP_REMOTE/$0" "/restore/$0"'
+#   fetch 'rclone copy "$HAZELLE_BACKUP_REMOTE/$0" "/restore/$0" && rclone copyto "$HAZELLE_BACKUP_REMOTE/departures.json" /restore/departures.json'
 #   fetch 'grep -q "\"bucket\":\"r2\"" "/restore/$0/manifest.json" ||
 #     { sed -n "s/.*\"pictures\":\[\([^]]*\)\].*/\1/p" "/restore/$0/manifest.json" | tr -d "\"" | tr , "\n" >/tmp/pictures &&
 #       rclone copy "$HAZELLE_BACKUP_REMOTE/files" /restore/files --files-from-raw /tmp/pictures; }'
@@ -44,7 +44,7 @@
 # restore so that its own restore.sh reads the generation. Writes after the
 # pre-upgrade generation's snapshots are lost; $failed keeps them until it is removed by hand.
 # A local v4 R2 generation can instead be read with restore.sh <generation> <empty dir> --snapshots-from-store;
-# its archives stay in the store for seven days after catalog expiry. Old pre-deploy generations keep their links.
+# its archives stay in the store while the generation is kept. Old pre-deploy generations keep their links.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO=ghcr.io/jiniill/hazelle

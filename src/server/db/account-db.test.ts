@@ -397,6 +397,31 @@ describe('the account registry', () => {
     expect(existsSync(`${target}.delta`)).toBe(false);
   });
 
+  it('stores a capture whole when it deletes a body its base holds, and a delta when it deletes only rows written since the base', async () => {
+    await signup();
+    await write(put(A, 'a1'), put(B, 'b1'));
+    now = 2_000_000;
+    const base = await baseline();
+    await write(put(C, 'c1'));
+    await write({ id: C, kind: 'chat', parent: null, body: null, baseRev: 3 });
+    now = 3_000_000;
+    const delta = await baseline();
+    await write({ id: A, kind: 'chat', parent: null, body: 'a2', baseRev: 1 });
+    await write({ id: A, kind: 'chat', parent: null, body: null, baseRev: 5 });
+    now = 4_000_000;
+    const whole = await baseline();
+    expect(raw.prepare('SELECT id, base, rev FROM snapshots ORDER BY taken_at').all()).toEqual([
+      { id: base, base: null, rev: 2 },
+      { id: delta, base, rev: 4 },
+      { id: whole, base: null, rev: 6 },
+    ]);
+    stores.close();
+    const target = join(dir, 'materialized.sqlite');
+    await materializeSnapshot(diskBucket(dir), db, INC, whole, target);
+    expect(opened(target, contents)).toEqual(opened(accountPath(dir, INC), contents));
+    expect(readdirSync(join(dir, 'accounts')).filter((name) => name.startsWith('.tmp-'))).toEqual([]);
+  });
+
   it('takes a whole snapshot first, a delta next, and a whole one again on a new timeline, once the base is a day short of RETENTION_MS old, and after a schema upgrade', async () => {
     await signup();
     let timeline = 't1';

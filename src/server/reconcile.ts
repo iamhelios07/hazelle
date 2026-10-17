@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { generationsDir, listGenerations, readManifest } from './backup/generation';
+import { namedArchives } from './backup/generation';
 import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
 import { fileKey, filePrefix, type Bucket } from './files/bucket';
@@ -91,25 +91,22 @@ async function reconcileOnce(dataDir: string, db: Db, files: Bucket, now: number
   }
 
   const catalogued = async (key: string) => (await db.prepare('SELECT 1 FROM snapshots WHERE incarnation = ? AND id = ?').bind(key.split('/')[1]!, key.split('/')[2]!.slice(0, -'.sqlite.gz'.length)).first()) !== null;
+  const named = files.kind === 'r2' ? await namedArchives(dataDir) : new Map<string, number>();
   for (const { key, modified } of await files.archives()) {
     if (await catalogued(key)) {
       await db.prepare('DELETE FROM snapshot_removals WHERE key = ?').bind(key).run();
       continue;
     }
+    // Unsettled, an uncatalogued archive may be a capture whose row is not written yet.
+    if (modified >= settled) continue;
     if (files.kind === 'r2') {
-      // Starts at discovery, not capture: a generation may have named an old snapshot just before its row expired.
-      await db.prepare('INSERT INTO snapshot_removals (key, due_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(key, now + RETENTION_MS).run();
-    } else if (modified < settled) {
+      await db.prepare('INSERT INTO snapshot_removals (key, due_at) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(key, named.get(key) ?? now).run();
+    } else {
       await files.delete(key);
       removed.push(key);
     }
   }
   const { results: archives } = await db.prepare('SELECT key FROM snapshot_removals WHERE due_at <= ?').bind(now).all<{ key: string }>();
-  const named = new Set<string>();
-  if (archives.length) for (const { id } of await listGenerations(dataDir)) {
-    const manifest = await readManifest(join(generationsDir(dataDir), id));
-    if (manifest?.version === 4 && manifest.snapshotStore.kind === 'r2') for (const snapshot of manifest.snapshots) named.add(snapshot.path);
-  }
   for (const { key } of archives) {
     // Expiry of generations runs daily and can fail; a still-present local generation remains a rollback source.
     if (named.has(key)) continue;

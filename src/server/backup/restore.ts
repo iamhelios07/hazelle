@@ -21,15 +21,17 @@ import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { alerts } from '../alerts';
 import { backups } from './backups';
-import { generationPictures, POOL, readManifest, type Manifest } from './generation';
+import { DEPARTURES, readDepartures, writeDepartures } from './departures';
+import { generationPictures, generationsDir, POOL, readManifest, type Manifest } from './generation';
 
 // The disaster restore (docs/research/docker-port-plan.md §10.2): one generation directory, beside the pool it was
 // copied with (<generation>/../files), into an empty data directory and the picture store the environment names. Every
 // hash is checked before anything is written; a generation whose pictures are in R2 is checked there by size only,
 // before anything but the service file is written. The service goes in before the pictures, since the hourly
 // reconciliation removes a picture prefix no account names; the server must not start until this has finished. Pending
-// operations are then resolved through the live server's own lifecycle code, and every account gets a fresh timeline,
-// so a device holding an older one re-pulls.
+// operations are then resolved through the live server's own lifecycle code, accounts that left since are deleted again
+// (departures.ts), every session is revoked, and every account gets a fresh timeline, so a device holding an older one
+// re-pulls.
 
 const HEADS = 16;
 
@@ -70,9 +72,21 @@ async function inStore(files: R2Bucket, service: string, manifest: Manifest) {
   if (wrong.length) throw new Error(`restore: ${wrong.length} of ${stored.length} pictures are not in the R2 bucket as the generation names them:\n${wrong.sort().join('\n')}`);
 }
 
-export type Restored = { accounts: number; pictures: number; operations: { id: number; phase: RestorePhase }[]; deleted: number };
+// accounts: every account restored, for the operator to review. deleted: pending deletions finished and departures
+// replayed. departures: 'missing' only when the operator restored without them. sessions: rows revoked, every one the
+// generation held, since logouts and password changes after it are rolled back with it.
+export type Restored = {
+  accounts: { id: string; username: string }[];
+  pictures: number;
+  operations: { id: number; phase: RestorePhase }[];
+  deleted: number;
+  departures: 'replayed' | 'missing';
+  sessions: number;
+};
 
-export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string, files: Bucket, fromStore = false): Promise<Restored> {
+export type RestoreOptions = { fromStore?: boolean; withoutDepartures?: boolean };
+
+export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string, files: Bucket, { fromStore = false, withoutDepartures = false }: RestoreOptions = {}): Promise<Restored> {
   const manifest = await readManifest(generation);
   // No `copied` needed: that marker is for freshness and the copier; a generation with its manifest and verified
   // hashes is a whole restore source wherever it lies.
@@ -83,6 +97,11 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   await mkdir(dataDir, { recursive: true });
   if ((await readdir(dataDir)).length) throw new Error(`restore: ${dataDir} is not empty`);
   await verify(generation, manifest, files, archives);
+  const ledger = join(generation, '..', DEPARTURES);
+  const departures = readDepartures(ledger);
+  if (departures === null && !withoutDepartures) {
+    throw new Error(`restore: ${ledger} is missing, so accounts that left after this generation cannot be deleted again; fetch it beside the generation, or pass --without-departures and review the restored accounts`);
+  }
 
   const service = join(dataDir, 'service.sqlite');
   await pipeline(createReadStream(join(generation, manifest.service.path)), createGunzip(), createWriteStream(service, { flags: 'wx' }));
@@ -119,6 +138,8 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id, files);
   if (manifest.bucket === 'disk') for (const { incarnation, id } of pictures) await files.put(fileKey(incarnation, id), await readFile(join(generation, '..', POOL, id)));
   for (const dir of ['', 'accounts']) fsyncPath(join(dataDir, dir));
+  // Carried over, so this machine's copier never replaces the remote ledger with one that lacks them.
+  if (departures !== null) writeDepartures(generationsDir(dataDir), departures);
 
   const outbound = () => Promise.reject(new Error('A restore calls no provider.'));
   const relay = relayBudget();
@@ -140,18 +161,24 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
       if (ended === null || ended === 'too-late' || !ended.verified) throw new Error(`restore: operation ${id} did not end (${JSON.stringify(ended)})`);
       operations.push({ id, phase: ended.phase });
     }
-    const { results: leaving } = await db.prepare("SELECT id, incarnation FROM accounts WHERE state = 'leaving'").all<{ id: string; incarnation: string }>();
+    // An account that left after the generation was captured is in it as active; it is deleted again as it was then,
+    // with no operator log row, since a 탈퇴 is kept out of that log (legal.ts).
+    const { results: leaving } = await db
+      .prepare("SELECT id, incarnation FROM accounts WHERE state = 'leaving' OR incarnation IN (SELECT value FROM json_each(?))")
+      .bind(JSON.stringify((departures ?? []).map(({ incarnation }) => incarnation)))
+      .all<{ id: string; incarnation: string }>();
     const after: Promise<unknown>[] = [];
     const ctx: Pick<ExecutionContext, 'waitUntil'> = { waitUntil: (work) => void after.push(work) };
     for (const { id, incarnation } of leaving) {
-      const left = await leaveAccount(env, ctx, id, incarnation, true);
+      const left = await leaveAccount(env, ctx, id, incarnation, false);
       if (left !== 'left') throw new Error(`restore: the deletion of ${id} did not finish (${left})`);
     }
     await Promise.all(after);
+    const sessions = (await db.prepare('DELETE FROM sessions').run()).meta.changes;
     await db.prepare('UPDATE accounts SET timeline = lower(hex(randomblob(16)))').run();
-    const accounts = (await db.prepare('SELECT COUNT(*) AS n FROM accounts').first<number>('n'))!;
+    const { results: accounts } = await db.prepare('SELECT id, username FROM accounts ORDER BY username').all<{ id: string; username: string }>();
     const stored = (await db.prepare('SELECT COUNT(*) AS n FROM account_files WHERE stored = 1').first<number>('n'))!;
-    return { accounts, pictures: stored, operations, deleted: leaving.length };
+    return { accounts, pictures: stored, operations, deleted: leaving.length, departures: departures === null ? 'missing' : 'replayed', sessions };
   } finally {
     env.stores.close();
     raw.close();

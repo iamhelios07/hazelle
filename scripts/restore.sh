@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 # Restores one local generation into an empty data directory, offline. The server must not start until this ends.
 # Disk pictures are pooled beside the generation; R2 pictures stay in the configured store. fetch brings a v4 R2
-# generation's archives from the backup pool into its directory before restore-cli verifies every archive hash.
-#   scripts/restore.sh <generation directory> <empty data directory> [--snapshots-from-store]
+# generation's archives from the backup pool into its directory before restore-cli verifies every archive hash, and
+# departures.json beside it, which restore-cli replays and refuses to go without unless given --without-departures.
+#   scripts/restore.sh <generation directory> <empty data directory> [--snapshots-from-store] [--without-departures]
 # fetch runs where rclone and its backup credentials are available (the copier container); it never reads the
 # picture bucket for archives. --snapshots-from-store is explicit for a local v4 generation, not a fallback.
 #   scripts/restore.sh fetch <backup remote> <generation id> <download directory>
@@ -13,6 +14,8 @@ if [ "${1:-}" = fetch ]; then
   rclone copy "$remote/$id" "$root/$id"
   manifest="$root/$id/manifest.json"
   [ -f "$manifest" ] || { echo "restore: missing manifest" >&2; exit 1; }
+  rclone copyto "$remote/departures.json" "$root/departures.json" ||
+    echo "restore: no departures.json fetched from $remote; restore-cli refuses without --without-departures" >&2
   work=$(mktemp -d)
   trap 'rm -rf "$work"' EXIT
   if grep -q '^{"version":4,.*"snapshotStore":{"kind":"r2",' "$manifest"; then

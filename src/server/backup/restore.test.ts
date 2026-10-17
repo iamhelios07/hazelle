@@ -19,6 +19,7 @@ import { proof, sessionCookie, testApp } from '../testing';
 import app from '../worker';
 import { alerts } from '../alerts';
 import { backups } from './backups';
+import { DEPARTURES } from './departures';
 import { captureGeneration, generationsDir, listGenerations, MANIFEST, POOL, readManifest } from './generation';
 import { restoreGeneration } from './restore';
 import { dayStart } from './snapshots';
@@ -129,11 +130,11 @@ it.each(['disk', 'r2'] as const)('preserves a %s generation’s released picture
     const files = s3 ? t.env.files : diskBucket(destination);
     if (s3) {
       s3.objects.delete(key);
-      await expect(restoreGeneration(generation, destination, 'migrations', files, true)).rejects.toThrow(/missing/);
+      await expect(restoreGeneration(generation, destination, 'migrations', files, { fromStore: true })).rejects.toThrow(/missing/);
       expect(readdirSync(destination)).toEqual([]);
       await files.put(key, bytes);
     }
-    expect(await restoreGeneration(generation, destination, 'migrations', files, Boolean(s3))).toMatchObject({ accounts: 1, pictures: 1 });
+    expect(await restoreGeneration(generation, destination, 'migrations', files, { fromStore: Boolean(s3) })).toMatchObject({ accounts: [{ id: user.id }], pictures: 1 });
     const raw = openDatabase(join(destination, 'service.sqlite'));
     const objects = new DatabaseSync(join(destination, 'accounts', `${user.incarnation}.sqlite`), { readOnly: true });
     try {
@@ -206,9 +207,11 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
 
   const dir = emptyDir();
   expect(await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).toEqual({
-    accounts: 4,
+    accounts: [armed, operator, rewound, targeted].map(({ id }, index) => ({ id, username: ['armed', 'operator', 'rewound', 'targeted'][index] })),
     pictures: 2,
     deleted: 1,
+    departures: 'replayed',
+    sessions: 4,
     operations: [
       { id: targeted.operation, phase: 'cancelled' },
       { id: armed.operation, phase: 'done' },
@@ -279,6 +282,44 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
   rmSync(join(generation, MANIFEST));
   await expect(restoreGeneration(generation, clean, 'migrations', diskBucket(clean))).rejects.toThrow(/no manifest/);
 }, 60_000);
+
+it('deletes again an account that left after the generation, revokes every session and lists the accounts it restored, and refuses without the departures unless told to', async () => {
+  const operator = await t.signUp('operator');
+  const victim = await t.signUp('victim');
+  expect((await t.daily(Date.now())).generation).toEqual({ outcome: 'ok', error: null });
+  const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
+  expect((await t.delete('account', { method: 'password', proof: proof('password') }, victim.cookie)).status).toBe(204);
+  expect(JSON.parse(readFileSync(join(generationsDir(t.dir), DEPARTURES), 'utf8'))).toEqual([{ account: victim.id, incarnation: victim.incarnation, leftAt: expect.any(Number) }]);
+
+  const dir = emptyDir();
+  expect(await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).toMatchObject({
+    accounts: [{ id: operator.id, username: 'operator' }],
+    deleted: 1,
+    departures: 'replayed',
+    sessions: 1,
+  });
+  const raw = openDatabase(join(dir, 'service.sqlite'));
+  try {
+    expect(raw.prepare('SELECT id FROM accounts').all()).toEqual([{ id: operator.id }]);
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM sessions').get()).toEqual({ n: 0 });
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM admin_log').get()).toEqual({ n: 0 });
+  } finally {
+    raw.close();
+  }
+  expect(existsSync(join(dir, 'accounts', `${victim.incarnation}.sqlite`))).toBe(false);
+  expect(readFileSync(join(generationsDir(dir), DEPARTURES), 'utf8')).toBe(readFileSync(join(generationsDir(t.dir), DEPARTURES), 'utf8'));
+
+  rmSync(join(generationsDir(t.dir), DEPARTURES));
+  const refused = emptyDir();
+  await expect(restoreGeneration(generation, refused, 'migrations', diskBucket(refused))).rejects.toThrow(/departures\.json is missing/);
+  expect(readdirSync(refused)).toEqual([]);
+  const without = emptyDir();
+  expect(await restoreGeneration(generation, without, 'migrations', diskBucket(without), { withoutDepartures: true })).toMatchObject({
+    accounts: [{ username: 'operator' }, { id: victim.id, username: 'victim' }],
+    deleted: 0,
+    departures: 'missing',
+  });
+}, 30_000);
 
 it('restores a version 3 delta baseline as its base with the delta applied', async () => {
   const user = await t.signUp('delta');
@@ -415,7 +456,7 @@ it('restores version 2 and 3 generations, whose snapshots are all whole, and ref
   for (const version of [2, 3]) {
     writeFileSync(join(generation, MANIFEST), written.replace('{"version":4,', `{"version":${version},`));
     const dir = emptyDir();
-    expect(await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).toMatchObject({ accounts: 1 });
+    expect(await restoreGeneration(generation, dir, 'migrations', diskBucket(dir))).toMatchObject({ accounts: [{ username: 'operator' }] });
   }
 }, 30_000);
 
@@ -437,7 +478,7 @@ it('names R2 snapshots in v4, supports a local store restore and a pooled disast
     expect(readdirSync(join(generationsDir(t.dir), POOL))).toEqual([]);
     expect(existsSync(join(generation, 'snapshots'))).toBe(false);
     // Local rollback explicitly reads the store; a disaster download below can restore after that store loses archives.
-    expect(await restoreGeneration(generation, emptyDir(), 'migrations', r2Bucket(s3.config), true)).toMatchObject({ accounts: 1 });
+    expect(await restoreGeneration(generation, emptyDir(), 'migrations', r2Bucket(s3.config), { fromStore: true })).toMatchObject({ accounts: [{ username: 'operator' }] });
     const manifest = (await readManifest(generation))!;
     for (const snapshot of manifest.snapshots) {
       await diskBucket(generation).put(snapshot.path, s3.objects.get(snapshot.path)!);
@@ -454,7 +495,7 @@ it('names R2 snapshots in v4, supports a local store restore and a pooled disast
 
     s3.objects.set(keptKey, held);
     const dir = emptyDir();
-    expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: 1, pictures: 1, deleted: 1 });
+    expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: [{ username: 'operator' }], pictures: 1, deleted: 1 });
     expect(existsSync(join(dir, 'files'))).toBe(false);
     const raw = openDatabase(join(dir, 'service.sqlite'));
     try {
@@ -481,7 +522,7 @@ it('restores a disk generation into the R2 bucket by putting its pooled pictures
     const generation = join(generationsDir(t.dir), (await listGenerations(t.dir))[0]!.id);
     expect((await readManifest(generation))!.bucket).toBe('disk');
     const dir = emptyDir();
-    expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: 1, pictures: 1 });
+    expect(await restoreGeneration(generation, dir, 'migrations', r2Bucket(s3.config))).toMatchObject({ accounts: [{ username: 'operator' }], pictures: 1 });
     expect([...s3.objects.keys()].filter((key) => key.startsWith('files/'))).toEqual([`files/${operator.incarnation}/${sha256Hex(kept)}`]);
     expect(s3.objects.get(`files/${operator.incarnation}/${sha256Hex(kept)}`)).toEqual(kept);
     expect(existsSync(join(dir, 'files'))).toBe(false);

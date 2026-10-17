@@ -508,7 +508,7 @@ describe('a restore', () => {
     const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
     t.restartProcess();
     // 8 days on, the undone restore's own pin has lapsed.
-    await expireSnapshots(t.env, Date.now() + 8 * 24 * HOUR_MS);
+    await expireSnapshots(t.env, Date.now() + 8 * 24 * HOUR_MS, new Map());
     expect(await runRestore(t.env, undo)).toMatchObject({ phase: 'done', verified: true, error: null });
     expect(await contents(seed.cookie)).toEqual(BEFORE);
   });

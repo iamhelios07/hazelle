@@ -70,6 +70,7 @@ it('copies v4 archives before marking, fetches them from the backup alone, and p
   const generation = join(t.data, 'backup', id);
   put(join(generation, 'manifest.json'), JSON.stringify(manifest));
   put(join(generation, 'service.sqlite.gz'), 'service');
+  put(join(t.data, 'backup', 'departures.json'), '[]');
   // A missing named source must not leave a complete remote generation or a local marker.
   expect(t.run().status).toBe(1);
   expect(existsSync(join(generation, 'copied'))).toBe(false);
@@ -91,6 +92,7 @@ it('copies v4 archives before marking, fetches them from the backup alone, and p
   const fetched = spawnSync('sh', ['scripts/restore.sh', 'fetch', 'backup:archive', id, download], { env: t.env, encoding: 'utf8' });
   expect({ status: fetched.status, stderr: fetched.stderr }).toEqual({ status: 0, stderr: '' });
   expect(readFileSync(join(download, id, 'snapshots', key), 'utf8')).toBe('archive');
+  expect(readFileSync(join(download, 'departures.json'), 'utf8')).toBe('[]');
 });
 
 it('moves local archives only after the stopped-app copy and every catalogued size have verified', () => {

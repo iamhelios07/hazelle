@@ -96,6 +96,7 @@ async function leave(
     if (row.operator) return 'operator';
     if (row.state !== 'leaving') return 'busy';
   }
+  env.backups.depart(accountId, incarnation, Date.now());
   const life = await reload(env, incarnation);
   // The row goes only after the store was seen fenced and emptied. A restart that never reached the store leaves it
   // answering as it was, and deleting the row then would leave its objects behind with nothing left to name them.
