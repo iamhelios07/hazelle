@@ -8,11 +8,13 @@ import type { UnfoundAssets } from './assets';
 import { EvaluationStopped, EvaluationStuck } from './evaluation';
 
 import { luaSnapshot, luaStanding } from './lua/snapshot';
-import { scriptsOf } from './scripts';
+import { scriptsOf, type Scripts } from './scripts';
+import type { ToolUnit } from '../model/tool';
 import type { ObjectStore } from './store';
 import { packsOf, pinned, scopeOf } from './chat-context';
 
-type Pass = { revision: number; generation: number; scripts: Script[]; snapshot: Snapshot; items: Missed[]; remaining: number; installed: boolean; view: Display; signal?: AbortSignal };
+// tools: those that may answer showing, run over each stretch after the Lua (Scripts.showing).
+type Pass = { revision: number; generation: number; scripts: Script[]; tools: ToolUnit[]; scope: ChatScope; snapshot: Snapshot; items: Missed[]; remaining: number; installed: boolean; view: Display; signal?: AbortSignal };
 // generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks, and never used
 // twice, so a stretch begun under an older one lands as a last result and never as a fresh one.
 type Basis = { parts: string[]; generation: number };
@@ -44,6 +46,7 @@ export class ScriptDisplay {
     private readonly open: () => Promise<LuaRunner>,
     private readonly report: (chat: string, result: Displayed | unknown) => void,
     private readonly unfound: UnfoundAssets,
+    private readonly tools: () => Pick<Scripts, 'showers' | 'showing'>,
   ) {}
 
   subscribe(chat: string, listener: (display?: Display) => void | Promise<void>) {
@@ -79,7 +82,8 @@ export class ScriptDisplay {
     const take = pinned(reader, chat);
     const all = scriptsOf(packsOf(this.store, chat));
     const scripts = all.filter(({ code }) => this.listens.get(code) !== false);
-    if (!scripts.length) {
+    const tools = this.tools().showers(chat);
+    if (!scripts.length && !tools.length) {
       const previous = this.passes.get(id);
       if (previous) void this.runner?.then((runner) => runner.forgetDisplay(id, previous.revision));
       this.passes.delete(id);
@@ -92,11 +96,11 @@ export class ScriptDisplay {
     const { character, persona } = standing;
     // Of all the bot's scripts, not only those passed: an engine's answer takes its script out of the passes and must
     // not make the others' results stale.
-    const generation = this.generation(id, [String(all.length), ...all.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
+    const generation = this.generation(id, [String(all.length), ...all.map(({ code }) => code), String(tools.length), ...tools.map(({ module, tool }) => `${module}:${tool.file.id}`), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
     const { display, work } = await this.store.evaluation.display({ asker: 'screen', chat: id }, scope, take, signal, { waits, generation, revision });
     if (!this.listeners.has(id) || signal?.aborted) return this.told(id, display);
     if (work) {
-      this.passes.set(id, { revision, generation, scripts, snapshot: luaSnapshot(scope, standing, work.staged, work.start), items: work.items, remaining: work.items.length, installed: false, view: display, signal });
+      this.passes.set(id, { revision, generation, scripts, tools, scope, snapshot: luaSnapshot(scope, standing, work.staged, work.start), items: work.items, remaining: work.items.length, installed: false, view: display, signal });
       this.drain(id);
     } else this.passes.delete(id);
     return this.told(id, display);
@@ -141,16 +145,21 @@ export class ScriptDisplay {
         const began = performance.now();
         let batch: DisplayBatch;
         try {
-          const runner = await (this.runner ??= this.open());
-          if (!pass.installed) {
-            await runner.installDisplay(chat, pass.revision, pass.scripts, pass.snapshot, pass.items.slice(0, pass.remaining));
-            pass.installed = true;
+          if (pass.scripts.every(({ code }) => this.listens.get(code) === false)) batch = { texts: items.map((item) => item.text), listening: pass.scripts.map(() => false), errors: [], missing: [], from, remaining: from };
+          else {
+            const runner = await (this.runner ??= this.open());
+            if (!pass.installed) {
+              await runner.installDisplay(chat, pass.revision, pass.scripts, pass.snapshot, pass.items.slice(0, pass.remaining));
+              pass.installed = true;
+            }
+            batch = await runner.display(chat, pass.revision, size);
           }
-          batch = pass.scripts.every(({ code }) => this.listens.get(code) === false)
-            ? { texts: items.map((item) => item.text), listening: pass.scripts.map(() => false), errors: [], missing: [], from, remaining: from }
-            : await runner.display(chat, pass.revision, size);
           this.report(chat, batch);
           batch.listening.forEach((listening, at) => this.listens.set(pass.scripts[at]!.code, listening));
+          if (pass.tools.length) {
+            const lua = batch;
+            batch = { ...lua, texts: await this.tools().showing(chat, pass.tools, pass.scope, pass.items.slice(lua.from, lua.from + lua.texts.length).map((item, at) => ({ version: item.version, text: lua.texts[at]! }))) };
+          }
         } catch (error) {
           // A pass that cannot be made shows the texts as they were, rather than nothing.
           this.report(chat, error);

@@ -178,6 +178,14 @@ export function budgetOf(model: Starred, settings: ModelSettings | null): number
   return context === null ? null : context - (replyOf(model, settings) ?? 0);
 }
 
+// The chat's 대화 모델's context and reply lengths as a turn holds them, each null where unknown or no model is set.
+export function limitsOf(store: Reader['store'], chat: Chat): { context: number | null; reply: number | null } {
+  const route = chatModel(store, chat, 'main');
+  if ('kind' in route) return { context: null, reply: null };
+  const settings = sentSettings(store, route);
+  return { context: contextOf(route.model, settings), reply: replyOf(route.model, settings) };
+}
+
 // null when the chat has no 대화 모델 or the context is unknown.
 export function promptBudget(store: Reader['store'], chat: Chat): number | null {
   const route = chatModel(store, chat, 'main');

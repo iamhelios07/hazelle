@@ -407,13 +407,18 @@ describe("the display with the bot's Lua", () => {
 // The forecast's tool slots; a chat whose memory no tool holds reads no scope for them.
 const cachedTools = (session: Session, chat: string) => session.scripts.cachedPrompt(chat, { scope: { messages: [] } as unknown as TurnContext['scope'], memory: null }).tools;
 
-async function toolChat(session: Session) {
-  await answerable(session);
+async function notesTool(session: Session) {
   const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name notes\n//@author jin\n//@display-name 메모\n//@uses model\n//@menu now 지금 정리\n//@action redo 다시 정리'));
   if (!parsed.ok) throw new Error('fixture');
   const added = await importTool(session.store, session.files, parsed.tool);
   if (!added.ok) throw new Error(added.error);
   await setModuleAlways(session.store, added.data.id, true);
+  return { parsed, added };
+}
+
+async function toolChat(session: Session) {
+  await answerable(session);
+  const { parsed, added } = await notesTool(session);
   const chat = crypto.randomUUID();
   await server.hold(session.store, chat);
   await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
@@ -551,7 +556,7 @@ describe('tool events through Scripts', () => {
       expect(heard.filter((kind) => kind.startsWith('change'))).toEqual([]);
       finishReply(noOutcome());
       await expect.poll(() => toolChatData(session.store, f.module, f.chat, 'index')).toEqual({ stale: said.id });
-      expect(heard).toEqual(['prompt', 'replying', 'reply', 'change:edit:0']);
+      expect(heard).toEqual(['sending', 'prompt', 'requesting', 'replying', 'reply', 'change:edit:0']);
       expect(toolBadges(session.store, f.module, f.chat)).toEqual({ [said.id]: { version: shown(f.messages()[0]!).id, text: '고침' } });
 
       void session.scripts.action(f.chat, f.module, 'redo', said.id);
@@ -718,6 +723,66 @@ describe('tool events through Scripts', () => {
         expect((await ending).text).toBe('again [lua]');
         expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
       } finally { vi.useRealTimers(); for (const resolve of late) resolve(); }
+    }, { run, close: () => {} });
+  });
+
+  it('hands the message sent and the request to each tool after the bot Lua, a chat message keeping its id', async () => {
+    const seen: Hazelle.RequestMessage[][] = [];
+    const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, _unit, _scope, event) => {
+      if (event.kind === 'sending') return { ...noOutcome(), handled: true, value: `${event.text} [tool]` };
+      if (event.kind !== 'requesting') return noOutcome();
+      seen.push(event.messages);
+      return { ...noOutcome(), handled: true, value: [...event.messages, { role: 'system', content: 'from tool' }] };
+    });
+    await server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `listenEdit('editInput', function(id, value) return value .. ' [lua]' end)
+        listenEdit('editRequest', function(id, value) value[#value + 1] = { role = 'system', content = 'from lua' } return value end)`);
+      await notesTool(session);
+      const log = stubRelay(() => saying('응'));
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      await expect.poll(() => log.length).toBe(1);
+      const said = messages()[1]!;
+      expect(shown(said).text).toBe('안녕 [lua] [tool]');
+      expect(seen[0]!.find(({ content }) => content === '안녕 [lua] [tool]')).toMatchObject({ role: 'user', message: said.id });
+      const sent = (JSON.parse(log[0]!.sent.body!) as { messages: { content: string }[] }).messages;
+      expect(sent.slice(-2).map(({ content }) => content)).toEqual(['from lua', 'from tool']);
+    }, { run, close: () => {} });
+  });
+
+  it('sends the request as it came past a tool that misses the deadline', async () => {
+    const late: (() => void)[] = [];
+    const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, _unit, _scope, event) => event.kind !== 'requesting' ? noOutcome() : new Promise((resolve) => late.push(() => resolve({ ...noOutcome(), value: [] }))));
+    await server.withSession(async (session) => {
+      const f = await toolChat(session);
+      await appendUserMessage(session.store, f.chat, { id: crypto.randomUUID(), text: 'hello' });
+      await session.store.projections.evaluate(f.chat);
+      const turn = gatherTurn(session, f.chat, { kind: 'answer' });
+      if (!turn || 'kind' in turn) throw new Error('fixture');
+      const prompt = { messages: [{ role: 'user' as const, content: 'hello' }], parts: [{ from: { kind: 'script' as const }, tokens: 1, origin: 'message' }] };
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const requesting = session.scripts.requesting(f.chat, turn, prompt);
+        await vi.waitFor(() => expect(late).toHaveLength(1));
+        await vi.advanceTimersByTimeAsync(5001);
+        expect((await requesting).messages).toEqual(prompt.messages);
+        expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
+      } finally { vi.useRealTimers(); for (const resolve of late) resolve(); }
+    }, { run, close: () => {} });
+  });
+
+  it('shows each message after the bot Lua and then the tools, which see where it stands', async () => {
+    const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, _unit, _scope, event) => event.kind !== 'showing' ? noOutcome()
+      : { ...noOutcome(), handled: true, value: event.shown.map(({ at, text }) => `${text} [${at ? at.index : 'greeting'}]`) });
+    await server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value .. ' [lua]' end)`);
+      await notesTool(session);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
+      const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
+      const leave = screen.subscribe(() => {});
+      screen.setInputs(opening, { width: 1200, height: 800 });
+      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. [lua] [greeting]', '안녕 [lua] [0]']);
+      leave();
     }, { run, close: () => {} });
   });
 

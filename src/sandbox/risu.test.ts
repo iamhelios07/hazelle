@@ -20,12 +20,22 @@ function fakeApi({ open = true } = {}) {
   ];
   const card: Hazelle.Card = {
     id: 'character-1', name: 'Mira', description: 'A sailor', personality: 'calm', scenario: 'harbor', greeting: null, creatorNotes: '', tags: ['sea'],
-    lore: [{ name: 'Port', keys: ['port', 'dock'], text: 'The port.', always: false, on: true }],
   };
+  const lorebook: Hazelle.LoreEntry[] = [
+    { name: 'Port', keys: ['port', 'dock'], text: 'The port.', always: false, on: true, owner: { kind: 'character', id: 'character-1' } },
+    { name: 'Weather', keys: [], text: 'Rain.', always: true, on: true, owner: { kind: 'chat', id: 'chat-1' } },
+    { name: 'Ships', keys: ['ship'], text: 'Many ships.', always: false, on: false, owner: { kind: 'module', id: 'module-1' } },
+  ];
+  const account: Hazelle.Account = {
+    personas: [{ id: 'p0', name: 'Jin', description: 'A reader', current: true }, { id: 'p1', name: 'Rook', description: 'A sailor too', current: false }],
+    characters: [{ id: 'character-1', name: 'Mira' }],
+  };
+  const setup: Hazelle.Setup = { persona: 'p1', limits: { context: 8000, reply: null }, modules: [{ id: 'module-1', name: 'Harbor' }] };
+  const settings: Hazelle.Settings = { image_base: 'none' };
   const model = vi.fn<Hazelle.Chat['model']>(async () => ({ ok: true, text: 'made' }));
   const chat = {
     id: 'chat-1', character: { name: 'Mira', description: 'A sailor' }, persona: null, length: messages.length,
-    messages: async () => messages, greeting: async () => null, card: async () => card,
+    messages: async () => messages, greeting: async () => null, card: async () => card, lorebook: async () => lorebook, setup: async () => setup,
     edit: (index: number, text: string) => { edits.push([index, text]); }, add: (role: Hazelle.Role, text: string) => { added.push([role, text]); },
     model, say: (text: string) => { said.push(text); },
   } as unknown as Hazelle.Chat;
@@ -36,11 +46,11 @@ function fakeApi({ open = true } = {}) {
       get: async (key: string) => storage.get(key), set: async (key: string, value: Hazelle.Json) => { storage.set(key, value); },
       delete: async (key: string) => { storage.delete(key); }, keys: async () => [...storage.keys()], onChange: () => () => {},
     },
-    settings: async () => ({ image_base: 'none' }), post: () => {}, page: null,
+    settings: async () => settings, setSetting: async (key: string, value: string | number | boolean) => { settings[key] = value; }, account: async () => account, post: () => {}, page: null,
     frame: { chat: async () => (open ? chat : null), show: vi.fn(), hide: vi.fn(), menu: (items: { id: string; label: string }[]) => { menus.push(items); }, missing: (name: string) => { missing.push(name); } },
   } as unknown as Hazelle.Api;
   const fire = (event: string, ...args: unknown[]) => (handlers.get(event) as (...args: unknown[]) => unknown)(...args);
-  return { api, chat, card, handlers, storage, menus, missing, edits, added, said, model, fire };
+  return { api, chat, card, handlers, storage, menus, missing, edits, added, said, model, settings, fire };
 }
 const install = (fake: ReturnType<typeof fakeApi>, scope: Record<string, unknown> = { confirm: () => false, prompt: () => null }) => {
   installRisu(fake.api, scope);
@@ -87,14 +97,14 @@ describe('the Risu adapter', () => {
     const scope = install(fake);
     const { Risuai } = scope;
     for (const name of RISU_MAPPED) expect(Risuai[name], name).toBeDefined();
-    await expect(Risuai.getDatabase!()).rejects.toThrow("Risu API 'getDatabase' is not available in Hazelle");
-    await expect(Risuai.getDatabase!()).rejects.toThrow();
+    await expect(Risuai.saveAsset!()).rejects.toThrow("Risu API 'saveAsset' is not available in Hazelle");
+    await expect(Risuai.saveAsset!()).rejects.toThrow();
     await expect(Risuai.getRootDocument!()).rejects.toThrow("Risu API 'getRootDocument' is declined in Hazelle");
-    await expect(Risuai.addRisuReplacer!('beforeRequest' as never, (() => []) as never)).rejects.toThrow("'addRisuReplacer:beforeRequest'");
+    await expect(Risuai.addRisuReplacer!('beforeTranslate' as never, (() => []) as never)).rejects.toThrow("'addRisuReplacer:beforeTranslate'");
     expect((Risuai as Record<string, unknown>).then).toBeUndefined();
     (scope.confirm as () => boolean)();
     (scope.confirm as () => boolean)();
-    expect(fake.missing).toEqual(['getDatabase', 'getRootDocument', 'addRisuReplacer:beforeRequest', 'confirm']);
+    expect(fake.missing).toEqual(['saveAsset', 'getRootDocument', 'addRisuReplacer:beforeTranslate', 'confirm']);
   });
 
   it('chains afterRequest replacers over the reply and answers runLLMModel in Risu shape', async () => {
@@ -121,6 +131,82 @@ describe('the Risu adapter', () => {
     expect(await Risuai.pluginStorage!.getItem!('missing' as never)).toBeNull();
     expect(await Risuai.pluginStorage!.keys!()).toEqual(['k']);
     expect(fake.storage.size).toBe(3);
+  });
+
+  it('hands beforeRequest the request in Risu shape after the process handlers, and maps its answer back', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    expect(fake.handlers.has('requesting')).toBe(false);
+    await Risuai.addRisuScriptHandler!('process' as never, ((text: string) => `${text}!`) as never);
+    const seen: unknown[] = [];
+    await Risuai.addRisuReplacer!('beforeRequest' as never, ((messages: { role: string; content: string }[], type: string) => {
+      seen.push(structuredClone(messages), type);
+      return [...messages, { role: 'system', content: 'note' }];
+    }) as never);
+    const request: Hazelle.RequestMessage[] = [{ role: 'system', content: 'rules', cache: true }, { role: 'user', content: 'hello', message: 'm0' }];
+    expect(await fake.fire('requesting', fake.chat, request)).toEqual([{ role: 'system', content: 'rules', cache: true }, { role: 'user', content: 'hello!', message: 'm0' }, { role: 'system', content: 'note' }]);
+    expect(seen).toEqual([[{ role: 'system', content: 'rules', cachePoint: true }, { role: 'user', content: 'hello!', memo: 'm0' }], 'model']);
+  });
+
+  it('fails a beforeRequest answer Hazelle cannot send and tells a field it cannot carry', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    const replacer = vi.fn((messages: object[]): object[] => messages.map((message) => ({ ...message, name: 'Mira' })));
+    await Risuai.addRisuReplacer!('beforeRequest' as never, replacer as never);
+    expect(await fake.fire('requesting', fake.chat, [{ role: 'user', content: 'hi' }])).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(fake.missing).toEqual(['addRisuReplacer:beforeRequest.name']);
+    replacer.mockReturnValueOnce([{ role: 'function', content: 'x' }]);
+    await expect(fake.fire('requesting', fake.chat, [{ role: 'user', content: 'hi' }])).rejects.toThrow('role function');
+  });
+
+  it('runs each script handler mode on its own stage, output after afterRequest', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    await Risuai.addRisuScriptHandler!('display' as never, ((text: string) => text.toUpperCase()) as never);
+    await Risuai.addRisuScriptHandler!('input' as never, ((text: string) => `[${text}]`) as never);
+    await Risuai.addRisuScriptHandler!('output' as never, ((text: string) => `${text} (out)`) as never);
+    await Risuai.addRisuReplacer!('afterRequest' as never, ((text: string) => `${text} (after)`) as never);
+    expect(await fake.fire('showing', fake.chat, [{ at: null, text: 'hi' }, { at: { index: 0, id: 'm0', version: 'v0' }, text: 'there' }])).toEqual(['HI', 'THERE']);
+    expect(await fake.fire('sending', fake.chat, 'go')).toBe('[go]');
+    expect(await fake.fire('replying', fake.chat, 'done')).toBe('done (after) (out)');
+    await Risuai.addRisuScriptHandler!('display' as never, (() => null) as never);
+    expect(await fake.fire('showing', fake.chat, [{ at: null, text: 'kept' }])).toEqual(['KEPT']);
+  });
+
+  it('builds the database keys asked for, and tells one it does not build', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    expect(await Risuai.getDatabase!(['personas', 'selectedPersona', 'presetRegex'] as never)).toEqual({
+      personas: [{ id: 'p0', name: 'Jin', personaPrompt: 'A reader' }, { id: 'p1', name: 'Rook', personaPrompt: 'A sailor too' }], selectedPersona: 1,
+    });
+    expect(fake.missing).toEqual(['getDatabase:presetRegex']);
+    expect(await Risuai.getDatabase!()).toEqual({
+      username: 'Rook', personaPrompt: 'A sailor too', personas: expect.any(Array), selectedPersona: 1, characters: [{ chaId: 'character-1', type: 'character', name: 'Mira' }],
+      maxContext: 8000, modules: [{ id: 'module-1', name: 'Harbor', lorebook: [{ comment: 'Ships', key: 'ship', content: 'Many ships.', alwaysActive: false, disabled: true }] }], enabledModules: ['module-1'],
+    });
+    const closed = install(fakeApi({ open: false })).Risuai;
+    expect(await closed.getDatabase!(['selectedPersona', 'maxContext', 'modules'] as never)).toEqual({ selectedPersona: 0 });
+  });
+
+  it('reads the open chat\'s lorebook entries in Risu shape and its character by the current index only', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    expect(await Risuai.getCurrentLorebookEntries!()).toEqual([
+      { comment: 'Port', key: 'port, dock', content: 'The port.', alwaysActive: false, disabled: false },
+      { comment: 'Weather', key: '', content: 'Rain.', alwaysActive: true, disabled: false },
+      { comment: 'Ships', key: 'ship', content: 'Many ships.', alwaysActive: false, disabled: true },
+    ]);
+    const current = await Risuai.getCurrentCharacterIndex!() as number;
+    expect(await Risuai.getCharacterFromIndex!(current as never)).toMatchObject({ chaId: 'character-1', globalLore: [{ comment: 'Port' }] });
+    expect(await Risuai.getCharacterFromIndex!((current + 1) as never)).toBeNull();
+    expect(await Risuai.unwarpSafeArray!([1, 2] as never)).toEqual([1, 2]);
+  });
+
+  it('writes an argument through the tool settings', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    await Risuai.setArgument!('image_base' as never, 'https://example.com' as never);
+    expect(await Risuai.getArgument!('image_base' as never)).toBe('https://example.com');
   });
 
   it('answers nativeFetch with a Response RisuPot and DiaryLog read, and turns a refusal into a failed fetch', async () => {
@@ -151,11 +237,12 @@ describe('the Risu adapter', () => {
   });
 });
 
-// The acceptance plugins (research/risu-plugin-adapter-plan.md §7 phase A) live in the private docs repo, beside this
-// checkout; without it this test skips.
+// The acceptance plugins (research/risu-plugin-adapter-plan.md §7 phases A and B) live in the private docs repo, beside
+// this checkout; without it these tests skip.
 const PORTS = new URL('../../docs/research/ports/', import.meta.url);
 const port = (path: string) => new URL(path, PORTS);
 const available = existsSync(port('risuai-side-phone/Side_Phone.js')) && existsSync(port('risu-fishing/risu_fishing.js'));
+const availableB = existsSync(port('risupot/risupot_v2_0_2.js')) && existsSync(port('diarylog/DiaryLog.min.js'));
 
 // Enough of a page for a plugin's load path: every property, call and construction answers another stand-in.
 function standIn(): unknown {
@@ -169,18 +256,19 @@ function standIn(): unknown {
   return proxy;
 }
 
-describe.runIf(available)('the acceptance plugins, unmodified', () => {
-  const load = async (path: string) => {
-    const fake = fakeApi();
-    const scope: Record<string, unknown> = {
-      document: standIn(), window: standIn(), navigator: standIn(), Image: standIn(), console: { log: () => {}, warn: () => {}, error: () => {} },
-      setTimeout, clearTimeout, setInterval, clearInterval, requestAnimationFrame: () => 0, cancelAnimationFrame: () => {}, crypto, confirm: () => false, prompt: () => null,
-    };
-    installRisu(fake.api, scope);
-    await runInNewContext(readFileSync(port(path), 'utf8'), scope, { timeout: 5000 });
-    return fake;
+const load = async (path: string) => {
+  const fake = fakeApi();
+  const scope: Record<string, unknown> = {
+    document: standIn(), window: standIn(), navigator: standIn(), Image: standIn(), console: { log: () => {}, warn: () => {}, error: () => {} },
+    setTimeout, clearTimeout, setInterval, clearInterval, requestAnimationFrame: () => 0, cancelAnimationFrame: () => {}, crypto, confirm: () => false, prompt: () => null,
+    TextEncoder, TextDecoder, URL, URLSearchParams, AbortController, AbortSignal, queueMicrotask, structuredClone, performance, location: standIn(), localStorage: standIn(),
   };
+  installRisu(fake.api, scope);
+  await runInNewContext(readFileSync(port(path), 'utf8'), scope, { timeout: 20_000 });
+  return fake;
+};
 
+describe.runIf(available)('the acceptance plugins, unmodified', () => {
   it('loads Side Phone and registers its button and its afterRequest replacer, which leaves the reply as it is', async () => {
     const fake = await load('risuai-side-phone/Side_Phone.js');
     await vi.waitFor(() => expect(fake.menus.at(-1)).toEqual([{ id: 'btn-secret-phone', label: '사이드폰' }]));
@@ -196,4 +284,26 @@ describe.runIf(available)('the acceptance plugins, unmodified', () => {
     await vi.waitFor(() => expect(fake.storage.has('plugin:state_v1')).toBe(true), { timeout: 2000 });
     expect(fake.missing).toEqual([]);
   });
+});
+
+describe.runIf(availableB)('the phase B acceptance plugins, unmodified', () => {
+  it('loads RisuPot, whose beforeRequest replacer adds its notes and keeps the chat message it was given', async () => {
+    const fake = await load('risupot/risupot_v2_0_2.js');
+    await vi.waitFor(() => expect(fake.handlers.has('requesting')).toBe(true), { timeout: 5000 });
+    expect(fake.menus.at(-1)).toEqual([{ id: 'risupot-open', label: '리수폿 설정' }]);
+    const request: Hazelle.RequestMessage[] = [{ role: 'system', content: 'rules' }, { role: 'user', content: 'hello', message: 'm0' }];
+    const sent = await fake.fire('requesting', fake.chat, request) as Hazelle.RequestMessage[];
+    expect(sent[0]).toEqual(request[0]);
+    expect(sent.at(-1)).toEqual(request[1]);
+    expect(sent.slice(1, -1).every(({ role, content }) => role === 'system' && content.includes('RISUPOT'))).toBe(true);
+    // It reaches for the app's page, which stays declined, and goes on without it.
+    expect(fake.missing).toEqual(['getRootDocument']);
+  }, 30_000);
+
+  // Opening its screen needs a real document, which only a browser run gives.
+  it('loads DiaryLog and registers its entry', async () => {
+    const fake = await load('diarylog/DiaryLog.min.js');
+    await vi.waitFor(() => expect(fake.menus.at(-1)).toEqual([{ id: expect.any(String), label: 'DiaryLog' }]), { timeout: 5000 });
+    expect(fake.missing).toEqual([]);
+  }, 30_000);
 });

@@ -2,13 +2,13 @@ import type { Port, Role } from '../../tool-api/protocol';
 import { ToolStopped } from '../script-binding';
 import type { ToolPage } from './facade';
 
-// frame: the iframe a frame tool's document runs in, which its page shows.
-export type Connection = { port: Port; ready: Promise<void>; close(): void; frame: HTMLIFrameElement | null };
+// frame: the iframe a frame tool's document runs in, which its page shows. close: resolves once the port is closed.
+export type Connection = { port: Port; ready: Promise<void>; close(): Promise<void>; frame: HTMLIFrameElement | null };
 // network: the frame is served the sandbox's network variant (server/static), only under the module's consent.
 export type Opening = { role: 'background' } | { role: 'frame'; network: boolean } | { role: 'page'; page: ToolPage };
 export type OpenFrame = (opening: Opening) => Connection;
-// A stopped frame's onUnload callbacks run until it is removed; the host no longer answers their calls.
-const UNLOAD_MS = 1000;
+// How long a stopped frame tool's onUnload callbacks run with its port open, their calls answered, before it is removed.
+export const UNLOAD_MS = 1000;
 
 export const toolFrame: OpenFrame = (opening) => {
   const page = opening.role === 'page' ? opening.page : null;
@@ -41,17 +41,22 @@ export const toolFrame: OpenFrame = (opening) => {
   return {
     port: channel.port1, ready, frame: role === 'frame' ? frame : null,
     close() {
-      if (closed) return;
+      if (closed) return Promise.resolve();
       closed = true;
       window.removeEventListener('message', receive);
       target?.postMessage({ kind: 'hazelle-stop' }, '*');
-      if (role === 'frame' && frame) {
-        frame.hidden = true;
-        setTimeout(() => frame.remove(), UNLOAD_MS);
-      } else frame?.remove();
-      channel.port1.close();
-      channel.port2.close();
       if (!connected) reject(new ToolStopped());
+      const end = () => {
+        frame?.remove();
+        channel.port1.close();
+        channel.port2.close();
+      };
+      if (role !== 'frame' || !frame) {
+        end();
+        return Promise.resolve();
+      }
+      frame.hidden = true;
+      return new Promise<void>((resolve) => setTimeout(() => { end(); resolve(); }, UNLOAD_MS));
     },
   };
 };

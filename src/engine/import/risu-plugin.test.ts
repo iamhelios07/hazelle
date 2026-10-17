@@ -51,8 +51,8 @@ describe('the Risu scan', () => {
   });
 
   it('lists unmapped and declined names and replacer kinds once each', () => {
-    expect(scanRisu("risuai.getDatabase(); risuai.getDatabase(); Risuai.getRootDocument(); risuai.addRisuReplacer('beforeRequest', f);")).toEqual({
-      verdict: 'partial', missing: ['getDatabase', 'getRootDocument', 'addRisuReplacer:beforeRequest'], hosts: [],
+    expect(scanRisu("risuai.saveAsset(); risuai.saveAsset(); Risuai.getRootDocument(); risuai.addRisuReplacer('beforeTranslate', f); risuai.addRisuReplacer('beforeRequest', f);")).toEqual({
+      verdict: 'partial', missing: ['saveAsset', 'getRootDocument', 'addRisuReplacer:beforeTranslate'], hosts: [],
     });
   });
 
@@ -68,8 +68,8 @@ describe('the Risu scan', () => {
   });
 
   it('still lists the unmapped Risu names an aliased plugin reaches as properties', () => {
-    expect(scanRisu("const api = globalThis.risuai; api.getChatFromIndex(0, 0); api?.getDatabase(); api.addRisuReplacer('beforeRequest', f); storage.getItem('x');")).toEqual({
-      verdict: 'unread', missing: ['getDatabase', 'addRisuReplacer:beforeRequest'], hosts: [],
+    expect(scanRisu("const api = globalThis.risuai; api.getChatFromIndex(0, 0); api?.saveAsset(); api.addRisuReplacer('beforeTranslate', f); storage.getItem('x');")).toEqual({
+      verdict: 'unread', missing: ['saveAsset', 'addRisuReplacer:beforeTranslate'], hosts: [],
     });
   });
 

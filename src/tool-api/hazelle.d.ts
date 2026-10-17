@@ -7,6 +7,12 @@ declare namespace Hazelle {
   interface Message { index: number; id: string; version: string; role: Role; text: string; time: number }
   type At = { index: number; id: string; version: string };
   interface ModelMessage { role: 'system' | 'user' | 'assistant'; content: string }
+  // A message of the request about to be sent. message: the id of the chat message it renders, absent for the prompt's
+  // own parts; an answered one that keeps it keeps that message's pictures. cache: the provider caches the request
+  // through it.
+  interface RequestMessage extends ModelMessage { message?: string; cache?: true }
+  // A message about to be shown; at: null for the greeting.
+  type Shown = { at: At | null; text: string };
   type ModelRefusal = 'not-allowed' | 'not-declared' | 'no-model' | 'flood' | 'failed';
   type ModelAnswer = { ok: true; text: string } | { ok: false; reason: ModelRefusal };
   // model: the embedding model that made the vectors; vectors from another model cannot be compared with them.
@@ -19,11 +25,19 @@ declare namespace Hazelle {
   type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; text?: string; options: string[] };
   type Settings = Record<string, string | number | boolean>;
   // The chat's character card. id: the character's, the same in every chat with it. greeting: the card's first
-  // message, null when it has none. lore: the character's own lorebook; on: whether the entry is switched on.
+  // message, null when it has none.
   interface Card {
     readonly id: string; name: string; description: string; personality: string; scenario: string; greeting: string | null;
-    creatorNotes: string; tags: string[]; lore: { name: string; keys: string[]; text: string; always: boolean; on: boolean }[];
+    creatorNotes: string; tags: string[];
   }
+  // A lorebook entry as written, before any activation. on: whether it is switched on. owner: whose lorebook holds it,
+  // with that one's id: the chat's character, one of its 등장인물, the chat itself, or a module on in it.
+  interface LoreEntry { name: string; keys: string[]; text: string; always: boolean; on: boolean; owner: { kind: 'character' | 'cast' | 'chat' | 'module'; id: string } }
+  // The account's personas (current: the one chats start with) and characters, read only; no chat of theirs is offered.
+  interface Account { personas: { id: string; name: string; description: string; current: boolean }[]; characters: { id: string; name: string }[] }
+  // persona: the id of the persona this chat speaks as, null when it is gone. limits: the chat model's context and reply
+  // lengths in tokens, null where unknown or no model is set. modules: those on in the chat, in pack order.
+  interface Setup { persona: string | null; limits: { context: number | null; reply: number | null }; modules: { id: string; name: string }[] }
 
   interface ChatState {                         // this tool's own per-chat variables, replayed with the story
     get<T extends Json = Json>(key: string): Promise<T | undefined>;
@@ -60,6 +74,8 @@ declare namespace Hazelle {
     badge(index: number, text: string | null): void;   // on the version shown now; lands with the outcome
     tokens(text: string): Promise<number>;
     lore(reserve?: number): Promise<{ role: 'system' | 'user' | 'assistant'; text: string }[]>;
+    lorebook(): Promise<LoreEntry[]>;           // every entry the chat's lorebooks hold, as written, in the prompt's order
+    setup(): Promise<Setup>;
     ask(question: Question): Promise<string | null>;
     say(text: string, tone?: 'normal' | 'error'): void;
   }
@@ -84,6 +100,13 @@ declare namespace Hazelle {
     // a reply about to be saved, after the bot's Lua: a text answered is saved instead; 5 s deadline, past which the
     // reply is saved as it came. The story cannot be changed here.
     replying(chat: Chat, text: string): string | void | Promise<string | void>;
+    // The same after the bot's Lua, with the same deadline, past which it goes on as it came; the story cannot be
+    // changed in them. sending: the user's message about to be saved. requesting: the request about to be sent, which a
+    // list answered replaces. showing: messages about to be shown, a stretch at a time, whose texts answered (one per
+    // message, in order) are shown instead; nothing is saved in it, so its writes throw.
+    sending(chat: Chat, text: string): string | void | Promise<string | void>;
+    requesting(chat: Chat, messages: RequestMessage[]): RequestMessage[] | void | Promise<RequestMessage[] | void>;
+    showing(chat: Chat, shown: Shown[]): string[] | void | Promise<string[] | void>;
     prompt(chat: Chat, turn: Turn): PromptAnswer | Promise<PromptAnswer>;   // this turn's slots; 5 s deadline
     change(chat: Chat, change: Change): void | Promise<void>;               // the user edited, switched, deleted or restored
     branch(chat: Chat, from: Branched): void | Promise<void>;              // chat is the new branch
@@ -111,6 +134,8 @@ declare namespace Hazelle {
     on<E extends keyof Events>(event: E, handler: Events[E]): void;   // events reach background and frame, except 'message'
     readonly storage: Storage;
     settings(): Promise<Settings>;
+    setSetting(key: string, value: string | number | boolean): Promise<void>;   // one of its own fields; throws on a value the field cannot hold
+    account(): Promise<Account>;
     post(data: Json): void;
     readonly page: Page | null;                  // null in background and frame
     readonly frame: Frame | null;                // only in frame

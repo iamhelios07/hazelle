@@ -37,7 +37,9 @@ export type FetchResult = { ok: true; response: Response } | { ok: false; reason
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
 export type ToolEvent =
   | { kind: 'reply'; reply: Hazelle.At }
-  | { kind: 'replying'; text: string }
+  | { kind: 'replying' | 'sending'; text: string }
+  | { kind: 'requesting'; messages: Hazelle.RequestMessage[] }
+  | { kind: 'showing'; shown: Hazelle.Shown[] }
   | { kind: 'prompt'; turn: Hazelle.Turn }
   | { kind: 'change'; change: Hazelle.Change }
   | { kind: 'branch'; from: Hazelle.Branched }
