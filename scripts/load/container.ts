@@ -22,6 +22,9 @@ export async function startContainer(options: ContainerOptions) {
     '--add-host', 'models.dev:127.0.0.1',
     '-e', `HAZELLE_SNAPSHOT_HOUR=${options.snapshotHour}`,
     '-e', `HAZELLE_LOCAL_PROVIDERS=${options.provider}`,
+    // Through docker's port every request arrives from the bridge; trusting it lets hazelle.ts name loopback as the
+    // visitor and stay out of the signup and login limits.
+    '-e', 'HAZELLE_TRUSTED_PROXIES=0.0.0.0/0,::/0',
     ...options.env.flatMap((pair) => ['-e', pair]),
     options.image,
   );
