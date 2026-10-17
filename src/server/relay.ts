@@ -1,4 +1,5 @@
 import { RELAY_HEADER, type RelayError } from '../contracts/http';
+import { HOP_BY_HOP } from './hop-by-hop';
 import { isRecord } from './http';
 import { PolicyRefusal } from './ssrf';
 import type { RelayAllowance } from './limits';
@@ -21,14 +22,8 @@ const METHODS = new Set(['GET', 'POST']);
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
 const DROPPED_REQUEST_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authorization',
+  ...HOP_BY_HOP,
   'proxy-connection',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
   'host',
   'cookie',
   'content-length',
@@ -42,12 +37,7 @@ const DROPPED_REQUEST_PREFIXES = ['x-forwarded-', 'cf-'];
 // The last group is applied by the browser to this app's origin, not the provider's: a connection
 // could otherwise wipe the session and vault cache (clear-site-data) or redirect error reports.
 const DROPPED_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
+  ...HOP_BY_HOP,
   'set-cookie',
   'content-encoding',
   'content-length',
