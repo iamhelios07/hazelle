@@ -89,7 +89,7 @@ export function backups(dataDir: string, hour: number, alerts: Alerts, free: Dis
       const clock = () => now + Math.round(performance.now() - started);
       const snapshots = await recorded(env, 'daily', clock, async () => {
         const { taken, skipped, unchanged, failed } = await takeBaselines(env, await staleBaselines(env, now, fresh ? now + 1 : dayStart(now)));
-        const expired = await expireSnapshots(env, now, await namedArchives(dataDir));
+        const expired = await expireSnapshots(env, dataDir, now, await namedArchives(dataDir));
         return { error: failed.length ? 'baseline-failed' : null, detail: { taken, skipped, unchanged, failed: failed.length, expired } };
       });
       const generation = await recorded(env, 'generation', clock, async () => {

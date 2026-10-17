@@ -13,7 +13,7 @@ import { fakeS3 } from '../files/fake-s3';
 import { r2Bucket } from '../files/r2-bucket';
 import { diskBucket } from '../files/disk-bucket';
 import { reconcile } from '../reconcile';
-import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, materializeSnapshot, RETENTION_MS, snapshotFor, type Stores } from './account-db';
+import { ACCOUNT_SCHEMA_VERSION, accountPath, accountRegistry, baseIdsPath, materializeSnapshot, RETENTION_MS, snapshotFor, type Stores } from './account-db';
 import { DAY_MS } from '../http';
 import { migrate } from './migrate';
 import { serviceDb, type Db } from './service-db';
@@ -287,7 +287,7 @@ describe('the account registry', () => {
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 0 });
     expect((await reconcile(dir, db, diskBucket(dir), Date.now())).removed).toEqual([]);
     const id = await baseline();
-    expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toEqual([`snapshots/${INC}/${orphan}`]);
+    expect((await reconcile(dir, db, diskBucket(dir), Date.now() + 61 * 60_000)).removed).toEqual([`base-ids/${INC}-${orphan!.slice(0, -'.sqlite.gz'.length)}.sqlite`, `snapshots/${INC}/${orphan}`]);
     expect(existsSync(diskBucket(dir).path(snapshotKey(INC, id)))).toBe(true);
   });
 
@@ -397,7 +397,17 @@ describe('the account registry', () => {
     expect(existsSync(`${target}.delta`)).toBe(false);
   });
 
-  it('stores a capture whole when it deletes a body its base holds, and a delta when it deletes only rows written since the base', async () => {
+  // Reads of snapshot archives through the registry's bucket.
+  const readsCounted = () => {
+    const reads: string[] = [];
+    const disk = diskBucket(dir);
+    stores.close();
+    stores = accountRegistry(dir, db, serviceReads(db), () => now, { ...disk, get: (key) => (reads.push(key), disk.get(key)) });
+    return reads;
+  };
+
+  it('stores a capture whole when it deletes a body its base holds, and a delta when it deletes only rows written since the base, without reading the base when its id list says so', async () => {
+    const reads = readsCounted();
     await signup();
     await write(put(A, 'a1'), put(B, 'b1'));
     now = 2_000_000;
@@ -406,10 +416,14 @@ describe('the account registry', () => {
     await write({ id: C, kind: 'chat', parent: null, body: null, baseRev: 3 });
     now = 3_000_000;
     const delta = await baseline();
+    expect(reads).toEqual([]);
     await write({ id: A, kind: 'chat', parent: null, body: 'a2', baseRev: 1 });
     await write({ id: A, kind: 'chat', parent: null, body: null, baseRev: 5 });
     now = 4_000_000;
     const whole = await baseline();
+    expect(reads).toEqual([snapshotKey(INC, base)]);
+    expect(existsSync(baseIdsPath(dir, INC, delta))).toBe(false);
+    expect(opened(baseIdsPath(dir, INC, whole), (file) => file.prepare('SELECT id FROM ids').all())).toEqual([{ id: B }]);
     expect(raw.prepare('SELECT id, base, rev FROM snapshots ORDER BY taken_at').all()).toEqual([
       { id: base, base: null, rev: 2 },
       { id: delta, base, rev: 4 },
@@ -420,6 +434,21 @@ describe('the account registry', () => {
     await materializeSnapshot(diskBucket(dir), db, INC, whole, target);
     expect(opened(target, contents)).toEqual(opened(accountPath(dir, INC), contents));
     expect(readdirSync(join(dir, 'accounts')).filter((name) => name.startsWith('.tmp-'))).toEqual([]);
+  });
+
+  it('reads the base to decide a deleting capture when the base has no id list', async () => {
+    const reads = readsCounted();
+    await signup();
+    await write(put(A, 'a1'));
+    now = 2_000_000;
+    const base = await baseline();
+    rmSync(baseIdsPath(dir, INC, base));
+    await write(put(B, 'b1'));
+    await write({ id: B, kind: 'chat', parent: null, body: null, baseRev: 2 });
+    now = 3_000_000;
+    const delta = await baseline();
+    expect(reads).toEqual([snapshotKey(INC, base)]);
+    expect(raw.prepare('SELECT base FROM snapshots WHERE id = ?').get(delta)).toEqual({ base });
   });
 
   it('takes a whole snapshot first, a delta next, and a whole one again on a new timeline, once the base is a day short of RETENTION_MS old, and after a schema upgrade', async () => {

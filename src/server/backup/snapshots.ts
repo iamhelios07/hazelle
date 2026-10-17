@@ -1,4 +1,5 @@
-import { CURRENT_BASELINE, RETENTION_MS, TAKES_BASELINE } from '../db/account-db';
+import { rmSync } from 'node:fs';
+import { baseIdsPath, CURRENT_BASELINE, RETENTION_MS, TAKES_BASELINE } from '../db/account-db';
 import { snapshotKey } from '../files/bucket';
 import { DAY_MS, type Services } from '../http';
 
@@ -65,8 +66,8 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
 // A deleted account has no restores and no row, so every catalog entry of it goes at RETENTION_MS from its taking.
 // Disk generations keep hard links; R2 generations name the store, so the catalog deletion queues a removal in the same
 // transaction, due when the newest local generation naming the archive expires, at once when none does (`named`, from
-// namedArchives; reconcile.ts).
-export async function expireSnapshots(env: Services, now: number, named: Map<string, number>): Promise<number> {
+// namedArchives; reconcile.ts). A snapshot's id list (baseIdsPath) goes with its row on either store.
+export async function expireSnapshots(env: Services, dataDir: string, now: number, named: Map<string, number>): Promise<number> {
   const { results } = await env.db
     .prepare(
       `SELECT id, incarnation FROM snapshots s
@@ -90,6 +91,7 @@ export async function expireSnapshots(env: Services, now: number, named: Map<str
       await env.db.prepare('DELETE FROM snapshots WHERE id = ?').bind(id).run();
       await env.files.delete(key);
     }
+    rmSync(baseIdsPath(dataDir, incarnation, id), { force: true });
     await pass();
   }
   return results.length;
