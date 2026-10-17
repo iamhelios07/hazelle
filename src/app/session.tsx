@@ -1,5 +1,5 @@
 import { toolId } from '../model/tool';
-import type { ToolMenu } from '../runtime/tools/facade';
+import type { ToolFrames, ToolMenu } from '../runtime/tools/facade';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { PictureUrl } from '../engine/assets';
 import type { ChatScope } from '../engine/render';
@@ -277,6 +277,11 @@ export function useTool(module: string | null) {
   return owner && live(owner) ? tool : null;
 }
 export const useTools = () => useKind('tool');
+
+export function useToolFrames(): ToolFrames {
+  const { tools } = useSession();
+  return useSyncExternalStore(tools.subscribe, tools.frames);
+}
 
 export function useChatTools(chat: string | null): ToolMenu[] {
   const { read, tools } = useSession();

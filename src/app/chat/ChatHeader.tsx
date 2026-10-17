@@ -4,7 +4,7 @@ import { ACTS } from '../common/acts';
 import { FeatureSwitches } from '../common/FeatureSwitches';
 import { NameDialog } from '../common/NameDialog';
 import { BOOKMARK, CAST, CHAT_LORE, EXPORT, FEATURE_NAMES, FEATURES_TITLE, NO_CHARACTER } from '../common/words';
-import { useRemembering } from '../session';
+import { useRemembering, useSession, useToolFrames } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
 import { Avatar, ChatTitle, Divider, Menu, MenuItem, MoreMenu, ToolButton, useMenuHandle, useMenuOpener, useWide } from '../ui';
@@ -36,7 +36,10 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const { id, item, shelf, cast, route, toggles, panel, features, modelMenu, castMenu, actions } = chat;
   const remembering = useRemembering();
-  const tools = toolMenu(chat.tools);
+  const session = useSession();
+  // Subscribed for items, which read the frame tools' registrations.
+  useToolFrames();
+  const tools = toolMenu(chat.tools, session.tools.items);
   const failed = features.memory && id !== null && remembering.failed.has(id);
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
   const wide = useWide();

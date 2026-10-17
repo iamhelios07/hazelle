@@ -3,6 +3,7 @@ import type { Stored } from '../../model/kinds';
 import { setModels, setTakesMemory } from '../../runtime/pack';
 import { scriptsOf } from '../../runtime/scripts';
 import { ToolSetting } from '../common/ToolSetting';
+import { opensPage } from '../common/ToolView';
 import type { Write } from '../common/saveQueue';
 import { useAutosave } from '../common/useAutosave';
 import { MEMORY_CLAIM_HELP, MODULE_MODELS, MODULE_MODELS_HELP, TOOL, toolVersion } from '../common/words';
@@ -30,7 +31,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
   return (
     <Section
       title={TOOL}
-      action={manifest.page && <Button variant="secondary" icon={ExternalLink} onClick={() => navigate({ kind: 'tool-page', module: module.id })}>열기</Button>}
+      action={opensPage(manifest) && <Button variant="secondary" icon={ExternalLink} onClick={() => navigate({ kind: 'tool-page', module: module.id })}>열기</Button>}
     >
       <Stack gap="group">
         <Facts items={[{ label: '버전', value: toolVersion(manifest.version) }, { label: '제작자', value: manifest.author }]} />

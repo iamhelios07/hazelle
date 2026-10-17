@@ -23,5 +23,5 @@
     "src/runtime",
     "src/vault"
   ],
-  "exclude": ["src/runtime/testing.ts", "src/runtime/**/*.test.ts"]
+  "exclude": ["src/runtime/testing.ts", "src/runtime/**/*.test.ts", "src/sandbox/**/*.test.ts"]
 }

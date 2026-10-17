@@ -13,6 +13,12 @@ declare namespace Hazelle {
   type EmbedAnswer = { ok: true; model: string; vectors: number[][] } | { ok: false; reason: ModelRefusal | 'too-large' };
   type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; text?: string; options: string[] };
   type Settings = Record<string, string | number | boolean>;
+  // The chat's character card. id: the character's, the same in every chat with it. greeting: the card's first
+  // message, null when it has none. lore: the character's own lorebook; on: whether the entry is switched on.
+  interface Card {
+    readonly id: string; name: string; description: string; personality: string; scenario: string; greeting: string | null;
+    creatorNotes: string; tags: string[]; lore: { name: string; keys: string[]; text: string; always: boolean; on: boolean }[];
+  }
 
   interface ChatState {                         // this tool's own per-chat variables, replayed with the story
     get<T extends Json = Json>(key: string): Promise<T | undefined>;
@@ -35,6 +41,7 @@ declare namespace Hazelle {
     readonly length: number;
     messages(from?: number, to?: number): Promise<Message[]>;
     greeting(): Promise<string | null>;         // the character's opening message, before index 0
+    card(): Promise<Card | null>;               // null in a chat with no character
     readonly state: ChatState;
     readonly data: ChatData;
     edit(index: number, text: string): void;    // a new version, as Lua's setChat; throws in change and branch
@@ -66,24 +73,38 @@ declare namespace Hazelle {
   type Branched = { from: string; messages: Record<string, string>; versions: Record<string, string> };   // old id → new
   interface Events {
     reply(chat: Chat, reply: At): void | Promise<void>;                     // a reply was saved
+    // a reply about to be saved, after the bot's Lua: a text answered is saved instead; 5 s deadline, past which the
+    // reply is saved as it came. The story cannot be changed here.
+    replying(chat: Chat, text: string): string | void | Promise<string | void>;
     prompt(chat: Chat, turn: Turn): PromptAnswer | Promise<PromptAnswer>;   // this turn's slots; 5 s deadline
     change(chat: Chat, change: Change): void | Promise<void>;               // the user edited, switched, deleted or restored
     branch(chat: Chat, from: Branched): void | Promise<void>;              // chat is the new branch
     menu(chat: Chat, item: string): void | Promise<void>;                   // a //@menu item pressed in the chat's ⋯
     action(chat: Chat, item: string, message: At): void | Promise<void>;   // a //@action item pressed on a message
     settings(settings: Settings): void | Promise<void>;                     // fields changed on the module page
+    open(): void | Promise<void>;                                           // the user opened a frame tool's page
     message(data: Json): void;                                              // from the other side (page <-> background)
   }
   interface Page { readonly chat: Chat | null; readonly theme: 'dark' | 'light'; close(): void }
+  // A frame tool's one document, which holds its listeners and its screen together (a RisuAI plugin's, through the
+  // adapter). It is shown on the tool's page only while it asks to be; closing the page hides it.
+  interface Frame {
+    chat(): Promise<Chat | null>;              // the chat open for it now; null on the module page with no chat
+    show(): void;                              // brings its page up with this document in it
+    hide(): void;                              // and closes that page
+    menu(items: { id: string; label: string }[]): void;   // its ⋯ items in the chat, replacing the last; pressed: 'menu'
+    missing(name: string): void;               // tells 점검 it met a name the API it was written for has and this one lacks
+  }
   interface Api {
     // Unreleased until tools are published (design §6.10, phase 3): version 1 changes in place until then.
     readonly api: 1;
     readonly tool: { name: string; author: string; displayName: string; version: string };
-    readonly context: 'background' | 'page';
-    on<E extends keyof Events>(event: E, handler: Events[E]): void;   // events reach background only, except 'message'
+    readonly context: 'background' | 'page' | 'frame';
+    on<E extends keyof Events>(event: E, handler: Events[E]): void;   // events reach background and frame, except 'message'
     readonly storage: Storage;
     settings(): Promise<Settings>;
     post(data: Json): void;
-    readonly page: Page | null;                  // null in background
+    readonly page: Page | null;                  // null in background and frame
+    readonly frame: Frame | null;                // only in frame
   }
 }

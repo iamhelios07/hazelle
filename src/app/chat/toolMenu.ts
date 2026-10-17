@@ -1,12 +1,13 @@
 import type { Badges, ToolChatData } from '../../model/tool';
 import type { ToolField } from '../../tool-api/manifest';
-import type { ToolMenu } from '../../runtime/tools/facade';
+import type { MenuItem, ToolMenu } from '../../runtime/tools/facade';
 
 type ToolAction = { module: string; name: string; label: string } & ({ kind: 'page' } | { kind: 'menu'; item: string });
 
-export const toolMenu = (tools: ToolMenu[]): ToolAction[] => tools.flatMap(({ module, manifest }) => [
+// items: the tool host's, which a frame tool's frame registers while it runs.
+export const toolMenu = (tools: ToolMenu[], items: (module: string) => MenuItem[]): ToolAction[] => tools.flatMap(({ module, manifest }) => [
   ...(manifest.page ? [{ kind: 'page' as const, module, name: manifest.displayName, label: manifest.page.label }] : []),
-  ...manifest.menu.map(({ id, label }) => ({ kind: 'menu' as const, module, name: manifest.displayName, label, item: id })),
+  ...items(module).map(({ id, label }) => ({ kind: 'menu' as const, module, name: manifest.displayName, label, item: id })),
 ]);
 
 // A message's 도구 menu: each tool's //@action items, by tool in pack order.

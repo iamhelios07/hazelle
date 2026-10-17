@@ -5,3 +5,17 @@
   min-height: var(--tool-frame-min-height);
   border: 0;
 }
+
+.slot {
+  flex-grow: 1;
+  width: 100%;
+  min-height: var(--tool-frame-min-height);
+}
+
+/* A frame tool's iframe, which lives in the body outside React's tree (moving an iframe reloads it), held over its
+   slot by FrameSlot. */
+.placed {
+  position: fixed;
+  z-index: var(--layer-panel);
+  border: 0;
+}

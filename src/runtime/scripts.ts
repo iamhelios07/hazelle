@@ -8,6 +8,7 @@ import { live, type PackOwner } from '../model/library';
 import type { ToolUnit } from '../model/tool';
 import type { Assembled, MemoryFill, PromptInput } from '../engine/pipeline';
 import { saveToolChat, toolsOf } from './tools/store';
+import type { Tools } from './tools/facade';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage, EmbedPurpose } from '../connectors/types';
 import { isRecord } from '../connectors/values';
@@ -204,6 +205,9 @@ export type Rehearsal = {
 
 export const NOT_REHEARSED = 'Error: not called while rehearsing';
 
+// A tool's answer in a stage a turn waits on (prompt, replying); one that misses it is cut off and the turn goes on.
+const TOOL_DEADLINE_MS = 5000;
+
 // The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
   private readonly interactions: ScriptInteractions;
@@ -216,7 +220,7 @@ export class Scripts {
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
-    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> },
+    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> & Pick<Tools, 'items'> },
   ) {
     this.interactions = new ScriptInteractions(session.store, this.closing.signal);
     this.schedule = new ScriptSchedule(session.store, this.interactions, this.closing.signal);
@@ -427,17 +431,36 @@ export class Scripts {
     return { ...rehearsal(), stopped: null, prompt: after, request, changed: after !== null || request !== null };
   }
 
+  // editOutput: the bot's Lua, then each tool's replying in pack order, each handing the next the text it left.
   async ending(chat: string, reply: Written): Promise<Written> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? scriptsOf(packsOf(this.session.store, stored.value)) : [];
-    if (!stored || scripts.length === 0 || reply.receipt.state === 'failed') return reply;
+    const units = stored ? toolsOf(this.session.store, stored.value) : [];
+    if (!stored || (scripts.length === 0 && units.length === 0) || reply.receipt.state === 'failed') return reply;
     return this.schedule.queued(chat, async () => {
       const messages = this.session.read.chat(chat).snapshot()?.messages ?? [];
       const at = reply.message === null ? -1 : messages.findIndex((message) => message.id === reply.message);
-      const scope = { ...scopeOf(this.session, chat, stored.value, at === -1 ? messages : messages.slice(0, at)), pending: reply.before ?? [] };
-      const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editOutput', value: reply.text, meta: { index: -1 } } }, scope, null);
-      const before = [...(reply.before ?? []), ...outcome.writes];
-      return { ...reply, text: typeof outcome.value === 'string' ? outcome.value : reply.text, ...(before.length > 0 && { before }) };
+      const scope = scopeOf(this.session, chat, stored.value, at === -1 ? messages : messages.slice(0, at));
+      let text = reply.text;
+      let before = reply.before ?? [];
+      if (scripts.length) {
+        const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editOutput', value: text, meta: { index: -1 } } }, { ...scope, pending: before }, null);
+        before = [...before, ...outcome.writes];
+        if (typeof outcome.value === 'string') text = outcome.value;
+      }
+      for (const unit of units) {
+        if (this.closing.signal.aborted) break;
+        const deadline = new AbortController();
+        const stop = AbortSignal.any([this.closing.signal, deadline.signal]);
+        const timer = setTimeout(() => deadline.abort(new ToolLate()), TOOL_DEADLINE_MS);
+        try {
+          const { outcome } = await this.dispatch(chat, { tool: unit, event: { kind: 'replying', text } }, { ...scope, pending: before }, null, stop, () => clearTimeout(timer));
+          if (stop.aborted) continue;
+          before = [...before, ...outcome.writes];
+          if (typeof outcome.value === 'string') text = outcome.value;
+        } finally { clearTimeout(timer); }
+      }
+      return { ...reply, text, ...(before.length > 0 && { before }) };
     });
   }
 
@@ -484,7 +507,7 @@ export class Scripts {
         this.lastPrompt.set(chat, last);
         const deadline = new AbortController();
         const stop = AbortSignal.any([signal, this.closing.signal, deadline.signal]);
-        const timer = setTimeout(() => deadline.abort(new ToolLate()), 5000);
+        const timer = setTimeout(() => deadline.abort(new ToolLate()), TOOL_DEADLINE_MS);
         try {
           const scope = { ...turn.scope, pending: [...(first.scope.pending ?? []), ...writes] };
           const { outcome, changed } = await this.dispatch(chat, { tool: unit, event: { kind: 'prompt', turn: { memory: holds } } }, scope, null, stop, () => clearTimeout(timer));
@@ -528,7 +551,7 @@ export class Scripts {
   // A //@menu item: its writes stay with the last message, whichever version it shows.
   menu(chat: string, module: string, item: string): Promise<void> {
     const unit = this.unit(chat, module);
-    if (!unit?.tool.manifest.menu.some((each) => each.id === item)) return Promise.resolve();
+    if (!unit || !this.bindings.tools.items(module).some((each) => each.id === item)) return Promise.resolve();
     return this.schedule.lane(chat, unit, async () => {
       const scope = this.scope(chat);
       await this.dispatch(chat, { tool: unit, event: { kind: 'menu', item } }, scope, onLast(scope), this.closing.signal);

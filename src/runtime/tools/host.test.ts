@@ -11,7 +11,7 @@ import type { Session } from '../session';
 import { answerable, testServer } from '../testing';
 import { blankCard } from '../../engine/import/card';
 import { projectGreetings } from '../greetings';
-import { inProcessTools } from '../testing/tool-transport';
+import { inProcessRisu, inProcessTools } from '../testing/tool-transport';
 import { ToolHost } from './host';
 import type { OpenFrame } from './frame';
 import { importTool, setToolData, setToolSettings, toolData, toolDataId } from './store';
@@ -404,4 +404,42 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
     await vi.waitFor(() => expect(session.scripts.snapshot().notes).toHaveLength(3));
     expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'failed')).toHaveLength(1);
   } finally { vi.useRealTimers(); close(); host.close(); }
+}));
+
+it('runs a frame tool as one frame: its registered items, a press from the chat, its page and the chat it reads', () => withTools(async (session, connect) => {
+  await answerable(session);
+  const parsed = source('1', '');
+  const added = await importTool(session.store, session.files, { ...parsed, manifest: { ...parsed.manifest, page: null, menu: [], risu: { verdict: 'all', missing: [], hosts: [] } } });
+  if (!added.ok) throw new Error(added.error);
+  await setModuleAlways(session.store, added.data.id, true);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  const module = added.data.id;
+  const pressed = vi.fn();
+  const transport = inProcessRisu((scope) => {
+    const risu = scope.Risuai as Record<string, (...args: unknown[]) => Promise<unknown>>;
+    void risu.registerButton!({ name: 'Cast', id: 'cast' }, async () => { pressed(await risu.getCurrentChatIndex!()); await risu.showContainer!('fullscreen'); });
+    void risu.registerSetting!('Open', () => risu.showContainer!('fullscreen'));
+  });
+  const host = connect(transport.open);
+  try {
+    await host.warm(chat);
+    const { items } = host;
+    await vi.waitFor(() => expect(items(module)).toEqual([{ id: 'cast', label: 'Cast' }]));
+    expect(transport.frames.map((frame) => frame.api?.context)).toEqual(['frame']);
+    await session.scripts.menu(chat, module, 'cast');
+    await vi.waitFor(() => expect(host.frames().get(module)).toEqual({ menu: [{ id: 'cast', label: 'Cast' }], chat, asking: true }));
+    expect(pressed.mock.calls[0]![0]).toEqual(expect.any(Number));
+    expect(pressed.mock.calls[0]![0]).not.toBe(-1);
+    const shownIn = { chat, place: vi.fn(), close: vi.fn() };
+    const detach = host.attach(module, shownIn);
+    await vi.waitFor(() => expect(shownIn.place).toHaveBeenCalledTimes(1));
+    expect(host.frames().get(module)?.asking).toBe(false);
+    detach();
+    const opened = { chat: null, place: vi.fn(), close: vi.fn() };
+    host.attach(module, opened);
+    await vi.waitFor(() => expect(opened.place).toHaveBeenCalledTimes(1));
+    expect(transport.frames).toHaveLength(1);
+  } finally { host.close(); }
 }));

@@ -1,7 +1,7 @@
 import type { ToolEvent } from '../engine/script-api';
 import type { createTools } from './tools/host';
 import type { Binding } from './script-binding';
-import type { ToolUnit } from '../model/tool';
+import { toolId, type ToolUnit } from '../model/tool';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { RELAY_HEADER } from '../contracts/http';
 import { bareModel } from '../connectors/chat-completions';
@@ -173,7 +173,10 @@ export function testServer() {
       vi.stubGlobal('window', new EventTarget());
       vi.stubGlobal('document', { visibilityState: 'hidden' });
       const { accountId, vaultKey } = await harness.account();
-      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { tools: typeof tools === 'function' ? tools : tools && (() => ({ ...tools, warm: async () => {}, menus: () => [], page: () => () => {} })), lua: async () => {
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { tools: typeof tools === 'function' ? tools : tools && (({ store }) => ({
+        ...tools, warm: async () => {}, menus: () => [], page: () => () => {}, attach: () => () => {}, subscribe: () => () => {}, frames: () => new Map(),
+        items: (module) => store.get('tool', toolId(module))?.value.manifest.menu ?? [],
+      })), lua: async () => {
         const machine = await lua;
         return { run: (chat, units, scope, event, host, lane) => runEvent(machine, chat, units, scope, event, host, lane), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
       } });

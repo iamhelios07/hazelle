@@ -15,7 +15,7 @@ import { Lua } from '../engine/lua/run';
 import { fold, shown } from '../model/chat';
 import { modelUsage } from '../model/usage';
 import { setToggle } from './characters';
-import { appendUserMessage, selectVersion, startChat } from './chat-log';
+import { appendUserMessage, selectVersion, startChat, type Written } from './chat-log';
 import { EvaluationFailed, EvaluationStuck } from './evaluation';
 import { projectGreetings } from './greetings';
 
@@ -551,7 +551,7 @@ describe('tool events through Scripts', () => {
       expect(heard.filter((kind) => kind.startsWith('change'))).toEqual([]);
       finishReply(noOutcome());
       await expect.poll(() => toolChatData(session.store, f.module, f.chat, 'index')).toEqual({ stale: said.id });
-      expect(heard).toEqual(['prompt', 'reply', 'change:edit:0']);
+      expect(heard).toEqual(['prompt', 'replying', 'reply', 'change:edit:0']);
       expect(toolBadges(session.store, f.module, f.chat)).toEqual({ [said.id]: { version: shown(f.messages()[0]!).id, text: '고침' } });
 
       void session.scripts.action(f.chat, f.module, 'redo', said.id);
@@ -689,6 +689,36 @@ describe('tool events through Scripts', () => {
         expect(cachedTools(session, chat)).toEqual([]);
       } finally { lease.release(); }
     }, binding);
+  });
+
+  it('hands a reply to each tool after the bot Lua, and passes it on unchanged past a tool that misses the deadline', async () => {
+    const late: (() => void)[] = [];
+    let hang = false;
+    const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, _unit, _scope, event) => {
+      if (event.kind !== 'replying') return noOutcome();
+      if (hang) return new Promise((resolve) => late.push(() => resolve({ ...noOutcome(), value: 'too late' })));
+      return { ...noOutcome(), handled: true, value: `${event.text} [tool]` };
+    });
+    await server.withSession(async (session) => {
+      const f = await toolChat(session);
+      const lua = await importModule(session.store, session.files, { name: 'lua', description: '', namespace: null, risu: null, pack: { regex: [], toggles: [], triggers: [{ kind: 'lua', id: 'lua', name: 'edit', code: "listenEdit('editOutput', function(id, value) return value .. ' [lua]' end)" }] }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
+      if (!lua.ok) throw new Error(lua.error);
+      await setModuleAlways(session.store, lua.data.id, true);
+      stubRelay(() => saying('reply'));
+      await takeTurn(session, f.chat, { kind: 'send', text: 'hello' });
+      await expect.poll(() => f.messages().length).toBe(2);
+      expect(shown(f.messages()[1]!).text).toBe('reply [lua] [tool]');
+      hang = true;
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const reply: Written = { id: crypto.randomUUID(), message: null, replaces: null, at: Date.now(), text: 'again', receipt: { state: 'done' } as Written['receipt'] };
+        const ending = session.scripts.ending(f.chat, reply);
+        await vi.waitFor(() => expect(late).toHaveLength(1));
+        await vi.advanceTimersByTimeAsync(5001);
+        expect((await ending).text).toBe('again [lua]');
+        expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
+      } finally { vi.useRealTimers(); for (const resolve of late) resolve(); }
+    }, { run, close: () => {} });
   });
 
   it('skips a prompt after its deadline, drops late writes, and notes that tool only once', async () => {

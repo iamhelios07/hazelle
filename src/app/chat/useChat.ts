@@ -21,7 +21,7 @@ import { NO_PERSONA_SLOT } from '../common/prompt-words';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
 import { BIN_KEEPS, LORE_BUDGET_LABEL } from '../common/words';
-import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useTurn } from '../session';
+import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useToolFrames, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
@@ -117,6 +117,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setInfoPick(reply);
     open({ kind: 'info', tab });
   };
+  // A frame tool of this chat that asks to be shown opens in the tool panel.
+  const frames = useToolFrames();
+  const askingTool = id === null ? undefined : tools.find(({ module }) => frames.get(module)?.asking && frames.get(module)?.chat === id)?.module;
+  useEffect(() => { if (askingTool) setPanels((current) => opened(current, { kind: 'tool', module: askingTool }, pairs)); }, [askingTool, pairs]);
   const flipPanel = (next: Panel, same: (current: Panel) => boolean) => setPanels((current) => (current.panel && same(current.panel) ? { ...current, panel: null } : opened(current, next, pairs)));
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
