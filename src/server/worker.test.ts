@@ -378,7 +378,8 @@ describe('guards', () => {
     const chat = crypto.randomUUID();
     const sent: Headers[] = [];
     upstream = async (_url, init) => { sent.push(init.headers); return Response.json({ data: [] }); };
-    const call = (bot: string) => t.raw('relay', { method: 'POST', headers: { 'content-type': 'application/json', cookie, 'x-account': body.accountId, 'x-hazelle-bot': bot }, body: JSON.stringify({ url: 'https://api.example.com/embeddings', method: 'POST', headers: {}, body: '{}' }) });
+    const envelope = JSON.stringify({ url: 'https://api.example.com/embeddings', method: 'POST', headers: {}, body: '{}' });
+    const call = (bot: string) => t.raw('relay', { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': String(envelope.length), cookie, 'x-account': body.accountId, 'x-hazelle-bot': bot }, body: envelope });
     expect((await call(chat)).status).toBe(200);
     expect([...sent[0]!.keys()].some((key) => key.toLowerCase() === 'x-hazelle-bot')).toBe(false);
     for (let i = 0; i < 19; i++) t.env.limits.botCalls.limit(`${body.accountId}:${chat}`);

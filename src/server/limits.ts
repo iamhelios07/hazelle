@@ -6,16 +6,21 @@ import { createHmac, randomBytes } from 'node:crypto';
 export type Limiter = { limit(key: string): { success: boolean } };
 export type UploadBudget = { take(size: number): Promise<boolean>; give(size: number): void };
 
-export type RelayAllowance = { visit(url: URL): boolean; take(bytes: number): boolean };
+// enter: a live call of the account's own, or null while it holds LIVE_CALLS; the function it answers ends that call, once.
+export type RelayAllowance = { visit(url: URL): boolean; take(bytes: number): boolean; enter(): (() => void) | null };
 export type RelayBudget = { account(id: string): RelayAllowance };
 export const RELAY_DAILY = { bytes: 4_000_000_000, hosts: 30 };
+// Calls an account holds open at once: a detached reply while its call runs, a relayed call until its answer ends.
+export const LIVE_CALLS = 32;
 
 // Enforcement only: never expose, log or persist these counters or destination fingerprints. A new UTC day (or
 // process) forgets them. Handles read the current day even when a detached call crosses midnight.
-export function relayBudget(bytes = RELAY_DAILY.bytes, hosts = RELAY_DAILY.hosts, clock: () => number = Date.now): RelayBudget {
+export function relayBudget(bytes = RELAY_DAILY.bytes, hosts = RELAY_DAILY.hosts, clock: () => number = Date.now, calls = LIVE_CALLS): RelayBudget {
   let day = -1;
   let secret = randomBytes(32);
   const accounts = new Map<string, { bytes: number; hosts: Set<string> }>();
+  // Not the day's: a call running across midnight is still open, and a count cleared with the day would never close it.
+  const live = new Map<string, number>();
   const current = (id: string) => {
     const today = Math.floor(clock() / 86_400_000);
     if (today !== day) {
@@ -46,13 +51,27 @@ export function relayBudget(bytes = RELAY_DAILY.bytes, hosts = RELAY_DAILY.hosts
         held.bytes = Math.min(bytes, held.bytes + size);
         return fits;
       },
+      enter: () => {
+        const open = live.get(id) ?? 0;
+        if (open >= calls) return null;
+        live.set(id, open + 1);
+        let ended = false;
+        return () => {
+          if (ended) return;
+          ended = true;
+          const left = live.get(id)! - 1;
+          if (left) live.set(id, left);
+          else live.delete(id);
+        };
+      },
     }),
   };
 }
 
-// One process holds every upload body in its memory until the bytes are on disk, so what it holds at once is bounded
-// by their bytes, not their count: a picture of ~100 KB never waits, and only bodies near MAX_FILE_BYTES share the
-// budget. A size is never past the budget: worker.ts bounds a body by MAX_FILE_BYTES before its route runs.
+// One process holds every picture upload until its bytes are on disk, and every provider call's body while it is read
+// and parsed (calls.ts), so what it holds at once is bounded by their bytes, not their count: a picture of ~100 KB or a
+// short prompt never waits, and only bodies near MAX_FILE_BYTES or CALL_BYTES share the budget. A size is never past
+// the budget: worker.ts bounds a body by its route's cap before the route runs.
 const UPLOAD_BYTES = 256 * 1024 * 1024;
 const UPLOAD_WAIT_MS = 30_000;
 

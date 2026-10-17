@@ -3,11 +3,11 @@ import { createServer, type Server, type ServerResponse } from 'node:http';
 import { createServer as createSocketServer, type AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { localProviders, pinnedLookup, pinnedOutbound, type Resolve } from './outbound';
-import { createRelay as relayWithBudget, type Upstream, type UpstreamInit } from './relay';
+import { forward, type Upstream, type UpstreamInit } from './relay';
 import { isPublicAddress, PolicyRefusal } from './ssrf';
 import { relayBudget } from './limits';
 
-const createRelay = (upstream: Upstream) => relayWithBudget(upstream, relayBudget().account('test'));
+const createRelay = (upstream: Upstream) => async (request: Request) => forward(upstream, await request.json(), 0, request.signal, relayBudget().account('test'));
 
 // No local address is public, so a test that dials the production dispatcher's pinned connection at a local server
 // lets 127.0.0.1 pass as public for its duration.

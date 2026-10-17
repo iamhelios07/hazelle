@@ -49,6 +49,7 @@ export type ServerError =
   | 'too-many-attempts'
   | 'too-many-bot-calls'
   | 'too-many-calls'
+  | 'too-many-live-calls'
   | 'too-many-reports'
   | 'too-many-restores'
   | 'too-many-signups'

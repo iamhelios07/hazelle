@@ -37,7 +37,7 @@ function provider(chunks = 0) {
 
 async function body() {
   const { key } = await replyKey();
-  return { id: crypto.randomUUID(), key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } };
+  return { id: crypto.randomUUID(), key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' }, bytes: 0 };
 }
 
 async function types(response: Response) {
@@ -69,7 +69,7 @@ describe('the stream registry', () => {
   it('gives two starts of one name one call and one stream-exists', async () => {
     const { seen, upstream } = provider();
     const streams = streamRegistry(store(), upstream);
-    const [a, b] = await Promise.all([streams.start('a', await body(), staying), streams.start('a', await body(), staying)]);
+    const [a, b] = await Promise.all([streams.start('a', await body(), staying, () => {}), streams.start('a', await body(), staying, () => {})]);
     expect([a.status, b.status].sort()).toEqual([200, 409]);
     await vi.waitFor(() => expect(seen.calls).toBe(1));
     expect(streams.live()).toBe(1);
@@ -94,7 +94,7 @@ describe('the stream registry', () => {
     const streams = streamRegistry(store(), upstream);
     const held = holdDerivation();
     try {
-      const starting = streams.start('a', await body(), staying);
+      const starting = streams.start('a', await body(), staying, () => {});
       expect((await streams.read('a', 0, staying)).status).toBe(404);
       held.open();
       const started = await starting;
@@ -115,7 +115,7 @@ describe('the stream registry', () => {
     const streams = streamRegistry(held, upstream);
     const derivation = holdDerivation();
     try {
-      const starting = streams.start('a', await body(), staying);
+      const starting = streams.start('a', await body(), staying, () => {});
       await streams.drop('a');
       derivation.open();
       expect((await starting).status).toBe(404);
@@ -130,8 +130,8 @@ describe('the stream registry', () => {
   it('counts a call live from its start to its end, and settles once none runs', async () => {
     const { upstream } = provider();
     const streams = streamRegistry(store(), upstream);
-    await (await streams.start('a', await body(), staying)).body?.cancel();
-    await (await streams.start('b', await body(), staying)).body?.cancel();
+    await (await streams.start('a', await body(), staying, () => {})).body?.cancel();
+    await (await streams.start('b', await body(), staying, () => {})).body?.cancel();
     expect(streams.live()).toBe(2);
     let settled = false;
     const settling = streams.settled().then(() => (settled = true));
@@ -146,7 +146,7 @@ describe('the stream registry', () => {
   it('expires a stream at its alarm: the call ends and its rows go', async () => {
     const { seen, upstream } = provider();
     const streams = streamRegistry(store(), upstream);
-    await (await streams.start('a', await body(), staying)).body?.cancel();
+    await (await streams.start('a', await body(), staying, () => {})).body?.cancel();
     await streams.expire(Date.now() + DAY_MS - 60_000);
     expect(streams.live()).toBe(1);
     await streams.expire(Date.now() + DAY_MS);
@@ -173,7 +173,7 @@ describe('the stream registry', () => {
       };
     };
     const streams = streamRegistry(held, provider(5).upstream);
-    await (await streams.start('a', await body(), staying)).body?.cancel();
+    await (await streams.start('a', await body(), staying, () => {})).body?.cancel();
     await vi.waitFor(() => expect(writing).toBe(true));
     const expiring = streams.expire(Date.now() + DAY_MS);
     open();
@@ -193,7 +193,7 @@ describe('the stream registry', () => {
     });
     const { seen, upstream } = provider(5);
     const streams = streamRegistry(held, upstream);
-    const reading = (await streams.start('a', await body(), staying)).arrayBuffer();
+    const reading = (await streams.start('a', await body(), staying, () => {})).arrayBuffer();
     await expect(reading).rejects.toThrow('stream write failed');
     await vi.waitFor(() => expect(streams.live()).toBe(0));
     expect(seen.aborted).toBe(1);
@@ -205,7 +205,7 @@ describe('the stream registry', () => {
     const path = tempFile();
     const { seen, upstream } = provider(5);
     const before = streamRegistry(store(path), upstream);
-    const reading = (await before.start('a', await body(), staying)).body!.getReader();
+    const reading = (await before.start('a', await body(), staying, () => {})).body!.getReader();
     // The fourth data frame would take the page past its bytes, so the head and three data frames are written at once.
     const stored = store(path).storage('a');
     await vi.waitFor(async () => expect((await stored.list({ start: 'f:0000000001', end: 'f;', limit: 1 })).size).toBe(1));

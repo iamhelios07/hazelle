@@ -66,19 +66,15 @@ export class RelayTrafficLimit extends Error {
   }
 }
 
-export function createRelay(upstream: Upstream, allowance: RelayAllowance): (request: Request) => Promise<Response> {
-  return async (request) => forward(upstream, await request.json().catch(() => null), request.signal, allowance);
-}
-
-// stream-box.ts calls it with a signal of its own, so the call outlives the client's request.
-export async function forward(upstream: Upstream, body: unknown, signal: AbortSignal, allowance: RelayAllowance): Promise<Response> {
+// stream-box.ts calls it with a signal of its own, so the call outlives the client's request. bytes: the request body the
+// client sent for the call (calls.ts), the whole envelope with its URL and headers.
+export async function forward(upstream: Upstream, body: unknown, bytes: number, signal: AbortSignal, allowance: RelayAllowance): Promise<Response> {
   const envelope = parseEnvelope(body);
   if (!envelope) return refuse(400, 'bad-envelope');
-  if (!allowance.take(0)) return refuse(429, 'relay-traffic-limit');
   if (!allowance.visit(envelope.url)) return refuse(429, 'relay-host-limit');
-  // The envelope includes URLs and headers: counting only its body leaves large GETs free. Charge every retry;
-  // failed attempts are not refunded. No request content is retained by the allowance.
-  if (!allowance.take(Buffer.byteLength(JSON.stringify(body)))) return refuse(429, 'relay-traffic-limit');
+  // Counting only the envelope's body would leave large GETs free. Charge every retry; failed attempts are not
+  // refunded. No request content is retained by the allowance.
+  if (!allowance.take(bytes)) return refuse(429, 'relay-traffic-limit');
   const call = new AbortController();
   const upstreamSignal = AbortSignal.any([signal, call.signal]);
 
@@ -93,6 +89,14 @@ export async function forward(upstream: Upstream, body: unknown, signal: AbortSi
     });
   } catch (error) {
     return error instanceof PolicyRefusal ? refuse(403, error.refusal) : refuse(502, 'upstream-unreachable');
+  }
+
+  // A Response carries 200 to 599 alone. Never left to its constructor: the server's Response (@hono/node-server)
+  // builds the real one only when it is first read, past this call's cleanup.
+  if (response.status < 200 || response.status > 599) {
+    call.abort();
+    await response.body?.cancel().catch(() => {});
+    return refuse(502, 'upstream-unreachable');
   }
 
   if (!allowance.take(Buffer.byteLength(JSON.stringify([...response.headers])))) {
@@ -148,7 +152,8 @@ export async function forward(upstream: Upstream, body: unknown, signal: AbortSi
         { highWaterMark: 0 },
       )
     : null;
-  return new Response(metered, { status: response.status, statusText: response.statusText, headers });
+  // No reason phrase: no client reads one, HTTP/2 carries none, and one with a control character is no Response's.
+  return new Response(metered, { status: response.status, headers });
 }
 
 function parseEnvelope(value: unknown): Envelope | null {
@@ -173,6 +178,6 @@ function outboundHeaders(input: Record<string, string>): Headers {
   return headers;
 }
 
-function refuse(status: number, error: RelayError, detail: Record<string, unknown> = {}): Response {
+export function refuse(status: number, error: RelayError, detail: Record<string, unknown> = {}): Response {
   return Response.json({ error, ...detail }, { status, headers: { [RELAY_HEADER]: 'error', 'cache-control': 'no-store' } });
 }
