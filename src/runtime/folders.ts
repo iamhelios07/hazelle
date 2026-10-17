@@ -8,13 +8,14 @@ type Placement = { id: string; folder: string | null };
 
 const folderOf = (value: Values[Filed]) => ('folder' in value ? (value.folder ?? null) : null);
 
-// A character names no folder with null; the other kinds leave the field out.
-function place(store: ObjectStore, kind: Filed, placements: Placement[]) {
+// A character names no folder with null; the other kinds leave the field out. still: whether a thing, where it is now,
+// is still where this placement was decided from; one another device moved meanwhile keeps that move.
+function place(store: ObjectStore, kind: Filed, placements: Placement[], still: (folder: string | null) => boolean = () => true) {
   return allWritten(placements.map(({ id, folder }) => {
-    if (kind === 'character') return store.update('character', id, (current) => ({ ...current, folder }));
-    if (kind === 'prompt') return store.update('prompt', id, (current) => (current.task !== undefined ? current : folder === null ? without(current, 'folder') : { ...current, folder }));
-    if (kind === 'module') return store.update('module', id, (current) => (folder === null ? without(current, 'folder') : { ...current, folder }));
-    return store.update('persona', id, (current) => (folder === null ? without(current, 'folder') : { ...current, folder }));
+    if (kind === 'character') return store.update('character', id, (current) => (!still(current.folder) ? current : { ...current, folder }));
+    if (kind === 'prompt') return store.update('prompt', id, (current) => (current.task !== undefined || !still(folderOf(current)) ? current : folder === null ? without(current, 'folder') : { ...current, folder }));
+    if (kind === 'module') return store.update('module', id, (current) => (!still(folderOf(current)) ? current : folder === null ? without(current, 'folder') : { ...current, folder }));
+    return store.update('persona', id, (current) => (!still(folderOf(current)) ? current : folder === null ? without(current, 'folder') : { ...current, folder }));
   }));
 }
 
@@ -44,8 +45,11 @@ export function folderRemoval(store: ObjectStore, id: string): RemovedFolder | n
   return { kind, folders: withInside(target), placements, up };
 }
 
-export const removeFolder = (store: ObjectStore, { kind, folders, placements, up }: RemovedFolder) =>
-  allWritten([place(store, kind, placements.map(({ id }) => ({ id, folder: up?.id ?? null }))), store.batch(folders.map(({ id }) => ({ type: 'remove', id })))]);
+export function removeFolder(store: ObjectStore, { kind, folders, placements, up }: RemovedFolder) {
+  const gone = new Set(folders.map(({ id }) => id));
+  const moved = place(store, kind, placements.map(({ id }) => ({ id, folder: up?.id ?? null })), (folder) => folder !== null && gone.has(folder));
+  return allWritten([moved, store.batch(folders.map(({ id }) => ({ type: 'remove', id })))]);
+}
 
-export const restoreFolder = (store: ObjectStore, { kind, folders, placements }: RemovedFolder) =>
-  allWritten([store.batch(folders.map(({ id, kind, parent, value }) => ({ type: 'restore', id, kind, parent, value }))), place(store, kind, placements)]);
+export const restoreFolder = (store: ObjectStore, { kind, folders, placements, up }: RemovedFolder) =>
+  allWritten([store.batch(folders.map(({ id, kind, parent, value }) => ({ type: 'restore', id, kind, parent, value }))), place(store, kind, placements, (folder) => folder === (up?.id ?? null))]);

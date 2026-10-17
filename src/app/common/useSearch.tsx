@@ -2,7 +2,8 @@ import { useState, type Ref } from 'react';
 import { SearchField } from '../ui';
 import { matches, noResults, SEARCH_FROM } from './search';
 
-// A picker's search: Enter in its field picks the first found, and ref lets the picker focus the field as it opens.
+// A picker's search: Enter in its field picks the first found once words are typed (with none, the first item may sit
+// in a folder not shown), and ref lets the picker focus the field as it opens.
 // query: words held by a parent that outlives the list, such as the sidebar's across entering a shelf.
 export type SearchOptions<T> = { ref?: Ref<HTMLInputElement>; onEnter?: (first: T) => void; query?: readonly [string, (query: string) => void] };
 
@@ -28,7 +29,7 @@ export function useSearch<T>(items: readonly T[], label: string, texts: (item: T
         onKeyDown={
           onEnter &&
           ((event) => {
-            if (event.key !== 'Enter' || first === undefined) return;
+            if (event.key !== 'Enter' || !words || first === undefined) return;
             event.preventDefault();
             onEnter(first);
           })

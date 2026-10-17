@@ -7,13 +7,14 @@ export const promptFolder = ({ value }: Stored<'prompt'>) => (value.task === und
 export const byPromptName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => a.value.name.localeCompare(b.value.name, 'ko');
 
 export function groupPrompts(prompts: readonly Stored<'prompt'>[]): { top: Stored<'prompt'>[]; copies: ReadonlyMap<string, readonly Stored<'prompt'>[]> } {
-  const ids = new Set(prompts.map(({ id }) => id));
+  const byId = new Map(prompts.map((prompt) => [prompt.id, prompt]));
   const top: Stored<'prompt'>[] = [];
   const copies = new Map<string, Stored<'prompt'>[]>();
-  // A copy sits under its original while that is still here.
+  // A copy sits under its original while that is still here, in the same folder: one filed elsewhere (moved while
+  // its original was in 휴지통) stays in its own folder.
   for (const prompt of prompts) {
-    const origin = prompt.value.origin;
-    if (!origin || !ids.has(origin.id)) {
+    const origin = prompt.value.origin && byId.get(prompt.value.origin.id);
+    if (!origin || promptFolder(origin) !== promptFolder(prompt)) {
       top.push(prompt);
       continue;
     }

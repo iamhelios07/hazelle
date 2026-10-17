@@ -38,4 +38,25 @@ describe('folders', () => {
     await removeFolder(store, outermost);
     expect('folder' in store.get('persona', hyun!)!.value).toBe(false);
   });
+
+  it('leaves a thing moved elsewhere after the removal was decided where it went, on removal and on undo', async () => {
+    const { store } = await server.account();
+    const made = async (name: string, parent: string | null) => {
+      const saved = await createFolder(store, 'persona', name, parent);
+      return saved.ok ? saved.data.id : '';
+    };
+    const top = await made('판타지', null);
+    const inner = await made('기사단', top);
+    const away = await made('현대', null);
+    const added = await addPersona(store, { name: '진', description: '', picture: null });
+    const jin = added.ok ? added.data.id : '';
+    await moveInto(store, 'persona', [jin], inner);
+
+    const removal = folderRemoval(store, inner)!;
+    await moveInto(store, 'persona', [jin], away);
+    await removeFolder(store, removal);
+    expect(store.get('persona', jin)!.value.folder).toBe(away);
+    await restoreFolder(store, removal);
+    expect(store.get('persona', jin)!.value.folder).toBe(away);
+  });
 });

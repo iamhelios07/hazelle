@@ -2,9 +2,9 @@ import { expect, it } from 'vitest';
 import type { Stored } from '../../model/kinds';
 import { byLastUse, groupPrompts } from './promptCopies';
 
-const prompt = (id: string, name: string, origin?: string): Stored<'prompt'> => ({
+const prompt = (id: string, name: string, origin?: string, folder?: string): Stored<'prompt'> => ({
   id, kind: 'prompt', parent: null, rev: 1,
-  value: { name, blocks: [], toggles: [], authorNote: '', models: {}, ...(origin === undefined ? {} : { origin: { id: origin, name: '원본' } }) },
+  value: { name, blocks: [], toggles: [], authorNote: '', models: {}, ...(origin === undefined ? {} : { origin: { id: origin, name: '원본' } }), ...(folder === undefined ? {} : { folder }) },
 });
 const ids = (prompts: readonly Stored<'prompt'>[]) => prompts.map(({ id }) => id);
 
@@ -23,6 +23,11 @@ it('sorts each original’s copies stably while promoting orphans and keeping ne
   expect(ids(removed.top)).toEqual(['z', 'orphan', 'a2', 'own', 'a1']);
   expect(ids(removed.copies.get('a2')!)).toEqual(['leaf']);
   expect(removed.copies.has('root')).toBe(false);
+});
+
+it('keeps a copy filed in another folder than its original in its own folder, not under the original', () => {
+  const { top, copies } = groupPrompts([prompt('root', '원본', undefined, 'a'), prompt('here', '사본', 'root', 'a'), prompt('away', '사본', 'root', 'b')]);
+  expect([ids(top), ids(copies.get('root')!)]).toEqual([['root', 'away'], ['here']]);
 });
 
 it('places a row by the latest use among it and its copies, the unused last by name', () => {
