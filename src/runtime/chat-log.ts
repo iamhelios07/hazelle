@@ -307,8 +307,10 @@ export const nameBookmark = (store: ObjectStore, chat: string, message: string, 
 export const versionTree = (store: ObjectStore, chat: string) => foldTree(store.children('entry', chat));
 
 // rows: the ledger rows of the calls the entry is the first to save (runtime/usage), written with it.
+const entryRow = (chat: string, entry: Entry, id: string = crypto.randomUUID()): Write => ({ type: 'create', kind: 'entry', id, parent: chat, value: entry });
+
 const append = (store: ObjectStore, chat: string, entry: Entry, id?: string, rows: Write[] = []) =>
-  rows.length ? store.batch([{ type: 'create', kind: 'entry', id: id ?? crypto.randomUUID(), parent: chat, value: entry }, ...rows]) : store.create('entry', entry, { id, parent: chat });
+  rows.length ? store.batch([entryRow(chat, entry, id), ...rows]) : store.create('entry', entry, { id, parent: chat });
 
 const translationRows = (store: ObjectStore, chat: string, translation?: Translation) =>
   (translation?.receipt ? [receiptRow(translation.receipt, translation.at, chatPlace(store, chat))] : []);
@@ -407,7 +409,7 @@ export const restoreMessage = (store: ObjectStore, chat: string, message: string
 // A run of messages deleted or restored as one act, in one batch, so a 되돌리기 brings back all of them or none.
 const markAll = (store: ObjectStore, chat: string, messages: string[], type: 'delete' | 'restore') => {
   const at = Date.now();
-  return store.batch(messages.map((message) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: chat, value: { type, message, at } as Entry })));
+  return store.batch(messages.map((message) => entryRow(chat, { type, message, at })));
 };
 
 export const removeMessages = (store: ObjectStore, chat: string, messages: string[]) => markAll(store, chat, messages, 'delete');
