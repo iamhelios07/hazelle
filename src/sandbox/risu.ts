@@ -28,7 +28,7 @@ const character = (card: Hazelle.Card, lorebook: Hazelle.LoreEntry[]) => ({
   globalLore: lorebook.filter(({ owner }) => owner.kind === 'character').map(loreEntry),
 });
 
-const chatOf = async (chat: Hazelle.Chat) => ({ message: (await chat.messages()).map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })) });
+const chatOf = (messages: Hazelle.Message[]) => ({ message: messages.map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })) });
 
 const MODEL_ROLES = new Set(['system', 'user', 'assistant']);
 // A Response with one of these statuses throws when given a body.
@@ -82,6 +82,15 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   };
   const buttons = new Map<string, { label: string; run: Callback }>();
   const messageActions = new Map<string, { label: string; run: MessageAction }>();
+  // Where each chatId handed out was, as read: a picture often lands after the user moved to another chat, whose messages
+  // the frame's chat then reads instead.
+  const places = new Map<string, { chat: Hazelle.Chat; at: Hazelle.At }>();
+  const place = (chat: Hazelle.Chat, { index, id, version }: Hazelle.At) => places.set(id, { chat, at: { index, id, version } });
+  const read = async (chat: Hazelle.Chat) => {
+    const messages = await chat.messages();
+    for (const message of messages) place(chat, message);
+    return chatOf(messages);
+  };
   const listedActions = () => [...messageActions].map(([id, { label }]) => ({ id, label }));
   const settings = new Map<string, Callback>();
   const replacers = { beforeRequest: new Set<Replacer>(), afterRequest: new Set<Replacer>() };
@@ -182,7 +191,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     getCurrentChatIndex: async () => (await opened())?.chatIndex ?? -1,
     getChatFromIndex: async (characterIndex: number, chatIndex: number) => {
       const chat = await at(characterIndex, chatIndex);
-      return chat && chatOf(chat);
+      return chat && read(chat);
     },
     setChatToIndex: async (characterIndex: number, chatIndex: number, value: { message: { role: string; data: string }[] }) => {
       const chat = await at(characterIndex, chatIndex);
@@ -304,15 +313,17 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   };
 
   api.on('menu', (_chat, item) => press(buttons.get(item)?.run));
-  api.on('action', (_chat, item, message) => {
+  api.on('action', (chat, item, message) => {
     const action = messageActions.get(item);
-    if (action) press(() => action.run({ chatId: message.id, index: message.index }));
+    if (!action) return;
+    place(chat, message);
+    press(() => action.run({ chatId: message.id, index: message.index }));
   });
   api.on('open', () => press(settings.values().next().value));
   api.on('reply', async (chat, reply) => {
     if (!listeners.size) return;
     const card = await chat.card();
-    const arg = { char: card && character(card, await chat.lorebook()), chat: await chatOf(chat), characterIndex: card ? index(card.id) : -1, chatIndex: index(chat.id), messageIndex: reply.index };
+    const arg = { char: card && character(card, await chat.lorebook()), chat: await read(chat), characterIndex: card ? index(card.id) : -1, chatIndex: index(chat.id), messageIndex: reply.index };
     for (const listener of [...listeners]) await listener(arg);
   });
 
@@ -323,12 +334,11 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   // here like the rest, and never through Risuai. A message is named by the chatId Risu's chat reads carry.
   scope.PluginSlots = {
     version: 1,
-    // Through the chat open for the frame, not an event's: the picture often comes after the reply's event has ended.
+    // On the version read when its chatId was handed out, which the picture was made for.
     attachPicture: async (chatId: string, bytes: Uint8Array, options: { caption?: string } = {}) => {
-      const chat = await frame.chat();
-      const message = chat && (await chat.messages()).find(({ id }) => id === chatId);
-      if (!message) throw new Error(`PluginSlots.attachPicture: the open chat has no message ${chatId}`);
-      await chat.picture({ index: message.index, id: message.id, version: message.version }, bytes, options);
+      const at = places.get(chatId);
+      if (!at) throw new Error(`PluginSlots.attachPicture: no chat read here has message ${chatId}`);
+      await at.chat.picture(at.at, bytes, options);
     },
     registerMessageAction: async ({ id, label }: { id: string; label: string }, callback: MessageAction) => {
       const previous = messageActions.get(id);

@@ -661,10 +661,19 @@ it('runs the porting sample as imported: each reply gets its picture as a 삽화
     await session.scripts.action(chat, module, 'redraw', reply);
     await vi.waitFor(() => expect(pictures()[0]!.rev).toBeGreaterThan(first.rev));
     expect(pictures().map(({ id }) => id)).toEqual([first.id]);
-    // Past the header's cap of three, or on a message the open chat lacks, the call fails where the plugin can see it.
+    // Past the header's cap of three, or on a message no chat read holds, the call fails where the plugin can see it.
     for (const id of ['a', 'b']) await slots.registerMessageAction({ id, label: id }, () => {});
     await expect(slots.registerMessageAction({ id: 'c', label: 'c' }, () => {})).rejects.toThrow('At most 3');
     expect(host.actions(module).map(({ id }) => id)).toEqual(['redraw', 'a', 'b']);
-    await expect(slots.attachPicture(crypto.randomUUID(), new Uint8Array())).rejects.toThrow('the open chat has no message');
+    await expect(slots.attachPicture(crypto.randomUUID(), new Uint8Array())).rejects.toThrow('no chat read here has message');
+    // The user moved to another chat while it was drawn: the picture still lands on the message it was drawn for.
+    const other = crypto.randomUUID();
+    await server.hold(session.store, other);
+    await startChat(session.store, other, { title: null, character: null, models: {} }, null);
+    await host.warm(other);
+    const before = pictures()[0]!.rev;
+    await slots.attachPicture(reply, Uint8Array.from(atob(PICTURE), (char) => char.charCodeAt(0)));
+    expect(pictures()[0]!.rev).toBeGreaterThan(before);
+    expect(session.store.children('illustration', other)).toEqual([]);
   } finally { host.close(); }
 }));
