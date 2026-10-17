@@ -42,6 +42,19 @@
   border: var(--border-thin) dashed var(--color-border-strong);
 }
 
+.open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  cursor: zoom-in;
+}
+
+/* Inside the frame, which clips whatever passes its edge. */
+.open:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
 .image {
   display: block;
   width: 100%;

@@ -97,6 +97,7 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
       label={LABEL}
       width={sent.width}
       height={sent.height}
+      pages={{ at, count: pictures.length, onStep: step }}
       foot={
         <>
           {pictures.length > 1 && (
