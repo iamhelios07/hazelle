@@ -6,6 +6,7 @@ import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
 import { useVeil } from '../foundation/veil';
+import { MenuSlot, useMenuSlot } from '../overlays/MoreMenu';
 import styles from './CardGrid.module.css';
 
 const STEPS: Record<string, (columns: number) => number> = { ArrowLeft: () => -1, ArrowRight: () => 1, ArrowUp: (columns) => -columns, ArrowDown: (columns) => columns };
@@ -70,8 +71,9 @@ type CardProps = {
 };
 
 export function FaceCard({ image, video = false, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag }: CardProps) {
+  const slot = useMenuSlot();
   return (
-    <div className={styles.cardBox}>
+    <div className={styles.cardBox} onContextMenu={slot.onContextMenu}>
       <button
         ref={ref}
         type="button"
@@ -92,7 +94,11 @@ export function FaceCard({ image, video = false, name, note, selected, current =
         {/* After the name, so the card is named by its name first; drawn over the picture's corner. */}
         {tag && <span className={styles.tag}><Tag tone="accent">{tag}</Tag></span>}
       </button>
-      {menu && <div className={styles.menu}>{menu}</div>}
+      {menu && (
+        <div className={styles.menu}>
+          <MenuSlot value={slot.held}>{menu}</MenuSlot>
+        </div>
+      )}
     </div>
   );
 }
@@ -104,9 +110,10 @@ type FolderCardProps = { name: string; note: string; faces: { image: string | nu
 
 export function FolderCard({ name, note, faces, onClick, menu, onDropCard }: FolderCardProps) {
   const drop = useCardDrop(onDropCard);
+  const slot = useMenuSlot();
   const shown = faces.slice(0, 4);
   return (
-    <div className={styles.cardBox}>
+    <div className={styles.cardBox} onContextMenu={slot.onContextMenu}>
       <button type="button" className={drop.over ? `${styles.card} ${styles.dropping}` : styles.card} onClick={onClick} {...drop.props}>
         <span className={styles.folder}>
           <span className={styles.tab} />
@@ -123,7 +130,11 @@ export function FolderCard({ name, note, faces, onClick, menu, onDropCard }: Fol
         <span className={styles.name}>{name}</span>
         <span className={styles.note}>{note}</span>
       </button>
-      {menu && <div className={styles.menu}>{menu}</div>}
+      {menu && (
+        <div className={styles.menu}>
+          <MenuSlot value={slot.held}>{menu}</MenuSlot>
+        </div>
+      )}
     </div>
   );
 }

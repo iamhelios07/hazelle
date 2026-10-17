@@ -51,6 +51,12 @@
   max-height: var(--menu-inner-max-height);
 }
 
+/* Opened by a right-click: Menu sets the pointer's spot within the anchor. */
+.point {
+  top: var(--point-top);
+  left: var(--point-left);
+}
+
 .below-start {
   top: calc(100% + var(--space-8));
   left: 0;

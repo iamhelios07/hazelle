@@ -10,7 +10,8 @@ import styles from './Menu.module.css';
 
 export type MenuOpener = { ref: RefObject<HTMLButtonElement | null>; popup: 'menu' | 'dialog'; expanded: boolean; onClick: () => void };
 
-type State = { open: boolean; from: HTMLElement | null };
+// at: where a right-click opened it (MoreMenu's slot), instead of beside its button.
+type State = { open: boolean; from: HTMLElement | null; at?: { x: number; y: number } };
 const CLOSED: State = { open: false, from: null };
 
 export type MenuHandle = { read: () => State; subscribe: (listener: () => void) => () => void; set: (state: State) => void };
@@ -62,7 +63,7 @@ const Holders = createContext<readonly (() => void)[]>([]);
 export function Menu({ label, trigger, place = 'below-start', size = 'md', kind = 'menu', handle, children }: Props) {
   const own = useMenuHandle();
   const menu = handle ?? own;
-  const { open, from } = useSyncExternalStore(menu.subscribe, menu.read);
+  const { open, from, at } = useSyncExternalStore(menu.subscribe, menu.read);
   const opener = useMenuOpener(menu);
   const anchor = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -108,18 +109,23 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
   // A menu taller than the room on its side scrolls within that room instead of running off the screen.
   useLayoutEffect(() => {
     if (!panel.current) return;
+    if (at) {
+      placeAt(panel.current, anchor.current!, at);
+      keepOnScreen(panel.current);
+      return;
+    }
     keepOnScreen(panel.current);
     const box = panel.current.getBoundingClientRect();
     const edge = parseFloat(getComputedStyle(panel.current).getPropertyValue('--menu-edge'));
     const { top, bottom } = room(panel.current);
     panel.current.style.setProperty('--room', `${side.startsWith('above') ? box.bottom - top - edge : bottom - box.top - edge}px`);
-  }, [open, side]);
+  }, [open, side, at]);
 
   return (
     <div className={styles.anchor} ref={anchor}>
       {trigger({ ...opener, popup: kind })}
       {open && (
-        <div ref={panel} className={`${styles.menu} ${styles[side]} ${styles[size]} ${kind === 'dialog' ? styles.dialog : ''}`} role={kind} aria-label={label}>
+        <div ref={panel} className={`${styles.menu} ${at ? styles.point : styles[side]} ${styles[size]} ${kind === 'dialog' ? styles.dialog : ''}`} role={kind} aria-label={label}>
           <Holders.Provider value={held}>
             <CloseMenu.Provider value={() => close(true)}>
               <ButtonSlot value={null}>{children}</ButtonSlot>
@@ -129,6 +135,19 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
       )}
     </div>
   );
+}
+
+// Drops from the pointer, or rises to it where the room below is shorter than the menu and than the room above.
+function placeAt(panel: HTMLElement, anchor: HTMLElement, at: { x: number; y: number }) {
+  const edge = parseFloat(getComputedStyle(panel).getPropertyValue('--menu-edge'));
+  const { top, bottom } = room(panel);
+  const below = bottom - edge - at.y;
+  const above = at.y - top - edge;
+  const upward = panel.offsetHeight > below && above > below;
+  panel.style.setProperty('--room', `${upward ? above : below}px`);
+  const box = anchor.getBoundingClientRect();
+  panel.style.setProperty('--point-left', `${at.x - box.left}px`);
+  panel.style.setProperty('--point-top', `${(upward ? at.y - panel.offsetHeight : at.y) - box.top}px`);
 }
 
 type ItemProps = {
