@@ -100,6 +100,7 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
       label={'tool' in value ? (value.caption ?? LABEL) : LABEL}
       width={width}
       height={height}
+      pages={{ at, count: pictures.length, onStep: step }}
       foot={
         <>
           {pictures.length > 1 && (

@@ -1,0 +1,80 @@
+.view {
+  composes: fadeIn from '../foundation/motion.module.css';
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-dialog);
+  background: var(--color-scrim);
+}
+
+/* The whole window, which the picture is measured against, so it grows past its own pixels to fill it. The buttons float
+   over it and take none of its room. */
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+  container-type: size;
+}
+
+/* --ratio is the shape the picture was made at, set by PictureView. Sized from it, the image's box is the picture's own,
+   with no letterbox inside it: a press beside the picture lands on the backdrop. A file of another shape sits inside
+   the box, never stretched. */
+.image {
+  --whole: min(100cqw, 100cqh * var(--ratio));
+
+  display: block;
+  width: var(--whole);
+  aspect-ratio: var(--ratio);
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+/* Over the picture's top; a press there passes through to the picture or the backdrop. */
+.top {
+  position: absolute;
+  top: var(--space-16);
+  right: var(--space-16);
+  left: var(--space-16);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.chrome {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+  pointer-events: auto;
+}
+
+.count {
+  height: var(--control-md);
+  padding: 0 var(--space-12);
+  color: var(--color-text-soft);
+  font: var(--text-sm) / var(--leading-tight) var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.close {
+  margin-left: auto;
+}
+
+.side {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.prev {
+  left: var(--space-16);
+}
+
+.next {
+  right: var(--space-16);
+}
