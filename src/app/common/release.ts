@@ -8,6 +8,16 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.17',
+    date: '2026-10-17',
+    lines: [
+      '프롬프트, 모듈, 페르소나를 폴더로 정리할 수 있어요. 목록의 카드나 줄을 우클릭하면 메뉴가 열려요.',
+      '마지막이 아닌 메시지의 휴지통을 누르면 그 메시지만 지울지, 거기부터 끝까지 지울지 고를 수 있어요.',
+      '계정 화면에서 다른 기기를 한 번에 로그아웃할 수 있어요. 비밀번호를 바꾸면 다른 기기는 자동으로 로그아웃돼요.',
+      '저장 공간의 텍스트 사용량에 지운 항목의 흔적까지 포함돼서 숫자가 조금 올라가요. 실제 저장된 내용은 그대로예요.',
+    ],
+  },
+  {
     version: 'v0.2.16',
     date: '2026-10-17',
     lines: ['스크롤 고정에서 입력 없이 보내면 새 응답이 화면 맨 위에서 시작해요. 이미 읽은 응답으로 올라가지 않아요.'],
