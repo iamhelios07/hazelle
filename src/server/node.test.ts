@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFi
 import { createServer as httpServer, request } from 'node:http';
 import { once } from 'node:events';
 import { Worker } from 'node:worker_threads';
-import { createServer } from 'node:net';
+import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -105,6 +105,40 @@ describe('the server process', () => {
       expect(failure.connectedMs).toEqual(expect.any(Number));
       expect(log).not.toContain('secret-');
       expect(received).toBe(1);
+    } finally {
+      await frontend.terminate();
+      await new Promise<void>((resolve) => api.close(() => resolve()));
+    }
+  }, 15_000);
+
+  it('ends hop-by-hop headers at the proxy both ways, so a bodyless request with a Trailer is answered', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const api = httpServer((incoming, outgoing) => {
+      seen.push(incoming.headers);
+      outgoing.writeHead(200, { connection: 'x-api-hop', 'x-api-hop': '1', 'keep-alive': 'timeout=5', 'proxy-authenticate': 'Basic', 'x-kept': '1' });
+      outgoing.end('done');
+    }).listen(0, '127.0.0.1');
+    await once(api, 'listening');
+    const port = await freePort();
+    const frontend = new Worker(join(process.cwd(), dirname(bundle), 'frontend-worker.js'), {
+      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client },
+    });
+    const send = (lines: string[]) =>
+      new Promise<string>((resolve) => {
+        const socket = connect(port, '127.0.0.1');
+        let answer = '';
+        socket.on('data', (chunk: Buffer) => (answer += chunk.toString()));
+        socket.on('close', () => resolve(answer));
+        socket.write([...lines, 'Connection: close', '', ''].join('\r\n'));
+      });
+    try {
+      await once(frontend, 'message');
+      const answer = await send(['GET /api/probe HTTP/1.1', 'Host: localhost', 'Trailer: X-Probe', 'TE: trailers', 'Keep-Alive: timeout=1', 'Proxy-Authorization: Basic x', 'Upgrade: h2c', 'Connection: x-client-hop', 'X-Client-Hop: 1']);
+      expect(answer).toMatch(/^HTTP\/1\.1 200 /);
+      expect(answer.toLowerCase()).not.toMatch(/x-api-hop|keep-alive|proxy-authenticate/);
+      expect(answer.toLowerCase()).toContain('x-kept: 1');
+      expect(Object.keys(seen[0]!).filter((name) => ['trailer', 'te', 'keep-alive', 'proxy-authorization', 'upgrade', 'x-client-hop'].includes(name))).toEqual([]);
+      expect(await send(['GET /api/again HTTP/1.1', 'Host: localhost'])).toMatch(/^HTTP\/1\.1 200 /);
     } finally {
       await frontend.terminate();
       await new Promise<void>((resolve) => api.close(() => resolve()));
