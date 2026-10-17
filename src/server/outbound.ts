@@ -12,6 +12,10 @@ export type Resolve = (hostname: string, options: LookupOptions) => Promise<Look
 
 // Above stream-box's 14.5-minute call limit: undici's 5-minute defaults would cut a quiet provider before that limit.
 const TIMEOUT_MS = 15 * 60 * 1000;
+// Sockets per origin, not per process: undici's Agent gives each origin a pool of its own. Calls past it wait for a free
+// socket rather than fail, so it stays far above one provider's share of the accounts' live calls (LIVE_CALLS each);
+// the process-wide bound is those live calls.
+const CONNECTIONS = 128;
 
 // Resolves every address itself and refuses the connection on the first one allowed refuses, so the socket and its
 // family fallback dial only what was validated; the host name stays the TLS server name. net asks for one address or,
@@ -52,7 +56,7 @@ function refusalIn(error: unknown): PolicyRefusal | null {
 
 export function pinnedOutbound(local: ReadonlySet<string>, resolve: Resolve = (hostname, options) => dns.lookup(hostname, { ...options, all: true })): Upstream {
   const dispatcher = (allowed: (address: string) => boolean) =>
-    new Agent({ connect: { lookup: pinnedLookup(resolve, allowed) }, bodyTimeout: TIMEOUT_MS, headersTimeout: TIMEOUT_MS });
+    new Agent({ connect: { lookup: pinnedLookup(resolve, allowed) }, connections: CONNECTIONS, bodyTimeout: TIMEOUT_MS, headersTimeout: TIMEOUT_MS });
   const pinned = dispatcher(isPublicAddress);
   // A listed destination may be plain http and answer a private address, and only it: the same host on another port
   // is not listed. It is still dialled only at what its lookup answered.

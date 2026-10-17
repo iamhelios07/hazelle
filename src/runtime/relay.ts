@@ -126,7 +126,7 @@ export async function stream(call: StreamCall, request: HttpRequest | null, sign
     } catch {
       return lost(signal);
     }
-    if (response.headers.get('x-stream') !== 'frames' || !response.body) return { kind: 'app', code: await errorCode(response) };
+    if (response.headers.get('x-stream') !== 'frames' || !response.body) return sourced(response);
     // A call stopped as its start was answered gets no marker: whoever stopped it ends it, and a marker landing after
     // that end would be picked up as a call to save.
     if (signal.aborted) return lost(signal);

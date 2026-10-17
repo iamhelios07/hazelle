@@ -44,6 +44,11 @@ it('ends a read once the session is gone instead of trying again', async () => {
   expect(fetch).toHaveBeenCalledOnce();
 });
 
+it('tells the relay’s refusal of a stream’s start from the app’s', async () => {
+  vi.stubGlobal('fetch', async () => Response.json({ error: 'relay-traffic-limit' }, { status: 429, headers: { 'x-relay': 'error' } }));
+  expect(await stream({ id: crypto.randomUUID(), key: {}, public: 'k' }, request, new AbortController().signal)).toEqual({ kind: 'relay', code: 'relay-traffic-limit' });
+});
+
 it('states the account the page holds on the relay and on every stream request', async () => {
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json({ error: 'stream-exists' }, { status: 409 }));
   vi.stubGlobal('fetch', fetch);

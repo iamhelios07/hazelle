@@ -3,10 +3,15 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
-import { createRelay as relayWithBudget, type Upstream, type UpstreamInit } from './relay';
+import { forward, type Upstream, type UpstreamInit } from './relay';
 import { PolicyRefusal } from './ssrf';
-import { relayBudget } from './limits';
+import { relayBudget, type RelayAllowance } from './limits';
 
+// What /api/relay hands forward (server/calls): the body read, and charged as the bytes the client sent.
+const relayWithBudget = (upstream: Upstream, allowance: RelayAllowance) => async (request: Request) => {
+  const text = await request.text();
+  return forward(upstream, await new Response(text).json().catch(() => null), Buffer.byteLength(text), request.signal, allowance);
+};
 const createRelay = (upstream: Upstream) => relayWithBudget(upstream, relayBudget().account('test'));
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
@@ -231,4 +236,22 @@ it('refuses mutation methods outside the provider GET/POST contract before reach
   const response = await createRelay(upstream)(post(envelope({ method: 'DELETE', body: null })));
   expect([response.status, await response.json()]).toEqual([400, { error: 'bad-envelope' }]);
   expect(upstream).not.toHaveBeenCalled();
+});
+
+it('answers an upstream status no response can carry as unreachable, ending the call, and passes no reason phrase on', async () => {
+  const cancel = vi.fn();
+  const signals: AbortSignal[] = [];
+  const answering = (status: number, statusText: string) =>
+    createRelay(async (_url, init) => {
+      signals.push(init.signal);
+      return Object.defineProperties(new Response(new ReadableStream({ cancel }), { headers: { 'content-type': 'text/event-stream' } }), { status: { value: status }, statusText: { value: statusText } });
+    });
+  for (const status of [999, 600]) {
+    const response = await answering(status, 'X')(post(envelope()));
+    expect([response.status, response.headers.get('x-relay'), await response.json()]).toEqual([502, 'error', { error: 'upstream-unreachable' }]);
+  }
+  expect([signals.map((signal) => signal.aborted), cancel.mock.calls.length]).toEqual([[true, true], 2]);
+  const phrased = await answering(200, 'OK\x01')(post(envelope()));
+  expect([phrased.status, phrased.statusText, phrased.headers.get('x-relay')]).toEqual([200, '', 'upstream']);
+  await phrased.body!.cancel();
 });

@@ -134,8 +134,10 @@ export class StreamBox {
     private readonly allowance: RelayAllowance,
   ) {}
 
-  async start({ id, key, request, retry }: { id: string; key: unknown; request: unknown; retry?: Retry }, signal: AbortSignal): Promise<Response> {
+  // leave: ends the account's live call (calls.ts), once this start is refused or its call is over.
+  async start({ id, key, request, bytes, retry }: { id: string; key: unknown; request: unknown; bytes: number; retry?: Retry }, signal: AbortSignal, leave: () => void): Promise<Response> {
     this.starts++;
+    let ran = false;
     try {
       const theirs = typeof key === 'string' ? fromBase64(key) : null;
       const pair = (await crypto.subtle.generateKey(P256, false, ['deriveBits'])) as { publicKey: Key; privateKey: Key };
@@ -157,9 +159,11 @@ export class StreamBox {
       this.next = this.persisted = 1;
       this.call = new AbortController();
       this.running = true;
-      this.ended = this.run(request, retry ?? null, sealing, this.call.signal);
+      ran = true;
+      this.ended = this.run(request, bytes, retry ?? null, sealing, this.call.signal).finally(leave);
       return await this.read(0, signal);
     } finally {
+      if (!ran) leave();
       this.starts--;
       this.release();
     }
@@ -183,7 +187,7 @@ export class StreamBox {
     if (!this.starts && !this.running && !this.readers) this.idle();
   }
 
-  private async run(envelope: unknown, retry: Retry | null, sealing: Key, signal: AbortSignal) {
+  private async run(envelope: unknown, bytes: number, retry: Retry | null, sealing: Key, signal: AbortSignal) {
     let limited = false;
     const cut = () => {
       limited = true;
@@ -210,7 +214,7 @@ export class StreamBox {
       let tries = 0;
       for (;;) {
         tries++;
-        response = await forward(this.upstream, envelope, signal, this.allowance);
+        response = await forward(this.upstream, envelope, bytes, signal, this.allowance);
         const wait = retry && tries <= retry.times && !signal.aborted && (await passing(response, retry.statuses)) ? retryWait(tries, response.headers.get('retry-after'), Date.now()) : null;
         if (wait === null) break;
         await response.body?.cancel();

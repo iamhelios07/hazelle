@@ -1,7 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { RETRY_MOST, type Retry } from '../contracts/streams';
-import { fail, ID, isRecord, readObject, type AppEnv } from './http';
+import { admitCall } from './calls';
+import { fail, ID, isRecord, type AppEnv } from './http';
 import { botCalls, canCall, requireSession } from './session';
 
 const whole = (value: unknown, least: number, most: number) => Number.isInteger(value) && (value as number) >= least && (value as number) <= most;
@@ -20,11 +21,19 @@ export const streams = new Hono<AppEnv>()
   .use('/:id', checkId)
   .use('/:id/*', checkId)
   .post('/:id', canCall, async (c) => {
-    const body = await readObject(c);
+    const call = await admitCall(c);
+    if (call instanceof Response) return call;
+    const body = isRecord(call.body) ? call.body : null;
     const retry = body?.retry;
-    if (!body || (body.bot !== undefined && (typeof body.bot !== 'string' || !ID.test(body.bot))) || (retry !== undefined && !isRetry(retry))) return fail(c, 400, 'bad-body');
-    if (body.bot !== undefined && !botCalls(c, body.bot)) return fail(c, 429, 'too-many-bot-calls');
-    return c.env.streams.start(name(c), { id: c.req.param('id')!, key: body.key, request: body.request, ...(retry !== undefined && { retry }) }, c.req.raw.signal);
+    if (!body || (body.bot !== undefined && (typeof body.bot !== 'string' || !ID.test(body.bot))) || (retry !== undefined && !isRetry(retry))) {
+      call.leave();
+      return fail(c, 400, 'bad-body');
+    }
+    if (body.bot !== undefined && !botCalls(c, body.bot)) {
+      call.leave();
+      return fail(c, 429, 'too-many-bot-calls');
+    }
+    return c.env.streams.start(name(c), { id: c.req.param('id')!, key: body.key, request: body.request, bytes: call.bytes, ...(retry !== undefined && { retry }) }, c.req.raw.signal, call.leave);
   })
   .get('/:id', (c) => c.env.streams.read(name(c), Number(c.req.query('from') ?? '0') || 0, c.req.raw.signal))
   .post('/:id/stop', (c) => {

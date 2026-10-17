@@ -2,12 +2,12 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { accounts } from './accounts';
 import { admin, notices, reports } from './admin';
+import { relayCall } from './calls';
 import { files, MAX_FILE_BYTES } from './files';
 import { fail, type AppEnv } from './http';
 import { BATCH_LIMITS, objects } from './objects';
 import { modelsDev } from './models-dev';
 import { PUBLISH_BYTES, shares } from './shares';
-import { createRelay } from './relay';
 import { canCall, relayBot, requireSession } from './session';
 import { streams } from './streams';
 import { vaults } from './vaults';
@@ -51,10 +51,11 @@ app.use(async (c, next) => {
 // listed. A provider call carries a whole prompt.
 const BODY_BYTES = 100_000;
 const CALL_BYTES = 32 * 1024 * 1024;
+const CALLS = /^\/api\/(relay|streams\/[^/]+)$/;
 const LARGER: [method: string, path: RegExp, bytes: number][] = [
   ['POST', /^\/api\/objects\/batch$/, BATCH_LIMITS.bytes],
   ['PUT', /^\/api\/files\/[^/]+$/, MAX_FILE_BYTES],
-  ['POST', /^\/api\/(relay|streams\/[^/]+)$/, CALL_BYTES],
+  ['POST', CALLS, CALL_BYTES],
   ['POST', /^\/api\/shares(\/[^/]+\/versions)?$/, PUBLISH_BYTES],
 ];
 
@@ -63,6 +64,8 @@ const LARGER: [method: string, path: RegExp, bytes: number][] = [
 // sends a chunked request body.
 app.use(async (c, next) => {
   if (c.req.header('transfer-encoding')?.toLowerCase().includes('chunked')) return fail(c, 411, 'length-required');
+  // A provider call is admitted by the size it states before its body is read (calls.ts).
+  if (c.req.method === 'POST' && CALLS.test(c.req.path) && c.req.header('content-length') === undefined) return fail(c, 411, 'length-required');
   const maxSize = LARGER.find(([method, path]) => method === c.req.method && path.test(c.req.path))?.[2] ?? BODY_BYTES;
   return bodyLimit({ maxSize, onError: () => fail(c, 413, 'too-large') })(c, next);
 });
@@ -76,7 +79,7 @@ app.route('/reports', reports);
 app.route('/notices', notices);
 app.route('/admin', admin);
 app.route('/models-dev', modelsDev);
-app.post('/relay', requireSession, canCall, relayBot, (c) => createRelay(c.env.outbound, c.env.limits.relay.account(c.get('account').id))(c.req.raw));
+app.post('/relay', requireSession, canCall, relayBot, relayCall);
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 

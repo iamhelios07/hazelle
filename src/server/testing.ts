@@ -48,20 +48,25 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     while (pending.length) await Promise.all(pending.splice(0));
   };
 
-  // As a page holding the cookie's account sends it: stating that account (server/session). raw states only what it is
-  // given. A Uint8Array body goes as bytes.
+  // As a page holding the cookie's account sends it: stating that account (server/session) and the body's length, as
+  // fetch does. raw states only what it is given. A Uint8Array body goes as bytes.
   const holding = async (cookie: string): Promise<Record<string, string>> => {
     const account = await env.db.prepare('SELECT account_id FROM sessions WHERE token_hash = ?').bind(await sha256Hex(cookie.split('=')[1]!)).first<string>('account_id');
     return account ? { cookie, [ACCOUNT_HEADER]: account } : { cookie };
   };
   const send = async (method: string, path: string, body?: unknown, cookie?: string) => {
     const bytes = body instanceof Uint8Array;
+    const sent = body === undefined ? undefined : bytes ? (body as Uint8Array<ArrayBuffer>) : new TextEncoder().encode(JSON.stringify(body));
     return app.request(
       `/api/${path}`,
       {
         method,
-        headers: { ...(method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' }), ...(cookie ? await holding(cookie) : {}) },
-        body: body === undefined ? undefined : bytes ? (body as Uint8Array<ArrayBuffer>) : JSON.stringify(body),
+        headers: {
+          ...(method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' }),
+          ...(sent && { 'content-length': String(sent.byteLength) }),
+          ...(cookie ? await holding(cookie) : {}),
+        },
+        body: sent,
       },
       env,
       ctx,

@@ -35,7 +35,7 @@ function endless() {
 async function start(box: StreamBox, retry?: Retry) {
   const { key } = await replyKey();
   const request = { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' };
-  return box.start({ id: crypto.randomUUID(), key, request, ...(retry && { retry }) }, staying);
+  return box.start({ id: crypto.randomUUID(), key, request, bytes: 0, ...(retry && { retry }) }, staying, () => {});
 }
 
 // A page's frames and the one that closed it are read before the first put has to answer.

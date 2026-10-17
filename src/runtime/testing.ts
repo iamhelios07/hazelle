@@ -45,7 +45,8 @@ function stubFetch() {
       return answer;
     }
     if (!server) throw new Error(`This test has no server for ${url}.`);
-    const headers = { ...(init.headers as Record<string, string>), ...(server.cookie ? { cookie: server.cookie } : {}) };
+    const length: Record<string, string> = typeof init.body === 'string' ? { 'content-length': String(new TextEncoder().encode(init.body).byteLength) } : {};
+    const headers = { ...(init.headers as Record<string, string>), ...length, ...(server.cookie ? { cookie: server.cookie } : {}) };
     const answering = Promise.resolve(server.app.raw(url.slice('/api/'.length), { ...init, headers }));
     answered.add(answering);
     void answering.finally(() => answered.delete(answering)).catch(() => {});

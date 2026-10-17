@@ -55,6 +55,7 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'account-mismatch': '다른 탭에서 다른 계정으로 로그인해서 이 탭에서 바꾼 내용을 저장하지 못했어요. 이 탭에서 다시 로그인해 주세요.',
   suspended: `정지된 계정이라 내용을 저장하거나 모델을 호출할 수 없어요. 백업 파일은 ${inSettings('account')}에서 받을 수 있어요.`,
   'too-many-calls': '모델을 너무 자주 호출했어요. 잠시 뒤에 다시 시도해 주세요.',
+  'too-many-live-calls': '동시에 받는 응답이 너무 많아요. 받고 있는 응답이 끝난 뒤 다시 시도해 주세요.',
   'storage-full': `저장 공간이 가득 찼어요. ${BIN}에서 영구 삭제하면 공간이 생겨요.`,
   'tool-file-refused': '도구 파일을 저장하지 못했어요. 파일 용량 한도나 차단 여부를 확인해 주세요.',
   'picture-unreadable': UNREADABLE_IMAGE,
