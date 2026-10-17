@@ -1,6 +1,7 @@
-import { Check, Folder } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { cardDrag, useCardDrop } from './cardDrag';
+import { FolderMark } from './FolderMark';
 import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
@@ -96,22 +97,30 @@ export function FaceCard({ image, video = false, name, note, selected, current =
   );
 }
 
-// Tiles fill the card: one face whole, two side by side, three or four in quarters.
-const TILES = [styles.one, styles.one, styles.two, styles.four, styles.four];
-
-// A folder among the cards: up to four faces of what it holds, or a folder mark when it holds none.
-// onDropCard: a dragged FaceCard's key, let go over this folder.
+// A folder among the cards, shaped as one: a tab over a body holding up to four faces of what it holds, each a quarter
+// however few there are, so one face never fills it as a card's picture does. onDropCard: a dragged FaceCard's key,
+// let go over this folder.
 type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode; onDropCard?: (key: string) => void };
 
 export function FolderCard({ name, note, faces, onClick, menu, onDropCard }: FolderCardProps) {
   const drop = useCardDrop(onDropCard);
+  const shown = faces.slice(0, 4);
   return (
     <div className={styles.cardBox}>
       <button type="button" className={drop.over ? `${styles.card} ${styles.dropping}` : styles.card} onClick={onClick} {...drop.props}>
-        <span className={`${styles.picture} ${styles.folder} ${TILES[Math.min(faces.length, 4)]}`}>
-          {faces.length === 0 ? <span className={styles.emptyFolder}><Icon icon={Folder} size="lg" /></span> : faces.slice(0, 4).map((face, index) => <span key={index} className={styles.tile}><Face {...face} /></span>)}
+        <span className={styles.folder}>
+          <span className={styles.tab} />
+          <span className={styles.body}>
+            {shown.length === 0 ? (
+              <span className={styles.emptyFolder}>
+                <FolderMark size="lg" />
+              </span>
+            ) : (
+              [...shown, ...Array<null>(4 - shown.length).fill(null)].map((face, index) => <span key={index} className={styles.slot}>{face && <Face {...face} />}</span>)
+            )}
+          </span>
         </span>
-        <span className={styles.folderName}><Icon icon={Folder} size="xs" /><span className={styles.name}>{name}</span></span>
+        <span className={styles.name}>{name}</span>
         <span className={styles.note}>{note}</span>
       </button>
       {menu && <div className={styles.menu}>{menu}</div>}

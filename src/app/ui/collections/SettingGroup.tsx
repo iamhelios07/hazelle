@@ -1,5 +1,6 @@
 import { createContext, useContext, useId, type ReactNode } from 'react';
 import { Hint, type Help } from '../overlays/Hint';
+import { FolderMark } from './FolderMark';
 import styles from './SettingGroup.module.css';
 
 // A row in a group is one of its ruled rows; a row outside one stands bare among fields with no inset of its own.
@@ -15,6 +16,8 @@ export function SettingGroup({ label, children }: { label: string; children: Rea
 
 type RowProps = {
   label: string;
+  // A folder's row, its mark before the label.
+  folder?: boolean;
   // Shown in the label's place; label stays the row's name.
   sentence?: ReactNode;
   changed?: boolean;
@@ -35,7 +38,7 @@ type RowProps = {
   note?: string;
 };
 
-export function SettingRow({ label, sentence, changed = false, help, sub, preview, control, action, wide = false, menu, error, note }: RowProps) {
+export function SettingRow({ label, folder = false, sentence, changed = false, help, sub, preview, control, action, wide = false, menu, error, note }: RowProps) {
   const id = useId();
   const grouped = useContext(Grouped);
   const className = [styles.row, grouped ? styles.ruled : styles.panel, wide && styles.wide].filter(Boolean).join(' ');
@@ -43,6 +46,11 @@ export function SettingRow({ label, sentence, changed = false, help, sub, previe
     <div className={className} role="group" aria-labelledby={sentence ? undefined : id} aria-label={sentence ? label : undefined}>
       <div className={styles.words}>
         <span className={styles.name}>
+          {folder && (
+            <span className={styles.folder}>
+              <FolderMark />
+            </span>
+          )}
           <span id={id} className={sentence ? `${styles.label} ${styles.sentence}` : styles.label}>
             {changed && <span className={styles.changed} aria-hidden />}
             {sentence ?? label}

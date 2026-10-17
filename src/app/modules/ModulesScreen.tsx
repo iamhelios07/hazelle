@@ -1,4 +1,4 @@
-import { Check, Folder, FolderInput } from 'lucide-react';
+import { Check, FolderInput } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { toolId } from '../../model/tool';
 import { ACTS, importOf } from '../common/acts';
@@ -61,7 +61,7 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
   );
   const folderRows: TableRow[] = at.folders.map((folder) => ({
     key: folder.id,
-    icon: Folder,
+    folder: true,
     cells: [folder.value.name, '', '', '', '', '', folderNote('module', index.byFolder.get(folder.id)!)],
     onDropCard: moving.dropInto?.(folder.id),
     onClick: () => go(folder.id),

@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { createContext, useContext, type ReactNode } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
+import { FolderMark } from './FolderMark';
 import { Item } from './Item';
 import { Viewport } from './Viewport';
 import styles from './List.module.css';
@@ -35,6 +36,8 @@ export function List(props: { label: string; box?: boolean; places?: boolean; ch
 
 type ItemProps = {
   leading?: ReactNode;
+  // A folder among the things, which opens it: its mark in leading's place and a › at the end.
+  folder?: boolean;
   title: string;
   badge?: string;
   code?: string;
@@ -54,10 +57,10 @@ type ItemProps = {
   expanded?: boolean;
 };
 
-export function ListItem({ leading, title, badge, code, description, tags = [], aside, trailing, onClick, control, detail, children, selected, current, expanded }: ItemProps) {
+export function ListItem({ leading, folder = false, title, badge, code, description, tags = [], aside, trailing, onClick, control, detail, children, selected, current, expanded }: ItemProps) {
   const windowed = useContext(Windowed);
   const places = useContext(Places);
-  const end = trailing ?? (places && onClick ? <Icon icon={ChevronRight} /> : undefined);
+  const end = trailing ?? ((places || folder) && onClick ? <Icon icon={ChevronRight} /> : undefined);
   const meta =
     code || tags.length > 0 ? (
       <>
@@ -71,7 +74,7 @@ export function ListItem({ leading, title, badge, code, description, tags = [], 
     <Item
       density="tall"
       scheme="list"
-      leading={leading}
+      leading={folder ? <FolderMark /> : leading}
       title={
         badge ? (
           <span className={styles.titled}>

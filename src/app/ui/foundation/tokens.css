@@ -251,6 +251,12 @@
   --color-success-border: color-mix(in srgb, var(--color-success) 40%, var(--color-bg));
   --color-selection: color-mix(in srgb, var(--color-accent) 35%, transparent);
   --color-found-term: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  /* Neutral on purpose: the accent already means picked, current and dropping, so a gold folder would read as picked. */
+  --color-folder: var(--color-text-muted);
+  --color-folder-fill: color-mix(in srgb, var(--color-text-muted) 55%, transparent);
+  --color-folder-bg: color-mix(in srgb, var(--color-text-muted) 18%, var(--color-surface));
+  --color-folder-bg-hover: color-mix(in srgb, var(--color-text-muted) 26%, var(--color-surface));
+  --color-folder-slot: color-mix(in srgb, var(--color-text-muted) 8%, var(--color-surface));
 
   --font-serif: 'Gowun Batang', serif;
   --font-sans: 'IBM Plex Sans KR', system-ui, sans-serif;

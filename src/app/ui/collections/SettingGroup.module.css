@@ -62,6 +62,11 @@
   align-items: center;
 }
 
+.folder {
+  display: flex;
+  margin-right: var(--space-8);
+}
+
 .label {
   composes: fieldLabel from '../foundation/type.module.css';
 }

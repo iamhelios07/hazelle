@@ -46,6 +46,7 @@ export function ModuleSwitches({ owner, own }: { owner: Owner; own: string[] }) 
           return (
             <SettingRow
               key={folder.id}
+              folder
               label={folder.value.name}
               sub={[folderNote('module', contents), lit > 0 && `${lit}개 켜짐`].filter(Boolean).join(' · ')}
               control={<IconButton icon={ChevronRight} label={`'${folder.value.name}' 폴더 열기`} size="sm" onClick={() => setPlace(folder.id)} />}

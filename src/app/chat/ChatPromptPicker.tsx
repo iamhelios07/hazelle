@@ -1,4 +1,4 @@
-import { FileText, Folder } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, isDefaultPrompt, ofSort, type PromptChoice } from '../../runtime/prompts';
@@ -94,7 +94,7 @@ export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: Pr
       <List label="프롬프트">
         {!search.words && !at.here && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
         {at.folders.map((folder) => (
-          <ListItem key={folder.id} leading={<Icon icon={Folder} size="sm" />} title={folder.value.name} aside={folderNote('prompt', index.byFolder.get(folder.id)!)} onClick={() => setPlace(folder.id)} />
+          <ListItem key={folder.id} folder title={folder.value.name} aside={folderNote('prompt', index.byFolder.get(folder.id)!)} onClick={() => setPlace(folder.id)} />
         ))}
         {search.words ? search.found.map((item) => row(item, false)) : at.placed(grouped.top).toSorted(byLastUse(uses, grouped.copies)).map((item) => row(item, true))}
       </List>

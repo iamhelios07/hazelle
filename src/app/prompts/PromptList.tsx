@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder, FolderInput } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderInput } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
@@ -112,7 +112,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
   const folderRows = filing ? at.folders.map((folder) => (
     <CardItem
       key={folder.id}
-      icon={Folder}
+      folder
       title={folder.value.name}
       aside={folderNote('prompt', index.byFolder.get(folder.id)!)}
       onClick={() => onGo(folder.id)}

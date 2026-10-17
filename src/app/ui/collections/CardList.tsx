@@ -1,8 +1,7 @@
-import type { LucideIcon } from 'lucide-react';
 import { createContext, useContext, type ReactNode } from 'react';
-import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
 import { cardDrag, useCardDrop } from './cardDrag';
+import { FolderMark } from './FolderMark';
 import { Item } from './Item';
 import styles from './CardList.module.css';
 
@@ -18,8 +17,9 @@ export function CardList({ label, children }: { label: string; children: ReactNo
 }
 
 type Props = {
-  // Before the title, such as a folder's mark.
-  icon?: LucideIcon;
+  // A folder among the things, which opens it and takes the cards dragged onto it. No › here: on these cards it
+  // unfolds a prompt's copies.
+  folder?: boolean;
   title: string;
   badge?: string;
   tags?: string[];
@@ -38,7 +38,7 @@ type Props = {
   onDropCard?: (key: string) => void;
 };
 
-export function CardItem({ icon, title, badge, tags = [], aside, control, onClick, children, selected, drag, onDropCard }: Props) {
+export function CardItem({ folder = false, title, badge, tags = [], aside, control, onClick, children, selected, drag, onDropCard }: Props) {
   const folded = useContext(Folded);
   const drop = useCardDrop(onDropCard);
   const meta =
@@ -51,9 +51,9 @@ export function CardItem({ icon, title, badge, tags = [], aside, control, onClic
       </>
     ) : undefined;
   return (
-    <li className={[folded ? undefined : styles.card, drop.over && styles.dropping].filter(Boolean).join(' ') || undefined} {...(drag === undefined ? {} : cardDrag(drag))} {...drop.props}>
+    <li className={[folded ? undefined : styles.card, folder && styles.folder, drop.over && styles.dropping].filter(Boolean).join(' ') || undefined} {...(drag === undefined ? {} : cardDrag(drag))} {...drop.props}>
       <div className={styles.head}>
-        <Item density="regular" scheme="list" leading={icon && <Icon icon={icon} size="sm" />} title={title} meta={meta} preview={aside} pressed={selected} onClick={onClick} />
+        <Item density="regular" scheme="list" leading={folder && <FolderMark size="md" />} title={title} meta={meta} preview={aside} pressed={selected} onClick={onClick} />
         {control && <span className={styles.control}>{control}</span>}
       </div>
       {children && (

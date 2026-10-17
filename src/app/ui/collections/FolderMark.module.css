@@ -1,0 +1,9 @@
+.mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-folder);
+}
+
+.mark svg {
+  fill: var(--color-folder-fill);
+}

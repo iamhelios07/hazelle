@@ -32,6 +32,10 @@
   border-left: var(--border-thin) solid var(--color-divider);
 }
 
+.folder {
+  background: var(--color-folder-bg);
+}
+
 .dropping {
   outline: var(--border-thick) solid var(--color-accent);
   background: var(--color-accent-bg);

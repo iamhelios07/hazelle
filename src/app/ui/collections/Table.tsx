@@ -1,8 +1,9 @@
-import type { LucideIcon } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import a11y from '../foundation/a11y.module.css';
 import { Icon } from '../foundation/Icon';
 import { cardDrag, useCardDrop } from './cardDrag';
+import { FolderMark } from './FolderMark';
 import styles from './Table.module.css';
 
 // name: the row's own column, wider than the rest; figure: a count or a size, set right; button: a row's ⋯.
@@ -10,10 +11,10 @@ import styles from './Table.module.css';
 export type TableColumn = { label: string; size: 'name' | 'fill' | 'figure' | 'button'; keep?: boolean };
 
 // A null cell is something the row does not have, drawn as a dash. summary: the row's other columns as one line, shown
-// under its first cell when the table is narrow. icon: before the first cell, such as a folder's mark. selected: one of
+// under its first cell when the table is narrow. folder: a folder's row, which opens it. selected: one of
 // a pick of several, absent while not picking. drag: the row can be dragged onto a folder's row, carrying this key;
 // onDropCard: a dragged row's key, let go over this one.
-export type TableRow = { key: string; cells: (ReactNode | null)[]; summary?: ReactNode; current?: boolean; icon?: LucideIcon; selected?: boolean; drag?: string; onDropCard?: (key: string) => void; onClick?: () => void };
+export type TableRow = { key: string; cells: (ReactNode | null)[]; summary?: ReactNode; current?: boolean; folder?: boolean; selected?: boolean; drag?: string; onDropCard?: (key: string) => void; onClick?: () => void };
 
 const TRACKS = { name: 'minmax(0, 2fr)', fill: 'minmax(0, 1fr)', figure: 'var(--table-figure-width)', button: 'var(--control-md)' };
 
@@ -41,10 +42,11 @@ export function Table({ label, columns, rows }: { label: string; columns: TableC
               {index > 0 && columns[index]!.label && <span className={a11y.srOnly}>{columns[index]!.label} </span>}
               {index === 0 ? (
                 <span className={styles.first}>
-                  {row.icon ? (
+                  {row.folder ? (
                     <span className={styles.marked}>
-                      <Icon icon={row.icon} size="sm" />
+                      <FolderMark />
                       {lead(content)}
+                      <Icon icon={ChevronRight} size="sm" />
                     </span>
                   ) : (
                     lead(content)
