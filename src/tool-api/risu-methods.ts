@@ -19,11 +19,12 @@ export const RISU_MAPPED: ReadonlySet<string> = new Set([
   'getCharacter', 'getChar', 'getCurrentCharacterIndex', 'getCurrentChatIndex', 'getChatFromIndex', 'setChatToIndex',
   'runLLMModel', 'addRisuReplacer', 'removeRisuReplacer', 'addRisuChatListener', 'removeRisuChatListener',
   'addRisuScriptHandler', 'removeRisuScriptHandler', 'getDatabase', 'getCurrentLorebookEntries', 'getCharacterFromIndex', 'setArgument', 'setArg',
-  'unwarpSafeArray', 'nativeFetch', 'risuFetch',
+  'unwarpSafeArray', 'nativeFetch', 'risuFetch', 'getRuntimeInfo', 'saveAsset', 'readImage',
 ]);
 // addRisuReplacer kinds the adapter runs; another kind is missing as `addRisuReplacer:<kind>`.
 export const RISU_REPLACERS: ReadonlySet<string> = new Set(['beforeRequest', 'afterRequest']);
-// Declined for good (design §6.10), worded apart from names not mapped yet.
+// Declined for good (design §6.10): the adapter answers them undefined, and the import words them apart from names not
+// mapped yet.
 export const RISU_DECLINED: ReadonlySet<string> = new Set([
   'getRootDocument', 'addProvider', 'registerBodyIntercepter', 'unregisterBodyIntercepter', 'sendChat', 'addPluginChannelListener', 'postPluginChannelMessage',
 ]);

@@ -1,6 +1,9 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
+import portingSample from '../../engine/import/fixtures/porting-sample.js.txt?raw';
+import { readToolFile } from '../../engine/import/risu-plugin';
 import { readTool } from '../../engine/import/tool';
-import type { Host, ToolReach } from '../../engine/script-api';
+import type { Host, ToolEvent, ToolReach } from '../../engine/script-api';
 import { toolId } from '../../model/tool';
 import type { Down, Up } from '../../tool-api/protocol';
 import { shown } from '../../model/chat';
@@ -604,5 +607,60 @@ it('learns of a listener a tool adds after it has loaded', () => withTools(async
     expect(host.hears(f.module, 'showing')).toBe(false);
     later();
     await vi.waitFor(() => expect(host.hears(f.module, 'showing')).toBe(true));
+  } finally { host.close(); }
+}));
+
+// A 1×1 PNG, what the sample's OffscreenCanvas stands in for here; only a browser run draws one.
+const PICTURE = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+class Canvas {
+  getContext() { return { fillStyle: '', fillRect: () => {} }; }
+  async convertToBlob() { return new Blob([Uint8Array.from(atob(PICTURE), (char) => char.charCodeAt(0))], { type: 'image/png' }); }
+}
+
+it('runs the porting sample as imported: the reply\'s picture is kept by its module and shown under that reply by a fresh frame', () => withTools(async (session, connect) => {
+  await answerable(session);
+  const read = readToolFile(new TextEncoder().encode(portingSample));
+  if (!read.ok) throw new Error('fixture');
+  // The guarded page part is still named, so the import says that part is left out; nothing asks for consent.
+  expect(read.tool.manifest).toMatchObject({ uses: [], risu: { verdict: 'partial', missing: ['getRootDocument'], hosts: [] } });
+  const added = await importTool(session.store, session.files, read.tool);
+  if (!added.ok) throw new Error(added.error);
+  const module = added.data.id;
+  await setModuleAlways(session.store, module, true);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  const transport = inProcessRisu((scope, code) => {
+    Object.assign(scope, { OffscreenCanvas: Canvas, btoa, crypto });
+    runInNewContext(code, scope);
+  });
+  const host = connect(transport.open);
+  const run = (event: ToolEvent) => {
+    const context = session.scripts.pageContext(chat, module)!;
+    return host.run(chat, { module, tool: session.store.get('tool', toolId(module))!.value }, context.scope, event, context.host);
+  };
+  try {
+    await host.warm(chat);
+    await vi.waitFor(() => expect(host.hears(module, 'showing')).toBe(true));
+    const replied = (await run({ kind: 'replying', text: 'The tide turns.' })).value as string;
+    const key = /<!--porting-sample:([\w-]+)-->$/.exec(replied)?.[1];
+    expect(replied).toBe(`The tide turns.\n<!--porting-sample:${key}-->`);
+    const assets = session.store.children('asset', module);
+    expect(assets.map(({ value }) => value)).toEqual([{ name: expect.stringMatching(/^[0-9a-f]{64}$/), type: 'image/png', size: atob(PICTURE).length, file: expect.any(Object) }]);
+    expect(toolData(session.store, module, `plugin:picture:${key}`)).toBe(`assets/${assets[0]!.value.name}.png`);
+    expect((await run({ kind: 'requesting', messages: [{ role: 'assistant', content: replied, message: 'm' }] })).value).toEqual([{ role: 'assistant', content: 'The tide turns.\n', message: 'm' }]);
+    const picture = `The tide turns.\n<img src="data:image/png;base64,${PICTURE}" alt="${key}">`;
+    expect((await run({ kind: 'showing', shown: [{ at: null, text: replied }] })).value).toEqual([picture]);
+
+    await setModuleAlways(session.store, module, false);
+    await vi.waitFor(() => expect(transport.frames[0]!.host.closed).toBe(true), { timeout: 3000 });
+    await setModuleAlways(session.store, module, true);
+    await host.warm(chat);
+    await vi.waitFor(() => expect(transport.frames).toHaveLength(2));
+    await vi.waitFor(() => expect(host.hears(module, 'showing')).toBe(true));
+    expect((await run({ kind: 'showing', shown: [{ at: null, text: replied }] })).value).toEqual([picture]);
+    // Its RisuAI page part stays behind the guard: each frame tells 점검 once, and nothing calls it.
+    const told = transport.frames.flatMap((frame) => (frame.sandbox.sent as Up[]).flatMap((message) => message.kind === 'call' && message.method === 'frame.missing' ? [message.args[0]] : []));
+    expect(told).toEqual(['getRootDocument', 'getRootDocument']);
   } finally { host.close(); }
 }));

@@ -11,7 +11,7 @@ export type ToolOutcome = {
 };
 export type Method =
   | 'chat.messages' | 'chat.greeting' | 'chat.card' | 'chat.state.get' | 'chat.data.get' | 'chat.data.keys' | 'chat.lorebook' | 'chat.setup' | 'model' | 'embed' | 'fetch' | 'ask' | 'say' | 'tokens' | 'lore'
-  | 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'settings' | 'settings.set' | 'account' | 'post' | 'page.close' | 'frame.chat' | 'frame.show' | 'frame.hide' | 'frame.menu' | 'frame.missing';
+  | 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'assets.save' | 'assets.read' | 'settings' | 'settings.set' | 'account' | 'post' | 'page.close' | 'frame.chat' | 'frame.show' | 'frame.hide' | 'frame.menu' | 'frame.missing';
 export type Role = 'background' | 'page' | 'frame';
 export type Down =
   | { kind: 'load'; api: 1; role: Role; code: string; manifest: ToolManifest; settings: Settings; chat: ChatHeader | null; theme: 'dark' | 'light' }

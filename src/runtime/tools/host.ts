@@ -20,7 +20,7 @@ import { Heartbeat } from '../worker';
 import type { MenuItem, ToolFrames, ToolHosts, ToolMenu, ToolPage, ToolSlot, Tools } from './facade';
 import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
-import { setToolSettings, toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
+import { readToolAsset, saveToolAsset, setToolSettings, toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
 import { fieldValue } from '../../engine/import/tool';
 import { SETTINGS_ID } from '../../model/settings';
 import { chatPersona } from '../personas';
@@ -477,6 +477,19 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       case 'storage.keys': return toolKeys(this.session.store, entry.module);
       case 'storage.set': if (typeof first === 'string' && isJson(second)) return this.writes.write(entry.module, first, second); break;
       case 'storage.delete': if (typeof first === 'string') return this.writes.write(entry.module, first, undefined); break;
+      case 'assets.save': {
+        if (!(first instanceof Uint8Array)) break;
+        this.writes.take(entry.module);
+        const saved = await saveToolAsset(this.session.store, this.session.files, entry.module, new Uint8Array(first));
+        if (!saved.ok) throw new Error(saved.error);
+        return saved.data;
+      }
+      case 'assets.read': {
+        if (typeof first !== 'string') break;
+        const read = await readToolAsset(this.session.store, this.session.files, entry.module, first);
+        if (!read.ok) throw new Error(read.error);
+        return read.data;
+      }
       case 'settings': return this.session.store.get('tool', toolId(entry.module))!.value.settings;
       case 'settings.set': {
         const field = entry.tool.manifest.settings.find(({ key }) => key === first);

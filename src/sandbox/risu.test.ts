@@ -97,14 +97,31 @@ describe('the Risu adapter', () => {
     const scope = install(fake);
     const { Risuai } = scope;
     for (const name of RISU_MAPPED) expect(Risuai[name], name).toBeDefined();
-    await expect(Risuai.saveAsset!()).rejects.toThrow("Risu API 'saveAsset' is not available in Hazelle");
-    await expect(Risuai.saveAsset!()).rejects.toThrow();
-    await expect(Risuai.getRootDocument!()).rejects.toThrow("Risu API 'getRootDocument' is declined in Hazelle");
+    await expect(Risuai.readInlay!()).rejects.toThrow("Risu API 'readInlay' is not available in Hazelle");
+    await expect(Risuai.readInlay!()).rejects.toThrow();
+    expect(typeof Risuai.getRootDocument).toBe('undefined');
+    expect(Risuai.getRootDocument).toBeUndefined();
     await expect(Risuai.addRisuReplacer!('beforeTranslate' as never, (() => []) as never)).rejects.toThrow("'addRisuReplacer:beforeTranslate'");
     expect((Risuai as Record<string, unknown>).then).toBeUndefined();
     (scope.confirm as () => boolean)();
     (scope.confirm as () => boolean)();
-    expect(fake.missing).toEqual(['saveAsset', 'getRootDocument', 'addRisuReplacer:beforeTranslate', 'confirm']);
+    expect(fake.missing).toEqual(['readInlay', 'getRootDocument', 'addRisuReplacer:beforeTranslate', 'confirm']);
+    expect(await Risuai.getRuntimeInfo!()).toEqual({ apiVersion: '3.0', platform: 'hazelle', saveMethod: 'account' });
+  });
+
+  it('saves an asset at Risu\'s path and reads it back with or without the assets/ prefix, refusing other folders', async () => {
+    const fake = fakeApi();
+    const kept = new Map<string, Uint8Array>();
+    Object.assign(fake.api, { assets: { save: async (bytes: Uint8Array) => { kept.set('abc', bytes); return 'abc'; }, read: async (name: string) => kept.get(name) ?? null } });
+    const { Risuai } = install(fake);
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    expect(await Risuai.saveAsset!(bytes as never)).toBe('assets/abc.png');
+    expect(await Risuai.readImage!('assets/abc.png' as never)).toBe(bytes);
+    expect(await Risuai.readImage!('abc.png' as never)).toBe(bytes);
+    expect(await Risuai.readImage!('assets/other.png' as never)).toBeNull();
+    expect(await Risuai.readImage!('abc' as never)).toBeNull();
+    await expect(Risuai.readImage!('assets/../abc.png' as never)).rejects.toThrow('readImage path');
+    await expect(Risuai.readImage!('..\\abc.png' as never)).rejects.toThrow('readImage path');
   });
 
   it('chains afterRequest replacers over the reply and answers runLLMModel in Risu shape', async () => {

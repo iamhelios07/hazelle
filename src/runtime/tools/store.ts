@@ -1,6 +1,7 @@
 import type { Chat } from '../../model/chat';
 import type { ToolUnit } from '../../model/tool';
 import { packsOf } from '../chat-context';
+import { assetType } from '../../engine/import/card';
 import { fieldValue, type ImportedTool } from '../../engine/import/tool';
 import { without } from '../../model/fields';
 import { live } from '../../model/library';
@@ -111,6 +112,33 @@ export async function setToolData(store: ObjectStore, module: string, key: strin
 export async function deleteToolData(store: ObjectStore, module: string, key: string): Promise<ApiResult<null>> {
   const id = await toolDataId(module, key);
   return store.get('tooldata', id) ? store.remove(id) : { ok: true, data: null };
+}
+
+// A tool's picture is an asset of its module: gone with it, counted in the account's picture budget, listed on the module
+// page. It is named by its bytes' hash and kept at an id made from the module and that name, so the same bytes saved
+// again, on any device, find their row and send nothing; the first part keeps the id apart from every toolDataId.
+const toolAssetId = (module: string, name: string) => keyId(`asset\0${module}\0${name}`);
+
+export async function saveToolAsset(store: ObjectStore, files: Files, module: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<string>> {
+  if (!live(store.get('module', module))) return { ok: false, error: 'gone' };
+  const type = assetType(bytes);
+  if (!type) return { ok: false, error: 'unsupported-file' };
+  const name = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const id = await toolAssetId(module, name);
+  if (store.get('asset', id)) return { ok: true, data: name };
+  const saved = await files.save([bytes]);
+  if (!saved.ok) return saved;
+  const [file] = saved.data;
+  if (!file) return { ok: false, error: 'picture-refused' };
+  // restore, as for toolchat: over a row the user deleted on the module page as well as where none was written.
+  const written = await store.batch([{ type: 'restore', kind: 'asset', id, parent: module, value: { name, type, size: bytes.byteLength, file } }]);
+  return written.ok ? { ok: true, data: name } : written;
+}
+
+// null: the module holds no picture by that name, another module's included.
+export async function readToolAsset(store: ObjectStore, files: Files, module: string, name: string): Promise<ApiResult<Uint8Array<ArrayBuffer> | null>> {
+  const asset = store.get('asset', await toolAssetId(module, name));
+  return asset ? files.read(asset.value.file) : { ok: true, data: null };
 }
 
 const chatRows = (store: ObjectStore, module: string, chat: string) => store.children('toolchat', chat).filter(({ value }) => value.module === module);

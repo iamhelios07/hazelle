@@ -2,7 +2,8 @@ import { RISU_DECLINED, RISU_REPLACERS } from '../tool-api/risu-methods';
 
 // RisuAI's v3 plugin API over the public Hazelle tool API (research/risu-plugin-adapter-plan.md §3). Risu's shapes
 // live only in this file and it calls nothing but `api`: nothing Risu-shaped crosses tool-api/protocol.ts, so the
-// host's contract stays Hazelle's own. A name it does not map throws and is told to 점검, never answered silently.
+// host's contract stays Hazelle's own. A name it does not map yet throws when called; a declined one reads as undefined,
+// as on a Risu without it, so a plugin's typeof guard takes its other branch. Either is told to 점검, never passed silently.
 
 type Callback = () => unknown;
 type Replacer = (content: never, type: string) => unknown;
@@ -76,7 +77,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   const tell = (name: string) => { if (told.has(name)) return; told.add(name); frame.missing(name); };
   const refuse = (name: string): never => {
     tell(name);
-    throw new Error(RISU_DECLINED.has(name) ? `Risu API '${name}' is declined in Hazelle` : `Risu API '${name}' is not available in Hazelle`);
+    throw new Error(`Risu API '${name}' is not available in Hazelle`);
   };
   const buttons = new Map<string, { label: string; run: Callback }>();
   const settings = new Map<string, Callback>();
@@ -124,6 +125,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   // The three Risu stores are one synced tool storage here, each under its own prefix so their keys never meet.
   const local = storage('local:');
   const mapped: Scope = {
+    getRuntimeInfo: async () => ({ apiVersion: '3.0', platform: 'hazelle', saveMethod: 'account' }),
     showContainer: async () => frame.show(),
     hideContainer: async () => frame.hide(),
     registerButton: async (arg: { name: string; id?: string }, callback: Callback) => {
@@ -211,6 +213,14 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     removeRisuScriptHandler: async (mode: string, handler: Handler) => { handlers[mode as Mode]?.delete(handler); },
     addRisuChatListener: async (_mode: 'output', listener: Listener) => { listeners.add(listener); },
     removeRisuChatListener: async (_mode: 'output', listener: Listener) => { listeners.delete(listener); },
+    // Risu's paths for what saveAsset keeps, assets/<hash>.png, over the tool's assets; readImage refuses other folders as
+    // Risu does, and answers null for a path this module never saved, a Risu path of the bot's own pictures included.
+    saveAsset: async (data: Uint8Array) => `assets/${await api.assets.save(data)}.png`,
+    readImage: async (path: string) => {
+      const name = path.startsWith('assets/') ? path.slice('assets/'.length) : path;
+      if (name.includes('/') || name.includes('\\')) throw new Error('readImage path cannot contain \'/\' or \'\\\', except the assets/ prefix');
+      return name.endsWith('.png') ? api.assets.read(name.slice(0, -'.png'.length)) : null;
+    },
     nativeFetch: fetchOf,
     // Risu's globalFetch: a JSON body, POST unless told, and an envelope holding the parsed JSON, or the bytes with
     // rawResponse; any failure, an unreadable JSON answer included, is its { ok: false, data: message, status: 400 }.
@@ -227,7 +237,10 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   const risu = new Proxy(mapped, {
     get: (target, name) => {
       if (typeof name === 'symbol' || name === 'then') return undefined;
-      return Object.hasOwn(target, name) ? target[name] : async () => refuse(name);
+      if (Object.hasOwn(target, name)) return target[name];
+      if (!RISU_DECLINED.has(name)) return async () => refuse(name);
+      tell(name);
+      return undefined;
     },
   });
 
