@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readTool } from '../../engine/import/tool';
-import type { Host } from '../../engine/script-api';
+import type { Host, ToolReach } from '../../engine/script-api';
 import { toolId } from '../../model/tool';
 import type { Down, Up } from '../../tool-api/protocol';
 import { shown } from '../../model/chat';
@@ -8,7 +8,9 @@ import { appendUserMessage, editMessage, startChat } from '../chat-log';
 import { setModuleAlways, setModuleDeleted } from '../modules';
 import { ToolLate, ToolStuck } from '../script-binding';
 import type { Session } from '../session';
-import { answerable, testServer } from '../testing';
+import { answerable, stubRelay, testServer } from '../testing';
+import { RELAY_HEADER } from '../../contracts/http';
+import { setNetwork } from '../pack';
 import { blankCard } from '../../engine/import/card';
 import { projectGreetings } from '../greetings';
 import { inProcessRisu, inProcessTools } from '../testing/tool-transport';
@@ -105,14 +107,22 @@ it('reads the greeting apart from the messages, which count from after it', () =
 it('refuses undeclared spending and forged event contexts, and isolates module storage', () => withTools(async (session, connect) => {
   const f = await fixture(session, '');
   let answer: Hazelle.ModelAnswer | null = null;
-  const transport = inProcessTools((api) => api.on('prompt', async (chat) => { answer = await chat.model('aux', [{ role: 'user', content: 'hi' }]); return null; }));
+  let fetched: Hazelle.FetchAnswer | null = null;
+  const transport = inProcessTools((api) => api.on('prompt', async (chat) => {
+    answer = await chat.model('aux', [{ role: 'user', content: 'hi' }]);
+    fetched = await chat.fetch('https://api.example.com/');
+    return null;
+  }));
   const host = connect(transport.open);
   try {
     const context = f.context();
     const model = vi.fn<Host['model']>();
-    await host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, { ...context.host, model });
+    const fetch = vi.fn<ToolReach['fetch']>();
+    await host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, { ...context.host, model, fetch });
     expect(answer).toEqual({ ok: false, reason: 'not-declared' });
+    expect(fetched).toEqual({ ok: false, reason: 'not-declared' });
     expect(model).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
     const frame = transport.frames[0]!;
     frame.emit({ kind: 'call', call: 900, event: 9999, method: 'model', args: ['aux', []] });
     await vi.waitFor(() => expect(frame.host.sent).toContainEqual(expect.objectContaining({ kind: 'answer', call: 900, ok: false })));
@@ -120,6 +130,79 @@ it('refuses undeclared spending and forged event contexts, and isolates module s
     if (!other.ok) throw new Error('fixture');
     await setToolData(session.store, other.data.id, 'secret', 'private');
     expect(await frame.api!.storage.get('secret')).toBeUndefined();
+  } finally { host.close(); }
+}));
+
+it('asks once before a tool reaches the network, sends nothing when refused, and relays a consented fetch with its request and signal', () => withTools(async (session, connect) => {
+  const f = await fixture(session, '//@uses network\n');
+  const url = 'https://api.example.com/v1/chat';
+  const log = stubRelay(() => new Response('{"error":"expired"}', { status: 401, headers: { [RELAY_HEADER]: 'upstream', 'content-type': 'application/json' } }));
+  const relayed = globalThis.fetch;
+  const signals: AbortSignal[] = [];
+  let hold = false;
+  vi.stubGlobal('fetch', (target: string, init: RequestInit) => {
+    if (target !== '/api/relay') return relayed(target, init);
+    signals.push(init.signal!);
+    return hold ? new Promise((_, reject) => init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))) : relayed(target, init);
+  });
+  const transport = inProcessTools(() => {});
+  const host = connect(transport.open);
+  const close = host.page(f.module, page(f.chat));
+  try {
+    await vi.waitFor(() => expect(transport.frames[0]?.api?.page?.chat).toBeTruthy());
+    const chat = transport.frames[0]!.api!.page!.chat!;
+    const init = { method: 'POST', headers: { authorization: 'Bearer secret' }, body: '{"q":1}' } as const;
+    const refused = chat.fetch(url, init);
+    await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'network', hosts: [] } })]));
+    session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'no');
+    expect(await refused).toEqual({ ok: false, reason: 'not-allowed' });
+    expect(log).toEqual([]);
+    expect(session.store.get('module', f.module)!.value.network).toBe(false);
+
+    await setNetwork(session.store, f.module, true);
+    const answer = await chat.fetch(url, init);
+    expect(log.map(({ sent }) => sent)).toEqual([{ url, method: 'POST', headers: { authorization: 'Bearer secret' }, body: '{"q":1}' }]);
+    expect(answer).toMatchObject({ ok: true, status: 401 });
+    if (!answer.ok) throw new Error('fixture');
+    expect(new TextDecoder().decode(answer.body)).toBe('{"error":"expired"}');
+    expect(answer.headers).toContainEqual(['content-type', 'application/json']);
+    expect(answer.headers.map(([name]) => name)).not.toContain(RELAY_HEADER);
+
+    hold = true;
+    const abort = new AbortController();
+    const held = chat.fetch(url, { signal: abort.signal });
+    await vi.waitFor(() => expect(signals).toHaveLength(2));
+    abort.abort();
+    await expect(held).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(signals[1]!.aborted).toBe(true));
+    expect(host.hosts().get(f.module)).toEqual(new Map([['api.example.com', 1]]));
+  } finally { close(); host.close(); }
+}));
+
+it('opens a Risu frame with the sandbox network variant only under its module consent, and restarts it when withdrawn', () => withTools(async (session, connect) => {
+  await answerable(session);
+  const parsed = source('1', '//@uses network\n');
+  const added = await importTool(session.store, session.files, { ...parsed, manifest: { ...parsed.manifest, page: null, menu: [], risu: { verdict: 'all', missing: [], hosts: [] } } });
+  if (!added.ok) throw new Error(added.error);
+  const module = added.data.id;
+  await setModuleAlways(session.store, module, true);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  const transport = inProcessRisu(() => {});
+  const host = connect(transport.open);
+  try {
+    await setNetwork(session.store, module, true);
+    await host.warm(chat);
+    expect(transport.frames.map((frame) => frame.opening)).toEqual([{ role: 'frame', network: true }]);
+    await setNetwork(session.store, module, false);
+    await vi.waitFor(() => expect(transport.frames[0]!.host.closed).toBe(true));
+    await host.warm(chat);
+    expect(transport.frames[1]!.opening).toEqual({ role: 'frame', network: false });
+    await setNetwork(session.store, module, true);
+    await host.warm(chat);
+    expect(transport.frames).toHaveLength(2);
+    expect(transport.frames[1]!.host.closed).toBe(false);
   } finally { host.close(); }
 }));
 

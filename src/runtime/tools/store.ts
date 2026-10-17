@@ -58,7 +58,7 @@ export async function importTool(store: ObjectStore, files: Files, { manifest, b
     // Reset before the new code is visible; a failure can ask again but never grant a new capability silently. Each
     // answer is asked again only for a use it covers: a version that only adds the memory claim keeps 모델 호출.
     const added = manifest.uses.filter((use) => !existing.value.manifest.uses.includes(use));
-    const answers = [...(added.includes('model') || added.includes('embed') ? ['botModels' as const] : []), ...(added.includes('memory') ? ['takesMemory' as const] : [])];
+    const answers = [...(added.includes('model') || added.includes('embed') ? ['botModels' as const] : []), ...(added.includes('memory') ? ['takesMemory' as const] : []), ...(added.includes('network') ? ['network' as const] : [])];
     if (answers.length) {
       const reset = await store.update('module', id, (current) => current.deleted === undefined ? answers.reduce((module, answer) => without(module, answer), current) : null);
       if (!reset.ok) return reset;

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { clientFiles, CSP, SANDBOX_CSP } from './static';
+import { clientFiles, CSP, SANDBOX_CSP, SANDBOX_NETWORK_CSP } from './static';
 
 let dir: string;
 let client: ReturnType<typeof clientFiles>;
@@ -94,4 +94,16 @@ it('serves the opaque tool document with a classic script and its own CSP, never
   expect(CSP).toContain("frame-src 'self'");
   expect(CSP).not.toContain('sandbox allow-scripts');
   expect((await client.request('/', { headers: PAGE })).headers.get('content-security-policy')).toBe(CSP);
+});
+
+it('serves a frame with network consent pictures, fonts and stylesheets from outside, and never a connection', async () => {
+  const policy = async (query: string) => (await client.request(`/sandbox.html?${query}`, { headers: PAGE })).headers.get('content-security-policy');
+  const wide = await policy('role=frame&network=1');
+  expect(wide).toBe(SANDBOX_NETWORK_CSP);
+  expect(wide).toContain('img-src data: blob: https:;');
+  expect(wide).toContain("font-src 'self' data: https:;");
+  expect(wide).toContain("connect-src 'none'");
+  expect(wide).toContain("frame-ancestors 'self'");
+  for (const query of ['role=frame', 'role=frame&network=yes', 'role=page']) expect(await policy(query)).toBe(SANDBOX_CSP);
+  expect(SANDBOX_CSP).not.toContain('https:');
 });

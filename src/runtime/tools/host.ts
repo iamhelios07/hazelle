@@ -1,7 +1,9 @@
 import { ChangeSignal } from '../../change-signal';
+import type { HttpRequest } from '../../connectors/types';
 import { isRecord } from '../../connectors/values';
+import { RELAY_HEADER } from '../../contracts/http';
 import { Runaway } from '../../engine/cbs/evaluate';
-import type { ToolEvent, Host, ModelMessage, Question } from '../../engine/script-api';
+import type { ToolEvent, ToolReach, ModelMessage, Question } from '../../engine/script-api';
 import type { ChatScope } from '../../engine/render';
 import { live } from '../../model/library';
 import { toolId, toolVar, type Tool, type ToolUnit } from '../../model/tool';
@@ -15,19 +17,21 @@ import { aborted, noOutcome, ToolStopped, ToolStuck, until, type Binding } from 
 import type { Session } from '../session';
 import type { StoreChange } from '../object-index';
 import { Heartbeat } from '../worker';
-import type { MenuItem, ToolFrames, ToolMenu, ToolPage, ToolSlot, Tools } from './facade';
+import type { MenuItem, ToolFrames, ToolHosts, ToolMenu, ToolPage, ToolSlot, Tools } from './facade';
 import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
 import { toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
 
 // event: absent for a page's own calls and writes.
-type Context = { chat: string; scope: ChatScope; host: Host; signal: AbortSignal; state?: Promise<ToolState>; event?: ToolEvent['kind'] };
+type Context = { chat: string; scope: ChatScope; host: ToolReach; signal: AbortSignal; state?: Promise<ToolState>; event?: ToolEvent['kind'] };
 type Pending = Context & { cancel: AbortController; resolve(outcome: ScriptOutcome): void; reject(error: Error): void; stop(): void };
 type Frame = {
   id: number; entry: Entry; connection: Connection; page?: ToolPage; closing: AbortController; heart: Heartbeat;
   loaded: boolean; ready: Promise<void>; resolve(): void; reject(error: Error): void; loadTimer: ReturnType<typeof setTimeout> | null;
-  listens: Set<EventName>; pending: Map<number, Pending>; calls: Set<number>; messages: Message[];
+  listens: Set<EventName>; pending: Map<number, Pending>; calls: Map<number, AbortController>; messages: Message[];
   reading: Promise<unknown>; lanes: Set<string>; release(): void;
+  // Opened with the sandbox's network variant (pictures and fonts from outside), fixed for the frame's life.
+  network: boolean;
 };
 // A frame tool (manifest.risu) runs as its background frame, with these: chat, the chat open for it, which its calls
 // outside an event read; menu, what its frame registered; shown, whether it asks to be shown; slot, where it is;
@@ -68,6 +72,11 @@ function isQuestion(value: unknown): value is Question {
 function isModelMessages(value: unknown): value is ModelMessage[] {
   return Array.isArray(value) && value.every((message) => isRecord(message) && (message.role === 'system' || message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string');
 }
+// The relay's envelope, less the URL: GET or POST, text headers, and a text body only with POST.
+function isRequest(value: unknown): value is Omit<HttpRequest, 'url'> {
+  return isRecord(value) && (value.method === 'GET' || value.method === 'POST') && isRecord(value.headers) && Object.values(value.headers).every((each) => typeof each === 'string')
+    && (value.body === null || (value.method === 'POST' && typeof value.body === 'string'));
+}
 const isPairs = (value: unknown) => Array.isArray(value) && value.every((pair) => Array.isArray(pair) && pair.length === 2 && typeof pair[0] === 'string' && (pair[1] === undefined || isJson(pair[1])));
 const isText = (value: unknown) => value === undefined || value === null || typeof value === 'string';
 function isAnswer(value: unknown): value is Hazelle.PromptAnswer | undefined {
@@ -100,7 +109,7 @@ function cardOf(character: string | null, scope: ChatScope): Hazelle.Card | null
 }
 const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
 
-export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
+export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> {
   private readonly entries = new Map<string, Entry>();
   private readonly code = new Map<string, Promise<string>>();
   private readonly stalls = new Map<string, number>();
@@ -109,6 +118,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   private readonly unsubscribe: () => void;
   private readonly signal = new ChangeSignal();
   private shownFrames: ToolFrames = new Map();
+  private called: ToolHosts = new Map();
   private ids = 0;
 
   constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly scripts: () => Pick<Scripts, 'report' | 'pageContext' | 'pageWrite'>, private readonly open: OpenFrame = toolFrame) {
@@ -129,6 +139,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
 
   readonly subscribe = (listener: () => void) => this.signal.subscribe(listener);
   readonly frames = () => this.shownFrames;
+  readonly hosts = () => this.called;
 
   private publish() {
     this.shownFrames = new Map([...this.entries.values()].filter((entry) => isFrameTool(entry.tool)).map((entry) => [entry.module, { menu: entry.menu, chat: entry.chat, asking: entry.shown && !entry.slot }]));
@@ -147,7 +158,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     }));
   }
 
-  async run(chat: string, unit: ToolUnit, scope: ChatScope, event: ToolEvent, host: Host, signal?: AbortSignal): Promise<ScriptOutcome> {
+  async run(chat: string, unit: ToolUnit, scope: ChatScope, event: ToolEvent, host: ToolReach, signal?: AbortSignal): Promise<ScriptOutcome> {
     const entry = this.entry(unit.module);
     if (entry.tool.file.id !== unit.tool.file.id || !this.allowed(chat, entry.module)) throw new ToolStopped();
     entry.chats.add(chat);
@@ -272,7 +283,9 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   }
 
   private frame(entry: Entry, page?: ToolPage): Frame {
-    const connection = this.open(page ? { role: 'page', page } : { role: isFrameTool(entry.tool) ? 'frame' : 'background' });
+    // A consent given while the frame runs widens it only at its next start: restarting would drop the call that asked.
+    const network = !page && isFrameTool(entry.tool) && this.networkOn(entry);
+    const connection = this.open(page ? { role: 'page', page } : isFrameTool(entry.tool) ? { role: 'frame', network } : { role: 'background' });
     let resolve!: () => void;
     let reject!: (error: Error) => void;
     const ready = new Promise<void>((done, failed) => { resolve = done; reject = failed; });
@@ -281,7 +294,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       id: ++this.ids, entry, connection, page, closing: new AbortController(),
       heart: new Heartbeat(() => this.send(frame, { kind: 'ping' }), () => this.stalled(frame)),
       loaded: false, ready, resolve, reject, loadTimer: null,
-      listens: new Set(), pending: new Map(), calls: new Set(), messages: [], reading: Promise.resolve(), lanes: new Set(), release: () => lease?.release(),
+      listens: new Set(), pending: new Map(), calls: new Map(), messages: [], reading: Promise.resolve(), lanes: new Set(), release: () => lease?.release(), network,
     };
     connection.port.onmessage = ({ data }: MessageEvent<unknown>) => this.receive(frame, data);
     connection.port.start();
@@ -326,13 +339,15 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       const call = Number(data.call);
       if (frame.calls.has(call)) return;
       if (frame.calls.size >= 128) { this.send(frame, { kind: 'answer', call, ok: false, value: 'too-many-calls' }); return; }
-      frame.calls.add(call);
-      void this.call(frame, data.method, data.args, data.event).then(
+      const cancel = new AbortController();
+      frame.calls.set(call, cancel);
+      void this.call(frame, data.method, data.args, data.event, cancel.signal).then(
         (value) => this.send(frame, { kind: 'answer', call, ok: true, value }),
         (error: unknown) => this.send(frame, { kind: 'answer', call, ok: false, value: describe(error) }),
       ).finally(() => frame.calls.delete(call));
       return;
     }
+    if (data.kind === 'cancel' && Number.isSafeInteger(data.call)) { frame.calls.get(Number(data.call))?.abort(); return; }
     if (data.kind === 'done' || data.kind === 'failed') {
       const id = Number(data.id);
       if (!Number.isSafeInteger(data.id)) return;
@@ -382,7 +397,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     return frame.page ? frame.page.chat : frame.entry.background === frame && isFrameTool(frame.entry.tool) ? frame.entry.chat : null;
   }
 
-  private async call(frame: Frame, method: string, args: unknown[], event: unknown): Promise<unknown> {
+  private async call(frame: Frame, method: string, args: unknown[], event: unknown, cancel: AbortSignal): Promise<unknown> {
     const entry = frame.entry;
     if (!live(this.session.store.get('module', entry.module))) throw new ToolStopped();
     const [first, second] = args;
@@ -457,6 +472,10 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
           const result = await context.host.model(first, second.map(({ role, content }) => ({ role, content })), owner, context.signal);
           return result.success ? { ok: true, text: result.result } : { ok: false, reason: result.reason };
         }
+        if (method === 'fetch' && typeof first === 'string' && URL.canParse(first) && isRequest(second)) {
+          if (!entry.tool.manifest.uses.includes('network')) return { ok: false, reason: 'not-declared' } satisfies Hazelle.FetchAnswer;
+          return this.fetch(entry, context, { url: first, ...second }, cancel);
+        }
         if (method === 'tokens' && typeof first === 'string') return context.host.tokens(first);
         if (method === 'lore' && (first === null || typeof first === 'number' && Number.isFinite(first) && first >= 0)) return context.host.lore(first);
         if (method === 'ask' && isQuestion(first)) return context.host.ask(first, owner, context.signal);
@@ -464,6 +483,30 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       }
     }
     throw new Error('Invalid tool call');
+  }
+
+  private async fetch(entry: Entry, context: Context, request: HttpRequest, cancel: AbortSignal): Promise<Hazelle.FetchAnswer> {
+    const signal = AbortSignal.any([context.signal, cancel]);
+    const result = await context.host.fetch(request, entry.module, signal);
+    if (result.ok || (result.reason !== 'not-allowed' && result.reason !== 'stopped')) this.tally(entry.module, new URL(request.url).hostname);
+    if (!result.ok) return result;
+    const { response } = result;
+    try {
+      return { ok: true, status: response.status, headers: [...response.headers].filter(([name]) => name !== RELAY_HEADER), body: await response.arrayBuffer() };
+    } catch {
+      return { ok: false, reason: signal.aborted ? 'stopped' : 'offline' };
+    }
+  }
+
+  private tally(module: string, host: string) {
+    const hosts = new Map(this.called.get(module));
+    hosts.set(host, (hosts.get(host) ?? 0) + 1);
+    this.called = new Map([...this.called, [module, hosts]]);
+    this.signal.notify();
+  }
+
+  private networkOn(entry: Entry): boolean {
+    return entry.tool.manifest.uses.includes('network') && live(this.session.store.get('module', entry.module))?.value.network === true;
   }
 
   private state(frame: Frame, context: Context): Promise<ToolState> {
@@ -560,6 +603,8 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     for (const entry of [...this.entries.values()]) {
       const tool = this.session.store.get('tool', toolId(entry.module))?.value;
       if (!tool || !live(this.session.store.get('module', entry.module)) || tool.file.id !== entry.tool.file.id || JSON.stringify(tool.manifest) !== JSON.stringify(entry.tool.manifest)) { this.end(entry, new ToolStopped()); continue; }
+      // A withdrawn network answer cannot wait for the frame's next start: its CSP still lets pictures out.
+      if (framesOf(entry).some((frame) => frame.network) && !this.networkOn(entry)) { this.end(entry, new ToolStopped()); continue; }
       this.settingsChanged(entry, tool);
       const keys = new Set<string>();
       for (const change of changes) {
@@ -586,4 +631,4 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   }
 }
 
-export const createTools = (session: Pick<Session, 'store' | 'files'>, scripts: () => Scripts): Tools & Binding<ToolUnit, ToolEvent> => new ToolHost(session, scripts);
+export const createTools = (session: Pick<Session, 'store' | 'files'>, scripts: () => Scripts): Tools & Binding<ToolUnit, ToolEvent, ToolReach> => new ToolHost(session, scripts);

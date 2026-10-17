@@ -122,6 +122,33 @@ describe('the Risu adapter', () => {
     expect(await Risuai.pluginStorage!.keys!()).toEqual(['k']);
     expect(fake.storage.size).toBe(3);
   });
+
+  it('answers nativeFetch with a Response RisuPot and DiaryLog read, and turns a refusal into a failed fetch', async () => {
+    const fake = fakeApi();
+    const bytes = (text: string) => new TextEncoder().encode(text).buffer as ArrayBuffer;
+    const fetch = vi.fn<Hazelle.Chat['fetch']>()
+      .mockResolvedValueOnce({ ok: true, status: 401, headers: [['content-type', 'application/json']], body: bytes('{"error":{"message":"expired"}}') })
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: [['content-type', 'image/png']], body: new Uint8Array([137, 80]).buffer })
+      .mockResolvedValueOnce({ ok: true, status: 204, headers: [], body: new ArrayBuffer(0) })
+      .mockResolvedValueOnce({ ok: false, reason: 'refused', code: 'not-public' });
+    Object.assign(fake.chat, { fetch });
+    const { Risuai } = install(fake);
+    const nativeFetch = Risuai.nativeFetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    const signal = new AbortController().signal;
+    // RisuPot: ok and status on a refusal, then the body as text for its detail, as JSON once read.
+    const refused = await nativeFetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer k' }, body: '{"a":1}', signal, redirect: 'error' });
+    expect(fetch).toHaveBeenCalledWith('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer k' }, body: '{"a":1}', signal });
+    expect([refused.ok, refused.status]).toEqual([false, 401]);
+    expect(JSON.parse(await refused.text())).toEqual({ error: { message: 'expired' } });
+    // DiaryLog: a picture's bytes and its type.
+    const picture = await nativeFetch('https://img.youtube.com/vi/x/0.jpg', { method: 'GET' });
+    expect([picture.ok, picture.headers.get('content-type'), [...new Uint8Array(await picture.arrayBuffer())]]).toEqual([true, 'image/png', [137, 80]]);
+    expect((await nativeFetch('https://api.example.com/empty')).status).toBe(204);
+    await expect(nativeFetch('https://10.0.0.1/')).rejects.toThrow(new TypeError('Failed to fetch: refused (not-public)'));
+    await expect(nativeFetch('https://api.example.com/', { method: 'PUT', body: 'x' })).rejects.toThrow(TypeError);
+    await expect(nativeFetch('https://api.example.com/', { method: 'POST', body: new Uint8Array([1]) })).rejects.toThrow(TypeError);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
 });
 
 // The acceptance plugins (research/risu-plugin-adapter-plan.md §7 phase A) live in the private docs repo, beside this

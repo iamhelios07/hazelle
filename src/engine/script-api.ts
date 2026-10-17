@@ -1,4 +1,4 @@
-import type { EmbedPurpose } from '../connectors/types';
+import type { EmbedPurpose, HttpRequest } from '../connectors/types';
 import type { Lore, PackOwner } from '../model/library';
 import type { Trigger } from './import/types';
 
@@ -27,6 +27,12 @@ export type Host = {
   // when refused or not saved.
   background(html: string, from: PackOwner, signal?: AbortSignal): Promise<boolean>;
 };
+// A tool reaches the network too, which Lua never does.
+export type ToolReach = Host & {
+  // Through the relay, under module's one answer for the network; the upstream's answer whatever its status.
+  fetch(request: HttpRequest, module: string, signal?: AbortSignal): Promise<FetchResult>;
+};
+export type FetchResult = { ok: true; response: Response } | { ok: false; reason: Exclude<Hazelle.FetchRefusal, 'not-declared'>; code?: string };
 
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
 export type ToolEvent =

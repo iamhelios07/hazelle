@@ -1,6 +1,6 @@
 export type Json = Hazelle.Json;
 export type Settings = Hazelle.Settings;
-export type ToolUse = 'model' | 'embed' | 'memory';
+export type ToolUse = 'model' | 'embed' | 'memory' | 'network';
 // composer: the field is shown in the tool's composer popover too.
 export type ToolField = { key: string; type: 'text' | 'number' | 'switch' | 'choice'; label: string; options?: string[]; default?: string | number | boolean; composer?: true };
 // The import scan of a Risu v3 plugin (research/risu-plugin-adapter-plan.md §4). missing: Risu methods the file names that

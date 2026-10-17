@@ -174,7 +174,7 @@ export function testServer() {
       vi.stubGlobal('document', { visibilityState: 'hidden' });
       const { accountId, vaultKey } = await harness.account();
       const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { tools: typeof tools === 'function' ? tools : tools && (({ store }) => ({
-        ...tools, warm: async () => {}, menus: () => [], page: () => () => {}, attach: () => () => {}, subscribe: () => () => {}, frames: () => new Map(),
+        ...tools, warm: async () => {}, menus: () => [], page: () => () => {}, attach: () => () => {}, subscribe: () => () => {}, frames: () => new Map(), hosts: () => new Map(),
         items: (module) => store.get('tool', toolId(module))?.value.manifest.menu ?? [],
       })), lua: async () => {
         const machine = await lua;

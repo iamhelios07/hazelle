@@ -27,14 +27,21 @@ describe('a .js file', () => {
 
   it('reads Side Phone 0.1.0 and Fishing 1.2.3 as working in full', () => {
     expect(read(sidePhone)).toMatchObject({ ok: true, tool: { manifest: {
-      name: 'Webso_Phone_v0.1.0', displayName: '사이드폰 플러그인', version: '0.1.0', description: '', uses: ['model'],
+      name: 'Webso_Phone_v0.1.0', displayName: '사이드폰 플러그인', version: '0.1.0', description: '', uses: ['model', 'network'],
       risu: { verdict: 'all', missing: [], hosts: ['cdn.jsdelivr.net'] },
     } } });
     expect(read(fishing)).toMatchObject({ ok: true, tool: { manifest: {
-      name: 'risu_fishing', version: '1.2.3', uses: ['model'], settings: [{ key: 'image_base', type: 'text' }],
+      name: 'risu_fishing', version: '1.2.3', uses: ['model', 'network'], settings: [{ key: 'image_base', type: 'text' }],
       description: '사용법과 업데이트 https://github.com/bampibubu-blip/risu-fishing\n버그 제보 https://github.com/bampibubu-blip/risu-fishing/issues',
       risu: { verdict: 'all', missing: [], hosts: ['cdn.jsdelivr.net', 'raw.githubusercontent.com'] },
     } } });
+  });
+
+  it('declares the network for a fetch, also through an alias, or for a literal host, and not without either', () => {
+    const uses = (body: string) => { const result = read(`//@name notes\n//@api 3.0\n${body}`); return result.ok && result.tool.manifest.uses; };
+    expect(uses('const api = risuai; await api.nativeFetch(url);')).toEqual(['network']);
+    expect(uses('img.src = "https://cdn.example.org/a.png";')).toEqual(['network']);
+    expect(uses('await risuai.runLLMModel({ messages, mode: "model" });')).toEqual(['model']);
   });
 });
 
@@ -61,8 +68,8 @@ describe('the Risu scan', () => {
   });
 
   it('still lists the unmapped Risu names an aliased plugin reaches as properties', () => {
-    expect(scanRisu("const api = globalThis.risuai; api.getChatFromIndex(0, 0); api?.nativeFetch(u); api.addRisuReplacer('beforeRequest', f); storage.getItem('x');")).toEqual({
-      verdict: 'unread', missing: ['nativeFetch', 'addRisuReplacer:beforeRequest'], hosts: [],
+    expect(scanRisu("const api = globalThis.risuai; api.getChatFromIndex(0, 0); api?.getDatabase(); api.addRisuReplacer('beforeRequest', f); storage.getItem('x');")).toEqual({
+      verdict: 'unread', missing: ['getDatabase', 'addRisuReplacer:beforeRequest'], hosts: [],
     });
   });
 
