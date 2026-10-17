@@ -173,6 +173,15 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setPinned(null);
   }
 
+  // The one way a message goes out, typed or one of 오토파일럿's.
+  async function say(text: string) {
+    setStopped(false);
+    asking();
+    const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
+    report(failure);
+    return failure;
+  }
+
   // Nothing typed asks for a reply after the last message (응답 받기), as RisuAI's empty send does.
   async function send() {
     if (busy) return;
@@ -183,14 +192,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (blocked(session, chat)) return setStopped(true);
     const text = drafts.text(draft.key).trim();
     if (!text || talk.snapshot(chatId)) return;
-    setStopped(false);
     drafts.set(draft.key, '');
-    asking();
-    const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
+    const failure = await say(text);
     // An unsaved reply or a kept failure means the user's message was saved. Any other failure's text goes back to the
     // chat's draft, wherever that is by now: a new chat may have been saved before the failure, or not at all.
     if (failure && failure.kind !== 'unsaved' && !failure.kept) drafts.putBack(store.get('chat', chatId) ? chatId : draft.key, text);
-    report(failure);
   }
 
   async function press(button: BotButton | null) {
@@ -342,6 +348,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       ...bookmarkActions,
       ...settingActions,
       send,
+      say,
       retryRegex,
       stop: () => talk.stop(chatId),
       regenerate: (message: Shown) => ask({ kind: 'regenerate', message: message.id }),
@@ -354,6 +361,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       branch,
       bookmarks: () => flipPanel({ kind: 'bookmarks' }, ({ kind }) => kind === 'bookmarks'),
       lore: () => flipPanel({ kind: 'lore' }, ({ kind }) => kind === 'lore'),
+      autopilot: () => flipPanel({ kind: 'autopilot' }, ({ kind }) => kind === 'autopilot'),
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
       info: (reply: string) => openInfo(reply, panel?.kind === 'info' ? panel.tab : 'reply'),

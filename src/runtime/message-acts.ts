@@ -1,6 +1,6 @@
 import type { ChatItem, Message } from '../model/chat';
 import type { ApiResult } from './api';
-import { branchChat, editMessage, removeMessage, removeMessages, restoreMessage, restoreMessages, selectVersion } from './chat-log';
+import { branchChat, copyShown, editMessage, removeMessage, removeMessages, restoreMessage, restoreMessages, selectVersion } from './chat-log';
 import type { Session } from './session';
 
 // The user's own acts on a chat's messages, each told to the chat's tools once it is saved (Hazelle change and branch
@@ -24,6 +24,11 @@ export async function editShown(session: Acting, chat: string, message: Message,
 
 export async function pickVersion(session: Acting, chat: string, message: Message, index: number) {
   return told(await selectVersion(session.store, chat, message.id, message.versions[index]!.id), () => tellAt(session, chat, message.id, 'select'));
+}
+
+// The version shown changes to the copy, so the tools are told of a switch.
+export async function copyVersion(session: Acting, chat: string, message: Message) {
+  return told(await copyShown(session.store, chat, message), () => tellAt(session, chat, message.id, 'select'));
 }
 
 // The message as it was: read before it goes.

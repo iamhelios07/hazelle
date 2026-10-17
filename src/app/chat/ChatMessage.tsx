@@ -12,7 +12,7 @@ import type { Translating } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
 import { MASCOT_PICTURES } from '../common/mascots';
 import { BOOKMARK } from '../common/words';
-import { describeReplyError, describeTranslateFailure } from '../common/failure';
+import { describeFailedReply, describeTranslateFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
@@ -226,7 +226,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             </>
           }
         >
-          {receipt.error ? describeReplyError(receipt.error) : '왜 실패했는지 알 수 없어요.'}
+          {describeFailedReply(receipt.error)}
         </Failure>
       </>
     );

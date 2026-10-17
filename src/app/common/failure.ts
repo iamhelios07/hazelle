@@ -177,6 +177,8 @@ function provider(status: number, detail: string): string {
   return detail ? `${ours} ${detail}` : ours;
 }
 
+export const describeFailedReply = (error: ReplyError | null) => (error ? describeReplyError(error) : '왜 실패했는지 알 수 없어요.');
+
 export function describeReplyError(error: ReplyError): string {
   switch (error.kind) {
     case 'refused':

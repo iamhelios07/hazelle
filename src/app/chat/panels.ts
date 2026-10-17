@@ -13,7 +13,7 @@ export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null
 export type InspectTab = 'request' | 'cache' | 'variables' | 'modules' | 'scripts';
 type InspectPanel = { kind: 'inspect'; tab: InspectTab };
 export type InfoTab = 'reply' | 'lore' | 'memory' | 'request' | 'response';
-export type Panel = InspectPanel | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info'; tab: InfoTab } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | Side;
+export type Panel = InspectPanel | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info'; tab: InfoTab } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | { kind: 'autopilot' } | Side;
 
 const isSide = (panel: Panel): panel is Side => panel.kind === 'prompts' || panel.kind === 'character' || panel.kind === 'module';
 
