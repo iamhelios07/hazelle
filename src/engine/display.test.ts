@@ -183,6 +183,11 @@ describe('storyHtml', () => {
     expect(storyHtml('<b>x</b> \\*y\\*', false)).toBe('<p>&lt;b&gt;x&lt;/b&gt; *y*</p>\n');
   });
 
+  it('makes a line that is only a bot’s picture a paragraph, and leaves two pictures on one block as written', () => {
+    expect(storyHtml('<img src="a.png">\n\n본문', true)).toBe('<p><img src="a.png"></p>\n<p>본문</p>\n');
+    expect(storyHtml('<img src="a.png">\n<img src="b.png">', true)).toBe('<img src="a.png">\n<img src="b.png">');
+  });
+
   it('marks a closed $$ pair outside code as a formula, as written, with no escape or mark read inside it', () => {
     expect(storyHtml('값 $$\\{a\\}*"b"*$$ `$$c$$` $$d', false)).toBe('<p>값 <span data-tex>$$\\{a\\}*&quot;b&quot;*$$</span> <code>$$c$$</code> $$d</p>\n');
   });

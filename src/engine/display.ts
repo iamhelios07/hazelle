@@ -120,11 +120,21 @@ function parser(html: boolean) {
   // Before text_join, so an escaped \* is still its own token and not read as a mark.
   md.core.ruler.before('text_join', 'story_lines', lines);
   md.core.ruler.after('story_lines', 'story_marks', marks);
-  if (!html) {
+  if (html) md.core.ruler.after('story_marks', 'picture_blocks', pictureBlocks);
+  else {
     md.inline.ruler.before('html_inline', 'inlay', inlay);
     md.core.ruler.after('story_marks', 'inlay_blocks', inlayBlocks);
   }
   return md;
+}
+
+// An HTML block that is only a picture, as {{img::}} and {{asset::}} leave one on its own line, is a paragraph, as
+// ![]() is: the story's picture lines (Story.tsx data-picture) are paragraphs, and a bare one would escape their cap.
+const LONE_PICTURE = /^\s*<img\b[^<>]*>\s*$/i;
+function pictureBlocks(state: StateCore) {
+  for (const token of state.tokens) {
+    if (token.type === 'html_block' && LONE_PICTURE.test(token.content)) token.content = `<p>${token.content.trim()}</p>\n`;
+  }
 }
 
 // Without the bot's HTML, the chat's inlays still show: their markup alone is kept (engine/assets INLAY_MARKUP).
