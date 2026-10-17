@@ -29,7 +29,7 @@ it('states the account the page holds with every request, and hears what answers
     Response.json({ error: 'suspended' }, { status: 403 }),
     Response.json({ error: 'storage-full' }, { status: 413 }),
     Response.json({ revs: [1] }, { headers: { 'x-account-bytes': '120' } }),
-    new Response(null, { status: 204, headers: { 'x-account-file-bytes': '30' } }),
+    new Response(null, { status: 204, headers: { 'x-account-file-bytes': '30', 'x-unread-notices': '2' } }),
     Response.json({ error: 'account-mismatch' }, { status: 409 }),
     Response.json({ error: 'account-mismatch' }, { status: 409 }),
   ];
@@ -45,6 +45,7 @@ it('states the account the page holds with every request, and hears what answers
     { kind: 'storage-full' },
     { kind: 'bytes', bytes: 120 },
     { kind: 'file-bytes', fileBytes: 30 },
+    { kind: 'notices', unread: 2 },
     { kind: 'elsewhere' },
   ]);
 });

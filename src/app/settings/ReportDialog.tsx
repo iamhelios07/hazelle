@@ -12,19 +12,19 @@ import { Button, Callout, Checkbox, Dialog, Stack, Text, TextField } from '../ui
 
 export const REPORT = '운영자에게 알리기';
 
-export function ReportButton() {
+export function ReportButton({ onSent }: { onSent: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button variant="secondary" size="sm" icon={Send} onClick={() => setOpen(true)}>
         {REPORT}
       </Button>
-      {open && <ReportDialog onClose={() => setOpen(false)} />}
+      {open && <ReportDialog onClose={() => setOpen(false)} onSent={onSent} />}
     </>
   );
 }
 
-function ReportDialog({ onClose }: { onClose: () => void }) {
+function ReportDialog({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
   const toast = useToast();
   const [text, setText] = useState('');
   // On by default: an error report is rarely answerable without it, and it holds no chat text or key.
@@ -38,6 +38,7 @@ function ReportDialog({ onClose }: { onClose: () => void }) {
       const sent = await sendReport(text, withDevice ? await diagnosticReport(BUILT_VERSION) : null);
       if (!sent.ok) return describeFailure(sent);
       toast.show('운영자에게 보냈어요.');
+      onSent();
       onClose();
       return null;
     });

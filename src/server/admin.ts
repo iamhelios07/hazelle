@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { type AccountState, type RestoreAction, MAX_DIAGNOSTICS_LENGTH, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
+import { UNREAD_NOTICES_HEADER } from '../contracts/http';
 import { SHARE_ID } from '../contracts/shares';
 import { blockFiles, fileBlocks } from './files';
 import { forgetCut, serveShareFile } from './shares';
@@ -21,8 +22,18 @@ export async function forgetOldRecords(db: Db): Promise<void> {
   await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before), ...forgetCut(db, 'TRUE')]);
 }
 
-// What any account, a suspended one too, sends the operator.
-export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c) => {
+// What any account, a suspended one too, sends the operator, and reads back of what it sent: the reports not on a share,
+// sent by this account, not an earlier one that held its id, each with the operator's reply when one came.
+export const reports = new Hono<AppEnv>().use(requireSession).get('/', async (c) => {
+  const listed = await page(
+    c,
+    `SELECT id, text, created_at AS createdAt, resolved_at AS resolvedAt,
+       (SELECT text FROM notices WHERE notices.report_id = reports.id) AS reply FROM reports`,
+    'share IS NULL AND EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = ?3 AND accounts.id = reports.account_id AND accounts.created_at <= reports.created_at)',
+    c.get('account').incarnation,
+  );
+  return listed ? c.json({ reports: listed.rows, next: listed.next }) : fail(c, 400, 'bad-input');
+}).post('/', async (c) => {
   const body = await readObject(c);
   const text = typeof body?.text === 'string' ? body.text.trim() : '';
   const diagnostics = body?.diagnostics ?? null;
@@ -43,14 +54,22 @@ export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c
 // The notices an account reads, over a notices row and an accounts row (both unaliased): its own, and those to every
 // account sent at or after it was created. The list and the session's unread count read the same text.
 export const VISIBLE = '(notices.incarnation = accounts.incarnation OR (notices.incarnation IS NULL AND notices.created_at >= accounts.created_at))';
+// Over an accounts row.
+export const UNREAD_NOTICES = `(SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AND notices.id > accounts.notices_seen)`;
+
+export async function tellUnreadNotices(c: Context<AppEnv>) {
+  const unread = await c.env.db.prepare(`SELECT ${UNREAD_NOTICES} AS unread FROM accounts WHERE incarnation = ?`).bind(c.get('account').incarnation).first<number>('unread');
+  if (unread !== null) c.header(UNREAD_NOTICES_HEADER, String(unread));
+}
 
 // What any account, a suspended one too, reads of what the operator sent. Newest first, paged like the operator's lists.
+// question: what a reply answers, null once that report was forgotten (forgetOldRecords).
 export const notices = new Hono<AppEnv>()
   .use(requireSession)
   .get('/', async (c) => {
     const listed = await page(
       c,
-      'SELECT id, report_id AS reportId, text, created_at AS createdAt FROM notices',
+      'SELECT id, report_id AS reportId, text, created_at AS createdAt, (SELECT text FROM reports WHERE reports.id = notices.report_id) AS question FROM notices',
       `EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = ?3 AND ${VISIBLE})`,
       c.get('account').incarnation,
     );
@@ -61,6 +80,7 @@ export const notices = new Hono<AppEnv>()
     const id = (await readObject(c))?.id;
     if (!positive(id)) return fail(c, 400, 'bad-input');
     await c.env.db.prepare('UPDATE accounts SET notices_seen = MAX(notices_seen, ?) WHERE incarnation = ?').bind(id, c.get('account').incarnation).run();
+    await tellUnreadNotices(c);
     return c.body(null, 204);
   });
 

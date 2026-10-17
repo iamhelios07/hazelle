@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { hearServedVersion } from '../../runtime/api';
+import type { AccountFacts } from '../../runtime/account';
 import { Drafts } from '../../runtime/drafts';
 import { openSession, type Session } from '../../runtime/session';
 import type { PullProgress } from '../../runtime/store';
@@ -46,15 +47,16 @@ function Restored({ dropped }: { dropped: number }) {
   return null;
 }
 
-// Said once when the session opens with notices the person has not seen. The ref: StrictMode runs a mount's effect twice.
-function Unread({ unread }: { unread: number }) {
+// Said when the account opens with notices the person has not seen, and again when a sync hears more than were last
+// said; marking them seen lowers the mark. The ref also keeps StrictMode's second effect run from saying it twice.
+function Unread({ facts }: { facts: AccountFacts }) {
   const toast = useToast();
-  const said = useRef(false);
+  const unread = useSyncExternalStore(facts.subscribe, () => facts.snapshot().unreadNotices);
+  const said = useRef(0);
   useEffect(() => {
-    if (!unread || said.current) return;
-    said.current = true;
-    toast.show(`${NOTICES.from}이 ${count(unread)}개 있어요`, { action: { label: '보기', onClick: () => navigate({ kind: 'account', section: 'notices' }) } });
-  }, []);
+    if (unread > said.current) toast.show(`${NOTICES.from}이 ${count(unread)}개 있어요`, { action: { label: '보기', onClick: () => navigate({ kind: 'account', section: 'notices' }) } });
+    said.current = unread;
+  }, [unread]);
   return null;
 }
 
@@ -89,7 +91,7 @@ function News() {
 // Everything behind an open vault is one session, opened before the first screen and closed when this unmounts,
 // which 잠그기 and 로그아웃 both do. A restore the store hears ends its session, and the next one opens on the restored
 // account (ObjectStore.rewind); what was typed outlives it.
-export function Workspace({ accountId, vaultKey, username, unreadNotices, ...account }: Unlocked) {
+export function Workspace({ accountId, vaultKey, username, ...account }: Unlocked) {
   const [session, setSession] = useState<Session | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -152,7 +154,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
       <DisplayProvider>
         <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
           {rewound !== null && <Restored dropped={rewound} />}
-          <Unread unread={unreadNotices} />
+          <Unread facts={account.facts} />
           <Stale />
           <News />
           <BotNotes />

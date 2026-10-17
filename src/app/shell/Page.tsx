@@ -45,6 +45,7 @@ const ChatSettingsScreen = lazy(() => import('../settings/ChatSettingsScreen').t
 const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ DisplayScreen }) => ({ default: DisplayScreen })));
 const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageScreen }) => ({ default: UsageScreen })));
 const NoticesScreen = lazy(() => import('../settings/NoticesSection').then(({ NoticesScreen }) => ({ default: NoticesScreen })));
+const SentScreen = lazy(() => import('../settings/SentSection').then(({ SentScreen }) => ({ default: SentScreen })));
 const LabsScreen = lazy(() => import('../settings/LabsScreen').then(({ LabsScreen }) => ({ default: LabsScreen })));
 const TranslatorScreen = lazy(() => import('../settings/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
 const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
@@ -122,6 +123,8 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
         return <UsageScreen back={back(at)} />;
       case 'notices':
         return <NoticesScreen back={back(at)} />;
+      case 'sent':
+        return <SentScreen back={back(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
       case 'feature':

@@ -58,6 +58,7 @@ const EXAMPLES = {
   ],
   usage: [{ kind: 'usage' }],
   notices: [{ kind: 'notices' }],
+  sent: [{ kind: 'sent' }],
   admin: [{ kind: 'admin' }],
   'admin-list': [{ kind: 'admin-list', list: 'accounts' }, { kind: 'admin-list', list: 'reports' }, { kind: 'admin-list', list: 'log' }],
   'chat-settings': [{ kind: 'chat-settings' }],

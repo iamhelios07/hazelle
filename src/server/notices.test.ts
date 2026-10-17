@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { UNREAD_NOTICES_HEADER } from '../contracts/http';
 import { testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -14,7 +15,7 @@ beforeEach(async () => {
 // The first signup of an installation is its operator, so a test calls this before t.signUp().
 const operator = () => t.signUp('operator');
 
-type Notice = { id: number; reportId: number | null; text: string; createdAt: number };
+type Notice = { id: number; reportId: number | null; text: string; createdAt: number; question: string | null };
 const read = async (cookie: string) => ((await (await t.get('notices', cookie)).json()) as { notices: Notice[] }).notices;
 const unread = async (cookie: string) => ((await (await t.get('session', cookie)).json()) as { session: { unreadNotices: number } }).session.unreadNotices;
 const log = async (cookie: string) => ((await (await t.get('admin/log', cookie)).json()) as { log: { action: string; target: string; detail: unknown }[] }).log;
@@ -29,7 +30,7 @@ it('sends a notice to one account, which that account reads and no other does, a
   expect((await t.post('admin/notices', { to: to.id, text: 'x'.repeat(2001) }, admin.cookie)).status).toBe(400);
   expect((await t.post('admin/notices', { to: crypto.randomUUID(), text: '없는 계정' }, admin.cookie)).status).toBe(404);
 
-  expect(await read(to.cookie)).toEqual([{ id: expect.any(Number), reportId: null, text: '점검이 끝났어요', createdAt: expect.any(Number) }]);
+  expect(await read(to.cookie)).toEqual([{ id: expect.any(Number), reportId: null, text: '점검이 끝났어요', createdAt: expect.any(Number), question: null }]);
   expect(await read(other.cookie)).toEqual([]);
   expect(await log(admin.cookie)).toEqual([{ id: expect.any(Number), at: expect.any(Number), action: 'send-notice', target: to.id, detail: { username: 'to', report: null } }]);
 });
@@ -72,7 +73,7 @@ it('replies on resolving a report in the one batch: a resolve that fails leaves 
 
   expect((await t.post(`admin/reports/${report}/resolve`, { reply: '고쳤어요' }, admin.cookie)).status).toBe(204);
   expect((await t.post(`admin/reports/${report}/resolve`, { reply: '또 고쳤어요' }, admin.cookie)).status).toBe(404);
-  expect(await read(sender.cookie)).toEqual([{ id: expect.any(Number), reportId: report, text: '고쳤어요', createdAt: expect.any(Number) }]);
+  expect(await read(sender.cookie)).toEqual([{ id: expect.any(Number), reportId: report, text: '고쳤어요', createdAt: expect.any(Number), question: '그림이 안 열려요' }]);
   expect((await log(admin.cookie)).map(({ action }) => action)).toEqual(['send-notice', 'resolve-report']);
 
   // A reply its sender can no longer read resolves nothing: the account that sent it is gone.
@@ -108,4 +109,29 @@ it("goes with the account it is to, so an account reusing its id reads nothing o
   const again = await t.signUp('again', gone.id);
   await t.env.db.prepare('UPDATE accounts SET created_at = created_at + 1 WHERE id = ?').bind(again.id).run();
   expect(await read(again.cookie)).toEqual([]);
+});
+
+it('lists what an account sent with its state and reply, and tells the unread count on a sync and on marking seen', async () => {
+  const admin = await operator();
+  const sender = await t.signUp('sender');
+  const other = await t.signUp('other');
+  for (const text of ['답해 주세요', '확인만', '아직']) await t.post('reports', { text }, sender.cookie);
+  await t.post('reports', { text: '남의 것' }, other.cookie);
+  const ids = (await t.env.db.prepare('SELECT id FROM reports WHERE account_id = ? ORDER BY id').bind(sender.id).all<{ id: number }>()).results.map(({ id }) => id);
+  await t.post(`admin/reports/${ids[0]}/resolve`, { reply: '고쳤어요' }, admin.cookie);
+  await t.post(`admin/reports/${ids[1]}/resolve`, undefined, admin.cookie);
+
+  const row = { createdAt: expect.any(Number), resolvedAt: expect.any(Number), reply: null };
+  expect(await (await t.get('reports', sender.cookie)).json()).toEqual({
+    next: null,
+    reports: [
+      { ...row, id: ids[2], text: '아직', resolvedAt: null },
+      { ...row, id: ids[1], text: '확인만' },
+      { ...row, id: ids[0], text: '답해 주세요', reply: '고쳤어요' },
+    ],
+  });
+
+  expect((await t.get('objects?since=0', sender.cookie)).headers.get(UNREAD_NOTICES_HEADER)).toBe('1');
+  const [reply] = await read(sender.cookie);
+  expect((await t.post('notices/seen', { id: reply!.id }, sender.cookie)).headers.get(UNREAD_NOTICES_HEADER)).toBe('0');
 });

@@ -22,15 +22,16 @@ const proven = ({ method, proof }: Proof) => ({ method, proof });
 
 // full: a write was refused for room and the account has not shrunk since, which another write or sync shows.
 // restoring: the server refused this account's objects while the operator restores it, and no store has answered since.
-export type Standing = { suspended: boolean; full: boolean; restoring: boolean; storage: Storage };
+// unreadNotices: as the session, then each sync, last said.
+export type Standing = { suspended: boolean; full: boolean; restoring: boolean; storage: Storage; unreadNotices: number };
 
 // A cap the operator changes is learned on the next page load.
 export class AccountFacts {
   private now: Standing;
   private readonly changes = new ChangeSignal();
 
-  constructor({ suspended, state, storage }: SessionFacts) {
-    this.now = { suspended, full: false, restoring: state === 'restoring', storage };
+  constructor({ suspended, state, storage, unreadNotices }: SessionFacts) {
+    this.now = { suspended, full: false, restoring: state === 'restoring', storage, unreadNotices };
   }
 
   readonly snapshot = (): Standing => this.now;
@@ -51,6 +52,8 @@ export class AccountFacts {
         return this.set({ ...now, restoring: false, full: now.full && now.storage.bytes !== null && heard.bytes >= now.storage.bytes, storage: { ...now.storage, bytes: heard.bytes } });
       case 'file-bytes':
         return this.set({ ...now, storage: { ...now.storage, fileBytes: heard.fileBytes } });
+      case 'notices':
+        return heard.unread === now.unreadNotices ? undefined : this.set({ ...now, unreadNotices: heard.unread });
     }
   };
 
@@ -74,7 +77,11 @@ export const deleteAccount = (credential: Proof) => api<undefined>('DELETE', 'ac
 export const sendReport = (text: string, diagnostics: string | null) =>
   api<undefined>('POST', 'reports', { text, diagnostics: diagnostics?.slice(0, MAX_DIAGNOSTICS_LENGTH) ?? null });
 
-export type Notice = { id: number; reportId: number | null; text: string; createdAt: number };
+// question: what a reply (reportId set) answers, null once that report was forgotten, a year after it was resolved.
+export type Notice = { id: number; reportId: number | null; text: string; createdAt: number; question: string | null };
 export const readNotices = (after: string | null, ask: { limit?: number } = {}) => page<'notices', Notice>('notices', 'notices', after, ask);
+// What this account sent the operator, newest first. reply: the operator's answer, null for none (yet).
+export type SentReport = { id: number; text: string; createdAt: number; resolvedAt: number | null; reply: string | null };
+export const readSentReports = (after: string | null, ask: { limit?: number } = {}) => page<'reports', SentReport>('reports', 'reports', after, ask);
 // newest: the newest notice shown, so one sent since stays unread.
 export const markNoticesSeen = (newest: number) => api<undefined>('POST', 'notices/seen', { id: newest });

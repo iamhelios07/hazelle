@@ -41,6 +41,7 @@ export type Route =
   | { kind: 'account'; section: AccountSection | null }
   | { kind: 'usage' }
   | { kind: 'notices' }
+  | { kind: 'sent' }
   | { kind: 'chat-settings' }
   | { kind: 'feature'; feature: Feature }
   | { kind: 'display' }
@@ -137,6 +138,7 @@ export function parseRoute(at: string): Route {
   }
   if (top === 'account' && id === 'usage' && sub === undefined) return { kind: 'usage' };
   if (top === 'account' && id === 'notices' && sub === undefined) return { kind: 'notices' };
+  if (top === 'account' && id === 'sent' && sub === undefined) return { kind: 'sent' };
   if (top === 'settings' && id === 'chat') {
     if (sub === undefined) return { kind: 'chat-settings' };
     const feature = FEATURES.find((candidate) => candidate === sub);
@@ -212,6 +214,8 @@ export function href(route: Route): string {
       return '/account/usage';
     case 'notices':
       return '/account/notices';
+    case 'sent':
+      return '/account/sent';
     case 'chat-settings':
       return '/settings/chat';
     case 'feature':
@@ -279,6 +283,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return 'admin';
     case 'usage':
     case 'notices':
+    case 'sent':
       return 'account';
     case 'chat-settings':
     case 'feature':
@@ -345,6 +350,7 @@ export function up(route: Below, chatShelf?: string | null): Route {
       return { kind: 'settings' };
     case 'usage':
     case 'notices':
+    case 'sent':
       return { kind: 'account', section: null };
     case 'admin-list':
       return { kind: 'admin' };

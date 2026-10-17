@@ -84,7 +84,7 @@ export const MODEL_SETTINGS = '모델 설정';
 
 // What passes between a person and the operator, always said with its direction. from: what the operator sent, on the
 // person's page. received: what people sent, on the operator's page. send: the operator sending one.
-export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
+export const NOTICES = { from: '운영자가 보낸 알림', sent: '내가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
 
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
 export const inFeature = (feature: Feature) => `${inSettings('chat')} › ${FEATURE_NAMES[feature]}`;

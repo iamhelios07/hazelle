@@ -15,6 +15,7 @@ import { Diagnostics } from './Diagnostics';
 import { LeaveSection } from './LeaveSection';
 import { NewsSection } from './NewsSection';
 import { NoticesSection } from './NoticesSection';
+import { SentSection } from './SentSection';
 import { SharedLinksSection } from './SharedLinksSection';
 
 // bytes is null while the server could not read it; a meter only where both it and the cap are known.
@@ -93,6 +94,7 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
       <Columns min="panel">
         <Stack gap="section">
           <NoticesSection head seek={section === 'notices'} />
+          <SentSection head />
           <Panel title="앱 정보">
             <SettingGroup label="앱 정보">
               <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />

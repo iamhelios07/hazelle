@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 import type { RestoreAction } from '../contracts/admin';
 import { CAP } from './caps';
 import { checkProof, findAccount, hashProof, outsideVisitor, readMethod, readProof } from './credentials';
-import { VISIBLE } from './admin';
+import { UNREAD_NOTICES } from './admin';
 import { fail, ID, readObject, type Account, type AppEnv } from './http';
 import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
 import { canWrite, currentAccount, dropSessionCookie, endOtherSessions, endSession, requireOwnSession, requireSession, setSessionCookie, startSession } from './session';
@@ -154,7 +154,7 @@ async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'usern
     store(c.env, incarnation).usage(incarnation),
     c.env.db.prepare(
       `SELECT ${CAP.bytes} AS bytesCap, file_bytes AS fileBytes, ${CAP.fileBytes} AS fileBytesCap,
-         (SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AND notices.id > accounts.notices_seen) AS unreadNotices
+         ${UNREAD_NOTICES} AS unreadNotices
        FROM accounts WHERE incarnation = ?`,
     )
       .bind(incarnation)

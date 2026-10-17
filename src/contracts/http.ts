@@ -1,6 +1,9 @@
 // An answer that changed or read an account's counts carries them, so the page holding the account stays current.
 export const ACCOUNT_USAGE_HEADERS = { bytes: 'x-account-bytes', fileBytes: 'x-account-file-bytes' } as const;
 export const ACCOUNT_HEADER = 'x-account';
+// The account's unread notices, on the answers a page keeps asking for (its sync) and on marking them seen, so a notice
+// sent while the page is open is told without a reload.
+export const UNREAD_NOTICES_HEADER = 'x-unread-notices';
 // The release the server runs, on every API answer, so a page built from an older one can offer a reload.
 export const VERSION_HEADER = 'x-hazelle-version';
 export const RELAY_HEADER = 'x-relay';
