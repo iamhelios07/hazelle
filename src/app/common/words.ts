@@ -37,6 +37,7 @@ export const CARD_WRITE_ASK_HELP = '허용하면 이 캐릭터의 배경 HTML이
 export const BOT_STUCK = '봇 스크립트가 끝나지 않아서 멈췄어요';
 
 export const TOOL = '도구';
+export const RISU_PLUGIN = 'Risu 플러그인';
 export const MODULE_MODELS = '모델 호출';
 export const MODULE_MODELS_HELP = '이 모듈이 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.';
 export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 추가로 호출하려고 해요' };

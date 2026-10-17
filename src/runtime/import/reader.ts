@@ -1,4 +1,5 @@
-import { readTool, TOOL_FILE_BYTES } from '../../engine/import/tool';
+import { readToolFile } from '../../engine/import/risu-plugin';
+import { TOOL_FILE_BYTES } from '../../engine/import/tool';
 import { readBackup } from '../../engine/import/backup';
 import { importCard, importRisum } from '../../engine/import/card';
 import { importPreset, isPresetFile } from '../../engine/import/preset';
@@ -51,7 +52,7 @@ export class ImportReader {
         const tool = request.file.name.toLowerCase().endsWith('.js');
         if (tool && request.file.size > TOOL_FILE_BYTES) return { ok: false, failure: { kind: 'unreadable', detail: 'tool-too-large' } };
         const bytes = new Uint8Array(await request.file.arrayBuffer());
-        if (tool) return readTool(bytes);
+        if (tool) return readToolFile(bytes);
         if (isPresetFile(request.file.name)) {
           const read = await importPreset(request.file.name, bytes);
           if (read.ok) return { ok: true, preset: { prompt: read.prompt, regex: read.regex, unsupported: read.unsupported } };

@@ -23,11 +23,11 @@ import { describeFailure } from '../common/failure';
 import { ImportContext } from '../common/importing';
 import { sizeText } from '../common/size';
 import { useSearch } from '../common/useSearch';
-import { moduleName, NO_CHARACTER, promptName } from '../common/words';
+import { moduleName, NO_CHARACTER, promptName, RISU_PLUGIN } from '../common/words';
 import { useFiles, useLibrary, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
-import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Menu, MenuItem, pickFiles, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
+import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Hint, Menu, MenuItem, pickFiles, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
 import { characterOutcome, chatOutcome, moduleOutcome, personaOutcome, promptOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
 import { missedLines, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
@@ -61,9 +61,9 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요.',
 };
 
-// Keyed by the failure details of engine/import/tool, of a chat file, of a preset (PresetFailure), of a persona PNG
-// (engine/import/persona) and of the size limits (engine/import/inflate TooLarge); a detail missing here reads as
-// 파일을 읽지 못했어요.
+// Keyed by the failure details of engine/import/tool and risu-plugin, of a chat file, of a preset (PresetFailure), of a
+// persona PNG (engine/import/persona) and of the size limits (engine/import/inflate TooLarge); a detail missing here
+// reads as 파일을 읽지 못했어요.
 const DETAIL_FAILURE: Record<string, string> = {
   'other-version': '이전 버전에서 만든 채팅 파일이라 가져올 수 없어요.',
   'not-preset': 'Risu 파일이지만 프리셋 파일이 아니에요.',
@@ -79,6 +79,8 @@ const DETAIL_FAILURE: Record<string, string> = {
   'tool-composer': '입력창 줄을 읽지 못했어요.',
   'tool-uses': '//@uses에는 model, embed, memory만 쓸 수 있어요.',
   'tool-unknown': '알 수 없는 줄이에요.',
+  'risu-old': `예전 버전의 ${RISU_PLUGIN}이라 가져올 수 없어요. API 3.0 플러그인만 쓸 수 있어요.`,
+  'risu-name': '//@name이 꼭 있어야 하고, 글자와 숫자, _ . - 기호만 쓸 수 있어요.',
   'persona-unreadable': 'Risu 페르소나 PNG 파일이지만 내용을 읽지 못했어요.',
   'persona-incomplete': '이름이나 설명이 빠진 페르소나라 가져올 수 없어요.',
   'expands-too-far': `압축을 풀면 파일 크기의 ${EXPANSION}배가 넘어서 가져올 수 없어요.`,
@@ -367,7 +369,7 @@ function Summary({ result }: { result: ImportOutcome }) {
   return (
     <Section level={3} title={result.title}>
       <Text>{result.holds}</Text>
-      {[result.placed, result.paired].map((line, index) => line && (line.failed ? <Callout key={index} tone="warn">{line.text}</Callout> : <Text key={index}>{line.text}</Text>))}
+      {[result.verdict, result.placed, result.paired].map((line, index) => line && (line.failed ? <Callout key={index} tone="warn">{line.text}{line.help && <Hint label={line.help.label}>{line.help.text}</Hint>}</Callout> : <Text key={index}>{line.text}</Text>))}
       {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
       {result.unused && <Text variant="note">{result.unused}</Text>}
     </Section>

@@ -3,7 +3,9 @@ import { expect, it } from 'vitest';
 import { importCard } from '../../engine/import/card';
 import type { ImportedModule } from '../../engine/import/types';
 import { convertPreset } from '../../engine/import/preset';
-import { characterOutcome, moduleOutcome, promptOutcome, toolOutcome, type Placement } from './importOutcome';
+import { readToolFile } from '../../engine/import/risu-plugin';
+import { RISU_DECLINED } from '../../tool-api/risu-methods';
+import { characterOutcome, DECLINED_WORDS, moduleOutcome, promptOutcome, toolOutcome, type Placement } from './importOutcome';
 
 it('keeps completed card and module reports as detached text without asset readers or source bytes', () => {
   const parsed = importCard('card.json', new TextEncoder().encode(JSON.stringify({ spec: 'chara_card_v3', data: { name: 'Mira', first_mes: 'Hi' } })));
@@ -13,8 +15,8 @@ it('keeps completed card and module reports as detached text without asset reade
   const card = characterOutcome('card.charx', imported, { id: 'character', unsupported: [{ kind: 'unsupported-file', count: 1 }], faceless: true });
   const module: ImportedModule = { name: 'Bell', description: '', namespace: null, risu: null, pack: imported.card, lore: [], loreFolders: [], assets: imported.assets, unsupported: [] };
   const report = moduleOutcome('bell.risum', module, 'module', [], { at: null, failure: null }, { prompts: [], failure: null });
-  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', placed: null, paired: null, missed: ['이미지: 가져오지 못함', '지원하지 않는 형식의 파일 1개'], unused: null });
-  expect(report).toEqual({ kind: 'module', file: 'bell.risum', id: 'module', title: '모듈 · Bell', holds: '에셋 1개', placed: { text: '아직 어디에도 켜지 않았어요. 설정 › 모듈에서 켤 수 있어요.', failed: false }, paired: null, missed: [], unused: null });
+  expect(card).toEqual({ kind: 'character', file: 'card.charx', id: 'character', title: 'Mira', holds: '첫인사 1개', verdict: null, placed: null, paired: null, missed: ['이미지: 가져오지 못함', '지원하지 않는 형식의 파일 1개'], unused: null });
+  expect(report).toEqual({ kind: 'module', file: 'bell.risum', id: 'module', title: '모듈 · Bell', holds: '에셋 1개', verdict: null, placed: { text: '아직 어디에도 켜지 않았어요. 설정 › 모듈에서 켤 수 있어요.', failed: false }, paired: null, missed: [], unused: null });
   expect(structuredClone([card, report])).toEqual([card, report]);
   imported.card.name = 'Changed';
   imported.assets.length = 0;
@@ -51,4 +53,19 @@ it('names the slot a preset placed twice, and the modules its prompt was turned 
   const outcome = promptOutcome('nureong.risup', read, 'prompt', ['누렁이모듈']);
   expect(outcome).toMatchObject({ kind: 'prompt', title: '프롬프트 · 누렁이', holds: '블록 2개', paired: { text: "'누렁이모듈' 모듈을 이 프롬프트에 켰어요.", failed: false } });
   expect(outcome.missed[0]).toBe('겹친 페르소나 블록 1개(처음 것만 가져옴)');
+});
+
+it('says how much of a Risu plugin works, wording declined names apart from those not mapped yet', () => {
+  const verdict = (source: string) => {
+    const read = readToolFile(new TextEncoder().encode(`//@name plug\n//@api 3.0\n${source}`));
+    if (!read.ok) throw new Error('fixture');
+    return toolOutcome('plug.js', read.tool.manifest, { id: 'm', previous: null }, { at: null, failure: null }).verdict;
+  };
+  expect(verdict('risuai.showContainer("fullscreen")')).toEqual({ text: 'Risu 플러그인 기능이 다 돼요.', failed: false });
+  expect(verdict('risuai.sendChat(); risuai.getRootDocument(); risuai.getDatabase()')).toEqual({
+    text: 'Risu 플러그인 기능 중 일부는 빠져요.', failed: true,
+    help: { label: '빠지는 기능', text: '앞으로도 지원하지 않아요: 사용자 대신 메시지 보내기, 앱 화면 직접 바꾸기. 아직 지원하지 않아요: getDatabase.' },
+  });
+  expect(verdict('start(risuai)')).toMatchObject({ text: 'Risu 플러그인 기능이 다 되는지 확인하지 못했어요.', failed: true });
+  expect([...RISU_DECLINED].filter((name) => !DECLINED_WORDS[name])).toEqual([]);
 });
