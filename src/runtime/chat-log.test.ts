@@ -99,7 +99,7 @@ describe('copyShown', () => {
     const chat = crypto.randomUUID();
     await server.hold(store, chat);
     await startChat(store, chat, { title: null, character: null, models: {} }, null);
-    const receipt: Receipt = { id: crypto.randomUUID(), connection: 'c', source: 'S', model: 'm', modelName: 'M', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, at: 1 };
+    const receipt: Receipt = { id: crypto.randomUUID(), connection: 'c', source: 'S', model: 'm', modelName: 'M', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: null, totalMs: 1, cache: null };
     const [first, swipe] = [crypto.randomUUID(), crypto.randomUUID()];
     await appendReply(store, chat, { id: first, message: null, replaces: null, at: 1, text: '첫 답', receipt });
     await appendReply(store, chat, { id: swipe, message: first, replaces: null, at: 2, text: '둘째 답', receipt });
