@@ -25,9 +25,9 @@ const AREAS = {
   destination: { paths: ['src/connectors/destination'], why: 'how an address is matched against the operator\'s local providers is shared by 직접 연결 and the server\'s outbound policy, so it imports nothing.' },
   engine: {
     paths: ['src/engine'],
-    imports: ['connectors'],
-    types: ['model', 'toolApi'],
-    why: 'the engine stays free of UI, network, storage and server code so its golden tests run in node, and takes only types from the model.',
+    imports: ['connectors', 'toolApi'],
+    types: ['model'],
+    why: 'the engine stays free of UI, network, storage and server code so its golden tests run in node, and takes only types from the model; the tool contract imports no application code, so its values keep the engine node-pure.',
   },
   model: {
     paths: ['src/model'],

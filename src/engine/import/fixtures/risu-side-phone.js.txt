@@ -1,0 +1,26 @@
+//@name Webso_Phone_v0.1.0
+//@display-name 사이드폰 플러그인
+//@api 3.0
+//@version 0.1.0
+//@arg auto_mode int 자동 모드: 0(끔·기본) 또는 1(켬·매 턴 자동 추출)
+//@arg comment_model string 호출 모델: submodel(보조·기본) 또는 model(일반)
+//@arg owner_name string 폰 주인 이름 (비우면 자동 감지)
+//@arg array_cap int 각 앱 배열 상한 (15~50, 기본 25)
+//@arg first_run_turns int 첫 실행 시 추출할 최근 턴 수 (1~10, 기본 3)
+      const i = await risuai.getCurrentCharacterIndex();
+      const i = await risuai.getCurrentChatIndex();
+    const arg = async (k) => overrides[k] !== undefined ? overrides[k] : await risuai.getArgument(k);
+      const raw = await risuai.pluginStorage.getItem(key);
+      await risuai.pluginStorage.setItem(key, JSON.stringify(value));
+      res = await risuai.runLLMModel({ messages, mode });
+          res = await risuai.runLLMModel({ messages, mode });
+      const ci = await risuai.getCurrentCharacterIndex();
+      const chi = await risuai.getCurrentChatIndex();
+      const chat = await risuai.getChatFromIndex(ci, chi);
+      const char = await risuai.getCharacter();
+    await risuai.showContainer('fullscreen');
+          src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.0/RIDIBatang.woff') format('woff');
+    document.getElementById('sp-backdrop').addEventListener('click', () => risuai.hideContainer());
+    document.getElementById('sp-close').addEventListener('click', () => risuai.hideContainer());
+    await risuai.registerButton(
+    await risuai.addRisuReplacer('afterRequest', async (content, type) => {

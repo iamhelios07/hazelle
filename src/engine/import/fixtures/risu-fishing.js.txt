@@ -1,0 +1,30 @@
+//@name risu_fishing
+//@api 3.0
+//@version 1.2.3
+//@update-url https://raw.githubusercontent.com/bampibubu-blip/risu-fishing/main/risu_fishing.js
+//@display-name 🎣 리스 낚시터
+//@link https://github.com/bampibubu-blip/risu-fishing 사용법과 업데이트
+//@link https://github.com/bampibubu-blip/risu-fishing/issues 버그 제보
+//@arg image_base string 물고기 그림 폴더 주소. 비워 두면 기본 그림, none을 넣으면 이모지만 써요.
+    const raw = await Risuai.pluginStorage.getItem(STORAGE_KEY);
+      try { await Risuai.pluginStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      await Risuai.registerButton(
+    try { char = await Risuai.getCharacter(); } catch (_) {}
+      const char = await Risuai.getCharacter();
+      const char = await Risuai.getCharacter();
+      try { res = await Risuai.runLLMModel({ ...t, messages }); }
+    'https://cdn.jsdelivr.net/gh/bampibubu-blip/risu-fishing@main/fish',
+    'https://raw.githubusercontent.com/bampibubu-blip/risu-fishing/main/fish',
+    try { v = String((await Risuai.getArgument('image_base')) || '').trim().replace(/\/+$/, ''); } catch (_) {}
+    await Risuai.showContainer('fullscreen');
+    try { await Risuai.pluginStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+    await Risuai.hideContainer();
+  await reg('채팅 메뉴 버튼', () => Risuai.registerButton(
+  await reg('설정 메뉴', () => Risuai.registerSetting('리스 낚시터', () => open('fish'), '🎣', 'html', 'risu-fishing-setting'));
+  await reg('사이드바 버튼', () => Risuai.registerButton(
+  await reg('언로드 콜백', () => Risuai.onUnload(async () => {
+      try { await Risuai.removeRisuReplacer('afterRequest', onAfterRequest); } catch (_) {}
+    try { await Risuai.pluginStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+      const ok = await Risuai.requestPluginPermission('replacer');
+      await Risuai.addRisuReplacer('afterRequest', onAfterRequest);
+      await Risuai.addRisuChatListener('output', onChatOutput);

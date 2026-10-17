@@ -11,7 +11,12 @@ const USES: readonly ToolUse[] = ['model', 'embed', 'memory'];
 export type ImportedTool = { manifest: ToolManifest; bytes: Uint8Array<ArrayBuffer> };
 export type ToolRead = { ok: true; tool: ImportedTool } | { ok: false; failure: ImportFailure };
 const HEADER_KEYS = new Set(['api', 'name', 'author', 'display-name', 'version', 'description', 'page']);
-const identity = (value: string) => /^[\p{L}\p{N}_.-]+$/u.test(value);
+export const identity = (value: string) => /^[\p{L}\p{N}_.-]+$/u.test(value);
+// written: the line as the file has it, quoted back in a failure.
+export type HeaderLine = { key: string; value: string; written: string };
+// header: the leading //@ lines, blank lines between them skipped; body: the code after them.
+export type ToolText = { ok: true; header: HeaderLine[]; body: string } | { ok: false; failure: ImportFailure };
+export const failed = (detail: string, line?: string): { ok: false; failure: ImportFailure } => ({ ok: false, failure: { kind: 'unreadable', detail, ...(line && { line }) } });
 
 export function fieldValue(field: ToolField, value: unknown): value is Settings[string] {
   switch (field.type) {
@@ -35,23 +40,32 @@ function fieldOf(value: unknown): ToolField | null {
   return field;
 }
 
-export function readTool(bytes: Uint8Array<ArrayBuffer>): ToolRead {
-  const failed = (detail: string, line?: string): ToolRead => ({ ok: false, failure: { kind: 'unreadable', detail, ...(line && { line }) } });
+export function toolText(bytes: Uint8Array<ArrayBuffer>): ToolText {
   if (bytes.byteLength > TOOL_FILE_BYTES) return failed('tool-too-large');
   let code: string;
   try { code = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
   catch { return failed('tool-encoding'); }
+  const lines = code.split(/\r?\n/);
+  const header: HeaderLine[] = [];
+  let next = 0;
+  for (; next < lines.length; next++) {
+    const line = lines[next]!;
+    if (!line.trim()) continue;
+    const match = /^\s*\/\/@([\w-]+)(?:\s+(.*))?$/.exec(line);
+    if (!match) break;
+    header.push({ key: match[1]!, value: match[2]?.trim() ?? '', written: line.trim() });
+  }
+  return { ok: true, header, body: lines.slice(next).join('\n') };
+}
+
+export function readTool(bytes: Uint8Array<ArrayBuffer>): ToolRead {
+  const text = toolText(bytes);
+  if (!text.ok) return text;
   const header = new Map<string, string>();
   const manifest: ToolManifest = { api: 1, name: '', author: '', displayName: '', version: '', description: '', uses: [], page: null, menu: [], settings: [], actions: [], composer: null };
   const actions = manifest.actions!;
   let unknown: string | null = null;
-  for (const line of code.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    const match = /^\s*\/\/@([\w-]+)(?:\s+(.*))?$/.exec(line);
-    if (!match) break;
-    const [, key, raw] = match;
-    const value = raw?.trim() ?? '';
-    const written = line.trim();
+  for (const { key, value, written } of text.header) {
     if (key === 'setting') {
       let json: unknown;
       try { json = JSON.parse(value); } catch { return failed('tool-setting', written); }
@@ -73,12 +87,12 @@ export function readTool(bytes: Uint8Array<ArrayBuffer>): ToolRead {
       const use = USES.find((each) => each === value);
       if (!use) return failed('tool-uses', written);
       if (!manifest.uses.includes(use)) manifest.uses.push(use);
-    } else if (HEADER_KEYS.has(key!)) header.set(key!, value);
+    } else if (HEADER_KEYS.has(key)) header.set(key, value);
     else unknown ??= written;
   }
   if (!manifest.composer && manifest.settings.some((field) => field.composer)) return failed('tool-composer');
   if (header.get('api') !== '1') return failed('tool-api');
-  // After the api check, so a file for another app (a Risu plugin's //@arg) is told it is not a tool at all.
+  // After the api check, so a file for another app is told it is not a tool at all.
   if (unknown) return failed('tool-unknown', unknown);
   const name = header.get('name') ?? '';
   const author = header.get('author') ?? '';
