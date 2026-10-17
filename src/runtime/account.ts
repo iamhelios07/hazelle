@@ -75,6 +75,6 @@ export const sendReport = (text: string, diagnostics: string | null) =>
   api<undefined>('POST', 'reports', { text, diagnostics: diagnostics?.slice(0, MAX_DIAGNOSTICS_LENGTH) ?? null });
 
 export type Notice = { id: number; reportId: number | null; text: string; createdAt: number };
-export const readNotices = (before: number | null) => page<'notices', Notice>('notices', 'notices', before);
+export const readNotices = (after: string | null, ask: { limit?: number } = {}) => page<'notices', Notice>('notices', 'notices', after, ask);
 // newest: the newest notice shown, so one sent since stays unread.
 export const markNoticesSeen = (newest: number) => api<undefined>('POST', 'notices/seen', { id: newest });

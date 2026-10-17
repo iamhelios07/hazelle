@@ -92,7 +92,7 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
       </Columns>
       <Columns min="panel">
         <Stack gap="section">
-          <NoticesSection seek={section === 'notices'} />
+          <NoticesSection head seek={section === 'notices'} />
           <Panel title="앱 정보">
             <SettingGroup label="앱 정보">
               <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />

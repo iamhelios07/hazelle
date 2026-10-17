@@ -2,10 +2,11 @@ import { readLog, type LogRow } from '../../runtime/admin';
 import { sizeText } from '../common/size';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
-import { Empty, List, ListItem, Panel } from '../ui';
+import { navigate } from '../shell/router';
+import { Button, Empty, List, ListItem, Panel } from '../ui';
 import { restoreError } from '../common/RestoresDialog';
 import { moment } from '../common/time';
-import { usePages } from '../common/useLoaded';
+import { HEAD_ROWS, usePages } from '../common/useLoaded';
 
 // The actions server/admin logs. One it does not list shows as the server wrote it.
 const ACTIONS: Record<string, string> = {
@@ -51,11 +52,12 @@ function codeOf({ target, detail }: LogRow): string | undefined {
   return typeof (detail as Record<string, unknown> | null)?.username === 'string' ? undefined : target;
 }
 
-export function LogSection() {
-  const pages = usePages(readLog);
+// head: the newest few, which 운영 shows.
+export function LogSection({ head }: { head: boolean }) {
+  const pages = usePages((after) => readLog(after, head ? { limit: HEAD_ROWS } : {}));
   const { rows } = pages;
   return (
-    <Panel title="기록">
+    <Panel title="기록" action={head && !pages.whole ? <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'admin-list', list: 'log' })}>모두 보기</Button> : undefined}>
       {pages.failure}
       {rows && rows.length === 0 && <Empty variant="section">아직 기록이 없어요.</Empty>}
       {rows && rows.length > 0 && (
@@ -65,7 +67,7 @@ export function LogSection() {
           ))}
         </List>
       )}
-      {pages.more}
+      {!head && pages.more}
     </Panel>
   );
 }

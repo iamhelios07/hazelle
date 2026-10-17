@@ -59,6 +59,8 @@ describe('the operator', () => {
       { ...row, accountId: leaving.id, username: 'leaving', state: 'leaving', bytes: null, disk: null, fileBytes: 0 },
     ]);
     expect(answer.next).toBeNull();
+    const flagged = (await (await t.get('admin/accounts?flagged=1', admin.cookie)).json()) as { accounts: { accountId: string }[] };
+    expect(flagged.accounts.map(({ accountId }) => accountId)).toEqual([leaving.id]);
     expect(await (await t.get('admin/usage', admin.cookie)).json()).toEqual({ accounts: 3, totals: { bytes: 40 + 4 * ROW_BYTES.object, disk: expect.any(Number), unread: 1, readAt: expect.any(Number) }, next: null });
     expect(await (await t.get('admin/service', admin.cookie)).json()).toMatchObject({ accounts: 3, people: 2 });
   });
@@ -92,6 +94,23 @@ describe('the operator', () => {
     } finally {
       t.env.stores = stores;
     }
+  });
+
+  it('pages a newest-first list by limit and next, and narrows reports to the open ones', async () => {
+    const admin = await operator();
+    const other = await t.signUp('other');
+    for (const text of ['one', 'two', 'three']) await t.post('reports', { text }, other.cookie);
+    type Page = { reports: { id: number; text: string }[]; next: string | null };
+    const listed = async (query: string) => {
+      const page = (await (await t.get(`admin/reports?${query}`, admin.cookie)).json()) as Page;
+      return [page.reports.map(({ text }) => text), page.next];
+    };
+    const first = (await (await t.get('admin/reports?limit=2', admin.cookie)).json()) as Page;
+    expect([first.reports.map(({ text }) => text), first.next]).toEqual([['three', 'two'], String(first.reports[1]!.id)]);
+    expect(await listed(`limit=2&after=${first.next}`)).toEqual([['one'], null]);
+    await t.post(`admin/reports/${first.reports[0]!.id}/resolve`, undefined, admin.cookie);
+    expect(await listed('open=1')).toEqual([['two', 'one'], null]);
+    expect((await t.get('admin/reports?limit=101', admin.cookie)).status).toBe(400);
   });
 
   it('keeps at most fifty store reads in flight and answers the ones unsettled at the deadline as unread', async () => {

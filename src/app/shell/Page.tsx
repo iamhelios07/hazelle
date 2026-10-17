@@ -19,6 +19,7 @@ import { SettingsList, settingsEntry } from './settings/SettingsNav';
 
 const ToolPageScreen = lazy(() => import('../modules/ToolPageScreen').then(({ ToolPageScreen }) => ({ default: ToolPageScreen })));
 const AdminScreen = lazy(() => import('../admin/AdminScreen').then(({ AdminScreen }) => ({ default: AdminScreen })));
+const AdminListScreen = lazy(() => import('../admin/AdminListScreen').then(({ AdminListScreen }) => ({ default: AdminListScreen })));
 const ChatScreen = lazy(() => import('../chat/ChatScreen').then(({ ChatScreen }) => ({ default: ChatScreen })));
 const ConnectionAddScreen = lazy(() => import('../connections/ConnectionAddScreen').then(({ ConnectionAddScreen }) => ({ default: ConnectionAddScreen })));
 const ConnectionDirectScreen = lazy(() => import('../connections/ConnectionDirectScreen').then(({ ConnectionDirectScreen }) => ({ default: ConnectionDirectScreen })));
@@ -43,6 +44,7 @@ const FeatureScreen = lazy(() => import('../settings/FeatureScreen').then(({ Fea
 const ChatSettingsScreen = lazy(() => import('../settings/ChatSettingsScreen').then(({ ChatSettingsScreen }) => ({ default: ChatSettingsScreen })));
 const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ DisplayScreen }) => ({ default: DisplayScreen })));
 const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageScreen }) => ({ default: UsageScreen })));
+const NoticesScreen = lazy(() => import('../settings/NoticesSection').then(({ NoticesScreen }) => ({ default: NoticesScreen })));
 const LabsScreen = lazy(() => import('../settings/LabsScreen').then(({ LabsScreen }) => ({ default: LabsScreen })));
 const TranslatorScreen = lazy(() => import('../settings/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
 const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
@@ -118,6 +120,8 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
         return <AccountScreen section={at.section} back={sideBack(at)} />;
       case 'usage':
         return <UsageScreen back={back(at)} />;
+      case 'notices':
+        return <NoticesScreen back={back(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
       case 'feature':
@@ -130,7 +134,9 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
         return <LabsScreen back={sideBack(at)} />;
       // Its path can be typed by anyone; the server refuses every call but the operator's.
       case 'admin':
-        return <AdminPage back={sideBack(at)} closeSettings={closeSettings} />;
+        return <AdminPage closeSettings={closeSettings}><AdminScreen back={sideBack(at)} /></AdminPage>;
+      case 'admin-list':
+        return <AdminPage closeSettings={closeSettings}><AdminListScreen list={at.list} back={back(at)} /></AdminPage>;
       case 'share':
         return <ShareArrival id={at.id} />;
     }
@@ -243,7 +249,7 @@ function ModelPage({ at, back }: { at: At<'model'>; back: Back }) {
   return connection && model ? <ModelScreen key={`${connection.id}/${model.id}`} connection={connection} model={model} back={back} /> : <Missing what="model" back={back} />;
 }
 
-function AdminPage({ back, closeSettings }: { back: Back | null; closeSettings: () => void }) {
+function AdminPage({ closeSettings, children }: { closeSettings: () => void; children: ReactNode }) {
   const { admin } = useAccount();
-  return admin ? <AdminScreen back={back} /> : <SettingsList onClose={closeSettings} />;
+  return admin ? children : <SettingsList onClose={closeSettings} />;
 }

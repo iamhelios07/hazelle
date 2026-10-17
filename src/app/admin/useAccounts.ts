@@ -1,50 +1,27 @@
-import { useEffect, useState } from 'react';
-import { readAccounts, readAdminAccount, type AccountsPage } from '../../runtime/admin';
+import { readAccounts, readAdminAccount } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
+import { HEAD_ROWS, usePages } from '../common/useLoaded';
+import { useToast } from '../toast';
 
-// Not usePages: navigation replaces the page and goes back through the server's string cursors rather than appending
-// after the last row's id, and an account action refetches that account (gone when null) rather than patching it.
-// A failed reload keeps the same page visible; navigation never presents the previous page as the newly asked one.
-export function useAccounts() {
-  const [history, setHistory] = useState<(string | null)[]>([null]);
-  const [attempt, setAttempt] = useState(0);
-  const [shown, setShown] = useState<{ cursor: string | null; page: AccountsPage } | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const cursor = history.at(-1)!;
-  const data = shown?.cursor === cursor ? shown.page : null;
-  useEffect(() => {
-    const stop = new AbortController();
-    setBusy(true);
-    void readAccounts(cursor, stop.signal).then((answer) => {
-      if (stop.signal.aborted) return;
-      setBusy(false);
-      setFailure(answer.ok ? null : describeFailure(answer));
-      if (answer.ok) setShown({ cursor, page: answer.data });
-    });
-    return () => stop.abort();
-  }, [cursor, attempt]);
+// head: only the accounts suspended, restoring or leaving, the few 운영 shows; it is asked again after an act, which may
+// flag an account not in hand. The whole list refetches only the account acted on (gone when null), keeping the pages
+// read so far.
+export function useAccounts(head: boolean) {
+  const toast = useToast();
+  const pages = usePages((after) => readAccounts(after, head ? { flagged: true, limit: HEAD_ROWS } : {}));
 
   async function refresh(id: string) {
-    if (!data?.accounts.some(({ accountId }) => accountId === id)) return false;
+    if (!pages.rows?.some(({ accountId }) => accountId === id)) return;
     const answer = await readAdminAccount(id);
-    if (!answer.ok) {
-      setFailure(describeFailure(answer));
-      return false;
-    }
+    if (!answer.ok) return toast.error('계정을 다시 읽지 못했어요.', { detail: describeFailure(answer) });
     const account = answer.data.account;
-    setShown((current) => current && {
-      ...current,
-      page: { ...current.page, accounts: current.page.accounts.flatMap((row) => row.accountId === id ? account ? [account] : [] : [row]) },
-    });
-    return account === null;
+    pages.update((rows) => rows.flatMap((row) => (row.accountId === id ? (account ? [account] : []) : [row])));
   }
 
-  return {
-    data, failure, busy, refresh,
-    page: history.length,
-    previous: history.length > 1 ? () => setHistory((held) => held.slice(0, -1)) : null,
-    next: data?.next ? () => setHistory((held) => [...held, data.next]) : null,
-    reload: () => setAttempt((held) => held + 1),
-  };
+  function acted(id?: string) {
+    if (head) pages.reload();
+    else if (id) void refresh(id);
+  }
+
+  return { ...pages, head, acted };
 }

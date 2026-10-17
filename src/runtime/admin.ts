@@ -63,9 +63,8 @@ export type LogRow = { id: number; at: number; action: string; target: string; d
 export const readService = () => api<Service>('GET', 'admin/service');
 export const setService = (values: Pick<Service, 'signupCap' | 'accountBytesCap' | 'accountFileBytesCap'>) => api<undefined>('PUT', 'admin/service', values);
 
-export type AccountsPage = { accounts: AdminAccount[]; next: string | null };
-const afterQuery = (after: string | null) => after === null ? '' : `?after=${encodeURIComponent(after)}`;
-export const readAccounts = (after: string | null = null, signal?: AbortSignal) => api<AccountsPage>('GET', `admin/accounts${afterQuery(after)}`, undefined, signal);
+// flagged: only the accounts suspended, restoring or leaving.
+export const readAccounts = (after: string | null, ask: { flagged?: boolean; limit?: number } = {}) => page<'accounts', AdminAccount>('admin/accounts', 'accounts', after, ask);
 export const readAdminAccount = (account: string) => api<{ account: AdminAccount | null }>('GET', `admin/accounts/${account}`);
 // readAt: when the first page was read; later pages were read after it.
 export type ServiceUsage = Totals & { accounts: number };
@@ -77,7 +76,7 @@ export async function readServiceUsage(progress: (totals: ServiceUsage) => void,
   let total: ServiceUsage | null = null;
   do {
     if (signal.aborted) return { ok: false, error: 'stopped' };
-    const page: ApiResult<UsagePage> = await api<UsagePage>('GET', `admin/usage${afterQuery(next)}`, undefined, signal);
+    const page: ApiResult<UsagePage> = await api<UsagePage>('GET', `admin/usage${next === null ? '' : `?after=${encodeURIComponent(next)}`}`, undefined, signal);
     if (!page.ok) return page;
     const read: ServiceUsage = { ...page.data.totals, accounts: page.data.accounts };
     total = total === null ? read : {
@@ -102,10 +101,11 @@ export const setCaps = (account: string, caps: Pick<AdminAccount, 'bytesCap' | '
 // Also finishes the deletion of a leaving account.
 export const removeAccount = (account: string) => api<undefined>('DELETE', `admin/accounts/${account}`, undefined, undefined, SLOW_ROUTE_WAIT);
 
-export const readReports = (before: number | null) => page<'reports', Report>('admin/reports', 'reports', before);
+// open: only the reports not resolved.
+export const readReports = (after: string | null, ask: { open?: boolean; limit?: number } = {}) => page<'reports', Report>('admin/reports', 'reports', after, ask);
 // reply: a notice to the report's sender, sent with resolving it; blank sends none.
 export const resolveReport = (id: number, reply = '') => api<undefined>('POST', `admin/reports/${id}/resolve`, { reply });
-export const readLog = (before: number | null) => page<'log', LogRow>('admin/log', 'log', before);
+export const readLog = (after: string | null, ask: { limit?: number } = {}) => page<'log', LogRow>('admin/log', 'log', after, ask);
 
 export const setFileBlocked = (file: string, blocked: boolean) => api<undefined>('PUT', `admin/files/${file}/blocked`, { blocked });
 

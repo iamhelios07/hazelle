@@ -48,13 +48,13 @@ export const VISIBLE = '(notices.incarnation = accounts.incarnation OR (notices.
 export const notices = new Hono<AppEnv>()
   .use(requireSession)
   .get('/', async (c) => {
-    const rows = page(
+    const listed = await page(
       c,
       'SELECT id, report_id AS reportId, text, created_at AS createdAt FROM notices',
       `EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = ?3 AND ${VISIBLE})`,
       c.get('account').incarnation,
     );
-    return rows ? c.json({ notices: (await rows.all()).results }) : fail(c, 400, 'bad-input');
+    return listed ? c.json({ notices: listed.rows, next: listed.next }) : fail(c, 400, 'bad-input');
   })
   // id: the newest notice the page showed, so one sent since it was read stays unread.
   .post('/seen', async (c) => {
@@ -141,44 +141,44 @@ type Usage = { bytes: number; disk: number } | null;
 
 // Keyset pages stay bounded after deletions and do not scan an ever-growing OFFSET. The (created_at, id) index owns
 // this order; the cursor includes both because accounts can share their creation millisecond.
-function accountPage(c: Context<AppEnv>, columns: string) {
-  const after = c.req.query('after');
-  if (after === undefined) return c.env.db.prepare(`SELECT ${columns} FROM accounts ORDER BY created_at, id LIMIT ?`).bind(PAGE_ROWS);
-  const split = after.indexOf(':');
-  const at = Number(after.slice(0, split));
-  const id = after.slice(split + 1);
-  if (split < 1 || !count(at) || !ID.test(id)) return null;
-  return c.env.db.prepare(`SELECT ${columns} FROM accounts WHERE (created_at, id) > (?, ?) ORDER BY created_at, id LIMIT ?`).bind(at, id, PAGE_ROWS);
+async function accountPage<T extends Pick<AccountRow, 'accountId' | 'createdAt'>>(c: Context<AppEnv>, columns: string, where = 'TRUE') {
+  const after = c.req.query('after') ?? null;
+  const limit = limitOf(c);
+  const split = after?.indexOf(':') ?? 0;
+  const at = Number(after?.slice(0, split));
+  const id = after?.slice(split + 1) ?? '';
+  if (limit === null || (after !== null && (split < 1 || !count(at) || !ID.test(id)))) return null;
+  const rows = after === null
+    ? c.env.db.prepare(`SELECT ${columns} FROM accounts WHERE ${where} ORDER BY created_at, id LIMIT ?`).bind(limit)
+    : c.env.db.prepare(`SELECT ${columns} FROM accounts WHERE (created_at, id) > (?, ?) AND ${where} ORDER BY created_at, id LIMIT ?`).bind(at, id, limit);
+  const { results } = await rows.all<T>();
+  return { rows: results, next: results.length === limit ? `${results.at(-1)!.createdAt}:${results.at(-1)!.accountId}` : null };
 }
-
-const afterAccounts = (rows: Pick<AccountRow, 'accountId' | 'createdAt'>[]) =>
-  rows.length === PAGE_ROWS ? `${rows.at(-1)!.createdAt}:${rows.at(-1)!.accountId}` : null;
 
 // bytes, disk: what the account's store answered, null for an account not read by the deadline, failing, or not
 // active (restoring and leaving accounts are not called). fileBytes: the sum of its pictures. bytesCap, fileBytesCap:
 // its own caps, 'default' while the service's apply. Whole-service totals are read separately through /usage.
+// flagged: only the accounts suspended, restoring or leaving.
 admin.get('/accounts', async (c) => {
-  const page = accountPage(c, ACCOUNT_COLUMNS);
-  if (!page) return fail(c, 400, 'bad-input');
-  const { results } = await page.all<AccountRow>();
-  const usages = await accountUsage(c.env, results);
-  return c.json({ accounts: results.map((row, index) => shownAccount(row, usages[index]!)), next: afterAccounts(results) });
+  const listed = await accountPage<AccountRow>(c, ACCOUNT_COLUMNS, c.req.query('flagged') === '1' ? "(suspended_at IS NOT NULL OR state != 'active')" : 'TRUE');
+  if (!listed) return fail(c, 400, 'bad-input');
+  const usages = await accountUsage(c.env, listed.rows);
+  return c.json({ accounts: listed.rows.map((row, index) => shownAccount(row, usages[index]!)), next: listed.next });
 });
 
 // Each request calls only this page's stores and answers sums. Ordinary actions never start this scan.
 admin.get('/usage', async (c) => {
-  const page = accountPage(c, 'id AS accountId, created_at AS createdAt, state, incarnation');
-  if (!page) return fail(c, 400, 'bad-input');
-  const { results } = await page.all<Pick<AccountRow, 'accountId' | 'createdAt' | 'state' | 'incarnation'>>();
+  const listed = await accountPage<Pick<AccountRow, 'accountId' | 'createdAt' | 'state' | 'incarnation'>>(c, 'id AS accountId, created_at AS createdAt, state, incarnation');
+  if (!listed) return fail(c, 400, 'bad-input');
   const totals = { bytes: 0, disk: 0, unread: 0 };
-  for (const usage of await accountUsage(c.env, results)) {
+  for (const usage of await accountUsage(c.env, listed.rows)) {
     if (usage === null) totals.unread++;
     else {
       totals.bytes += usage.bytes;
       totals.disk += usage.disk;
     }
   }
-  return c.json({ totals: { ...totals, readAt: Date.now() }, accounts: results.length, next: afterAccounts(results) });
+  return c.json({ totals: { ...totals, readAt: Date.now() }, accounts: listed.rows.length, next: listed.next });
 });
 
 // A change refreshes only its row. A deleted account is absent rather than a reason to reload the service.
@@ -350,12 +350,24 @@ admin.put('/service', async (c) => {
   return c.body(null, 204);
 });
 
-// Newest first. before: the last id of the page before, for the next one. A page shorter than PAGE_ROWS is the last.
+// Every list pages alike: after is the next of the page before, limit the rows asked (PAGE_ROWS at most and when not
+// asked), and next is null on a page shorter than limit, the last. These lists run newest first, their cursor an id.
 // where: what else a row must meet, with its values from ?3 on.
-function page(c: Context<AppEnv>, select: string, where = 'TRUE', ...values: SqlValue[]) {
-  const before = c.req.query('before');
-  if (before !== undefined && !/^[1-9]\d{0,15}$/.test(before)) return null;
-  return c.env.db.prepare(`${select} WHERE (?1 IS NULL OR id < ?1) AND ${where} ORDER BY id DESC LIMIT ?2`).bind(before === undefined ? null : Number(before), PAGE_ROWS, ...values);
+async function page<T extends { id: number }>(c: Context<AppEnv>, select: string, where = 'TRUE', ...values: SqlValue[]) {
+  const after = c.req.query('after');
+  const limit = limitOf(c);
+  if ((after !== undefined && !/^[1-9]\d{0,15}$/.test(after)) || limit === null) return null;
+  const { results } = await c.env.db
+    .prepare(`${select} WHERE (?1 IS NULL OR id < ?1) AND ${where} ORDER BY id DESC LIMIT ?2`)
+    .bind(after === undefined ? null : Number(after), limit, ...values)
+    .all<T>();
+  return { rows: results, next: results.length === limit ? String(results.at(-1)!.id) : null };
+}
+
+function limitOf(c: Context<AppEnv>) {
+  const limit = c.req.query('limit');
+  if (limit === undefined) return PAGE_ROWS;
+  return /^[1-9]\d{0,2}$/.test(limit) && Number(limit) <= PAGE_ROWS ? Number(limit) : null;
 }
 
 // A share report carries its share's state now and whose it is: held, reviewed (a hold lifted or a block, after which
@@ -365,16 +377,18 @@ const SHARED = `(SELECT json_object('held', s.held_at IS NOT NULL, 'reviewed', s
     'removed', s.removed_at IS NOT NULL, 'ownerId', a.id, 'ownerName', a.username)
   FROM shares s LEFT JOIN accounts a ON a.incarnation = s.incarnation WHERE s.id = reports.share)`;
 
+// open: only the reports not resolved.
 admin.get('/reports', async (c) => {
-  const rows = page(
+  const listed = await page<{ id: number; share: string | null; shared: string | null }>(
     c,
     `SELECT id, account_id AS accountId, username, text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link, diagnostics,
        ${SHARED} AS shared FROM reports`,
+    c.req.query('open') === '1' ? 'resolved_at IS NULL' : 'TRUE',
   );
-  if (!rows) return fail(c, 400, 'bad-input');
-  const { results } = await rows.all<{ share: string | null; shared: string | null }>();
+  if (!listed) return fail(c, 400, 'bad-input');
   return c.json({
-    reports: results.map(({ shared, ...row }) => {
+    next: listed.next,
+    reports: listed.rows.map(({ shared, ...row }) => {
       const state = shared === null ? null : (JSON.parse(shared) as ShareRow);
       return { ...row, shared: state && { held: Boolean(state.held), reviewed: Boolean(state.reviewed), cut: Boolean(state.cut), removed: Boolean(state.removed), ownerId: state.ownerId, ownerName: state.ownerName } };
     }),
@@ -467,8 +481,7 @@ admin.post('/shares/:id/block', async (c) => {
 const resolveShareReports = (db: Db, share: string, at: number) => db.prepare('UPDATE reports SET resolved_at = ? WHERE share = ? AND resolved_at IS NULL').bind(at, share);
 
 admin.get('/log', async (c) => {
-  const rows = page(c, 'SELECT id, at, action, target, detail FROM admin_log');
-  if (!rows) return fail(c, 400, 'bad-input');
-  const { results } = await rows.all<{ detail: string | null }>();
-  return c.json({ log: results.map((row) => ({ ...row, detail: row.detail === null ? null : (JSON.parse(row.detail) as unknown) })) });
+  const listed = await page<{ id: number; detail: string | null }>(c, 'SELECT id, at, action, target, detail FROM admin_log');
+  if (!listed) return fail(c, 400, 'bad-input');
+  return c.json({ log: listed.rows.map((row) => ({ ...row, detail: row.detail === null ? null : (JSON.parse(row.detail) as unknown) })), next: listed.next });
 });

@@ -40,17 +40,21 @@ export type Route =
   // section opens the page at 운영자가 보낸 알림 or 새 소식, which the toasts saying they came link to.
   | { kind: 'account'; section: AccountSection | null }
   | { kind: 'usage' }
+  | { kind: 'notices' }
   | { kind: 'chat-settings' }
   | { kind: 'feature'; feature: Feature }
   | { kind: 'display' }
   | { kind: 'translator' }
   | { kind: 'labs' }
   | { kind: 'admin' }
+  | { kind: 'admin-list'; list: AdminList }
   // 헤이젤로 가져오기 from a share link (library/ShareArrival); its key waits in common/sharePending, never in the path.
   | { kind: 'share'; id: string }
   | { kind: 'settings' };
 
 export const HOME: Route = { kind: 'home' };
+export const ADMIN_LISTS = ['accounts', 'reports', 'log'] as const;
+export type AdminList = (typeof ADMIN_LISTS)[number];
 // 캐릭터 둘러보기's place: a folder's id, BIN_PLACE for 휴지통, or null for the top.
 export const BIN_PLACE = 'bin';
 const placeOf = (params: URLSearchParams) => {
@@ -132,6 +136,7 @@ export function parseRoute(at: string): Route {
     if (top === 'account') return { kind: 'account', section: ACCOUNT_SECTIONS.find((section) => section === params.get('section')) ?? null };
   }
   if (top === 'account' && id === 'usage' && sub === undefined) return { kind: 'usage' };
+  if (top === 'account' && id === 'notices' && sub === undefined) return { kind: 'notices' };
   if (top === 'settings' && id === 'chat') {
     if (sub === undefined) return { kind: 'chat-settings' };
     const feature = FEATURES.find((candidate) => candidate === sub);
@@ -140,7 +145,11 @@ export function parseRoute(at: string): Route {
   if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };
   if (top === 'settings' && id === 'translator' && sub === undefined) return { kind: 'translator' };
   if (top === 'settings' && id === 'labs' && sub === undefined) return { kind: 'labs' };
-  if (top === 'settings' && id === 'admin' && sub === undefined) return { kind: 'admin' };
+  if (top === 'settings' && id === 'admin') {
+    if (sub === undefined) return { kind: 'admin' };
+    const list = ADMIN_LISTS.find((candidate) => candidate === sub);
+    return list ? { kind: 'admin-list', list } : HOME;
+  }
   return HOME;
 }
 
@@ -201,6 +210,8 @@ export function href(route: Route): string {
       return `/account${route.section ? `?section=${route.section}` : ''}`;
     case 'usage':
       return '/account/usage';
+    case 'notices':
+      return '/account/notices';
     case 'chat-settings':
       return '/settings/chat';
     case 'feature':
@@ -213,6 +224,8 @@ export function href(route: Route): string {
       return '/settings/labs';
     case 'admin':
       return '/settings/admin';
+    case 'admin-list':
+      return `/settings/admin/${route.list}`;
     case 'share':
       return `/s/${route.id}`;
     case 'settings':
@@ -262,7 +275,10 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'labs':
     case 'admin':
       return route.kind;
+    case 'admin-list':
+      return 'admin';
     case 'usage':
+    case 'notices':
       return 'account';
     case 'chat-settings':
     case 'feature':
@@ -328,7 +344,10 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'admin':
       return { kind: 'settings' };
     case 'usage':
+    case 'notices':
       return { kind: 'account', section: null };
+    case 'admin-list':
+      return { kind: 'admin' };
     case 'feature':
       return { kind: 'chat-settings' };
     case 'add-connection':

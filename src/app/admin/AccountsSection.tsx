@@ -9,9 +9,11 @@ import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
 import { count } from '../common/typedNumber';
 import { NOTICES, UNKNOWN } from '../common/words';
+import { RestoresDialog } from '../common/RestoresDialog';
 import { useSession } from '../session';
+import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { Button, Callout, ConfirmDialog, MenuItem, MoreMenu, Section, Table, Tag, type TableColumn } from '../ui';
+import { Button, ConfirmDialog, MenuItem, MoreMenu, Section, Table, Tag, type TableColumn } from '../ui';
 import { CapsDialog } from './CapsDialog';
 import { NoticeDialog } from './NoticeDialog';
 import type { useAccounts } from './useAccounts';
@@ -32,22 +34,28 @@ const COLUMNS: TableColumn[] = [
   { label: '', size: 'button', keep: true },
 ];
 
-type Named = Pick<AdminAccount, 'accountId' | 'username'>;
+const COLUMNS_HELP = '텍스트는 계정에 저장된 데이터의 크기이고, 디스크는 그 데이터가 서버에서 실제로 차지하는 용량이에요.';
 
-export function AccountsSection({ loaded, onActed, onRestores, children }: { loaded: ReturnType<typeof useAccounts>; onActed: (id?: string) => void; onRestores: (account: Named) => void; children?: ReactNode }) {
+// total: every account, leaving ones too, as the rows count them; null while the service is not read.
+export function AccountsSection({ loaded, total, onActed, children }: { loaded: ReturnType<typeof useAccounts>; total: number | null; onActed: () => void; children?: ReactNode }) {
   const { username: own } = useSession();
   const toast = useToast();
-  const { data, failure, reload } = loaded;
+  const { rows, head } = loaded;
   const [removing, setRemoving] = useState<AdminAccount | null>(null);
   const [capping, setCapping] = useState<AdminAccount | null>(null);
   const [writing, setWriting] = useState<{ account: AdminAccount; suspend: boolean } | null>(null);
+  const [restoring, setRestoring] = useState<AdminAccount | null>(null);
   const [busy, setBusy] = useState(false);
-  const paged = loaded.previous !== null || loaded.next !== null;
+
+  function acted(id?: string) {
+    loaded.acted(id);
+    onActed();
+  }
 
   async function act(id: string, done: Promise<ApiResult<undefined>>, failed: string) {
     const answer = await done;
     if (!answer.ok) return toast.error(failed, { detail: describeFailure(answer) });
-    onActed(id);
+    acted(id);
   }
 
   async function remove(account: AdminAccount) {
@@ -60,22 +68,22 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
   return (
     <Section
       title="계정"
-      note={[...(paged ? [`${loaded.page}쪽`] : []), ...(data ? [`${count(data.accounts.length)}명`] : [])].join(' · ')}
-      action={<>
-        <Button variant="ghost" busy={loaded.busy} onClick={reload}>새로고침</Button>
-        {paged && <>
-          <Button variant="ghost" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>
-          <Button variant="ghost" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
-        </>}
-      </>}
-      help="텍스트는 계정에 저장된 데이터의 크기이고, 디스크는 그 데이터가 서버에서 실제로 차지하는 용량이에요."
+      note={total === null ? undefined : `${count(total)}명`}
+      action={
+        head ? (
+          <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'admin-list', list: 'accounts' })}>모두 보기</Button>
+        ) : (
+          <Button variant="ghost" busy={loaded.busy} onClick={loaded.reload}>새로고침</Button>
+        )
+      }
+      help={head ? `정지됐거나 복원·탈퇴 중인 계정만 여기에 보여요. ${COLUMNS_HELP}` : COLUMNS_HELP}
     >
-      {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: reload }}>{failure}</Callout>}
-      {data && (
+      {loaded.failure}
+      {rows && rows.length > 0 && (
         <Table
           label="계정"
           columns={COLUMNS}
-          rows={data.accounts.map((account) => {
+          rows={rows.map((account) => {
             const state = STATES[account.state];
             const others = account.username !== own;
             const tags = [...(others ? [] : ['운영자']), ...(state ? [state] : []), ...(account.suspended ? ['정지됨'] : [])];
@@ -102,7 +110,7 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
                   ) : (
                     <>
                       <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
-                      <MenuItem icon={History} label="복원 기록" onClick={() => onRestores(account)} />
+                      <MenuItem icon={History} label="복원 기록" onClick={() => setRestoring(account)} />
                       {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
                       {others &&
                         (account.suspended ? (
@@ -119,6 +127,7 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
           })}
         />
       )}
+      {loaded.more}
       {children}
       {capping && (
         <CapsDialog
@@ -126,7 +135,7 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
           onClose={() => setCapping(null)}
           onSaved={() => {
             setCapping(null);
-            onActed(capping.accountId);
+            acted(capping.accountId);
           }}
         />
       )}
@@ -140,7 +149,7 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
             send={(reason) => suspend(writing.account.accountId, reason)}
             onSent={() => {
               setWriting(null);
-              onActed(writing.account.accountId);
+              acted(writing.account.accountId);
             }}
             onClose={() => setWriting(null)}
           />
@@ -168,6 +177,14 @@ export function AccountsSection({ loaded, onActed, onRestores, children }: { loa
             계정과 그 안에 저장된 모든 데이터를 삭제해요. 이 작업은 되돌릴 수 없어요.
           </ConfirmDialog>
         ))}
+      {restoring && (
+        <RestoresDialog
+          key={restoring.accountId}
+          operated={{ accountId: restoring.accountId, username: restoring.username, report: null }}
+          onClose={() => setRestoring(null)}
+          onActed={() => acted(restoring.accountId)}
+        />
+      )}
     </Section>
   );
 }

@@ -16,16 +16,16 @@ it('sets the service, suspends an account and resolves its report, each read bac
   });
 
   expect(await suspend(accountId, '도배')).toMatchObject({ ok: true });
-  expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, suspended: true }] } });
+  expect(await readAccounts(null)).toMatchObject({ ok: true, data: { rows: [{ accountId, suspended: true }] } });
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { admin: true, suspended: true } } });
 
   expect(await sendReport('그림이 이상해요', null)).toMatchObject({ ok: true });
   const reports = await readReports(null);
-  expect(reports).toMatchObject({ ok: true, data: { rows: [{ accountId, text: '그림이 이상해요', resolvedAt: null }], more: false } });
+  expect(reports).toMatchObject({ ok: true, data: { rows: [{ accountId, text: '그림이 이상해요', resolvedAt: null }], next: null } });
   expect(await resolveReport(reports.ok ? reports.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
   const log = await readLog(null);
   expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['resolve-report', 'send-notice', 'suspend', 'set-service']);
-  expect(log.ok && log.data.more).toBe(false);
+  expect(log.ok && log.data.next).toBeNull();
 });
 
 it('sends notices with a reply, a reason and to everyone, which the account reads newest first, counted unread until seen', async () => {
@@ -39,7 +39,7 @@ it('sends notices with a reply, a reason and to everyone, which the account read
 
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 3 } } });
   const notices = await readNotices(null);
-  expect(notices).toMatchObject({ ok: true, data: { rows: [{ text: '점검해요' }, { text: '잠시 멈춰요', reportId: null }, { text: '고쳤어요', reportId: report }], more: false } });
+  expect(notices).toMatchObject({ ok: true, data: { rows: [{ text: '점검해요' }, { text: '잠시 멈춰요', reportId: null }, { text: '고쳤어요', reportId: report }], next: null } });
   expect(await markNoticesSeen(notices.ok ? notices.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 0 } } });
 });
@@ -74,7 +74,7 @@ it('restores an account to a time on its report: its open device drops to the ob
     id: run.ok && run.data.id, reportId: report, at, undoes: null, targetAt: now - 3_600_000, phase: 'done', verified: true, error: null,
     createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [],
   }] });
-  expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, state: 'active', bytes: expect.any(Number) }], next: null } });
+  expect(await readAccounts(null)).toMatchObject({ ok: true, data: { rows: [{ accountId, state: 'active', bytes: expect.any(Number) }], next: null } });
   const log = await readLog(null);
   expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['restore-done', 'restore-begun']);
 });
@@ -91,7 +91,7 @@ function answering(...answers: Response[]) {
 it('reads a bounded account page whose usage can be unknown or held', async () => {
   const unread = { accountId: 'b', username: 'bee', createdAt: 1, suspended: false, state: 'restoring', bytes: null, disk: null, fileBytes: 30, bytesCap: 'default', fileBytesCap: null };
   answering(Response.json({ accounts: [unread], next: null }));
-  expect(await readAccounts()).toEqual({ ok: true, data: { accounts: [unread], next: null } });
+  expect(await readAccounts(null)).toEqual({ ok: true, data: { rows: [unread], next: null } });
 });
 
 it('refreshes a single account and explicitly sums usage pages without retaining account rows', async () => {

@@ -1,13 +1,15 @@
 import { api, type ApiResult } from './api';
 
-export type Page<T> = { rows: T[]; more: boolean };
+// next: what the following page is asked after, null on the last (server/admin page).
+export type Page<T> = { rows: T[]; next: string | null };
+// limit: the rows asked, the server's page when absent. A true flag narrows the list; a false one is left out.
+export type Ask = Record<string, number | boolean | undefined>;
 
-// The server's PAGE_ROWS (server/admin): a page shorter than it is the last.
-const PAGE_ROWS = 100;
-
-export async function page<K extends string, T extends { id: number }>(path: string, key: K, before: number | null): Promise<ApiResult<Page<T>>> {
-  const answer = await api<Record<K, T[]>>('GET', `${path}${before === null ? '' : `?before=${before}`}`);
+export async function page<K extends string, T>(path: string, key: K, after: string | null, ask: Ask = {}): Promise<ApiResult<Page<T>>> {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(ask)) if (value !== undefined && value !== false) query.set(name, value === true ? '1' : String(value));
+  if (after !== null) query.set('after', after);
+  const answer = await api<Record<K, T[]> & { next: string | null }>('GET', query.size ? `${path}?${query}` : path);
   if (!answer.ok) return answer;
-  const rows = answer.data[key];
-  return { ok: true, data: { rows, more: rows.length === PAGE_ROWS } };
+  return { ok: true, data: { rows: answer.data[key], next: answer.data.next } };
 }
