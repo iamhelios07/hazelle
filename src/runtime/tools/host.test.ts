@@ -1,4 +1,5 @@
 import { runInNewContext } from 'node:vm';
+import { noOutcome } from '../script-binding';
 import { describe, expect, it, vi } from 'vitest';
 import portingSample from '../../engine/import/fixtures/porting-sample.js.txt?raw';
 import { readToolFile } from '../../engine/import/risu-plugin';
@@ -183,7 +184,18 @@ it('asks once before a tool reaches the network, sends nothing when refused, and
   } finally { close(); host.close(); }
 }));
 
-it('opens a Risu frame with the sandbox network variant only under its module consent, and restarts it when withdrawn', () => withTools(async (session, connect) => {
+it('asks for the network once the tool starts in a chat, before any fetch, and keeps the card past a send', () => withTools(async (session) => {
+  const f = await fixture(session, '//@uses network\n');
+  session.scripts.claims(f.chat);
+  session.scripts.claims(f.chat);
+  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'network', hosts: [] } })]));
+  await session.scripts.pageWrite(f.chat, f.module, noOutcome());
+  expect(session.scripts.snapshot().questions).toHaveLength(1);
+  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  await vi.waitFor(() => expect(session.store.get('module', f.module)!.value.network).toBe(true));
+}));
+
+it('opens a Risu frame with the sandbox network variant only under its module consent, and restarts it when given or withdrawn', () => withTools(async (session, connect) => {
   await answerable(session);
   const parsed = source('1', '//@uses network\n');
   const added = await importTool(session.store, session.files, { ...parsed, manifest: { ...parsed.manifest, page: null, menu: [], risu: { verdict: 'all', missing: [], hosts: [] } } });
@@ -204,9 +216,8 @@ it('opens a Risu frame with the sandbox network variant only under its module co
     await host.warm(chat);
     expect(transport.frames[1]!.opening).toEqual({ role: 'frame', network: false });
     await setNetwork(session.store, module, true);
-    await host.warm(chat);
-    expect(transport.frames).toHaveLength(2);
-    expect(transport.frames[1]!.host.closed).toBe(false);
+    await vi.waitFor(() => expect(transport.frames.map((frame) => frame.opening)).toEqual([{ role: 'frame', network: true }, { role: 'frame', network: false }, { role: 'frame', network: true }]), { timeout: UNLOAD_MS * 2 });
+    await vi.waitFor(() => expect(transport.frames[1]!.host.closed).toBe(true), { timeout: UNLOAD_MS * 2 });
   } finally { host.close(); }
 }));
 

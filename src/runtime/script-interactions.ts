@@ -131,15 +131,18 @@ export class ScriptInteractions {
     return this.decide(`network:${module}`, chat, { kind: 'network', hosts }, { kind: 'module', id: module }, (yes) => setNetwork(store, module, yes), signal);
   }
 
-  // The memory claims of the chat's tools that the user has not answered, each asked once per module (design §6.10).
+  // What the chat's tools claim and the user has not answered, memory and network, each asked once per module when the
+  // tool starts in a chat (design §6.10), not first when it uses it.
   claims(chat: string) {
     const { store } = this;
     const stored = live(store.get('chat', chat));
     if (!stored || this.closing.aborted) return;
     for (const { module, tool } of toolsOf(store, stored.value)) {
       const key = `memory:${module}`;
-      if (!tool.manifest.uses.includes('memory') || store.get('module', module)?.value.takesMemory !== undefined || this.consents.has(key)) continue;
-      void this.decide(key, chat, { kind: 'memory' }, { kind: 'module', id: module }, (yes) => setTakesMemory(store, module, yes));
+      if (tool.manifest.uses.includes('memory') && store.get('module', module)?.value.takesMemory === undefined && !this.consents.has(key)) {
+        void this.decide(key, chat, { kind: 'memory' }, { kind: 'module', id: module }, (yes) => setTakesMemory(store, module, yes));
+      }
+      if (tool.manifest.uses.includes('network')) void this.mayFetch(chat, module, false);
     }
   }
 
@@ -157,9 +160,10 @@ export class ScriptInteractions {
     return deciding;
   }
 
-  // A memory claim holds up no run, so it stays until the user answers it.
+  // A claim holds up no run, so it stays until the user answers it; a fetch that joined a network claim waits with it,
+  // holding only its own tool's lane.
   dismiss(chat: string) {
-    for (const { id, chat: asked, question } of this.state.questions) if (asked === chat && question.kind !== 'memory') this.answer(id, null);
+    for (const { id, chat: asked, question } of this.state.questions) if (asked === chat && question.kind !== 'memory' && question.kind !== 'network') this.answer(id, null);
   }
 
   tell(chat: string, key: string, note: Note, from: PackOwner | null = null) {

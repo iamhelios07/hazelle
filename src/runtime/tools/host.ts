@@ -324,7 +324,6 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   }
 
   private frame(entry: Entry, page?: ToolPage): Frame {
-    // A consent given while the frame runs widens it only at its next start: restarting would drop the call that asked.
     const network = !page && isFrameTool(entry.tool) && this.networkOn(entry);
     const connection = this.open(page ? { role: 'page', page } : isFrameTool(entry.tool) ? { role: 'frame', network } : { role: 'background' });
     let resolve!: () => void;
@@ -713,6 +712,14 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       if (!tool || !live(this.session.store.get('module', entry.module)) || tool.file.id !== entry.tool.file.id || JSON.stringify(tool.manifest) !== JSON.stringify(entry.tool.manifest)) { this.end(entry, new ToolStopped()); continue; }
       // A withdrawn network answer cannot wait for the frame's next start: its CSP still lets pictures out.
       if (framesOf(entry).some((frame) => frame.network) && !this.networkOn(entry)) { this.end(entry, new ToolStopped()); continue; }
+      // A consent given while it runs restarts a frame no slot shows, for its pictures from outside; one shown keeps its
+      // sandbox to its next start rather than close under the user.
+      if (entry.background && !entry.background.network && !entry.slot && !entry.pages.size && isFrameTool(entry.tool) && this.networkOn(entry)) {
+        const { chat } = entry;
+        this.end(entry, new ToolStopped());
+        if (chat) void this.warm(chat);
+        continue;
+      }
       this.settingsChanged(entry, tool);
       const keys = new Set<string>();
       for (const change of changes) {
