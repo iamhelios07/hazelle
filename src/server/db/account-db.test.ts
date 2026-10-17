@@ -449,6 +449,12 @@ describe('the account registry', () => {
     const delta = await baseline();
     expect(reads).toEqual([snapshotKey(INC, base)]);
     expect(raw.prepare('SELECT base FROM snapshots WHERE id = ?').get(delta)).toEqual({ base });
+    expect(opened(baseIdsPath(dir, INC, base), (file) => file.prepare('SELECT id FROM ids').all())).toEqual([{ id: A }]);
+    await write({ id: A, kind: 'chat', parent: null, body: 'a2', baseRev: 1 });
+    await write({ id: A, kind: 'chat', parent: null, body: null, baseRev: 4 });
+    now = 4_000_000;
+    await baseline();
+    expect(reads).toEqual([snapshotKey(INC, base), snapshotKey(INC, base)]);
   });
 
   it('takes a whole snapshot first, a delta next, and a whole one again on a new timeline, once the base is a day short of RETENTION_MS old, and after a schema upgrade', async () => {

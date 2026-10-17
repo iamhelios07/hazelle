@@ -357,6 +357,8 @@ export class AccountDb implements StoreDb {
     }
     try {
       await materializeSnapshot(this.files, this.service, this.incarnation, base, merged);
+      // The miss fills the list, so a base from before the lists is read once, not daily until its next whole.
+      if (!existsSync(ids)) writeBaseIds(this.dataDir, this.incarnation, base, merged);
       const held = withDelta(merged, plain, (db) => {
         const found = db.prepare('SELECT 1 FROM delta.objects d JOIN main.objects b ON b.id = d.id WHERE d.body IS NULL AND b.body IS NOT NULL LIMIT 1').get() !== undefined;
         if (found) applyDelta(db);
