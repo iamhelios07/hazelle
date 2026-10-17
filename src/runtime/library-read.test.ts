@@ -35,9 +35,9 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   const changed = vi.fn();
   const stop = own.subscribe(changed);
   expect([...before.byFolder.keys()].sort()).toEqual(['f', 'k', 'o']);
-  expect(ids(before.byFolder.get('f')!.characters)).toEqual(['a', 'b']);
+  expect(ids(before.byFolder.get('f')!.inside)).toEqual(['a', 'b']);
   expect(ids(before.byFolder.get('f')!.direct)).toEqual(['b']);
-  expect(ids(before.byFolder.get('k')!.characters)).toEqual(['a']);
+  expect(ids(before.byFolder.get('k')!.inside)).toEqual(['a']);
   expect(before.byFolder.get('k')!.up).toBe(before.byFolder.get('f')!.folder);
   expect(ids(before.loose)).toEqual(['c', 'd']);
   expect(before.byCharacter.get('g')?.character.deleted).toBe(1);
@@ -59,7 +59,7 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   items.set('c', character('c', 'k', 80));
   announce('character', 'c');
   const moved = read.library.snapshot();
-  expect(ids(moved.byFolder.get('f')!.characters)).toEqual(['a', 'b', 'c']);
+  expect(ids(moved.byFolder.get('f')!.inside)).toEqual(['a', 'b', 'c']);
   expect(ids(moved.byFolder.get('k')!.direct)).toEqual(['a', 'c']);
   expect(ids(moved.loose)).toEqual(['d']);
   expect(changed).not.toHaveBeenCalled();
@@ -68,11 +68,11 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   announce('folder', 'f');
   const orphaned = read.library.snapshot();
   expect(orphaned.byFolder.get('k')!.up).toBeNull();
-  expect(ids(orphaned.byFolder.get('k')!.characters)).toEqual(['a', 'c']);
+  expect(ids(orphaned.byFolder.get('k')!.inside)).toEqual(['a', 'c']);
   expect(ids(orphaned.loose)).toEqual(['b', 'd']);
   items.set('a', character('a', 'k', 90, { deleted: 3 }));
   announce('character', 'a');
-  expect(ids(read.library.snapshot().byFolder.get('k')!.characters)).toEqual(['c']);
+  expect(ids(read.library.snapshot().byFolder.get('k')!.inside)).toEqual(['c']);
   expect(read.library.snapshot().byCharacter.get('a')?.character.deleted).toBe(3);
   expect(own.snapshot()).toBeNull();
   expect(changed).toHaveBeenCalledOnce();

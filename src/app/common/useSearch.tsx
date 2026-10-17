@@ -4,11 +4,11 @@ import { matches, noResults, SEARCH_FROM } from './search';
 
 // A picker's search: Enter in its field picks the first found, and ref lets the picker focus the field as it opens.
 // query: words held by a parent that outlives the list, such as the sidebar's across entering a shelf.
-type Options<T> = { ref?: Ref<HTMLInputElement>; onEnter?: (first: T) => void; query?: readonly [string, (query: string) => void] };
+export type SearchOptions<T> = { ref?: Ref<HTMLInputElement>; onEnter?: (first: T) => void; query?: readonly [string, (query: string) => void] };
 
 // One list's search: the field shows from SEARCH_FROM items and stays while words are typed, so a list shrinking
 // under a search keeps the field that filters it.
-export function useSearch<T>(items: readonly T[], label: string, texts: (item: T) => string[], options: Options<T> = {}) {
+export function useSearch<T>(items: readonly T[], label: string, texts: (item: T) => string[], options: SearchOptions<T> = {}) {
   const own = useState('');
   const [query, setQuery] = options.query ?? own;
   const { ref, onEnter } = options;

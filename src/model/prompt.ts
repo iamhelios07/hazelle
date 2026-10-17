@@ -88,6 +88,8 @@ export type ConversationPrompt = {
   models: Assignment;
   origin?: { id: string; name: string };
   imported?: 'risu-preset';
+  // Only conversation prompts are filed (model/folders; user ruling, 2026-10-17).
+  folder?: string;
   // The modules on in its chats, in the order they were turned on (design §6.5). One that is gone reads as off.
   modules?: string[];
   // The modules its Risu preset named (moduleIntergration), each a Risu module id or namespace, so a module imported

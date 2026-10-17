@@ -21,7 +21,7 @@ type Props = {
   onPurge: () => void;
   // The folder path, shown before the note where cards from every folder stand together.
   where?: string;
-  // The card drags onto a folder (실험실 탐색기식 폴더).
+  // The card drags onto a folder.
   drag?: boolean;
 };
 

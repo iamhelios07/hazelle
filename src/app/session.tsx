@@ -3,6 +3,7 @@ import type { ToolMenu } from '../runtime/tools/facade';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { PictureUrl } from '../engine/assets';
 import type { ChatScope } from '../engine/render';
+import { nest, type Filed } from '../model/folders';
 import { binned, live } from '../model/library';
 import type { Kind, Stored } from '../model/kinds';
 import type { AccountFacts, Standing } from '../runtime/account';
@@ -134,6 +135,11 @@ export const useShares = () => useKind('share');
 function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {
   const all = useKind(kind);
   return useMemo(() => all.filter(live), [all]);
+}
+// The folders of one kind as a tree; characters' come with the library (useLibrary).
+export function useFolders(kind: Exclude<Filed, 'character'>) {
+  const all = useKind('folder');
+  return useMemo(() => nest(all, kind), [all, kind]);
 }
 export const usePrompts = () => useLive('prompt');
 export const usePersonas = () => useLive('persona');

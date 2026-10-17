@@ -31,3 +31,8 @@
   list-style: none;
   border-left: var(--border-thin) solid var(--color-divider);
 }
+
+.dropping {
+  outline: var(--border-thick) solid var(--color-accent);
+  background: var(--color-accent-bg);
+}

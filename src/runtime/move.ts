@@ -6,11 +6,13 @@ import { inlayIds } from '../engine/import/risu-character';
 import { mergeUnsupported, MOVE_UNSUPPORTED_KINDS, unsupportedCount, type BackupCatalog, type Card, type Imported, type MoveUnsupported, type RisuBackup, type RisuChat, type Unsupported } from '../engine/import/types';
 import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';
+import { filedIn } from '../model/folders';
 import type { Asset } from '../model/library';
 import type { MemorySettings } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
-import { createFolder, importCharacter, saveAssets, setToggle, type ImportedCharacter, type Progress } from './characters';
+import { createFolder } from './folders';
+import { importCharacter, saveAssets, setToggle, type ImportedCharacter, type Progress } from './characters';
 import { setLoreBudget } from './chat-context';
 import { chatWrites, saveNewChats } from './chat-log';
 import type { Files } from './files';
@@ -199,9 +201,9 @@ const lastTalk = (chat: RisuChat) => chat.messages.at(-1)?.at ?? 0;
 const movedMemory = (store: ObjectStore): MemorySettings => ({ ...defaultMemory(store), on: false });
 
 async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<string>> {
-  const held = store.list('folder').find(({ value }) => value.parent === undefined && value.name === name);
+  const held = store.list('folder').find(({ value }) => filedIn(value) === 'character' && value.parent === undefined && value.name === name);
   if (held) return { ok: true, data: held.id };
-  const made = await createFolder(store, name, null);
+  const made = await createFolder(store, 'character', name, null);
   return made.ok ? { ok: true, data: made.data.id } : made;
 }
 

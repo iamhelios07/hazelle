@@ -54,7 +54,7 @@ export function PersonaEditor({ stored, back }: { stored: Stored<'persona'>; bac
       if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요. 다른 페르소나를 현재 페르소나로 정한 뒤 삭제해 주세요.');
       return toast.failed(removed, '삭제하지 못했어요.');
     }
-    navigate({ kind: 'personas' });
+    navigate({ kind: 'personas', place: null });
     toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => restorePersona(store, id), BIN_KEEPS);
   }
 

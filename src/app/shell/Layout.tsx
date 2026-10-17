@@ -35,8 +35,8 @@ export function Layout() {
 
   const fallback = { fallback: true };
   useShortcut('settings', () => (settings === null ? navigate(settingsEntry(wide)) : closeSettings()), fallback);
-  useShortcut('personas', () => navigate({ kind: 'personas' }), fallback);
-  useShortcut('prompts', () => navigate({ kind: 'prompts' }), fallback);
+  useShortcut('personas', () => navigate({ kind: 'personas', place: null }), fallback);
+  useShortcut('prompts', () => navigate({ kind: 'prompts', place: null }), fallback);
   useShortcut('shortcutList', () => setListing((open) => !open), fallback);
   useShortcut('sidebar', () => (wide && settings === null ? fold(!folded) : false), fallback);
   useShortcut('pictures', () => changeDisplay({ hidePictures: !display.hidePictures }), fallback);

@@ -5,7 +5,7 @@ import { UNSUPPORTED_KINDS, type Card, type Imported, type Pack, type Picture, t
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { IllustrateSwitches, Rung } from '../model/illustration';
 import type { Stored, Values } from '../model/kinds';
-import { holds, nest, withInside, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
+import { readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
 import { likenessId, type Likeness } from '../model/likeness';
 import type { ToggleValues } from '../model/prompt';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
@@ -13,7 +13,6 @@ import type { ApiResult } from './api';
 import type { Files } from './files';
 import { thumbnail } from './picture';
 import { markDeleted } from './removal';
-import { allWritten } from './api';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
@@ -352,34 +351,3 @@ export function resetToggles(store: ObjectStore, character: string | null): Prom
   if (character === null) return store.upsert('settings', (current = EMPTY_SETTINGS) => without(current, 'toggles'));
   return store.update('character', character, (current) => without(current, 'toggles'));
 }
-
-type Placement = { id: string; folder: string | null };
-
-const place = (store: ObjectStore, placements: Placement[]) => allWritten(placements.map(({ id, folder }) => store.update('character', id, (current) => ({ ...current, folder }))));
-
-export const moveCharacters = (store: ObjectStore, ids: string[], folder: string | null) => place(store, ids.map((id) => ({ id, folder })));
-
-export const createFolder = (store: ObjectStore, name: string, parent: string | null) => store.create('folder', parent ? { name, parent } : { name });
-
-export const renameFolder = (store: ObjectStore, id: string, name: string) => store.update('folder', id, (current) => ({ ...current, name }));
-
-// What removeFolder writes and restoreFolder undoes, and up, the folder the removed one sat in, where the characters
-// move to (null: out of every folder).
-export type RemovedFolder = { folders: Stored<'folder'>[]; placements: Placement[]; up: Stored<'folder'> | null };
-
-// A folder goes with the folders inside it, and its characters, those in 휴지통 too, move up a level. Both go at once:
-// a character left naming a gone folder sits in no folder (model/library indexFolders). null: the folder is gone.
-export function folderRemoval(store: ObjectStore, id: string): RemovedFolder | null {
-  const every = nest(store.list('folder')).flatMap(withInside);
-  const target = every.find((folder) => folder.id === id);
-  if (!target) return null;
-  const up = every.find((folder) => folder.children.includes(target)) ?? null;
-  const placements = store.list('character').filter(({ value }) => holds(target, value)).map(({ id, value }) => ({ id, folder: value.folder }));
-  return { folders: withInside(target), placements, up };
-}
-
-export const removeFolder = (store: ObjectStore, { folders, placements, up }: RemovedFolder) =>
-  allWritten([place(store, placements.map(({ id }) => ({ id, folder: up?.id ?? null }))), store.batch(folders.map(({ id }) => ({ type: 'remove', id })))]);
-
-export const restoreFolder = (store: ObjectStore, { folders, placements }: RemovedFolder) =>
-  allWritten([store.batch(folders.map(({ id, kind, parent, value }) => ({ type: 'restore', id, kind, parent, value }))), place(store, placements)]);

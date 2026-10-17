@@ -15,6 +15,6 @@ export { SettingGroup, SettingRow } from './SettingGroup';
 export { Shares } from './Shares';
 export { Swatches } from './Swatches';
 export { SideTitle } from './SideTitle';
-export { Table, type TableColumn } from './Table';
+export { Table, type TableColumn, type TableRow } from './Table';
 export { Tab, Tabs } from './Tabs';
 export { ROWS_RESIZED, Viewport, type Seek } from './Viewport';

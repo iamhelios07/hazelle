@@ -5,7 +5,8 @@ import { chatTitle, shown, type Chat, type ChatSummary, type Message } from '../
 import { withMarks, withoutMarks } from '../model/illustration';
 import type { Illustrating, Illustrator } from './illustrate';
 import type { Kind, Stored, Values } from '../model/kinds';
-import { indexFolders, isLive, live, nest, shelve, type CharacterShelf, type FolderContents, type FolderTree, type Shelf } from '../model/library';
+import { indexFolders, nest, type FolderIndex, type FolderTree } from '../model/folders';
+import { isLive, live, shelve, type CharacterShelf, type Shelf } from '../model/library';
 import type { Memory } from '../model/memory';
 import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
 import type { ApiFailure } from './api';
@@ -41,11 +42,8 @@ export type Library = {
   none: Shelf<ChatSummary>;
   deleted: CharacterShelf<ChatSummary>[];
   deletedChats: ChatSummary[];
-  folders: FolderTree[];
   byCharacter: ReadonlyMap<string, CharacterShelf<ChatSummary>>;
-  byFolder: ReadonlyMap<string, FolderContents<ChatSummary>>;
-  loose: CharacterShelf<ChatSummary>[];
-};
+} & FolderIndex<CharacterShelf<ChatSummary>>;
 
 const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => (shelf && isLive(shelf.character) ? shelf : null);
 
@@ -102,7 +100,7 @@ export class ReadModels {
     readonly store: ObjectStore,
     readonly open: OpenDisplay = { display: (id, chat, messages, screen, signal) => evaluateChat({ store }, id, chat, messages, screen, signal), subscribe: () => () => {} },
   ) {
-    this.folders = nest(store.list('folder'));
+    this.folders = nest(store.list('folder'), 'character');
     this.settings = new Snapshot(store.get('settings', SETTINGS_ID)?.value ?? EMPTY_SETTINGS);
     this.unreadable = new Snapshot(store.unreadable());
     this.updateLists();
@@ -203,7 +201,7 @@ export class ReadModels {
     }
     if (kinds.has('settings')) this.settings.set(this.store.get('settings', SETTINGS_ID)?.value ?? EMPTY_SETTINGS);
     this.unreadable.set(this.store.unreadable());
-    if (kinds.has('folder')) this.folders = nest(this.store.list('folder'));
+    if (kinds.has('folder')) this.folders = nest(this.store.list('folder'), 'character');
     if (listsChanged || ['character', 'avatar', 'folder'].some((kind) => kinds.has(kind))) {
       const library = this.buildLibrary();
       this.library.set(library);
@@ -266,7 +264,7 @@ export class ReadModels {
     const sameDeleted = previous !== undefined && sameItems(previous.deleted, next.deleted);
     if (previous && sameCharacters && sameDeleted && sameItems(previous.deletedChats, next.deletedChats) && previous.none === next.none && previous.folders === next.folders) return previous;
     const byCharacter = previous && sameCharacters && sameDeleted ? previous.byCharacter : new Map([...next.characters, ...next.deleted].map((shelf) => [shelf.id, shelf]));
-    const filed = previous && sameCharacters && previous.folders === next.folders ? { byFolder: previous.byFolder, loose: previous.loose } : indexFolders(next.characters, next.folders);
+    const filed = previous && sameCharacters && previous.folders === next.folders ? { byFolder: previous.byFolder, loose: previous.loose } : indexFolders(next.characters, next.folders, (shelf) => shelf.character.folder);
     return { ...next, byCharacter, ...filed };
   }
 }

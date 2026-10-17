@@ -1,6 +1,9 @@
 import type { Stored } from '../../model/kinds';
 import type { PromptUse } from './usePromptUse';
 
+// Only conversation prompts are filed (user ruling, 2026-10-17): the other kinds stay flat.
+export const promptFolder = ({ value }: Stored<'prompt'>) => (value.task === undefined ? (value.folder ?? null) : null);
+
 export const byPromptName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => a.value.name.localeCompare(b.value.name, 'ko');
 
 export function groupPrompts(prompts: readonly Stored<'prompt'>[]): { top: Stored<'prompt'>[]; copies: ReadonlyMap<string, readonly Stored<'prompt'>[]> } {

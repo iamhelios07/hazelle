@@ -9,7 +9,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addAssets, addCharacter, folderRemoval, removeAssets, replaceAsset, restoreAssets, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, pinToggle, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addAssets, addCharacter, removeAssets, replaceAsset, restoreAssets, copyCharacter, createCharacter, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, pinToggle, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
@@ -39,19 +39,6 @@ async function savedChat(store: ObjectStore, character: string | null = null) {
   await store.projections.save(id);
   return id;
 }
-
-describe('folderRemoval', () => {
-  it('takes a middle folder with the folders inside it and moves their characters to the folder it sat in', () => {
-    const folder = (id: string, parent?: string) => ({ id, kind: 'folder', parent: null, rev: 1, value: parent ? { name: id, parent } : { name: id } });
-    const character = (id: string, folder: string) => ({ id, kind: 'character', parent: null, rev: 1, value: { folder } });
-    const items = [folder('f'), folder('k', 'f'), folder('s', 'k'), character('a', 's'), character('b', 'k'), character('c', 'f')];
-    const store = { list: (kind: string) => items.filter((item) => item.kind === kind) } as unknown as ObjectStore;
-    const removal = folderRemoval(store, 'k')!;
-    expect(removal.up?.id).toBe('f');
-    expect(removal.folders.map(({ id }) => id)).toEqual(['k', 's']);
-    expect(removal.placements.map(({ id }) => id)).toEqual(['a', 'b']);
-  });
-});
 
 describe('importCharacter', () => {
   it('gives the lorebook folders ids, and each entry its folder by id', async () => {

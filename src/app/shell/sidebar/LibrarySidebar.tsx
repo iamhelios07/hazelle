@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
-import type { CharacterShelf, FolderTree, Shelf } from '../../../model/library';
+import type { FolderTree } from '../../../model/folders';
+import type { CharacterShelf, Shelf } from '../../../model/library';
 import { shelfName } from '../../library/shelf';
 import { usePersisted } from '../../common/usePersisted';
 import { useCharacter, useChatSummary, useLibrary, useWritingChats } from '../../session';

@@ -22,9 +22,9 @@ const GROUPS: Place[][] = [
   [
     { page: 'chat', label: PAGES.chat, icon: MessageSquare, route: { kind: 'chat-settings' } },
     { page: 'translator', label: PAGES.translator, icon: Languages, route: { kind: 'translator' } },
-    { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts' } },
-    { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
-    { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules' } },
+    { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts', place: null } },
+    { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas', place: null } },
+    { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules', place: null } },
   ],
 ];
 const APP: Place[] = [

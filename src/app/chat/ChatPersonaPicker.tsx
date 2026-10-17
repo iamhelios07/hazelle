@@ -58,7 +58,7 @@ export function PersonaDialog({ persona, characterName, pinned, onChoose, onPin,
           <Hint label="고정">이 캐릭터와 새로 시작하는 채팅에 이 페르소나를 써요.</Hint>
         </Row>
       )}
-      <Button variant="link" onClick={() => navigate(using ? { kind: 'persona', id: using } : { kind: 'personas' })}>
+      <Button variant="link" onClick={() => navigate(using ? { kind: 'persona', id: using } : { kind: 'personas', place: null })}>
         페르소나 관리
       </Button>
     </>

@@ -1,7 +1,8 @@
 import { LayoutGrid, MessageSquarePlus, PackageOpen, UserRoundPlus } from 'lucide-react';
 import { useMemo } from 'react';
 import type { ChatSummary } from '../../../model/chat';
-import { characterTexts, type FolderTree, type Shelf } from '../../../model/library';
+import type { FolderTree } from '../../../model/folders';
+import { characterTexts, type Shelf } from '../../../model/library';
 import { ACTS, importOf, newOf } from '../../common/acts';
 import { useSearch } from '../../common/useSearch';
 import { ago } from '../../common/time';
@@ -85,7 +86,7 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
       {!empty && <Viewport keys={items.map(({ key }) => key)}>{(index) => {
         const item = items[index]!;
         return <TreeRow depth={item.depth}>{'shelf' in item ? row(item.shelf) :
-          <FolderRow name={item.folder.value.name} count={byFolder.get(item.folder.id)!.characters.length}
+          <FolderRow name={item.folder.value.name} count={byFolder.get(item.folder.id)!.inside.length}
             open={opened.has(item.folder.id)} onToggle={() => onToggleFolder(item.folder.id)} />}</TreeRow>;
       }}</Viewport>}
 

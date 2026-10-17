@@ -95,19 +95,19 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'connection':
         return <ConnectionPage at={at} back={back(at)} />;
       case 'prompts':
-        return <PromptsScreen back={sideBack(at)} />;
+        return <PromptsScreen place={at.place} back={sideBack(at)} />;
       case 'prompt':
         return <ItemPage at={at} back={back(at)}>{(stored) => <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'personas':
-        return <PersonaList back={sideBack(at)} />;
+        return <PersonaList place={at.place} back={sideBack(at)} />;
       case 'persona':
         return <ItemPage at={at} back={back(at)}>{(stored) => <PersonaEditor key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'modules':
-        return <ModulesScreen back={sideBack(at)} />;
+        return <ModulesScreen place={at.place} back={sideBack(at)} />;
       case 'module':
         return <ItemPage at={at} back={back(at)}>{(stored) => <ModuleScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'tool-page':
-        return <ItemPage at={{ kind: 'module', id: at.module }} back={backTo({ kind: 'modules' }, wide)}>{(stored) => <ToolPageScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
+        return <ItemPage at={{ kind: 'module', id: at.module }} back={backTo({ kind: 'modules', place: null }, wide)}>{(stored) => <ToolPageScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'models':
         return <ModelsScreen back={sideBack(at)} />;
       case 'profile':

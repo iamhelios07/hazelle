@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { live } from '../../model/library';
 import type { SideAt } from '../chat/ChatScreen';
 import { PackToggles } from '../common/PackToggles';
@@ -56,8 +56,10 @@ function ModuleSide({ open, onOpen, onClose }: Props<'module'>) {
 
 function PromptSide({ open, inUse, onOpen, onClose }: Props<'prompts'>) {
   const stored = live(useStored('prompt', open.id));
+  // Kept while a prompt is open, so 프롬프트 목록 goes back to the folder it was opened from.
+  const [place, setPlace] = useState<string | null>(null);
   const toList = () => onOpen({ kind: 'prompts', id: null, pane: null });
-  if (!stored) return <PromptList onPick={(id) => onOpen({ kind: 'prompts', id, pane: null })} inUse={inUse ?? undefined} frame={panel('프롬프트', onClose)} />;
+  if (!stored) return <PromptList onPick={(id) => onOpen({ kind: 'prompts', id, pane: null })} inUse={inUse ?? undefined} place={place} onGo={setPlace} frame={panel('프롬프트', onClose)} />;
   return (
     <PromptEditor
       key={`${stored.id}:${open.block ?? ''}`}

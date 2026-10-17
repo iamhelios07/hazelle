@@ -301,7 +301,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           expand={SHORTCUTS.bigEdit.keys}
           value={text.systemPrompt}
           onChange={(value) => change('systemPrompt', value)}
-          help={{ text: '비워 두면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts' }) } }}
+          help={{ text: '비워 두면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts', place: null }) } }}
         />
         <TextField
           label="대화 뒤 지시문"

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, FolderInput } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
@@ -14,7 +14,9 @@ import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, Hint, PickCard
 import { taskModelWords } from './ModelPane';
 import { useImport } from '../common/importing';
 import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
-import { byLastUse, byPromptName, groupPrompts } from '../common/promptCopies';
+import { byLastUse, byPromptName, groupPrompts, promptFolder as folderOf } from '../common/promptCopies';
+import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
+import { FolderMenu, FolderPath, useMoving, useNaming } from '../common/folders/FolderParts';
 
 const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트', illustrate: '새 삽화 프롬프트', mascot: '새 마스코트 프롬프트' } satisfies Record<PromptSort, string>;
 const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] = [
@@ -27,15 +29,17 @@ const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] 
 type Order = 'name' | 'recent';
 
 // defaults: each kind's default leads the list, as a card that opens it. The default is chosen on the prompt's own
-// page (기본으로 정하기), never from these cards.
+// page (기본으로 정하기), never from these cards. place: the folder the 대화 tab stands in.
 type Props = {
   onPick: (id: string) => void;
   inUse?: string;
   defaults?: boolean;
+  place: string | null;
+  onGo: (place: string | null) => void;
   frame: Frame;
 };
 
-export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
+export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const prompts = usePrompts();
@@ -47,6 +51,18 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
   const [shown, setShown] = useState<PromptSort>('conversation');
   const [order, setOrder] = useState<Order>('name');
   const { pickPrompts } = useImport();
+  const conversations = useMemo(() => grouped.top.filter((prompt) => ofSort(prompt, 'conversation')), [grouped]);
+  const index = useFolderIndex('prompt', conversations, folderOf);
+  const filing = shown === 'conversation';
+  const at = placeIn(index, place, false);
+  const naming = useNaming('prompt');
+  // A prompt moves with the copies listed under it.
+  const carry = (id: string): string[] => [id, ...(grouped.copies.get(id) ?? []).flatMap((copy) => carry(copy.id))];
+  const filedAt = (id: string) => {
+    const prompt = prompts.find((each) => each.id === id);
+    return prompt ? folderOf(prompt) : null;
+  };
+  const moving = useMoving('prompt', index, filedAt, { off: !filing, carry });
 
   const badge = (prompt: Stored<'prompt'>) => defaultMark(isDefaultPrompt(settings, prompt), prompt.value.name);
   const tags = (id: string) => (id === inUse ? ['사용 중'] : []);
@@ -55,19 +71,21 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
 
   function add(sort: PromptSort) {
     const id = crypto.randomUUID();
-    void addPrompt(store, NEW_NAME[sort], sort, id).then((added) => added.ok || toast.failed(added, '프롬프트를 만들지 못했어요.'));
+    const folder = sort === 'conversation' ? at.here?.folder.id : undefined;
+    void addPrompt(store, NEW_NAME[sort], sort, id, folder).then((added) => added.ok || toast.failed(added, '프롬프트를 만들지 못했어요.'));
     onPick(id);
   }
 
   const byName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byPromptName(a, b);
   const recentFirst = shown === 'conversation' && order === 'recent';
-  const top = grouped.top.filter((prompt) => ofSort(prompt, shown)).sort(recentFirst ? byLastUse(uses, grouped.copies) : byName);
+  const top = (filing ? at.placed(conversations) : grouped.top.filter((prompt) => ofSort(prompt, shown))).sort(recentFirst ? byLastUse(uses, grouped.copies) : byName);
   const current = SORTS.find(({ sort }) => sort === shown)!;
 
-  const row = (prompt: Stored<'prompt'>) => {
+  const row = (prompt: Stored<'prompt'>, nested = false) => {
     const copies = grouped.copies.get(prompt.id) ?? [];
     const expanded = open.has(prompt.id);
     const flip = () => setOpen((current) => new Set(current.has(prompt.id) ? [...current].filter((id) => id !== prompt.id) : [...current, prompt.id]));
+    const picking = moving.picked !== null && !nested;
     return (
       <CardItem
         key={prompt.id}
@@ -75,7 +93,9 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
         badge={badge(prompt)}
         tags={tags(prompt.id)}
         aside={usage(prompt)}
-        onClick={() => onPick(prompt.id)}
+        selected={picking ? moving.picked!.has(prompt.id) : undefined}
+        drag={moving.dropInto && !nested ? prompt.id : undefined}
+        onClick={() => (picking ? moving.toggle(prompt.id) : onPick(prompt.id))}
         control={
           copies.length > 0 && (
             <Button variant="ghost" size="sm" icon={expanded ? ChevronDown : ChevronRight} expanded={expanded} onClick={flip}>
@@ -84,10 +104,22 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
           )
         }
       >
-        {expanded && copies.map(row)}
+        {expanded && copies.map((copy) => row(copy, true))}
       </CardItem>
     );
   };
+
+  const folderRows = filing ? at.folders.map((folder) => (
+    <CardItem
+      key={folder.id}
+      icon={Folder}
+      title={folder.value.name}
+      aside={folderNote('prompt', index.byFolder.get(folder.id)!)}
+      onClick={() => onGo(folder.id)}
+      onDropCard={moving.dropInto?.(folder.id)}
+      control={<FolderMenu kind="prompt" folder={folder} depth={at.path.length + 1} onName={naming.name} />}
+    />
+  )) : [];
 
   const defaultCards = defaults && (
     <Section title="기본 프롬프트">
@@ -156,7 +188,7 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
                 title={promptName(prompt.value.name)}
                 badge={badge(prompt)}
                 tags={[...(prompt.value.task ? [TASK_NAMES[prompt.value.task]] : []), ...tags(prompt.id)]}
-                aside={usage(prompt)}
+                aside={[whereIs(index, folderOf(prompt)), usage(prompt)].filter(Boolean).join(' · ') || undefined}
                 onClick={() => onPick(prompt.id)}
               />
             ))}
@@ -164,13 +196,31 @@ export function PromptList({ onPick, inUse, defaults = false, frame }: Props) {
         ) : (
           <Empty variant="section">{search.none}</Empty>
         )
-      ) : top.length ? (
-        <CardList label={`${current.label} 프롬프트`}>{top.map(row)}</CardList>
       ) : (
-        <Empty variant="section" action={adding}>
-          {current.none}
-        </Empty>
+        <>
+          {filing && (
+            <FolderPath kind="prompt" path={at.path} onGo={onGo} onName={naming.name} dropInto={moving.dropInto}>
+              <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
+                {moving.picked ? '완료' : '선택해서 옮기기'}
+              </Button>
+            </FolderPath>
+          )}
+          {folderRows.length + top.length > 0 ? (
+            <CardList label={`${current.label} 프롬프트`}>
+              {folderRows}
+              {top.map((prompt) => row(prompt))}
+            </CardList>
+          ) : at.here && filing ? (
+            <Empty variant="section">비어 있는 폴더예요.</Empty>
+          ) : (
+            <Empty variant="section" action={adding}>
+              {current.none}
+            </Empty>
+          )}
+        </>
       )}
+      {moving.bar}
+      {naming.dialog}
     </>
   );
   return frame({ head: { title: PAGES.prompts, actions }, body });

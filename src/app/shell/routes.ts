@@ -25,11 +25,12 @@ export type Route =
   | { kind: 'connect-direct'; address: string }
   | { kind: 'connection'; id: string }
   // pane: the prompt editor's pane that is open, which a door to a prompt's 토글, 모델 or 이미지 names; null, a block.
-  | { kind: 'prompts' }
+  // place on a list of things that folders hold: a folder's id, or null for the top.
+  | { kind: 'prompts'; place: string | null }
   | { kind: 'prompt'; id: string; pane: PromptPane | null }
-  | { kind: 'personas' }
+  | { kind: 'personas'; place: string | null }
   | { kind: 'persona'; id: string }
-  | { kind: 'modules' }
+  | { kind: 'modules'; place: string | null }
   | { kind: 'module'; id: string; pane: 'toggles' | null }
   | { kind: 'tool-page'; module: string }
   | { kind: 'models' }
@@ -50,8 +51,13 @@ export type Route =
   | { kind: 'settings' };
 
 export const HOME: Route = { kind: 'home' };
-// 캐릭터 둘러보기's place: a folder's id, BIN_PLACE for 휴지통, or null for the top (실험실 탐색기식 폴더 only).
+// 캐릭터 둘러보기's place: a folder's id, BIN_PLACE for 휴지통, or null for the top.
 export const BIN_PLACE = 'bin';
+const placeOf = (params: URLSearchParams) => {
+  const place = params.get('in');
+  return place !== null && ID.test(place) ? place : null;
+};
+const placed = (path: string, place: string | null) => (place === null ? path : `${path}?in=${place}`);
 
 type Kind<K extends Route['kind']> = Extract<Route, { kind: K }>;
 export type Below = Exclude<Route, Kind<'home' | 'settings' | 'share'>>;
@@ -75,8 +81,7 @@ export function parseRoute(at: string): Route {
   if (rest.length > 0) return HOME;
   if (top === 'characters') {
     if (id === undefined) {
-      const place = params.get('in');
-      return { kind: 'gallery', place: place !== null && (place === BIN_PLACE || ID.test(place)) ? place : null };
+      return { kind: 'gallery', place: params.get('in') === BIN_PLACE ? BIN_PLACE : placeOf(params) };
     }
     if (id === NONE) return sub === undefined ? { kind: 'shelf', character: null } : HOME;
     if (!ID.test(id)) return HOME;
@@ -103,17 +108,17 @@ export function parseRoute(at: string): Route {
     return type ? { kind: 'connect', type } : HOME;
   }
   if (top === 'prompts') {
-    if (id === undefined) return { kind: 'prompts' };
+    if (id === undefined) return { kind: 'prompts', place: placeOf(params) };
     if (!ID.test(id) || sub !== undefined) return HOME;
     const pane = params.get('pane');
     return { kind: 'prompt', id, pane: PROMPT_PANES.find((each) => each === pane) ?? null };
   }
   if (top === 'personas' && sub === undefined) {
-    if (id === undefined) return { kind: 'personas' };
+    if (id === undefined) return { kind: 'personas', place: placeOf(params) };
     return ID.test(id) ? { kind: 'persona', id } : HOME;
   }
   if (top === 'modules') {
-    if (id === undefined) return { kind: 'modules' };
+    if (id === undefined) return { kind: 'modules', place: placeOf(params) };
     if (!ID.test(id)) return HOME;
     if (sub === 'page') return { kind: 'tool-page', module: id };
     return sub === undefined ? { kind: 'module', id, pane: params.get('pane') === 'toggles' ? 'toggles' : null } : HOME;
@@ -153,7 +158,7 @@ export function href(route: Route): string {
     case 'home':
       return '/';
     case 'gallery':
-      return route.place === null ? '/characters' : `/characters?in=${route.place}`;
+      return placed('/characters', route.place);
     case 'shelf':
       return `/characters/${route.character ?? NONE}`;
     case 'edit':
@@ -173,15 +178,15 @@ export function href(route: Route): string {
     case 'connection':
       return `/connections/${route.id}`;
     case 'prompts':
-      return '/prompts';
+      return placed('/prompts', route.place);
     case 'prompt':
       return `/prompts/${route.id}${route.pane ? `?pane=${route.pane}` : ''}`;
     case 'personas':
-      return '/personas';
+      return placed('/personas', route.place);
     case 'persona':
       return `/personas/${route.id}`;
     case 'modules':
-      return '/modules';
+      return placed('/modules', route.place);
     case 'module':
       return `/modules/${route.id}${route.pane ? `?pane=${route.pane}` : ''}`;
     case 'tool-page':
@@ -295,7 +300,8 @@ export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
 // use their answer.
 export function up(route: Below, chatShelf?: string | null): Route {
   switch (route.kind) {
-    // The route does not know a folder's parent: ← from inside one goes to the top, browser back a level.
+    // The route does not know a folder's parent: ← from inside one, here or on the settings lists below, goes to the
+    // top; browser back goes up a level.
     case 'gallery':
       return route.place === null ? HOME : { kind: 'gallery', place: null };
     case 'shelf':
@@ -307,10 +313,12 @@ export function up(route: Below, chatShelf?: string | null): Route {
       const shelf = shelfOf(route, chatShelf);
       return shelf === undefined ? HOME : { kind: 'shelf', character: shelf };
     }
-    case 'connections':
     case 'prompts':
     case 'personas':
     case 'modules':
+      if (route.place !== null) return { ...route, place: null };
+    // falls through
+    case 'connections':
     case 'models':
     case 'account':
     case 'chat-settings':
@@ -330,11 +338,11 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'connect-direct':
       return { kind: 'add-connection' };
     case 'prompt':
-      return { kind: 'prompts' };
+      return { kind: 'prompts', place: null };
     case 'persona':
-      return { kind: 'personas' };
+      return { kind: 'personas', place: null };
     case 'module':
-      return route.pane ? { ...route, pane: null } : { kind: 'modules' };
+      return route.pane ? { ...route, pane: null } : { kind: 'modules', place: null };
     case 'tool-page':
       return { kind: 'module', id: route.module, pane: null };
     case 'profile':

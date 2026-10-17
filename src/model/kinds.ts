@@ -1,7 +1,8 @@
 import type { Connection } from '../connectors/types';
 import type { CachePrint } from './cache';
 import type { Chat, Entry, Summary } from './chat';
-import type { Asset, Avatar, Character, Folder, Lore, Module } from './library';
+import type { Folder } from './folders';
+import type { Asset, Avatar, Character, Lore, Module } from './library';
 import type { Illustration } from './illustration';
 import type { Likeness } from './likeness';
 import type { Remark } from './mascot';
@@ -144,7 +145,9 @@ const unread = shape({ text: str });
 const toggleLine: Check = (value) =>
   isRecord(value) && (value.kind === 'groupEnd' || (value.kind === 'divider' || value.kind === 'caption' || value.kind === 'group' ? mark : value.kind === 'unread' ? unread : toggle)(value));
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(toggleLine) });
-const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
+// filed: the folder a thing sits in, absent for none (model/folders).
+const filed: Check = (value) => value === undefined || str(value);
+const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord, folder: filed });
 const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate' || value === 'mascot', model: (value) => value === undefined || isRecord(value) });
 
 const SHAPES = {
@@ -166,11 +169,11 @@ const SHAPES = {
     folder: orNull(str),
     loreFolders: listOf(shape({ id: str, name: str })),
   }),
-  module: shape({ name: str, description: str, namespace: orNull(str), regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: listOf(toggleLine), loreFolders: listOf(shape({ id: str, name: str })) }),
+  module: shape({ name: str, description: str, namespace: orNull(str), folder: filed, regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: listOf(toggleLine), loreFolders: listOf(shape({ id: str, name: str })) }),
   tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model' || value === 'embed' || value === 'memory'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
   tooldata: shape({ key: str, value: (value) => value !== undefined }),
   toolchat: shape({ module: str, key: orNull(str), value: (value) => value !== undefined }),
-  folder: shape({ name: str }),
+  folder: shape({ name: str, of: (value) => value === undefined || value === 'prompt' || value === 'module' || value === 'persona' }),
   lore: shape({
     ...all(bool, 'enabled', 'constant', 'selective', 'useRegex', 'caseSensitive'),
     name: str,
@@ -221,7 +224,7 @@ const SHAPES = {
     ? shape({ at: num, call: shape({ ...all(str, 'id', 'connection', 'model', 'modelName', 'source'), calibration }), chat: orNull(str), character: orNull(str) })(value)
     : value.type === 'cost' && shape({ call: str, cost: orNull(isRecord), at: num })(value)),
   prompt: (value) => prompt(value) && (conversation(value) || task(value)),
-  persona: shape({ name: str, description: str, picture: orNull(str) }),
+  persona: shape({ name: str, description: str, picture: orNull(str), folder: filed }),
   profile: shape({ name: str, settings: isRecord }),
 } satisfies Record<Kind, Check>;
 

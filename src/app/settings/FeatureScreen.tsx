@@ -18,7 +18,7 @@ import { FEATURE_HELP, FeatureSwitch } from './FeatureDefaults';
 import { GlobalNoteField } from './GlobalNoteField';
 import { MemoryDefaults } from './MemoryDefaults';
 
-const editPrompt = (door: PromptDoor) => navigate(door ? { kind: 'prompt', ...door } : { kind: 'prompts' });
+const editPrompt = (door: PromptDoor) => navigate(door ? { kind: 'prompt', ...door } : { kind: 'prompts', place: null });
 
 export function FeatureScreen({ feature, back }: { feature: Feature; back: Back }) {
   const name = FEATURE_NAMES[feature];

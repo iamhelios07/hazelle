@@ -1,9 +1,11 @@
-import { FileText } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { FileText, Folder } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, isDefaultPrompt, ofSort, type PromptChoice } from '../../runtime/prompts';
 import { useSearch } from '../common/useSearch';
-import { byLastUse, byPromptName, groupPrompts } from '../common/promptCopies';
+import { byLastUse, byPromptName, groupPrompts, promptFolder } from '../common/promptCopies';
+import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
+import { FolderPath } from '../common/folders/FolderParts';
 import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
 import { defaultMark, DELETED_PROMPT, follows, promptName } from '../common/words';
 import { useSession, useSettings, usePrompts } from '../session';
@@ -29,11 +31,12 @@ export function ChatPromptPicker({ prompt, open, onOpen }: { prompt: PromptChoic
   );
 }
 
-// Mounted only while open, so each opening starts with an empty search. A touch screen gets no focused search, whose
-// keyboard would cover the list.
+// Mounted only while open, so each opening starts with an empty search, in the folder of the chat's own prompt. A touch
+// screen gets no focused search, whose keyboard would cover the list.
 export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: PromptChoice; onChoose: ChatSettingsActions['setPrompt']; onEdit: (id: string | null) => void; onClose: () => void }) {
   const { store } = useSession();
-  const prompts = usePrompts().filter((each) => ofSort(each, 'conversation'));
+  const all = usePrompts();
+  const prompts = useMemo(() => all.filter((each) => ofSort(each, 'conversation')), [all]);
   const uses = usePromptUse();
   const settings = useSettings();
   const toast = useToast();
@@ -42,9 +45,12 @@ export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: Pr
     if (hasFinePointer()) field.current?.focus();
   }, []);
   const fallback = chatPrompt(store, {});
-  const grouped = groupPrompts(prompts);
+  const grouped = useMemo(() => groupPrompts(prompts), [prompts]);
   const own = prompt.own && prompt.kind === 'prompt' ? prompt.prompt.id : null;
   const search = useSearch(prompts.toSorted(byPromptName), '프롬프트 검색', (item) => [promptName(item.value.name)], { ref: field, onEnter: (first) => choose(first.id) });
+  const index = useFolderIndex('prompt', grouped.top, promptFolder);
+  const [place, setPlace] = useState(() => (own !== null && prompt.kind === 'prompt' ? promptFolder(prompt.prompt) : null));
+  const at = placeIn(index, place, search.words !== '');
 
   function choose(value: string | null) {
     onClose();
@@ -61,7 +67,7 @@ export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: Pr
       key={item.id}
       title={promptName(item.value.name)}
       badge={defaultMark(isDefaultPrompt(settings, item), item.value.name)}
-      aside={promptUseWords(uses.get(item.id) ?? EMPTY_USE)}
+      aside={[!nested && search.words ? whereIs(index, promptFolder(item)) : undefined, promptUseWords(uses.get(item.id) ?? EMPTY_USE)].filter(Boolean).join(' · ')}
       selected={item.id === own}
       onClick={() => choose(item.id)}
     >
@@ -83,10 +89,14 @@ export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: Pr
   );
   return (
     <Dialog title="이 채팅의 프롬프트" onClose={onClose} toolbar={search.field || undefined} footer={footer}>
+      {index.folders.length > 0 && !search.words && <FolderPath kind="prompt" path={at.path} onGo={setPlace} />}
       {search.none && <Empty>{search.none}</Empty>}
       <List label="프롬프트">
-        {!search.words && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
-        {search.words ? search.found.map((item) => row(item, false)) : grouped.top.toSorted(byLastUse(uses, grouped.copies)).map((item) => row(item, true))}
+        {!search.words && !at.here && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
+        {at.folders.map((folder) => (
+          <ListItem key={folder.id} leading={<Icon icon={Folder} size="sm" />} title={folder.value.name} aside={folderNote('prompt', index.byFolder.get(folder.id)!)} onClick={() => setPlace(folder.id)} />
+        ))}
+        {search.words ? search.found.map((item) => row(item, false)) : at.placed(grouped.top).toSorted(byLastUse(uses, grouped.copies)).map((item) => row(item, true))}
       </List>
     </Dialog>
   );

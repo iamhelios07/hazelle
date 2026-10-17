@@ -67,7 +67,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
 
   function remove() {
     void setModuleDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
-    navigate({ kind: 'modules' });
+    navigate({ kind: 'modules', place: null });
     toast.undoable(`'${moduleName(name)}' 모듈을 삭제했어요.`, () => setModuleDeleted(store, id, null), BIN_KEEPS);
   }
 

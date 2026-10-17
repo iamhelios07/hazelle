@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import type { Stored } from './kinds';
-import { characterTexts, daysLeft, holds, indexFolders, KEEP_DELETED, nest, pathOf, shelve } from './library';
+import { characterTexts, daysLeft, KEEP_DELETED, shelve } from './library';
 
 const character = (id: string, rev: number): Stored<'character'> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: null, loreFolders: [] } });
 const chat = (id: string, character: string | null, order: number) => ({ id, chat: { character }, order });
@@ -35,34 +35,6 @@ describe('shelve', () => {
     const { characters, deleted } = shelve([character('a', 1), gone], [], [chat('c1', 'd', 5)], []);
     expect(characters.map((shelf) => shelf.id)).toEqual(['a']);
     expect(deleted.map((shelf) => [shelf.id, shelf.chats.map((item) => item.id)])).toEqual([['d', ['c1']]]);
-  });
-});
-
-describe('nest', () => {
-  it('puts subfolders under their top folder by name, and lifts one whose top folder is gone', () => {
-    const folder = (id: string, name: string, parent?: string): Stored<'folder'> => ({ id, kind: 'folder', parent: null, rev: 1, value: parent ? { name, parent } : { name } });
-    const tree = nest([folder('k', '기사단', 'f'), folder('f', '판타지'), folder('m', '마법사', 'f'), folder('o', '고아', 'gone'), folder('d', '데일리')]);
-    expect(tree.map((top) => [top.id, top.children.map((child) => child.id)])).toEqual([
-      ['o', []],
-      ['d', []],
-      ['f', ['k', 'm']],
-    ]);
-    const inKnights = character('a', 1).value;
-    inKnights.folder = 'k';
-    expect(holds(tree[2]!, inKnights)).toBe(true);
-    expect(holds(tree[2]!.children[1]!, inKnights)).toBe(false);
-  });
-
-  it('nests a third level, whose characters its top folder holds and whose path runs from the top', () => {
-    const folder = (id: string, name: string, parent?: string): Stored<'folder'> => ({ id, kind: 'folder', parent: null, rev: 1, value: parent ? { name, parent } : { name } });
-    const tree = nest([folder('s', '학원물', 'k'), folder('k', '기사단', 'f'), folder('f', '판타지')]);
-    expect(tree.map((top) => top.id)).toEqual(['f']);
-    expect(tree[0]!.children[0]!.children.map((child) => child.id)).toEqual(['s']);
-    const inSchool = character('a', 1).value;
-    inSchool.folder = 's';
-    expect(holds(tree[0]!, inSchool)).toBe(true);
-    const { byFolder } = indexFolders([], tree);
-    expect(pathOf(byFolder, 's').map(({ id }) => id)).toEqual(['f', 'k', 's']);
   });
 });
 

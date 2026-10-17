@@ -69,7 +69,8 @@ export const mascotPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, '
 // changing every turn does not invalidate the history's cached prefix. The notes after the chat and the two texts
 // a card replaces start empty, so a card's system prompt and post-history instructions have their places. A new
 // task prompt starts as the account's default of its sort is, or the built-in one while that is gone.
-export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id?: string): Promise<ApiResult<Stored<'prompt'>>> {
+// folder: where a conversation prompt is filed (model/folders); task prompts are never filed.
+export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id?: string, folder?: string): Promise<ApiResult<Stored<'prompt'>>> {
   const named = () => ({ id: crypto.randomUUID(), name: null });
   if (sort !== 'conversation') {
     const base = choose(store, sort, undefined);
@@ -88,7 +89,7 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id
     { ...named(), kind: 'slot', slot: 'authorNote', role: 'system', wrapper: null },
     { ...named(), kind: 'slot', slot: 'postEverything' },
   ];
-  return store.create('prompt', { name, blocks, toggles: [], authorNote: '', models: {} }, { id });
+  return store.create('prompt', { name, blocks, toggles: [], authorNote: '', models: {}, ...(folder !== undefined && { folder }) }, { id });
 }
 
 // paired: the modules turned on for it, those its preset named that were here and then made, the module that holds its
