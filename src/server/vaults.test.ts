@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ACCOUNT_HEADER, VISITOR_HEADER } from '../contracts/http';
-import { proof, testApp } from './testing';
+import { proof, sessionCookie, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -21,6 +21,16 @@ describe('password change', () => {
     const loggedIn = await login('password', change.passwordProof);
     expect(((await loggedIn.json()) as { vault: unknown }).vault).toEqual({ passwordWrap: 'bmV3IHdyYXA=', recoveryWrap: body.recoveryWrap });
     expect((await login('recovery', body.recoveryProof)).status).toBe(200);
+  });
+
+  it('ends every other session of the account and keeps the one that changed it', async () => {
+    const { body, cookie } = await t.signUp('jin');
+    const stolen = sessionCookie(await login('password', body.passwordProof));
+    const change = { method: 'recovery', proof: body.recoveryProof, passwordProof: proof('new password'), passwordWrap: 'bmV3IHdyYXA=' };
+
+    expect((await t.put('vault/password', change, cookie)).status).toBe(204);
+    expect((await t.get('objects?since=0', stolen)).status).toBe(401);
+    expect((await t.get('objects?since=0', cookie)).status).toBe(200);
   });
 
   it('keys authenticated proof failures by visitor and account, sharing backoff with login but not another address', async () => {

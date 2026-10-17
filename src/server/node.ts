@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { once } from 'node:events';
-import type { AddressInfo } from 'node:net';
+import { BlockList, isIP, type AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
@@ -43,7 +43,26 @@ function wholeFrom(name: string, fallback: number, min: number, max: number): nu
   }
   return value;
 }
+// Addresses or CIDR ranges, comma-separated, whose X-Forwarded-For names the visitor (frontend-worker.ts). Blank trusts
+// none. An entry that is neither refuses the start, as a malformed number does.
+function proxiesFrom(name: string): BlockList {
+  const trusted = new BlockList();
+  for (const entry of (process.env[name] ?? '').split(',').map((part) => part.trim()).filter(Boolean)) {
+    const [, address = '', prefix] = /^([^/]+)(?:\/(\d{1,3}))?$/.exec(entry) ?? [];
+    const family = isIP(address);
+    const bits = prefix === undefined ? null : Number(prefix);
+    if (!family || (bits !== null && bits > (family === 4 ? 32 : 128))) {
+      console.error(`hazelle: ${name} must list addresses or CIDR ranges: ${entry}`);
+      process.exit(1);
+    }
+    const type = family === 4 ? 'ipv4' : 'ipv6';
+    if (bits === null) trusted.addAddress(address, type);
+    else trusted.addSubnet(address, bits, type);
+  }
+  return trusted;
+}
 const port = wholeFrom('PORT', 8080, 1, 65535);
+const trustedProxies = proxiesFrom('HAZELLE_TRUSTED_PROXIES');
 const drainMs = wholeFrom('HAZELLE_DRAIN_SECONDS', 60, 0, 3600) * 1000;
 const snapshotHour = wholeFrom('HAZELLE_SNAPSHOT_HOUR', 3, 0, 23);
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
@@ -131,7 +150,7 @@ const server = serve({ fetch: (request) => root.fetch(request, services, ctx), h
 await once(server, 'listening');
 // The public listener owns no databases, so even a synchronous SQL operation cannot hold its asset responses.
 const frontend = new Worker(new URL(import.meta.url.endsWith('.ts') ? './frontend-worker.ts' : './frontend-worker.js', import.meta.url), {
-  workerData: { port, apiPort: (server.address() as AddressInfo).port, clientDir } satisfies FrontendOptions,
+  workerData: { port, apiPort: (server.address() as AddressInfo).port, clientDir, trustedProxies } satisfies FrontendOptions,
 });
 frontend.on('error', (error) => { log('frontend failed', { error: String(error) }); process.exit(1); });
 frontend.on('exit', (code) => { if (!draining) { log('frontend stopped', { code }); process.exit(1); } });

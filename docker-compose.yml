@@ -23,6 +23,8 @@ services:
       # a private address; every other such destination stays refused.
       HAZELLE_LOCAL_PROVIDERS: host.docker.internal:11434,host.docker.internal:1234,host.docker.internal:5001
       HAZELLE_ALERT_WEBHOOK: ${HAZELLE_ALERT_WEBHOOK:-}
+      # A reverse proxy of your own in front (README "Other settings"); left empty, the connection's peer is the visitor.
+      HAZELLE_TRUSTED_PROXIES: ${HAZELLE_TRUSTED_PROXIES:-}
       # Pictures in R2 instead of the volume (README "Pictures in R2"); left empty, they stay on the volume.
       HAZELLE_FILES_BUCKET: ${HAZELLE_FILES_BUCKET:-}
       HAZELLE_FILES_R2_ENDPOINT: ${HAZELLE_FILES_R2_ENDPOINT:-}

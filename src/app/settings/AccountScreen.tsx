@@ -1,4 +1,7 @@
+import { logOutOthers } from '../../runtime/account';
+import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
+import { count } from '../common/typedNumber';
 import { useAccount, useSession, useStanding } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { AccountSection, Back } from '../shell/routes';
@@ -25,6 +28,11 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
   const { onLock, onLogout } = useAccount();
   const { suspended, storage } = useStanding();
   const toast = useToast();
+  async function logOutElsewhere() {
+    const ended = await logOutOthers();
+    if (!ended.ok) return toast.error('다른 기기에서 로그아웃하지 못했어요.', { detail: describeFailure(ended) });
+    toast.show(ended.data.ended ? `다른 기기 ${count(ended.data.ended)}곳에서 로그아웃했어요.` : '로그인한 다른 기기가 없어요.');
+  }
   return (
     <Screen width="page" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
       <Stack gap="group">
@@ -49,6 +57,15 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
             help="저장한 내용은 암호화된 채로 서버에 남아요."
             control={
               <Button variant="secondary" size="sm" onClick={() => void onLogout().then((failure) => failure && toast.error(failure))}>
+                로그아웃
+              </Button>
+            }
+          />
+          <SettingRow
+            label="다른 기기에서 로그아웃"
+            help="지금 쓰는 기기는 로그인한 채로 남아요."
+            control={
+              <Button variant="secondary" size="sm" onClick={() => void logOutElsewhere()}>
                 로그아웃
               </Button>
             }

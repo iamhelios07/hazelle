@@ -4,12 +4,13 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFi
 import { createServer as httpServer, request } from 'node:http';
 import { once } from 'node:events';
 import { Worker } from 'node:worker_threads';
-import { createServer } from 'node:net';
+import { BlockList, connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { buildSync } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { VISITOR_HEADER } from '../contracts/http';
 import { MAX_FILE_BYTES } from './files';
 import { sha256Hex } from './http';
 import { CSP } from './static';
@@ -84,7 +85,7 @@ describe('the server process', () => {
     await once(api, 'listening');
     const port = await freePort();
     const frontend = new Worker(join(process.cwd(), dirname(bundle), 'frontend-worker.js'), {
-      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client },
+      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client, trustedProxies: new BlockList() },
       stderr: true,
     });
     let log = '';
@@ -111,6 +112,65 @@ describe('the server process', () => {
     }
   }, 15_000);
 
+  it('ends hop-by-hop headers at the proxy both ways, so a bodyless request with a Trailer is answered', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const api = httpServer((incoming, outgoing) => {
+      seen.push(incoming.headers);
+      outgoing.writeHead(200, { connection: 'x-api-hop', 'x-api-hop': '1', 'keep-alive': 'timeout=5', 'proxy-authenticate': 'Basic', 'x-kept': '1' });
+      outgoing.end('done');
+    }).listen(0, '127.0.0.1');
+    await once(api, 'listening');
+    const port = await freePort();
+    const frontend = new Worker(join(process.cwd(), dirname(bundle), 'frontend-worker.js'), {
+      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client, trustedProxies: new BlockList() },
+    });
+    const send = (lines: string[]) =>
+      new Promise<string>((resolve) => {
+        const socket = connect(port, '127.0.0.1');
+        let answer = '';
+        socket.on('data', (chunk: Buffer) => (answer += chunk.toString()));
+        socket.on('close', () => resolve(answer));
+        socket.write([...lines, 'Connection: close', '', ''].join('\r\n'));
+      });
+    try {
+      await once(frontend, 'message');
+      const answer = await send(['GET /api/probe HTTP/1.1', 'Host: localhost', 'Trailer: X-Probe', 'TE: trailers', 'Keep-Alive: timeout=1', 'Proxy-Authorization: Basic x', 'Upgrade: h2c', 'Connection: x-client-hop', 'X-Client-Hop: 1']);
+      expect(answer).toMatch(/^HTTP\/1\.1 200 /);
+      expect(answer.toLowerCase()).not.toMatch(/x-api-hop|keep-alive|proxy-authenticate/);
+      expect(answer.toLowerCase()).toContain('x-kept: 1');
+      expect(Object.keys(seen[0]!).filter((name) => ['trailer', 'te', 'keep-alive', 'proxy-authorization', 'upgrade', 'x-client-hop'].includes(name))).toEqual([]);
+      expect(await send(['GET /api/again HTTP/1.1', 'Host: localhost'])).toMatch(/^HTTP\/1\.1 200 /);
+    } finally {
+      await frontend.terminate();
+      await new Promise<void>((resolve) => api.close(() => resolve()));
+    }
+  }, 15_000);
+
+  it('takes the visitor from X-Forwarded-For only when the connection comes from a trusted proxy', async () => {
+    const visitors: unknown[] = [];
+    const api = httpServer((incoming, outgoing) => {
+      visitors.push(incoming.headers[VISITOR_HEADER]);
+      outgoing.end('done');
+    }).listen(0, '127.0.0.1');
+    await once(api, 'listening');
+    const loopback = new BlockList();
+    loopback.addSubnet('127.0.0.0', 8, 'ipv4');
+    for (const trustedProxies of [new BlockList(), loopback]) {
+      const port = await freePort();
+      const frontend = new Worker(join(process.cwd(), dirname(bundle), 'frontend-worker.js'), {
+        workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client, trustedProxies },
+      });
+      try {
+        await once(frontend, 'message');
+        await fetch(`http://127.0.0.1:${port}/api/probe`, { headers: { 'x-forwarded-for': '127.0.0.1, 203.0.113.9' } });
+      } finally {
+        await frontend.terminate();
+      }
+    }
+    await new Promise<void>((resolve) => api.close(() => resolve()));
+    expect(visitors).toEqual(['::ffff:127.0.0.1', '203.0.113.9']);
+  }, 15_000);
+
   it('retires idle proxy sockets before the API deadline without timing out an active response', async () => {
     let connections = 0;
     let closed = 0;
@@ -126,7 +186,7 @@ describe('the server process', () => {
     await once(api, 'listening');
     const port = await freePort();
     const frontend = new Worker(join(process.cwd(), dirname(bundle), 'frontend-worker.js'), {
-      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client },
+      workerData: { port, apiPort: (api.address() as { port: number }).port, clientDir: client, trustedProxies: new BlockList() },
     });
     const get = async (path: string) => {
       const response = await fetch(`http://127.0.0.1:${port}/api/${path}`, { signal: AbortSignal.timeout(5000) });
@@ -219,6 +279,9 @@ describe('the server process', () => {
     const refused = start(join(dir, 'data-bad-env'), await freePort(), { HAZELLE_SNAPSHOT_HOUR: '24' });
     expect(await refused.exited).toBe(1);
     expect(refused.log()).toContain('HAZELLE_SNAPSHOT_HOUR must be a whole number from 0 to 23');
+    const untrusted = start(join(dir, 'data-bad-proxies'), await freePort(), { HAZELLE_TRUSTED_PROXIES: '172.30.0.0/24, 172.30.0.0/' });
+    expect(await untrusted.exited).toBe(1);
+    expect(untrusted.log()).toContain('HAZELLE_TRUSTED_PROXIES must list addresses or CIDR ranges: 172.30.0.0/');
 
     const data = join(dir, 'data-signal');
     const port = await freePort();

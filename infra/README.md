@@ -128,9 +128,11 @@ Under attack: `terraform apply -target=vultr_firewall_rule.web -var edge=cloudfl
 Cloudflare's dashboard. Vultr applies a firewall change in up to about 7 minutes. The address is public by then, which
 is why the firewall, not the proxy alone, is the shield. Back: the same with `edge=direct` and the proxy off.
 
-The share links' per-visitor limiter (src/server/frontend-worker.ts) keys each visitor on the last X-Forwarded-For
-entry, which is Caddy's; with `edge = cloudflare` that is a Cloudflare address and every visitor would share a few keys,
-so switching the edge needs the worker to read CF-Connecting-IP first.
+The login, signup and share-link limits key each visitor on the last X-Forwarded-For entry when the connection comes
+from `HAZELLE_TRUSTED_PROXIES` (src/server/frontend-worker.ts), which `docker-compose.hosted.yml` sets to the `edge`
+network that Caddy alone shares with the app. That entry is the address Caddy saw; with `edge = cloudflare` it is a
+Cloudflare address and every visitor would share a few keys, so switching the edge needs Caddy to name the visitor
+Cloudflare saw (CF-Connecting-IP) first.
 
 ## State
 

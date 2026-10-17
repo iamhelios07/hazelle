@@ -12,7 +12,11 @@ services:
     environment:
       # No local model servers here: every plain-http or private destination is refused.
       HAZELLE_LOCAL_PROVIDERS: !reset null
+      # The edge network's subnet: Caddy is the only other container on it and no port of the app is published, so a
+      # peer from it is Caddy, and its X-Forwarded-For names the visitor. Change both together.
+      HAZELLE_TRUSTED_PROXIES: 172.30.0.0/24
     extra_hosts: !reset []
+    networks: [edge]
 
   backup:
     volumes:
@@ -30,11 +34,18 @@ services:
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy:/data
+    networks: [edge]
     logging:
       driver: json-file
       options:
         max-size: 50m
         max-file: "5"
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   caddy:
