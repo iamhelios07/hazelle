@@ -6,7 +6,7 @@ import { checkProof, findAccount, hashProof, outsideVisitor, readMethod, readPro
 import { VISIBLE } from './admin';
 import { fail, ID, readObject, type Account, type AppEnv } from './http';
 import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
-import { canWrite, currentAccount, dropSessionCookie, endSession, requireOwnSession, requireSession, setSessionCookie, startSession } from './session';
+import { canWrite, currentAccount, dropSessionCookie, endOtherSessions, endSession, requireOwnSession, requireSession, setSessionCookie, startSession } from './session';
 import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
@@ -90,6 +90,12 @@ accounts.post('/login', async (c) => {
 accounts.post('/logout', async (c) => {
   await endSession(c);
   return c.body(null, 204);
+});
+
+// No proof asked: a stolen session can only make the owner sign in again, and a new password ends it (vaults.ts).
+accounts.post('/logout/others', requireSession, async (c) => {
+  const { meta } = await endOtherSessions(c).run();
+  return c.json({ ended: meta.changes });
 });
 
 // Everything a page load needs, in one request: from Korea each round trip can take seconds.

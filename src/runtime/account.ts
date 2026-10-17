@@ -64,6 +64,7 @@ export const loadSession = () => api<Boot>('GET', 'session');
 export const signUp = (signup: Signup) => api<SessionFacts>('POST', 'signup', signup);
 export const logIn = (username: string, credential: Proof) => api<SignedIn>('POST', 'login', { username, ...proven(credential) });
 export const logOut = () => api<undefined>('POST', 'logout');
+export const logOutOthers = () => api<{ ended: number }>('POST', 'logout/others');
 export const changePassword = (current: Proof, next: { passwordProof: string; passwordWrap: string }) =>
   api<undefined>('PUT', 'vault/password', { ...proven(current), ...next });
 

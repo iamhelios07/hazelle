@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { checkProof, findAccount, hashProof, readMethod, readProof } from './credentials';
 import type { Db } from './db/service-db';
 import { fail, readObject, type AppEnv } from './http';
-import { requireSession } from './session';
+import { endOtherSessions, requireSession } from './session';
 
 // The server stores the wrapped keys without understanding them. The cap only keeps rows small: a real wrap is 80
 // characters.
@@ -32,8 +32,9 @@ export function readWrap(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_WRAP_LENGTH ? value : null;
 }
 
-// A new password replaces the login hash and the password wrap together. It needs the current password
-// or the recovery key, so a stolen session alone cannot lock the owner out.
+// A new password replaces the login hash and the password wrap and ends every other session, together: a session
+// stolen before the reset must not outlive it. It needs the current password or the recovery key, so a stolen session
+// alone cannot lock the owner out.
 vaults.put('/password', async (c) => {
   const body = await readObject(c);
   const method = readMethod(body?.method);
@@ -49,6 +50,7 @@ vaults.put('/password', async (c) => {
   await db.batch([
     db.prepare('UPDATE accounts SET login_hash = ? WHERE id = ?').bind(hashProof(passwordProof), id),
     db.prepare('UPDATE vaults SET password_wrap = ?, updated_at = ? WHERE account_id = ?').bind(passwordWrap, Date.now(), id),
+    endOtherSessions(c),
   ]);
   return c.body(null, 204);
 });

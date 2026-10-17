@@ -92,6 +92,12 @@ export async function endSession(c: Context<AppEnv>) {
   dropSessionCookie(c);
 }
 
+// Behind requireSession, which read this cookie and set the account it names. The presented session stays.
+export function endOtherSessions(c: Context<AppEnv>) {
+  const token = getCookie(c, 'session', 'host')!;
+  return c.env.db.prepare('DELETE FROM sessions WHERE account_id = ? AND token_hash <> ?').bind(c.get('account').id, sha256Hex(token));
+}
+
 export function dropSessionCookie(c: Context) {
   deleteCookie(c, 'session', { prefix: 'host' });
 }

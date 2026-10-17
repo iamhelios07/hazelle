@@ -161,6 +161,16 @@ describe('accounts', () => {
     expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
   });
 
+  it('logs out every other device and keeps this one', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    const other = sessionCookie(await post('login', { username: 'jin', method: 'password', proof: body.passwordProof }));
+    const ended = await post('logout/others', undefined, cookie);
+    expect(await ended.json()).toEqual({ ended: 1 });
+    expect((await get('objects?since=0', other)).status).toBe(401);
+    expect((await get('objects?since=0', cookie)).status).toBe(200);
+  });
+
   it('deletes an account for its own proof: its rows, sessions, vault and store go', async () => {
     await operator();
     const body = signupBody('other');
