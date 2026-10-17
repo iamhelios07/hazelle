@@ -140,19 +140,19 @@
 }
 
 /* The box, not the screen, decides: in a narrow list column on a wide screen, a field chip beside the words squeezes
-   them to a syllable a line. A switch is narrow enough to stay beside them. 440px is --screen-narrow (and
+   them to a syllable a line. A lone switch, or a folder's › (.opens), is narrow enough to stay beside them. 440px is --screen-narrow (and
    --dialog-width): a container query cannot read var(), so change them together. */
 @container (max-width: 440px) {
-  .row:not(:has(> .control > [role='switch']:only-child)) {
+  .row:not(:has(> .control > [role='switch']:only-child), .opens) {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-8);
   }
 
-  .row:has(> .menu):not(:has(> .control > [role='switch']:only-child)) {
+  .row:has(> .menu):not(:has(> .control > [role='switch']:only-child), .opens) {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .row:has(> .menu):not(:has(> .control > [role='switch']:only-child)) > .control {
+  .row:has(> .menu):not(:has(> .control > [role='switch']:only-child), .opens) > .control {
     grid-row: 2;
     grid-column: 1 / -1;
   }
@@ -168,16 +168,16 @@
 }
 
 @media (max-width: 959px) {
-  .row:not(.panel, :has(> .control > [role='switch']:only-child)) {
+  .row:not(.panel, :has(> .control > [role='switch']:only-child), .opens) {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-8);
   }
 
-  .row:has(> .menu):not(.panel, :has(> .control > [role='switch']:only-child)) {
+  .row:has(> .menu):not(.panel, :has(> .control > [role='switch']:only-child), .opens) {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .row:has(> .menu):not(.panel, :has(> .control > [role='switch']:only-child)) > .control {
+  .row:has(> .menu):not(.panel, :has(> .control > [role='switch']:only-child), .opens) > .control {
     grid-row: 2;
     grid-column: 1 / -1;
   }

@@ -41,7 +41,7 @@ type RowProps = {
 export function SettingRow({ label, folder = false, sentence, changed = false, help, sub, preview, control, action, wide = false, menu, error, note }: RowProps) {
   const id = useId();
   const grouped = useContext(Grouped);
-  const className = [styles.row, grouped ? styles.ruled : styles.panel, wide && styles.wide].filter(Boolean).join(' ');
+  const className = [styles.row, grouped ? styles.ruled : styles.panel, wide && styles.wide, folder && styles.opens].filter(Boolean).join(' ');
   return (
     <div className={className} role="group" aria-labelledby={sentence ? undefined : id} aria-label={sentence ? label : undefined}>
       <div className={styles.words}>

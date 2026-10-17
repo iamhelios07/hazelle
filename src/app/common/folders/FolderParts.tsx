@@ -51,6 +51,8 @@ type PathProps = {
 // Where an explorer stands, from the top down, with 새 폴더 and the current folder's ⋯.
 export function FolderPath({ kind, path, onGo, onName, dropInto, trail, children }: PathProps) {
   const here = path.at(-1);
+  // Where nothing is made, the top alone is only the title again.
+  if (!onName && !here && !trail && !children) return null;
   const parts = [
     { key: 'top', name: filedNoun(kind), onClick: () => onGo(null), onDropCard: dropInto?.(null) },
     ...path.map((folder) => ({ key: folder.id, name: folder.value.name, onClick: () => onGo(folder.id), onDropCard: dropInto?.(folder.id) })),
