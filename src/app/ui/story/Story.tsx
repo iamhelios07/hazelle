@@ -47,9 +47,13 @@ const pictureKey = (picture: Element) => `${picture.getAttribute(PICTURE)}:${pic
 // Sent from a message when the reader opens or closes one of its pictures, so the chat keeps its view where it is.
 export const READER_RESIZED = 'readerresized';
 // The CSP refuses a style attribute, even in the document the sanitizer parses into, so each is renamed before the
-// parse and applied through CSSOM, which the CSP allows.
-const STYLE_ATTRIBUTE = /(<[a-z][^>]*?\s)style(?=\s*=)/gi;
+// parse and applied through CSSOM, which the CSP allows. A DOMPurify hook would come too late: hooks run after the parse.
+// One match per tag, up to its first > (a > inside a quoted value ends it, as it always has), or to the end for a tag
+// never closed: a lazy scan from every < rescanned the rest of the text for each < with no > after it.
+const TAG = /<[a-z][^>]*(?:>|$)/gi;
+const STYLE_ATTRIBUTE = /(\s)style(?=\s*=)/gi;
 const SET_ASIDE = 'data-style';
+export const setStylesAside = (html: string) => html.replace(TAG, (tag) => tag.replace(STYLE_ATTRIBUTE, `$1${SET_ASIDE}`));
 // No form: the CSP does not limit where one posts. DOMPurify's own URL rule, with blob: added for the bots' pictures;
 // sanitize then keeps only the app's own sources and web links. No popover or command: either opens an element in
 // the top layer, which no containment holds, without a script. KaTeX's MathML (math.ts) wraps a formula in semantics and
@@ -64,9 +68,10 @@ const CONFIG = {
 };
 const VOID = new Set(['BR', 'HR', 'IMG', 'INPUT', 'WBR']);
 const HTML = 'http://www.w3.org/1999/xhtml';
-// The look-ahead takes the spaces itself: \s* giving one back would let url( "blob:…" ) past it.
-const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*\)/gi;
-const ANY_URL = /url\([^)]*\)/gi;
+// An url( never closed runs to the end, as CSS reads it, and goes whole: matching only a closed one rescanned the rest
+// of the text for each url(. The look-ahead takes the spaces itself: \s* giving one back would let url( "blob:…" ) past it.
+const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*(?:\)|$)/gi;
+const ANY_URL = /url\([^)]*(?:\)|$)/gi;
 // data: pictures, and blob: ones, which only the app itself can make: the chat puts its bots' pictures there.
 const OWN_SOURCE = /^(?:data|blob):/;
 const XLINK = 'http://www.w3.org/1999/xlink';
@@ -174,7 +179,7 @@ function placeInlay(fragment: DocumentFragment, mark: string | null, name: strin
 const inlayName = (index: number) => `inlay-${index}`;
 
 function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFragment {
-  const fragment = DOMPurify.sanitize(html.replace(STYLE_ATTRIBUTE, `$1${SET_ASIDE}`), CONFIG);
+  const fragment = DOMPurify.sanitize(setStylesAside(html), CONFIG);
   for (const element of fragment.querySelectorAll<HTMLElement | SVGElement>(`[${SET_ASIDE}]`)) {
     element.style.cssText = cleanCss(element.getAttribute(SET_ASIDE)!, veil !== null);
     ground(element.style);
