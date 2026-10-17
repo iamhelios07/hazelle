@@ -93,6 +93,30 @@ describe('copyShown', () => {
     await selectVersion(store, chat, copy!.id, said);
     expect(folded().map((message) => shown(message).text)).toEqual(['안녕', '다음']);
   });
+
+  it('gives the copy the pictures and remarks of the version it copied, and not those of its other versions', async () => {
+    const { store, files } = await server.account();
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: null, character: null, models: {} }, null);
+    const receipt: Receipt = { id: crypto.randomUUID(), connection: 'c', source: 'S', model: 'm', modelName: 'M', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, at: 1 };
+    const [first, swipe] = [crypto.randomUUID(), crypto.randomUUID()];
+    await appendReply(store, chat, { id: first, message: null, replaces: null, at: 1, text: '첫 답', receipt });
+    await appendReply(store, chat, { id: swipe, message: first, replaces: null, at: 2, text: '둘째 답', receipt });
+    const stored = await files.save([new Uint8Array([1, 2, 3])]);
+    const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
+    const sent = { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
+    await store.create('illustration', { message: first, version: swipe, scene, receipt: null, model: { connection: 'c', model: 'm' }, sent, file: stored.ok ? stored.data[0]! : { id: '', key: '' }, type: 'image/png', size: 3, at: 4 }, { parent: chat });
+    const remark = (version: string, line: string) => store.create('remark', { message: first, version, mascot: 'yeongae', expression: 'calm', line, receipt, model: { connection: 'c', model: 'm' }, at: 3 }, { parent: chat });
+    await remark(first, '첫 줄');
+    await remark(swipe, '둘째 줄');
+    const [message] = fold(store.children('entry', chat));
+    expect(await copyShown(store, chat, message!)).toMatchObject({ ok: true });
+    const copy = shown(fold(store.children('entry', chat))[0]!);
+    expect(copy.text).toBe('둘째 답');
+    expect(store.children('illustration', chat).filter(({ value }) => value.version === copy.id)).toHaveLength(1);
+    expect(store.children('remark', chat).filter(({ value }) => value.version === copy.id).map(({ value }) => value.line)).toEqual(['둘째 줄']);
+  });
 });
 
 describe('bookmarks', () => {

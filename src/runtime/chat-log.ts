@@ -265,9 +265,19 @@ const held = ({ text, receipt, seed, translation, staged, before, reasoning, gre
 export function copyShown(store: ObjectStore, chat: string, message: Message) {
   const current = shown(message);
   const id = crypto.randomUUID();
+  // Pictures and remarks name a version (an illustration any id it stood under), so the copy gets its own rows, as a
+  // branch gives them (copyWrites); without them the copy shows the reply bare.
+  const stood = new Set([...(current.earlier ?? []), current.id]);
+  const shownRows = (kind: 'illustration' | 'remark'): Write[] =>
+    store
+      .children(kind, chat)
+      .filter(({ value }) => value.message === message.id && stood.has(value.version))
+      .map(({ value }) => ({ type: 'create', kind, id: crypto.randomUUID(), parent: chat, value: { ...value, version: id } }));
   return store.batch([
     entryRow(chat, { type: 'version', message: message.id, replaces: null, edit: current.edited, at: current.at, ...held(current) }, id),
     ...(current.after ? [entryRow(chat, { type: 'vars', version: id, set: current.after, at: current.at })] : []),
+    ...shownRows('illustration'),
+    ...shownRows('remark'),
   ]);
 }
 
