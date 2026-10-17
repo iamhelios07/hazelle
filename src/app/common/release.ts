@@ -8,6 +8,16 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.18',
+    date: '2026-10-17',
+    lines: [
+      '설정 › 계정의 내가 보낸 알림에서 운영자에게 보낸 알림을 확인했는지, 답변이 왔는지 볼 수 있어요. 답변에는 내가 보낸 내용이 함께 보여요.',
+      '운영자가 알림을 보내면 새로고침하지 않아도 바로 알려 줘요.',
+      '이미지 최대 높이가 이미지 최대 폭으로 바뀌었어요. 가로로 긴 이미지는 글 폭을 꽉 채워요. 디스플레이의 가로 이미지는 꽉 채우기에서 끌 수 있어요.',
+      '캐릭터마다 정해 둔 이미지 최대 높이는 사라져요. 필요하면 캐릭터 편집의 최대 폭에서 다시 정해 주세요.',
+    ],
+  },
+  {
     version: 'v0.2.17',
     date: '2026-10-17',
     lines: [
