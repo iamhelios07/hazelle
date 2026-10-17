@@ -186,6 +186,7 @@ it('resets stalls after loading, then disables three consecutive stalled loads a
     await host.warm(f.chat);
     expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'stuck' && note.disabled)).toHaveLength(1);
     expect(transport.frames).toHaveLength(5);
+    expect(host.hears(f.module, 'showing')).toBe(false);
     const context = f.context();
     await expect(host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, context.host)).rejects.toMatchObject({ disabled: true });
   } finally { vi.useRealTimers(); host.close(); }
@@ -506,5 +507,19 @@ it('answers a frame tool\'s unload callbacks while its port stays open, then clo
     await setModuleAlways(session.store, module, false);
     await vi.waitFor(() => expect(toolData(session.store, module, 'plugin:last')).toBe('saved'), { timeout: 3000 });
     await vi.waitFor(() => expect(transport.frames[0]!.host.closed).toBe(true));
+  } finally { host.close(); }
+}));
+
+it('learns of a listener a tool adds after it has loaded', () => withTools(async (session, connect) => {
+  const f = await fixture(session);
+  let later!: () => void;
+  const transport = inProcessTools((api) => { later = () => api.on('showing', () => {}); });
+  const host = connect(transport.open);
+  try {
+    expect(host.hears(f.module, 'showing')).toBeNull();
+    await host.warm(f.chat);
+    expect(host.hears(f.module, 'showing')).toBe(false);
+    later();
+    await vi.waitFor(() => expect(host.hears(f.module, 'showing')).toBe(true));
   } finally { host.close(); }
 }));

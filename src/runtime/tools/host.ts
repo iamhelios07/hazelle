@@ -155,6 +155,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   };
 
   readonly hears = (module: string, event: EventName): boolean | null => {
+    if ((this.stalls.get(module) ?? 0) >= 3) return false;
     const frame = this.entries.get(module)?.background;
     return frame?.loaded ? frame.listens.has(event) : null;
   };
