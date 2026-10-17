@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { fold, type Chat, type Receipt } from '../model/chat';
+import { fold, shown, type Chat, type Receipt } from '../model/chat';
 import { memoryId } from '../model/memory';
 import { chatFile, readChatFile } from './chat-file';
-import { appendReply, appendTranslation, appendUserMessage, selectVersion, startChat } from './chat-log';
+import { appendReply, appendTranslation, appendUserMessage, selectVersion, setVariableByHand, startChat } from './chat-log';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -14,13 +14,15 @@ async function savedChat() {
   await server.hold(store, id);
   const chat: Chat = { title: '밤', character: null, models: {} };
   await startChat(store, id, chat, null);
-  await appendUserMessage(store, id, { id: crypto.randomUUID(), text: '안녕' });
+  const said = crypto.randomUUID();
+  await appendUserMessage(store, id, { id: said, text: '안녕' });
   const reply = crypto.randomUUID();
   await appendReply(store, id, { id: reply, message: null, replaces: null, at: 1, text: '첫 답', receipt });
   const swipe = crypto.randomUUID();
   await appendReply(store, id, { id: swipe, message: reply, replaces: null, at: 2, text: '둘째 답', receipt });
   await selectVersion(store, id, reply, reply);
   await appendTranslation(store, id, reply, { text: 'First reply', receipt: null, at: 3 }, crypto.randomUUID());
+  await setVariableByHand(store, id, said, 'mood', 'calm');
   await store.create('memory', { records: [], state: [{ about: 'Luna', field: 'mood', value: 'calm', record: null }], threads: [], chapters: [] }, { id: memoryId(id), parent: id });
   return { store, files, id };
 }
@@ -39,6 +41,7 @@ describe('chat file', () => {
     if (!read.ok) throw new Error(read.error);
     expect(read.file.chat.id).toBe(id);
     expect(fold(read.file.entries)).toEqual(fold(store.children('entry', id)));
+    expect(shown(fold(read.file.entries)[0]!).byHand).toEqual([['mood', 'calm']]);
     expect(read.file.memory?.value.state).toEqual([{ about: 'Luna', field: 'mood', value: 'calm', record: null }]);
     // A chat with no 마스코트 대사, as every file written before them is, reads with none.
     expect(read.file.remarks).toEqual([]);

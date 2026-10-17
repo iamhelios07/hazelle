@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { VariableInspection, VariableWriter } from '../../engine/render';
+import { VARIABLE_LIMITS, type InspectedVariable, type VariableInspection, type VariableWriter } from '../../engine/render';
+import { shown } from '../../model/chat';
 import { inspectToggles } from '../../runtime/chat-context';
+import { setVariableByHand } from '../../runtime/chat-log';
 import type { Sending } from '../../runtime/turn-context';
 import { useSearch } from '../common/useSearch';
 import { UNKNOWN } from '../common/words';
 import { useSession } from '../session';
-import { Empty, List, ListItem, Section, Stack, Text } from '../ui';
+import { useToast } from '../toast';
+import { Button, Empty, List, ListItem, Row, Section, Stack, Text, TextField } from '../ui';
 
 const SCRIPT_STAGE = { input: '입력', output: '출력', greeting: '첫 메시지', staged: '대기 중인 메시지' } as const;
 
@@ -21,13 +24,45 @@ function writerName(writer: VariableWriter): string {
       return `${writer.index + 1}번째 메시지 · 스크립트`;
     case 'cbs':
       return `${writer.index + 1}번째 메시지 · ${SCRIPT_STAGE[writer.stage]} CBS`;
+    case 'hand':
+      return `${writer.index + 1}번째 메시지 · 직접 수정`;
   }
+}
+
+// version: the last message's shown one, where the edit lands; undefined when the chat has no message. A value 점검
+// shows cut is not edited: its draft would save the cut.
+function ValueEditor({ chat, version, busy, variable, onDone }: { chat: string; version: string | undefined; busy: boolean; variable: InspectedVariable; onDone: () => void }) {
+  const { store } = useSession();
+  const toast = useToast();
+  const [draft, setDraft] = useState(variable.last.value);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const why = busy ? '응답을 생성하는 중에는 고칠 수 없어요.' : version === undefined ? '메시지가 있어야 고칠 수 있어요.' : variable.nameTruncated || variable.last.truncated ? '값이 너무 길어서 여기서는 고칠 수 없어요.' : null;
+  if (why || version === undefined) return <Text variant="note">{why}</Text>;
+  const save = async () => {
+    setSaving(true);
+    const saved = await setVariableByHand(store, chat, version, variable.name, draft);
+    setSaving(false);
+    if (saved.ok) onDone();
+    else if (saved.error === 'too-long') setError(`${VARIABLE_LIMITS.value}자까지 저장할 수 있어요.`);
+    else toast.failed(saved);
+  };
+  return (
+    <Stack gap="related">
+      <TextField label="값" showLabel={false} value={draft} onChange={(value) => { setDraft(value); setError(null); }} lines={variable.last.value.includes('\n') ? 4 : undefined} error={error ?? undefined} />
+      <Row kind="actions">
+        <Button size="sm" busy={saving} disabled={draft === variable.last.value} onClick={() => void save()}>저장</Button>
+        <Button variant="secondary" size="sm" onClick={onDone}>취소</Button>
+      </Row>
+    </Stack>
+  );
 }
 
 export const shownValue = (value: string, truncated: boolean) => (value === '' ? '(빈 값)' : truncated ? `${value}…` : value);
 
 export function Variables({ chat, sending, busy }: { chat: string; sending: Sending | null | undefined; busy: boolean }) {
-  const { store } = useSession();
+  const { store, read } = useSession();
+  const last = read.chat(chat).snapshot()?.messages.at(-1);
   const [inspected, setInspected] = useState<VariableInspection | null | undefined>(undefined);
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
@@ -44,7 +79,7 @@ export function Variables({ chat, sending, busy }: { chat: string; sending: Send
   const search = useSearch(variables, '변수 검색', ({ name, last }) => [name, last.value]);
   return (
     <Stack gap="section">
-      <Section title="변수" help="지금까지의 대화를 처음부터 다시 읽어서 계산한 값이에요. 누르면 값이 언제 바뀌었는지 볼 수 있어요.">
+      <Section title="변수" help="지금까지의 대화를 처음부터 다시 읽어서 계산한 값이에요. 누르면 값이 언제 바뀌었는지 보고 고칠 수 있어요. 고친 값은 마지막 메시지에 저장돼요. 그 메시지를 다시 생성하면 사라져요.">
         {inspected === undefined ? (
           <Text variant="note">읽는 중…</Text>
         ) : inspected === null ? (
@@ -66,11 +101,14 @@ export function Variables({ chat, sending, busy }: { chat: string; sending: Send
                     onClick={() => setOpen(open === variable.name ? null : variable.name)}
                     detail={
                       open === variable.name && (
-                        <List label={`${variable.name} 기록`}>
-                          {[...variable.history].reverse().map((write, index) => (
-                            <ListItem key={index} title={shownValue(write.value, write.truncated)} aside={writerName(write.writer)} />
-                          ))}
-                        </List>
+                        <Stack gap="related">
+                          <ValueEditor chat={chat} version={last && shown(last).id} busy={busy} variable={variable} onDone={() => setOpen(null)} />
+                          <List label={`${variable.name} 기록`}>
+                            {[...variable.history].reverse().map((write, index) => (
+                              <ListItem key={index} title={shownValue(write.value, write.truncated)} aside={writerName(write.writer)} />
+                            ))}
+                          </List>
+                        </Stack>
                       )
                     }
                   />
