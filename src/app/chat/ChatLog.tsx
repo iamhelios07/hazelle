@@ -77,6 +77,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           me={me}
           modelName={modelName}
           opening={message === opening}
+          last={index === messages.length - 1}
           busy={busy}
           editing={editing?.id === message.id ? editing : null}
           pinned={pinned === message.id}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { shown } from '../../model/chat';
-import { deleteMessage, editShown, undeleteMessage } from '../../runtime/message-acts';
+import { deleteMessage, deleteMessages, editShown, undeleteMessage, undeleteMessages } from '../../runtime/message-acts';
 import type { Shown } from '../../runtime/talk';
 import { linesOf, withPart, type Part } from './editPart';
 import { useSession } from '../session';
@@ -34,6 +34,17 @@ export function useMessageEdit(id: string | null, messages: Shown[], regenerate:
     toast.undoable('메시지를 삭제했어요.', () => undeleteMessage(session, id, message));
   }
 
+  // The message and every one after it.
+  function removeFrom(message: Shown) {
+    if (!id) return;
+    const from = messages.findIndex(({ id: each }) => each === message.id);
+    if (from === -1) return;
+    const gone = messages.slice(from);
+    if (editing && gone.some(({ id: each }) => each === editing.id)) setEditing(null);
+    void deleteMessages(session, id, gone).then((saved) => saved.ok || toast.failed(saved));
+    toast.undoable(`메시지 ${gone.length}개를 삭제했어요.`, () => undeleteMessages(session, id, gone));
+  }
+
   return {
     editing,
     actions: {
@@ -47,6 +58,7 @@ export function useMessageEdit(id: string | null, messages: Shown[], regenerate:
       cancelEdit: () => setEditing(null),
       saveEdit,
       remove,
+      removeFrom,
     },
   };
 }
