@@ -48,18 +48,22 @@ export function useLayer(active: boolean, layer: Layer) {
 }
 
 // The sides a popover must stay within: the nearest box that clips it, such as a list column that scrolls, inside the
-// screen. The screen alone is not enough: a menu inside a narrow column is cut off at the column's side.
-function room(element: HTMLElement) {
+// screen. The screen alone is not enough: a menu inside a column is cut off at the column's side, top or bottom.
+export function room(element: HTMLElement) {
   let left = 0;
+  let top = 0;
   let right = document.documentElement.clientWidth;
+  let bottom = window.innerHeight;
   for (let at = element.parentElement; at; at = at.parentElement) {
     if (getComputedStyle(at).overflowX === 'visible') continue;
     const box = at.getBoundingClientRect();
     left = Math.max(left, box.left);
+    top = Math.max(top, box.top);
     right = Math.min(right, box.right);
+    bottom = Math.min(bottom, box.bottom);
     break;
   }
-  return { left, right };
+  return { left, top, right, bottom };
 }
 
 export function keepOnScreen(element: HTMLElement) {

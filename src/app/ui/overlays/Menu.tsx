@@ -5,7 +5,7 @@ import { Item } from '../collections/Item';
 import { ButtonSlot } from '../controls/Button';
 import { Icon } from '../foundation/Icon';
 import { faceStyle, type FontId } from '../foundation/fonts';
-import { keepOnScreen, useLayer } from './layers';
+import { keepOnScreen, room, useLayer } from './layers';
 import styles from './Menu.module.css';
 
 export type MenuOpener = { ref: RefObject<HTMLButtonElement | null>; popup: 'menu' | 'dialog'; expanded: boolean; onClick: () => void };
@@ -41,9 +41,9 @@ export function useMenuOpener(handle: MenuHandle): MenuOpener {
 type Props = {
   label: string;
   trigger: (opener: MenuOpener) => ReactNode;
-  // end: below or above, whichever half of the window the button is not in, for a button that can sit anywhere in a
-  // scrolling story, where the screen's head or the composer would cover a menu opened the fixed way.
-  place?: 'below-start' | 'below-end' | 'above-start' | 'above-end' | 'end';
+  // start, end: below or above, whichever half of its scrolling box the button is not in, for a button that can sit anywhere on
+  // a scrolling page, where the screen's head, the composer or the page's own end would squeeze a menu opened the fixed way.
+  place?: 'below-start' | 'below-end' | 'above-start' | 'above-end' | 'start' | 'end';
   size?: 'md' | 'lg' | 'form';
   // dialog: a small form opened and closed like a menu, such as the chat's 작가의 노트; useMenuClose closes it.
   kind?: 'menu' | 'dialog';
@@ -95,13 +95,15 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
   }, [open, holders, hide]);
 
   const [upward, setUpward] = useState(false);
+  const flips = place === 'start' || place === 'end';
   useLayoutEffect(() => {
-    if (open && place === 'end') {
+    if (open && flips) {
       const { top, bottom } = anchor.current!.getBoundingClientRect();
-      setUpward(top + bottom > window.innerHeight);
+      const box = room(anchor.current!);
+      setUpward(top + bottom > box.top + box.bottom);
     }
-  }, [open, place]);
-  const side = place === 'end' ? (upward ? 'above-end' : 'below-end') : place;
+  }, [open, flips]);
+  const side = flips ? (`${upward ? 'above' : 'below'}-${place}` as const) : place;
 
   // A menu taller than the room on its side scrolls within that room instead of running off the screen.
   useLayoutEffect(() => {
@@ -109,7 +111,8 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
     keepOnScreen(panel.current);
     const box = panel.current.getBoundingClientRect();
     const edge = parseFloat(getComputedStyle(panel.current).getPropertyValue('--menu-edge'));
-    panel.current.style.setProperty('--room', `${side.startsWith('above') ? box.bottom - edge : window.innerHeight - box.top - edge}px`);
+    const { top, bottom } = room(panel.current);
+    panel.current.style.setProperty('--room', `${side.startsWith('above') ? box.bottom - top - edge : bottom - box.top - edge}px`);
   }, [open, side]);
 
   return (

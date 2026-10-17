@@ -86,7 +86,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
   };
 
   const addMenu = (index: number, trigger: (opener: MenuOpener) => ReactNode) => (
-    <Menu label="블록 추가" size="lg" place="below-start" trigger={trigger}>
+    <Menu label="블록 추가" size="lg" place="start" trigger={trigger}>
       {insert(index)}
     </Menu>
   );
