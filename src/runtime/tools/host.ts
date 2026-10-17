@@ -18,7 +18,11 @@ import { Heartbeat } from '../worker';
 import type { MenuItem, ToolFrames, ToolMenu, ToolPage, ToolSlot, Tools } from './facade';
 import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
-import { toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
+import { setToolSettings, toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
+import { fieldValue } from '../../engine/import/tool';
+import { SETTINGS_ID } from '../../model/settings';
+import { chatPersona } from '../personas';
+import { limitsOf, packsOf } from '../chat-context';
 
 // event: absent for a page's own calls and writes.
 type Context = { chat: string; scope: ChatScope; host: Host; signal: AbortSignal; state?: Promise<ToolState>; event?: ToolEvent['kind'] };
@@ -28,6 +32,8 @@ type Frame = {
   loaded: boolean; ready: Promise<void>; resolve(): void; reject(error: Error): void; loadTimer: ReturnType<typeof setTimeout> | null;
   listens: Set<EventName>; pending: Map<number, Pending>; calls: Set<number>; messages: Message[];
   reading: Promise<unknown>; lanes: Set<string>; release(): void;
+  // Ended, with its port still open while the connection lets its unload callbacks run: their calls are answered.
+  unloading: boolean;
 };
 // A frame tool (manifest.risu) runs as its background frame, with these: chat, the chat open for it, which its calls
 // outside an event read; menu, what its frame registered; shown, whether it asks to be shown; slot, where it is;
@@ -36,7 +42,9 @@ type Entry = {
   module: string; tool: Tool; settings: string; background: Frame | null; pages: Set<Frame>; chats: Set<string>; idle: ReturnType<typeof setTimeout> | null; data: Map<string, { key: string; json: string }>;
   chat: string | null; menu: MenuItem[]; shown: boolean; slot: ToolSlot | null; leaving: boolean;
 };
-const EVENTS = new Set<EventName>(['reply', 'replying', 'prompt', 'change', 'branch', 'menu', 'action', 'settings', 'open', 'message']);
+const EVENTS = new Set<EventName>(['reply', 'replying', 'sending', 'requesting', 'showing', 'prompt', 'change', 'branch', 'menu', 'action', 'settings', 'open', 'message']);
+// The sandbox refuses story changes in these too (sandbox/api.ts); a page that posts its own outcome is not trusted to.
+const STORY_LOCKED = new Set<ToolEvent['kind']>(['change', 'branch', 'replying', 'sending', 'requesting', 'showing']);
 const IDLE_MS = 10 * 60_000;
 const STUCK_MS = 8000;
 const describe = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -75,8 +83,20 @@ function isAnswer(value: unknown): value is Hazelle.PromptAnswer | undefined {
   if (!isRecord(value) || !isText(value.tool)) return false;
   return value.memory === undefined || (isRecord(value.memory) && typeof value.memory.text === 'string' && (value.memory.through === null || typeof value.memory.through === 'string'));
 }
-function isOutcome(value: unknown): value is ToolOutcome {
-  return isRecord(value) && isAnswer(value.value) && isPairs(value.writes) && isPairs(value.data)
+const isRequest = (value: unknown): value is Hazelle.RequestMessage[] => Array.isArray(value) && value.every((message) => isModelMessages([message])
+  && (message.message === undefined || typeof message.message === 'string') && (message.cache === undefined || message.cache === true));
+const answers = (event: ToolEvent['kind'] | undefined, value: unknown) => {
+  if (value === undefined) return true;
+  switch (event) {
+    case 'prompt': return isAnswer(value);
+    case 'replying': case 'sending': return typeof value === 'string';
+    case 'requesting': return isRequest(value);
+    case 'showing': return Array.isArray(value) && value.every((text) => typeof text === 'string');
+    default: return false;
+  }
+};
+function isOutcome(value: unknown, event: ToolEvent['kind'] | undefined): value is ToolOutcome {
+  return isRecord(value) && answers(event, value.value) && isPairs(value.writes) && isPairs(value.data)
     && Array.isArray(value.edits) && value.edits.every((edit) => isRecord(edit) && Number.isInteger(edit.index) && typeof edit.text === 'string')
     && Array.isArray(value.added) && value.added.every((item) => isRecord(item) && (item.role === 'user' || item.role === 'char') && typeof item.text === 'string')
     && Array.isArray(value.badges) && value.badges.every((badge) => isRecord(badge) && Number.isInteger(badge.index) && (badge.text === null || typeof badge.text === 'string'));
@@ -84,7 +104,9 @@ function isOutcome(value: unknown): value is ToolOutcome {
 const eventFields = (event: ToolEvent): Partial<Extract<Down, { kind: 'event' }>> => {
   switch (event.kind) {
     case 'reply': return { reply: event.reply };
-    case 'replying': return { text: event.text };
+    case 'replying': case 'sending': return { text: event.text };
+    case 'requesting': return { messages: event.messages };
+    case 'showing': return { shown: event.shown };
     case 'prompt': return { turn: event.turn };
     case 'change': return { change: event.change };
     case 'branch': return { from: event.from };
@@ -95,8 +117,13 @@ const eventFields = (event: ToolEvent): Partial<Extract<Down, { kind: 'event' }>
 function cardOf(character: string | null, scope: ChatScope): Hazelle.Card | null {
   const { card } = scope;
   if (!card || character === null) return null;
-  const lore = scope.lore.filter(({ parent }) => parent === character).map(({ value }) => ({ name: value.name, keys: value.keys, text: value.content, always: value.constant, on: value.enabled }));
-  return { id: character, name: card.name, description: card.description, personality: card.personality, scenario: card.scenario, greeting: card.greetings[0] ?? null, creatorNotes: card.creatorNotes, tags: card.tags, lore };
+  return { id: character, name: card.name, description: card.description, personality: card.personality, scenario: card.scenario, greeting: card.greetings[0] ?? null, creatorNotes: card.creatorNotes, tags: card.tags };
+}
+// scope.lore holds only the character's, the cast's, the chat's own and the on modules' entries.
+function lorebookOf(chat: string, character: string | null, scope: ChatScope): Hazelle.LoreEntry[] {
+  const cast = new Set(scope.cast.map(({ id }) => id));
+  const kind = (parent: string) => parent === character ? 'character' : parent === chat ? 'chat' : cast.has(parent) ? 'cast' : 'module';
+  return scope.lore.map(({ parent, value }) => ({ name: value.name, keys: value.keys, text: value.content, always: value.constant, on: value.enabled, owner: { kind: kind(parent!), id: parent! } }));
 }
 const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
 
@@ -125,6 +152,11 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     const tool = this.session.store.get('tool', toolId(module))?.value;
     if (!tool) return [];
     return isFrameTool(tool) ? this.entries.get(module)?.menu ?? [] : tool.manifest.menu;
+  };
+
+  readonly hears = (module: string, event: EventName): boolean | null => {
+    const frame = this.entries.get(module)?.background;
+    return frame?.loaded ? frame.listens.has(event) : null;
   };
 
   readonly subscribe = (listener: () => void) => this.signal.subscribe(listener);
@@ -282,6 +314,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       heart: new Heartbeat(() => this.send(frame, { kind: 'ping' }), () => this.stalled(frame)),
       loaded: false, ready, resolve, reject, loadTimer: null,
       listens: new Set(), pending: new Map(), calls: new Set(), messages: [], reading: Promise.resolve(), lanes: new Set(), release: () => lease?.release(),
+      unloading: false,
     };
     connection.port.onmessage = ({ data }: MessageEvent<unknown>) => this.receive(frame, data);
     connection.port.start();
@@ -309,8 +342,13 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   }
 
   private receive(frame: Frame, data: unknown) {
-    if (frame.closing.signal.aborted || !isRecord(data)) return;
+    if (!isRecord(data) || (frame.closing.signal.aborted && !(frame.unloading && data.kind === 'call'))) return;
     if (data.kind === 'pong') { frame.heart.answered(); return; }
+    if (data.kind === 'loaded' && frame.loadTimer === null && frame.loaded && Array.isArray(data.listens) && data.listens.every((event) => EVENTS.has(event as EventName))) {
+      // A listener added after load (sandbox/api.ts sends the whole list again).
+      frame.listens = new Set(data.listens as EventName[]);
+      return;
+    }
     if (data.kind === 'loaded' && !frame.loaded && frame.loadTimer !== null && Array.isArray(data.listens) && data.listens.every((event) => EVENTS.has(event as EventName))) {
       frame.listens = new Set(data.listens as EventName[]);
       frame.loaded = true;
@@ -424,6 +462,22 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       case 'storage.set': if (typeof first === 'string' && isJson(second)) return this.writes.write(entry.module, first, second); break;
       case 'storage.delete': if (typeof first === 'string') return this.writes.write(entry.module, first, undefined); break;
       case 'settings': return this.session.store.get('tool', toolId(entry.module))!.value.settings;
+      case 'settings.set': {
+        const field = entry.tool.manifest.settings.find(({ key }) => key === first);
+        if (!field || !fieldValue(field, second)) break;
+        this.writes.take(entry.module);
+        const saved = await setToolSettings(this.session, entry.module, { [field.key]: second });
+        if (!saved.ok) throw new Error(saved.error);
+        return;
+      }
+      case 'account': {
+        const { store } = this.session;
+        const current = store.get('settings', SETTINGS_ID)?.value.persona;
+        return {
+          personas: store.list('persona').flatMap((each) => live(each) ? [{ id: each.id, name: each.value.name, description: each.value.description, current: each.id === current }] : []),
+          characters: store.list('character').flatMap((each) => live(each) ? [{ id: each.id, name: each.value.card.name }] : []),
+        } satisfies Hazelle.Account;
+      }
       case 'post':
         if (isJson(first)) {
           if (frame.page) this.send(await this.background(entry), { kind: 'message', data: first });
@@ -444,6 +498,17 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
           return tail;
         }
         if (method === 'chat.card') return cardOf(live(this.session.store.get('chat', context.chat))?.value.character ?? null, context.scope);
+        if (method === 'chat.lorebook') return lorebookOf(context.chat, live(this.session.store.get('chat', context.chat))?.value.character ?? null, context.scope);
+        if (method === 'chat.setup') {
+          const { store } = this.session;
+          const chat = live(store.get('chat', context.chat))!.value;
+          const persona = chatPersona(store, chat);
+          return {
+            persona: persona.kind === 'persona' ? persona.persona.id : null,
+            limits: limitsOf(store, chat),
+            modules: packsOf(store, chat).flatMap(({ id, module }) => module ? [{ id, name: store.get('module', id)!.value.name }] : []),
+          } satisfies Hazelle.Setup;
+        }
         if (method === 'chat.greeting') return context.scope.greeting === null ? null : (await this.state(frame, context)).texts[0]!;
         if (method === 'chat.state.get' && typeof first === 'string') return decodeState(new Map((await this.state(frame, context)).variables).get(toolVar(entry.tool.manifest, first)));
         if (method === 'chat.data.get' && typeof first === 'string') return toolChatData(this.session.store, entry.module, context.chat, first);
@@ -482,7 +547,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   }
 
   private async convert(frame: Frame, context: Context, value: unknown): Promise<ScriptOutcome> {
-    if (!isOutcome(value)) throw new Error('Invalid tool outcome');
+    if (!isOutcome(value, context.event)) throw new Error('Invalid tool outcome');
     const greeting = context.scope.greeting === null ? 0 : 1;
     const edits = value.edits.filter(({ index }) => index >= 0 && index < context.scope.messages.length - greeting);
     const state = edits.length ? await this.state(frame, context) : null;
@@ -490,8 +555,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     const badges = [...new Map(value.badges.map(({ index, text }) => [index, text]))].map(([index, text]) => ({ index, text }));
     // A page's write takes its share of the write rate before it is converted (pageWrite).
     if (context.event && (data.length || badges.length)) this.writes.take(frame.entry.module);
-    // The sandbox refuses these in an event about the user's own change; a page that posts its own outcome is not trusted to.
-    const story = context.event === 'change' || context.event === 'branch' || context.event === 'replying' ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
+    const story = context.event && STORY_LOCKED.has(context.event) ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
     return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, json]) => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...story, tool: { data, badges } };
   }
 
@@ -502,7 +566,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     if (!frame.closing.signal.aborted) await this.scripts().pageWrite(context.chat, frame.entry.module, outcome);
   }
 
-  private send(frame: Frame, message: Down) { if (!frame.closing.signal.aborted) frame.connection.port.postMessage(message); }
+  private send(frame: Frame, message: Down) { if (!frame.closing.signal.aborted || frame.unloading) frame.connection.port.postMessage(message); }
 
   private idle(entry: Entry) {
     if (entry.idle) clearTimeout(entry.idle);
@@ -525,8 +589,11 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     frame.closing.abort(error);
     if (frame.loadTimer !== null) clearTimeout(frame.loadTimer);
     frame.heart.rest();
-    frame.connection.port.onmessage = null;
-    frame.connection.close();
+    frame.unloading = true;
+    void frame.connection.close().then(() => {
+      frame.unloading = false;
+      frame.connection.port.onmessage = null;
+    });
     frame.reject(error);
     for (const pending of frame.pending.values()) { pending.stop(); pending.reject(error); }
     frame.pending.clear();

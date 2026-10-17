@@ -1,7 +1,7 @@
 import { connectApi } from '../../sandbox/api';
 import { installRisu } from '../../sandbox/risu';
 import type { Up } from '../../tool-api/protocol';
-import type { OpenFrame } from '../tools/frame';
+import { UNLOAD_MS, type OpenFrame } from '../tools/frame';
 
 class LocalPort {
   onmessage: ((event: MessageEvent) => void) | null = null;
@@ -19,8 +19,9 @@ class LocalPort {
   close() { this.closed = true; }
 }
 
-export type InProcessFrame = { host: LocalPort; sandbox: LocalPort; api: Hazelle.Api | null; page: boolean; emit(message: Up): void };
-export function inProcessTools(execute: (api: Hazelle.Api, code: string) => void | Promise<void>) {
+// stop: what the frame runs when told to stop (sandbox/page.ts), its port kept open for UNLOAD_MS as toolFrame keeps it.
+export type InProcessFrame = { host: LocalPort; sandbox: LocalPort; api: Hazelle.Api | null; page: boolean; emit(message: Up): void; stop?: () => void };
+export function inProcessTools(execute: (api: Hazelle.Api, code: string, frame: InProcessFrame) => void | Promise<void>) {
   const frames: InProcessFrame[] = [];
   const open: OpenFrame = (opening) => {
     const host = new LocalPort();
@@ -29,15 +30,25 @@ export function inProcessTools(execute: (api: Hazelle.Api, code: string) => void
     sandbox.peer = host;
     const frame: InProcessFrame = { host, sandbox, api: null, page: opening.role === 'page', emit: (message) => sandbox.postMessage(message) };
     frames.push(frame);
-    const close = connectApi(sandbox, (code, api) => { frame.api = api; return execute(api, code); });
-    return { port: host, ready: Promise.resolve(), frame: null, close: () => { host.close(); close(); } };
+    const close = connectApi(sandbox, (code, api) => { frame.api = api; return execute(api, code, frame); });
+    const end = () => { host.close(); close(); };
+    return {
+      port: host, ready: Promise.resolve(), frame: null,
+      close: async () => {
+        if (opening.role === 'frame') {
+          frame.stop?.();
+          await new Promise((resolve) => setTimeout(resolve, UNLOAD_MS));
+        }
+        end();
+      },
+    };
   };
   return { open, frames };
 }
 
 // A Risu plugin's frame: plugin runs with Risuai, risuai and the dialog shims in scope.
-export const inProcessRisu = (plugin: (scope: Record<string, unknown>) => void) => inProcessTools((api) => {
+export const inProcessRisu = (plugin: (scope: Record<string, unknown>) => void) => inProcessTools((api, _code, frame) => {
   const scope: Record<string, unknown> = {};
-  installRisu(api, scope);
+  frame.stop = installRisu(api, scope);
   plugin(scope);
 });

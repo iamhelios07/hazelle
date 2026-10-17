@@ -1,4 +1,5 @@
 import type { ToolManifest } from '../../tool-api/manifest';
+import type { EventName } from '../../tool-api/protocol';
 
 export type ToolMenu = { module: string; manifest: ToolManifest };
 export type ToolPage = { window: Window; chat: string | null; theme: 'dark' | 'light'; close: () => void };
@@ -13,6 +14,8 @@ export type Tools = {
   menus(chat: string): ToolMenu[];
   // A tool's ⋯ items: its header's, or for a frame tool what its frame registered while it runs.
   items(module: string): MenuItem[];
+  // Whether the module's running tool listens for event; null until it has loaded.
+  hears(module: string, event: EventName): boolean | null;
   page(module: string, page: ToolPage): () => void;
   attach(module: string, slot: ToolSlot): () => void;
   subscribe(listener: () => void): () => void;

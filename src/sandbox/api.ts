@@ -5,12 +5,15 @@ type Load = Extract<Down, { kind: 'load' }>;
 type Buffer = { writes: Map<string, Json | undefined>; edits: Map<number, string>; added: ToolOutcome['added']; data: Map<string, Json | undefined>; badges: Map<number, string | null> };
 const buffer = (): Buffer => ({ writes: new Map(), edits: new Map(), added: [], data: new Map(), badges: new Map() });
 const empty = (pending: Buffer) => !pending.writes.size && !pending.edits.size && !pending.added.length && !pending.data.size && !pending.badges.size;
-const outcome = (pending: Buffer, value?: Hazelle.PromptAnswer): ToolOutcome => ({
+const outcome = (pending: Buffer, value?: ToolOutcome['value']): ToolOutcome => ({
   value, writes: [...pending.writes], edits: [...pending.edits].map(([index, text]) => ({ index, text })), added: pending.added,
   data: [...pending.data], badges: [...pending.badges].map(([index, text]) => ({ index, text })),
 });
-// An event about the user's own change must not rewrite the story under them, nor one about a reply not yet saved.
-const STORY_LOCKED = new Set<EventName>(['change', 'branch', 'replying']);
+// An event about the user's own change must not rewrite the story under them, nor one inside a turn or a showing.
+const STORY_LOCKED = new Set<EventName>(['change', 'branch', 'replying', 'sending', 'requesting', 'showing']);
+// Nothing a showing answers is saved, so a write there would be lost.
+const QUIET = new Set<EventName>(['showing']);
+const ANSWERS = new Set<EventName>(['replying', 'sending', 'requesting', 'showing']);
 const describe = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api) => void | Promise<void>): () => void {
@@ -47,12 +50,12 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
     });
   };
 
-  const chatOf = (header: ChatHeader, event?: number, writes = buffer(), locked = false): Hazelle.Chat => {
-    const pending = () => event === undefined ? pageWrites : writes;
+  const chatOf = (header: ChatHeader, event?: number, writes = buffer(), locked = false, quiet = false): Hazelle.Chat => {
+    const pending = () => { if (quiet) throw new Error('Nothing is saved in this event'); return event === undefined ? pageWrites : writes; };
     const changed = () => { if (event === undefined) flushPage(); };
     const story = () => { if (locked) throw new Error('The story cannot be changed in this event'); };
     const overlaid = async <T extends Json>(layer: 'writes' | 'data', method: 'chat.state.get' | 'chat.data.get', key: string): Promise<T | undefined> => {
-      const current = pending()[layer];
+      const current = (event === undefined ? pageWrites : writes)[layer];
       if (current.has(key)) return current.get(key) as T | undefined;
       if (event === undefined && pageSent?.[layer].has(key)) return pageSent[layer].get(key) as T | undefined;
       return call<T | undefined>(method, [key], event);
@@ -93,6 +96,8 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
       badge: (index, text) => { pending().badges.set(index, text); changed(); },
       tokens: (text) => call('tokens', [text], event),
       lore: (reserve) => call('lore', [reserve ?? null], event),
+      lorebook: () => call('chat.lorebook', [], event),
+      setup: () => call('chat.setup', [], event),
       ask: (question) => call('ask', [question], event),
       say: (text, tone = 'normal') => fire('say', [tone, text], event),
     };
@@ -144,6 +149,8 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
           onChange: (listener) => { storageListeners.add(listener); return () => { storageListeners.delete(listener); }; },
         },
         settings: () => call<Settings>('settings', []),
+        setSetting: (key, value) => call('settings.set', [key, value]),
+        account: () => call('account', []),
         post: (data) => fire('post', [data]),
         page: data.role === 'page' ? { chat: data.chat && chatOf(data.chat), theme: data.theme, close: () => fire('page.close', []) } : null,
         frame: data.role === 'frame' ? {
@@ -170,9 +177,12 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
     if (data.kind === 'open') { void dispatch('open', []).catch((error: unknown) => failed(0, error)); return; }
     if (data.kind === 'event') {
       const pending = buffer();
-      const chat = data.chat && chatOf(data.chat, data.id, pending, STORY_LOCKED.has(data.event));
-      const args = { reply: [chat, data.reply], replying: [chat, data.text], prompt: [chat, data.turn], change: [chat, data.change], branch: [chat, data.from], menu: [chat, data.item], action: [chat, data.item, data.message] }[data.event as string] ?? [chat];
-      const answer = (value: unknown) => data.event === 'prompt' ? (value as Hazelle.PromptAnswer | undefined) ?? null : data.event === 'replying' && typeof value === 'string' ? value : undefined;
+      const chat = data.chat && chatOf(data.chat, data.id, pending, STORY_LOCKED.has(data.event), QUIET.has(data.event));
+      const args = {
+        reply: [chat, data.reply], replying: [chat, data.text], sending: [chat, data.text], requesting: [chat, data.messages], showing: [chat, data.shown], prompt: [chat, data.turn],
+        change: [chat, data.change], branch: [chat, data.from], menu: [chat, data.item], action: [chat, data.item, data.message],
+      }[data.event as string] ?? [chat];
+      const answer = (value: unknown) => data.event === 'prompt' ? (value as Hazelle.PromptAnswer | undefined) ?? null : ANSWERS.has(data.event) && value !== null ? value as ToolOutcome['value'] : undefined;
       // The host checks the answer's shape; one the port cannot carry fails the event here.
       void dispatch(data.event, args).then((value) => send({ kind: 'done', id: data.id, outcome: outcome(pending, answer(value)) })).catch((error: unknown) => failed(data.id, error));
     }

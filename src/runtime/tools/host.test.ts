@@ -11,6 +11,7 @@ import type { Session } from '../session';
 import { answerable, testServer } from '../testing';
 import { blankCard } from '../../engine/import/card';
 import { projectGreetings } from '../greetings';
+import { upsertChatLore } from '../lore';
 import { inProcessRisu, inProcessTools } from '../testing/tool-transport';
 import { ToolHost } from './host';
 import type { OpenFrame } from './frame';
@@ -449,5 +450,61 @@ it('runs a frame tool as one frame: its registered items, a press from the chat,
     await vi.waitFor(() => expect(opened.place).toHaveBeenCalledTimes(1));
     expect(opens).toHaveBeenCalledTimes(1);
     expect(transport.frames).toHaveLength(1);
+  } finally { host.close(); }
+}));
+
+it('writes a tool\'s own settings field and refuses a value the field cannot hold', () => withTools(async (session, connect) => {
+  const f = await fixture(session);
+  const transport = inProcessTools(() => {});
+  const host = connect(transport.open);
+  try {
+    await host.warm(f.chat);
+    const api = transport.frames[0]!.api!;
+    await api.setSetting('title', 'B');
+    expect(session.store.get('tool', toolId(f.module))!.value.settings).toEqual({ title: 'B' });
+    await expect(api.setSetting('title', 3)).rejects.toThrow('Invalid tool call');
+    await expect(api.setSetting('missing', 'x')).rejects.toThrow('Invalid tool call');
+  } finally { host.close(); }
+}));
+
+it('reads the chat\'s lorebook by owner, how the chat is set up, and the account\'s personas and characters', () => withTools(async (session, connect) => {
+  const f = await fixture(session, undefined, 'Hello.');
+  const character = session.store.get('chat', f.chat)!.value.character!;
+  await upsertChatLore(session.store, f.chat, { name: 'Gate', keys: ['gate'], secondaryKeys: [], content: 'The gate is shut.', enabled: true, constant: false, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 0, priority: null, position: null });
+  const transport = inProcessTools(() => {});
+  const host = connect(transport.open);
+  const close = host.page(f.module, page(f.chat));
+  try {
+    await vi.waitFor(() => expect(transport.frames[0]?.api).not.toBeNull());
+    const api = transport.frames[0]!.api!;
+    expect(await api.page!.chat!.lorebook()).toEqual([{ name: 'Gate', keys: ['gate'], text: 'The gate is shut.', always: false, on: true, owner: { kind: 'chat', id: f.chat } }]);
+    const account = await api.account();
+    expect(account.characters).toEqual([{ id: character, name: 'Mira' }]);
+    const setup = await api.page!.chat!.setup();
+    expect(setup).toEqual({ persona: account.personas.find(({ current }) => current)?.id ?? null, limits: { context: null, reply: null }, modules: [{ id: f.module, name: 'test' }] });
+  } finally { close(); host.close(); }
+}));
+
+it('answers a frame tool\'s unload callbacks while its port stays open, then closes it', () => withTools(async (session, connect) => {
+  await answerable(session);
+  const parsed = source('1', '');
+  const added = await importTool(session.store, session.files, { ...parsed, manifest: { ...parsed.manifest, page: null, menu: [], risu: { verdict: 'all', missing: [], hosts: [] } } });
+  if (!added.ok) throw new Error(added.error);
+  const module = added.data.id;
+  await setModuleAlways(session.store, module, true);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  const transport = inProcessRisu((scope) => {
+    const risu = scope.Risuai as { onUnload(callback: () => unknown): Promise<void>; pluginStorage: { setItem(key: string, value: string): Promise<void> } };
+    void risu.onUnload(() => risu.pluginStorage.setItem('last', 'saved'));
+  });
+  const host = connect(transport.open);
+  try {
+    await host.warm(chat);
+    await vi.waitFor(() => expect(host.hears(module, 'menu')).toBe(true));
+    await setModuleAlways(session.store, module, false);
+    await vi.waitFor(() => expect(toolData(session.store, module, 'plugin:last')).toBe('saved'), { timeout: 3000 });
+    await vi.waitFor(() => expect(transport.frames[0]!.host.closed).toBe(true));
   } finally { host.close(); }
 }));

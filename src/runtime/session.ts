@@ -104,7 +104,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   // Asked for once the session has closed, it makes none: nothing would be left to end it.
   const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
   const unfound = new UnfoundAssets();
-  const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result), unfound);
+  const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result), unfound, () => scripts);
   const read = new ReadModels(store, display);
   const likenesses = new Likenesses({ tokens, store, credentials, log, files, catalogs });
   const illustrator = new Illustrator({ tokens, store, credentials, log, files, likenesses });

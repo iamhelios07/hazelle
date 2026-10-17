@@ -10,7 +10,7 @@ import type { Assembled, MemoryFill, PromptInput } from '../engine/pipeline';
 import { saveToolChat, toolsOf } from './tools/store';
 import type { Tools } from './tools/facade';
 import type { Role } from '../connectors/assignment';
-import type { ChatMessage, EmbedPurpose } from '../connectors/types';
+import type { ChatMessage, EmbedPurpose, InputPicture } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, Question, ScriptUnit, ToolEvent } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
@@ -36,6 +36,8 @@ import { answerInstructionOf, packsOf, scopeOf } from './chat-context';
 import { setBackground } from './characters';
 import type { Blocked, Sending, TurnContext } from './turn-context';
 import type { HistoryMessage } from '../engine/history';
+import type { Chat } from '../model/chat';
+import type { EventName } from '../tool-api/protocol';
 import type { EvaluatedPrompt } from './evaluation-core';
 import { providerFit } from './token-calibration';
 
@@ -84,6 +86,8 @@ type StartSteps<F> = {
   // The turn's scope as it now stands, the message being sent last.
   scope(): ChatScope;
   run(event: Event, scope: ChatScope): Promise<{ outcome: Outcome; changed: boolean }>;
+  // The tools' sending, after the Lua's editInput.
+  input(text: string, scope: ChatScope): Promise<{ value: string; writes: Writes }>;
   // The chat changed under the turn; answer: once the message being sent is saved.
   changed(answer: boolean): Promise<F | null>;
   send(text: string, before: Writes): Promise<F | null>;
@@ -114,6 +118,11 @@ async function startStages<F>(said: string | null, steps: StartSteps<F>): Promis
       if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
       stop = edited.outcome.stop;
       stage = 'editInput';
+      if (!stop) {
+        const tooled = await steps.input(text, { ...history(), pending: before });
+        text = tooled.value;
+        before = [...before, ...tooled.writes];
+      }
     }
     const failed = await steps.send(text, before);
     if (failed) return failed;
@@ -131,22 +140,32 @@ async function startStages<F>(said: string | null, steps: StartSteps<F>): Promis
   return { kind: 'started', writes: start.outcome.writes };
 }
 
-// editRequest reads each message's origin as Risu's memo; what it answers keeps no memo, which nothing past it reads.
-const requestEvent = ({ messages, parts }: Pick<Assembled, 'messages' | 'parts'>): Event => ({
-  kind: 'edit',
-  stage: 'editRequest',
-  value: messages.map((message, at) => {
-    const { origin } = parts[at]!;
-    return origin === undefined ? message : { ...message, memo: origin };
-  }),
-  meta: {},
+// A request message with origin, the id of the chat message it renders (Assembled parts).
+type Sent = { message: ChatMessage; origin?: string };
+const sentOf = ({ messages, parts }: Pick<Assembled, 'messages' | 'parts'>): Sent[] => messages.map((message, at) => {
+  const { origin } = parts[at]!;
+  return origin === undefined ? { message } : { message, origin };
 });
 
+// editRequest reads each message's origin as Risu's memo.
+const requestEvent = (sent: Sent[]): Event => ({ kind: 'edit', stage: 'editRequest', value: sent.map(({ message, origin }) => origin === undefined ? message : { ...message, memo: origin }), meta: {} });
+
+// An answered message names its origin under key (the Lua's memo, a tool's message); keeping one it was given keeps
+// that message's pictures, which neither reads as text. One that is no message is left out.
+function sentBack(sent: Sent[], answered: unknown[], key: 'memo' | 'message'): Sent[] {
+  const origins = new Map<string, InputPicture[] | undefined>(sent.flatMap(({ message, origin }) => origin === undefined ? [] : [[origin, message.pictures]]));
+  return answered.flatMap((message): Sent[] => {
+    if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
+    const origin = typeof message[key] === 'string' && origins.has(message[key]) ? message[key] : undefined;
+    const kept = origin === undefined ? undefined : origins.get(origin);
+    return [{ message: { role: message.role, content: message.content, ...(message.cache === true && { cache: true }), ...(kept && { pictures: kept }) }, ...(origin !== undefined && { origin }) }];
+  });
+}
+
 // A listener's answer that is no list of messages leaves the request as it was built.
-const requestAnswer = (outcome: Outcome, messages: ChatMessage[]): ChatMessage[] => !outcome.handled || !Array.isArray(outcome.value) ? messages : outcome.value.flatMap((message: unknown): ChatMessage[] => {
-  if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
-  return [{ role: message.role, content: message.content, ...(message.cache === true && { cache: true }) }];
-});
+const requestAnswer = (outcome: Outcome, sent: Sent[]): Sent[] => !outcome.handled || !Array.isArray(outcome.value) ? sent : sentBack(sent, outcome.value, 'memo');
+
+const toolRequest = (sent: Sent[]): Hazelle.RequestMessage[] => sent.map(({ message: { role, content, cache }, origin }) => ({ role, content, ...(origin !== undefined && { message: origin }), ...(cache && { cache }) }));
 
 // What saving a run's changes to the chat (Scripts.event) and gathering it again make of scope: an edited message is
 // a staged version keeping what its text wrote, an added one is new and staged, and a lorebook write takes the place
@@ -205,8 +224,13 @@ export type Rehearsal = {
 
 export const NOT_REHEARSED = 'Error: not called while rehearsing';
 
-// A tool's answer in a stage a turn waits on (prompt, replying); one that misses it is cut off and the turn goes on.
+// A tool's answer in a stage a turn or a display waits on (prompt, the edit stages); one that misses it is cut off and
+// the turn goes on.
 const TOOL_DEADLINE_MS = 5000;
+
+// A step of the tools' chain (Scripts.chained). scope: the chat as the step sees it, after the writes of the tools
+// before it. answer: what a tool answered makes of the value, an Error when it cannot. quiet: nothing it does is saved.
+type Chained<T> = { event(value: T): ToolEvent; scope(writes: Writes): ChatScope; answer(answered: unknown, value: T): T | Error; quiet?: true };
 
 // The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
@@ -220,7 +244,7 @@ export class Scripts {
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
-    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> & Pick<Tools, 'items'> },
+    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> & Pick<Tools, 'items' | 'hears'> },
   ) {
     this.interactions = new ScriptInteractions(session.store, this.closing.signal);
     this.schedule = new ScriptSchedule(session.store, this.interactions, this.closing.signal);
@@ -317,7 +341,8 @@ export class Scripts {
     signal: AbortSignal,
   ): Promise<Started> {
     const scripts = triggersOf(packsOf(this.session.store, first.chat));
-    if (scripts.length === 0) return { turn: first };
+    const units = first.said ? this.listening(first.chat, 'sending') : [];
+    if (scripts.length === 0 && units.length === 0) return { turn: first };
     const halted: Halted = { kind: 'halted' };
     // 멈추기 ends the turn without waiting for a run that may itself be waiting, for a model or for the user. The
     // runs go on to where the user's message is saved, since they may already have written to the chat for it, and
@@ -334,7 +359,12 @@ export class Scripts {
       const { said } = first;
       const end = await startStages(said?.text ?? null, {
         scope: () => turn.scope,
-        run: (event, scope) => this.dispatch(chat, { lua: scripts, event }, scope, null),
+        run: async (event, scope) => scripts.length ? this.dispatch(chat, { lua: scripts, event }, scope, null) : { outcome: { ...noOutcome(), value: event.kind === 'edit' ? event.value : undefined }, changed: false },
+        input: (text, scope) => this.chained(chat, units, text, {
+          event: (text) => ({ kind: 'sending', text }),
+          scope: (writes) => ({ ...scope, pending: [...(scope.pending ?? []), ...writes] }),
+          answer: (answered) => answered as string,
+        }),
         changed: regather,
         send: async (text, before) => {
           const sent = await appendUserMessage(this.session.store, chat, { ...said!, text, ...(before.length > 0 && { before }) });
@@ -357,19 +387,34 @@ export class Scripts {
     return Promise.race([started, stopped]);
   }
 
+  // editRequest: the bot's Lua, then each tool's requesting. Only the chat's own requests pass here; a script's or a
+  // tool's model call, memory and translation do not.
   async requesting(chat: string, turn: TurnContext, prompt: Pick<Assembled, 'messages' | 'parts'>): Promise<{ messages: ChatMessage[]; writes: Writes }> {
     const scripts = scriptsOf(packsOf(this.session.store, turn.chat));
-    if (scripts.length === 0) return { messages: prompt.messages, writes: [] };
+    const units = this.listening(turn.chat, 'requesting');
+    if (scripts.length === 0 && units.length === 0) return { messages: prompt.messages, writes: [] };
     return this.schedule.queued(chat, async () => {
-      const { outcome } = await this.dispatch(chat, { lua: scripts, event: requestEvent(prompt) }, turn.scope, null);
-      return { messages: requestAnswer(outcome, prompt.messages), writes: outcome.writes };
+      let sent = sentOf(prompt);
+      let writes: Writes = [];
+      if (scripts.length) {
+        const { outcome } = await this.dispatch(chat, { lua: scripts, event: requestEvent(sent) }, turn.scope, null);
+        sent = requestAnswer(outcome, sent);
+        writes = outcome.writes;
+      }
+      const tooled = await this.chained(chat, units, sent, {
+        event: (sent) => ({ kind: 'requesting', messages: toolRequest(sent) }),
+        scope: (more) => ({ ...turn.scope, pending: [...(turn.scope.pending ?? []), ...writes, ...more] }),
+        answer: (answered, sent) => sentBack(sent, answered as unknown[], 'message'),
+      });
+      return { messages: tooled.value.map(({ message }) => message), writes: [...writes, ...tooled.writes] };
     });
   }
 
   // The pre-send stages of sending, on Lua engines of their own and off the chat's queue, so a real send never waits
   // behind one; nothing is saved or kept in the page log. Each stage hands the next the chat as the send's would. A
   // question is dismissed and no model is called, so a script that branches on either may go another way when sent.
-  // null: the chat has no triggers.
+  // Tools are not rehearsed: their storage writes would be real, so what a tool's sending or requesting does shows only
+  // when sent. null: the chat has no triggers.
   async rehearse(chat: string, { turn, prompt, calibration }: Sending, signal: AbortSignal): Promise<Rehearsal | null> {
     const scripts = triggersOf(packsOf(this.session.store, turn.chat));
     if (scripts.length === 0) return null;
@@ -403,6 +448,7 @@ export class Scripts {
     const end = await startStages<never>(turn.said?.text ?? null, {
       scope: () => scope,
       run,
+      input: async (value) => ({ value, writes: [] }),
       changed: async () => null,
       send: async (text, before) => {
         const last = scope.messages.at(-1)!;
@@ -425,9 +471,9 @@ export class Scripts {
     const built = touched ? await this.session.store.evaluation.prompt({ asker: 'view', chat }, { scope, seed: turn.reply.id, budget: turn.budget, fit: providerFit(turn.route, turn.settings, calibration.fit.allowance), ...this.cachedPrompt(chat, { scope, memory: memoryFill(this.session.store, chat, turn.chat, scope.messages) }), continuing: false, answerInstruction: answerInstructionOf(this.session.store) }, signal) : prompt;
     const after = 'kind' in built || JSON.stringify(built.messages) !== JSON.stringify(prompt.messages) ? built : null;
     if ('kind' in built) return { ...rehearsal(), stopped: null, prompt: after, changed: true };
-    const edited = await run(requestEvent(built), scope);
+    const edited = await run(requestEvent(sentOf(built)), scope);
     if (edited.outcome.writes.length > 0) scope = { ...scope, pending: [...end.writes, ...edited.outcome.writes] };
-    const request = edited.outcome.trace?.entries.some((entry) => entry.changed) ? requestAnswer(edited.outcome, built.messages) : null;
+    const request = edited.outcome.trace?.entries.some((entry) => entry.changed) ? requestAnswer(edited.outcome, sentOf(built)).map(({ message }) => message) : null;
     return { ...rehearsal(), stopped: null, prompt: after, request, changed: after !== null || request !== null };
   }
 
@@ -435,7 +481,7 @@ export class Scripts {
   async ending(chat: string, reply: Written): Promise<Written> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? scriptsOf(packsOf(this.session.store, stored.value)) : [];
-    const units = stored ? toolsOf(this.session.store, stored.value) : [];
+    const units = stored ? this.listening(stored.value, 'replying') : [];
     if (!stored || (scripts.length === 0 && units.length === 0) || reply.receipt.state === 'failed') return reply;
     return this.schedule.queued(chat, async () => {
       const messages = this.session.read.chat(chat).snapshot()?.messages ?? [];
@@ -448,20 +494,66 @@ export class Scripts {
         before = [...before, ...outcome.writes];
         if (typeof outcome.value === 'string') text = outcome.value;
       }
-      for (const unit of units) {
-        if (this.closing.signal.aborted) break;
-        const deadline = new AbortController();
-        const stop = AbortSignal.any([this.closing.signal, deadline.signal]);
-        const timer = setTimeout(() => deadline.abort(new ToolLate()), TOOL_DEADLINE_MS);
-        try {
-          const { outcome } = await this.dispatch(chat, { tool: unit, event: { kind: 'replying', text } }, { ...scope, pending: before }, null, stop, () => clearTimeout(timer));
-          if (stop.aborted) continue;
-          before = [...before, ...outcome.writes];
-          if (typeof outcome.value === 'string') text = outcome.value;
-        } finally { clearTimeout(timer); }
-      }
+      const lua = before;
+      const tooled = await this.chained(chat, units, text, {
+        event: (text) => ({ kind: 'replying', text }),
+        scope: (writes) => ({ ...scope, pending: [...lua, ...writes] }),
+        answer: (answered) => answered as string,
+      });
+      text = tooled.value;
+      before = [...before, ...tooled.writes];
       return { ...reply, text, ...(before.length > 0 && { before }) };
     });
+  }
+
+  // The chat's tools that may answer showing (ScriptDisplay).
+  showers(chat: Chat): ToolUnit[] {
+    return this.listening(chat, 'showing');
+  }
+
+  // editDisplay's tools, after the bot's Lua, over one stretch of a display pass; nothing they do is saved.
+  async showing(chat: string, units: ToolUnit[], scope: ChatScope, items: { version: string; text: string }[]): Promise<string[]> {
+    const greeting = scope.greeting === null ? 0 : 1;
+    const places = new Map(scope.messages.map((message, at) => [message.id, at]));
+    const shown = items.map(({ version, text }): Hazelle.Shown => {
+      const at = places.get(version)!;
+      return { at: at < greeting ? null : { index: at - greeting, id: scope.messages[at]!.message, version }, text };
+    });
+    const { value } = await this.chained(chat, units, items.map(({ text }) => text), {
+      event: (texts) => ({ kind: 'showing', shown: shown.map((each, at) => ({ ...each, text: texts[at]! })) }),
+      scope: () => scope,
+      answer: (answered, texts) => (answered as string[]).length === texts.length ? answered as string[] : new Error(`showing answered ${(answered as string[]).length} texts for ${texts.length} messages`),
+      quiet: true,
+    });
+    return value;
+  }
+
+  // Each tool in pack order, after the bot's Lua, under the deadline, handed what the one before it left; one that
+  // misses the deadline is cut off and the value passes on as it came.
+  private async chained<T>(chat: string, units: ToolUnit[], first: T, step: Chained<T>): Promise<{ value: T; writes: Writes }> {
+    let value = first;
+    let writes: Writes = [];
+    for (const unit of units) {
+      if (this.closing.signal.aborted) break;
+      const deadline = new AbortController();
+      const stop = AbortSignal.any([this.closing.signal, deadline.signal]);
+      const timer = setTimeout(() => deadline.abort(new ToolLate()), TOOL_DEADLINE_MS);
+      try {
+        const run = { tool: unit, event: step.event(value) };
+        const outcome = step.quiet ? await this.run(chat, run, step.scope(writes), stop).finally(() => clearTimeout(timer)) : (await this.dispatch(chat, run, step.scope(writes), null, stop, () => clearTimeout(timer))).outcome;
+        if (stop.aborted) continue;
+        writes = [...writes, ...outcome.writes];
+        const next = outcome.value === undefined ? value : step.answer(outcome.value, value);
+        if (next instanceof Error) this.report(chat, next, { kind: 'module', id: unit.module });
+        else value = next;
+      } finally { clearTimeout(timer); }
+    }
+    return { value, writes };
+  }
+
+  // A tool whose frame has not loaded yet may listen.
+  private listening(chat: Chat, event: EventName): ToolUnit[] {
+    return toolsOf(this.session.store, chat).filter(({ module }) => this.bindings.tools.hears(module, event) !== false);
   }
 
   // onOutput, once the reply is saved. What it writes is the reply version's.
@@ -713,7 +805,8 @@ export class Scripts {
         : this.bindings.tools.run(chat, units.tool, scope, units.event, host, signal);
       const outcome = await until(running, signal);
       this.report(chat, outcome, from);
-      if ('tool' in units) this.keepLog(chat, [{ stage: event.kind, pack: from, script: units.tool.tool.manifest.displayName, at, duration: performance.now() - began, logs: [], writes: outcome.writes, errors: outcome.errors, missing: outcome.missing, stopped: outcome.stop, changed: outcome.value !== undefined, handled: outcome.handled, truncated: false }]);
+      // A showing runs once per stretch shown; kept here, it would push the turns' entries out of the log's bound.
+      if ('tool' in units && (event.kind !== 'showing' || outcome.errors.length || outcome.missing.length)) this.keepLog(chat, [{ stage: event.kind, pack: from, script: units.tool.tool.manifest.displayName, at, duration: performance.now() - began, logs: [], writes: outcome.writes, errors: outcome.errors, missing: outcome.missing, stopped: outcome.stop, changed: outcome.value !== undefined, handled: outcome.handled, truncated: false }]);
       return outcome;
     } catch (error) {
       this.report(chat, error, from);
