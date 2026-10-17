@@ -14,9 +14,6 @@ import { contexts, renderChat, type ChatScope, type LuaDisplay, type Missed } fr
 // backgroundHTML that did is left out.
 export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: boolean; unfound: string[]; stopped: Runaway | null };
 
-// A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
-const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
-
 export type DisplayWork = { items: Missed[]; staged: string[]; start: [string, string][] };
 export type DisplayPatch = { rows: { index: number; text: string; drawn: number[]; boxes: Box[] }[]; css: string; pass: boolean; unfound: string[]; stopped: Runaway | null };
 
@@ -92,8 +89,24 @@ export class DisplayPass {
   }
 }
 
-function stripStyles(text: string, blocks: string[]) {
-  return text.replace(STYLE, (_, css: string) => { blocks.push(css); return ''; });
+// A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
+// One pass, taking what /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi takes: that regex rescans to the end for each
+// opener with no > after it, and no opener after that one has a > either.
+export function stripStyles(text: string, blocks: string[]): string {
+  const opener = /<style\b/gi;
+  const closer = /<\/style\s*>/gi;
+  let kept = '';
+  let from = 0;
+  for (let found = opener.exec(text); found; found = opener.exec(text)) {
+    const open = text.indexOf('>', opener.lastIndex);
+    if (open === -1) break;
+    closer.lastIndex = open + 1;
+    const end = closer.exec(text);
+    blocks.push(text.slice(open + 1, end ? end.index : text.length));
+    kept += text.slice(from, found.index);
+    from = opener.lastIndex = end ? closer.lastIndex : text.length;
+  }
+  return kept + text.slice(from);
 }
 
 // Markdown as Risu parses it (markdown-it, soft breaks kept, no indented code), so a bot's HTML blocks and the prose

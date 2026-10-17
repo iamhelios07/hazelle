@@ -292,6 +292,14 @@ describe('readBackup', () => {
     expect(await readBackup([bin([['database.risudat', PNG]])])).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
   });
 
+  it('holds the blocks of a database to one unpacking limit together', async () => {
+    const padded = gzipSync(strToU8(`${' '.repeat(33 * 1024 * 1024)}{}`));
+    const block = [1, 1, 4, ...strToU8('root'), ...u32(padded.length, true), ...padded];
+    const database = (count: number) => new Uint8Array([...strToU8('RISUSAVE'), 0, ...Array.from({ length: count }, () => block).flat()]);
+    expect(await readBackup([backupFile(database(1))])).toMatchObject({ ok: true });
+    expect(await readBackup([backupFile(database(2))])).toEqual({ ok: false, failure: { kind: 'expands-too-far' } });
+  });
+
   it('reads the block form of the database as it reads the legacy form', async () => {
     // Risu's block writer reads chaId off every character, so a block file never holds the null the legacy fixture does.
     const whole = { ...db, characters: db.characters.filter((character) => character !== null) };

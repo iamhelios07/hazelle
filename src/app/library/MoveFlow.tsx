@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Inlays } from '../../engine/import/backup';
+import { EXPANSION } from '../../engine/import/inflate';
 import type { PresetFailure } from '../../engine/import/preset';
 import type { BackupCatalog, BackupFailure, RisuBackup } from '../../engine/import/types';
 import type { Unused } from '../../engine/pipeline';
 import { ImportWorker } from '../../runtime/import/client';
-import { ImportReadError } from '../../runtime/import/protocol';
+import { ImportReadError, ImportStuck } from '../../runtime/import/protocol';
 import { broughtFromRisu, fillInlays, modulesFromRisu, moveFromRisu, sortRisuFiles, type FilledInlays, type Moved, type MoveStep } from '../../runtime/move';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
@@ -21,6 +22,7 @@ import { hasModule, stepsOf, tickable, tickCount, toPick, type Have, type Ticks 
 const FAILURE: Record<BackupFailure['kind'], string> = {
   encrypted: 'risuai.xyz의 전체 백업만으로는 가져올 수 없어요. Risu에서 \'부분 로컬 백업 저장\'으로 받은 파일을 함께 넣어 주세요.',
   'no-database': 'Risu 백업 파일이 아니거나 깨진 파일이에요.',
+  'expands-too-far': `백업 속 데이터가 압축을 풀면 원래 크기의 ${EXPANSION}배가 넘어서 가져올 수 없어요.`,
   unreadable: 'Risu 백업 파일이 아니거나 깨진 파일이에요.',
 };
 
@@ -89,7 +91,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       if (!live) return;
       if (!(error instanceof ImportReadError)) throw error;
       source.close();
-      setPhase({ kind: 'failed', message: '백업 파일을 읽지 못했어요. 다시 가져와 주세요.', again: null });
+      setPhase({ kind: 'failed', message: error instanceof ImportStuck ? '백업 파일을 읽다가 멈춰서 그만뒀어요. 파일이 깨졌을 수 있어요.' : '백업 파일을 읽지 못했어요. 다시 가져와 주세요.', again: null });
     });
     return () => {
       live = false;
@@ -141,7 +143,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       if (reader.current !== source) return;
       if (!(error instanceof ImportReadError)) throw error;
       source.close();
-      setPhase({ kind: 'failed', message: '백업 파일을 읽지 못했어요. 멈추기 전까지 가져온 내용은 저장됐어요.', again: null });
+      setPhase({ kind: 'failed', message: `${error instanceof ImportStuck ? '백업 파일을 읽다가 멈춰서 그만뒀어요.' : '백업 파일을 읽지 못했어요.'} 멈추기 전까지 가져온 내용은 저장됐어요.`, again: null });
     }
   }
 

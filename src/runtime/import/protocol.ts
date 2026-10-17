@@ -40,9 +40,12 @@ export type Replies = {
 };
 export type Method = keyof Inputs;
 export type Request<K extends Method = Method> = { [M in K]: { kind: M } & Inputs[M] }[K];
-export type Down<K extends Method = Method> = { id: number; request: Request<K> };
-export type Up = { id: number; result: Replies[Method] } | { id: number; error: string };
+export type Down<K extends Method = Method> = { id: number; request: Request<K> } | { ping: true };
+// pong answers a ping; progress is a sign of life from inside one long read (engine/progress).
+export type Up = { id: number; result: Replies[Method] } | { id: number; error: string } | { pong: true } | { progress: true };
 
 export const MESSAGE_PAGE = 256;
 export const MESSAGE_BYTES = 1_000_000;
 export class ImportReadError extends Error {}
+// The worker went STUCK_MS (client.ts) without a sign of life, held by a file it cannot finish reading.
+export class ImportStuck extends ImportReadError {}

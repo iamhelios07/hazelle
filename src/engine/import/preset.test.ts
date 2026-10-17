@@ -1,8 +1,8 @@
-import { decompressSync } from 'fflate';
+import { decompressSync, gzipSync } from 'fflate';
 import { unpack as unpackMsgpack } from 'msgpackr';
 import { expect, it } from 'vitest';
 import type { Block, ConversationPrompt } from '../../model/prompt';
-import { convertPreset, writePreset } from './preset';
+import { convertPreset, importPreset, writePreset } from './preset';
 import { unpack } from './risum';
 
 it("keeps a preset's toggle lines in order, one it cannot read as written and counted", () => {
@@ -90,4 +90,9 @@ it('writes a .risup that Risu opens (msgpackr, AES-GCM) into the same prompt, ke
   expect(read.prompt.toggles).toEqual(prompt.toggles);
   expect(read.prompt.authorNote).toBe('기본 노트');
   expect(read.prompt.companions).toEqual(['risu-id', 'ns']);
+});
+
+it('refuses a preset that unpacks past its limit, saying so', async () => {
+  const file = gzipSync(new Uint8Array(80 * 1024 * 1024));
+  expect(await importPreset('Mira.risupreset', file)).toEqual({ ok: false, failure: { kind: 'unreadable', detail: 'expands-too-far' } });
 });

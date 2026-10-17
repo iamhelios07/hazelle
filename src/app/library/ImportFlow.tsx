@@ -2,6 +2,7 @@ import { importTool, undoToolImport } from '../../runtime/tools/store';
 import { useToast } from '../toast';
 import { Check, FileText, MessageSquare, MessageSquarePlus, Package, UserRound, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { EXPANSION, METADATA_BYTES } from '../../engine/import/inflate';
 import { PRESET_EXTENSIONS } from '../../engine/import/preset';
 import { mergeUnsupported, type ImportFailure } from '../../engine/import/types';
 import { characterTexts, live } from '../../model/library';
@@ -11,7 +12,7 @@ import { setDeleted } from '../../runtime/characters';
 import { importChat } from '../../runtime/chat-log';
 import type { ApiFailure, ApiResult } from '../../runtime/api';
 import { ImportWorker } from '../../runtime/import/client';
-import { ImportReadError, type ChatsRead } from '../../runtime/import/protocol';
+import { ImportReadError, ImportStuck, type ChatsRead } from '../../runtime/import/protocol';
 import { importModule, pairWithPrompts, setModuleAt, setModuleDeleted, type ModulePlace } from '../../runtime/modules';
 import { fillPictures, importRisuChats, risuMatch } from '../../runtime/move';
 import { addRisuPersona, removePersona } from '../../runtime/personas';
@@ -20,6 +21,7 @@ import type { ObjectStore } from '../../runtime/store';
 import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
 import { ImportContext } from '../common/importing';
+import { sizeText } from '../common/size';
 import { useSearch } from '../common/useSearch';
 import { moduleName, NO_CHARACTER, promptName } from '../common/words';
 import { useFiles, useLibrary, useSettings, useStore } from '../session';
@@ -59,8 +61,9 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요.',
 };
 
-// Keyed by the failure details of engine/import/tool, of a chat file, of a preset (PresetFailure) and of a persona PNG
-// (engine/import/persona); a detail missing here reads as 파일을 읽지 못했어요.
+// Keyed by the failure details of engine/import/tool, of a chat file, of a preset (PresetFailure), of a persona PNG
+// (engine/import/persona) and of the size limits (engine/import/inflate TooLarge); a detail missing here reads as
+// 파일을 읽지 못했어요.
 const DETAIL_FAILURE: Record<string, string> = {
   'other-version': '이전 버전에서 만든 채팅 파일이라 가져올 수 없어요.',
   'not-preset': 'Risu 파일이지만 프리셋 파일이 아니에요.',
@@ -78,6 +81,8 @@ const DETAIL_FAILURE: Record<string, string> = {
   'tool-unknown': '알 수 없는 줄이에요.',
   'persona-unreadable': 'Risu 페르소나 PNG 파일이지만 내용을 읽지 못했어요.',
   'persona-incomplete': '이름이나 설명이 빠진 페르소나라 가져올 수 없어요.',
+  'expands-too-far': `압축을 풀면 파일 크기의 ${EXPANSION}배가 넘어서 가져올 수 없어요.`,
+  'entry-too-large': `이미지를 뺀 내용이 ${sizeText(METADATA_BYTES)}를 넘어서 가져올 수 없어요.`,
 };
 
 class ImportCancelled extends Error {}
@@ -232,7 +237,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       return characterOutcome(file.name, parsed.card, saved.data);
     } catch (error) {
       if (!(error instanceof ImportReadError)) throw error;
-      return { kind: 'failed', file: file.name, failure: '파일을 읽지 못했어요. 다시 가져와 주세요.' };
+      return { kind: 'failed', file: file.name, failure: error instanceof ImportStuck ? '파일을 읽다가 멈춰서 그만뒀어요. 파일이 깨졌을 수 있어요.' : '파일을 읽지 못했어요. 다시 가져와 주세요.' };
     } finally {
       reader.close();
       readers.current.delete(reader);

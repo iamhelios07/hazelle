@@ -1,15 +1,23 @@
 import type { PresetRead } from '../../engine/import/preset';
 import type { ImportedTool } from '../../engine/import/tool';
 import type { BackupResult, Imported, ImportedModule, ImportResult, RisuCharacter, RisuChat } from '../../engine/import/types';
-import { ImportReadError, type AssetRead, type ChatsRead, type Down, type Method, type ModuleData, type Replies, type Request, type Up } from './protocol';
+import { ImportReadError, ImportStuck, type AssetRead, type ChatsRead, type Down, type Method, type ModuleData, type Replies, type Request, type Up } from './protocol';
 import { PendingRequests } from '../pending-requests';
-import { moduleWorker } from '../worker';
+import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
+
+// The worker gives a sign of life per step of unpacking (engine/progress) and answers pings between reads, so STUCK_MS
+// bounds one parse or step; a file that holds it past that, as a pattern that never ends would, is what passes it.
+// Until the worker first answers, only one that cannot load at all is ended, after LOAD_MS.
+const STUCK_MS = 8_000;
+const LOAD_MS = 20_000;
 
 export class ImportWorker {
   private worker: Worker | null = null;
   private closed = false;
+  private limit = LOAD_MS;
   private readonly pending = new PendingRequests<Replies[Method]>();
+  private readonly heart = new Heartbeat(() => this.worker?.postMessage({ ping: true } satisfies Down), () => this.end(new ImportStuck('stuck')));
 
   async card(file: File): Promise<ImportResult | ChatsRead | { ok: true; tool: ImportedTool } | { ok: true; preset: PresetRead }> {
     const result = await this.ask({ kind: 'card', file });
@@ -39,7 +47,7 @@ export class ImportWorker {
   }
 
   close() {
-    this.end('closed');
+    this.end(new ImportReadError('closed'));
   }
 
   private async character(key: number): Promise<RisuCharacter> {
@@ -75,8 +83,9 @@ export class ImportWorker {
     const { id, promise } = this.pending.add();
     try {
       this.open().postMessage({ id, request } satisfies Down<K>);
+      this.heart.start(this.limit);
     } catch (error) {
-      this.end(error instanceof Error ? error.message : String(error));
+      this.end(new ImportReadError(error instanceof Error ? error.message : String(error)));
     }
     return promise as Promise<Replies[K]>;
   }
@@ -85,22 +94,24 @@ export class ImportWorker {
     if (this.worker) return this.worker;
     const worker = moduleWorker(workerUrl);
     worker.onmessage = ({ data }: MessageEvent<Up>) => {
-      const pending = this.pending.take(data.id);
-      if (!pending) return;
-      if ('error' in data) pending.reject(new ImportReadError(data.error));
-      else pending.resolve(data.result);
+      this.limit = STUCK_MS;
+      this.heart.answered();
+      if ('error' in data) this.pending.take(data.id)?.reject(new ImportReadError(data.error));
+      else if ('result' in data) this.pending.take(data.id)?.resolve(data.result);
+      if (this.pending.size) this.heart.start(this.limit);
+      else this.heart.rest();
     };
-    worker.onerror = (error) => this.end(error.message);
-    worker.onmessageerror = () => this.end('unreadable worker message');
+    worker.onerror = (error) => this.end(new ImportReadError(error.message));
+    worker.onmessageerror = () => this.end(new ImportReadError('unreadable worker message'));
     this.worker = worker;
     return worker;
   }
 
-  private end(message: string) {
+  private end(error: ImportReadError) {
     this.closed = true;
+    this.heart.rest();
     this.worker?.terminate();
     this.worker = null;
-    const error = new ImportReadError(message);
     this.pending.rejectAll(() => error);
   }
 }

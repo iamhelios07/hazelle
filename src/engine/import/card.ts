@@ -1,4 +1,5 @@
 import { add, cardSource, convert, counted, extensionOf, lorebookSource, record, text, type Converted, type Tally } from './convert';
+import { METADATA_BYTES } from './inflate';
 import { hazelleSource, printOf, readHazelle, readModule, type ConvertedBundle } from './hazelle';
 import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportedModule, type ImportReport, type ImportResult, type Imported, type LoreEntry } from './types';
 import { base64, readPng } from './png';
@@ -56,9 +57,9 @@ function fromPng(bytes: Uint8Array<ArrayBuffer>): ImportResult {
 
 function readCharx(bytes: Uint8Array<ArrayBuffer>, tally: Tally): { zip: Zip; raw: unknown; converted: Converted } | ImportResult {
   const zip = openZip(bytes);
-  const card = zip?.read('card.json');
+  const card = zip?.read('card.json', METADATA_BYTES);
   if (!zip || !card) return fail('unreadable', 'no card.json');
-  const moduleBytes = zip.read('module.risum');
+  const moduleBytes = zip.read('module.risum', METADATA_BYTES);
   const module = moduleBytes ? readRisumModule(moduleBytes) : null;
   if (moduleBytes && !module) add(tally, 'module');
   const raw: unknown = JSON.parse(utf8.decode(card));

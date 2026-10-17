@@ -1,5 +1,5 @@
 import { deflateSync } from 'fflate';
-import { inflate } from './inflate';
+import { expansionLimit, inflate, TooLarge } from './inflate';
 
 const END_OF_DIRECTORY = 0x06054b50;
 const DIRECTORY_ENTRY = 0x02014b50;
@@ -12,8 +12,9 @@ export type Zip = {
   // Whatever precedes the archive: the image of a JPEG with an appended zip.
   prefix: Uint8Array<ArrayBuffer>;
   // A file's bytes, read when asked, so a bot of thousands of pictures is never unpacked at once. null: no such
-  // file, a damaged one, or one stored in a way this reader does not take.
-  read(path: string): Uint8Array<ArrayBuffer> | null;
+  // file, a damaged one, or one stored in a way this reader does not take. limit: what the file may hold, checked
+  // before it is unpacked.
+  read(path: string, limit?: number): Uint8Array<ArrayBuffer> | null;
 };
 
 type Entry = { method: number; compressed: number; size: number; header: number };
@@ -21,7 +22,8 @@ type Entry = { method: number; compressed: number; size: number; header: number 
 const utf8 = new TextDecoder();
 
 // The central directory is read once. A zip appended to a JPEG records its offsets from its own start, so the
-// archive's start is where its directory says it must be.
+// archive's start is where its directory says it must be. What its packed files declare is held to the archive's
+// limit here, before any is unpacked: inflate holds each to its declared size.
 export function openZip(bytes: Uint8Array<ArrayBuffer>): Zip | null {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const floor = Math.max(0, bytes.length - END_RECORD - 0xffff);
@@ -32,21 +34,26 @@ export function openZip(bytes: Uint8Array<ArrayBuffer>): Zip | null {
   const start = record - view.getUint32(record + 16, true) - directorySize;
   if (start < 0) return null;
   const entries = new Map<string, Entry>();
+  let unpacked = 0;
   for (let at = record - directorySize; at + 46 <= record && view.getUint32(at, true) === DIRECTORY_ENTRY; ) {
     const nameLength = view.getUint16(at + 28, true);
     const name = utf8.decode(bytes.subarray(at + 46, at + 46 + nameLength));
-    entries.set(name, {
+    const entry: Entry = {
       method: view.getUint16(at + 10, true),
       compressed: view.getUint32(at + 20, true),
       size: view.getUint32(at + 24, true),
       header: start + view.getUint32(at + 42, true),
-    });
+    };
+    if (entry.method === DEFLATED) unpacked += entry.size;
+    entries.set(name, entry);
     at += 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
   }
+  if (unpacked > expansionLimit(bytes.length)) throw new TooLarge('expands-too-far');
   return {
     prefix: bytes.slice(0, start),
-    read: (path) => {
+    read: (path, limit = Infinity) => {
       const entry = entries.get(path);
+      if (entry && Math.max(entry.size, entry.compressed) > limit) throw new TooLarge('entry-too-large');
       if (!entry || entry.header + 30 > bytes.length || view.getUint32(entry.header, true) !== LOCAL_HEADER) return null;
       const from = entry.header + 30 + view.getUint16(entry.header + 26, true) + view.getUint16(entry.header + 28, true);
       const data = bytes.subarray(from, from + entry.compressed);
