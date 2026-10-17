@@ -10,9 +10,13 @@ export const toolMenu = (tools: ToolMenu[], items: (module: string) => MenuItem[
   ...items(module).map(({ id, label }) => ({ kind: 'menu' as const, module, name: manifest.displayName, label, item: id })),
 ]);
 
-// A message's 도구 menu: each tool's //@action items, by tool in pack order.
-export type ToolActions = { module: string; name: string; items: { id: string; label: string }[] };
-export const toolActions = (tools: ToolMenu[]): ToolActions[] => tools.flatMap(({ module, manifest }) => manifest.actions?.length ? [{ module, name: manifest.displayName, items: manifest.actions }] : []);
+// A message's 도구 menu: each tool's message actions, by tool in pack order. actions: the tool host's, which a frame
+// tool's frame registers while it runs.
+export type ToolActions = { module: string; name: string; items: MenuItem[] };
+export const toolActions = (tools: ToolMenu[], actions: (module: string) => MenuItem[]): ToolActions[] => tools.flatMap(({ module, manifest }) => {
+  const items = actions(module);
+  return items.length ? [{ module, name: manifest.displayName, items }] : [];
+});
 
 // A //@composer item: its button, and the settings fields it shows, which are the module's own in every chat.
 export type ToolComposer = { module: string; name: string; label: string; fields: ToolField[]; page: boolean };

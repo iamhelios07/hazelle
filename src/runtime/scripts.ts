@@ -245,7 +245,7 @@ export class Scripts {
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
-    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent, ToolReach> & Pick<Tools, 'items' | 'hears'> },
+    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent, ToolReach> & Pick<Tools, 'items' | 'actions' | 'hears'> },
   ) {
     this.interactions = new ScriptInteractions(session.store, this.closing.signal);
     this.schedule = new ScriptSchedule(session.store, this.interactions, this.closing.signal);
@@ -654,7 +654,7 @@ export class Scripts {
   // A //@action item pressed on message: its writes stay with that message, whichever version it shows.
   action(chat: string, module: string, item: string, message: string): Promise<void> {
     const unit = this.unit(chat, module);
-    if (!unit?.tool.manifest.actions?.some((each) => each.id === item)) return Promise.resolve();
+    if (!unit || !this.bindings.tools.actions(module).some((each) => each.id === item)) return Promise.resolve();
     return this.schedule.lane(chat, unit, async () => {
       const scope = this.scope(chat);
       const at = atOf(scope, message);

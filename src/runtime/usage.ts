@@ -160,7 +160,7 @@ export class Usage {
         else unreadable = true;
       } else if (row.kind === 'illustration') {
         if (!isValue('illustration', held)) unreadable = true;
-        else if (held.receipt) calls.push(usageCall(held.receipt, held.at));
+        else if ('receipt' in held && held.receipt) calls.push(usageCall(held.receipt, held.at));
       } else if (row.kind === 'memory') {
         if (!isValue('memory', held)) unreadable = true;
         else for (const { receipt, at } of [...held.records, ...held.chapters]) if (receipt) calls.push(usageCall(receipt, at));

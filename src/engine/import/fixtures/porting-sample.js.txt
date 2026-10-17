@@ -1,65 +1,34 @@
 //@name porting_sample
 //@display-name 포팅 예제
 //@api 3.0
-//@version 1.0.0
+//@version 2.0.0
 
-// Draws a small picture for each reply, keeps it, and shows it under that reply, in RisuAI and in Hazelle alike.
-// A display handler is handed the message's text and nothing else, so the reply carries its own key: a comment
-// afterRequest adds, which the process handler keeps out of every later request.
-const MARK = /<!--porting-sample:([\w-]+)-->/;
-const shown = new Map();
+// Draws a small picture for each reply and puts it on that reply, with 다시 그리기 in every message's menu, in RisuAI
+// and in Hazelle alike. What would touch RisuAI's page goes through PluginSlots: Hazelle has it built in, and on RisuAI
+// the piece Hazelle publishes, pasted above this, fills it. Without it, the plugin does nothing rather than fail.
 
-async function draw(text) {
+async function draw(seed) {
   const canvas = new OffscreenCanvas(96, 96);
   const context = canvas.getContext('2d');
-  context.fillStyle = `hsl(${(text.length * 37) % 360} 70% 55%)`;
+  context.fillStyle = `hsl(${(seed * 37) % 360} 70% 55%)`;
   context.fillRect(0, 0, 96, 96);
   const blob = await canvas.convertToBlob({ type: 'image/png' });
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-function base64(bytes) {
-  let binary = '';
-  for (let at = 0; at < bytes.length; at += 0x8000) binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
-  return btoa(binary);
+// Not awaited where it is called: drawing may take as long as it takes, and the chat goes on meanwhile.
+function attach(chatId, seed) {
+  (async () => PluginSlots.attachPicture(chatId, await draw(seed), { caption: '응답에 맞춘 색' }))().catch((error) => console.error(error));
 }
 
 (async () => {
-  // Translations and summaries pass afterRequest too; only the chat's own reply gets a picture.
-  await Risuai.addRisuReplacer('afterRequest', async (content, type) => {
-    if (type !== 'model') return content;
-    const key = crypto.randomUUID();
-    const path = await Risuai.saveAsset(await draw(content));
-    await Risuai.pluginStorage.setItem(`picture:${key}`, path);
-    return `${content}\n<!--porting-sample:${key}-->`;
+  if (typeof PluginSlots === 'undefined') return;
+
+  await Risuai.addRisuChatListener('output', async ({ characterIndex, chatIndex, messageIndex }) => {
+    const chat = await Risuai.getChatFromIndex(characterIndex, chatIndex);
+    const reply = chat?.message[messageIndex];
+    if (reply) attach(reply.chatId, reply.data.length);
   });
 
-  await Risuai.addRisuScriptHandler('process', (content) => content.replace(MARK, ''));
-
-  await Risuai.addRisuScriptHandler('display', async (content) => {
-    const found = content.match(MARK);
-    if (!found) return null;
-    const key = found[1];
-    let html = shown.get(key);
-    if (html === undefined) {
-      const path = await Risuai.pluginStorage.getItem(`picture:${key}`);
-      const bytes = path && await Risuai.readImage(path);
-      if (!bytes) return content.replace(MARK, '');
-      html = `<img src="data:image/png;base64,${base64(bytes)}" alt="${key}">`;
-      shown.set(key, html);
-    }
-    return content.replace(MARK, html);
-  });
-
-  // RisuAI only: bring the new picture into view on RisuAI's own page. Hazelle has no page to offer, so there the name
-  // reads as undefined and this part is skipped; everything above runs in both.
-  if (typeof Risuai.getRootDocument === 'function') {
-    await Risuai.addRisuChatListener('output', async ({ chat, messageIndex }) => {
-      const found = chat.message[messageIndex]?.data.match(MARK);
-      if (!found) return;
-      const page = await Risuai.getRootDocument();
-      const picture = await page.querySelector(`img[alt="${found[1]}"]`);
-      if (picture) await picture.scrollIntoView({ block: 'nearest' });
-    });
-  }
+  await PluginSlots.registerMessageAction({ id: 'redraw', label: '다시 그리기' }, ({ chatId }) => attach(chatId, Date.now()));
 })();

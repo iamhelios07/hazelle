@@ -23,7 +23,7 @@ it('lists declared pages and actions in pack order, each under its own module id
 it('groups message actions by tool and lists composer items with their own fields only', () => {
   const memory: ToolManifest = { ...manifest('기억', { label: '열기' }, []), actions: [{ id: 'redo', label: '다시 정리' }], composer: { label: '기억' }, settings: [{ key: 'auto', type: 'switch', label: '자동', composer: true }, { key: 'size', type: 'number', label: '단위' }] };
   const tools = [{ module: 'plain', manifest: manifest('메모', null, []) }, { module: 'memory', manifest: memory }];
-  expect(toolActions(tools)).toEqual([{ module: 'memory', name: '기억', items: [{ id: 'redo', label: '다시 정리' }] }]);
+  expect(toolActions(tools, (module) => tools.find((tool) => tool.module === module)!.manifest.actions ?? [])).toEqual([{ module: 'memory', name: '기억', items: [{ id: 'redo', label: '다시 정리' }] }]);
   expect(toolComposer(tools)).toEqual([{ module: 'memory', name: '기억', label: '기억', fields: [{ key: 'auto', type: 'switch', label: '자동', composer: true }], page: true }]);
 });
 

@@ -6,7 +6,7 @@ import { appendUserMessage, setChatOwn, startChat } from './chat-log';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { blankCard } from '../engine/import/card';
-import { placeMark } from '../model/illustration';
+import { placeMark, type Drawn } from '../model/illustration';
 import { severalScenes } from '../engine/illustrate';
 import { takeTurn } from './turn';
 import { removeIllustration, restoreIllustration } from './illustrate';
@@ -73,7 +73,7 @@ describe('Illustrator', () => {
         expect(session.illustrator.snapshot().size).toBe(0);
       }, { timeout: 5000 });
       const reply = fold(session.store.children('entry', chat))[1]!;
-      const { value } = session.store.children('illustration', chat)[0]!;
+      const value = session.store.children('illustration', chat)[0]!.value as Drawn;
       expect(value).toMatchObject({ message: reply.id, version: shown(reply).id, scene: { paragraph: 1, shape: 'portrait' }, receipt: { state: 'done' }, sent: { width: 832, height: 1216, characters: [{ center: { x: 0.5, y: 0.5 } }] }, type: 'image/png', size: PNG.byteLength });
       expect(log).toHaveLength(4);
       expect(log[1]!.sent.body).toContain('[2] The room was dark.');
@@ -98,7 +98,7 @@ describe('Illustrator', () => {
       expect(log[1]!.sent.body).toContain(severalScenes(2));
       expect(log).toHaveLength(4);
       // A paragraph already taken drops its scene, and so does one past the count.
-      const drawn = session.store.children('illustration', chat).map(({ value }) => value);
+      const drawn = session.store.children('illustration', chat).map(({ value }) => value as Drawn);
       expect(drawn.map(({ scene }) => scene.paragraph).sort()).toEqual([1, 2]);
       expect(drawn[0]!.receipt!.id).toBe(drawn[1]!.receipt!.id);
     }));
@@ -247,7 +247,7 @@ describe('Illustrator with profiles', { timeout: 15_000 }, () => {
       expect(profileCalls()[0]!.sent.body).toContain('1girl, {artist:pen}, silver hair, maid');
       const sent = JSON.parse(log.find(({ sent }) => sent.url.endsWith('/generate'))!.sent.body!);
       expect(sent).toMatchObject({ prompt: expect.stringMatching(/^\{artist:pen\}, 1girl, indoors/), characters: [{ prompt: 'girl, profile silver hair, maid uniform, smile' }] });
-      expect(session.store.children('illustration', chat)[0]!.value.sent.characters[0]!.prompt).toBe('girl, profile silver hair, maid uniform, smile');
+      expect((session.store.children('illustration', chat)[0]!.value as Drawn).sent.characters[0]!.prompt).toBe('girl, profile silver hair, maid uniform, smile');
       await draw();
       expect(profileCalls()).toHaveLength(1);
     }));

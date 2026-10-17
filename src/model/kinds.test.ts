@@ -18,6 +18,13 @@ it('accepts an illustration as the run stores it, and refuses one whose scene lo
   expect(isValue('illustration', { ...illustration, scene: { ...scene, framing: undefined } })).toBe(false);
 });
 
+it('accepts a tool\'s picture with no scene, and refuses one that lost its tool\'s name', () => {
+  const attached = { message: 'm', version: 'v', file: { id: 'f', key: 'k' }, type: 'image/png', size: 10, at: 1, paragraph: 0, width: 96, height: 96, tool: { module: 'mod', name: 'Sample' } };
+  expect(isValue('illustration', attached)).toBe(true);
+  expect(isValue('illustration', { ...attached, caption: 'A tide' })).toBe(true);
+  expect(isValue('illustration', { ...attached, tool: { module: 'mod' } })).toBe(false);
+});
+
 
 it('accepts tool files and per-key data without changing existing module shapes', () => {
   const manifest = { api: 1, name: 'notes', author: 'jin', displayName: 'Notes', version: '1', description: '', uses: [], page: null, menu: [], settings: [] };

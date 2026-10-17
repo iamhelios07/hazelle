@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { assetType, blankCard, importCard, importRisum, writeCharx } from './card';
+import { assetType, blankCard, imageSize, importCard, importRisum, writeCharx } from './card';
 import { moduleSource } from './hazelle';
 import { concat, METADATA_BYTES } from './inflate';
 import { fileSource } from './source';
@@ -467,3 +467,11 @@ const RISU_MODULE = [
   'YSAtQOIFIJdhIPJAeS3TTCAAbmFhYWFhYWFhINNMtdNsSLQ8Dw56BSCXYY7TTEgFAG5hYWFhYWFhYSBIBUwFPA8OegUgl2GO00xI',
   'BQBuYWFhYWFhYWEgHUBAzUcFeUgOQPIgl2FWbmFhYWFhYXtuYWFhYc9uYWF7AG5hYSAPbCwFIJdhIHkOSLLbQOKyTAUgbnsA',
 ];
+
+it('reads a picture\'s size from its header, past a JPEG\'s tables, and none from a header cut short', () => {
+  const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), (char) => char.charCodeAt(0));
+  expect(imageSize(png)).toEqual({ type: 'image/png', width: 1, height: 1 });
+  const jpeg = Uint8Array.of(0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46, 0xff, 0xc4, 0x00, 0x02, 0xff, 0xc2, 0x00, 0x11, 0x08, 0x00, 0x30, 0x00, 0x40, 0x03);
+  expect(imageSize(jpeg)).toEqual({ type: 'image/jpeg', width: 64, height: 48 });
+  expect(imageSize(png.subarray(0, 18))).toBeNull();
+});

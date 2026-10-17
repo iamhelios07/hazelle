@@ -21,7 +21,8 @@ import type { MenuItem, ToolFrames, ToolHosts, ToolMenu, ToolPage, ToolSlot, Too
 import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
 import { readToolAsset, saveToolAsset, setToolSettings, toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
-import { fieldValue } from '../../engine/import/tool';
+import { fieldValue, TOOL_ACTION_CHARS, TOOL_ACTIONS } from '../../engine/import/tool';
+import { attachIllustration } from '../illustrate';
 import { RISU_DECLINED } from '../../tool-api/risu-methods';
 import { SETTINGS_ID } from '../../model/settings';
 import { chatPersona } from '../personas';
@@ -41,11 +42,11 @@ type Frame = {
   unloading: boolean;
 };
 // A frame tool (manifest.risu) runs as its background frame, with these: chat, the chat open for it, which its calls
-// outside an event read; menu, what its frame registered; shown, whether it asks to be shown; slot, where it is;
+// outside an event read; menu and actions, what its frame registered; shown, whether it asks to be shown; slot, where it is;
 // leaving, a slot that showed it left in this commit, so a slot attached before the commit ends is a remount.
 type Entry = {
   module: string; tool: Tool; settings: string; background: Frame | null; pages: Set<Frame>; chats: Set<string>; idle: ReturnType<typeof setTimeout> | null; data: Map<string, { key: string; json: string }>;
-  chat: string | null; menu: MenuItem[]; shown: boolean; slot: ToolSlot | null; leaving: boolean;
+  chat: string | null; menu: MenuItem[]; actions: MenuItem[]; shown: boolean; slot: ToolSlot | null; leaving: boolean;
 };
 const EVENTS = new Set<EventName>(['reply', 'replying', 'sending', 'requesting', 'showing', 'prompt', 'change', 'branch', 'menu', 'action', 'settings', 'open', 'message']);
 // The sandbox refuses story changes in these too (sandbox/api.ts); a page that posts its own outcome is not trusted to.
@@ -165,6 +166,12 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     return isFrameTool(tool) ? this.entries.get(module)?.menu ?? [] : tool.manifest.menu;
   };
 
+  readonly actions = (module: string): MenuItem[] => {
+    const tool = this.session.store.get('tool', toolId(module))?.value;
+    if (!tool) return [];
+    return isFrameTool(tool) ? this.entries.get(module)?.actions ?? [] : tool.manifest.actions ?? [];
+  };
+
   readonly hears = (module: string, event: EventName): boolean | null => {
     if ((this.stalls.get(module) ?? 0) >= 3) return false;
     const frame = this.entries.get(module)?.background;
@@ -176,7 +183,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   readonly hosts = () => this.called;
 
   private publish() {
-    this.shownFrames = new Map([...this.entries.values()].filter((entry) => isFrameTool(entry.tool)).map((entry) => [entry.module, { menu: entry.menu, chat: entry.chat, asking: entry.shown && !entry.slot }]));
+    this.shownFrames = new Map([...this.entries.values()].filter((entry) => isFrameTool(entry.tool)).map((entry) => [entry.module, { menu: entry.menu, actions: entry.actions, chat: entry.chat, asking: entry.shown && !entry.slot }]));
     this.signal.notify();
   }
 
@@ -304,7 +311,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     const entry: Entry = {
       module, tool, settings: JSON.stringify(tool.settings), background: null, pages: new Set(), chats: new Set(), idle: null,
       data: new Map(store.children('tooldata', module).map(({ id, value }) => [id, { key: value.key, json: JSON.stringify(value.value) }])),
-      chat: null, menu: [], shown: false, slot: null, leaving: false,
+      chat: null, menu: [], actions: [], shown: false, slot: null, leaving: false,
     };
     this.entries.set(module, entry);
     return entry;
@@ -467,6 +474,12 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         entry.menu = first.map(({ id, label }) => ({ id, label }));
         this.publish();
         return;
+      case 'frame.actions':
+        if (!own || !isMenu(first)) break;
+        if (first.length > TOOL_ACTIONS || first.some(({ label }) => [...label].length > TOOL_ACTION_CHARS)) throw new Error(`At most ${TOOL_ACTIONS} message actions, each named in ${TOOL_ACTION_CHARS} characters`);
+        entry.actions = first.map(({ id, label }) => ({ id, label }));
+        this.publish();
+        return;
       case 'frame.missing': {
         if (!own || typeof first !== 'string') break;
         const from = { kind: 'module', id: entry.module } as const;
@@ -492,6 +505,16 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         const read = await readToolAsset(this.session.store, this.session.files, entry.module, first);
         if (!read.ok) throw new Error(read.error);
         return read.data;
+      }
+      case 'chat.picture': {
+        const [, at, bytes, caption] = args;
+        if (typeof first !== 'string' || !isRecord(at) || typeof at.id !== 'string' || typeof at.version !== 'string' || !(bytes instanceof Uint8Array) || (caption !== null && typeof caption !== 'string')) break;
+        if (!this.allowed(first, entry.module)) throw new ToolStopped();
+        this.writes.take(entry.module);
+        const tool = { module: entry.module, name: live(this.session.store.get('module', entry.module))!.value.name };
+        const saved = await attachIllustration(this.session, first, tool, { message: at.id, version: at.version }, new Uint8Array(bytes), caption);
+        if (!saved.ok) throw new Error(saved.error);
+        return;
       }
       case 'settings': return this.session.store.get('tool', toolId(entry.module))!.value.settings;
       case 'settings.set': {
@@ -663,6 +686,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     if (frame.entry.background === frame) {
       frame.entry.background = null;
       frame.entry.menu = [];
+      frame.entry.actions = [];
       frame.entry.shown = false;
       if (frame.entry.slot) {
         const { slot } = frame.entry;

@@ -2,16 +2,17 @@ import { ChangeSignal } from '../change-signal';
 import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
+import { imageSize } from '../engine/import/card';
 import { parseScenes, pictureRequest, toldProfiles, type SceneInvalid } from '../engine/illustrate';
 import type { RanAway } from '../engine/pipeline';
 import { fold, shown, standing, type Chat, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
-import { paragraphsOf, pictureCount, type Illustration, type Scene } from '../model/illustration';
+import { paragraphsOf, pictureCount, type Attached, type Illustration, type Scene } from '../model/illustration';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { Portrait } from '../model/likeness';
 import type { IllustratePrompt } from '../model/prompt';
-import type { ApiFailure } from './api';
+import type { ApiFailure, ApiResult } from './api';
 import type { Route, RouteFailure } from './assignment';
 import { chatIllustrate } from './features';
 import { pinned, scopeOf } from './chat-context';
@@ -26,13 +27,45 @@ import { pageAnswer } from './talk';
 import { chatPlace, receiptRow } from './usage';
 
 // 삽화 (design §6.6): per message per run, one scene call to the chat's 보조 model (or the 삽화 prompt's own) writes
-// as many scenes as the reply's length earns (model/illustration pictureCount), and each is one image call, in turn. The only writer of `illustration` objects but a backup's restore and a chat's copies.
+// as many scenes as the reply's length earns (model/illustration pictureCount), and each is one image call, in turn. The only writer of `illustration` objects but a backup's restore and a chat's copies,
+// a tool's pictures included (attachIllustration).
 
 export type ImageRoute = Route & { draws: Draws };
 
 // 삭제: the picture goes at once, and 되돌리기 writes it back under its id.
 export const removeIllustration = (store: ObjectStore, id: string) => store.take('illustration', id);
 export const restoreIllustration = (store: ObjectStore, removed: Stored<'illustration'>) => store.restore(removed);
+
+// A tool's picture on a message version (Hazelle.Chat.picture), after the version's last paragraph. It replaces the one
+// that tool put on the version before, so a tool's own 다시 그리기 leaves one picture; the user's 삭제 still takes it.
+export async function attachIllustration(
+  { store, files }: Pick<Deps, 'store' | 'files'>, chat: string, tool: Attached['tool'], at: { message: string; version: string }, bytes: Uint8Array<ArrayBuffer>, caption: string | null,
+): Promise<ApiResult<null>> {
+  const picture = imageSize(bytes);
+  if (!picture) return { ok: false, error: 'not-a-picture' };
+  const lease = store.retainChat(chat);
+  try {
+    const failure = await lease.ready;
+    if (failure) return failure;
+    const messages = fold(store.children('entry', chat));
+    const version = messages.find(({ id }) => id === at.message)?.versions.find(({ id }) => id === at.version);
+    if (!live(store.get('chat', chat)) || !version) return { ok: false, error: 'gone' };
+    const versions = standing(messages);
+    const held = store.children('illustration', chat).find(({ value }) => 'tool' in value && value.tool.module === tool.module && versions.get(value.version) === at.version);
+    const saved = await files.save([bytes]);
+    if (!saved.ok) return saved;
+    const [file] = saved.data;
+    if (!file) return { ok: false, error: 'picture-refused' };
+    const value: Attached = {
+      message: at.message, version: at.version, file, type: picture.type, size: bytes.byteLength, at: Date.now(),
+      paragraph: Math.max(0, paragraphsOf(version.text).length - 1), width: picture.width, height: picture.height, tool, ...(caption !== null && { caption }),
+    };
+    const written = held ? await store.update('illustration', held.id, () => value) : await store.create('illustration', value, { parent: chat });
+    return written.ok ? { ok: true, data: null } : written;
+  } finally {
+    lease.release();
+  }
+}
 
 // The starred models that draw: their output holds an image and their connection's type fills draws. The first is the
 // image model of a chat whose switches name none.
@@ -260,7 +293,7 @@ export class Illustrator {
       .flatMap(({ value }) => {
         const version = versions.get(value.version);
         const at = version === undefined ? undefined : order.get(version);
-        return at === undefined ? [] : [{ at, value }];
+        return at === undefined || 'tool' in value ? [] : [{ at, value }];
       })
       .sort((a, b) => a.at - b.at || a.value.scene.paragraph - b.value.scene.paragraph || a.value.at - b.value.at)
       .map(({ at, value }) => ({ scene: value.scene, ago: history.length - 1 - at }));

@@ -72,6 +72,11 @@ declare namespace Hazelle {
     // with its reason, as fetch does.
     fetch(url: string, init?: FetchInit): Promise<FetchAnswer>;
     badge(index: number, text: string | null): void;   // on the version shown now; lands with the outcome
+    // A picture on a message version, shown as a 삽화 after its last paragraph, replacing the one this tool put there
+    // before. Saved when it resolves, also after the event that handed this chat has ended, so it may take as long as
+    // drawing does; it shares the write rate of storage. caption: read in the picture's place where it is not seen.
+    // Throws on bytes that are no PNG, JPEG, GIF, WebP or AVIF, a version the chat no longer has, or a refused file.
+    picture(at: At, bytes: Uint8Array, options?: { caption?: string }): Promise<void>;
     tokens(text: string): Promise<number>;
     lore(reserve?: number): Promise<{ role: 'system' | 'user' | 'assistant'; text: string }[]>;
     lorebook(): Promise<LoreEntry[]>;           // every entry the chat's lorebooks hold, as written, in the prompt's order
@@ -130,6 +135,9 @@ declare namespace Hazelle {
     show(): void;                              // brings its page up with this document in it
     hide(): void;                              // and closes that page
     menu(items: { id: string; label: string }[]): void;   // its ⋯ items in the chat, replacing the last; pressed: 'menu'
+    // Its items in each message's ⋯, replacing the last, as a header's //@action items are; pressed: 'action'. Rejects
+    // past 3 items or a label past 16 characters, as the header's limits.
+    actions(items: { id: string; label: string }[]): Promise<void>;
     missing(name: string): void;               // tells 점검 it met a name the API it was written for has and this one lacks
   }
   interface Api {

@@ -198,16 +198,14 @@ const SHAPES = {
   vectors: shape({ model: str, items: isRecord }),
   cacheprint: shape({ ...all(str, 'call', 'connection', 'model'), account: orNull(str), messages: listOf(shape({ role: str, hash: str, tokens: num, from: isRecord })) }),
   memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), chapters: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, records: listOf(shape({ id: str, at: num })) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
-  illustration: shape({
-    ...all(str, 'message', 'version', 'type'),
-    scene: shape({ paragraph: num, shape: str, setting: str, framing: str, characters: listOf(shape({ ...all(str, 'name', 'look', 'outfit', 'action'), x: num, y: num })) }),
-    receipt: orNull(isRecord),
-    model: shape(all(str, 'connection', 'model')),
-    sent: shape({ prompt: str, negative: str, characters: listOf(shape({ prompt: str, negative: str, center: shape(all(num, 'x', 'y')) })), ...all(num, 'width', 'height', 'seed') }),
-    file: shape({ id: str, key: str }),
-    size: num,
-    at: num,
-  }),
+  illustration: (value) => shape({ ...all(str, 'message', 'version', 'type'), file: shape({ id: str, key: str }), size: num, at: num })(value) && (isRecord(value) && 'tool' in value
+    ? shape({ ...all(num, 'paragraph', 'width', 'height'), tool: shape(all(str, 'module', 'name')), caption: (caption) => caption === undefined || str(caption) })(value)
+    : shape({
+      scene: shape({ paragraph: num, shape: str, setting: str, framing: str, characters: listOf(shape({ ...all(str, 'name', 'look', 'outfit', 'action'), x: num, y: num })) }),
+      receipt: orNull(isRecord),
+      model: shape(all(str, 'connection', 'model')),
+      sent: shape({ prompt: str, negative: str, characters: listOf(shape({ prompt: str, negative: str, center: shape(all(num, 'x', 'y')) })), ...all(num, 'width', 'height', 'seed') }),
+    })(value)),
   remark: shape({ ...all(str, 'message', 'version', 'mascot', 'expression', 'line'), receipt: isRecord, model: shape(all(str, 'connection', 'model')), at: num }),
   connection: shape({
     type: str,

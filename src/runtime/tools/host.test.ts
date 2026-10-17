@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import portingSample from '../../engine/import/fixtures/porting-sample.js.txt?raw';
 import { readToolFile } from '../../engine/import/risu-plugin';
 import { readTool } from '../../engine/import/tool';
-import type { Host, ToolEvent, ToolReach } from '../../engine/script-api';
+import type { Host, ToolReach } from '../../engine/script-api';
 import { toolId } from '../../model/tool';
 import type { Down, Up } from '../../tool-api/protocol';
 import { shown } from '../../model/chat';
-import { appendUserMessage, editMessage, startChat } from '../chat-log';
+import { appendScripted, appendUserMessage, editMessage, startChat } from '../chat-log';
 import { setModuleAlways, setModuleDeleted } from '../modules';
 import { ToolLate, ToolStuck } from '../script-binding';
 import type { Session } from '../session';
@@ -518,7 +518,7 @@ it('runs a frame tool as one frame: its registered items, a press from the chat,
     await vi.waitFor(() => expect(items(module)).toEqual([{ id: 'cast', label: 'Cast' }]));
     expect(transport.frames.map((frame) => frame.api?.context)).toEqual(['frame']);
     await session.scripts.menu(chat, module, 'cast');
-    await vi.waitFor(() => expect(host.frames().get(module)).toEqual({ menu: [{ id: 'cast', label: 'Cast' }], chat, asking: true }));
+    await vi.waitFor(() => expect(host.frames().get(module)).toEqual({ menu: [{ id: 'cast', label: 'Cast' }], actions: [], chat, asking: true }));
     expect(pressed.mock.calls[0]![0]).toEqual(expect.any(Number));
     expect(pressed.mock.calls[0]![0]).not.toBe(-1);
     const shownIn = { chat, place: vi.fn(), close: vi.fn() };
@@ -617,12 +617,11 @@ class Canvas {
   async convertToBlob() { return new Blob([Uint8Array.from(atob(PICTURE), (char) => char.charCodeAt(0))], { type: 'image/png' }); }
 }
 
-it('runs the porting sample as imported: the reply\'s picture is kept by its module and shown under that reply by a fresh frame', () => withTools(async (session, connect) => {
+it('runs the porting sample as imported: each reply gets its picture as a 삽화, and its message action redraws it, after a fresh frame too', () => withTools(async (session, connect) => {
   await answerable(session);
   const read = readToolFile(new TextEncoder().encode(portingSample));
   if (!read.ok) throw new Error('fixture');
-  // The guarded page part is still named, so the import says that part is left out; nothing asks for consent.
-  expect(read.tool.manifest).toMatchObject({ uses: [], risu: { verdict: 'partial', missing: ['getRootDocument'], hosts: [] } });
+  expect(read.tool.manifest).toMatchObject({ uses: [], risu: { verdict: 'all', missing: [], hosts: [] } });
   const added = await importTool(session.store, session.files, read.tool);
   if (!added.ok) throw new Error(added.error);
   const module = added.data.id;
@@ -630,38 +629,42 @@ it('runs the porting sample as imported: the reply\'s picture is kept by its mod
   const chat = crypto.randomUUID();
   await server.hold(session.store, chat);
   await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
+  await appendScripted(session.store, chat, { edits: [], removed: [], added: [{ follows: null, ahead: null, messages: [{ role: 'assistant', text: 'The tide turns.\nGulls rise.' }] }], vars: null });
+  await session.store.projections.evaluate(chat);
+  const reply = session.store.foldedChat(chat).messages[1]!.id;
+  let slots!: { attachPicture(chatId: string, bytes: Uint8Array): Promise<void>; registerMessageAction(item: { id: string; label: string }, callback: () => void): Promise<void> };
   const transport = inProcessRisu((scope, code) => {
-    Object.assign(scope, { OffscreenCanvas: Canvas, btoa, crypto });
+    Object.assign(scope, { OffscreenCanvas: Canvas, console });
+    slots = scope.PluginSlots as typeof slots;
     runInNewContext(code, scope);
   });
   const host = connect(transport.open);
-  const run = (event: ToolEvent) => {
-    const context = session.scripts.pageContext(chat, module)!;
-    return host.run(chat, { module, tool: session.store.get('tool', toolId(module))!.value }, context.scope, event, context.host);
-  };
+  const pictures = () => session.store.children('illustration', chat);
   try {
     await host.warm(chat);
-    await vi.waitFor(() => expect(host.hears(module, 'showing')).toBe(true));
-    const replied = (await run({ kind: 'replying', text: 'The tide turns.' })).value as string;
-    const key = /<!--porting-sample:([\w-]+)-->$/.exec(replied)?.[1];
-    expect(replied).toBe(`The tide turns.\n<!--porting-sample:${key}-->`);
-    const assets = session.store.children('asset', module);
-    expect(assets.map(({ value }) => value)).toEqual([{ name: expect.stringMatching(/^[0-9a-f]{64}$/), type: 'image/png', size: atob(PICTURE).length, file: expect.any(Object) }]);
-    expect(toolData(session.store, module, `plugin:picture:${key}`)).toBe(`assets/${assets[0]!.value.name}.png`);
-    expect((await run({ kind: 'requesting', messages: [{ role: 'assistant', content: replied, message: 'm' }] })).value).toEqual([{ role: 'assistant', content: 'The tide turns.\n', message: 'm' }]);
-    const picture = `The tide turns.\n<img src="data:image/png;base64,${PICTURE}" alt="${key}">`;
-    expect((await run({ kind: 'showing', shown: [{ at: null, text: replied }] })).value).toEqual([picture]);
+    await vi.waitFor(() => expect(host.actions(module)).toEqual([{ id: 'redraw', label: '다시 그리기' }]));
+    const context = session.scripts.pageContext(chat, module)!;
+    // The reply event ends before the picture is drawn; the picture lands after it, as a slow one would.
+    await host.run(chat, { module, tool: session.store.get('tool', toolId(module))!.value }, context.scope, { kind: 'reply', reply: { index: 1, id: reply, version: reply } }, context.host);
+    await vi.waitFor(() => expect(pictures()).toHaveLength(1));
+    const first = pictures()[0]!;
+    expect(first.value).toEqual({ message: reply, version: reply, file: expect.any(Object), type: 'image/png', size: atob(PICTURE).length, at: expect.any(Number), paragraph: 1, width: 1, height: 1, tool: { module, name: '포팅 예제' }, caption: '응답에 맞춘 색' });
 
     await setModuleAlways(session.store, module, false);
     await vi.waitFor(() => expect(transport.frames[0]!.host.closed).toBe(true), { timeout: 3000 });
     await setModuleAlways(session.store, module, true);
     await host.warm(chat);
-    await vi.waitFor(() => expect(transport.frames).toHaveLength(2));
-    await vi.waitFor(() => expect(host.hears(module, 'showing')).toBe(true));
-    expect((await run({ kind: 'showing', shown: [{ at: null, text: replied }] })).value).toEqual([picture]);
-    // Its RisuAI page part stays behind the guard: each frame tells 점검 once, nothing calls it, and no toast is raised.
-    const told = transport.frames.flatMap((frame) => (frame.sandbox.sent as Up[]).flatMap((message) => message.kind === 'call' && message.method === 'frame.missing' ? [message.args[0]] : []));
-    expect(told).toEqual(['getRootDocument', 'getRootDocument']);
-    expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'missing')).toEqual([]);
+    await vi.waitFor(() => expect(host.actions(module)).toEqual([{ id: 'redraw', label: '다시 그리기' }]));
+    expect(transport.frames).toHaveLength(2);
+    expect(pictures().map(({ id }) => id)).toEqual([first.id]);
+    await session.scripts.action(chat, module, 'redraw', reply);
+    await vi.waitFor(() => expect(pictures()[0]!.rev).toBeGreaterThan(first.rev));
+    expect(pictures().map(({ id }) => id)).toEqual([first.id]);
+    // Past the header's cap of three, or on a message the open chat lacks, the call fails where the plugin can see it.
+    for (const id of ['a', 'b']) await slots.registerMessageAction({ id, label: id }, () => {});
+    await expect(slots.registerMessageAction({ id: 'c', label: 'c' }, () => {})).rejects.toThrow('At most 3');
+    expect(host.actions(module).map(({ id }) => id)).toEqual(['redraw', 'a', 'b']);
+    await expect(slots.attachPicture(crypto.randomUUID(), new Uint8Array())).rejects.toThrow('the open chat has no message');
   } finally { host.close(); }
 }));
