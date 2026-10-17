@@ -170,7 +170,7 @@ const SHAPES = {
     loreFolders: listOf(shape({ id: str, name: str })),
   }),
   module: shape({ name: str, description: str, namespace: orNull(str), folder: filed, regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: listOf(toggleLine), loreFolders: listOf(shape({ id: str, name: str })) }),
-  tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model' || value === 'embed' || value === 'memory'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
+  tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model' || value === 'embed' || value === 'memory' || value === 'network'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
   tooldata: shape({ key: str, value: (value) => value !== undefined }),
   toolchat: shape({ module: str, key: orNull(str), value: (value) => value !== undefined }),
   folder: shape({ name: str, of: (value) => value === undefined || value === 'prompt' || value === 'module' || value === 'persona' }),

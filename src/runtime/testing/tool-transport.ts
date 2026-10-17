@@ -1,7 +1,7 @@
 import { connectApi } from '../../sandbox/api';
 import { installRisu } from '../../sandbox/risu';
 import type { Up } from '../../tool-api/protocol';
-import { UNLOAD_MS, type OpenFrame } from '../tools/frame';
+import { UNLOAD_MS, type OpenFrame, type Opening } from '../tools/frame';
 
 class LocalPort {
   onmessage: ((event: MessageEvent) => void) | null = null;
@@ -20,7 +20,7 @@ class LocalPort {
 }
 
 // stop: what the frame runs when told to stop (sandbox/page.ts), its port kept open for UNLOAD_MS as toolFrame keeps it.
-export type InProcessFrame = { host: LocalPort; sandbox: LocalPort; api: Hazelle.Api | null; page: boolean; emit(message: Up): void; stop?: () => void };
+export type InProcessFrame = { host: LocalPort; sandbox: LocalPort; api: Hazelle.Api | null; page: boolean; opening: Opening; emit(message: Up): void; stop?: () => void };
 export function inProcessTools(execute: (api: Hazelle.Api, code: string, frame: InProcessFrame) => void | Promise<void>) {
   const frames: InProcessFrame[] = [];
   const open: OpenFrame = (opening) => {
@@ -28,7 +28,7 @@ export function inProcessTools(execute: (api: Hazelle.Api, code: string, frame: 
     const sandbox = new LocalPort();
     host.peer = sandbox;
     sandbox.peer = host;
-    const frame: InProcessFrame = { host, sandbox, api: null, page: opening.role === 'page', emit: (message) => sandbox.postMessage(message) };
+    const frame: InProcessFrame = { host, sandbox, api: null, page: opening.role === 'page', opening, emit: (message) => sandbox.postMessage(message) };
     frames.push(frame);
     const close = connectApi(sandbox, (code, api) => { frame.api = api; return execute(api, code, frame); });
     const end = () => { host.close(); close(); };

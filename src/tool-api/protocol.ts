@@ -10,7 +10,7 @@ export type ToolOutcome = {
   data: [string, Json | undefined][]; badges: { index: number; text: string | null }[];
 };
 export type Method =
-  | 'chat.messages' | 'chat.greeting' | 'chat.card' | 'chat.state.get' | 'chat.data.get' | 'chat.data.keys' | 'chat.lorebook' | 'chat.setup' | 'model' | 'embed' | 'ask' | 'say' | 'tokens' | 'lore'
+  | 'chat.messages' | 'chat.greeting' | 'chat.card' | 'chat.state.get' | 'chat.data.get' | 'chat.data.keys' | 'chat.lorebook' | 'chat.setup' | 'model' | 'embed' | 'fetch' | 'ask' | 'say' | 'tokens' | 'lore'
   | 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'settings' | 'settings.set' | 'account' | 'post' | 'page.close' | 'frame.chat' | 'frame.show' | 'frame.hide' | 'frame.menu' | 'frame.missing';
 export type Role = 'background' | 'page' | 'frame';
 export type Down =
@@ -28,6 +28,7 @@ export type Up =
   | { kind: 'done'; id: number; outcome: ToolOutcome }
   | { kind: 'failed'; id: number; message: string }
   | { kind: 'call'; call: number; event?: number; method: Method; args: unknown[] }
+  | { kind: 'cancel'; call: number }
   | { kind: 'pong' };
 
 export type Port = Pick<MessagePort, 'onmessage' | 'postMessage' | 'start' | 'close'>;

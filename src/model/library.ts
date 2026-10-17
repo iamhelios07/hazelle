@@ -59,10 +59,12 @@ export type Character = Mark & {
 // namespace: Risu's, which {{moduleenabled::…}} asks by. loreFolders only group its lorebook on screen.
 // risu: the id module files name it by (engine/import/types ImportedModule.risu), set for one brought from a Risu backup,
 // which a move skips, or with a character's charx, which a later charx bundling it is attached to. takesMemory: whether its tool may hold the
-// memory slot of the chats it is on in, which turns the built-in memory off there; absent: not asked yet.
+// memory slot of the chats it is on in, which turns the built-in memory off there; absent: not asked yet. network: whether its
+// tool may reach the outside (its fetches through the relay, its frame's pictures and fonts); absent: not asked yet.
 export type Module = Pack & Mark & {
   botModels?: boolean;
   takesMemory?: boolean;
+  network?: boolean;
   name: string;
   description: string;
   namespace: string | null;

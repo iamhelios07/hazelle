@@ -8,7 +8,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { EvaluationStuck } from './evaluation';
 import { LuaStuck } from './lua/client';
 import { setCardWrites } from './characters';
-import { setModels, setTakesMemory } from './pack';
+import { setModels, setNetwork, setTakesMemory } from './pack';
 import { ToolLate, ToolStopped, ToolStuck } from './script-binding';
 import type { ObjectStore } from './store';
 import { toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
@@ -35,8 +35,9 @@ type Note =
 export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
 // Consent is saved on the spender, not the chat's character: 'yes' allows it and 'no' refuses it.
 // A dismissal leaves it to be asked again. memory: a tool's claim on the memory slot, saved on its module.
-// card: a script would rewrite the chat's character's card, saved on that character whichever script asked.
-export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'memory' } | { kind: 'card' } };
+// card: a script would rewrite the chat's character's card, saved on that character whichever script asked. network: a
+// tool would reach the outside, saved on its module; hosts: the literal hosts its code names, none for a Hazelle tool.
+export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'memory' } | { kind: 'card' } | { kind: 'network'; hosts: string[] } };
 export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
 export class ScriptInteractions {
@@ -117,6 +118,17 @@ export class ScriptInteractions {
     if (stored.value.cardWrites !== undefined) return stored.value.cardWrites;
     if (deadline) return false;
     return this.decide(`card:${character}`, chat, { kind: 'card' }, from, (yes) => setCardWrites(store, character, yes), signal);
+  }
+
+  // Whether module's tool may reach the outside (design §6.10): asked once per module and kept on it, as allowed is.
+  async mayFetch(chat: string, module: string, deadline: boolean, signal?: AbortSignal): Promise<boolean> {
+    const { store } = this;
+    const stored = live(store.get('module', module));
+    if (!stored) return false;
+    if (stored.value.network !== undefined) return stored.value.network;
+    if (deadline) return false;
+    const hosts = store.get('tool', toolId(module))?.value.manifest.risu?.hosts ?? [];
+    return this.decide(`network:${module}`, chat, { kind: 'network', hosts }, { kind: 'module', id: module }, (yes) => setNetwork(store, module, yes), signal);
   }
 
   // The memory claims of the chat's tools that the user has not answered, each asked once per module (design §6.10).

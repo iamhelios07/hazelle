@@ -43,9 +43,12 @@ function readRisuPlugin(header: HeaderLine[], body: string, bytes: Uint8Array<Ar
     const [url, ...label] = value.split(/\s+/);
     return url ? [[label.join(' '), url].filter(Boolean).join(' ')] : [];
   });
+  const risu = scanRisu(body);
+  // A literal host is the network too: a picture or font the frame loads from it reaches the outside (static.ts).
+  const network = /\b(?:nativeFetch|risuFetch)\b/.test(body) || risu.hosts.length > 0;
   const manifest: ToolManifest = {
     api: 1, name, author: RISU_AUTHOR, displayName: last('display-name') || name, version: last('version') ?? '', description: about.join('\n'),
-    uses: /\brunLLMModel\b/.test(body) ? ['model'] : [], page: null, menu: [], settings, actions: [], composer: null, risu: scanRisu(body),
+    uses: [...(/\brunLLMModel\b/.test(body) ? ['model' as const] : []), ...(network ? ['network' as const] : [])], page: null, menu: [], settings, actions: [], composer: null, risu,
   };
   return { ok: true, tool: { manifest, bytes } };
 }

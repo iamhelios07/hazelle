@@ -18,14 +18,14 @@ describe('tool header', () => {
     `${header}//@setting {"key":"n","type":"number","label":"N","default":"3"}`,
     `${header}//@setting {"key":"n","type":"choice","label":"N","options":["a"],"default":"b"}`,
     `${header}//@name ../notes`,
-    `${header}//@uses network`,
+    `${header}//@uses web`,
   ])('refuses an unsupported or malformed declaration: %s', (source) => {
     expect(read(source)).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
   });
 
   it('reads every use, message actions and the composer item with its fields', () => {
-    const result = read(`${header}//@uses model\n//@uses embed\n//@uses memory\n//@uses embed\n//@action redo 이 부분 다시 정리\n//@composer 기억\n//@setting {"key":"chunk","type":"number","label":"요약 단위","default":30,"composer":true}`);
-    expect(result).toMatchObject({ ok: true, tool: { manifest: { uses: ['model', 'embed', 'memory'], actions: [{ id: 'redo', label: '이 부분 다시 정리' }], composer: { label: '기억' }, settings: [{ key: 'chunk', composer: true }] } } });
+    const result = read(`${header}//@uses model\n//@uses embed\n//@uses memory\n//@uses embed\n//@uses network\n//@action redo 이 부분 다시 정리\n//@composer 기억\n//@setting {"key":"chunk","type":"number","label":"요약 단위","default":30,"composer":true}`);
+    expect(result).toMatchObject({ ok: true, tool: { manifest: { uses: ['model', 'embed', 'memory', 'network'], actions: [{ id: 'redo', label: '이 부분 다시 정리' }], composer: { label: '기억' }, settings: [{ key: 'chunk', composer: true }] } } });
     expect(read(header)).toMatchObject({ ok: true, tool: { manifest: { actions: [], composer: null } } });
   });
 

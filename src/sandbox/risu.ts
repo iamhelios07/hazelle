@@ -29,6 +29,8 @@ const character = (card: Hazelle.Card, lorebook: Hazelle.LoreEntry[]) => ({
 const chatOf = async (chat: Hazelle.Chat) => ({ message: (await chat.messages()).map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })) });
 
 const MODEL_ROLES = new Set(['system', 'user', 'assistant']);
+// A Response with one of these statuses throws when given a body.
+const NULL_BODY = new Set([204, 205, 304]);
 
 // Risu's script handler modes on Hazelle's stages, each after the bot's Lua as Risu runs them (processScriptFull):
 // display per message shown, output on the reply, input on the message sent, process on each chat message of the request.
@@ -106,6 +108,18 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
       key: async (at: number) => (await keys())[at] ?? null,
       length: async () => (await keys()).length,
     };
+  };
+  // nativeFetch over the tool's fetch, which the relay carries: a refusal rejects as a failed fetch does, and the answer
+  // is a Response made here, read whole before it is handed over.
+  const fetchOf = async (url: string | URL, init: RequestInit = {}) => {
+    const method = (init.method ?? 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'POST') throw new TypeError(`Failed to fetch: Hazelle sends GET and POST only, not ${method}`);
+    if (init.body != null && (method === 'GET' || typeof init.body !== 'string')) throw new TypeError('Failed to fetch: Hazelle sends a text body, with POST only');
+    const chat = await frame.chat();
+    if (!chat) throw new TypeError('Failed to fetch: no chat is open');
+    const answer = await chat.fetch(String(url), { method, headers: Object.fromEntries(new Headers(init.headers)), ...(typeof init.body === 'string' && { body: init.body }), ...(init.signal && { signal: init.signal }) });
+    if (!answer.ok) throw new TypeError(`Failed to fetch: ${answer.reason}${answer.code ? ` (${answer.code})` : ''}`);
+    return new Response(NULL_BODY.has(answer.status) ? null : answer.body, { status: answer.status, headers: answer.headers });
   };
   // The three Risu stores are one synced tool storage here, each under its own prefix so their keys never meet.
   const local = storage('local:');
@@ -197,6 +211,18 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     removeRisuScriptHandler: async (mode: string, handler: Handler) => { handlers[mode as Mode]?.delete(handler); },
     addRisuChatListener: async (_mode: 'output', listener: Listener) => { listeners.add(listener); },
     removeRisuChatListener: async (_mode: 'output', listener: Listener) => { listeners.delete(listener); },
+    nativeFetch: fetchOf,
+    // Risu's globalFetch: a JSON body, POST unless told, and an envelope holding the parsed JSON, or the bytes with
+    // rawResponse; any failure, an unreadable JSON answer included, is its { ok: false, data: message, status: 400 }.
+    risuFetch: async (url: string, arg: { body?: unknown; headers?: Record<string, string>; method?: 'GET' | 'POST'; rawResponse?: boolean; abortSignal?: AbortSignal } = {}) => {
+      try {
+        const response = await fetchOf(url, { method: arg.method ?? 'POST', headers: { 'Content-Type': 'application/json', ...arg.headers }, body: JSON.stringify(arg.body), signal: arg.abortSignal ?? null });
+        const data: unknown = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
+        return { ok: response.ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+      } catch (error) {
+        return { ok: false, data: String(error), headers: {}, status: 400 };
+      }
+    },
   };
   const risu = new Proxy(mapped, {
     get: (target, name) => {

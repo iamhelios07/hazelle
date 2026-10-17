@@ -1,6 +1,6 @@
 import { build } from 'esbuild';
 import type { Plugin } from 'vite';
-import { SANDBOX_HEADERS } from '../src/server/static';
+import { sandboxHeaders } from '../src/server/static';
 
 export async function sandboxSource(): Promise<string> {
   const options = { bundle: true, write: false, format: 'iife' as const, platform: 'browser' as const, target: 'es2023', logLevel: 'silent' as const };
@@ -19,7 +19,8 @@ export function sandbox(): Plugin {
       server.middlewares.use((request, response, next) => {
         const path = request.url?.split('?')[0];
         if (path === '/sandbox.html') {
-          for (const [name, value] of Object.entries(SANDBOX_HEADERS)) response.setHeader(name, value);
+          const network = new URLSearchParams(request.url?.split('?')[1]).get('network') === '1';
+          for (const [name, value] of Object.entries(sandboxHeaders(network))) response.setHeader(name, value);
         } else {
           // HMR needs its own script policy; tool pages still cannot navigate off-origin in development.
           response.setHeader('Content-Security-Policy', "frame-src 'self'");

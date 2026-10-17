@@ -9,6 +9,8 @@ export type MenuItem = { id: string; label: string };
 export type ToolSlot = { chat: string | null; place(frame: HTMLIFrameElement | null): void; close(): void };
 // Each running frame tool: its ⋯ items, the chat it runs for, and whether it asks to be shown with no slot to show it.
 export type ToolFrames = ReadonlyMap<string, { menu: MenuItem[]; chat: string | null; asking: boolean }>;
+// By module, the hosts its tool's fetches went to in this page session and how many times; nothing they sent is kept.
+export type ToolHosts = ReadonlyMap<string, ReadonlyMap<string, number>>;
 export type Tools = {
   warm(chat: string): Promise<void>;
   menus(chat: string): ToolMenu[];
@@ -20,4 +22,5 @@ export type Tools = {
   attach(module: string, slot: ToolSlot): () => void;
   subscribe(listener: () => void): () => void;
   frames(): ToolFrames;
+  hosts(): ToolHosts;
 };

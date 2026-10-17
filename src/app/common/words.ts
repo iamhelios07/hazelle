@@ -43,6 +43,12 @@ export const MODULE_MODELS_HELP = '이 모듈이 대화 응답과 별개로 모�
 export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 추가로 호출하려고 해요' };
 export const MEMORY_CLAIM = '이 모듈이 장기 기억을 대신 관리하려고 해요';
 export const MEMORY_CLAIM_HELP = '허용하면 이 모듈을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
+// The ruling (design §6.10) is that the ask says plainly what the network allows, so the card's line is that sentence.
+export const NETWORK = '외부 연결';
+export const NETWORK_HELP = '켜면 이 모듈이 대화 내용을 앱 밖으로 보낼 수 있어요. 바깥 이미지와 글꼴은 화면을 새로고침한 뒤부터 보여요.';
+export const NETWORK_CONSENT = '이 모듈이 대화 내용을 앱 밖으로 보낼 수 있어요';
+export const networkAskHelp = (hosts: string[]) => ['허용하면 이 모듈이 바깥 주소에 연결해요. 이 모듈에서는 한 번만 물어보고, 모듈 화면에서 다시 바꿀 수 있어요.', ...(hosts.length ? [`코드에 적힌 주소: ${hosts.join(', ')}`] : [])].join(' ');
+export const NETWORK_CALLED = '연결한 곳';
 export const TOOL_LATE = '도구 응답이 늦어져서 이번에는 빼고 보냈어요';
 export const TOOL_STALE = '이미 다음 응답이 나와서 도구가 바꾼 내용은 반영하지 않았어요';
 export const toolVersion = (version: string) => version || UNKNOWN;

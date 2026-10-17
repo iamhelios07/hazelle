@@ -1,15 +1,15 @@
 import { ExternalLink } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
-import { setModels, setTakesMemory } from '../../runtime/pack';
+import { setModels, setNetwork, setTakesMemory } from '../../runtime/pack';
 import { scriptsOf } from '../../runtime/scripts';
 import { ToolSetting } from '../common/ToolSetting';
 import { opensPage } from '../common/ToolView';
 import type { Write } from '../common/saveQueue';
 import { useAutosave } from '../common/useAutosave';
-import { MEMORY_CLAIM_HELP, MODULE_MODELS, MODULE_MODELS_HELP, TOOL, toolVersion } from '../common/words';
-import { useSession, useTool } from '../session';
+import { MEMORY_CLAIM_HELP, MODULE_MODELS, MODULE_MODELS_HELP, NETWORK, NETWORK_CALLED, NETWORK_HELP, TOOL, toolVersion } from '../common/words';
+import { useSession, useTool, useToolHosts } from '../session';
 import { navigate } from '../shell/router';
-import { Button, Facts, Section, SettingGroup, SettingRow, Stack, Switch } from '../ui';
+import { Button, Disclosure, Facts, Section, SettingGroup, SettingRow, Stack, Switch } from '../ui';
 
 export function ToolSection({ module }: { module: Stored<'module'> }) {
   const { store } = useSession();
@@ -28,6 +28,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
   if (!stored) return consent ? <SettingGroup label={MODULE_MODELS}>{consent}</SettingGroup> : null;
   const { manifest, settings } = stored.value;
   const memory = manifest.uses.includes('memory');
+  const network = manifest.uses.includes('network');
   return (
     <Section
       title={TOOL}
@@ -35,8 +36,17 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
     >
       <Stack gap="group">
         <Facts items={[{ label: '버전', value: toolVersion(manifest.version) }, { label: '제작자', value: manifest.author }]} />
-        {(models || memory || manifest.settings.length > 0) && <SettingGroup label={`${TOOL} 설정`}>
+        {(models || memory || network || manifest.settings.length > 0) && <SettingGroup label={`${TOOL} 설정`}>
           {consent}
+          {network && (
+            <FlagRow
+              saveKey={`module-network:${module.id}`}
+              label={NETWORK}
+              help={NETWORK_HELP}
+              stored={module.value.network === true}
+              write={(on) => setNetwork(store, module.id, on)}
+            />
+          )}
           {memory && (
             <FlagRow
               saveKey={`module-memory:${module.id}`}
@@ -48,12 +58,24 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
           )}
           {manifest.settings.map((field) => <ToolSetting key={field.key} module={module.id} field={field} value={settings[field.key]} />)}
         </SettingGroup>}
+        {network && <CalledHosts module={module.id} />}
       </Stack>
     </Section>
   );
 }
 
 const MEMORY_CLAIM_LABEL = '장기 기억 맡기기';
+
+// Only since this page loaded, and only where and how often: what was sent is never kept.
+function CalledHosts({ module }: { module: string }) {
+  const hosts = useToolHosts(module);
+  if (!hosts) return null;
+  return (
+    <Disclosure label={NETWORK_CALLED}>
+      <Facts items={[...hosts].map(([host, count]) => ({ label: host, value: `${count}번` }))} />
+    </Disclosure>
+  );
+}
 
 type FlagProps = { saveKey: string; label: string; help: string; stored: boolean; write: (on: boolean) => ReturnType<Write<{ on: boolean }>> };
 

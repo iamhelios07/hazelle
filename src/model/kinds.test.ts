@@ -28,8 +28,8 @@ it('accepts tool files and per-key data without changing existing module shapes'
   expect(isValue('tooldata', { key: 'note', value: { text: 'hello' } })).toBe(true);
   expect(isValue('tooldata', { key: 'note', value: null })).toBe(true);
   expect(isValue('tooldata', { key: 'note' })).toBe(false);
-  expect(isValue('tool', { ...tool, manifest: { ...manifest, uses: ['model', 'embed', 'memory'], actions: [{ id: 'a', label: 'A' }], composer: { label: '기억' } } })).toBe(true);
-  expect(isValue('tool', { ...tool, manifest: { ...manifest, uses: ['network'] } })).toBe(false);
+  expect(isValue('tool', { ...tool, manifest: { ...manifest, uses: ['model', 'embed', 'memory', 'network'], actions: [{ id: 'a', label: 'A' }], composer: { label: '기억' } } })).toBe(true);
+  expect(isValue('tool', { ...tool, manifest: { ...manifest, uses: ['web'] } })).toBe(false);
   expect(isValue('toolchat', { module: 'm', key: 'index', value: [1, 2] })).toBe(true);
   expect(isValue('toolchat', { module: 'm', key: null, value: { message: { version: 'v', text: '요약됨' } } })).toBe(true);
   expect(isValue('toolchat', { key: 'index', value: 1 })).toBe(false);

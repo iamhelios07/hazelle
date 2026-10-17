@@ -29,11 +29,15 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
   const handlers = new Map<EventName, ((...args: never[]) => unknown)[]>();
   const storageListeners = new Set<(keys: string[]) => void>();
   const send = (message: Up) => { if (!closed) port.postMessage(message); };
-  const call = <T>(method: Method, args: unknown[], event?: number): Promise<T> => {
+  const call = <T>(method: Method, args: unknown[], event?: number, signal?: AbortSignal): Promise<T> => {
     if (closed) return Promise.reject(new Error('closed'));
+    if (signal?.aborted) return Promise.reject(signal.reason);
     const id = ++calls;
     return new Promise<T>((resolve, reject) => {
-      waiting.set(id, { resolve: (value) => resolve(value as T), reject });
+      const abort = () => { waiting.delete(id); send({ kind: 'cancel', call: id }); reject(signal!.reason); };
+      const settled = () => signal?.removeEventListener('abort', abort);
+      signal?.addEventListener('abort', abort, { once: true });
+      waiting.set(id, { resolve: (value) => { settled(); resolve(value as T); }, reject: (error) => { settled(); reject(error); } });
       send({ kind: 'call', call: id, method, args, ...(event === undefined ? {} : { event }) });
     });
   };
@@ -93,6 +97,7 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
       add: (role, text) => { story(); pending().added.push({ role, text }); changed(); },
       model: (role, messages) => call('model', [role, messages], event),
       embed: (texts, as) => call('embed', [texts, as ?? null], event),
+      fetch: (url, { method = 'GET', headers = {}, body, signal } = {}) => call('fetch', [url, { method, headers, body: body ?? null }], event, signal),
       badge: (index, text) => { pending().badges.set(index, text); changed(); },
       tokens: (text) => call('tokens', [text], event),
       lore: (reserve) => call('lore', [reserve ?? null], event),

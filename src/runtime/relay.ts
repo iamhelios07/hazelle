@@ -27,7 +27,7 @@ export type JsonAnswer = { ok: true; data: unknown } | { ok: false; failure: Rel
 const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 'stopped' } : { kind: 'offline' });
 
 // The provider's answer, whatever its status. bot: the chat whose bot's script makes the call (BOT_HEADER).
-async function send(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
+export async function relayRaw(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
   let response: Response;
   try {
     response = await fetchApi('relay', {
@@ -63,7 +63,7 @@ async function answered(response: Response | RelayFailure): Promise<Response | R
 }
 
 export async function relay(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
-  return answered(await send(request, signal, bot));
+  return answered(await relayRaw(request, signal, bot));
 }
 
 export async function relayJson(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<JsonAnswer> {
@@ -85,7 +85,7 @@ export async function relayBytes(request: HttpRequest, signal?: AbortSignal): Pr
 
 // OAuth puts its refusals in a JSON body for the caller to read: RFC 8628 answers "not yet" with a 400.
 export async function relayOAuth(request: HttpRequest, signal?: AbortSignal): Promise<JsonAnswer> {
-  return readJson(await send(request, signal), signal);
+  return readJson(await relayRaw(request, signal), signal);
 }
 
 async function readJson(response: Response | RelayFailure, signal?: AbortSignal): Promise<JsonAnswer> {
