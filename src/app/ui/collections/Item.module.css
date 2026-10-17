@@ -100,6 +100,7 @@
 /* A menu's label still wraps, but its box cuts the first letter's overhang. */
 .compact.list .title {
   overflow: hidden;
+  font-weight: var(--weight-medium);
 }
 
 .meta {
