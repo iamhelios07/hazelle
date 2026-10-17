@@ -83,8 +83,10 @@ export function backups(dataDir: string, hour: number, alerts: Alerts, free: Dis
 
   const job = (env: Services, now: number, fresh: boolean) => {
     running ??= (async () => {
-      const started = Date.now();
-      const clock = () => now + Date.now() - started;
+      // Monotonic: the wall clock can step back mid-job, and the job's clock must never fall behind the baselines it
+      // stamped at `now`, or the generation finds no current baseline for them.
+      const started = performance.now();
+      const clock = () => now + Math.round(performance.now() - started);
       const snapshots = await recorded(env, 'daily', clock, async () => {
         const { taken, skipped, unchanged, failed } = await takeBaselines(env, await staleBaselines(env, now, fresh ? now + 1 : dayStart(now)));
         const expired = await expireSnapshots(env, now, await namedArchives(dataDir));

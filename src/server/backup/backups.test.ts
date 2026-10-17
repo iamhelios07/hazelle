@@ -105,8 +105,8 @@ it('names, for a fresh ask, a baseline of every account written since today’s,
 it('records each step at its own start and end, including the baseline time before generation', async () => {
   await t.signUp('operator');
   const started = Date.now();
-  let now = started;
-  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+  let now = 0;
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
   const take = t.env.stores.snapshot;
   const baseline = vi.spyOn(t.env.stores, 'snapshot').mockImplementation(async (...args) => {
     const result = await take(...args);
@@ -128,5 +128,17 @@ it('records each step at its own start and end, including the baseline time befo
     generation.mockRestore();
     baseline.mockRestore();
     clock.mockRestore();
+  }
+});
+
+it('captures its generation though the wall clock steps back during the job', async () => {
+  await t.signUp('operator');
+  const at = dayStart(Date.now()) + 4 * HOUR_MS;
+  let wall = Date.now();
+  const spy = vi.spyOn(Date, 'now').mockImplementation(() => wall--);
+  try {
+    expect((await t.daily(at)).generation).toEqual({ outcome: 'ok', error: null });
+  } finally {
+    spy.mockRestore();
   }
 });
