@@ -44,6 +44,10 @@ describe('tool storage', () => {
     await importTool(store, files, source('1.4', '//@uses model\n//@uses memory\n//@uses embed\n'));
     expect(store.get('module', module)!.value.botModels).toBeUndefined();
     expect(store.get('module', module)!.value.takesMemory).toBe(true);
+    await store.update('module', module, (current) => ({ ...current, botModels: true, network: false }));
+    await importTool(store, files, source('1.5', '//@uses model\n//@uses memory\n//@uses embed\n//@uses network\n'));
+    expect(store.get('module', module)!.value).toMatchObject({ botModels: true, takesMemory: true });
+    expect(store.get('module', module)!.value.network).toBeUndefined();
     await undoToolImport(store, module, updated.data.previous!);
     expect(store.get('tool', toolId(module))!.value.manifest.version).toBe('1.0');
     expect(await files.read(store.get('tool', toolId(module))!.value.file)).toEqual({ ok: true, data: source().bytes });

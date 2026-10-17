@@ -1,12 +1,12 @@
 import type { PackOwner } from '../../model/library';
 import type { ScriptQuestion } from '../../runtime/script-interactions';
-import { BOT_MODELS_HELP, CARD_WRITE_ASK_HELP, CARD_WRITE_CONSENT, MEMORY_CLAIM, MEMORY_CLAIM_HELP, MODEL_CONSENT, MODULE_MODELS_HELP } from '../common/words';
+import { BOT_MODELS_HELP, CARD_WRITE_ASK_HELP, CARD_WRITE_CONSENT, MEMORY_CLAIM, MEMORY_CLAIM_HELP, MODEL_CONSENT, MODULE_MODELS_HELP, NETWORK_CONSENT, networkAskHelp } from '../common/words';
 import type { AskAnswer } from '../ui';
 
 const CONSENT: AskAnswer = { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] };
 
 // Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
-// option's index, and for a model call, a memory claim or a card write 'yes' or 'no'.
+// option's index, and for a model call, a memory claim, a card write or the network 'yes' or 'no'.
 export function asking(question: ScriptQuestion['question'], owner: PackOwner['kind']): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {
     case 'input':
@@ -25,5 +25,7 @@ export function asking(question: ScriptQuestion['question'], owner: PackOwner['k
       return { text: MEMORY_CLAIM, help: MEMORY_CLAIM_HELP, answer: CONSENT };
     case 'card':
       return { text: CARD_WRITE_CONSENT[owner], help: CARD_WRITE_ASK_HELP, answer: CONSENT };
+    case 'network':
+      return { text: NETWORK_CONSENT, help: networkAskHelp(question.hosts), answer: CONSENT };
   }
 }

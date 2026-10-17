@@ -4,7 +4,8 @@ import type { ToolPage } from './facade';
 
 // frame: the iframe a frame tool's document runs in, which its page shows.
 export type Connection = { port: Port; ready: Promise<void>; close(): void; frame: HTMLIFrameElement | null };
-export type Opening = { role: 'background' | 'frame' } | { role: 'page'; page: ToolPage };
+// network: the frame is served the sandbox's network variant (server/static), only under the module's consent.
+export type Opening = { role: 'background' } | { role: 'frame'; network: boolean } | { role: 'page'; page: ToolPage };
 export type OpenFrame = (opening: Opening) => Connection;
 // A stopped frame's onUnload callbacks run until it is removed; the host no longer answers their calls.
 const UNLOAD_MS = 1000;
@@ -31,7 +32,7 @@ export const toolFrame: OpenFrame = (opening) => {
   if (frame) {
     frame.hidden = true;
     frame.setAttribute('sandbox', 'allow-scripts');
-    frame.src = `/sandbox.html?role=${role}`;
+    frame.src = `/sandbox.html?role=${role}${opening.role === 'frame' && opening.network ? '&network=1' : ''}`;
     document.body.append(frame);
     target = frame.contentWindow;
   }

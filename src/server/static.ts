@@ -8,7 +8,11 @@ import { SHARE_ID, type ShareCover } from '../contracts/shares';
 export const CSP =
   "default-src 'self'; img-src 'self' data: blob:; media-src blob:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'";
 export const SANDBOX_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self' blob: 'unsafe-eval' 'wasm-unsafe-eval'; worker-src blob:; connect-src 'none'; img-src data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src data: blob:; frame-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'";
-export const SANDBOX_HEADERS = { 'Content-Security-Policy': SANDBOX_CSP, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-cache' };
+// A frame whose module allowed the network (runtime/tools/frame.ts asks with ?network=1): pictures, fonts and the
+// stylesheets that load webfonts may come from outside. connect-src stays closed; its fetches go through the host.
+export const SANDBOX_NETWORK_CSP = SANDBOX_CSP.replace("img-src data: blob:", 'img-src data: blob: https:').replace("style-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https:").replace("font-src 'self' data:", "font-src 'self' data: https:");
+// The two variants differ in URL, so a cached copy of one is never served for the other.
+export const sandboxHeaders = (network: boolean) => ({ 'Content-Security-Policy': network ? SANDBOX_NETWORK_CSP : SANDBOX_CSP, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-cache' });
 const HEADERS = { 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 // Every file under /assets has a content hash in its name, so a changed file is a new URL.
 const IMMUTABLE = 'public, max-age=31536000, immutable';
@@ -23,7 +27,7 @@ export function clientFiles(clientDir: string, cover: (share: string) => Promise
   });
   const sandbox = serveStatic({ root: clientDir, path: 'sandbox.html', precompressed: true });
   client.get('/sandbox.html', async (c) => {
-    for (const [name, value] of Object.entries(SANDBOX_HEADERS)) c.header(name, value);
+    for (const [name, value] of Object.entries(sandboxHeaders(c.req.query('network') === '1'))) c.header(name, value);
     return (await sandbox(c, async () => {})) || c.notFound();
   });
   const page = serveStatic({ root: clientDir, path: 'index.html', precompressed: true });

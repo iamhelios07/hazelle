@@ -11,6 +11,11 @@ declare namespace Hazelle {
   type ModelAnswer = { ok: true; text: string } | { ok: false; reason: ModelRefusal };
   // model: the embedding model that made the vectors; vectors from another model cannot be compared with them.
   type EmbedAnswer = { ok: true; model: string; vectors: number[][] } | { ok: false; reason: ModelRefusal | 'too-large' };
+  // refused: the relay or the app refused the call, code naming why (not-https, not-public, upstream-redirect,
+  // upstream-not-api, relay-host-limit, relay-traffic-limit, …). A body is text; a redirect is not followed.
+  type FetchRefusal = 'not-allowed' | 'not-declared' | 'flood' | 'refused' | 'offline' | 'stopped';
+  type FetchInit = { method?: 'GET' | 'POST'; headers?: Record<string, string>; body?: string; signal?: AbortSignal };
+  type FetchAnswer = { ok: true; status: number; headers: [string, string][]; body: ArrayBuffer } | { ok: false; reason: FetchRefusal; code?: string };
   type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; text?: string; options: string[] };
   type Settings = Record<string, string | number | boolean>;
   // The chat's character card. id: the character's, the same in every chat with it. greeting: the card's first
@@ -49,6 +54,9 @@ declare namespace Hazelle {
     model(role: 'main' | 'aux', messages: ModelMessage[]): Promise<ModelAnswer>;   // needs //@uses model
     // needs //@uses embed. as: what the texts are for, which retrieval-tuned models embed differently.
     embed(texts: string[], as?: 'query' | 'document'): Promise<EmbedAnswer>;
+    // needs //@uses network, which the user allows once per module; through the app's relay. An aborted signal rejects
+    // with its reason, as fetch does.
+    fetch(url: string, init?: FetchInit): Promise<FetchAnswer>;
     badge(index: number, text: string | null): void;   // on the version shown now; lands with the outcome
     tokens(text: string): Promise<number>;
     lore(reserve?: number): Promise<{ role: 'system' | 'user' | 'assistant'; text: string }[]>;

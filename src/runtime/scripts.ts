@@ -10,9 +10,9 @@ import type { Assembled, MemoryFill, PromptInput } from '../engine/pipeline';
 import { saveToolChat, toolsOf } from './tools/store';
 import type { Tools } from './tools/facade';
 import type { Role } from '../connectors/assignment';
-import type { ChatMessage, EmbedPurpose } from '../connectors/types';
+import type { ChatMessage, EmbedPurpose, HttpRequest } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, Question, ScriptUnit, ToolEvent } from '../engine/script-api';
+import type { EmbedResult, Event, FetchResult, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, Question, ScriptUnit, ToolEvent, ToolReach } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Writes } from '../model/chat';
 import { allWritten, type ApiFailure } from './api';
@@ -32,6 +32,7 @@ import type { ScriptDisplay } from './script-display';
 import type { RequestLog } from './request-log';
 import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
+import { relayRaw } from './relay';
 import { answerInstructionOf, packsOf, scopeOf } from './chat-context';
 import { setBackground } from './characters';
 import type { Blocked, Sending, TurnContext } from './turn-context';
@@ -220,7 +221,7 @@ export class Scripts {
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
-    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> & Pick<Tools, 'items'> },
+    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent, ToolReach> & Pick<Tools, 'items'> },
   ) {
     this.interactions = new ScriptInteractions(session.store, this.closing.signal);
     this.schedule = new ScriptSchedule(session.store, this.interactions, this.closing.signal);
@@ -606,7 +607,7 @@ export class Scripts {
     return scopeOf(this.session, chat, this.session.store.get('chat', chat)!.value, this.session.store.foldedChat(chat).messages);
   }
 
-  pageContext(chat: string, module: string, signal?: AbortSignal): { scope: ChatScope; host: Host } | null {
+  pageContext(chat: string, module: string, signal?: AbortSignal): { scope: ChatScope; host: ToolReach } | null {
     if (this.closing.signal.aborted || !this.unit(chat, module)) return null;
     const scope = this.scope(chat);
     return { scope, host: this.host(chat, scope, signal) };
@@ -723,7 +724,7 @@ export class Scripts {
   }
 
   // deadline: the run answers the prompt event, whose deadline would dismiss a card before anyone read it.
-  private host(chat: string, scope: ChatScope, signal?: AbortSignal, deadline = false): Host {
+  private host(chat: string, scope: ChatScope, signal?: AbortSignal, deadline = false): ToolReach {
     const either = (callSignal?: AbortSignal) => (callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal);
     return {
       ...this.reads(chat, scope, () => this.interactions.tell(chat, 'runaway', { kind: 'runaway' })),
@@ -732,6 +733,7 @@ export class Scripts {
       model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, deadline, either(callSignal)),
       embed: (texts, as, from, callSignal) => this.embed(chat, texts, as, from, deadline, either(callSignal)),
       background: (html, from, callSignal) => this.background(chat, html, from, deadline, either(callSignal)),
+      fetch: (request, module, callSignal) => this.fetch(chat, request, module, deadline, either(callSignal)),
     };
   }
 
@@ -798,6 +800,23 @@ export class Scripts {
     if (character === null || signal?.aborted || !(await this.interactions.mayRewrite(chat, character, from, deadline, signal))) return false;
     if (signal?.aborted) return false;
     return (await setBackground(store, character, html)).ok;
+  }
+
+  // A tool's own call out (design §6.10), under its module's one answer, counted against the chat's bot calls as a model
+  // call is.
+  private async fetch(chat: string, request: HttpRequest, module: string, deadline: boolean, signal?: AbortSignal): Promise<FetchResult> {
+    const from = { kind: 'module', id: module } as const;
+    if (signal?.aborted || this.closing.signal.aborted || !live(this.session.store.get('chat', chat))) return { ok: false, reason: 'stopped' };
+    if (!(await this.interactions.mayFetch(chat, module, deadline, signal))) return { ok: false, reason: 'not-allowed' };
+    if (signal?.aborted) return { ok: false, reason: 'stopped' };
+    const response = await relayRaw(request, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal, chat);
+    if (response instanceof Response) return { ok: true, response };
+    if (response.kind === 'app' && response.code === 'too-many-bot-calls') {
+      this.interactions.tell(chat, 'flood', { kind: 'flood' }, from);
+      return { ok: false, reason: 'flood' };
+    }
+    if (response.kind === 'relay' || response.kind === 'app') return { ok: false, reason: 'refused', code: response.code };
+    return { ok: false, reason: response.kind === 'stopped' ? 'stopped' : 'offline' };
   }
 
   // With the account's 임베딩 모델, under the spender's one answer for model calls.

@@ -49,7 +49,7 @@ export function BotNotes() {
           toast.show(TOOL_STALE, { detail: from?.name });
           break;
         case 'flood':
-          toast.error('모델에 너무 자주 요청해서 잠시 막았어요', { detail: from?.name });
+          toast.error('요청이 너무 잦아서 잠시 막았어요', { detail: from?.name });
           break;
         case 'unsaved':
           toast.failed(note.failure, '봇이 바꾼 내용을 저장하지 못했어요');

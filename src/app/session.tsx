@@ -283,6 +283,11 @@ export function useToolFrames(): ToolFrames {
   return useSyncExternalStore(tools.subscribe, tools.frames);
 }
 
+export function useToolHosts(module: string): ReadonlyMap<string, number> | undefined {
+  const { tools } = useSession();
+  return useSyncExternalStore(tools.subscribe, tools.hosts).get(module);
+}
+
 export function useChatTools(chat: string | null): ToolMenu[] {
   const { read, tools } = useSession();
   const model = chat === null ? null : read.tools(chat, tools);

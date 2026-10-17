@@ -117,5 +117,8 @@ export const sampleScript = (store: ObjectStore, owner: PackOwner, script: Regex
 export const setTakesMemory = (store: ObjectStore, module: string, takesMemory: boolean): Promise<ApiResult<unknown>> =>
   store.update('module', module, (current) => current.deleted === undefined ? { ...current, takesMemory } : null);
 
+export const setNetwork = (store: ObjectStore, module: string, network: boolean): Promise<ApiResult<unknown>> =>
+  store.update('module', module, (current) => current.deleted === undefined ? { ...current, network } : null);
+
 export const setModels = (store: ObjectStore, { kind, id }: PackOwner, botModels: boolean): Promise<ApiResult<unknown>> =>
   store.update(kind, id, (current) => current.deleted === undefined ? { ...current, botModels } : null);
