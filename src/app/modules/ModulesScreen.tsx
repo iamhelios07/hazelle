@@ -96,7 +96,7 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
   return (
     <Screen width="page" top={<NavBar title={PAGES.modules} {...backBar(back)} actions={importing} />}>
       {search.field && <Row kind="toolbar">{search.field}</Row>}
-      {modules.length > 0 && (
+      {modules.length + index.folders.length > 0 && (
         <FolderPath kind="module" path={at.path} onGo={go} onName={naming.name} dropInto={moving.dropInto}>
           <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
             {moving.picked ? '완료' : '선택해서 옮기기'}
