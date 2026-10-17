@@ -23,7 +23,8 @@ export function NoticesSection({ head, seek }: { head: boolean; seek: boolean })
   const pages = usePages((after) => readNotices(after, head ? { limit: HEAD_ROWS } : {}));
   const [open, setOpen] = useState<Notice | null>(null);
   const { rows } = pages;
-  const newest = rows?.[0]?.id;
+  // A head with more behind 모두 보기 marks nothing: an unread notice past its five was not shown.
+  const newest = head && !pages.whole ? undefined : rows?.[0]?.id;
   useEffect(() => {
     if (newest !== undefined) void markNoticesSeen(newest);
   }, [newest]);
