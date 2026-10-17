@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serviceReads, type Write } from '../account-store';
+import { ROW_BYTES } from '../caps';
 import { snapshotKey } from '../files/bucket';
 import { cachedR2Bucket } from '../files/cached-r2-bucket';
 import { fakeS3 } from '../files/fake-s3';
@@ -87,7 +88,7 @@ describe('the account registry', () => {
   it('serves a prepared file, and a stub got before a restart fails every later call while a fresh one goes on', async () => {
     await signup();
     const old = store();
-    expect(await old.batch(INC, 't1', [put(A, 'x')], null)).toEqual({ revs: [1], bytes: 1, timeline: 't1' });
+    expect(await old.batch(INC, 't1', [put(A, 'x')], null)).toEqual({ revs: [1], bytes: 1 + ROW_BYTES.object, timeline: 't1' });
     await expect(old.restart(INC)).rejects.toThrow(/restarted/);
     await expect(old.status(INC)).rejects.toThrow(/fresh one/);
     expect(await store().status(INC)).toEqual({ state: 'active', timeline: 't1', operation: null });

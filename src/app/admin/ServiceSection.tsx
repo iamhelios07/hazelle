@@ -4,7 +4,7 @@ import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
-import { Button, Callout, NumberInput, Section, SettingGroup, SettingRow } from '../ui';
+import { Button, Callout, NumberInput, Section, SettingGroup, SettingRow, Text } from '../ui';
 import { CAP_ERROR, capText, typedCap, typedCount } from './bytes';
 
 // The operator raises the cap in steps, so each cap sits with the count it bounds.
@@ -62,6 +62,7 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
           control={<NumberInput label="계정당 이미지 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}
         />
       </SettingGroup>
+      <Text variant="note">{`서비스 데이터베이스 ${sizeText(service.databaseBytes)} · 공유 링크 ${count(service.links)}개`}</Text>
       {failure && (
         <Callout tone="warn" alert>
           {failure}

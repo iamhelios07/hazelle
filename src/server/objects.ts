@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { createMiddleware } from 'hono/factory';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import { FILE_ID } from '../contracts/files';
 import type { FeedQuery, Write } from './account-store';
@@ -6,6 +7,7 @@ import { fail, ID, isRecord, readObject, refused, RETRY_SECONDS, type AppEnv } f
 import { store } from './lifecycle';
 import { canWrite, requireSession } from './session';
 import { claimFiles } from './files/claims';
+import { tokenBucket } from './limits';
 
 const KIND = /^[a-z][a-z-]{0,31}$/;
 // A timeline is 16 random bytes in hex (migrations/0001_baseline.sql).
@@ -13,6 +15,15 @@ const TIMELINE =/^[0-9a-f]{32}$/;
 // bytes: worker.ts enforces it on the whole body, timeline included. The client batches by these, sent with every page.
 // The sizes date from the Cloudflare store (a 2 MB row, a 32 MiB RPC).
 export const BATCH_LIMITS = { items: 200, bytes: 4_000_000, body: 1_500_000 };
+
+// Per account, taken before the body is read: 20 a second, in bursts of up to a minute's. A Risu move (148k objects in
+// ~164 s, 200 a batch) needs ~5 a second, and a page's small writes come in bursts; the rows a batch leaves are billed
+// (account-store.ts), so this bounds the rate, not the size. The client waits out a refusal (runtime/connection-wait).
+const batches = tokenBucket(1200, 60_000);
+const throttle = createMiddleware<AppEnv>(async (c, next) => {
+  const taken = batches.limit(c.get('account').id);
+  return taken.success ? next() : fail(c, 429, 'too-many-writes', { retryAfter: taken.retryAfter });
+});
 
 export const objects = new Hono<AppEnv>();
 
@@ -53,7 +64,7 @@ objects.get('/', async (c) => {
   });
 });
 
-objects.post('/batch', canWrite, async (c) => {
+objects.post('/batch', canWrite, throttle, async (c) => {
   const input = await readObject(c);
   if (!input || typeof input.timeline !== 'string' || !TIMELINE.test(input.timeline) || !Array.isArray(input.writes) || !input.writes.length) {
     return fail(c, 400, 'bad-input');

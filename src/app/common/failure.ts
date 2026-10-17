@@ -12,6 +12,7 @@ import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
 import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
+import { SHARE_LIMITS } from '../../contracts/shares';
 import { count } from './typedNumber';
 import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, SHARE, UNREADABLE_IMAGE } from './words';
 
@@ -38,6 +39,7 @@ type OnFallback =
   | 'files-full'
   | 'too-many-attempts'
   | 'too-many-bot-calls'
+  | 'too-many-writes'
   | 'wrong-login'
   // Restore refusals, worded by the restores dialog.
   | 'bad-report'
@@ -63,6 +65,9 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'file-blocked': '운영자가 차단한 파일이라 올리거나 열 수 없어요.',
   'too-many-reports': '운영자가 아직 확인하지 않은 알림이 많아서 더 보낼 수 없어요.',
   'too-many-visits': '요청을 너무 자주 보냈어요. 잠시 뒤에 다시 시도해 주세요.',
+  'too-many-shares': `링크는 ${count(SHARE_LIMITS.links)}개까지 만들 수 있어요. 안 쓰는 링크를 끊고 다시 시도해 주세요.`,
+  'too-many-versions': `링크 하나에 새 버전은 ${count(SHARE_LIMITS.versions)}번까지 올릴 수 있어요. 링크를 끊고 새로 공유해 주세요.`,
+  'too-many-publishes': '링크를 너무 자주 공유했어요. 잠시 뒤에 다시 시도해 주세요.',
   'share-held': SHARE.heldNote,
   'no-consent': '링크로 공유하려면 먼저 공유 규칙에 동의해야 해요.',
   'not-admin': '운영자 계정으로만 할 수 있어요.',

@@ -12,7 +12,7 @@ it('sets the service, suspends an account and resolves its report, each read bac
   expect(await setService({ signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null })).toMatchObject({ ok: true });
   expect(await readService()).toEqual({
     ok: true,
-    data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, people: 1, pending: 0, fileBytes: 0, backupAgeHours: null, diskFreePercent: expect.any(Number), warnings: expect.any(Array) },
+    data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, people: 1, pending: 0, fileBytes: 0, links: 0, databaseBytes: expect.any(Number), backupAgeHours: null, diskFreePercent: expect.any(Number), warnings: expect.any(Array) },
   });
 
   expect(await suspend(accountId, '도배')).toMatchObject({ ok: true });

@@ -3,7 +3,7 @@ import { createMiddleware } from 'hono/factory';
 import { type AccountState, type RestoreAction, MAX_DIAGNOSTICS_LENGTH, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
 import { SHARE_ID } from '../contracts/shares';
 import { blockFiles, fileBlocks } from './files';
-import { serveShareFile } from './shares';
+import { forgetCut, serveShareFile } from './shares';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fail, ID, readObject, type AppEnv, type Services } from './http';
 import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
@@ -15,9 +15,10 @@ const PAGE_ROWS = 100;
 // How long a resolved report and a log row are kept, as the privacy page says. An open report stays whatever its age.
 const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
+// Also the rows of cut links whose reports were resolved or forgotten since (shares.ts forgetCut).
 export async function forgetOldRecords(db: Db): Promise<void> {
   const before = Date.now() - KEEP_MS;
-  await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before)]);
+  await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before), ...forgetCut(db, 'TRUE')]);
 }
 
 // What any account, a suspended one too, sends the operator.
@@ -322,7 +323,9 @@ admin.get('/service', async (c) => {
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
        (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COUNT(*) FROM accounts WHERE state != 'leaving') AS people,
        (SELECT COUNT(*) FROM reports WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM shares WHERE held_at IS NOT NULL AND removed_at IS NULL) AS pending,
-       (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes
+       (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes,
+       (SELECT COUNT(*) FROM shares WHERE cut_at IS NULL) AS links,
+       (SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()) AS databaseBytes
      FROM service`,
   ).first();
   return c.json({ ...row, ...(await c.env.backups.freshness(c.env, Date.now())) });
