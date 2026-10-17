@@ -16,6 +16,7 @@ import { api, holdAccount } from './api';
 import { setDefaultModel } from './assignment';
 import { runEvent } from './lua/event';
 import { Files } from './files';
+import { RequestLog, type Logged } from './request-log';
 import { openSession, type Session } from './session';
 import { ObjectStore } from './store';
 
@@ -103,6 +104,10 @@ export const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...ran
 
 export const testModel: Model = { ...bareModel('m'), name: 'M' };
 export const testConnection: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [testModel] };
+
+// For a call made outside a session: a log no store releases, and a call's names.
+export const testLog = () => new RequestLog({ subscribe: () => () => true, scopeState: () => 'loaded' });
+export const LOGGED: Logged = { chat: null, purpose: 'reply', call: { connection: 'c', source: 'OpenRouter', model: 'm', modelName: 'M' } };
 
 export async function answerable(session: Session): Promise<void> {
   const connection = await session.store.create('connection', testConnection);

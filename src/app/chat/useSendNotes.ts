@@ -5,12 +5,13 @@ import type { Route } from '../../runtime/assignment';
 import { breakCost, forecast, lastCache, prior, type Forecast } from '../../runtime/cache';
 import { leaving } from '../../runtime/memory-view';
 import type { Shown } from '../../runtime/talk';
-import { cacheSend, forecastSend, previewRequest, type PreviewRequest, type Sending, type Unsendable } from '../../runtime/turn-context';
+import type { SentRequest } from '../../runtime/request-log';
+import { cacheSend, forecastSend, previewRequest, type Sending, type Unsendable } from '../../runtime/turn-context';
 import { useSession } from '../session';
 
 const SETTLE_MS = 400;
 
-export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Sending | Unsendable | null | undefined; request: () => PreviewRequest | null };
+export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Sending | Unsendable | null | undefined; request: () => SentRequest | null };
 
 // until: when the last call's cache runs out, null when it cached nothing. next: the draft's forecast against the
 // chat's stored last call (runtime/cache), with what a break costs where the model is priced and the model it was worked
@@ -66,7 +67,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
 
   const cache = useMemo((): CacheNotes => ({ until: last?.until ?? null, next }), [last, next]);
   const request = useMemo(() => {
-    let wire: PreviewRequest | null | undefined;
+    let wire: SentRequest | null | undefined;
     return () => {
       if (wire === undefined) wire = sending && 'turn' in sending ? previewRequest(sending) : null;
       return wire;

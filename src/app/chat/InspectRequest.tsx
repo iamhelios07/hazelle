@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { tokenGroups, type From, type TokenSource } from '../../engine/pipeline';
+import type { ForecastPart } from '../../runtime/cache';
 import type { Rehearsal } from '../../runtime/scripts';
 import { afterEnter, previewRequest, type AfterEnter, type Sending } from '../../runtime/turn-context';
 import { describeTurnFailure, runaway } from '../common/failure';
 import { MESSAGE_ROLES, SLOT } from '../common/prompt-words';
-import { tokens } from '../common/receipt';
-import { useSession } from '../session';
+import { cost, tokens } from '../common/receipt';
+import { MODEL_SETTINGS, opens, UNKNOWN } from '../common/words';
+import { useSession, useStore } from '../session';
+import { navigate } from '../shell/router';
 import { Callout, CodeBlock, Disclosure, Empty, Facts, Gauge, List, ListItem, Section, Stack, Text } from '../ui';
+import { BROKEN, profileName, reads, why } from './ChatCache';
 import { partName, RequestView } from './ChatSent';
 import { HookList, STAGES } from './InspectScripts';
 import type { Side } from './panels';
-import type { SendNotes } from './useSendNotes';
+import type { CacheNotes, SendNotes } from './useSendNotes';
 
 function later(steps: AfterEnter[]): string[] {
   return steps.map((step) => {
@@ -25,13 +29,16 @@ function later(steps: AfterEnter[]): string[] {
   });
 }
 
-export function NextRequest({ chat, sending, request, editor, onEdit }: { chat: string; sending: Sending; request: SendNotes['request']; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
+export function NextRequest({ chat, sending, request, cache, editor, onEdit }: { chat: string; sending: Sending; request: SendNotes['request']; cache: CacheNotes; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
   const session = useSession();
   const missing = later(afterEnter(session, chat, sending.turn));
   return (
     <Stack gap="section">
       <Section title="보낼 입력">
         <NextTokens sending={sending} />
+      </Section>
+      <Section title="캐시" help="지금 보내면 캐시를 얼마나 읽고 새로 저장할지 미리 계산해요. 토큰 수는 추정치예요.">
+        {cache.next ? <NextCache next={cache.next} editor={editor} onEdit={onEdit} /> : cache.next === null ? <Empty variant="section">계산할 캐시가 없어요.</Empty> : <Text variant="note">계산하는 중…</Text>}
       </Section>
       <RequestView
         level={2}
@@ -149,6 +156,81 @@ function NextTokens({ sending }: { sending: Sending }) {
           ))}
         </List>
       </Disclosure>
+    </Stack>
+  );
+}
+
+const STATES: Record<ForecastPart['state'], string> = { read: '캐시에서 읽음', write: '새로 저장', tail: '캐시 밖' };
+const CHANGES = { changed: '달라짐', added: '추가됨' } as const;
+
+type CacheRow = { name: string; tokens: number; count: number } & Pick<ForecastPart, 'from' | 'state' | 'change' | 'point'>;
+
+// Neighbours of one part, alike in how the cache takes them, read as one row; a point ends its row. A changed part is
+// a row of its own, so its from is the row's.
+function cacheRows(parts: ForecastPart[]): CacheRow[] {
+  const out: CacheRow[] = [];
+  for (const part of parts) {
+    const name = partName(part.from, part.role);
+    const open = out.at(-1);
+    if (open && !open.point && !open.change && !part.change && open.name === name && open.state === part.state) {
+      open.tokens += part.tokens;
+      open.count++;
+      open.point = part.point;
+    } else out.push({ name, tokens: part.tokens, count: 1, from: part.from, state: part.state, change: part.change, point: part.point });
+  }
+  return out;
+}
+
+type NextCacheProps = { next: NonNullable<CacheNotes['next']>; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
+
+function NextCache({ next: { forecast, cost: price, route }, editor, onEdit }: NextCacheProps) {
+  const store = useStore();
+  const { against, written, tail, removed } = forecast;
+  const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', connection: route.connection.id, model: route.model.id }) } : undefined;
+  return (
+    <Stack gap="group">
+      {against?.broken && <Callout tone="warn" action={off}>{`${BROKEN}: ${why(against.broken, profileName(store, route))} ${reads(against)}`}</Callout>}
+      <Facts
+        variant="tiles"
+        items={[
+          { label: STATES.read, value: against ? tokens(against.read) : UNKNOWN, ...(!against && { tone: 'muted' as const }) },
+          { label: STATES.write, value: tokens(written) },
+          { label: STATES.tail, value: tokens(tail) },
+        ]}
+      />
+      {!against && <Text variant="note">직전 요청 기록이 없어서 얼마나 읽을지 알 수 없어요.</Text>}
+      {price && (
+        <Facts
+          items={[
+            { label: '이대로 보내면', value: cost(price.paid) },
+            { label: '캐시를 다 읽으면', value: cost(price.whole) },
+          ]}
+        />
+      )}
+      <List label="보낼 메시지">
+        {cacheRows(forecast.parts).map((row, index) => {
+          const side = row.change && editor(row.from);
+          return (
+            <ListItem
+              key={index}
+              title={row.count > 1 ? `${row.name} ${row.count}개` : row.name}
+              badge={row.change ? CHANGES[row.change] : undefined}
+              tags={[STATES[row.state], ...(row.point === 'cache' ? ['캐시 지점'] : row.point === 'short' ? ['캐시 지점 · 최소 크기 미만'] : [])]}
+              aside={tokens(row.tokens)}
+              onClick={side ? () => onEdit(side) : undefined}
+            />
+          );
+        })}
+      </List>
+      {removed.length > 0 && (
+        <Section level={3} title="빠지는 메시지">
+          <List label="빠지는 메시지">
+            {removed.map((part, index) => (
+              <ListItem key={index} title={partName(part.from, part.role)} aside={tokens(part.tokens)} />
+            ))}
+          </List>
+        </Section>
+      )}
     </Stack>
   );
 }

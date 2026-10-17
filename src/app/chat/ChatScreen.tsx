@@ -62,7 +62,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
     else if (chat.id !== null) actions.openInspect('request');
   });
   const inUse = prompt.kind === 'prompt' ? prompt.prompt.id : null;
-  const inspect = chat.inspect && chat.id !== null && <ChatInspect chat={chat.id} tab={chat.inspect.tab} notes={chat.sendNotes} messages={chat.messages} busy={busy} prompt={prompt} character={shelf?.id ?? null} onTab={actions.switchInspectTab} onClose={actions.closeInspect} onEdit={actions.side} />;
+  const inspect = chat.inspect && chat.id !== null && <ChatInspect chat={chat.id} tab={chat.inspect.tab} notes={chat.sendNotes} busy={busy} prompt={prompt} character={shelf?.id ?? null} onTab={actions.switchInspectTab} onClose={actions.closeInspect} onEdit={actions.side} />;
   const paired = usePanelsBeside() && !!panel && !!chat.inspect;
   useEffect(() => {
     onPaired(paired);

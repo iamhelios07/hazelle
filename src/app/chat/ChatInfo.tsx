@@ -6,13 +6,11 @@ import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
-import { cost, seconds, speed, tokens } from '../common/receipt';
+import { cost, finish, seconds, speed, tokens } from '../common/receipt';
 import { DISCOUNT, UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
 import type { InfoTab, Side } from './panels';
 import type { OpenChat } from './useChat';
-
-const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김' } as const;
 
 const TABS: { value: InfoTab; label: string }[] = [
   { value: 'reply', label: '응답' },
@@ -21,12 +19,6 @@ const TABS: { value: InfoTab; label: string }[] = [
   { value: 'request', label: '요청 원문' },
   { value: 'response', label: '응답 원문' },
 ];
-
-function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
-  if (receipt.state === 'failed') return { label: '종료 사유', value: '실패', tone: 'warn' };
-  if (receipt.cut) return { label: '종료 사유', value: CUT[receipt.cut], tone: receipt.cut === 'stopped' ? undefined : 'warn' };
-  return { label: '종료 사유', value: '정상 종료' };
-}
 
 const outcomeFacts = (receipt: Receipt) => [
   { label: '비용', value: cost(receipt.cost), tone: receipt.cost === null ? ('muted' as const) : undefined },
@@ -53,7 +45,7 @@ type Props = Pick<OpenChat, 'id' | 'shelf' | 'messages' | 'infoPick'> & {
 };
 
 export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onTab, onPick, onRecord, onEdit, onClose }: Props) {
-  const { talk, costs } = useSession();
+  const { log, costs } = useSession();
   const memory = useChatMemory(chat);
   const tab = picked === 'memory' && !onRecord ? 'reply' : picked;
   const replies = messages.filter((message) => message.role === 'assistant');
@@ -106,7 +98,7 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
   }
   else {
     const earlier = calls(receipt).slice(0, -1);
-    const sent = talk.sent(receipt.id);
+    const entry = chat ? log.entry(chat, receipt.id) : null;
     body = (
       <>
         <Tabs label="응답 정보">
@@ -136,10 +128,10 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
             )}
           </>
         )}
-        {tab === 'lore' && <SentLore sent={sent} character={shelf && { id: shelf.id, card: shelf.character.card }} onEdit={onEdit} />}
-        {tab === 'memory' && onRecord && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
-        {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
-        {tab === 'response' && <SentResponse sent={sent} />}
+        {tab === 'lore' && <SentLore entry={entry} character={shelf && { id: shelf.id, card: shelf.character.card }} onEdit={onEdit} />}
+        {tab === 'memory' && onRecord && <SentMemory entry={entry} memory={memory} onRecord={onRecord} />}
+        {tab === 'request' && <SentRequest entry={entry} receipt={receipt} />}
+        {tab === 'response' && <SentResponse entry={entry} />}
       </>
     );
   }

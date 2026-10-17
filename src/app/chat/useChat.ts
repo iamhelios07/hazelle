@@ -138,12 +138,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!features.memory) setPanels((current) => (current.panel?.kind === 'memory' ? { ...current, panel: null } : current));
   }, [features.memory]);
 
-  // Only a reply this page asked for has what it sent (runtime/talk sent), so it is told the moment that reply lands.
+  // Only a reply this page asked for has what it sent (runtime/request-log), so it is told the moment that reply lands.
   const lastReply = messages.findLast((message) => message.role === 'assistant');
   const lastCall = lastReply && shown(lastReply).receipt?.id;
   useEffect(() => {
     if (!lastReply || !lastCall || cutTold.has(chatId)) return;
-    const cut = budgetCut(talk.sent(lastCall)?.prompt.lore ?? null);
+    const cut = budgetCut(session.log.entry(chatId, lastCall)?.prompt?.lore ?? null);
     if (cut === 0) return;
     cutTold.add(chatId);
     toast.show(`켜진 로어북 항목 중 ${cut}개가 빠졌어요`, {

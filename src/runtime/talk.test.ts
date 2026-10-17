@@ -229,15 +229,15 @@ describe('Talk', () => {
       await takeTurn(session, chat, { kind: 'answer' });
       const message = () => fold(session.store.children('entry', chat))[1]!;
       const call = shown(message()).receipt!.id;
-      expect(session.talk.sent(call)?.request).toEqual({ url: 'https://openrouter.ai/api/v1/chat/completions', body: expect.stringContaining('"content":"안녕"') });
+      expect(session.log.entry(chat, call)?.request).toEqual({ url: 'https://openrouter.ai/api/v1/chat/completions', body: expect.stringContaining('"content":"안녕"') });
       // An edit (a person's, or a bot's onOutput) is a version of its own that keeps the call's receipt.
       await editMessage(session.store, chat, message(), '반가워요!', null);
       expect(shown(message()).id).not.toBe(call);
       expect(shown(message()).receipt!.id).toBe(call);
-      expect(session.talk.sent(call)).not.toBeNull();
+      expect(session.log.entry(chat, call)).not.toBeNull();
       lease.release();
       await vi.waitFor(() => expect(session.store.scopeState(chat)).toBe('unloaded'));
-      expect(session.talk.sent(call)).toBeNull();
+      expect(session.log.entry(chat, call)).toBeNull();
     }));
 
   it('keeps on each receipt what its send expected from the cache, and stores the call so a forecast survives a reload', () =>

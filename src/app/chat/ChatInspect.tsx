@@ -4,7 +4,7 @@ import type { Sending } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { useSession } from '../session';
 import { Empty, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
-import { CacheTab } from './ChatCacheTab';
+import { Log } from './InspectLog';
 import { Modules } from './InspectModules';
 import { NextRequest } from './InspectRequest';
 import { Scripts } from './InspectScripts';
@@ -15,16 +15,16 @@ import type { SendNotes } from './useSendNotes';
 
 const TABS: { value: InspectTab; label: string }[] = [
   { value: 'request', label: '요청' },
-  { value: 'cache', label: '캐시' },
   { value: 'variables', label: '변수' },
   { value: 'modules', label: '모듈' },
   { value: 'scripts', label: '스크립트' },
+  { value: 'log', label: '기록' },
 ];
 
-type ChatInspectProps = Pick<OpenChat, 'messages' | 'busy' | 'prompt'> & { chat: string; character: string | null; tab: InspectTab; notes: SendNotes; onTab: (tab: InspectTab) => void; onClose: () => void; onEdit: (side: Side) => void };
+type ChatInspectProps = Pick<OpenChat, 'busy' | 'prompt'> & { chat: string; character: string | null; tab: InspectTab; notes: SendNotes; onTab: (tab: InspectTab) => void; onClose: () => void; onEdit: (side: Side) => void };
 
 // 점검: every tab before a send reads the composer's one next-send result (useSendNotes), never a prompt of its own.
-export function ChatInspect({ chat, character, tab, notes, messages, busy, prompt, onTab, onClose, onEdit }: ChatInspectProps) {
+export function ChatInspect({ chat, character, tab, notes, busy, prompt, onTab, onClose, onEdit }: ChatInspectProps) {
   const { store } = useSession();
   const conversation = prompt.kind === 'prompt' ? { id: prompt.prompt.id, blocks: prompt.prompt.value.blocks } : null;
   const editor = (from: From) => editorOf(from, conversation, character, (lore) => store.get('lore', lore)?.parent ?? null);
@@ -45,11 +45,11 @@ export function ChatInspect({ chat, character, tab, notes, messages, busy, promp
     <SidePanel title="점검" onClose={onClose}>
       <Stack gap="section">
         {tabs}
-        {tab === 'request' && ready((sending) => <NextRequest chat={chat} sending={sending} request={notes.request} editor={editor} onEdit={onEdit} />)}
-        {tab === 'cache' && <CacheTab cache={notes.cache} messages={messages} busy={busy} editor={editor} onEdit={onEdit} />}
+        {tab === 'request' && ready((sending) => <NextRequest chat={chat} sending={sending} request={notes.request} cache={notes.cache} editor={editor} onEdit={onEdit} />)}
         {tab === 'variables' && <Variables chat={chat} sending={notes.sending && 'turn' in notes.sending ? notes.sending : null} busy={busy} />}
         {tab === 'modules' && ready((sending) => <Modules sending={sending} />)}
         {tab === 'scripts' && <Scripts chat={chat} />}
+        {tab === 'log' && <Log chat={chat} />}
       </Stack>
     </SidePanel>
   );

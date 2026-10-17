@@ -23,14 +23,14 @@ import { upsertChatLore } from './lore';
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { gather, generate } from './generate';
+import { gather, generate, receiptOf } from './generate';
 import type { ScriptOutcome } from './lua/event';
 import { modelProfile } from './profiles';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
+import type { RequestLog } from './request-log';
 import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
-import { receiptOf } from './talk';
 import { answerInstructionOf, packsOf, scopeOf } from './chat-context';
 import { setBackground } from './characters';
 import type { Blocked, Sending, TurnContext } from './turn-context';
@@ -215,7 +215,7 @@ export class Scripts {
   private readonly lastPrompt = new Map<string, Map<string, Answered>>();
 
   constructor(
-    private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
+    private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
     private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> },
   ) {
     this.interactions = new ScriptInteractions(session.store, this.closing.signal);
@@ -731,7 +731,7 @@ export class Scripts {
   // role, with a receipt kept on the last message shown so usage and cost count it. Risu's answer shape stays at the
   // Lua binding. The reason also lets the tool binding answer without parsing text.
   private async model(chat: string, role: Role, messages: ModelMessage[], from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<ModelResult> {
-    const { store, credentials } = this.session;
+    const { store, credentials, log } = this.session;
     const refused = (reason: ModelRefusal, why: string): ModelResult => ({ success: false, reason, result: `Error: ${why}` });
     if (signal?.aborted || this.closing.signal.aborted) return refused('failed', 'stopped');
     const stored = live(store.get('chat', chat));
@@ -750,6 +750,7 @@ export class Scripts {
     // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,
+      log,
       connection: route.connection.value,
       model: route.model,
       settings: profile.profile.value.settings,
@@ -778,7 +779,7 @@ export class Scripts {
 
   // With the account's 임베딩 모델, under the spender's one answer for model calls.
   private async embed(chat: string, texts: string[], as: EmbedPurpose | null, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<EmbedResult> {
-    const { store, credentials } = this.session;
+    const { store, credentials, log } = this.session;
     if (signal?.aborted || this.closing.signal.aborted || !live(store.get('chat', chat)) || !live(store.get(from.kind, from.id))) return { ok: false, reason: 'failed' };
     if (!(await this.interactions.allowed(chat, from, deadline, signal))) return { ok: false, reason: 'not-allowed' };
     if (signal?.aborted || !live(store.get(from.kind, from.id))) return { ok: false, reason: 'failed' };
@@ -787,7 +788,7 @@ export class Scripts {
       this.interactions.tell(chat, 'no-model:embed', { kind: 'no-model', role: 'embed' }, from);
       return { ok: false, reason: 'no-model' };
     }
-    const { answer, receipt } = await embedTexts({ credentials, count: countTexts(store) }, route, texts, as, chat, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
+    const { answer, receipt } = await embedTexts({ credentials, log, count: countTexts(store) }, route, texts, as, chat, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
     if (receipt) await keepCall(this.session, chat, receipt);
     if (!answer.ok && answer.reason === 'flood') this.interactions.tell(chat, 'flood', { kind: 'flood' }, from);
     return answer;

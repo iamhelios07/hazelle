@@ -6,7 +6,7 @@ import { isChapter } from '../../engine/memory';
 import type { Chapter, Memory, MemoryRecord } from '../../model/memory';
 import type { Role } from '../../model/prompt';
 import type { HttpRequest } from '../../connectors/types';
-import type { Sent } from '../../runtime/talk';
+import type { LogEntry } from '../../runtime/request-log';
 import { MESSAGE_ROLES, SLOT, textName } from '../common/prompt-words';
 import { Button, Callout, ChoiceGroup, CodeBlock, Empty, Facts, List, ListItem, Row, Section, Stack, Text } from '../ui';
 import { loreBudgetEditor, type Side } from './panels';
@@ -18,9 +18,10 @@ import { ANSWER_INSTRUCTION_LABEL, CHAPTER, COMMAND, inSettings, LORE_BUDGET_LAB
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
-// Not "none" or "gone": what a call sent is kept only by the page that made it, while its chat stays open (runtime/talk
-// sent), so a reload, another device or a resumed call has none of it to show.
-const UNKEPT = '요청을 보낸 기기에서 채팅 화면을 열어 둔 동안에만 볼 수 있어요.';
+// Not "none" or "gone": what a call sent is kept only by the page that made it, while its chat stays open and within
+// the log's bound (runtime/request-log), so a reload, another device or an older call has none of it to show.
+const UNKEPT = '요청을 보낸 기기에서 채팅 화면을 열어 둔 동안 최근 요청만 볼 수 있어요.';
+const PICKED = '새로고침 전에 보낸 요청이라 원문을 알 수 없어요.';
 
 export function partName(from: From, role: Role): string {
   switch (from.kind) {
@@ -43,9 +44,9 @@ export function partName(from: From, role: Role): string {
   }
 }
 
-// Headers, which carry the credential, are never kept (runtime/generate), so there is nothing to redact here.
-export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Receipt }) {
-  if (!sent) {
+// Redacted where it was recorded (runtime/request-log redacted), so nothing is redacted here.
+export function SentRequest({ entry, receipt }: { entry: LogEntry | null; receipt: Receipt }) {
+  if (!entry) {
     return (
       <>
         <Facts
@@ -60,13 +61,20 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
       </>
     );
   }
-  return <RequestView prompt={sent.prompt} title="보낸 순서대로" request={() => sent.request} unbuilt="요청을 보내기 전에 멈춰서 본문이 없어요." />;
+  if (entry.picked) return <Empty variant="section">{PICKED}</Empty>;
+  // Only a chat reply keeps the parts it was assembled from; any other call shows its wire request.
+  if (!entry.prompt) return <RequestBody request={entry.request} unbuilt={UNBUILT} />;
+  return <RequestView prompt={entry.prompt} title="보낸 순서대로" request={() => entry.request} unbuilt={UNBUILT} />;
 }
 
-export function SentResponse({ sent }: { sent: Sent | null }) {
-  if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
-  if (!sent.response) return <Empty variant="section">이 응답의 응답 원문이 없어요.</Empty>;
-  return <CodeBlock>{sent.response}</CodeBlock>;
+const UNBUILT = '요청을 보내기 전에 멈춰서 본문이 없어요.';
+
+export function SentResponse({ entry }: { entry: LogEntry | null }) {
+  if (!entry) return <Empty variant="section">{UNKEPT}</Empty>;
+  if (entry.picked) return <Empty variant="section">{PICKED}</Empty>;
+  if (entry.purpose === 'embedding') return <Empty variant="section">임베딩 응답은 숫자 목록이라 보관하지 않아요.</Empty>;
+  if (!entry.response) return <Empty variant="section">이 응답의 응답 원문이 없어요.</Empty>;
+  return <CodeBlock>{entry.response}</CodeBlock>;
 }
 
 type RequestViewProps = {
@@ -237,9 +245,9 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
 }
 
 // The records are named as they are now; one deleted since reads as gone.
-export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memory: Memory | null; onRecord: (record: string) => void }) {
-  if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
-  const { memory: used, dropped } = sent.prompt;
+export function SentMemory({ entry, memory, onRecord }: { entry: LogEntry | null; memory: Memory | null; onRecord: (record: string) => void }) {
+  if (!entry?.prompt) return <Empty variant="section">{UNKEPT}</Empty>;
+  const { memory: used, dropped } = entry.prompt;
   const cut = { label: '컨텍스트 한도로 빠진 메시지', value: `${dropped}개`, tone: dropped ? ('warn' as const) : undefined };
   if (!used) {
     return (
@@ -300,9 +308,10 @@ function SentRecords({ title, ids, records, onRecord }: { title: string; ids: st
   );
 }
 
-export function SentLore({ sent, character, onEdit }: { sent: Sent | null; character: { id: string; card: Card } | null; onEdit: (side: Side) => void }) {
-  if (!sent) return <Empty variant="section">{UNKEPT}</Empty>;
-  const lore = sent.prompt.lore;
+export function SentLore({ entry, character, onEdit }: { entry: LogEntry | null; character: { id: string; card: Card } | null; onEdit: (side: Side) => void }) {
+  if (!entry?.prompt) return <Empty variant="section">{UNKEPT}</Empty>;
+  const { prompt } = entry;
+  const lore = prompt.lore;
   if (!lore) return <Empty variant="section">캐릭터 없이 대화하는 채팅이라 로어북이 없어요.</Empty>;
   if (lore.length === 0) return <Empty variant="section">이 응답에서 켜진 로어북 항목이 없어요.</Empty>;
   const names = new Map(lore.map(({ id, name }) => [id, name]));
@@ -312,7 +321,7 @@ export function SentLore({ sent, character, onEdit }: { sent: Sent | null; chara
   const door = editor ? { label: opens('캐릭터 편집 › 로어북'), onClick: () => onEdit(editor) } : { label: opens(inSettings('chat')), onClick: () => navigate({ kind: 'chat-settings' }) };
   return (
     <>
-      {cut > 0 && <Callout tone="warn" action={door}>{`${LORE_BUDGET_LABEL}(${sent.prompt.loreBudget.toLocaleString()} 토큰)을 넘어 ${cut}개가 빠졌어요.`}</Callout>}
+      {cut > 0 && <Callout tone="warn" action={door}>{`${LORE_BUDGET_LABEL}(${prompt.loreBudget.toLocaleString()} 토큰)을 넘어 ${cut}개가 빠졌어요.`}</Callout>}
       <Section level={3} title="활성화된 항목" note={`${lore.length}개 중 ${went}개 들어감`}>
         <List label="활성화된 로어북 항목">
           {lore.map((entry) => (

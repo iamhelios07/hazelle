@@ -91,7 +91,7 @@ it('runs reference memory through real Scripts, the aux connection, the tool slo
     await expect.poll(() => summaries).toBe(2);
     await expect.poll(() => shown(messages()[3]!).after?.some(([name]) => name === key)).toBe(true);
     const original = shown(messages()[3]!).id;
-    const sent = session.talk.sent(shown(messages()[3]!).receipt!.id)!;
+    const sent = { prompt: session.log.entry(chat, shown(messages()[3]!).receipt!.id)!.prompt! };
     expect(sent.prompt.parts.some(({ from }) => from.kind === 'tool' && from.name === '간단 기억')).toBe(true);
     expect(sent.prompt.messages.some(({ content }) => content === 'summary 1')).toBe(true);
     expect(log.filter(({ sent }) => sent.body?.includes('Summarize the conversation'))).toHaveLength(2);
@@ -101,7 +101,7 @@ it('runs reference memory through real Scripts, the aux connection, the tool slo
     await takeTurn(session, chat, { kind: 'regenerate', message: messages()[3]!.id });
     await expect.poll(() => summaries).toBe(3);
     await expect.poll(() => shown(messages()[3]!).after?.some(([name]) => name === key)).toBe(true);
-    const replacement = session.talk.sent(shown(messages()[3]!).receipt!.id)!;
+    const replacement = { prompt: session.log.entry(chat, shown(messages()[3]!).receipt!.id)!.prompt! };
     expect(replacement.prompt.messages.some(({ content }) => content === 'summary 1')).toBe(true);
     expect(replacement.prompt.messages.some(({ content }) => content === 'summary 2')).toBe(false);
     await selectVersion(session.store, chat, messages()[3]!.id, original);

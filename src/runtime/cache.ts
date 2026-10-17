@@ -5,7 +5,7 @@ import type { Connection, Cost, Model } from '../connectors/types';
 import { fingerprint } from '../engine/memory';
 import type { Assembled, From } from '../engine/pipeline';
 import { cachePrintId, type CacheBreak, type CacheForecast, type CachePrint, type WireMessage } from '../model/cache';
-import { calls, shown, type Message, type Receipt } from '../model/chat';
+import type { Message, Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { Role } from '../model/prompt';
 import type { ObjectStore } from './store';
@@ -181,19 +181,4 @@ export function breakCost(connection: Connection, model: Model, { parts, written
   const paid = cost(against.read, written);
   const whole = cost(Math.min(against.of, ends), Math.max(ends - against.of, 0));
   return paid && whole && { paid, whole };
-}
-
-// One call of the chat as its receipt counts the cache: read and written as the provider reported, the rest of the
-// input sent at the full price; null where it did not report them. forecast: what the send expected, absent before
-// receipts kept it.
-export type CacheTurn = { call: string; at: number; modelName: string; input: number | null; read: number | null; written: number | null; forecast?: CacheForecast };
-
-// The calls of the messages as shown, latest first, a continuation's calls with its own.
-export function cacheTurns(messages: Message[]): CacheTurn[] {
-  return messages
-    .flatMap((message) => {
-      const { at, receipt } = shown(message);
-      return receipt ? calls(receipt).map(({ id, modelName, usage, forecast }) => ({ call: id, at, modelName, input: usage?.inputTokens ?? null, read: usage?.cachedInputTokens ?? null, written: usage?.cacheWriteInputTokens ?? null, ...(forecast && { forecast }) })) : [];
-    })
-    .reverse();
 }

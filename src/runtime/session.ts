@@ -18,6 +18,7 @@ import { deviceCache } from './device-cache';
 import { Drafts } from './drafts';
 import type { DeviceCache } from './object-cache';
 import { Rememberer } from './memory';
+import { RequestLog } from './request-log';
 import { addFirstPersona, recordChatPersonas } from './personas';
 import { addFirstProfile } from './profiles';
 import { addDefaults } from './prompts';
@@ -41,6 +42,7 @@ export type Session = {
   assets: AssetUrls;
   unfound: UnfoundAssets;
   talk: Talk;
+  log: RequestLog;
   costs: Costs;
   usage: Usage;
   tokens: Tokens;
@@ -96,22 +98,24 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const tokens = new Tokens(usage);
   const drafts = bindings.drafts ?? new Drafts();
   const reading = new Set<string>();
-  const translator = new Translator(store, credentials, costs, tokens, reading);
+  const log = new RequestLog(store);
+  const translator = new Translator(store, credentials, log, costs, tokens, reading);
   let runner: Promise<LuaRunner> | null = null;
   // Asked for once the session has closed, it makes none: nothing would be left to end it.
   const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
   const unfound = new UnfoundAssets();
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result), unfound);
   const read = new ReadModels(store, display);
-  const likenesses = new Likenesses({ tokens, store, credentials, files, catalogs });
-  const illustrator = new Illustrator({ tokens, store, credentials, files, likenesses });
-  const commentator = new Commentator({ tokens, store, credentials });
+  const likenesses = new Likenesses({ tokens, store, credentials, log, files, catalogs });
+  const illustrator = new Illustrator({ tokens, store, credentials, log, files, likenesses });
+  const commentator = new Commentator({ tokens, store, credentials, log });
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
-  const scripts: Scripts = new Scripts({ tokens, store, read, credentials, costs, display }, { lua: machine, tools });
-  const memory = new Rememberer({ store, read, credentials, costs, scripts, tokens }, reading);
+  const scripts: Scripts = new Scripts({ tokens, store, read, credentials, log, costs, display }, { lua: machine, tools });
+  const memory = new Rememberer({ store, read, credentials, log, costs, scripts, tokens }, reading);
   const talk = new Talk(
     store,
     credentials,
+    log,
     costs,
     tokens,
     (chat, reply) => scripts.ending(chat, reply),
@@ -137,7 +141,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     if (purpose.kind === 'reply') void talk.resume(stream);
     else if (purpose.kind === 'translation') translator.resume(stream, purpose.version);
     else if (purpose.kind === 'memory') memory.resume(stream);
-    else void resumeSend({ store, credentials, streams }, stream, closing.signal);
+    else void resumeSend({ store, credentials, log, streams }, stream, closing.signal);
   });
   let started = false;
   const stopSync = keepSynced(store, () => { if (started && !closing.signal.aborted) streams.pickUp(); });
@@ -167,6 +171,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     display.close();
     streams.close();
     talk.close();
+    log.close();
     scripts.close();
     tools.close();
     // One still being made is ended as it is made.
@@ -184,6 +189,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { tools, username, store, files, assets, unfound, talk, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

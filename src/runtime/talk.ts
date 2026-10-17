@@ -7,7 +7,7 @@ import type { InlineThoughts } from '../connectors/stream';
 import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
 import type { CacheForecast } from '../model/cache';
-import type { Message, Receipt, ReceiptError, Writes } from '../model/chat';
+import type { Message, Receipt, Writes } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
 import type { ApiFailure } from './api';
@@ -17,11 +17,12 @@ import { appendReply, appendUserMessage, savedElsewhere, type Said, type Written
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { gather, generate, resume, type GenerateInput, type Reply } from './generate';
+import { gather, generate, receiptOf, resume, unsettled, type GenerateInput, type Reply } from './generate';
 import { stopStream } from './relay';
+import type { RequestLog } from './request-log';
 import type { ObjectStore } from './store';
 import type { ChatLease } from './chat-scope';
-import { callOf, endCall, newCall, pageCall } from './streams';
+import { callOf, endCall, newCall, pageCall, type PageClass } from './streams';
 import type { Session } from './session';
 
 // A continuation's text and reasoning start as those it continues. before:
@@ -50,9 +51,6 @@ export type Shown = Message & { live: string | null; whole?: true; batch?: true;
 // said: the user's message as it is saved, which a message sent translated saves translated; null when prepare saved it
 // itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt.
 export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast };
-
-// It lives in page memory only, until the session closes: the raw request and response are never stored.
-export type Sent = Pick<Reply, 'request' | 'response' | 'calibration'> & { prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
@@ -117,13 +115,12 @@ export class Talk {
   private closed = false;
   private readonly unsaved = new Map<string, { chat: string; reply: Written; call: string }>();
   private readonly changes = new ChangeSignal();
-  // By call id.
-  private readonly sentBy = new Map<string, { chat: string; sent: Sent }>();
   private readonly leave: () => void;
 
   constructor(
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
+    private readonly log: RequestLog,
     private readonly costs: Costs,
     private readonly tokens: Tokens,
     // ended: a reply as its stream ended, which the bot's Lua may rewrite before it is saved. saved: once it is.
@@ -132,20 +129,15 @@ export class Talk {
     // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {
-    const left = store.subscribe((changes) => {
-      const released = new Set(changes.filter((change) => change.kind === 'scope' && store.scopeState(change.id) === 'unloaded').map((change) => change.id));
-      for (const [id, held] of this.sentBy) if (released.has(held.chat)) this.sentBy.delete(id);
-    });
     // A restore ends the store a turn was begun on, and none of the turn's writes can land after it, so it ends every
     // turn as 멈추기 does, a batch's wait too: a call left running would be billed and never read. close does not: a
     // call outlives a locked vault, for the next session to read.
-    const unrewound = store.subscribeRewound(() => {
+    this.leave = store.subscribeRewound(() => {
       for (const held of this.turns.values()) {
         this.halt(held);
         held.abort.abort();
       }
     });
-    this.leave = () => { left(); unrewound(); };
   }
 
   readonly subscribe = this.changes.subscribe;
@@ -153,12 +145,6 @@ export class Talk {
   readonly snapshot = (chat: string): Turn | null => this.turns.get(chat)?.turn ?? null;
 
   readonly writing = (): ReadonlySet<string> => this.writingChats;
-
-  // By the call's id, which its receipt keeps through an edit, a branch and a continuation (model/chat Receipt). null:
-  // its chat was released, or this page did not make the call.
-  sent(call: string): Sent | null {
-    return this.sentBy.get(call)?.sent ?? null;
-  }
 
   // 멈추기: the call ends on the server too, and the text so far is saved as cut; a batch is canceled at the provider and
   // waited for until it ends. Reading stops first, so the server's end is never read as the stream's own.
@@ -178,7 +164,6 @@ export class Talk {
     this.closed = true;
     for (const held of this.turns.values()) held.abort.abort();
     this.unsaved.clear();
-    this.sentBy.clear();
     this.leave();
   }
 
@@ -277,7 +262,7 @@ export class Talk {
       call.retrying = this.retrying(held);
       this.reading.add(call.id);
       held.calling = call.id;
-      const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(this.store, route.connection.value, settings), messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held), batching });
+      const replying = generate({ credentials: this.credentials, log: this.log, connection: route.connection.value, model: route.model, settings, retries: retriesOf(this.store, route.connection.value, settings), messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held), batching });
       const sent = await sending;
       if (sent && !sent.ok) {
         held.cancel.abort();
@@ -297,9 +282,10 @@ export class Talk {
       decision = { fit: fitted.fit, retries: fitted.retries };
     }
     if (this.closed) return null;
+    const forecast = answer.calibration.retries.length ? undefined : ready.forecast;
     // Kept before the save, whose store change is what shows the reply's 정보.
-    this.sentBy.set(call.id, { chat, sent: { request: answer.request, response: answer.response, prompt, calibration: answer.calibration } });
-    const written = this.written(held, reply, callOf(route), answer, Date.now(), answer.calibration.retries.length ? undefined : ready.forecast);
+    this.log.attach(chat, call.id, { prompt, forecast });
+    const written = this.written(held, reply, callOf(route), answer, Date.now(), forecast);
     // A receipt's cache is the view's, so one kept means the answer has its view.
     const printing = cacheKept(written.receipt) && writePrint(this.store, chat, call.id, wireOf(route.connection.id, answer.account, answer.cache!, prompt.parts));
     const saved = await this.save(chat, await this.ended(chat, written), call.id);
@@ -323,7 +309,7 @@ export class Talk {
     try {
       await this.store.pinned(async () => {
         if (await lease.ready) return;
-        const answer = await resume({ store: this.store, credentials: this.credentials }, stream, held.abort.signal, this.writer(held), this.inline(held), { retrying: this.retrying(held), cancel: held.cancel.signal });
+        const answer = await resume({ store: this.store, credentials: this.credentials, log: this.log }, stream, held.abort.signal, this.writer(held), this.inline(held), { retrying: this.retrying(held), cancel: held.cancel.signal });
         // Not Date.now(): the call may have ended long before this page read it, and the cache timer counts back from at.
         const at = stream.value.at + answer.totalMs;
         if (!this.closed) await this.save(chat, await this.ended(chat, this.written(held, reply, stream.value.call, answer, at)), stream.id);
@@ -355,58 +341,14 @@ export class Talk {
   }
 }
 
-export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
-  return {
-    id: answer.call,
-    calibration: answer.calibration,
-    ...call,
-    ...(answer.account !== null && { account: answer.account }),
-    ...(answer.tries !== null && answer.tries > 1 && { tries: answer.tries }),
-    state: answer.state,
-    cut: answer.cut,
-    error: answer.error && receiptError(answer.error),
-    finishReason: answer.finishReason,
-    usage: answer.usage,
-    cost: answer.cost,
-    replyId: answer.replyId,
-    firstTextMs: answer.firstTextMs,
-    totalMs: answer.totalMs,
-    cache: answer.cache?.cache ?? null,
-    ...(answer.discount && { discount: answer.discount }),
-  };
-}
-
-// A task's call (a memory record's, a 삽화 scene's) is never settled later, so its receipt keeps no pending cost.
-export const unsettled = (receipt: Receipt): Receipt => (receipt.cost === 'pending' ? { ...receipt, cost: null } : receipt);
-
-// Field by field, never the error itself: whatever a network error gains must not reach saved chats.
-export function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
-  switch (error.kind) {
-    case 'refused':
-    case 'relay':
-    case 'app':
-      return { kind: error.kind, code: error.code };
-    case 'provider':
-      return 'status' in error ? { kind: 'provider', status: error.status, detail: error.detail } : { kind: 'provider', detail: error.detail };
-    case 'bad-event':
-    case 'network':
-      return { kind: error.kind, detail: error.detail };
-    case 'offline':
-    case 'no-token':
-      return { kind: error.kind };
-    case 'pool':
-      return { kind: 'pool', group: error.group };
-  }
-}
-
 // A 삽화 scene (runtime/illustrate), a likeness (runtime/likeness) or a mascot's line (runtime/mascot), read through the
 // server's stream like any model call but with no marker: a pick-up on another device would make it again and pay for
 // it twice. The caller parses the text.
-export async function pageAnswer(session: Pick<Session, 'store' | 'tokens' | 'credentials'>, { route, settings }: { route: Route; settings: ModelSettings }, requestClass: 'illustration' | 'likeness' | 'mascot', chat: string | null, messages: GenerateInput['messages'], signal: AbortSignal): Promise<{ kind: 'stopped' } | { kind: 'failed'; receipt: Receipt } | { text: string; receipt: Receipt }> {
-  const { store, credentials } = session;
+export async function pageAnswer(session: Pick<Session, 'store' | 'tokens' | 'credentials' | 'log'>, { route, settings }: { route: Route; settings: ModelSettings }, requestClass: Exclude<PageClass, 'script'>, chat: string | null, messages: GenerateInput['messages'], signal: AbortSignal): Promise<{ kind: 'stopped' } | { kind: 'failed'; receipt: Receipt } | { text: string; receipt: Receipt }> {
+  const { store, credentials, log } = session;
   const text = gather();
   const call = await pageCall(session, route, requestClass, chat);
-  const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
+  const answer = await generate({ credentials, log, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
   if (answer.cut === 'stopped') return { kind: 'stopped' };
   const receipt = unsettled(receiptOf(callOf(route), answer));
   return answer.state === 'done' ? { text: text.value(), receipt } : { kind: 'failed', receipt };

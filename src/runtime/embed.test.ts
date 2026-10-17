@@ -4,12 +4,13 @@ import type { Stored } from '../model/kinds';
 import { embedModel, type Route } from './assignment';
 import { Credentials } from './credential';
 import { embedTexts } from './embed';
+import { testLog } from './testing';
 
 const model: Model = { id: 'text-embedding-3-small', name: 'Small', input: ['text'], output: ['embedding'], contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null }, price: { input: 0.02, output: 0, cacheRead: null, cacheWrite: null, tiers: [] } };
 const connection: Stored<'connection'> = { id: 'c', kind: 'connection', parent: null, rev: 1, value: { type: 'openai', label: 'OpenAI', baseUrl: null, protocol: null, accounts: [{ id: 'a', secret: 'sk' }], turns: null, starred: [model] } };
 const route: Route = { connection, model };
 const chat = crypto.randomUUID();
-const deps = (tokens = 1) => ({ credentials: new Credentials(), count: async (texts: string[]) => texts.map(() => tokens) });
+const deps = (tokens = 1) => ({ credentials: new Credentials(), log: testLog(), count: async (texts: string[]) => texts.map(() => tokens) });
 const upstream = (body: unknown, status = 200, relay: string | null = 'upstream') => vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json(body, { status, headers: relay ? { 'x-relay': relay } : {} }));
 
 afterEach(() => vi.unstubAllGlobals());
@@ -32,6 +33,13 @@ it('relays naming its chat and keeps a receipt with input tokens and the price-l
   expect(url).toBe('/api/relay');
   expect((init.headers as Record<string, string>)['x-hazelle-bot']).toBe(chat);
   expect(JSON.parse(init.body as string)).toMatchObject({ url: 'https://api.openai.com/v1/embeddings', headers: { authorization: 'Bearer sk' } });
+});
+
+it('logs the call under its chat as an embedding, its request without the vectors that answered it', async () => {
+  vi.stubGlobal('fetch', upstream({ data: [{ index: 0, embedding: [0.1, 0.2] }], usage: { prompt_tokens: 1 } }));
+  const log = testLog();
+  const { receipt } = await embedTexts({ ...deps(), log }, route, ['밤'], 'query', chat);
+  expect(log.of(chat).entries).toEqual([expect.objectContaining({ purpose: 'embedding', receipt, request: { url: 'https://api.openai.com/v1/embeddings', body: expect.stringContaining('밤') }, response: null })]);
 });
 
 it('answers flood when the server refuses the chat’s bot call, with no receipt', async () => {

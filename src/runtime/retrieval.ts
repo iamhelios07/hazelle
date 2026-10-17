@@ -11,7 +11,7 @@ import { countTexts, EMBED_TEXTS, embedTexts, type Embedded } from './embed';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
 
-type Reader = Pick<Session, 'store' | 'read' | 'credentials' | 'costs'>;
+type Reader = Pick<Session, 'store' | 'read' | 'credentials' | 'costs' | 'log'>;
 
 export const chatVectors = (store: Pick<ObjectStore, 'children'>, chat: string): Stored<'vectors'> | undefined => store.children('vectors', chat).find((entry) => entry.id === vectorsId(chat));
 
@@ -47,7 +47,7 @@ export async function indexRecords(session: Reader, chat: string, signal: AbortS
   if (!records.length && !stale) return { ok: true };
   for (let from = 0; from < records.length; from += EMBED_TEXTS) {
     const batch = records.slice(from, from + EMBED_TEXTS);
-    const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: countTexts(store) }, route, batch.map(recordText), 'document', chat, signal);
+    const { answer, receipt } = await embedTexts({ credentials: session.credentials, log: session.log, count: countTexts(store) }, route, batch.map(recordText), 'document', chat, signal);
     if (receipt) await keepCall(session, chat, receipt);
     if (!answer.ok) {
       if (Object.keys(items).length) await writeVectors(store, chat, { model: route.model.id, items });
@@ -102,7 +102,7 @@ export async function findRecords(session: Reader, chat: string, messages: Histo
   const found = retrievalOf(store, chat, messages);
   if (!found) return [];
   const { route, items, query } = found;
-  const { answer, receipt } = await embedTexts({ credentials: session.credentials, count: countTexts(store) }, route, [query], 'query', chat, AbortSignal.any([signal, AbortSignal.timeout(QUERY_WAIT)]));
+  const { answer, receipt } = await embedTexts({ credentials: session.credentials, log: session.log, count: countTexts(store) }, route, [query], 'query', chat, AbortSignal.any([signal, AbortSignal.timeout(QUERY_WAIT)]));
   if (receipt) await keepCall(session, chat, receipt);
   return answer.ok ? nearest(rank(answer.vectors[0]!, items)) : [];
 }

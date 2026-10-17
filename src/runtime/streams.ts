@@ -9,7 +9,8 @@ import type { Stream } from '../model/stream';
 import { streamKey } from '../vault/streams';
 import type { Route } from './assignment';
 import { chatMemory } from './memory-read';
-import { dropStream, type StreamCall } from './relay';
+import type { GenerateInput } from './generate';
+import { dropStream } from './relay';
 import type { ObjectStore } from './store';
 
 // The only writer of `stream` objects, each the marker of a generation call the server is making for a chat
@@ -23,24 +24,26 @@ export type CallTarget = { id: string; chat: string | null; result: string; for:
 // Its marker is written once the server holds the call, never before: a pick-up that found the marker of a call not
 // started yet would read no call and save that as its result. A marker that fails to save only leaves the call to this
 // page; one that lands after its result was saved is removed by the next pick-up.
-export async function newCall({ store, tokens }: Pick<Session, 'store' | 'tokens'>, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
+export async function newCall({ store, tokens }: Pick<Session, 'store' | 'tokens'>, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<GenerateInput['call']> {
   const key = await streamKey();
   const at = Date.now();
   const requestClass = purpose.kind === 'reply' ? 'conversation' : purpose.kind === 'input' ? 'translation' : purpose.kind;
-  const call: StreamCall = { id, key: key.private, public: key.public, ...calibrate({ store, tokens }, route, requestClass, chat) };
+  const call: GenerateInput['call'] = { id, key: key.private, public: key.public, logged: { chat, purpose: purpose.kind, call: callOf(route) }, ...calibrate({ store, tokens }, route, requestClass, chat) };
   call.started = chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), calibration: call.calibration!, at, result, for: purpose }, { id, parent: chat });
   return call;
 }
 
+export type PageClass = 'script' | 'illustration' | 'likeness' | 'mascot';
+
 // A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
 // reload has no use for (bot: its chat, where the server limits these), or a task's through pageAnswer.
-export async function pageCall(session: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: 'script' | 'illustration' | 'likeness' | 'mascot', chat: string | null): Promise<StreamCall> {
+export async function pageCall(session: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: PageClass, chat: string | null): Promise<GenerateInput['call']> {
   const key = await streamKey();
-  return { id: crypto.randomUUID(), key: key.private, public: key.public, ...calibrate(session, route, requestClass, chat), ...(requestClass === 'script' && chat !== null && { bot: chat }) };
+  return { id: crypto.randomUUID(), key: key.private, public: key.public, logged: { chat, purpose: requestClass, call: callOf(route) }, ...calibrate(session, route, requestClass, chat), ...(requestClass === 'script' && chat !== null && { bot: chat }) };
 }
 
 // Auxiliary prompts stay caller-owned: no splitting, trimming, or shrink-and-retry after a provider refusal.
-function calibrate({ store, tokens }: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: RequestClass, chat: string | null): Pick<StreamCall, 'calibration' | 'measure' | 'preflight'> {
+function calibrate({ store, tokens }: Pick<Session, 'store' | 'tokens'>, route: Route, requestClass: RequestClass, chat: string | null): Pick<GenerateInput['call'], 'calibration' | 'measure' | 'preflight'> {
   return {
     calibration: unavailableCalibration('preparation'),
     measure: (prepared) => measureInput(store, route.connection.id, requestClass, prepared),
