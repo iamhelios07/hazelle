@@ -406,7 +406,7 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
   } finally { vi.useRealTimers(); close(); host.close(); }
 }));
 
-it('runs a frame tool as one frame: its registered items, a press from the chat, its page and the chat it reads', () => withTools(async (session, connect) => {
+it('runs a frame tool as one frame: its registered items, a press from the chat, a remounted slot, its page and the chat it reads', () => withTools(async (session, connect) => {
   await answerable(session);
   const parsed = source('1', '');
   const added = await importTool(session.store, session.files, { ...parsed, manifest: { ...parsed.manifest, page: null, menu: [], risu: { verdict: 'all', missing: [], hosts: [] } } });
@@ -417,10 +417,11 @@ it('runs a frame tool as one frame: its registered items, a press from the chat,
   await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
   const module = added.data.id;
   const pressed = vi.fn();
+  const opens = vi.fn();
   const transport = inProcessRisu((scope) => {
     const risu = scope.Risuai as Record<string, (...args: unknown[]) => Promise<unknown>>;
     void risu.registerButton!({ name: 'Cast', id: 'cast' }, async () => { pressed(await risu.getCurrentChatIndex!()); await risu.showContainer!('fullscreen'); });
-    void risu.registerSetting!('Open', () => risu.showContainer!('fullscreen'));
+    void risu.registerSetting!('Open', () => { opens(); return risu.showContainer!('fullscreen'); });
   });
   const host = connect(transport.open);
   try {
@@ -437,9 +438,16 @@ it('runs a frame tool as one frame: its registered items, a press from the chat,
     await vi.waitFor(() => expect(shownIn.place).toHaveBeenCalledTimes(1));
     expect(host.frames().get(module)?.asking).toBe(false);
     detach();
+    const remounted = { chat, place: vi.fn(), close: vi.fn() };
+    const detachRemounted = host.attach(module, remounted);
+    await vi.waitFor(() => expect(remounted.place).toHaveBeenCalledTimes(1));
+    expect(opens).not.toHaveBeenCalled();
+    detachRemounted();
+    await vi.waitFor(() => expect(host.frames().get(module)?.asking).toBe(false));
     const opened = { chat: null, place: vi.fn(), close: vi.fn() };
     host.attach(module, opened);
     await vi.waitFor(() => expect(opened.place).toHaveBeenCalledTimes(1));
+    expect(opens).toHaveBeenCalledTimes(1);
     expect(transport.frames).toHaveLength(1);
   } finally { host.close(); }
 }));

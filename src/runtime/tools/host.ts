@@ -30,10 +30,11 @@ type Frame = {
   reading: Promise<unknown>; lanes: Set<string>; release(): void;
 };
 // A frame tool (manifest.risu) runs as its background frame, with these: chat, the chat open for it, which its calls
-// outside an event read; menu, what its frame registered; shown, whether it asks to be shown; slot, where it is.
+// outside an event read; menu, what its frame registered; shown, whether it asks to be shown; slot, where it is;
+// leaving, a slot that showed it left in this commit, so a slot attached before the commit ends is a remount.
 type Entry = {
   module: string; tool: Tool; settings: string; background: Frame | null; pages: Set<Frame>; chats: Set<string>; idle: ReturnType<typeof setTimeout> | null; data: Map<string, { key: string; json: string }>;
-  chat: string | null; menu: MenuItem[]; shown: boolean; slot: ToolSlot | null;
+  chat: string | null; menu: MenuItem[]; shown: boolean; slot: ToolSlot | null; leaving: boolean;
 };
 const EVENTS = new Set<EventName>(['reply', 'replying', 'prompt', 'change', 'branch', 'menu', 'action', 'settings', 'open', 'message']);
 const IDLE_MS = 10 * 60_000;
@@ -196,6 +197,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       return () => {};
     }
     if (slot.chat !== null) { entry.chats.add(slot.chat); entry.chat = slot.chat; }
+    if (entry.leaving) { entry.leaving = false; entry.shown = true; }
     const previous = entry.slot;
     entry.slot = slot;
     previous?.place(null);
@@ -210,8 +212,14 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     return () => {
       if (entry.slot !== slot) return;
       entry.slot = null;
-      entry.shown = false;
       slot.place(null);
+      // A slot replaced within the same commit is a remount (StrictMode, a resize across layouts), not the user closing
+      // it. shown drops now, so no other tool's panel is pushed aside meanwhile, and a remount restores it.
+      if (entry.shown) {
+        entry.leaving = true;
+        queueMicrotask(() => { entry.leaving = false; });
+      }
+      entry.shown = false;
       this.idle(entry);
       this.publish();
     };
@@ -251,7 +259,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     const entry: Entry = {
       module, tool, settings: JSON.stringify(tool.settings), background: null, pages: new Set(), chats: new Set(), idle: null,
       data: new Map(store.children('tooldata', module).map(({ id, value }) => [id, { key: value.key, json: JSON.stringify(value.value) }])),
-      chat: null, menu: [], shown: false, slot: null,
+      chat: null, menu: [], shown: false, slot: null, leaving: false,
     };
     this.entries.set(module, entry);
     return entry;
