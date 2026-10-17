@@ -16,14 +16,13 @@ import type { ApiFailure, ApiResult } from './api';
 import { retriesOf } from './connections';
 import { evaluationFailure } from './evaluation';
 import type { Route, RouteFailure } from './assignment';
-import { gather, generate, resume, type Reply } from './generate';
+import { gather, generate, receiptOf, resume, unsettled, type Reply } from './generate';
 import { taskWriter } from './profiles';
 import { memoryPrompt } from './prompts';
 import type { Session } from './session';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
-import { receiptOf, unsettled } from './talk';
 import { chatPlace, keepRow } from './usage';
 import { tokenLimits, promptBudget, sentSettings } from './chat-context';
 import { wouldSend } from './turn-context';
@@ -282,7 +281,7 @@ export class Rememberer {
   private readonly stop: () => void;
 
   constructor(
-    private readonly session: Pick<Session, 'store' | 'read' | 'credentials' | 'costs' | 'scripts' | 'tokens'>,
+    private readonly session: Pick<Session, 'store' | 'read' | 'credentials' | 'log' | 'costs' | 'scripts' | 'tokens'>,
     // The calls this page reads (runtime/streams).
     private readonly reading: Set<string>,
   ) {
@@ -484,7 +483,7 @@ export class Rememberer {
   }
 
   private async summarize(chat: string, { job, sent, from, to, memory, before, chapter, prompt, route, settings }: Planned): Promise<Outcome> {
-    const { store, credentials } = this.session;
+    const { store, credentials, log } = this.session;
     const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
     const assembled = await store.evaluation.memory({ asker: 'memory', chat }, { scope: sent.scope, prompt, memory, before, budget, span: { from, to }, chapter, seed: crypto.randomUUID() });
     if ('kind' in assembled) return assembled;
@@ -493,7 +492,7 @@ export class Rememberer {
     const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read), ...(job.chapter && { chapter: job.chapter }) } };
     const text = gather();
     const answer = await this.reads(target.id, async (signal) =>
-      generate({ credentials, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call: await newCall(this.session, route, target), signal, onText: text.add }),
+      generate({ credentials, log, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call: await newCall(this.session, route, target), signal, onText: text.add }),
     );
     return this.finish(chat, target.id, target.result, callOf(route), answer, text.value(), job, read);
   }

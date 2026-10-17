@@ -1,4 +1,5 @@
 import type { Cost } from '../../connectors/types';
+import type { Receipt } from '../../model/chat';
 import { money } from './money';
 import { count } from './typedNumber';
 import { UNKNOWN } from './words';
@@ -13,6 +14,14 @@ export function cost(value: Cost | 'pending' | null): string {
   if (value === 'pending') return '확인하는 중…';
   const amount = money(value.unit, value.amount);
   return value.source === 'reported' ? amount : `약 ${amount}`;
+}
+
+const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김' } as const;
+
+export function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
+  if (receipt.state === 'failed') return { label: '종료 사유', value: '실패', tone: 'warn' };
+  if (receipt.cut) return { label: '종료 사유', value: CUT[receipt.cut], tone: receipt.cut === 'stopped' ? undefined : 'warn' };
+  return { label: '종료 사유', value: '정상 종료' };
 }
 
 // A reply that came in one piece, as from a provider that does not stream, has no speed to measure.

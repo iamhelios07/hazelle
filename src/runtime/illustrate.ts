@@ -76,7 +76,7 @@ export type Illustrating = ReadonlyMap<string, Drawing>;
 export const runs = (drawing: Drawing) => drawing.writing || drawing.sketches.some(({ failure }) => failure === null);
 
 type Stopped = { kind: 'stopped' };
-type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'files' | 'likenesses'>;
+type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'log' | 'files' | 'likenesses'>;
 
 export function sceneWriterOf(store: Deps['store'], chat: Chat): ReturnType<typeof taskWriter> | { kind: 'prompt-missing'; own: boolean } {
   const prompt = illustrationPrompt(store, chatIllustrate(store, chat).prompt);

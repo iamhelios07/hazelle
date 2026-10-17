@@ -43,7 +43,7 @@ type LikenessRun = { stage: 'building' } | { stage: 'failed'; failure: LikenessF
 export type LikenessRuns = ReadonlyMap<string, LikenessRun>;
 
 type Stopped = { kind: 'stopped' };
-type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'files' | 'catalogs'>;
+type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'log' | 'files' | 'catalogs'>;
 type Picture = Pick<Asset, 'name' | 'type' | 'file'> & { avatar: boolean };
 type Held = { name: string; type: string; avatar: boolean; bytes: Uint8Array<ArrayBuffer> };
 // files: pictures still to read; held: one already in the owner's value, a persona's thumb.

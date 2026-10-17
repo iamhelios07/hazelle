@@ -52,7 +52,7 @@ it('silently retries a context refusal with a smaller exact-wire cut, runs reque
   expect(read.ok && read.data.length).toBe(1);
   expect(session.tokens.call(receipt)).toMatchObject({ ratio: 2, bound: 'refusal', retries: [{ actual: null }] });
   expect(receipt.calibration!.eligible).toBe(true);
-  expect(session.talk.sent(receipt.id)!.prompt.messages).toEqual(texts[1]!.messages.map(({ content }) => expect.objectContaining({ content })));
+  expect(session.log.entry(chat, receipt.id)!.prompt!.messages).toEqual(texts[1]!.messages.map(({ content }) => expect.objectContaining({ content })));
 }));
 
 it('caps automatic refusal retries and keeps their evidence out of receipt usage totals', () => server.withSession(async (session) => {
@@ -142,7 +142,7 @@ it.each(['translation', 'memory', 'illustration', 'likeness', 'script'] as const
   const messages = [{ role: 'user' as const, content: 'oversized '.repeat(500) }];
   const pick = vi.spyOn(session.credentials.pool, 'pick');
   const log = stubRelay(() => measuredReply(100));
-  const answer = await generate({ credentials: session.credentials, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages, call, signal: signal(), onText: () => {} });
+  const answer = await generate({ credentials: session.credentials, log: session.log, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages, call, signal: signal(), onText: () => {} });
   expect(answer.error).toEqual({ kind: 'refused', code: 'context-fit' });
   expect(answer.calibration.fit?.allowance).toBeLessThan(184);
   expect(answer.calibration.measurement).toMatchObject({ kind: 'measured', key: expect.stringContaining(requestClass) });
@@ -155,7 +155,7 @@ it('surfaces an auxiliary snapshot failure and records a provider refusal withou
   const { chat, route } = await ready(session);
   if ('kind' in route) throw new Error(route.kind);
   const log = stubRelay(() => upstream(400, { error: { code: 'context_length_exceeded', message: 'maximum context length exceeded' } }));
-  const ask = async () => generate({ credentials: session.credentials, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages: [{ role: 'user', content: 'hello' }], call: await pageCall(session, route, 'script', chat), signal: signal(), onText: () => {} });
+  const ask = async () => generate({ credentials: session.credentials, log: session.log, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages: [{ role: 'user', content: 'hello' }], call: await pageCall(session, route, 'script', chat), signal: signal(), onText: () => {} });
   vi.spyOn(session.usage, 'read').mockResolvedValueOnce({ ok: false, error: 'unreadable' });
   expect((await ask()).error).toEqual({ kind: 'app', code: 'unreadable' });
   expect(log).toHaveLength(0);
@@ -190,7 +190,7 @@ it('keeps an auxiliary preflight cancellation a stopped cut and reports an unres
   const stopped = new AbortController();
   stopped.abort();
   const call = await pageCall(session, route, 'script', chat);
-  const answer = await generate({ credentials: session.credentials, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages: [{ role: 'user', content: 'hello' }], call, signal: stopped.signal, onText: () => {} });
+  const answer = await generate({ credentials: session.credentials, log: session.log, connection: route.connection.value, model: route.model, settings: { maxOutput: 16 }, retries: 0, messages: [{ role: 'user', content: 'hello' }], call, signal: stopped.signal, onText: () => {} });
   expect(answer).toMatchObject({ state: 'cut', cut: 'stopped', error: null });
   expect(log).toHaveLength(0);
   const gone = { ...route, connection: { ...route.connection, value: { ...route.connection.value, type: 'missing-provider' } } };

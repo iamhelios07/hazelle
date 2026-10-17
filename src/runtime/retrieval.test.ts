@@ -49,7 +49,7 @@ describe('retrieval', () => {
       expect(again[0]!.sent.url).toContain('/embeddings');
       expect(JSON.parse(again[0]!.sent.body as string)).toMatchObject({ input: ['Do you remember the pier, Luna? Tell me what we said there that morning.'] });
       const reply = fold(session.store.children('entry', chat)).at(-1)!;
-      const sent = session.talk.sent(shown(reply).receipt!.id)!;
+      const sent = { prompt: session.log.entry(chat, shown(reply).receipt!.id)!.prompt! };
       expect(sent.prompt.memory).toMatchObject({ by: null, found: [records[0]!.id, records[3]!.id] });
       const at = sent.prompt.messages.findIndex(({ content }) => content.startsWith(RETRIEVED_HEADING));
       expect(sent.prompt.messages[at]).toMatchObject({ role: 'user' });

@@ -15,12 +15,12 @@ import { appendTranslation, savedElsewhere, type Written } from './chat-log';
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { gather, generate, resume, type Reply } from './generate';
+import type { RequestLog } from './request-log';
+import { gather, generate, receiptOf, resume, type Reply } from './generate';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { modelProfile } from './profiles';
 import { translationPrompt } from './prompts';
 import type { ObjectStore } from './store';
-import { receiptOf } from './talk';
 import { keepRow } from './usage';
 import { evaluatingTask, type Lane } from './evaluation';
 
@@ -40,11 +40,11 @@ export type TranslateFailure =
   | { kind: 'unsaved'; failure: ApiFailure }
   | RanAway;
 
-type Deps = { store: ObjectStore; credentials: Credentials; tokens: Tokens };
+type Deps = { store: ObjectStore; credentials: Credentials; log: RequestLog; tokens: Tokens };
 
 // A translation cut at its length keeps what it wrote, and its receipt says it was cut.
 export async function translate(
-  { store, credentials, tokens }: Deps,
+  { store, credentials, log, tokens }: Deps,
   { chat, scope, take, translations, request, language, lane }: TranslateInput,
   target: CallTarget,
   signal: AbortSignal,
@@ -60,6 +60,7 @@ export async function translate(
   const text = gather(onText);
   const answer = await generate({
     credentials,
+    log,
     connection: route.connection.value,
     model: route.model,
     settings: profile.profile.value.settings,
@@ -74,7 +75,7 @@ export async function translate(
 
 // A translation the server was already making when this page came (tech-spec §6, Detached replies). Only a saved
 // chat's translations are picked up, so no language is needed: a greeting's translation is never one of them.
-export async function resumeTranslation(deps: Pick<Deps, 'store' | 'credentials'>, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
+export async function resumeTranslation(deps: Pick<Deps, 'store' | 'credentials' | 'log'>, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
   const text = gather(onText);
   const answer = await resume(deps, stream, signal, text.add);
   return translated(stream.value.call, answer, text.value(), null);
@@ -116,6 +117,7 @@ export class Translator {
   constructor(
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
+    private readonly log: RequestLog,
     private readonly costs: Costs,
     private readonly tokens: Tokens,
     // The calls this page reads (runtime/streams).
@@ -154,7 +156,7 @@ export class Translator {
   translate(chat: string, { id: version, text: original }: Version, input: TranslateInput): Promise<void> {
     if (this.closed || this.aborts.has(version)) return Promise.resolve();
     const target: CallTarget = { id: crypto.randomUUID(), chat: this.store.get('chat', chat) ? chat : null, result: crypto.randomUUID(), for: { kind: 'translation', version } };
-    return this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials, tokens: this.tokens }, input, target, signal, onText), (made) =>
+    return this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials, log: this.log, tokens: this.tokens }, input, target, signal, onText), (made) =>
       this.store.get('chat', chat)
         ? appendTranslation(this.store, chat, version, made.translation, target.result)
         : setTextTranslation(this.store, input.chat.character!, original, made.language!, made.translation).then(async (saved) => {
@@ -167,7 +169,7 @@ export class Translator {
   resume(stream: Stored<'stream'>, version: string) {
     const chat = stream.parent!;
     if (this.closed || this.aborts.has(version)) return;
-    void this.run(chat, version, { id: stream.id, result: stream.value.result }, (signal, onText) => resumeTranslation({ store: this.store, credentials: this.credentials }, stream, signal, onText), (made) =>
+    void this.run(chat, version, { id: stream.id, result: stream.value.result }, (signal, onText) => resumeTranslation({ store: this.store, credentials: this.credentials, log: this.log }, stream, signal, onText), (made) =>
       appendTranslation(this.store, chat, version, made.translation, stream.value.result),
     );
   }

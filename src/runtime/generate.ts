@@ -7,13 +7,16 @@ import { batchLane, cacheView, laneBusy, resolveConnection, resolveModel, RETRYA
 import { decodeStream, type InlineThoughts, type Outcome } from '../connectors/stream';
 import type { ModelSettings } from '../connectors/settings';
 import { ConnectorError, type Account, type Batches, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase, type Starred } from '../connectors/types';
+import type { Receipt, ReceiptError } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import type { Stream } from '../model/stream';
 import { routeOf } from './assignment';
 import type { CredentialFailure, Credentials } from './credential';
 import type { PoolFailure } from './pool';
 import type { ObjectStore } from './store';
 import { pause } from './pause';
 import { relay, relayJson, stream, type RelayFailure, type StreamCall } from './relay';
+import { redacted, type Logged, type RequestLog } from './request-log';
 
 export type ReplyError =
   | { kind: 'refused'; code: string }
@@ -21,7 +24,7 @@ export type ReplyError =
   | CredentialFailure
   | NonNullable<Outcome['error']>;
 
-// A stop is a cut, never an error. request is the address and body the request was built with, for 요청 원문, and
+// A stop is a cut, never an error. request is the address and body the request was built with, redacted, and
 // cache what its cache read and wrote; both null when it was refused before it could be built, or picked up after a reload.
 // response: the body the provider answered with, as read, for 응답 원문; null when none was read here, and for a batch's
 // answer.
@@ -45,13 +48,15 @@ export type Reply = Omit<Outcome, 'error'> & {
 
 export type GenerateInput = {
   credentials: Credentials;
+  log: RequestLog;
   connection: Connection;
   model: Starred;
   settings: ModelSettings;
   // How many times a try that failed for a moment is sent again (connections retriesOf).
   retries: number;
   messages: ChatMessage[];
-  call: StreamCall;
+  // logged: who the call is for, as newCall and pageCall know it.
+  call: StreamCall & { logged: Logged };
   signal: AbortSignal;
   onText: (phase: Phase, text: string) => void;
   inline?: InlineThoughts;
@@ -61,7 +66,8 @@ export type GenerateInput = {
   batching?: { waiting: () => void; cancel: AbortSignal };
 };
 
-export async function generate({ credentials, connection, model, settings, retries, messages, call, signal, onText, inline, batching }: GenerateInput): Promise<Reply> {
+export async function generate({ credentials, log, connection, model, settings, retries, messages, call, signal, onText, inline, batching }: GenerateInput): Promise<Reply> {
+  const at = Date.now();
   const started = performance.now();
   let firstText: number | null = null;
   // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
@@ -71,7 +77,7 @@ export async function generate({ credentials, connection, model, settings, retri
   let tries: number | null = null;
   let protocol = "";
   let answered: (() => string) | null = null;
-  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
+  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => logReply(log, call.logged, at, false, {
     ...outcome,
     ...refusalFields(protocol, outcome, error, call.calibration ?? unavailableCalibration('preparation')),
     call: call.id,
@@ -110,7 +116,7 @@ export async function generate({ credentials, connection, model, settings, retri
       if (calibration.measurement.kind !== 'measured') return reply(...failedWith({ kind: 'refused', code: 'tokenizer' }));
       if (calibration.fit.allowance !== null && calibration.measurement.o200k > calibration.fit.allowance) return reply(...failedWith({ kind: 'refused', code: 'context-fit' }));
     }
-    built = { url: request.url, body: request.body };
+    built = redacted(request, connection);
     cached = cacheView(route, asked);
   } catch (error) {
     if (error instanceof ConnectorError) return reply(...failedWith({ kind: 'refused', code: error.code }));
@@ -174,6 +180,12 @@ export async function generate({ credentials, connection, model, settings, retri
   const outcome = await decodeStream(route, model, read.response, signal, timed, inline);
   if (outcome.error) credentials.pool.stale(connection, serving);
   return reply(outcome, outcome.error);
+}
+
+// Every way out of generate and resume passes here, so no model call goes unrecorded.
+function logReply(log: RequestLog, { chat, purpose, call }: Logged, at: number, picked: boolean, reply: Reply): Reply {
+  log.record({ chat, purpose, at, picked, receipt: receiptOf(call, reply), request: reply.request, response: reply.response });
+  return reply;
 }
 
 // The body passes on unchanged, and a reader's cancel still reaches the provider's call.
@@ -295,11 +307,12 @@ export function cacheViewOf(connection: Connection, model: Starred, settings: Mo
 // live rest; or a batch, asked about again. Its request is gone, its time to first text unknown, and its duration the
 // server's, or for a batch the time until this page read its answer. turn: a reply's reader (Talk), told of each try
 // sent again (StreamCall retrying), and whose 멈추기 cancels a batch (GenerateInput batching).
-export async function resume({ store, credentials }: { store: ObjectStore; credentials: Credentials }, { id, value }: Stored<'stream'>, signal: AbortSignal, onText: GenerateInput['onText'], inline?: InlineThoughts, turn?: { retrying: () => void; cancel: AbortSignal }): Promise<Reply> {
+export async function resume({ store, credentials, log }: { store: ObjectStore; credentials: Credentials; log: RequestLog }, { id, parent, value }: Stored<'stream'>, signal: AbortSignal, onText: GenerateInput['onText'], inline?: InlineThoughts, turn?: { retrying: () => void; cancel: AbortSignal }): Promise<Reply> {
   let took = 0;
   let tries: number | null = null;
   let protocol = '';
-  const reply = ([outcome, error]: Answered): Reply => ({ ...outcome, ...refusalFields(protocol, outcome, error, value.calibration), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, response: null, cache: null });
+  const who: Logged = { chat: parent!, purpose: value.for.kind, call: value.call };
+  const reply = ([outcome, error]: Answered): Reply => logReply(log, who, value.at, true, { ...outcome, ...refusalFields(protocol, outcome, error, value.calibration), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, response: null, cache: null });
   const route = routeOf(store, value.call);
   const resolved = 'kind' in route ? null : resolveConnection(route.connection.value);
   if ('kind' in route || !resolved) return reply(failedWith({ kind: 'refused', code: 'model-gone' }));
@@ -323,4 +336,48 @@ export async function resume({ store, credentials }: { store: ObjectStore; crede
   const outcome = await decodeStream(routed, route.model, response, signal, onText, inline);
   took = call.took ?? 0;
   return reply([outcome, outcome.error]);
+}
+
+export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
+  return {
+    id: answer.call,
+    calibration: answer.calibration,
+    ...call,
+    ...(answer.account !== null && { account: answer.account }),
+    ...(answer.tries !== null && answer.tries > 1 && { tries: answer.tries }),
+    state: answer.state,
+    cut: answer.cut,
+    error: answer.error && receiptError(answer.error),
+    finishReason: answer.finishReason,
+    usage: answer.usage,
+    cost: answer.cost,
+    replyId: answer.replyId,
+    firstTextMs: answer.firstTextMs,
+    totalMs: answer.totalMs,
+    cache: answer.cache?.cache ?? null,
+    ...(answer.discount && { discount: answer.discount }),
+  };
+}
+
+// A task's call (a memory record's, a 삽화 scene's) is never settled later, so its receipt keeps no pending cost.
+export const unsettled = (receipt: Receipt): Receipt => (receipt.cost === 'pending' ? { ...receipt, cost: null } : receipt);
+
+// Field by field, never the error itself: whatever a network error gains must not reach saved chats.
+export function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
+  switch (error.kind) {
+    case 'refused':
+    case 'relay':
+    case 'app':
+      return { kind: error.kind, code: error.code };
+    case 'provider':
+      return 'status' in error ? { kind: 'provider', status: error.status, detail: error.detail } : { kind: 'provider', detail: error.detail };
+    case 'bad-event':
+    case 'network':
+      return { kind: error.kind, detail: error.detail };
+    case 'offline':
+    case 'no-token':
+      return { kind: error.kind };
+    case 'pool':
+      return { kind: 'pool', group: error.group };
+  }
 }

@@ -10,7 +10,7 @@ import type { ToggleSection } from './toggles';
 // which the prompt's 토글 pane and the character's 토글 part go back to. A module opens beside the chat only from there,
 // with its toggles alone.
 export type Side = { kind: 'prompts'; id: string | null; pane: PromptPane | null; block?: string; fromToggles?: true } | { kind: 'character'; id: string; part: CharacterPart | null; fromToggles?: true } | { kind: 'module'; id: string };
-export type InspectTab = 'request' | 'cache' | 'variables' | 'modules' | 'scripts';
+export type InspectTab = 'request' | 'variables' | 'modules' | 'scripts' | 'log';
 type InspectPanel = { kind: 'inspect'; tab: InspectTab };
 export type InfoTab = 'reply' | 'lore' | 'memory' | 'request' | 'response';
 export type Panel = InspectPanel | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info'; tab: InfoTab } | { kind: 'tool'; module: string } | { kind: 'bookmarks' } | { kind: 'lore' } | { kind: 'autopilot' } | Side;

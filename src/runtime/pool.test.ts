@@ -7,7 +7,7 @@ import { streamKey } from '../vault/streams';
 import { Credentials } from './credential';
 import { generate } from './generate';
 import { Pool } from './pool';
-import { stubRelay, testServer, upstream } from './testing';
+import { LOGGED, stubRelay, testLog, testServer, upstream } from './testing';
 
 const server = testServer();
 beforeEach(() => server.account());
@@ -80,7 +80,7 @@ it('reads a failed reply’s account again before the next pick, and sends that 
   const model: Model = { ...bareModel('gpt-4.1'), name: 'gpt' };
   const send = async () => {
     const key = await streamKey();
-    return generate({ credentials, connection: pool(), model, settings: {}, retries: RETRIES, messages: [{ role: 'user', content: '안녕' }], call: { id: crypto.randomUUID(), key: key.private, public: key.public }, signal: new AbortController().signal, onText: () => {} });
+    return generate({ credentials, log: testLog(), connection: pool(), model, settings: {}, retries: RETRIES, messages: [{ role: 'user', content: '안녕' }], call: { id: crypto.randomUUID(), key: key.private, public: key.public, logged: LOGGED }, signal: new AbortController().signal, onText: () => {} });
   };
   expect(await send()).toMatchObject({ state: 'failed', account: 'a' });
   expect(await send()).toMatchObject({ state: 'failed', account: 'a' });

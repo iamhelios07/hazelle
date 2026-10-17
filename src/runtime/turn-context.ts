@@ -19,6 +19,7 @@ import { wireOf, type CacheSend } from './cache';
 import { answerInstructionOf, asSent, budgetOf, packsOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
 import { cacheViewOf } from './generate';
+import { redacted, type SentRequest } from './request-log';
 import { memoryFill } from './memory-read';
 import { chatPersona, type PersonaSource } from './personas';
 import { modelProfile } from './profiles';
@@ -150,34 +151,14 @@ export function cacheSend({ turn, prompt, calibration }: Sending, account: strin
   return { ...wireOf(turn.route.connection.id, account, view, prompt.parts), facts };
 }
 
-export type PreviewRequest = { url: string; body: string | null };
-
-// No credential is applied: all connectors authenticate through withCredential's headers, including Gemini and
-// Vertex. Imported direct endpoints can still embed one in their URL. Preparation shares sending's cache-point
-// selection with cacheSend; headers never leave this helper.
-export function previewRequest({ turn, prompt }: Sending): PreviewRequest | null {
+// Preparation shares sending's cache-point selection with cacheSend; headers never leave this helper.
+export function previewRequest({ turn, prompt }: Sending): SentRequest | null {
   const resolved = resolveConnection(turn.route.connection.value);
   if (!resolved) return null;
   const route = resolveModel(resolved, turn.route.model);
   const asked = { model: turn.route.model, messages: prompt.messages, settings: turn.settings };
   const { request } = prepareChat(route, { ...asked, settings: batchLane(route, asked) ? { ...asked.settings, streaming: false } : asked.settings });
-  const url = new URL(request.url);
-  let redacted = false;
-  if (url.username || url.password) {
-    url.username = 'REDACTED';
-    url.password = '';
-    redacted = true;
-  }
-  for (const key of url.searchParams.keys()) {
-    if (/^(key|api[_-]?key|access[_-]?token|token|authorization)$/i.test(key)) {
-      url.searchParams.set(key, 'REDACTED');
-      redacted = true;
-    }
-  }
-  const secrets = [...new Set(turn.route.connection.value.accounts.flatMap(({ secret }) => secret ? [secret, encodeURIComponent(secret)] : []))].sort((a, b) => b.length - a.length);
-  const pattern = secrets.length ? new RegExp(secrets.map((secret) => secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g') : null;
-  const address = redacted ? url.href : request.url;
-  return { url: pattern ? address.replace(pattern, 'REDACTED') : address, body: request.body };
+  return redacted(request, turn.route.connection.value);
 }
 
 export type AfterEnter =

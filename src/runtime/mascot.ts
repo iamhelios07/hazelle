@@ -34,7 +34,7 @@ export type MascotFailure =
 export type Commenting = ReadonlyMap<string, { chat: string; message: string; failure: MascotFailure | null }>;
 
 type Stopped = { kind: 'stopped' };
-type Deps = Pick<Session, 'tokens' | 'store' | 'credentials'>;
+type Deps = Pick<Session, 'tokens' | 'store' | 'credentials' | 'log'>;
 
 // How many of the mascot's earlier lines its sheet shows, so it does not repeat itself.
 const SAID = 3;
