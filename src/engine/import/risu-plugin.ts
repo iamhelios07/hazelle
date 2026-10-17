@@ -1,5 +1,5 @@
 import type { RisuScan, ToolField, ToolManifest } from '../../tool-api/manifest';
-import { RISU_MAPPED, RISU_REPLACERS } from '../../tool-api/risu-methods';
+import { RISU_MAPPED, RISU_NAMES, RISU_REPLACERS } from '../../tool-api/risu-methods';
 import { failed, identity, readTool, toolText, type HeaderLine, type ToolRead } from './tool';
 
 // Risu headers name no author. One fixed value keeps a plugin's identity (name + author) the same across reimports,
@@ -58,19 +58,6 @@ const sticky = (pattern: RegExp, text: string, from: number) => {
   return pattern.exec(text);
 };
 
-// The names of Risu v3's API object (RisuaiPluginAPI in upstream risuai.d.ts, plus risuFetch, which plugins still call).
-// An aliased plugin is searched for these as properties of anything, so what it will miss is still listed.
-const RISU_NAMES = [
-  'addPluginChannelListener', 'addProvider', 'addRisuChatListener', 'addRisuReplacer', 'addRisuScriptHandler', 'addTTSPostprocessor', 'addTTSPreprocessor',
-  'apiVersion', 'apiVersionCompatibleWith', 'changeColorScheme', 'changeTextTheme', 'checkCharOrder', 'createMutationObserver', 'getArg', 'getArgument',
-  'getChar', 'getCharacter', 'getCharacterFromIndex', 'getChatFromIndex', 'getColorScheme', 'getCurrentCharacterIndex', 'getCurrentChatIndex',
-  'getCurrentLorebookEntries', 'getDatabase', 'getFetchLogs', 'getLocalPluginStorage', 'getRootDocument', 'getRuntimeInfo', 'getTextTheme',
-  'getTranslationCache', 'hideContainer', 'loadPlugins', 'log', 'nativeFetch', 'onUnload', 'parseRisuChat', 'pluginStorage', 'postPluginChannelMessage',
-  'readImage', 'readInlay', 'registerBodyIntercepter', 'registerButton', 'registerMCP', 'registerSetting', 'removeRisuChatListener', 'removeRisuReplacer',
-  'removeRisuScriptHandler', 'requestPluginPermission', 'risuFetch', 'runLLMModel', 'safeLocalStorage', 'saveAsset', 'saveSecretHeader',
-  'searchTranslationCache', 'sendChat', 'setArg', 'setArgument', 'setChar', 'setCharacter', 'setCharacterToIndex', 'setChatToIndex', 'setColorScheme',
-  'setCustomTextTheme', 'setDatabase', 'setDatabaseLite', 'showContainer', 'unregisterBodyIntercepter', 'unregisterMCP', 'unregisterUIPart', 'unwarpSafeArray',
-];
 const UNMAPPED_ANYWHERE = new RegExp(`(?:\\.|\\[\\s*['"\`])\\s*(${RISU_NAMES.filter((name) => !RISU_MAPPED.has(name)).join('|')})\\b`, 'g');
 const REPLACER_ANYWHERE = /\.\s*addRisuReplacer\s*(?:\?\.)?\(\s*(['"`])([\w-]*)\1/g;
 
