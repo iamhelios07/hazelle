@@ -120,7 +120,7 @@ function parser(html: boolean) {
   // Before text_join, so an escaped \* is still its own token and not read as a mark.
   md.core.ruler.before('text_join', 'story_lines', lines);
   md.core.ruler.after('story_lines', 'story_marks', marks);
-  if (html) md.core.ruler.after('story_marks', 'picture_blocks', pictureBlocks);
+  if (html) md.core.ruler.after('story_marks', 'picture_lines', pictureLines);
   else {
     md.inline.ruler.before('html_inline', 'inlay', inlay);
     md.core.ruler.after('story_marks', 'inlay_blocks', inlayBlocks);
@@ -128,13 +128,28 @@ function parser(html: boolean) {
   return md;
 }
 
-// An HTML block that is only a picture, as {{img::}} and {{asset::}} leave one on its own line, is a paragraph, as
-// ![]() is: the story's picture lines (Story.tsx data-picture) are paragraphs, and a bare one would escape their cap.
-const LONE_PICTURE = /^\s*<img\b[^<>]*>\s*$/i;
-function pictureBlocks(state: StateCore) {
-  for (const token of state.tokens) {
-    if (token.type === 'html_block' && LONE_PICTURE.test(token.content)) token.content = `<p>${token.content.trim()}</p>\n`;
-  }
+// A picture at the start of a line stands as its own line, as ![]() alone does: the story's picture lines (Story.tsx
+// data-picture) are paragraphs holding only a picture, and one left bare or followed by text would escape their cap.
+// {{img::}} and {{asset::}} leave one either as an HTML block of its own or ahead of the line's text. One later in the
+// line stays in it.
+const PICTURE = /^\s*<img\b[^<>]*>\s*$/i;
+function pictureLines(state: StateCore) {
+  const out: Token[] = [];
+  state.tokens.forEach((token, index) => {
+    const open = state.tokens[index - 1];
+    const [first, ...rest] = token.children ?? [];
+    if (token.type === 'html_block' && PICTURE.test(token.content)) token.content = `<p>${token.content.trim()}</p>\n`;
+    const leads = token.type === 'inline' && open?.type === 'paragraph_open' && !open.hidden && first?.type === 'html_inline' && PICTURE.test(first.content);
+    if (!leads || rest.every((child) => child.type === 'text' && !child.content.trim())) return void out.push(token);
+    if (rest[0]!.type === 'text') rest[0]!.content = rest[0]!.content.trimStart();
+    out.push(
+      Object.assign(new state.Token('inline', '', 0), { children: [first] }),
+      Object.assign(new state.Token('paragraph_close', 'p', -1), { block: true }),
+      Object.assign(new state.Token('paragraph_open', 'p', 1), { block: true }),
+      Object.assign(new state.Token('inline', '', 0), { children: rest }),
+    );
+  });
+  state.tokens = out;
 }
 
 // Without the bot's HTML, the chat's inlays still show: their markup alone is kept (engine/assets INLAY_MARKUP).

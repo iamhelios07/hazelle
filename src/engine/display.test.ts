@@ -183,8 +183,11 @@ describe('storyHtml', () => {
     expect(storyHtml('<b>x</b> \\*y\\*', false)).toBe('<p>&lt;b&gt;x&lt;/b&gt; *y*</p>\n');
   });
 
-  it('makes a line that is only a bot’s picture a paragraph, and leaves two pictures on one block as written', () => {
+  it('stands a bot’s picture at the start of a line as its own line, and leaves two on one block as written', () => {
     expect(storyHtml('<img src="a.png">\n\n본문', true)).toBe('<p><img src="a.png"></p>\n<p>본문</p>\n');
+    expect(storyHtml('<img src="a.png"> "네." 본문 <img src="b.png">', true)).toBe(
+      '<p><img src="a.png"></p>\n<p><mark risu-mark="quote2">&quot;네.&quot;</mark> 본문 <img src="b.png"></p>\n',
+    );
     expect(storyHtml('<img src="a.png">\n<img src="b.png">', true)).toBe('<img src="a.png">\n<img src="b.png">');
   });
 
