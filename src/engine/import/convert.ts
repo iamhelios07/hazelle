@@ -149,10 +149,34 @@ export function readTriggers(raw: unknown): Unstamped<Trigger>[] {
   return triggers;
 }
 
+// A background without its closed <style> blocks and comments, as /<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi
+// strips them, in one pass: that regex rescans to the end for each opener left open. An opener with no closer after
+// it leaves every later one of its kind open too, so that kind is not looked for again.
+export function withoutStyles(html: string): string {
+  const opener = /<style\b|<!--/gi;
+  const closers = { style: /<\/style\s*>/gi, comment: /-->/g };
+  const open = new Set<keyof typeof closers>();
+  let kept = '';
+  let from = 0;
+  for (let found = opener.exec(html); found; found = opener.exec(html)) {
+    const kind = found[0] === '<!--' ? 'comment' : 'style';
+    if (open.has(kind)) continue;
+    const closer = closers[kind];
+    closer.lastIndex = opener.lastIndex;
+    if (!closer.exec(html)) {
+      open.add(kind);
+      continue;
+    }
+    kept += html.slice(from, found.index);
+    from = opener.lastIndex = closer.lastIndex;
+  }
+  return kept + html.slice(from);
+}
+
 function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; toggles: unknown }, tally: Tally): Pack {
   const triggers = readTriggers(raw.trigger);
   const background = text(raw.background);
-  if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
+  if (/<(?!style\b)[a-z]/i.test(withoutStyles(background))) add(tally, 'background-html');
   const toggles = readToggles(text(raw.toggles));
   add(tally, 'toggle-line', toggles.filter((line) => line.kind === 'unread').length);
   return { ...stampIds({ regex: regexScripts(list(raw.regex), tally), triggers }), ...(background.trim() ? { background } : {}), toggles };

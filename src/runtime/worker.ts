@@ -1,3 +1,5 @@
+import { onProgress } from '../engine/progress';
+
 type Policy = { createScriptURL(url: string): string };
 
 // The CSP requires Trusted Types for script URLs. This policy is never exported: it signs only a URL handed to
@@ -16,6 +18,19 @@ export function moduleWorker(url: string): Worker {
 }
 
 const BEAT_MS = 1000;
+// Often enough to stay far inside a page's stuck limit, seldom enough that posting never slows a long pass.
+const PROGRESS_MS = 250;
+
+// Inside a worker: the engine's signs of life (engine/progress), posted at most every PROGRESS_MS.
+export function postProgress(post: () => void) {
+  let last = -Infinity;
+  onProgress(() => {
+    const now = performance.now();
+    if (now - last < PROGRESS_MS) return;
+    last = now;
+    post();
+  });
+}
 
 // A worker that leaves a ping unanswered past limit ms is held by a job that will not end. Counted from the ping, never
 // from the clock alone: a hidden tab's timers run late, and the worker answers at once all the same. A beat that comes

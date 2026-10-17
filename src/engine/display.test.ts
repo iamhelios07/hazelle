@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveAssets } from './assets';
 import { evaluate } from './cbs/evaluate';
-import { display, DisplayPass, storyHtml } from './display';
+import { display, DisplayPass, storyHtml, stripStyles } from './display';
 import type { HistoryMessage } from './history';
 import { blankCard } from './import/card';
 import type { Card } from './import/types';
@@ -47,6 +47,26 @@ describe('display', () => {
     const { texts, css } = display(scope);
     expect(texts).toEqual(['<div class="box">box</div>\n', 'The lamp. <div class="box">HP 7</div>\n']);
     expect(css.split('\n')).toEqual(['.hp::after { content: "7" }', '.x-risu-box { color: red }']);
+  });
+});
+
+describe('stripStyles', () => {
+  it('takes what the style regex takes, in one pass over openers with no > after them', () => {
+    const pieces = ['<style>', '<style a="b">', '<STYLE', '</style>', '</style >', '</Style\n>', '>', '<b>', 'x', '<styles>'];
+    let state = 7;
+    const pick = () => pieces[(state = (state * 1103515245 + 12345) & 0x7fffffff) % pieces.length]!;
+    const take = (text: string) => {
+      const blocks: string[] = [];
+      return { text: stripStyles(text, blocks), blocks };
+    };
+    for (let n = 0; n < 2000; n++) {
+      const text = Array.from({ length: n % 13 }, pick).join('');
+      const blocks: string[] = [];
+      const kept = text.replace(/<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi, (_, css: string) => (blocks.push(css), ''));
+      expect(take(text)).toEqual({ text: kept, blocks });
+    }
+    const open = '<style '.repeat(150_000);
+    expect(take(open)).toEqual({ text: open, blocks: [] });
   });
 });
 

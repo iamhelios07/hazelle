@@ -56,7 +56,7 @@ export class ImportReader {
           const read = await importPreset(request.file.name, bytes);
           if (read.ok) return { ok: true, preset: { prompt: read.prompt, regex: read.regex, unsupported: read.unsupported } };
           // Its other failures go as details, which the app's DETAIL_FAILURE words.
-          return { ok: false, failure: read.failure.kind === 'unreadable' ? { kind: 'unreadable' } : { kind: 'unreadable', detail: read.failure.kind } };
+          return { ok: false, failure: read.failure.kind === 'unreadable' ? { kind: 'unreadable', detail: read.failure.detail } : { kind: 'unreadable', detail: read.failure.kind } };
         }
         const chats = request.file.name.toLowerCase().endsWith('.json') ? chatsOf(bytes) : null;
         if (chats) return chats;

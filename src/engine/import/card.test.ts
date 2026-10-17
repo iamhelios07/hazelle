@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { assetType, blankCard, importCard, importRisum, writeCharx } from './card';
 import { moduleSource } from './hazelle';
-import { concat } from './inflate';
+import { concat, METADATA_BYTES } from './inflate';
 import { fileSource } from './source';
 import { readRisum, readRisumModule, risumBlock, risumHead, RISUM_END, unpack, writeRisum } from './risum';
 import type { Bot, ImportResult, Imported, Trigger, TypedModule } from './types';
@@ -40,6 +40,17 @@ const own = (bytes: Uint8Array) => new Uint8Array(bytes);
 const json = (card: unknown) => ok(importCard('card.json', own(strToU8(JSON.stringify(card)))));
 const charx = (files: Record<string, Uint8Array>) => ok(importCard('card.charx', own(zipSync(files))));
 const counts = (imported: Imported) => Object.fromEntries(imported.report.unsupported.map(({ kind, count }) => [kind, count]));
+
+// The output size the zip's directory declares for one file, rewritten in place.
+function declare(zip: Uint8Array, path: string, size: number): Uint8Array<ArrayBuffer> {
+  const out = own(zip);
+  const view = new DataView(out.buffer);
+  const name = strToU8(path);
+  for (let at = 0; at + 46 <= out.length; at++) {
+    if (view.getUint32(at, true) === 0x02014b50 && view.getUint16(at + 28, true) === name.length && name.every((byte, i) => out[at + 46 + i] === byte)) view.setUint32(at + 24, size, true);
+  }
+  return out;
+}
 
 describe('importCard', () => {
   it('prefers the ccv3 chunk over chara in a PNG', () => {
@@ -378,6 +389,17 @@ describe('importCard', () => {
     const risuai = (written: Bot) => JSON.parse(new TextDecoder().decode(writeCharx(written).files[0]!.bytes)).data.extensions.risuai;
     expect(risuai(bot([]))).not.toHaveProperty('lowLevelAccess');
     expect(risuai(bot([module([lua()])])).lowLevelAccess).toBe(true);
+  });
+
+  it('refuses a file past a size limit by what it declares, before unpacking or reading it', async () => {
+    const file = zipSync({ 'card.json': strToU8(JSON.stringify(v3({}))), 'assets/other/image/0.png': new Uint8Array(1000) });
+    const refused = (detail: string) => ({ ok: false, failure: { kind: 'unreadable', detail } });
+    expect(importCard('Mira.charx', declare(file, 'assets/other/image/0.png', 0xffffffff))).toEqual(refused('expands-too-far'));
+    expect(importCard('Mira.charx', declare(file, 'card.json', METADATA_BYTES + 1))).toEqual(refused('entry-too-large'));
+    const head = new Uint8Array(6);
+    head.set([111, 0]);
+    new DataView(head.buffer).setUint32(2, METADATA_BYTES + 1, true);
+    expect(await importRisum({ size: 2 * METADATA_BYTES, read: async () => head })).toEqual(refused('entry-too-large'));
   });
 
   it('fails by kind instead of throwing', async () => {

@@ -246,5 +246,5 @@ export type RisuBackup = {
   preset(key: number): Promise<RisuPreset>;
   module(key: number): Promise<ImportedModule>;
 };
-export type BackupFailure = { kind: 'encrypted' | 'no-database' | 'unreadable'; detail?: string };
+export type BackupFailure = { kind: 'encrypted' | 'no-database' | 'expands-too-far' | 'unreadable'; detail?: string };
 export type BackupResult = { ok: true; backup: RisuBackup } | { ok: false; failure: BackupFailure };

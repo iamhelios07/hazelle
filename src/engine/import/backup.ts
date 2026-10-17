@@ -3,7 +3,7 @@ import { SIGNATURE } from '../assets';
 import { imageType } from './card';
 import { add, counted, record, text, type Json, type Tally } from './convert';
 import { readModule } from './hazelle';
-import { gunzip } from './inflate';
+import { expansionLimit, gunzip, TooLarge } from './inflate';
 import { readMsgpack } from './msgpack';
 import { risuPersonaFields } from './persona';
 import type { FileSource } from './source';
@@ -66,6 +66,7 @@ export async function readBackup(sources: FileSource[]): Promise<BackupResult> {
     if (!isRecord(db)) return fail('unreadable', 'not a Risu database');
     return { ok: true, backup: await fromDatabase(db, files) };
   } catch (error) {
+    if (error instanceof TooLarge) return fail('expands-too-far');
     return fail('unreadable', error instanceof Error ? error.message : String(error));
   }
 }
@@ -147,16 +148,17 @@ const u32 = (bytes: Uint8Array, at: number) => new DataView(bytes.buffer, bytes.
 const startsWith = (bytes: Uint8Array, header: number[]) => header.every((byte, i) => bytes[i] === byte);
 
 function decode(bytes: Uint8Array): unknown {
-  if (startsWith(bytes, LEGACY_HEADER)) return readMsgpack(gunzip(bytes.subarray(LEGACY_HEADER.length)));
+  if (startsWith(bytes, LEGACY_HEADER)) return readMsgpack(gunzip(bytes.subarray(LEGACY_HEADER.length), expansionLimit(bytes.length)));
   if (startsWith(bytes, BLOCK_HEADER)) return readBlocks(bytes.subarray(BLOCK_HEADER.length));
   throw new Error('not a Risu database');
 }
 
 // Each block: type u8, gzip flag u8, name length u8, name, data length u32, data (UTF-8 JSON). Characters come one per
-// block, in the file's order, which is Risu's list order.
+// block, in the file's order, which is Risu's list order. The blocks share one limit, the database's.
 function readBlocks(bytes: Uint8Array): unknown {
   const db: Record<string, unknown> = {};
   const characters: unknown[] = [];
+  let room = expansionLimit(bytes.length);
   for (let at = 0; at < bytes.length; ) {
     const type = bytes[at]!;
     const zipped = bytes[at + 1] === 1;
@@ -166,8 +168,9 @@ function readBlocks(bytes: Uint8Array): unknown {
     at = start + length;
     if (at > bytes.length) throw new Error('the database ends early');
     if (type !== ROOT && type !== CHARACTER && type !== PRESETS && type !== MODULES) continue;
-    const data = bytes.subarray(start, at);
-    const value: unknown = JSON.parse(utf8.decode(zipped ? gunzip(data) : data));
+    const data = zipped ? gunzip(bytes.subarray(start, at), room) : bytes.subarray(start, at);
+    room -= data.length;
+    const value: unknown = JSON.parse(utf8.decode(data));
     if (type === CHARACTER) characters.push(value);
     else if (type === PRESETS) db.botPresets = value;
     else if (type === MODULES) db.modules = value;

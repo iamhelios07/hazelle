@@ -3,7 +3,7 @@ import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
 import { args } from '../lorebook/decorators';
 import { add, counted, record, regexScripts, stampIds, text, type Json, type Tally } from './convert';
-import { gunzip } from './inflate';
+import { expansionLimit, gunzip, TooLarge } from './inflate';
 import { readMsgpack, writeMsgpack } from './msgpack';
 import { pack, unpack } from './risum';
 import { readToggles, writeToggles } from './toggles';
@@ -18,7 +18,7 @@ export type PresetUnsupported = { kind: Counted; count: number } | { kind: 'repe
 
 // unreadable: not RPack'd gzip'd MessagePack. not-preset: a Risu container of another type. decrypt-failed:
 // the preset inside does not open. no-template: a legacy preset, which risu-alpha does not assemble.
-export type PresetFailure = { kind: 'unreadable' | 'not-preset' | 'decrypt-failed' | 'no-template' };
+export type PresetFailure = { kind: 'unreadable' | 'not-preset' | 'decrypt-failed' | 'no-template'; detail?: string };
 // regex: the preset's scripts, which a prompt cannot hold; saving puts them in a module on for the prompt.
 export type PresetRead = { prompt: ConversationPrompt; regex: RegexScript[]; unsupported: PresetUnsupported[] };
 export type PresetResult = ({ ok: true } & PresetRead) | { ok: false; failure: PresetFailure };
@@ -62,9 +62,9 @@ export async function importPreset(fileName: string, bytes: Uint8Array): Promise
   const packed = fileName.toLowerCase().endsWith('.risup');
   let outer: unknown;
   try {
-    outer = readMsgpack(gunzip(packed ? unpack(bytes) : bytes));
-  } catch {
-    return fail('unreadable');
+    outer = readMsgpack(gunzip(packed ? unpack(bytes) : bytes, expansionLimit(bytes.length)));
+  } catch (error) {
+    return error instanceof TooLarge ? { ok: false, failure: { kind: 'unreadable', detail: error.message } } : fail('unreadable');
   }
   const sealed = isRecord(outer) ? (outer.preset ?? outer.pres) : null;
   if (!isRecord(outer) || outer.type !== 'preset' || !(sealed instanceof Uint8Array)) return fail('not-preset');

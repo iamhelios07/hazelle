@@ -1,6 +1,6 @@
 import { deflateSync, gzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { gunzip, inflate } from './inflate';
+import { gunzip, inflate, TooLarge } from './inflate';
 
 // Bytes that barely pack, so the packed form spans several steps.
 const noise = (length: number) => {
@@ -15,7 +15,7 @@ describe('inflate and gunzip', () => {
   it('read data whose packed form spans several steps', () => {
     const data = noise(300_000);
     expect(same(inflate(deflateSync(data), data.length), data)).toBe(true);
-    expect(same(gunzip(gzipSync(data)), data)).toBe(true);
+    expect(same(gunzip(gzipSync(data), data.length), data)).toBe(true);
   });
 
   it('refuse an output that is not the size declared for it, larger or smaller', () => {
@@ -25,6 +25,10 @@ describe('inflate and gunzip', () => {
     expect(() => inflate(packed, 99_999)).toThrow('more data than declared');
     const file = gzipSync(data);
     new DataView(file.buffer).setUint32(file.length - 4, 0xffffffff, true);
-    expect(() => gunzip(file)).toThrow('less data than declared');
+    expect(() => gunzip(file, Infinity)).toThrow('less data than declared');
+  });
+
+  it('stop a gzip that unpacks past its limit', () => {
+    expect(() => gunzip(gzipSync(new Uint8Array(100_000)), 99_999)).toThrow(TooLarge);
   });
 });

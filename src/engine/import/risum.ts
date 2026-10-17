@@ -1,4 +1,5 @@
 import { isRecord } from '../../connectors/values';
+import { METADATA_BYTES, TooLarge } from './inflate';
 import type { FileSource } from './source';
 
 // RPack's decode table, ported under AGPL-3.0: bytes 256-511 of src/ts/rpack/rpack_map.bin in
@@ -42,6 +43,7 @@ export async function readRisum(source: FileSource): Promise<{ module: Record<st
   if (source.size < HEADER) return null;
   const length = jsonLength(await source.read(0, HEADER));
   if (length === null || HEADER + length > source.size) return null;
+  if (length > METADATA_BYTES) throw new TooLarge('entry-too-large');
   const module = moduleOf(await source.read(HEADER, length));
   if (!module) return null;
   const assets: (() => Promise<Uint8Array<ArrayBuffer>>)[] = [];
