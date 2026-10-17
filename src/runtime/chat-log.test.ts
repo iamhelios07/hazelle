@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { calls, fold, foldTree, shown, translationOutdated, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
+import { calls, fold, foldTree, shown, translationOutdated, type Chat, type ChatItem, type Message, type Receipt, type Version } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatPrint } from './cache';
 import { chatFile, readChatFile } from './chat-file';
-import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, nameBookmark, removeMessage, removeMessages, restoreMessages, selectVersion, setBookmark, setCast, setChatOwn, startChat, withOwn } from './chat-log';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, copyShown, editMessage, importChat, nameBookmark, removeMessage, removeMessages, restoreMessages, selectVersion, setBookmark, setCast, setChatOwn, startChat, withOwn } from './chat-log';
 import { setChatModel, withMainModel } from './assignment';
 import type { Files } from './files';
 import { summaryId } from './summary';
@@ -70,6 +70,28 @@ describe('removeMessages', () => {
     expect(texts()).toEqual(['말 0', '말 1']);
     await restoreMessages(store, chat, said.slice(2));
     expect(texts()).toEqual(['말 0', '말 1', '말 2', '말 3', '말 4']);
+  });
+});
+
+describe('copyShown', () => {
+  it("shows a copy of the version shown, with what the bot's Lua wrote around it, and leaves what followed on the version it copied", async () => {
+    const { store } = await server.account();
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: null, character: null, models: {} }, null);
+    const said = crypto.randomUUID();
+    await appendUserMessage(store, chat, { id: said, text: '안녕', follows: null, before: [['order', 'input']] });
+    await appendScripted(store, chat, { edits: [], removed: [], added: [], vars: { version: said, set: [['hp', '9']] } });
+    await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '다음', follows: said });
+    const folded = () => fold(store.children('entry', chat));
+    expect(await copyShown(store, chat, folded()[0]!)).toMatchObject({ ok: true });
+    const [copy, ...rest] = folded();
+    expect(rest).toEqual([]);
+    const held = ({ text, seed, before, after }: Version) => ({ text, seed, before, after });
+    expect(copy!.selected).toBe(1);
+    expect(held(shown(copy!))).toEqual(held(copy!.versions[0]!));
+    await selectVersion(store, chat, copy!.id, said);
+    expect(folded().map((message) => shown(message).text)).toEqual(['안녕', '다음']);
   });
 });
 

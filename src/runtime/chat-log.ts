@@ -1,7 +1,7 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
-import { CAST_MAX, foldTree, shown, standing, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
+import { CAST_MAX, foldTree, shown, standing, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Version, type Writes } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import type { Illustration } from '../model/illustration';
 import type { Remark } from '../model/mascot';
@@ -231,13 +231,11 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 // version again in its own place when it is an edit or came later than the message, which a message entry cannot
 // hold; the other versions; and a select when the one shown is not the last, since adding a version selects it.
 // versions: each version's id in the branch, by its id here.
-// A field added to versions or messages must be written here too, or a branch drops it, as must a kind a chat holds
-// (copyWrites, branchToolData). The calls the bot's Lua made (Version.calls) are dropped on purpose: usage counts a
-// call where it was made.
+// A field added to messages must be written here too, or a branch drops it, as must a kind a chat holds
+// (copyWrites, branchToolData).
 function copied(id: string, { role, at, versions, selected, after }: Message, follows: string | null): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
-  const held = ({ text, receipt, seed, translation, staged, before, reasoning, greeting }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }), ...(reasoning && { reasoning }), ...(greeting !== undefined && { greeting }) });
   // The first version said again holds its own writes: an edit would add them to the message entry's.
   const repeated = first!.edited || first!.at !== at;
   const entries: [string, Entry][] = [[id, { type: 'message', role, at, follows, ...held(repeated ? { ...first!, before: undefined } : first!) }]];
@@ -254,6 +252,21 @@ function copied(id: string, { role, at, versions, selected, after }: Message, fo
   for (const version of versions) if (version.after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(version.id)!, set: version.after, at: version.at }]);
   if (after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(versions[selected]!.id)!, set: after, at, stays: true }]);
   return { entries, versions: made };
+}
+
+// What a copy of a version carries. A field added to versions must be written here too, or a copy drops it. The calls
+// the bot's Lua made (Version.calls) are dropped on purpose: usage counts a call where it was made.
+const held = ({ text, receipt, seed, translation, staged, before, reasoning, greeting }: Version) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }), ...(reasoning && { reasoning }), ...(greeting !== undefined && { greeting }) });
+
+// A new last version of the message, a copy of the one shown, which it shows: what followed the one shown stays that
+// version's continuation (Entry follows), so a line written after the copy leaves the story before it a switch away.
+export function copyShown(store: ObjectStore, chat: string, message: Message) {
+  const current = shown(message);
+  const id = crypto.randomUUID();
+  return store.batch([
+    entryRow(chat, { type: 'version', message: message.id, replaces: null, edit: current.edited, at: current.at, ...held(current) }, id),
+    ...(current.after ? [entryRow(chat, { type: 'vars', version: id, set: current.after, at: current.at })] : []),
+  ]);
 }
 
 // A blank name gives the chat back its first message as its name.

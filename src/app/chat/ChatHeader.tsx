@@ -1,5 +1,5 @@
 import { toolMenu } from './toolMenu';
-import { BookKey, BookOpen, Bookmark, Brain, Keyboard, MessageSquarePlus, Package, ScanSearch, Search, SlidersHorizontal, SquarePen, ToggleRight, UsersRound } from 'lucide-react';
+import { BookKey, BookOpen, Bookmark, Brain, Keyboard, MessageSquarePlus, Package, PlaneTakeoff, ScanSearch, Search, SlidersHorizontal, SquarePen, ToggleRight, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { FeatureSwitches } from '../common/FeatureSwitches';
 import { NameDialog } from '../common/NameDialog';
@@ -77,6 +77,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         {item && <MenuItem icon={ToggleRight} label={FEATURES_TITLE} onClick={openFeatures.onClick} />}
         {item && <MenuItem icon={BookKey} label={CHAT_LORE} onClick={actions.lore} />}
         {item && <MenuItem icon={ScanSearch} label="점검" onClick={() => actions.openInspect('request')} />}
+        {item && <MenuItem icon={PlaneTakeoff} label="오토파일럿" onClick={actions.autopilot} />}
         {tools.length > 0 && <>
           <Divider variant="menu" />
           {tools.map((tool) => <MenuItem key={`${tool.module}:${tool.kind === 'page' ? 'page' : `menu:${tool.item}`}`} icon={Package} label={tool.label} sub={tool.name} checked={tool.kind === 'page' ? panel?.kind === 'tool' && panel.module === tool.module : undefined} onClick={() => tool.kind === 'page' ? actions.tool(tool.module) : actions.toolMenu(tool.module, tool.item)} />)}

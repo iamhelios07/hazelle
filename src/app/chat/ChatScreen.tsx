@@ -8,6 +8,7 @@ import { useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
 import { useAssetUrl } from '../session';
 import { ChatFrame, Pill, SidePeeks, usePanelsBeside } from '../ui';
+import { ChatAutopilot } from './ChatAutopilot';
 import { ChatBookmarks } from './ChatBookmarks';
 import { ChatInspect } from './ChatInspect';
 import { ChatComposer } from './ChatComposer';
@@ -22,6 +23,7 @@ import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useEditBeside } from './editBeside';
 import { promptEditor, toggleEditor, type Panel, type Side } from './panels';
+import { useAutopilot } from './useAutopilot';
 import { useChat } from './useChat';
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
@@ -44,6 +46,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
   const { reading, display } = useDisplay();
   const chat = useChat(chatId, item, shelf, reading.reply);
   const { id, busy, panel, scroll, prompt, actions } = chat;
+  const autopilot = useAutopilot(chat);
   const folded = display.foldComposer && scroll.away;
   const url = useAssetUrl();
   // The thumbnail stands in until the full picture is read.
@@ -96,6 +99,8 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
             />
           ) : panel?.kind === 'bookmarks' ? (
             chat.item && <ChatBookmarks item={chat.item} messages={chat.messages} texts={chat.texts} names={speakers(chat)} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
+          ) : panel?.kind === 'autopilot' ? (
+            <ChatAutopilot autopilot={autopilot} busy={busy} onClose={actions.closePanel} />
           ) : panel?.kind === 'lore' ? (
             id && <ChatLore id={id} onClose={actions.closePanel} />
           ) : panel?.kind === 'tool' ? (
