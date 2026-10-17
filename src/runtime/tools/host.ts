@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../../change-signal';
 import { isRecord } from '../../connectors/values';
 import { Runaway } from '../../engine/cbs/evaluate';
 import type { ToolEvent, Host, ModelMessage, Question } from '../../engine/script-api';
@@ -14,7 +15,7 @@ import { aborted, noOutcome, ToolStopped, ToolStuck, until, type Binding } from 
 import type { Session } from '../session';
 import type { StoreChange } from '../object-index';
 import { Heartbeat } from '../worker';
-import type { ToolMenu, ToolPage, Tools } from './facade';
+import type { MenuItem, ToolFrames, ToolMenu, ToolPage, ToolSlot, Tools } from './facade';
 import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
 import { toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
@@ -28,12 +29,19 @@ type Frame = {
   listens: Set<EventName>; pending: Map<number, Pending>; calls: Set<number>; messages: Message[];
   reading: Promise<unknown>; lanes: Set<string>; release(): void;
 };
-type Entry = { module: string; tool: Tool; settings: string; background: Frame | null; pages: Set<Frame>; chats: Set<string>; idle: ReturnType<typeof setTimeout> | null; data: Map<string, { key: string; json: string }> };
-const EVENTS = new Set<EventName>(['reply', 'prompt', 'change', 'branch', 'menu', 'action', 'settings', 'message']);
+// A frame tool (manifest.risu) runs as its background frame, with these: chat, the chat open for it, which its calls
+// outside an event read; menu, what its frame registered; shown, whether it asks to be shown; slot, where it is.
+type Entry = {
+  module: string; tool: Tool; settings: string; background: Frame | null; pages: Set<Frame>; chats: Set<string>; idle: ReturnType<typeof setTimeout> | null; data: Map<string, { key: string; json: string }>;
+  chat: string | null; menu: MenuItem[]; shown: boolean; slot: ToolSlot | null;
+};
+const EVENTS = new Set<EventName>(['reply', 'replying', 'prompt', 'change', 'branch', 'menu', 'action', 'settings', 'open', 'message']);
 const IDLE_MS = 10 * 60_000;
 const STUCK_MS = 8000;
 const describe = (error: unknown) => error instanceof Error ? error.message : String(error);
 const framesOf = (entry: Entry) => [...(entry.background ? [entry.background] : []), ...entry.pages];
+const isFrameTool = (tool: Tool) => tool.manifest.risu !== undefined;
+const isMenu = (value: unknown): value is MenuItem[] => Array.isArray(value) && value.every((item) => isRecord(item) && typeof item.id === 'string' && typeof item.label === 'string');
 
 function isJson(value: unknown): value is Json {
   try { JSON.stringify(value); } catch { return false; }
@@ -75,6 +83,7 @@ function isOutcome(value: unknown): value is ToolOutcome {
 const eventFields = (event: ToolEvent): Partial<Extract<Down, { kind: 'event' }>> => {
   switch (event.kind) {
     case 'reply': return { reply: event.reply };
+    case 'replying': return { text: event.text };
     case 'prompt': return { turn: event.turn };
     case 'change': return { change: event.change };
     case 'branch': return { from: event.from };
@@ -82,6 +91,12 @@ const eventFields = (event: ToolEvent): Partial<Extract<Down, { kind: 'event' }>
     case 'action': return { item: event.item, message: event.message };
   }
 };
+function cardOf(character: string | null, scope: ChatScope): Hazelle.Card | null {
+  const { card } = scope;
+  if (!card || character === null) return null;
+  const lore = scope.lore.filter(({ parent }) => parent === character).map(({ value }) => ({ name: value.name, keys: value.keys, text: value.content, always: value.constant, on: value.enabled }));
+  return { id: character, name: card.name, description: card.description, personality: card.personality, scenario: card.scenario, greeting: card.greetings[0] ?? null, creatorNotes: card.creatorNotes, tags: card.tags, lore };
+}
 const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
 
 export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
@@ -91,6 +106,8 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   private readonly writes: ToolWrites;
   private readonly closing = new AbortController();
   private readonly unsubscribe: () => void;
+  private readonly signal = new ChangeSignal();
+  private shownFrames: ToolFrames = new Map();
   private ids = 0;
 
   constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly scripts: () => Pick<Scripts, 'report' | 'pageContext' | 'pageWrite'>, private readonly open: OpenFrame = toolFrame) {
@@ -103,9 +120,28 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     return stored ? toolsOf(this.session.store, stored.value).map(({ module, tool }) => ({ module, manifest: tool.manifest })) : [];
   }
 
+  readonly items = (module: string): MenuItem[] => {
+    const tool = this.session.store.get('tool', toolId(module))?.value;
+    if (!tool) return [];
+    return isFrameTool(tool) ? this.entries.get(module)?.menu ?? [] : tool.manifest.menu;
+  };
+
+  readonly subscribe = (listener: () => void) => this.signal.subscribe(listener);
+  readonly frames = () => this.shownFrames;
+
+  private publish() {
+    this.shownFrames = new Map([...this.entries.values()].filter((entry) => isFrameTool(entry.tool)).map((entry) => [entry.module, { menu: entry.menu, chat: entry.chat, asking: entry.shown && !entry.slot }]));
+    this.signal.notify();
+  }
+
   async warm(chat: string): Promise<void> {
     await Promise.all(this.menus(chat).map(async ({ module }) => {
-      try { const entry = this.entry(module); entry.chats.add(chat); await this.background(entry); }
+      try {
+        const entry = this.entry(module);
+        entry.chats.add(chat);
+        if (isFrameTool(entry.tool) && entry.chat !== chat) { entry.chat = chat; this.publish(); }
+        await this.background(entry);
+      }
       catch (error) { this.scripts().report(chat, error, { kind: 'module', id: module }); }
     }));
   }
@@ -148,6 +184,39 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     return () => { this.endFrame(frame, new ToolStopped()); this.idle(frame.entry); };
   }
 
+  // The frame is shown over slot while it asks to be; a slot attached while it does not is the user opening its page.
+  attach(module: string, slot: ToolSlot): () => void {
+    let entry: Entry;
+    try {
+      entry = this.entry(module);
+      if (!isFrameTool(entry.tool) || (slot.chat !== null && !this.allowed(slot.chat, module))) throw new ToolStopped();
+    } catch (error) {
+      this.scripts().report(slot.chat ?? '', error, { kind: 'module', id: module });
+      slot.close();
+      return () => {};
+    }
+    if (slot.chat !== null) { entry.chats.add(slot.chat); entry.chat = slot.chat; }
+    const previous = entry.slot;
+    entry.slot = slot;
+    previous?.place(null);
+    previous?.close();
+    this.idle(entry);
+    this.publish();
+    void this.background(entry).then((frame) => {
+      if (entry.slot !== slot) return;
+      if (entry.shown) slot.place(frame.connection.frame);
+      else this.send(frame, { kind: 'open' });
+    }, (error: unknown) => this.scripts().report(slot.chat ?? '', error, { kind: 'module', id: module }));
+    return () => {
+      if (entry.slot !== slot) return;
+      entry.slot = null;
+      entry.shown = false;
+      slot.place(null);
+      this.idle(entry);
+      this.publish();
+    };
+  }
+
   private settingsChanged(entry: Entry, tool: Tool) {
     const settings = JSON.stringify(tool.settings);
     if (settings === entry.settings) return;
@@ -161,6 +230,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     this.closing.abort();
     this.unsubscribe();
     for (const entry of [...this.entries.values()]) this.end(entry, new ToolStopped());
+    this.signal.clear();
     this.writes.close();
     this.code.clear();
   }
@@ -178,7 +248,11 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     if (!tool || !live(store.get('module', module))) throw new ToolStopped();
     const current = this.entries.get(module);
     if (current) return current;
-    const entry: Entry = { module, tool, settings: JSON.stringify(tool.settings), background: null, pages: new Set(), chats: new Set(), idle: null, data: new Map(store.children('tooldata', module).map(({ id, value }) => [id, { key: value.key, json: JSON.stringify(value.value) }])) };
+    const entry: Entry = {
+      module, tool, settings: JSON.stringify(tool.settings), background: null, pages: new Set(), chats: new Set(), idle: null,
+      data: new Map(store.children('tooldata', module).map(({ id, value }) => [id, { key: value.key, json: JSON.stringify(value.value) }])),
+      chat: null, menu: [], shown: false, slot: null,
+    };
     this.entries.set(module, entry);
     return entry;
   }
@@ -190,7 +264,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   }
 
   private frame(entry: Entry, page?: ToolPage): Frame {
-    const connection = this.open(page);
+    const connection = this.open(page ? { role: 'page', page } : { role: isFrameTool(entry.tool) ? 'frame' : 'background' });
     let resolve!: () => void;
     let reject!: (error: Error) => void;
     const ready = new Promise<void>((done, failed) => { resolve = done; reject = failed; });
@@ -210,7 +284,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       if (page?.chat && !context) throw new ToolStopped();
       frame.loadTimer = setTimeout(() => this.stalled(frame), STUCK_MS);
       frame.heart.start(STUCK_MS);
-      this.send(frame, { kind: 'load', api: 1, role: page ? 'page' : 'background', code, manifest: entry.tool.manifest, settings: entry.tool.settings, chat: context ? header(page!.chat!, context.scope) : null, theme: page?.theme ?? 'dark' });
+      this.send(frame, { kind: 'load', api: 1, role: page ? 'page' : isFrameTool(entry.tool) ? 'frame' : 'background', code, manifest: entry.tool.manifest, settings: entry.tool.settings, chat: context ? header(page!.chat!, context.scope) : null, theme: page?.theme ?? 'dark' });
     }).catch((error: unknown) => this.endFrame(frame, error instanceof Error ? error : new Error(String(error)), true));
     return frame;
   }
@@ -255,8 +329,8 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       const id = Number(data.id);
       if (!Number.isSafeInteger(data.id)) return;
       if (id === 0) {
-        if (data.kind === 'failed' && typeof data.message === 'string') this.scripts().report(frame.page?.chat ?? '', new Error(data.message), { kind: 'module', id: frame.entry.module });
-        else if (data.kind === 'done' && frame.page?.chat) {
+        if (data.kind === 'failed' && typeof data.message === 'string') this.scripts().report(this.chatOf(frame) ?? '', new Error(data.message), { kind: 'module', id: frame.entry.module });
+        else if (data.kind === 'done' && this.chatOf(frame)) {
           void this.pageWrite(frame, data.outcome).then(
             () => this.send(frame, { kind: 'answer', call: 0, ok: true, value: null }),
             (error: unknown) => this.send(frame, { kind: 'answer', call: 0, ok: false, value: describe(error) }),
@@ -289,17 +363,54 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
       if (!pending || !this.allowed(pending.chat, frame.entry.module)) throw new ToolStopped();
       return pending;
     }
-    const chat = frame.page?.chat;
+    const chat = this.chatOf(frame);
     const context = chat && this.scripts().pageContext(chat, frame.entry.module, frame.closing.signal);
     if (!context || !chat) throw new Error('no-chat');
     return { ...context, chat, signal: frame.closing.signal };
+  }
+
+  // The chat a page or a frame tool's calls outside an event act on.
+  private chatOf(frame: Frame): string | null {
+    return frame.page ? frame.page.chat : frame.entry.background === frame && isFrameTool(frame.entry.tool) ? frame.entry.chat : null;
   }
 
   private async call(frame: Frame, method: string, args: unknown[], event: unknown): Promise<unknown> {
     const entry = frame.entry;
     if (!live(this.session.store.get('module', entry.module))) throw new ToolStopped();
     const [first, second] = args;
+    const own = !frame.page && isFrameTool(entry.tool);
     switch (method) {
+      case 'frame.chat': {
+        if (!own) break;
+        const chat = this.chatOf(frame);
+        const context = chat && this.scripts().pageContext(chat, entry.module, frame.closing.signal);
+        return context ? header(chat, context.scope) : null;
+      }
+      case 'frame.show':
+        if (!own) break;
+        entry.shown = true;
+        entry.slot?.place(frame.connection.frame);
+        this.publish();
+        return;
+      case 'frame.hide':
+        if (!own) break;
+        entry.shown = false;
+        entry.slot?.place(null);
+        entry.slot?.close();
+        this.publish();
+        return;
+      case 'frame.menu':
+        if (!own || !isMenu(first)) break;
+        entry.menu = first.map(({ id, label }) => ({ id, label }));
+        this.publish();
+        return;
+      case 'frame.missing': {
+        if (!own || typeof first !== 'string') break;
+        const from = { kind: 'module', id: entry.module } as const;
+        const log = { stage: 'call', pack: from, script: entry.tool.manifest.displayName, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [first], stopped: false, changed: false, handled: false, truncated: false };
+        this.scripts().report(entry.chat ?? '', { errors: [], missing: [first], trace: { entries: [log], omitted: 0 } }, from);
+        return;
+      }
       case 'storage.get': if (typeof first === 'string') return toolData(this.session.store, entry.module, first); break;
       case 'storage.keys': return toolKeys(this.session.store, entry.module);
       case 'storage.set': if (typeof first === 'string' && isJson(second)) return this.writes.write(entry.module, first, second); break;
@@ -324,6 +435,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
           frame.messages = messages;
           return tail;
         }
+        if (method === 'chat.card') return cardOf(live(this.session.store.get('chat', context.chat))?.value.character ?? null, context.scope);
         if (method === 'chat.greeting') return context.scope.greeting === null ? null : (await this.state(frame, context)).texts[0]!;
         if (method === 'chat.state.get' && typeof first === 'string') return decodeState(new Map((await this.state(frame, context)).variables).get(toolVar(entry.tool.manifest, first)));
         if (method === 'chat.data.get' && typeof first === 'string') return toolChatData(this.session.store, entry.module, context.chat, first);
@@ -371,7 +483,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     // A page's write takes its share of the write rate before it is converted (pageWrite).
     if (context.event && (data.length || badges.length)) this.writes.take(frame.entry.module);
     // The sandbox refuses these in an event about the user's own change; a page that posts its own outcome is not trusted to.
-    const story = context.event === 'change' || context.event === 'branch' ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
+    const story = context.event === 'change' || context.event === 'branch' || context.event === 'replying' ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
     return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, json]) => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...story, tool: { data, badges } };
   }
 
@@ -387,7 +499,8 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   private idle(entry: Entry) {
     if (entry.idle) clearTimeout(entry.idle);
     entry.idle = null;
-    if (entry.pages.size || framesOf(entry).some((frame) => frame.pending.size)) return;
+    // A frame tool lives while a chat is open for it or its page shows it.
+    if (entry.pages.size || entry.slot || entry.chat !== null || framesOf(entry).some((frame) => frame.pending.size)) return;
     entry.idle = setTimeout(() => this.end(entry, new ToolStopped()), IDLE_MS);
   }
 
@@ -412,7 +525,18 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     frame.release();
     for (const chat of frame.lanes) this.session.store.evaluation.forget({ asker: 'tool', chat, tool: `${frame.entry.module}:${frame.id}` });
     frame.entry.pages.delete(frame);
-    if (frame.entry.background === frame) frame.entry.background = null;
+    if (frame.entry.background === frame) {
+      frame.entry.background = null;
+      frame.entry.menu = [];
+      frame.entry.shown = false;
+      if (frame.entry.slot) {
+        const { slot } = frame.entry;
+        frame.entry.slot = null;
+        slot.place(null);
+        slot.close();
+      }
+      this.publish();
+    }
     if (closePage) frame.page?.close();
   }
 
@@ -421,6 +545,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     for (const frame of framesOf(entry)) this.endFrame(frame, error, true);
     this.writes.cancel(entry.module);
     if (this.entries.get(entry.module) === entry) this.entries.delete(entry.module);
+    this.publish();
   }
 
   private changed(changes: readonly StoreChange[]) {
@@ -447,7 +572,8 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
         for (const [id, pending] of frame.pending) if (!this.allowed(pending.chat, entry.module)) this.settle(frame, id, new ToolStopped());
         if (frame.page?.chat && !this.allowed(frame.page.chat, entry.module)) this.endFrame(frame, new ToolStopped(), true);
       }
-      if (entry.chats.size && !entry.pages.size && ![...entry.chats].some((chat) => this.allowed(chat, entry.module))) this.end(entry, new ToolStopped());
+      if (entry.chat !== null && !this.allowed(entry.chat, entry.module)) { entry.chat = null; this.publish(); }
+      if (entry.chats.size && !entry.pages.size && !entry.slot && ![...entry.chats].some((chat) => this.allowed(chat, entry.module))) this.end(entry, new ToolStopped());
     }
   }
 }

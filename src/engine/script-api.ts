@@ -31,6 +31,7 @@ export type Host = {
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
 export type ToolEvent =
   | { kind: 'reply'; reply: Hazelle.At }
+  | { kind: 'replying'; text: string }
   | { kind: 'prompt'; turn: Hazelle.Turn }
   | { kind: 'change'; change: Hazelle.Change }
   | { kind: 'branch'; from: Hazelle.Branched }
