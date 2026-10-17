@@ -86,6 +86,12 @@ declare namespace Hazelle {
     keys(): Promise<string[]>;
     onChange(listener: (keys: string[]) => void): () => void;   // other side, other device, or own write
   }
+  // Pictures and videos the tool keeps: owned by the module and gone with it, counted in the account's picture budget,
+  // shown among the module's assets. A name is the bytes' SHA-256 in hex, so the same bytes saved again keep one copy.
+  interface Assets {
+    save(bytes: Uint8Array): Promise<string>;   // throws on bytes that are no picture or video, or that the account refuses
+    read(name: string): Promise<Uint8Array | null>;   // null: none of this tool's by that name; throws when its file cannot be read
+  }
   // memory: this tool holds the chat's memory slot this turn (//@uses memory, allowed by the user, first in pack order).
   type Turn = { memory: boolean };
   // memory goes in the memory slot, before the history, and should change only when a chunk closes: a text that
@@ -133,6 +139,7 @@ declare namespace Hazelle {
     readonly context: 'background' | 'page' | 'frame';
     on<E extends keyof Events>(event: E, handler: Events[E]): void;   // events reach background and frame, except 'message'
     readonly storage: Storage;
+    readonly assets: Assets;
     settings(): Promise<Settings>;
     setSetting(key: string, value: string | number | boolean): Promise<void>;   // one of its own fields; throws on a value the field cannot hold
     account(): Promise<Account>;

@@ -153,6 +153,10 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
           keys: () => call('storage.keys', []),
           onChange: (listener) => { storageListeners.add(listener); return () => { storageListeners.delete(listener); }; },
         },
+        assets: {
+          save: (bytes) => call('assets.save', [bytes]),
+          read: (name) => call('assets.read', [name]),
+        },
         settings: () => call<Settings>('settings', []),
         setSetting: (key, value) => call('settings.set', [key, value]),
         account: () => call('account', []),

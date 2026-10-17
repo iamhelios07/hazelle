@@ -46,9 +46,9 @@ export function inProcessTools(execute: (api: Hazelle.Api, code: string, frame: 
   return { open, frames };
 }
 
-// A Risu plugin's frame: plugin runs with Risuai, risuai and the dialog shims in scope.
-export const inProcessRisu = (plugin: (scope: Record<string, unknown>) => void) => inProcessTools((api, _code, frame) => {
+// A Risu plugin's frame: plugin runs with Risuai, risuai and the dialog shims in scope, handed the code the host loaded.
+export const inProcessRisu = (plugin: (scope: Record<string, unknown>, code: string) => void) => inProcessTools((api, code, frame) => {
   const scope: Record<string, unknown> = {};
   frame.stop = installRisu(api, scope);
-  plugin(scope);
+  plugin(scope, code);
 });

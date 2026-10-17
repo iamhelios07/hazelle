@@ -5,7 +5,7 @@ import { setModuleDeleted } from '../modules';
 import { purgeNow } from '../removal';
 import { exportBackup, readBackup, restoreBackup } from '../testing/backup';
 import { testServer } from '../testing';
-import { deleteToolData, importTool, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_VALUE_BYTES, undoToolImport } from './store';
+import { deleteToolData, importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_VALUE_BYTES, undoToolImport } from './store';
 import type { Files } from '../files';
 
 const server = testServer();
@@ -97,6 +97,31 @@ describe('tool storage', () => {
     expect(await setToolData(store, module, 'extra', 1)).toEqual({ ok: false, error: 'too-large' });
     expect((await setToolData(store, module, '0', 1)).ok).toBe(true);
     expect((await setToolData(store, module, 'extra', 1)).ok).toBe(true);
+  });
+
+  it('keeps a picture as one asset of its module by its hash, again after the user deletes it, and reads it for that module only', async () => {
+    const { store, files } = await server.account();
+    const added = await importTool(store, files, source());
+    if (!added.ok) throw new Error(added.error);
+    const module = added.data.id;
+    const picture = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), (char) => char.charCodeAt(0));
+    const save = vi.spyOn(files, 'save');
+    const saved = await saveToolAsset(store, files, module, picture);
+    if (!saved.ok) throw new Error(saved.error);
+    expect(await saveToolAsset(store, files, module, picture.slice())).toEqual(saved);
+    expect(save).toHaveBeenCalledOnce();
+    const [asset] = store.children('asset', module);
+    expect(asset!.value).toMatchObject({ name: saved.data, type: 'image/png', size: picture.length });
+    expect(await readToolAsset(store, files, module, saved.data)).toEqual({ ok: true, data: picture });
+    expect(await readToolAsset(store, files, crypto.randomUUID(), saved.data)).toEqual({ ok: true, data: null });
+    expect(await saveToolAsset(store, files, module, new TextEncoder().encode('not a picture'))).toEqual({ ok: false, error: 'unsupported-file' });
+    await store.remove(asset!.id);
+    expect(await readToolAsset(store, files, module, saved.data)).toEqual({ ok: true, data: null });
+    expect(await saveToolAsset(store, files, module, picture)).toEqual(saved);
+    expect(store.children('asset', module).map(({ id }) => id)).toEqual([asset!.id]);
+    await setModuleDeleted(store, module, Date.now());
+    expect((await purgeNow(store, unswept, 'module', module, () => {})).ok).toBe(true);
+    expect(store.list('asset')).toEqual([]);
   });
 
   it('keeps per-chat data and badges in one batch per event, within the per-chat limit, and purges them in a chat never opened', async () => {
