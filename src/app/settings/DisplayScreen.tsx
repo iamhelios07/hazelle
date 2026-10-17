@@ -4,7 +4,7 @@ import { storyHtml } from '../../engine/display';
 import { EMPTY_SETTINGS, type SavedLook } from '../../model/settings';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
-import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
+import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePercent';
 import { HidePicturesRow, ReadingRows, ReplyRow } from '../common/ReadingRows';
 import { choices, describeLook, SIDE, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
 import { typedText } from '../common/typed';
@@ -120,7 +120,12 @@ export function DisplayScreen({ back }: { back: Back | null }) {
         <Section title="이미지">
           <SettingGroup label="이미지">
             <HidePicturesRow />
-            <PictureMostRow />
+            <PictureWidestRow />
+            <SettingRow
+              label="가로 이미지는 꽉 채우기"
+              help="가로가 세로보다 긴 이미지는 최대 폭과 상관없이 글 폭을 꽉 채워요."
+              control={<Switch label="가로 이미지는 꽉 채우기" checked={display.wideFill} onChange={(wideFill) => changeDisplay({ wideFill })} />}
+            />
             <SettingRow
               label="이미지 위치"
               help="넓은 화면에서 삽화와 캐릭터 이미지를 채팅 어느 쪽에 둘지 정해요."
@@ -160,24 +165,24 @@ export function DisplayScreen({ back }: { back: Back | null }) {
 }
 
 // Unlike a character's, this one is never empty: it is what an empty one follows.
-const readMost = (draft: string) => readPictureHeight(draft) ?? null;
+const readWidest = (draft: string) => readPicturePercent(draft) ?? null;
 
-function PictureMostRow() {
+function PictureWidestRow() {
   const { display, changeDisplay } = useDisplay();
   const [typed, setTyped] = useState<string>();
-  const draft = typedText(typed, readMost, display.pictureMost, String);
-  const invalid = readMost(draft) === null;
+  const draft = typedText(typed, readWidest, display.pictureWidest, String);
+  const invalid = readWidest(draft) === null;
   const type = (next: string) => {
     setTyped(next);
-    const most = readMost(next);
-    if (most !== null) changeDisplay({ pictureMost: most });
+    const widest = readWidest(next);
+    if (widest !== null) changeDisplay({ pictureWidest: widest });
   };
   return (
     <SettingRow
-      label="이미지 최대 높이"
-      help="화면 높이 대비 비율이에요. 세로로 긴 이미지가 이 높이에 맞춰 줄어들어요. 봇마다 따로 정할 수도 있어요."
-      error={invalid ? PICTURE_HEIGHT_ERROR : undefined}
-      control={<NumberInput label="이미지 최대 높이" value={draft} unit="%" invalid={invalid} onChange={type} />}
+      label="이미지 최대 폭"
+      help="글 폭 대비 비율이에요. 더 큰 이미지는 이 폭에 맞춰 줄어들어요. 봇마다 따로 정할 수도 있어요."
+      error={invalid ? PICTURE_PERCENT_ERROR : undefined}
+      control={<NumberInput label="이미지 최대 폭" value={draft} unit="%" invalid={invalid} onChange={type} />}
     />
   );
 }

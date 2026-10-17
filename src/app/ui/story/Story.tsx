@@ -36,6 +36,8 @@ const NAMED = '[risu-trigger], [risu-btn]';
 // Named in Story.shadow.css.
 const PICTURE = 'data-picture';
 const OPEN = 'data-open';
+// Named in Story.shadow.css: on a picture's line whose picture is wider than tall, which CSS cannot tell.
+const WIDE = 'data-wide';
 const PICTURES = Symbol('pictures');
 // Named in Story.shadow.css. Holds the source of the picture or video it stands in for.
 const VEILED = 'data-veiled';
@@ -306,6 +308,13 @@ export function storySelection(story: HTMLElement): { pieces: string[]; end: Sel
   return { pieces: [text(range.startContainer, range.startOffset, first, first.childNodes.length), text(last, 0, range.endContainer, range.endOffset)], end };
 }
 
+// Set over any the bot's HTML wrote. A picture already loaded is measured before the frame is drawn.
+function markWide(picture: HTMLImageElement) {
+  const mark = () => picture.parentElement!.toggleAttribute(WIDE, picture.naturalWidth > picture.naturalHeight);
+  if (picture.complete) mark();
+  else picture.addEventListener('load', mark, { once: true });
+}
+
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
 export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [], ref }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
@@ -329,6 +338,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     // After the cursor, which would otherwise go into the slot.
     for (const [index, mark] of marks.entries()) placeInlay(fragment, mark, inlayName(index));
     root().replaceChildren(fragment);
+    for (const picture of root().querySelectorAll<HTMLImageElement>(`[${PICTURE}] > img`)) markWide(picture);
   }, [html, cursor, pictures, veil, veilTaps, whole, placed, math]);
 
   // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.

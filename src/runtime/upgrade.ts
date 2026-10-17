@@ -48,7 +48,7 @@ function upgradeConnection(value: Record<string, unknown>) {
 // gives.
 function upgradeCharacter(value: Record<string, unknown>) {
   let upgraded: Record<string, unknown> | null = null;
-  for (const step of [dropTranslate, translationsByText, cardScriptIds, statusIds, dropKeepStatus, cardEffects, cardToggles]) upgraded = step(upgraded ?? value) ?? upgraded;
+  for (const step of [dropTranslate, translationsByText, cardScriptIds, statusIds, dropKeepStatus, cardEffects, cardToggles, dropPictureHeight]) upgraded = step(upgraded ?? value) ?? upgraded;
   return upgraded;
 }
 
@@ -131,6 +131,14 @@ function statusIds(value: Record<string, unknown>) {
 // Until 2026-10-09 옆에 두기 could keep 상태 in the story's margin.
 function dropKeepStatus(value: Record<string, unknown>) {
   return 'keepStatus' in value ? without(value, 'keepStatus') : null;
+}
+
+// Until 2026-10-17 이미지 크기 capped a picture's height (pictures.most), which says nothing about the width cap that
+// replaced it.
+function dropPictureHeight(value: Record<string, unknown>) {
+  if (!isRecord(value.pictures) || !('most' in value.pictures)) return null;
+  const pictures = without(value.pictures, 'most');
+  return Object.keys(pictures).length ? { ...value, pictures } : without(value, 'pictures');
 }
 
 // Until 2026-10-08 a chat's memory held no chapters.

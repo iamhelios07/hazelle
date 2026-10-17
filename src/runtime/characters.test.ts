@@ -381,9 +381,9 @@ describe('setPictures', () => {
     const added = await addCharacter(store, bare('루나'), none, () => {});
     const id = added.ok ? added.data : '';
     await setPictures(store, id, { peek: 30 });
-    await setPictures(store, id, { fold: false, most: 90 });
-    expect(store.get('character', id)?.value.pictures).toEqual({ peek: 30, fold: false, most: 90 });
-    await setPictures(store, id, { peek: undefined, fold: undefined, most: undefined });
+    await setPictures(store, id, { fold: false, widest: 90 });
+    expect(store.get('character', id)?.value.pictures).toEqual({ peek: 30, fold: false, widest: 90 });
+    await setPictures(store, id, { peek: undefined, fold: undefined, widest: undefined });
     expect(store.get('character', id)?.value).not.toHaveProperty('pictures');
   });
 });

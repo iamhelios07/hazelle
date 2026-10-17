@@ -57,6 +57,11 @@ describe('upgradeValue', () => {
     expect(upgradeValue('character', { folder: null, keepStatus: true })).toEqual({ folder: null });
   });
 
+  it("drops a character's picture height cap, and its pictures once nothing else is set", () => {
+    expect(upgradeValue('character', { folder: null, pictures: { peek: 30, most: 90 } })).toEqual({ folder: null, pictures: { peek: 30 } });
+    expect(upgradeValue('character', { folder: null, pictures: { most: 90 } })).toEqual({ folder: null });
+  });
+
   it("reads a character's and a module's opaque block effects again once this app runs them, and leaves loops opaque", () => {
     const concat = { type: 'v2ConcatString', source1: 'a', source1Type: 'value', source2: 'b', source2Type: 'value', outputVar: 'ab', indent: 0 };
     const loop = { type: 'v2LoopNTimes', value: '2', valueType: 'value', indent: 0 };

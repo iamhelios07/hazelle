@@ -96,10 +96,15 @@
     max-width: 100%;
   }
 
-  /* A bot's CSS that sizes pictures wins, as it does in its own boxes (design.md §6.4). */
+  /* A bot's CSS that sizes pictures wins, as it does in its own boxes (design.md §6.4). data-wide: Story.tsx marks a
+     picture wider than tall. */
   [data-picture] > img {
     display: block;
-    max-height: var(--story-picture-most);
+    max-width: var(--story-picture-widest);
+  }
+
+  [data-picture][data-wide] > img {
+    max-width: var(--story-picture-wide);
   }
 }
 

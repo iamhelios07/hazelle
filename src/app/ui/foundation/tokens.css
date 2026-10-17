@@ -315,7 +315,8 @@
   --story-inert-opacity: 0.45;
   /* A picture line's defaults (Story.shadow.css); a character's own replace them (ChatFrame's pictures). */
   --story-picture-peek: 40vh;
-  --story-picture-most: none;
+  --story-picture-widest: 100%;
+  --story-picture-wide: 100%;
 
   --space-2: 2px;
   --space-4: 4px;

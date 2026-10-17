@@ -25,7 +25,7 @@ import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import type { CharacterPart } from '../common/characterPart';
 import type { Frame } from '../common/frame';
-import { PICTURE_HEIGHT_ERROR, readPictureHeight } from '../common/pictureHeight';
+import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePercent';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
@@ -41,7 +41,7 @@ import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, Li
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
-type Height = 'peek' | 'most';
+type Percent = 'peek' | 'widest';
 const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), cardWrites: setCardWrites, keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
@@ -109,7 +109,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
   const [typedName, setTypedName] = useState<string>();
   const [changingFace, setChangingFace] = useState(false);
-  const [typedHeights, setTypedHeights] = useState<Partial<Record<Height, string>>>({});
+  const [typedPercents, setTypedPercents] = useState<Partial<Record<Percent, string>>>({});
   const held: CharacterText = { ...character.card, alias: character.alias ?? '', ...unsaved };
   const text = { ...held, name: typedText(typedName, filled, held.name, String) };
   // Most cards leave these two empty. Fixed at mount, so clearing one while typing does not hide it.
@@ -136,23 +136,23 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
     void SWITCHES[field](store, id, on).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
-  function changeHeight(field: Height, draft: string) {
-    setTypedHeights((current) => ({ ...current, [field]: draft }));
-    const value = readPictureHeight(draft);
+  function changePercent(field: Percent, draft: string) {
+    setTypedPercents((current) => ({ ...current, [field]: draft }));
+    const value = readPicturePercent(draft);
     pictureSave.change({ [field]: value ?? undefined }, value !== null);
   }
 
-  function heightRow(field: Height, label: string, help: Help, placeholder: string) {
-    const height = typedText(typedHeights[field], readPictureHeight, pictures[field], (value) => String(value ?? ''));
-    const set = height.trim() !== '';
-    const invalid = readPictureHeight(height) === null;
+  function percentRow(field: Percent, label: string, help: Help, placeholder: string) {
+    const percent = typedText(typedPercents[field], readPicturePercent, pictures[field], (value) => String(value ?? ''));
+    const set = percent.trim() !== '';
+    const invalid = readPicturePercent(percent) === null;
     return (
       <SettingRow
         label={label}
         help={help}
         changed={set}
-        error={invalid ? PICTURE_HEIGHT_ERROR : undefined}
-        control={<NumberInput label={label} value={height} unit="%" placeholder={placeholder} invalid={invalid} onChange={(draft) => changeHeight(field, draft)} />}
+        error={invalid ? PICTURE_PERCENT_ERROR : undefined}
+        control={<NumberInput label={label} value={percent} unit="%" placeholder={placeholder} invalid={invalid} onChange={(draft) => changePercent(field, draft)} />}
       />
     );
   }
@@ -357,8 +357,8 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
         {decor && (
           <Disclosure label="이미지 크기">
             <SettingGroup label="이미지 크기">
-              {fold && heightRow('peek', '접힌 높이', '화면 높이 대비 비율이에요.', '40')}
-              {heightRow('most', '최대 높이', { text: '화면 높이 대비 비율이에요. 비워 두면 디스플레이 설정을 따라요.', open: { label: opens(inSettings('display')), onClick: () => navigate({ kind: 'display' }) } }, String(display.pictureMost))}
+              {fold && percentRow('peek', '접힌 높이', '화면 높이 대비 비율이에요.', '40')}
+              {percentRow('widest', '최대 폭', { text: '글 폭 대비 비율이에요. 비워 두면 디스플레이 설정을 따라요.', open: { label: opens(inSettings('display')), onClick: () => navigate({ kind: 'display' }) } }, String(display.pictureWidest))}
             </SettingGroup>
           </Disclosure>
         )}
