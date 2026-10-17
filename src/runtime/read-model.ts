@@ -1,7 +1,7 @@
 import { ChangeSignal } from '../change-signal';
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
-import { chatTitle, shown, type Chat, type ChatSummary, type Message } from '../model/chat';
+import { chatTitle, shown, standing, type Chat, type ChatSummary, type Message } from '../model/chat';
 import { withMarks, withoutMarks } from '../model/illustration';
 import type { Illustrating, Illustrator } from './illustrate';
 import type { Kind, Stored, Values } from '../model/kinds';
@@ -278,10 +278,14 @@ export type ChatScreen = ScreenChat & { placed: ReadonlyMap<number, string> };
 type Drawings = Pick<Illustrator, 'snapshot' | 'subscribe'>;
 
 // By version, the paragraphs its pictures and its picture being drawn stand after.
-function placesOf(store: ObjectStore, chat: string, drawings: Illustrating): Map<string, Set<number>> {
+function placesOf(store: ObjectStore, chat: string, messages: readonly Message[], drawings: Illustrating): Map<string, Set<number>> {
   const places = new Map<string, Set<number>>();
   const add = (version: string, paragraph: number) => places.set(version, (places.get(version) ?? new Set()).add(paragraph));
-  for (const { value } of store.children('illustration', chat)) add(value.version, value.scene.paragraph);
+  const versions = standing(messages);
+  for (const { value } of store.children('illustration', chat)) {
+    const version = versions.get(value.version);
+    if (version) add(version, value.scene.paragraph);
+  }
   for (const drawing of drawings.values()) if (drawing.chat === chat) for (const { scene } of drawing.sketches) add(drawing.version, scene.paragraph);
   return places;
 }
@@ -434,7 +438,7 @@ export class ChatScreenRead {
     const messages = withTurn(this.base ? this.base.messages : this.opening.messages, this.turn, this.id);
     const { store } = this.models;
     const { value, reads } = store.capture(() => {
-      const places = store.scopeState(this.id) === 'loaded' ? placesOf(store, this.id, this.drawings.snapshot()) : new Map<string, Set<number>>();
+      const places = store.scopeState(this.id) === 'loaded' ? placesOf(store, this.id, messages, this.drawings.snapshot()) : new Map<string, Set<number>>();
       return this.models.open.display(this.id, chat, marked(messages, places), this.screen, evaluation.signal);
     });
     this.reads = reads;

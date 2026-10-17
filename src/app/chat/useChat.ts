@@ -89,7 +89,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const bot = shelf?.character.decor !== false;
   const url = useAssetUrl();
   const { actions: translationActions, ...translation } = useChatTranslation(chatId, chat, messages, texts, translate);
-  const { actions: illustrationActions, ...illustration } = useChatIllustrations(chatId, id, chat);
+  const { actions: illustrationActions, ...illustration } = useChatIllustrations(chatId, id, chat, messages);
   const { actions: remarkActions, ...remark } = useChatRemarks(chatId, id);
   const toolData = useChildren('toolchat', id);
   const badges = useMemo(() => badgesByVersion(toolData, tools), [toolData, tools]);

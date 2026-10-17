@@ -82,10 +82,11 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
     );
   }
   const { picture, pictures } = slot;
-  const { version, scene, sent } = picture.value;
+  const { scene, sent } = picture.value;
   const at = pictures.indexOf(picture);
   const step = (by: -1 | 1) => onPage(pictures[(at + by + pictures.length) % pictures.length]!.id);
-  const text = shown(message).text;
+  // The picture's own version may be one its message's edits replaced since.
+  const { id: version, text } = shown(message);
   const again = () => {
     onPage(null);
     onDraw(message.id, version, scene);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calls, ChatFold, chatTitle, fold, foldTree, previewLine, recentIn, recentModels, shown, type Entry, type Message, type Receipt } from './chat';
+import { calls, ChatFold, chatTitle, fold, foldTree, previewLine, recentIn, recentModels, shown, standing, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -237,6 +237,13 @@ describe("fold with the bot's Lua writes", () => {
     expect(shown(fold(entries)[0]!)).toMatchObject({ id: 'e2', before: [['turn', '1'], ['mood', 'calm']], after: [['hp', '9'], ['hp', '8'], ['hp', '7']] });
     const retried = shown(fold([...entries, version('r1', 'b1', '다시', 'e2')])[0]!);
     expect([retried.before, retried.after]).toEqual([undefined, undefined]);
+  });
+
+  it('leads every id a version stood under through its edits to it, and none through a retry', () => {
+    const edit = (id: string, replaces: string) => entry(id, { type: 'version', message: 'b1', replaces, edit: true, at: rev, text: id, receipt: receipt() });
+    const edited = [bot('b1', '하나'), edit('e1', 'b1'), edit('e2', 'e1')];
+    expect([...standing(fold(edited))]).toEqual([['b1', 'e2'], ['e1', 'e2'], ['e2', 'e2']]);
+    expect([...standing(fold([...edited, version('r1', 'b1', '다시', 'e2')]))]).toEqual([['r1', 'r1']]);
   });
 
   it('keeps what a button wrote with its message whichever version is shown, and with the message before once its own is deleted', () => {

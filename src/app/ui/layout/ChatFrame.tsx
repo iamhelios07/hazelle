@@ -55,7 +55,8 @@ type Props = {
   // The character's picture, standing on the stage where no 삽화 do.
   portrait?: string;
   // A character's own look for the lines that are only a picture, over the defaults in tokens.css.
-  pictures?: { fold?: false; peek?: number; most?: number };
+  // wideFill: a picture wider than tall is not held to widest.
+  pictures?: Pictures & { wideFill: boolean };
   compact: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   onScroll: () => void;
@@ -149,7 +150,8 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
             '--story-stage-lead': `${storyLead}px`,
             '--story-stage-at': `${side === 'right' ? storyLead + room.story : storyLead - room.stage}px`,
             '--story-picture-peek': pictures?.fold === false ? 'none' : pictures?.peek && `${pictures.peek}vh`,
-            '--story-picture-most': pictures?.most && `${pictures.most}vh`,
+            '--story-picture-widest': pictures?.widest && `${pictures.widest}%`,
+            '--story-picture-wide': pictures && `${pictures.wideFill ? PICTURE_PERCENT.max : (pictures.widest ?? PICTURE_PERCENT.max)}%`,
           } as CSSProperties
         }
       >

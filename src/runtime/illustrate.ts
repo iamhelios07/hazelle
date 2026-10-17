@@ -4,7 +4,7 @@ import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
 import { parseScenes, pictureRequest, toldProfiles, type SceneInvalid } from '../engine/illustrate';
 import type { RanAway } from '../engine/pipeline';
-import { fold, shown, type Chat, type Receipt } from '../model/chat';
+import { fold, shown, standing, type Chat, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
 import { paragraphsOf, pictureCount, type Illustration, type Scene } from '../model/illustration';
 import type { Stored } from '../model/kinds';
@@ -253,11 +253,13 @@ export class Illustrator {
   // The scenes of the chat's pictures for the shown version of each message up to the one drawn, by message, paragraph
   // and time, each with its distance from the message drawn: what each figure was last drawn in (toldProfiles).
   private drawnBefore(store: ObjectStore, chat: string, history: ReturnType<typeof fold>): { scene: Scene; ago: number }[] {
-    const order = new Map(history.map((message, index) => [`${message.id}/${shown(message).id}`, index]));
+    const order = new Map(history.map((message, index) => [shown(message).id, index]));
+    const versions = standing(history);
     return store
       .children('illustration', chat)
       .flatMap(({ value }) => {
-        const at = order.get(`${value.message}/${value.version}`);
+        const version = versions.get(value.version);
+        const at = version === undefined ? undefined : order.get(version);
         return at === undefined ? [] : [{ at, value }];
       })
       .sort((a, b) => a.at - b.at || a.value.scene.paragraph - b.value.scene.paragraph || a.value.at - b.value.at)

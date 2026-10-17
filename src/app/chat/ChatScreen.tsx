@@ -117,7 +117,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
         stage={chat.stage}
         side={display.pictureSide}
         portrait={portrait}
-        pictures={{ ...shelf?.character.pictures, most: shelf?.character.pictures?.most ?? display.pictureMost }}
+        pictures={{ ...shelf?.character.pictures, widest: shelf?.character.pictures?.widest ?? display.pictureWidest, wideFill: display.wideFill }}
         compact={folded}
         scrollRef={scroll.scrollRef}
         onScroll={scroll.onScroll}

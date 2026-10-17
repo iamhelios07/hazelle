@@ -333,6 +333,7 @@ describe('importChat', () => {
     await appendReply(store, source, { id: crypto.randomUUID(), message: reply, replaces: null, at: 2, text: '다른 답', receipt });
     await selectVersion(store, source, reply, reply);
     await appendTranslation(store, source, reply, { text: 'A reply', receipt: null, at: 3 }, crypto.randomUUID());
+    await editMessage(store, source, fold(store.children('entry', source)).find((message) => message.id === reply)!, '답 고침', null);
     const messages = fold(store.children('entry', source));
     const sources = messages.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }));
     await store.create('memory', { records: [{ id: 'r', sources, print: 'p', when: null, where: null, who: [], what: 'w', lines: [], outcome: '', receipt: null, at: 0, state: [], opens: [], closes: [] }], state: [], threads: [], chapters: [] }, { id: memoryId(source), parent: source });
@@ -362,8 +363,8 @@ describe('importChat', () => {
     expect(store.get('chat', id)!.value).toEqual({ title: '기숙사의 밤', character: null, models: {}, note: '노트', seed: source });
     expect(store.get('memory', memoryId(id))!.value.records[0]!.sources).toEqual(copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id })));
     const [illustration] = store.children('illustration', id);
-    const replied = copy.find((message) => message.versions.some(({ text }) => text === '답'))!;
-    expect(illustration?.value).toMatchObject({ message: replied.id, version: replied.versions.find(({ text }) => text === '답')!.id });
+    const replied = copy.find((message) => message.versions.some(({ text }) => text === '답 고침'))!;
+    expect(illustration?.value).toMatchObject({ message: replied.id, version: replied.versions.find(({ text }) => text === '답 고침')!.id });
     const opened = await files.read(illustration!.value.file);
     expect(opened.ok && [...opened.data]).toEqual([1, 2, 3]);
     const [inlay] = store.children('inlay', id);

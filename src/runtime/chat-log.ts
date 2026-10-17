@@ -1,7 +1,7 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
-import { CAST_MAX, foldTree, shown, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
+import { CAST_MAX, foldTree, shown, standing, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import type { Illustration } from '../model/illustration';
 import type { Remark } from '../model/mascot';
@@ -188,8 +188,10 @@ function copyWrites(id: string, source: { message: Message; follows: string | nu
   }
   const kept = memory && branchMemory(memory, messages, versions);
   if (kept) writes.push({ type: 'create', kind: 'memory', id: memoryId(id), parent: id, value: kept });
+  const standingIds = standing(source.map(({ message }) => message));
   for (const illustration of illustrations) {
-    const [message, version] = [messages.get(illustration.message), versions.get(illustration.version)];
+    const standsAs = standingIds.get(illustration.version);
+    const [message, version] = [messages.get(illustration.message), standsAs && versions.get(standsAs)];
     if (message && version) writes.push({ type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: id, value: { ...illustration, message, version } });
   }
   for (const remark of remarks) {

@@ -160,7 +160,8 @@ export type Entry =
 // Variable writes in the order made; a later one of a name wins.
 export type Writes = [string, string][];
 
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; calls?: BotCall[]; reasoning?: string; greeting?: number };
+// earlier: the ids it stood under before its edits, oldest first; a retry, a continuation or a new version has none.
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; calls?: BotCall[]; reasoning?: string; greeting?: number; earlier?: string[] };
 export type BotCall = { receipt: Receipt; at: number };
 // after: the writes that stay with the message (Entry vars), set after its shown version's own.
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number; after?: Writes };
@@ -249,6 +250,7 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
         if (edited.after) version.after = edited.after;
         if (edited.calls) version.calls = edited.calls;
         if (edited.reasoning) version.reasoning = edited.reasoning;
+        version.earlier = ids.get(edited)!;
       }
       own.set(id, version);
       home.set(version, message);
@@ -505,6 +507,11 @@ export const fold = (entries: Stored<'entry'>[]): Message[] => folded(entries).s
 export const foldTree = (entries: Stored<'entry'>[]) => folded(entries).tree();
 
 export const shown = (message: Message): Version => message.versions[message.selected]!;
+
+// By every id a version stood under, the one it stands under now: what follows a version into its edits (삽화) is
+// read through it, never by the id it was saved with.
+export const standing = (messages: readonly Message[]): Map<string, string> =>
+  new Map(messages.flatMap(({ versions }) => versions.flatMap(({ id, earlier = [] }) => [...earlier, id].map((each): [string, string] => [each, id]))));
 
 // An edit that changed the text and left the translation keeps the translation's time (runtime/chat-log editMessage).
 export const translationOutdated = (version: Version) => version.edited && version.translation !== undefined && version.translation.at < version.at;

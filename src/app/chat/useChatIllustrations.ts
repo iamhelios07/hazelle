@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Chat } from '../../model/chat';
+import { standing, type Chat, type Message } from '../../model/chat';
 import type { Illustration, IllustrateSwitches, Scene } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { setIllustrate, setOwnIllustrate } from '../../runtime/characters';
@@ -13,12 +13,15 @@ import { useToast } from '../toast';
 // scenes of a run it failed together.
 const told = new WeakSet<IllustrateFailure>();
 
-function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap<string, Stored<'illustration'>[]> {
+function picturesByVersion(illustrations: Stored<'illustration'>[], messages: readonly Message[]): ReadonlyMap<string, Stored<'illustration'>[]> {
+  const standingIds = standing(messages);
   const versions = new Map<string, Stored<'illustration'>[]>();
   for (const picture of [...illustrations].sort((a, b) => a.value.at - b.value.at)) {
-    const pictures = versions.get(picture.value.version);
+    const version = standingIds.get(picture.value.version);
+    if (!version) continue;
+    const pictures = versions.get(version);
     if (pictures) pictures.push(picture);
-    else versions.set(picture.value.version, [picture]);
+    else versions.set(version, [picture]);
   }
   return versions;
 }
@@ -28,14 +31,14 @@ function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap
 export type Reshaping = { message: string; version: string; scene: Scene; sent: Illustration['sent']; paragraphs: number };
 export type IllustrationActions = ReturnType<typeof useChatIllustrations>['actions'];
 
-export function useChatIllustrations(chatId: string, id: string | null, chat: Chat) {
+export function useChatIllustrations(chatId: string, id: string | null, chat: Chat, messages: readonly Message[]) {
   const { character } = chat;
   const { store, illustrator } = useSession();
   const toast = useToast();
   const illustrate = chatIllustrate(store, chat);
   const sceneWriter = sceneWriterOf(store, chat);
   const illustrations = useChildren('illustration', id);
-  const pictures = useMemo(() => picturesByVersion(illustrations), [illustrations]);
+  const pictures = useMemo(() => picturesByVersion(illustrations, messages), [illustrations, messages]);
   const illustrating = useIllustrating();
   // Settled by the switch and the pictures, not by a picture landing, so the story moves aside before one does.
   const stage = illustrate.auto || illustrations.length > 0 || [...illustrating.values()].some((drawing) => drawing.chat === chatId);

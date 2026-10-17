@@ -70,9 +70,9 @@ export type Module = Pack & Mark & {
   risu?: string;
   folder?: string;
 };
-// fold false shows such a picture whole instead of its top until opened. peek is the height its top shows at, most the
-// height no such picture is drawn taller than (shrunk to fit), each in percent of the screen's height.
-export type Pictures = { fold?: false; peek?: number; most?: number };
+// fold false shows such a picture whole instead of its top until opened. peek is the height its top shows at, in percent
+// of the screen's height; widest the width no such picture is drawn wider than, in percent of the text's width.
+export type Pictures = { fold?: false; peek?: number; widest?: number };
 export const PICTURE_PERCENT = { min: 10, max: 100 };
 export type TextTranslation = { source: string; language: string; translation: Translation };
 export type LoreFolder = { id: string; name: string };

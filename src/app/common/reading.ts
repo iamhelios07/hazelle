@@ -35,15 +35,16 @@ export function parseReading(stored: string, fallback: Reading): Reading {
   };
 }
 
-// pictureMost: the height no picture-only line's picture is drawn taller than, in percent of the screen's height, unless
-// the character sets its own (Pictures.most).
+// pictureWidest: the width no picture-only line's picture is drawn wider than, in percent of the text's width, unless
+// the character sets its own (Pictures.widest). wideFill: a picture wider than tall fills the text's width anyway.
+// The default draws every picture as before the cap (user, 2026-10-17).
 // quotes (대사 모양), pictureSide and portrait: reading habits, so no preset sets them.
 // portrait: the character's picture on the stage, only in a chat without 삽화: the stage is theirs (user, 2026-10-16).
-export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; hidePictures: boolean; pictureMost: number; pictureSide: StageSide; portrait: boolean };
+export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; portrait: boolean };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, hidePictures: false, pictureMost: 80, pictureSide: 'right', portrait: false };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, hidePictures: false, pictureWidest: 100, wideFill: true, pictureSide: 'right', portrait: false };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -57,7 +58,8 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     hideHeader: flag(read.hideHeader, fallback.hideHeader),
     foldComposer: flag(read.foldComposer, fallback.foldComposer),
     hidePictures: flag(read.hidePictures, fallback.hidePictures),
-    pictureMost: percent(read.pictureMost) ?? fallback.pictureMost,
+    pictureWidest: percent(read.pictureWidest) ?? fallback.pictureWidest,
+    wideFill: flag(read.wideFill, fallback.wideFill),
     pictureSide: known(SIDE, read.pictureSide, fallback.pictureSide),
     portrait: flag(read.portrait, fallback.portrait),
   };
