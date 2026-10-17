@@ -1,22 +1,16 @@
-.git
-.claude
-.data
-.wrangler
-.vitest
-.github
-node_modules
-dist
-docs
-e2e
-infra
-deploy
-shots
-test-results
-*.module.d.css.ts
-.env
-.env.*
-.dev.vars
-rclone
-release/*
+# The build context is an allowlist: only what the Dockerfile's build stage reads enters it. Ignore rules in .gitignore
+# do not apply to Docker, so a denylist would ship any local data directory (.data, .data-real, ...) to the builder.
+*
+!package.json
+!package-lock.json
+!index.html
+!sandbox.html
+!vite.config.ts
+!tsconfig*.json
+!LICENSE
+!src
+!public
+!scripts
+!migrations
 !release/source.tar.gz
-selfhost
+*.module.d.css.ts
