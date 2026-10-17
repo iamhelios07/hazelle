@@ -2,9 +2,9 @@
 # The off-site copier (src/server/db/README.md, "The copier's contract"), run in the rclone/rclone image.
 #   rclone-backup.sh        a pass now and every hour after
 #   rclone-backup.sh once   one pass; exits 1 when a copy or the prune failed
-# A pass copies every generation that has manifest.json and no copied marker, writes the marker after each success,
-# then prunes the remote. The remote mirrors backup/: <remote>/<id>/ and the picture pool <remote>/files/, where
-# scripts/restore.sh looks for the pool.
+# A pass copies departures.json, then every generation that has manifest.json and no copied marker, writes the marker
+# after each success, then prunes the remote. The remote mirrors backup/: <remote>/departures.json, <remote>/<id>/ and
+# the picture pool <remote>/files/, where scripts/restore.sh looks for them.
 # One copier per remote prefix: the prune takes every object under it as this machine's, and the lock below serializes
 # passes inside one container only.
 set -u
@@ -164,6 +164,12 @@ prune() {
 }
 
 pass() {
+  # Overwritten whole on every pass, as the app rewrites it (src/server/backup/departures.ts), so a departure reaches the
+  # remote within the hour; the remote's expired entries go with the overwrite. Without the file the app has captured no
+  # generation here yet, and the remote's is left alone.
+  if [ -f "$LOCAL/departures.json" ]; then
+    rclone copyto "$LOCAL/departures.json" "$REMOTE/departures.json" || { log "departures copy failed"; return 1; }
+  fi
   ids=$(pending)
   if [ -n "$ids" ]; then
     # The pool first, so no copied generation names a picture the remote lacks.

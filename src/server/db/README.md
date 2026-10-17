@@ -20,6 +20,8 @@ backup/<capturedAt>-<hex>/       one backup generation: service.sqlite.gz, manif
                                  snapshots/<incarnation>/<id>.sqlite.gz;
                                  copied once the copier has sent it off-site
 backup/files/<sha256>            the pictures every disk generation names, each once
+backup/departures.json           the accounts that left while a generation from before may still be restored
+                                 (src/server/backup/departures.ts); rewritten whole, copied off-site on every copier pass
 ```
 
 Every SQLite file opens with `journal_mode=WAL`, `synchronous=FULL`, `busy_timeout=5000`, `foreign_keys=ON` (`openDatabase`). FULL
@@ -33,7 +35,7 @@ selects the whole `head` and `kv` and the `objects` above the base's rev into a 
 writers, then releases the baseline queue (and any handle opened just for it). Checkpoints keep the queue until publication. The capture fixes `taken_at` and `rev`; an archive worker compacts that private copy, runs `quick_check`, gzips it and fsyncs the gzip. The owner publishes it through `Bucket.putFile` and only then writes the `snapshots` row: disk copies to a temporary name, fsyncs, renames and syncs the directory; R2 streams a signed PUT with `UNSIGNED-PAYLOAD` and the file size as `Content-Length`. The private copy and gzip are staged under `accounts/.tmp-*` and removed afterwards. An account file at signup: schema and `head` written, checkpointed, fsynced, directory fsynced, then
 the account's row. A directory made on the way is synced into its parent too (`makeDirs`, `durable.ts`). Deletion is the reverse: the service commit first, then the files. A crash between the two leaves a file with no row,
 which the hourly reconciliation (`reconcile.ts`) removes once it is an hour old (a picture prefix in R2 is queued in
-`picture_removals` and goes 7 days later). An uncatalogued R2 archive is queued in `snapshot_removals`, due 7 days after discovery; a catalogued archive cancels that queue entry. No read falls back to a previous disk location.
+`picture_removals` and goes 7 days later). An uncatalogued R2 archive an hour old is queued in `snapshot_removals`, due when the newest local generation naming it expires, at once when none does; a catalogued archive cancels that queue entry. No read falls back to a previous disk location.
 
 Installing a snapshot over a live account file (an armed restore, `account-db.ts`): `materializeSnapshot` checks the snapshot's size and
 SHA-256 against its row (a delta's base too), decompresses the whole file beside the live file, applies a delta's rows onto it and checks
@@ -53,7 +55,9 @@ A snapshot catalog entry goes at 7 days (`RETENTION_MS`) unless pinned. A delta 
 taken on the account's current timeline (a row records it; signup, a finished rewind and a disaster restore each start a new one) at the
 current account schema version and younger than 6 days, a day short of expiry so a base chosen for a capture is not expired before
 the capture's row names it (none: the snapshot taken is whole), never against another delta; a whole snapshot stays as long as a delta
-names it, normally up to 13 days (a delta that is the account's floor keeps its base as long as itself). An operation pins its checkpoint and target (an undo's from its begin) until it ends and
+names it. A capture that deletes a body its base holds is stored whole instead (the base and the delta materialized at the captured
+rev), so a base never holds a body deleted after it and may live as long as its deltas; a capture deleting only rows written since its
+base stays a delta. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
 for 7 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
 recoverable by hand. A live account keeps its floor, its newest baseline 7 days old or older of any timeline, whatever its age: a time inside the
 window may land on it, also one from before a rewind. Pins are read from `restores`, so a deleted account
@@ -72,8 +76,9 @@ copies both sets and reclaims releases against each installed snapshot; recovery
 reservation to a stored copy. With the R2 store the manifest names both pictures and archives where they are;
 the copier pools the archives in the backup bucket before marking a generation copied. A deleted account's pictures stay in R2 until
 `picture_removals.due_at`, 7 days after deletion was queued. Snapshot catalog expiry atomically queues `snapshot_removals` (migration
-0009), due 7 days later; the hourly sweep also waits while any local v4 generation names the archive, including a generation whose
-expiry has not run successfully. Disk expiry deletes immediately because hard links keep generations independent.
+0009), due when the newest local v4 generation naming the archive expires (`namedArchives`), at once when none does; the hourly sweep
+also waits while any local v4 generation names the archive, including a generation whose expiry has not run successfully, so a
+`--snapshots-from-store` restore of a kept generation finds every archive. Disk expiry deletes immediately because hard links keep generations independent.
 The manifest (version 4) records picture `bucket` and `snapshotStore` (`{kind:"disk"}` or `{kind:"r2",bucket:<name>}`) for all its
 snapshot entries. Versions 1–3 still read with archives in the generation; version 2 snapshots are all whole, version 3 may contain
 deltas, and version 1 pictures are disk-pooled. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The archive worker then compacts, checks and gzips the service copy, and `manifest.json` is written last (temp,
@@ -101,7 +106,9 @@ generation; it needs rclone and its config, as in the copier container. A local 
 `--snapshots-from-store`; this streams from the recorded store and verifies the same hashes, with no fallback. Restore writes the service (migrated to this build) before the pictures, drops
 catalog rows for snapshots the generation lacks, restores each account by materializing the snapshot the manifest names for it (its current baseline, or its operation's checkpoint once
 past the fence, where no baseline is taken; one past `rewound` by installing its target over that), then ends every pending operation through `lifecycle.ts` (before `armed` cancelled,
-from `armed` on finished, unverified ones finalized), finishes pending deletions, and gives every account a fresh timeline. The
+from `armed` on finished, unverified ones finalized), finishes pending deletions, deletes again every account `departures.json` beside
+the generation names (refusing before anything is written when that file is missing, unless given `--without-departures`), carries
+that file into the new directory, revokes every session, gives every account a fresh timeline, and prints the accounts it restored. The
 server must not start on the directory until it has finished.
 
 Service-table changes ship as a new `migrations/NNNN_*.sql`, applied by `migrate.ts` in one transaction each with a checksum ledger row.

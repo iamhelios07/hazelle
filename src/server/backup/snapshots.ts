@@ -64,8 +64,9 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
 // the floor is also an unchanged account's only copy. A base goes on a later pass, once its last delta has gone.
 // A deleted account has no restores and no row, so every catalog entry of it goes at RETENTION_MS from its taking.
 // Disk generations keep hard links; R2 generations name the store, so the catalog deletion queues a removal in the same
-// transaction, due one retention later and held while a local generation still names it (reconcile.ts).
-export async function expireSnapshots(env: Services, now: number): Promise<number> {
+// transaction, due when the newest local generation naming the archive expires, at once when none does (`named`, from
+// namedArchives; reconcile.ts).
+export async function expireSnapshots(env: Services, now: number, named: Map<string, number>): Promise<number> {
   const { results } = await env.db
     .prepare(
       `SELECT id, incarnation FROM snapshots s
@@ -82,7 +83,7 @@ export async function expireSnapshots(env: Services, now: number): Promise<numbe
   for (const { id, incarnation } of results) {
     const key = snapshotKey(incarnation, id);
     if (env.files.kind === 'r2') await env.db.batch([
-      env.db.prepare('INSERT INTO snapshot_removals (key, due_at) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET due_at = excluded.due_at').bind(key, now + RETENTION_MS),
+      env.db.prepare('INSERT INTO snapshot_removals (key, due_at) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET due_at = excluded.due_at').bind(key, named.get(key) ?? now),
       env.db.prepare('DELETE FROM snapshots WHERE id = ?').bind(id),
     ]);
     else {

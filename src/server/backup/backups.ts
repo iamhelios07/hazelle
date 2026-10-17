@@ -1,7 +1,8 @@
 import type { Alerts } from '../alerts';
 import { DAY_MS, type Services } from '../http';
+import { recordDeparture } from './departures';
 import { freePercent, freshness, type DiskFree, type Freshness } from './freshness';
-import { captureGeneration, expireGenerations } from './generation';
+import { captureGeneration, expireGenerations, generationsDir, namedArchives } from './generation';
 import { dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
 
 // The daily job, the gate a backup generation holds, and their record in backup_runs (docs/research/docker-port-plan.md
@@ -27,6 +28,8 @@ export type Backups = {
   // what the asker wants covered) and covers every live account as it is now, not as of today's baseline. A baseline it
   // could not take fails its generation: published, it would name an older baseline for that account.
   fresh(env: Services): Promise<{ snapshots: Outcome; generation: Outcome }>;
+  // Records an account's departure (departures.ts), durably, before any of it is destroyed.
+  depart(account: string, incarnation: string, at: number): void;
 };
 
 export function backups(dataDir: string, hour: number, alerts: Alerts, free: DiskFree = freePercent): Backups {
@@ -84,7 +87,7 @@ export function backups(dataDir: string, hour: number, alerts: Alerts, free: Dis
       const clock = () => now + Date.now() - started;
       const snapshots = await recorded(env, 'daily', clock, async () => {
         const { taken, skipped, unchanged, failed } = await takeBaselines(env, await staleBaselines(env, now, fresh ? now + 1 : dayStart(now)));
-        const expired = await expireSnapshots(env, now);
+        const expired = await expireSnapshots(env, now, await namedArchives(dataDir));
         return { error: failed.length ? 'baseline-failed' : null, detail: { taken, skipped, unchanged, failed: failed.length, expired } };
       });
       const generation = await recorded(env, 'generation', clock, async () => {
@@ -117,6 +120,7 @@ export function backups(dataDir: string, hour: number, alerts: Alerts, free: Dis
       return job(env, Date.now(), true);
     },
     freshness: (env, now) => freshness(env, dataDir, now, free),
+    depart: (account, incarnation, at) => recordDeparture(generationsDir(dataDir), { account, incarnation, leftAt: at }),
     // One tick at a time: a second that comes while one runs gets that one, so no alert goes out twice. Today is the
     // UTC day itself, not "from its start on": a run stamped by a clock since put back belongs to no day yet.
     tick: (env, now) =>
