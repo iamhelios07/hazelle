@@ -1,15 +1,16 @@
 import { logOutOthers } from '../../runtime/account';
+import { setPulseSharing, sharesPulse } from '../../runtime/pulse';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
-import { useAccount, useSession, useStanding } from '../session';
+import { useAccount, useSession, useSettings, useStanding, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { AccountSection, Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
 import { BUILT_VERSION } from '../common/release';
-import { BIN, PAGES, UNKNOWN } from '../common/words';
-import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingGroup, SettingRow, Stack, Text } from '../ui';
+import { BIN, PAGES, PULSE, UNKNOWN } from '../common/words';
+import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingGroup, SettingRow, Stack, Switch, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
 import { LeaveSection } from './LeaveSection';
@@ -29,10 +30,16 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
   const { onLock, onLogout } = useAccount();
   const { suspended, storage } = useStanding();
   const toast = useToast();
+  const store = useStore();
+  const sharing = sharesPulse(useSettings());
   async function logOutElsewhere() {
     const ended = await logOutOthers();
     if (!ended.ok) return toast.error('다른 기기에서 로그아웃하지 못했어요.', { detail: describeFailure(ended) });
     toast.show(ended.data.ended ? `다른 기기 ${count(ended.data.ended)}곳에서 로그아웃했어요.` : '로그인한 다른 기기가 없어요.');
+  }
+  async function share(on: boolean) {
+    const done = await setPulseSharing(store, on);
+    if (!done.ok) toast.failed(done, '바꾸지 못했어요.');
   }
   return (
     <Screen width="page" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
@@ -98,6 +105,11 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
           <Panel title="앱 정보">
             <SettingGroup label="앱 정보">
               <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
+              <SettingRow
+                label={PULSE.sharing}
+                help="켜 두면 쓰는 모델과 제공자, 응답 수가 집계에 더해져요. 누가 썼는지와 대화 내용은 남지 않아요."
+                control={<Switch label={PULSE.sharing} checked={sharing} onChange={(on) => void share(on)} />}
+              />
               <Diagnostics />
             </SettingGroup>
             <LegalNotice />

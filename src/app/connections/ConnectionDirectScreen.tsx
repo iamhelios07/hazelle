@@ -4,6 +4,7 @@ import type { Connection, Protocol } from '../../connectors/types';
 import { newAccount, providerConnection } from '../../runtime/connections';
 import { HTTPS_ONLY } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
+import { DIRECT_CONNECTION } from '../common/words';
 import { useAccount, useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -49,7 +50,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
 
   return (
     <Screen
-      top={<NavBar title="직접 연결" {...backBar(back)} />}
+      top={<NavBar title={DIRECT_CONNECTION} {...backBar(back)} />}
       onSubmit={submit}
       actions={
         <Button type="submit" busy={busy} disabled={!draft}>

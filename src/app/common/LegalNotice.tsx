@@ -1,6 +1,7 @@
 import { Link, Row, Stack, Text } from '../ui';
 import { OPERATOR, PRIVACY, REPOSITORY, TERMS } from './legal';
 import { BUILT_VERSION } from './release';
+import { PULSE } from './words';
 
 // The notices GPLv3 §5(d) has an interactive program show, with AGPL-3.0 §13's offer of the running version's
 // source. It shows before sign-in too: the page's code reaches a browser that never makes an account.
@@ -22,6 +23,7 @@ export function LegalNotice() {
         <Link href="/license.txt">라이선스 전문</Link>
         <Link href={TERMS.path}>{TERMS.title}</Link>
         <Link href={PRIVACY.path}>{PRIVACY.title}</Link>
+        <Link href={PULSE.path}>{PULSE.title}</Link>
       </Row>
     </Stack>
   );
