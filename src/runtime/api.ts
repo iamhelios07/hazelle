@@ -24,7 +24,7 @@ export function holdAccount(account: string | null, onHeard: ((heard: Heard) => 
   hear = onHeard;
 }
 
-// 헤이젤 지금 (design §6.12): the session holds the account's switch here, and fetchApi alone decides whether a request
+// 헤이젤 나우 (design §6.12): the session holds the account's switch here, and fetchApi alone decides whether a request
 // carries a label. seen: the page-load mark, owed until the next request goes out while sharing.
 let sharing = false;
 let seenOwed = false;

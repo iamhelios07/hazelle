@@ -29,7 +29,7 @@ export const MODELS_DEV_LISTS: Readonly<Partial<Record<string, { list: string; c
 };
 
 // The models a connection type lists itself, by id and name: no models.dev list holds them. Kept here so the server names
-// them on 헤이젤 지금 (server/pulse) from the connector's own list. The first is the type's default.
+// them on 헤이젤 나우 (server/pulse) from the connector's own list. The first is the type's default.
 export const CONNECTOR_MODELS = {
   novelai: [
     { id: 'nai-diffusion-5-full', name: 'NovelAI Diffusion V5 Full' },

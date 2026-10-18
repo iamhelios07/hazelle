@@ -31,7 +31,7 @@ app.use(async (c, next) => {
   }
 });
 
-// 헤이젤 지금 counts only labelled requests. One a signed-in account sent marks it active this week whatever the route
+// 헤이젤 나우 counts only labelled requests. One a signed-in account sent marks it active this week whatever the route
 // answered, since the page's one seen mark may ride a pick-up that finds its stream gone; a call counts where its
 // provider answered (calls.ts, streams.ts). The account is the one requireSession or the session read (accounts.ts) set.
 app.use(async (c, next) => {

@@ -9,7 +9,7 @@ export const VERSION_HEADER = 'x-hazelle-version';
 export const RELAY_HEADER = 'x-relay';
 // The chat whose bot's script makes a relayed call (an embedding), counted in that chat's cap as its streams are.
 export const BOT_HEADER = 'x-hazelle-bot';
-// 헤이젤 지금's label (contracts/pulse), sent only while the account shares its usage.
+// 헤이젤 나우's label (contracts/pulse), sent only while the account shares its usage.
 export const PULSE_HEADER = 'x-hazelle-pulse';
 // Who sent a request, as the public listener saw it (server/frontend-worker): the key of the per-visitor limits.
 export const VISITOR_HEADER = 'x-hazelle-visitor';

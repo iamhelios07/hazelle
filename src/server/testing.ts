@@ -137,7 +137,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       env.stores.close();
       env.stores = registry();
     },
-    // 헤이젤 지금 as a new process opens it: its sets empty, its start read again from pulse_start.
+    // 헤이젤 나우 as a new process opens it: its sets empty, its start read again from pulse_start.
     restartPulse: async () => {
       env.pulse = await openPulse(env.db, () => clock.now());
     },

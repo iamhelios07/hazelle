@@ -54,6 +54,6 @@ export type Settings = {
   labs?: string[];
   features?: FeatureSwitches;
   answerInstruction?: string;
-  // 헤이젤 지금 (design §6.12): false stops every usage label this account's pages send; absent shares (the default).
+  // 헤이젤 나우 (design §6.12): false stops every usage label this account's pages send; absent shares (the default).
   pulse?: false;
 };

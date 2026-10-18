@@ -13,7 +13,7 @@ const RETRY_MS = 10 * 60 * 1000;
 // A fetch is background work the shutdown drain waits for, so it is bounded.
 const FETCH_MS = 60 * 1000;
 
-// name: models.dev's display name, which 헤이젤 지금 shows (pulse.ts); null where it gives none.
+// name: models.dev's display name, which 헤이젤 나우 shows (pulse.ts); null where it gives none.
 type ListedRow = ListedModel & { list: string; model: string; name: string | null };
 
 const rate = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);

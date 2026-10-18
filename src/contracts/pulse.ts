@@ -1,4 +1,4 @@
-// 헤이젤 지금 (design §6.12): the label a client adds to requests it already sends, and the public board's answer.
+// 헤이젤 나우 (design §6.12): the label a client adds to requests it already sends, and the public board's answer.
 // The server counts only labelled requests; it infers nothing from traffic.
 
 export const PULSE_ROLES = ['chat', 'aux', 'image', 'embedding'] as const;
@@ -38,21 +38,35 @@ export function readPulseHeader(value: string | undefined | null): PulseLabel | 
 export const PULSE_FLOORS = { row: 5, board: 10, round: 10 } as const;
 
 // One ranking row. model: the confirmed name in the spelling most counted, null for 기타. type: the connection type,
-// present only in the split view (프로바이더별로 보기). share: of the role's total in the same window, 0 to 1. people:
-// that week's distinct people on the row. replies: 대화 only, replies received in the last 24 hours, rounded.
+// present only in the split view (제공자별로 보기). share: of the role's total in the same window, 0 to 1. people:
+// that week's distinct people on the row. replies: the board's 대화 only, replies received in the last 24 hours, rounded.
 export type PulseRow = { model: string | null; type?: string; share: number; people: number; replies?: number };
 
 export type PulseRanking = { merged: PulseRow[]; split: PulseRow[] };
+export type PulseRankings = Record<PulseRole, PulseRanking>;
+
+// Who stood where a period earlier, for the rank change marks: the same rows in the same order, nothing else.
+export type PulsePlace = Pick<PulseRow, 'model' | 'type'>;
+export type PulseOrder = { merged: PulsePlace[]; split: PulsePlace[] };
+// A role is null where its earlier period ended before counting started, so a first period shows no marks.
+export type PulseBefore = Record<PulseRole, PulseOrder | null>;
 
 // hours: the last 24 whole hours, oldest first, each hour's calls per role (rounded); at is the hour's start.
-// week.from: the start of the counting week (Monday 00:00 KST).
+// week.from: the start of the counting week (Monday 00:00 KST). before: 대화 the 24 hours before, the other roles last
+// week. weeks: the earlier weeks that passed PULSE_FLOORS.board, newest first, each read as a PulseWeek.
 export type PulseBoard = {
   week: { from: number; people: number };
   replies: number;
   hours: { at: number; calls: Record<PulseRole, number> }[];
-  ranking: Record<PulseRole, PulseRanking>;
+  ranking: PulseRankings;
+  before: PulseBefore;
+  weeks: number[];
 };
 
 // starts: when counting starts (labels before it are ignored). board: null before then, or while fewer than
 // PULSE_FLOORS.board people share this week. at: when this answer was made; the server refreshes it every few minutes.
 export type PulseAnswer = { starts: number; at: number; board: PulseBoard | null };
+
+// An earlier week (GET /api/pulse/weeks/:from), every role ranked by that week's people, 대화 too: its replies are kept
+// only 48 hours. before: the week before it.
+export type PulseWeek = { from: number; people: number; ranking: PulseRankings; before: PulseBefore };

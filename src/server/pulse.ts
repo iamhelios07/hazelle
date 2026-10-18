@@ -4,7 +4,7 @@ import { PULSE_FLOORS, PULSE_ROLES, type PulseAnswer, type PulseBoard, type Puls
 import type { Db, Statement } from './db/service-db';
 import { DAY_MS, type AppEnv } from './http';
 
-// 헤이젤 지금 (design §6.12): counts what the client labels (worker.ts, calls.ts, streams.ts) and answers the public board.
+// 헤이젤 나우 (design §6.12): counts what the client labels (worker.ts, calls.ts, streams.ts) and answers the public board.
 
 const HOUR_MS = 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
@@ -211,6 +211,8 @@ async function board(db: Db, now: number): Promise<PulseBoard | null> {
     replies: rounded(chatCalls),
     hours: hours.map(({ at, calls: counts }) => ({ at, calls: Object.fromEntries(PULSE_ROLES.map((role) => [role, rounded(counts[role])])) as Record<PulseRole, number> })),
     ranking: { chat, aux: byPeople('aux'), image: byPeople('image'), embedding: byPeople('embedding') },
+    before: { chat: null, aux: null, image: null, embedding: null },
+    weeks: [],
   };
 }
 

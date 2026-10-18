@@ -23,7 +23,7 @@ export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 // What the process gives every request (node.ts; testing.ts builds the same set over a temp directory). outbound: the
 // one way a provider is reached; localProviders: the hosts it reaches outside the public internet (outbound.ts), which
 // the session tells the client. limits: calls per account, botCalls per account and chat, visitors per visitor on the
-// anonymous share routes (shares.ts), signup and credentials. backups: the daily job. pulse: 헤이젤 지금's counts.
+// anonymous share routes (shares.ts), signup and credentials. backups: the daily job. pulse: 헤이젤 나우's counts.
 export type Services = {
   db: Db;
   files: Bucket;
@@ -36,7 +36,7 @@ export type Services = {
   pulse: Pulse;
 };
 
-// label: the request's 헤이젤 지금 label (worker.ts).
+// label: the request's 헤이젤 나우 label (worker.ts).
 export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number; label?: PulseLabel } };
 
 export function fail(c: Context, status: ContentfulStatusCode, error: ServerError, detail: Record<string, unknown> = {}) {

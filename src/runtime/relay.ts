@@ -28,7 +28,7 @@ export type JsonAnswer = { ok: true; data: unknown } | { ok: false; failure: Rel
 const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 'stopped' } : { kind: 'offline' });
 
 // The provider's answer, whatever its status. bot: the chat whose bot's script makes the call (BOT_HEADER). pulse: a
-// provider call's 헤이젤 지금 label, sent to this app's server beside the request and never in request.headers, which
+// provider call's 헤이젤 나우 label, sent to this app's server beside the request and never in request.headers, which
 // the relay forwards to the provider.
 export async function relayRaw(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<Response | RelayFailure> {
   let response: Response;

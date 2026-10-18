@@ -103,7 +103,7 @@ accounts.post('/logout/others', requireSession, async (c) => {
 accounts.get('/session', async (c) => {
   const account = await currentAccount(c);
   if (!account) return c.json({ session: null, signupOpen: Boolean(await c.env.db.prepare(`SELECT ${ROOM} AS open`).first('open')) });
-  // For 헤이젤 지금's page-load mark (worker.ts), which counts the signed-in account.
+  // For 헤이젤 나우's page-load mark (worker.ts), which counts the signed-in account.
   c.set('account', account);
   const [session, vault] = await Promise.all([describe(c, account), readVault(c.env.db, account.id)]);
   return c.json({ session, vault });
