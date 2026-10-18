@@ -14,7 +14,7 @@ it('serves generated Brotli and gzip assets with their original type and cache p
     await writeFile(join(dir, 'assets/main-h1.js'), body);
     await writeFile(join(dir, 'assets/font-h2.woff2'), body);
     await compressClient(dir);
-    const client = clientFiles(dir);
+    const client = clientFiles(dir, async () => null, () => Promise.reject(new Error('no pulse')));
     for (const [encoding, decode] of [['br', brotliDecompressSync], ['gzip', gunzipSync]] as const) {
       const response = await client.request('/assets/main-h1.js', { headers: { 'accept-encoding': encoding } });
       expect(response.headers.get('content-encoding')).toBe(encoding);
