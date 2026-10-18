@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import { PULSE_PAGE, type PulseAnswer } from '../contracts/pulse';
 import { SHARE_ID, type ShareCover } from '../contracts/shares';
 
 // frame-src is also the tool pages' navigation boundary: adding any host there opens a way out for them.
@@ -17,7 +18,7 @@ const HEADERS = { 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nos
 // Every file under /assets has a content hash in its name, so a changed file is a new URL.
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
-export function clientFiles(clientDir: string, cover: (share: string) => Promise<ShareCover | null>) {
+export function clientFiles(clientDir: string, cover: (share: string) => Promise<ShareCover | null>, pulse: () => Promise<PulseAnswer>) {
   const client = new Hono();
   client.use(async (c, next) => {
     const started = performance.now();
@@ -46,6 +47,13 @@ export function clientFiles(clientDir: string, cover: (share: string) => Promise
     if (!SHARE_ID.test(id) || !c.req.header('accept')?.includes('text/html')) return next();
     return c.html(sharePage(await readFile(join(clientDir, 'index.html'), 'utf8'), await cover(id)));
   });
+  client.get(PULSE_PAGE.path, async (c, next) => {
+    if (!c.req.header('accept')?.includes('text/html')) return next();
+    const html = await readFile(join(clientDir, 'index.html'), 'utf8');
+    // The page loads whatever the numbers do.
+    const answer = await pulse().catch(() => null);
+    return c.html(answer ? pulsePage(html, answer) : html);
+  });
   client.get('*', serveStatic({ root: clientDir, precompressed: true }));
   // A path that is no file is a client route, whatever it looks like: model ids carry dots
   // (/models/<connection>/vendor/model-4.5). Only a page load gets the page; a missing asset is a real 404.
@@ -58,17 +66,28 @@ export function clientFiles(clientDir: string, cover: (share: string) => Promise
 
 const escape = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
+function worded(html: string, title: string, line: string): string {
+  const [named, said] = [escape(title), escape(line)];
+  return html
+    .replace(/<title>[^<]*<\/title>/, () => `<title>${named}</title>`)
+    .replace(/<meta property="og:title" content="[^"]*"/, () => `<meta property="og:title" content="${named}"`)
+    .replace(/<meta name="description" content="[^"]*"/, () => `<meta name="description" content="${said}"`)
+    .replace(/<meta property="og:description" content="[^"]*"/, () => `<meta property="og:description" content="${said}"`);
+}
+
 // A share link's page: the app's page, whose embed carries the sharer's opt-in cover as text, or the app's own words
 // when there is none. Never a picture, not even the app's: an embed of a share shows text only.
 export function sharePage(html: string, cover: ShareCover | null): string {
-  let page = html.replace(/\s*<meta property="og:image[^>]*>/g, '').replace(/<meta name="twitter:card" content="[^"]*"/, '<meta name="twitter:card" content="summary"');
-  if (!cover) return page;
-  const title = escape(cover.creator ? `${cover.name} · ${cover.creator}` : cover.name);
-  const line = escape(cover.line);
-  page = page
-    .replace(/<title>[^<]*<\/title>/, () => `<title>${title}</title>`)
-    .replace(/<meta property="og:title" content="[^"]*"/, () => `<meta property="og:title" content="${title}"`)
-    .replace(/<meta name="description" content="[^"]*"/, () => `<meta name="description" content="${line}"`)
-    .replace(/<meta property="og:description" content="[^"]*"/, () => `<meta property="og:description" content="${line}"`);
-  return page;
+  const page = html.replace(/\s*<meta property="og:image[^>]*>/g, '').replace(/<meta name="twitter:card" content="[^"]*"/, '<meta name="twitter:card" content="summary"');
+  return cover ? worded(page, cover.creator ? `${cover.name} · ${cover.creator}` : cover.name, cover.line) : page;
+}
+
+// 헤이젤 나우's page: the app's page, picture included, whose embed tells the board's numbers; the app's own words
+// while there is no board.
+function pulsePage(html: string, { board }: PulseAnswer): string {
+  if (!board) return html;
+  const count = (value: number) => value.toLocaleString('ko-KR');
+  // 기타 never headlines.
+  const leader = board.ranking.chat.merged.find((row) => row.model !== null)?.model;
+  return worded(html, leader ? `${PULSE_PAGE.title} · 대화 1위 ${leader}` : PULSE_PAGE.title, `최근 24시간 응답 ${count(board.replies)}번 · 이번 주 ${count(board.week.people)}명이 썼어요`);
 }

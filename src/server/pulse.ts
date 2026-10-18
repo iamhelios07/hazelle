@@ -1,8 +1,21 @@
 import { Hono } from 'hono';
 import { CONNECTOR_MODELS, MODELS_DEV_LISTS } from '../connectors/models-dev';
-import { PULSE_FLOORS, PULSE_ROLES, type PulseAnswer, type PulseBoard, type PulseLabel, type PulseRanking, type PulseRole, type PulseRow } from '../contracts/pulse';
+import {
+  PULSE_FLOORS,
+  PULSE_ROLES,
+  type PulseAnswer,
+  type PulseBoard,
+  type PulseLabel,
+  type PulseOrder,
+  type PulsePlace,
+  type PulseRanking,
+  type PulseRankings,
+  type PulseRole,
+  type PulseRow,
+  type PulseWeek,
+} from '../contracts/pulse';
 import type { Db, Statement } from './db/service-db';
-import { DAY_MS, type AppEnv } from './http';
+import { DAY_MS, fail, type AppEnv } from './http';
 
 // 헤이젤 나우 (design §6.12): counts what the client labels (worker.ts, calls.ts, streams.ts) and answers the public board.
 
@@ -23,6 +36,8 @@ export type Pulse = {
   // A call its provider answered 2xx.
   call(account: string, label: Call): Promise<void>;
   answer(): Promise<PulseAnswer>;
+  // null for anything but one of the board's weeks.
+  week(from: number): Promise<PulseWeek | null>;
 };
 
 // Who counted toward a row, in memory only, never written or shown (as the relay quotas, limits.ts). stored: the people
@@ -108,6 +123,7 @@ export async function openPulse(db: Db, clock: () => number = Date.now): Promise
   };
 
   let memo: { at: number; answer: Promise<PulseAnswer> } | null = null;
+  const weeks = new Map<number, Promise<PulseWeek | null>>();
   return {
     seen: async (account) => {
       const now = clock();
@@ -123,9 +139,9 @@ export async function openPulse(db: Db, clock: () => number = Date.now): Promise
       const now = clock();
       const current = thisWeek(now);
       const writes = [db.prepare('INSERT INTO pulse_hours (hour, role, calls) VALUES (?, ?, 1) ON CONFLICT DO UPDATE SET calls = calls + 1').bind(hourOf(now), role)];
-      // A 대화 row's share is of the day's replies; the other roles' of their week's people.
-      const total = role === 'chat' ? null : entryIn(current.roles, role, group);
-      if (total && grown(total, account, PULSE_FLOORS.row)) {
+      // 대화's too, though the board shares it by replies: a past week shares it by people (pastWeek).
+      const total = entryIn(current.roles, role, group);
+      if (grown(total, account, PULSE_FLOORS.row)) {
         writes.push(db.prepare('INSERT INTO pulse_week_roles (week, role, people) VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET people = max(people, excluded.people)').bind(current.from, role, total.stored));
       }
       for (const split of ['', type]) {
@@ -144,7 +160,7 @@ export async function openPulse(db: Db, clock: () => number = Date.now): Promise
     answer: () => {
       const now = clock();
       if (!memo || now - memo.at >= MEMO_MS) {
-        const made = { at: now, answer: (async (): Promise<PulseAnswer> => ({ starts, at: now, board: counting(now) ? await board(db, now) : null }))() };
+        const made = { at: now, answer: (async (): Promise<PulseAnswer> => ({ starts, at: now, board: counting(now) ? await board(db, starts, now) : null }))() };
         made.answer.catch(() => {
           if (memo === made) memo = null;
         });
@@ -152,35 +168,56 @@ export async function openPulse(db: Db, clock: () => number = Date.now): Promise
       }
       return memo.answer;
     },
+    week: (from) => {
+      if (!Number.isSafeInteger(from) || weekOf(from) !== from || from >= weekOf(clock())) return Promise.resolve(null);
+      // A past week no longer changes. Only weeks found are kept: any number can be asked.
+      const kept = weeks.get(from);
+      if (kept) return kept;
+      const made = pastWeek(db, from);
+      weeks.set(from, made);
+      made.then(
+        (week) => {
+          if (!week) weeks.delete(from);
+        },
+        () => weeks.delete(from),
+      );
+      return made;
+    },
   };
 }
 
 type WeekRow = { role: PulseRole; key: string; type: string; name: string | null; people: number };
 type ReplyRow = { key: string; type: string; name: string | null; replies: number };
 const rounded = (count: number) => Math.round(count / PULSE_FLOORS.round) * PULSE_FLOORS.round;
+const typed = (type: string) => (type ? { type } : {});
+const byRole = <T>(made: (role: PulseRole) => T) => Object.fromEntries(PULSE_ROLES.map((role) => [role, made(role)])) as Record<PulseRole, T>;
+const ranked = (rows: { count: number; row: PulseRow }[]): PulseRanking => {
+  const last = '\uffff';
+  const sorted = rows
+    .sort((a, b) => b.count - a.count || (a.row.model ?? last).localeCompare(b.row.model ?? last) || (a.row.type ?? '').localeCompare(b.row.type ?? ''))
+    .map(({ row }) => row);
+  return { merged: sorted.filter((row) => row.type === undefined), split: sorted.filter((row) => row.type !== undefined) };
+};
+const place = ({ key, type }: PulseRow): PulsePlace => (type === undefined ? { key } : { key, type });
+const places = ({ merged, split }: PulseRanking): PulseOrder => ({ merged: merged.map(place), split: split.map(place) });
 
 // Stored rows passed their floors when written, so the board reads only the database: a restart hides nothing it showed.
-async function board(db: Db, now: number): Promise<PulseBoard | null> {
-  const week = weekOf(now);
+// The 24 whole hours before now's hour: each hour's calls, and 대화 ranked by its replies.
+async function chatDay(db: Db, now: number): Promise<{ hours: { at: number; calls: Record<PulseRole, number> }[]; ranking: PulseRanking }> {
   const until = hourOf(now);
   const since = until - DAY_MS;
-  const people = await db.prepare('SELECT people FROM pulse_week WHERE week = ?').bind(week).first<number>('people');
-  if (people === null) return null;
-  const [calls, roles, models, replies] = await Promise.all([
+  const [calls, weekRows, replies] = await Promise.all([
     db.prepare('SELECT hour, role, calls FROM pulse_hours WHERE hour >= ? AND hour < ?').bind(since, until).all<{ hour: number; role: PulseRole; calls: number }>(),
-    db.prepare('SELECT role, people FROM pulse_week_roles WHERE week = ?').bind(week).all<{ role: PulseRole; people: number }>(),
-    db.prepare('SELECT role, key, type, name, people FROM pulse_week_models WHERE week = ?').bind(week).all<WeekRow>(),
+    db.prepare("SELECT key, type, people FROM pulse_week_models WHERE week = ? AND role = 'chat'").bind(weekOf(now)).all<{ key: string; type: string; people: number }>(),
     db.prepare('SELECT key, type, name, replies FROM pulse_hour_replies WHERE hour >= ? AND hour < ? ORDER BY replies DESC').bind(since, until).all<ReplyRow>(),
   ]);
   const callsAt = new Map(calls.results.map((row) => [`${row.hour}\0${row.role}`, row.calls]));
   const hours = Array.from({ length: 24 }, (_, index) => {
     const at = since + index * HOUR_MS;
-    return { at, calls: Object.fromEntries(PULSE_ROLES.map((role) => [role, callsAt.get(`${at}\0${role}`) ?? 0])) as Record<PulseRole, number> };
+    return { at, calls: byRole((role) => callsAt.get(`${at}\0${role}`) ?? 0) };
   });
   const chatCalls = hours.reduce((sum, hour) => sum + hour.calls.chat, 0);
-  const weekRows = new Map(models.results.map((row) => [`${row.role}\0${row.key}\0${row.type}`, row]));
-  const totals = new Map(roles.results.map((row) => [row.role, row.people]));
-
+  const peopleOf = new Map(weekRows.results.map((row) => [`${row.key}\0${row.type}`, row.people]));
   // Ordered by replies, so the first row of a model names it in its most-counted spelling.
   const summed = new Map<string, ReplyRow>();
   for (const row of replies.results) {
@@ -189,34 +226,66 @@ async function board(db: Db, now: number): Promise<PulseBoard | null> {
     if (found) found.replies += row.replies;
     else summed.set(id, { ...row });
   }
-  const ranked = (rows: { count: number; row: PulseRow }[]): PulseRanking => {
-    const last = '\uffff';
-    const sorted = rows
-      .sort((a, b) => b.count - a.count || (a.row.model ?? last).localeCompare(b.row.model ?? last) || (a.row.type ?? '').localeCompare(b.row.type ?? ''))
-      .map(({ row }) => row);
-    return { merged: sorted.filter((row) => row.type === undefined), split: sorted.filter((row) => row.type !== undefined) };
-  };
-  const typed = (type: string) => (type ? { type } : {});
   // A 대화 row also shows its week's people, so it waits for its week row (at PULSE_FLOORS.row people) as well.
-  const chat = ranked(
-    [...summed.values()].flatMap(({ key, type, name, replies: count }) => {
-      const weekRow = weekRows.get(`chat\0${key}\0${type}`);
-      return weekRow ? [{ count, row: { key, model: name, ...typed(type), share: count / chatCalls, people: weekRow.people, replies: rounded(count) } }] : [];
+  const ranking = ranked(
+    [...summed].flatMap(([id, { key, type, name, replies: count }]) => {
+      const people = peopleOf.get(id);
+      return people === undefined ? [] : [{ count, row: { key, model: name, ...typed(type), share: count / chatCalls, people, replies: rounded(count) } }];
     }),
   );
-  const byPeople = (role: PulseRole) =>
-    ranked(models.results.filter((row) => row.role === role).map(({ key, type, name, people: count }) => ({ count, row: { key, model: name, ...typed(type), share: count / totals.get(role)!, people: count } })));
+  return { hours, ranking };
+}
+
+// null for a week that never passed PULSE_FLOORS.board, whose lists were never shown.
+async function weekRanking(db: Db, week: number): Promise<{ people: number; ranking: PulseRankings } | null> {
+  const people = await db.prepare('SELECT people FROM pulse_week WHERE week = ?').bind(week).first<number>('people');
+  if (people === null) return null;
+  const [roles, models] = await Promise.all([
+    db.prepare('SELECT role, people FROM pulse_week_roles WHERE week = ?').bind(week).all<{ role: PulseRole; people: number }>(),
+    db.prepare('SELECT role, key, type, name, people FROM pulse_week_models WHERE week = ?').bind(week).all<WeekRow>(),
+  ]);
+  const totals = new Map(roles.results.map((row) => [row.role, row.people]));
+  const ranking = byRole((role) =>
+    ranked(models.results.filter((row) => row.role === role).map(({ key, type, name, people: count }) => ({ count, row: { key, model: name, ...typed(type), share: count / totals.get(role)!, people: count } }))),
+  );
+  return { people, ranking };
+}
+
+async function board(db: Db, starts: number, now: number): Promise<PulseBoard | null> {
+  const from = weekOf(now);
+  const current = await weekRanking(db, from);
+  if (!current) return null;
+  const [day, dayBefore, lastWeek, weeks] = await Promise.all([
+    chatDay(db, now),
+    // Its oldest hour is the oldest forgetPulseHours keeps.
+    hourOf(now) - 2 * DAY_MS < starts ? null : chatDay(db, now - DAY_MS),
+    weekRanking(db, from - WEEK_MS),
+    db.prepare('SELECT week FROM pulse_week WHERE week < ? ORDER BY week DESC').bind(from).all<{ week: number }>(),
+  ]);
   return {
-    week: { from: week, people },
-    replies: rounded(chatCalls),
-    hours: hours.map(({ at, calls: counts }) => ({ at, calls: Object.fromEntries(PULSE_ROLES.map((role) => [role, rounded(counts[role])])) as Record<PulseRole, number> })),
-    ranking: { chat, aux: byPeople('aux'), image: byPeople('image'), embedding: byPeople('embedding') },
-    before: { chat: null, aux: null, image: null, embedding: null },
-    weeks: [],
+    week: { from, people: current.people },
+    replies: rounded(day.hours.reduce((sum, hour) => sum + hour.calls.chat, 0)),
+    hours: day.hours.map(({ at, calls }) => ({ at, calls: byRole((role) => rounded(calls[role])) })),
+    // The board's 대화 is the day's replies; the week's people rank it only once the week is past.
+    ranking: { ...current.ranking, chat: day.ranking },
+    before: { ...byRole((role) => lastWeek && places(lastWeek.ranking[role])), chat: dayBefore && places(dayBefore.ranking) },
+    weeks: weeks.results.map((row) => row.week),
   };
 }
 
-export const forgetPulseHours = (db: Db, now = Date.now()) =>
-  db.batch(['pulse_hours', 'pulse_hour_replies'].map((table) => db.prepare(`DELETE FROM ${table} WHERE hour < ?`).bind(now - HOURS_KEPT_MS)));
+async function pastWeek(db: Db, from: number): Promise<PulseWeek | null> {
+  const [week, prior] = await Promise.all([weekRanking(db, from), weekRanking(db, from - WEEK_MS)]);
+  return week && { from, people: week.people, ranking: week.ranking, before: byRole((role) => prior && places(prior.ranking[role])) };
+}
 
-export const pulse = new Hono<AppEnv>().get('/', async (c) => c.json(await c.env.pulse.answer(), 200, { 'cache-control': `public, max-age=${MEMO_MS / 1000}` }));
+// By hour boundary: the board's 대화 before reads [hourOf(now) - 2 days, hourOf(now) - 1 day) whole.
+export const forgetPulseHours = (db: Db, now = Date.now()) =>
+  db.batch(['pulse_hours', 'pulse_hour_replies'].map((table) => db.prepare(`DELETE FROM ${table} WHERE hour < ?`).bind(hourOf(now) - HOURS_KEPT_MS)));
+
+const WEEK_CACHE_SECONDS = 24 * 60 * 60;
+export const pulse = new Hono<AppEnv>()
+  .get('/', async (c) => c.json(await c.env.pulse.answer(), 200, { 'cache-control': `public, max-age=${MEMO_MS / 1000}` }))
+  .get('/weeks/:from', async (c) => {
+    const found = await c.env.pulse.week(Number(c.req.param('from')));
+    return found ? c.json(found, 200, { 'cache-control': `public, max-age=${WEEK_CACHE_SECONDS}` }) : fail(c, 404, 'not-found');
+  });

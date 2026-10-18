@@ -2,10 +2,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { PulseAnswer, PulseBoard } from '../contracts/pulse';
 import { clientFiles, CSP, SANDBOX_CSP, SANDBOX_NETWORK_CSP } from './static';
 
 let dir: string;
 let client: ReturnType<typeof clientFiles>;
+let pulse: () => Promise<PulseAnswer>;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-client-'));
   mkdirSync(join(dir, 'assets'));
@@ -20,7 +22,7 @@ beforeAll(() => {
   ]) {
     writeFileSync(join(dir, name!), body!);
   }
-  client = clientFiles(dir, async (share) => (share === 'covered-share-id' ? { name: 'Mira <b>', creator: 'jin & co', line: '$& "quoted"' } : null));
+  client = clientFiles(dir, async (share) => (share === 'covered-share-id' ? { name: 'Mira <b>', creator: 'jin & co', line: '$& "quoted"' } : null), () => pulse());
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -61,6 +63,23 @@ describe('the client files', () => {
     expect(covered).toBe('<title>Mira &#60;b&#62; · jin &#38; co</title><meta name="description" content="$&#38; &#34;quoted&#34;" /><meta property="og:title" content="Mira &#60;b&#62; · jin &#38; co" /><meta property="og:description" content="$&#38; &#34;quoted&#34;" /><meta name="twitter:card" content="summary" />');
     const bare = await client.request('/s/no-cover-share00', { headers: PAGE });
     expect([bare.headers.get('content-security-policy'), await bare.text()]).toEqual([CSP, '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta name="twitter:card" content="summary" />']);
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
+  });
+
+  it("fills 헤이젤 나우's embed with the board's escaped numbers and its first named 대화 model, keeping the picture", async () => {
+    const html = '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta property="og:image" content="https://hazelle.app/og.png" />';
+    writeFileSync(join(dir, 'index.html'), html);
+    const row = (model: string | null) => ({ key: model ?? '', model, share: 0.5, people: 5 });
+    const board = { week: { from: 0, people: 4560 }, replies: 12340, ranking: { chat: { merged: [row(null), row('GPT <5> & "co"')], split: [] } } } as unknown as PulseBoard;
+    pulse = async () => ({ starts: 0, at: 0, board });
+    const page = async () => (await client.request('/now', { headers: PAGE })).text();
+    expect(await page()).toBe(
+      '<title>헤이젤 나우 · 대화 1위 GPT &#60;5&#62; &#38; &#34;co&#34;</title><meta name="description" content="최근 24시간 응답 12,340번 · 이번 주 4,560명이 썼어요" /><meta property="og:title" content="헤이젤 나우 · 대화 1위 GPT &#60;5&#62; &#38; &#34;co&#34;" /><meta property="og:description" content="최근 24시간 응답 12,340번 · 이번 주 4,560명이 썼어요" /><meta property="og:image" content="https://hazelle.app/og.png" />',
+    );
+    for (const answer of [() => Promise.resolve({ starts: 0, at: 0, board: null }), () => Promise.reject(new Error('down'))]) {
+      pulse = answer;
+      expect(await page()).toBe(html);
+    }
     writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
   });
 
