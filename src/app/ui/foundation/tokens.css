@@ -113,6 +113,7 @@
   --palette-rose-850: #532639;
   --palette-lime-850: #263b1a;
   --palette-parchment-200: #ecd9b4;
+  --palette-bronze-400: #c98a5e;
 }
 
 /* The dark theme: the document's default, and any element drawn in it inside a light one (a preset's swatch). */
@@ -141,6 +142,11 @@
   --color-on-accent: var(--palette-gold-950);
   --color-warn: var(--palette-coral-400);
   --color-success: var(--palette-mint-400);
+  --color-rank-1: var(--palette-gold-400);
+  --color-rank-2: var(--palette-lilac-250);
+  --color-rank-3: var(--palette-bronze-400);
+  --color-on-rank: var(--palette-ink-900);
+  --color-rank-1-text: var(--palette-gold-400);
   --color-focus: var(--color-accent);
   --color-scrim: var(--palette-scrim);
   --color-you-bg: var(--palette-mint-800);
@@ -249,6 +255,8 @@
   --color-warn-text: color-mix(in srgb, var(--color-warn) 30%, var(--color-text));
   --color-success-bg: color-mix(in srgb, var(--color-success) 10%, var(--color-bg));
   --color-success-border: color-mix(in srgb, var(--color-success) 40%, var(--color-bg));
+  --color-rank-1-bg: color-mix(in srgb, var(--color-rank-1) 8%, var(--color-bg));
+  --color-rank-1-border: color-mix(in srgb, var(--color-rank-1) 40%, var(--color-bg));
   --color-selection: color-mix(in srgb, var(--color-accent) 35%, transparent);
   --color-found-term: color-mix(in srgb, var(--color-accent) 30%, transparent);
   /* Neutral on purpose: the accent already means picked, current and dropping, so a gold folder would read as picked. */
@@ -350,6 +358,7 @@
   --scrollbar-inset: 3px;
   --dot: 6px;
   --bar-height: 4px;
+  --rank-place: 32px;
   --gauge-height: 8px;
   --chart-height: 120px;
   --chart-bar-max: 40px;
@@ -526,6 +535,8 @@
   --color-on-accent: var(--palette-sand-10);
   --color-warn: var(--palette-coral-700);
   --color-success: var(--palette-mint-700);
+  --color-rank-2: var(--palette-paper-500);
+  --color-rank-1-text: var(--palette-gold-700);
   --color-scrim: var(--palette-scrim-soft);
   --color-you-bg: var(--palette-mint-150);
   --color-you-text: var(--palette-mint-900);

@@ -1,0 +1,110 @@
+.ranking {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 0 var(--rank-place) minmax(0, 1fr) auto 0;
+  gap: var(--space-4) var(--space-12);
+}
+
+/* Every row on the list's columns, so the bars end at one line whatever each value's width. A subgrid's padding would
+   squeeze its first and last tracks, so the empty edge columns and their gaps are the row's inset instead. */
+.row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: var(--space-12) 0;
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--radius-md);
+}
+
+.place {
+  grid-column: 2;
+  display: grid;
+  place-items: center;
+  width: var(--rank-place);
+  height: var(--rank-place);
+  border-radius: var(--radius-full);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-faint);
+}
+
+.body {
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.name {
+  composes: ellipsis from '../foundation/a11y.module.css';
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.detail {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  display: block;
+  height: var(--bar-height);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-raised);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: var(--color-text-faint);
+}
+
+.value {
+  grid-column: 4;
+  justify-self: end;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.first {
+  background: var(--color-rank-1-bg);
+  border-color: var(--color-rank-1-border);
+}
+
+.first .place,
+.first .fill {
+  background: var(--color-rank-1);
+}
+
+.second .place,
+.second .fill {
+  background: var(--color-rank-2);
+}
+
+.third .place,
+.third .fill {
+  background: var(--color-rank-3);
+}
+
+.first .place,
+.second .place,
+.third .place {
+  color: var(--color-on-rank);
+}
+
+.first .name {
+  font-size: var(--text-lg);
+}
+
+.first .value {
+  font-size: var(--text-xl);
+  color: var(--color-rank-1-text);
+}

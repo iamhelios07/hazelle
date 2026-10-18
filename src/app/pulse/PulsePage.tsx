@@ -6,7 +6,7 @@ import { describeFailure } from '../common/failure';
 import { LegalNotice } from '../common/LegalNotice';
 import { count } from '../common/typedNumber';
 import { inSettings, PULSE } from '../common/words';
-import { Bars, Brand, Callout, Divider, Empty, Facts, Intro, Screen, Section, SettingRow, Switch, Tab, Table, Tabs, Text, type TableColumn } from '../ui';
+import { Bars, Brand, Callout, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tab, Tabs, Text } from '../ui';
 import { clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, startsText } from './board';
 
 type View = { kind: 'loading' } | { kind: 'failed'; failure: string } | { kind: 'read'; answer: PulseAnswer };
@@ -59,13 +59,6 @@ function Board({ board, at }: { board: PulseBoard; at: number }) {
   const [split, setSplit] = useState(false);
   const rows = rankRows(board.ranking[role], split);
   const chat = role === 'chat';
-  const columns: TableColumn[] = [
-    { label: '모델', size: 'name' },
-    ...(split ? [{ label: '제공자', size: 'fill' } as const] : []),
-    ...(chat ? [{ label: '응답', size: 'figure' } as const] : []),
-    { label: '비율', size: 'figure' },
-    { label: '사람', size: 'figure' },
-  ];
   return (
     <>
       <Facts
@@ -86,14 +79,7 @@ function Board({ board, at }: { board: PulseBoard; at: number }) {
         </Tabs>
         <SettingRow label={SPLIT} control={<Switch label={SPLIT} checked={split} onChange={setSplit} />} />
         {rows.length ? (
-          <Table
-            label={`${PULSE_ROLE_NAMES[role]} 모델 순위`}
-            columns={columns}
-            rows={rows.map((row) => {
-              const facts = [...(split ? [row.provider] : []), ...(chat ? [row.replies] : []), row.share, row.people];
-              return { key: String(row.rank), cells: [`${row.rank}. ${row.model}`, ...facts], summary: facts.filter(Boolean).join(' · ') };
-            })}
-          />
+          <Ranking label={`${PULSE_ROLE_NAMES[role]} 모델 순위`} items={rows} />
         ) : (
           <Empty variant="section">아직 순위에 오른 모델이 없어요.</Empty>
         )}
