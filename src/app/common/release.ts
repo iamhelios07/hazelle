@@ -8,6 +8,14 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.22',
+    date: '2026-10-18',
+    lines: [
+      '봇이 꾸민 화면이 Risu와 더 비슷하게 보여요. 응답 안의 서랍 버튼, 테두리·글꼴 크기, 위젯 색이 빠지던 문제를 고쳤어요.',
+      '봇 상태창 숫자가 NaN으로 보이거나 버튼이 {{button}} 글자로 보이던 문제를 고쳤어요.',
+    ],
+  },
+  {
     version: 'v0.2.21',
     date: '2026-10-18',
     lines: ['버튼으로 여닫는 봇 설정 패널이 처음부터 펼쳐져 보이던 문제를 고쳤어요. 이제 버튼을 누르면 메시지 폭에 맞춰 열려요.'],
