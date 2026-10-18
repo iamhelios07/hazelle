@@ -538,14 +538,19 @@ export const firstLine = (text: string) => lines(text)[0] ?? '';
 const prose = (line: string) => !line.startsWith('#') && /\p{L}{2}/u.test(line.replace(/\[[^\]]*\]|\([^)]*\)|【[^】]*】/g, ''));
 
 const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
+// The stored text still holds its CBS, which the displayed one shows filled ({{char}} enters → Luna enters).
+const CBS_PART = /\{\{[\s\S]*?\}\}|<(?:user|char|bot)>/gi;
+// Shorter, a piece between two tags ('. ') would be found in any line.
+const PIECE_LEAST = 6;
 
 // Many bots open every reply with the same status line, which tells one chat from the next no better than a blank.
 // story: the message's own text. A line the bot's scripts brought in is passed over too: a settings panel kept off
 // the screen until opened reads as prose.
 export function previewLine(text: string, story: string): string {
   const all = lines(text);
-  const own = squash(story.replace(/<[^>]*>/g, ' '));
-  return all.find((line) => prose(line) && own.includes(squash(line))) ?? all.find(prose) ?? all[0] ?? '';
+  const pieces = story.split(CBS_PART).flatMap(lines).map(squash);
+  const own = (line: string) => pieces.some((piece) => piece.includes(line) || (piece.length >= PIECE_LEAST && line.includes(piece)));
+  return all.find((line) => prose(line) && own(squash(line))) ?? all.find(prose) ?? all[0] ?? '';
 }
 
 // texts: each message's text as it is displayed (engine/render, which the model cannot call).

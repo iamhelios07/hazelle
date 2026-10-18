@@ -130,7 +130,8 @@ function covers(style: Declarations) {
 // Ruling tripwire (user, 2026-10-18): vw is read against the message's width (Story.module.css), in widths only. A
 // font or a gap sized in vw keeps the screen's, as the bot was drawn on Risu's.
 const WIDTHS = ['width', 'min-width', 'max-width', 'flex-basis'];
-const VW = /(?<=[\d.])vw\b/g;
+// A number standing alone, not the end of a name (--width-100vw).
+const VW = /(?<![\w-])(\d*\.?\d+)vw\b/g;
 // A drawer Risu kept off the screen by its own extent (right: -33% beside width: 33%) until a rule set that offset back
 // (.panel[class*="opened"] { right: 0 }). Grounded with its offsets gone it would stand open in the message, so it is
 // hidden and that rule shows it, across the message: its extent was a share of the screen it slid over. A box only
@@ -171,7 +172,8 @@ export function groundRules(rules: Iterable<object>) {
     });
     return drawer ? [{ rule, display: drawer.display }] : [];
   });
-  const covering = new Set(fixed.filter(({ style }) => covers(style)));
+  // A drawer parked off the screen opens across the message (parked below), not over it.
+  const covering = new Set(fixed.filter((rule) => covers(rule.style) && !parked.some((each) => each.rule === rule)));
   for (const rule of fixed) {
     const { style } = rule;
     for (const property of SCREEN_PLACEMENT) style.removeProperty(property);
@@ -190,7 +192,7 @@ export function groundRules(rules: Iterable<object>) {
   for (const { style } of all) {
     for (const property of WIDTHS) {
       const value = style.getPropertyValue(property);
-      const read = value.replace(VW, 'cqw');
+      const read = value.replace(VW, '$1cqw');
       if (read !== value) style.setProperty(property, read, style.getPropertyPriority(property));
     }
   }

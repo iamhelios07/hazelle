@@ -135,8 +135,8 @@
   composes: fadeAway from '../foundation/motion.module.css';
 }
 
-/* A story sized by its words can be no size container (Story.module.css). */
-.bubble > * {
+/* A story sized by its words can be no size container (Story.module.css), nor one a status box nests in it. */
+.bubble * {
   container-type: normal;
 }
 

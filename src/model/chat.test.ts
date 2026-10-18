@@ -290,6 +290,7 @@ describe('previewLine', () => {
   it('passes the prose a bot script brought in, such as a settings panel, for the message\'s own', () => {
     const panel = '<div class="settings-panel"><div>System Configuration</div></div>\n<p>The lobby  buzzed.</p>';
     expect(previewLine(panel, 'The lobby buzzed.')).toBe('The lobby  buzzed.');
-    expect(previewLine(panel, '{{user}} waits.')).toBe('System Configuration');
+    expect(previewLine(panel, '{{user}}')).toBe('System Configuration');
+    expect(previewLine('<div>System Configuration</div>\nLuna enters the lobby.\nShe waves.', '{{char}} enters the lobby.\nShe waves.')).toBe('Luna enters the lobby.');
   });
 });

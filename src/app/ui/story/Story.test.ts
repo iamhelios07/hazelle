@@ -67,10 +67,12 @@ it('hides a drawer parked off the screen by its own width until the rule that sl
 it('lays a screen backdrop over the message, and reads vw against the message in widths only', () => {
   const backdrop = rule('.sys-backdrop', { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', 'z-index': '980' });
   const dialog = rule('.dialog', { position: 'fixed', top: '0', right: '0', bottom: '0', left: '0', width: '300px' });
-  const box = rule('.box', { width: 'min(94vw, 700px)', 'max-width': '.5vw', 'font-size': '2vw' }, ['width']);
-  groundRules([backdrop, dialog, box]);
+  const box = rule('.box', { width: 'min(94vw, 700px)', 'max-width': '.5vw', 'min-width': 'var(--width-100vw, 80vw)', 'font-size': '2vw' }, ['width']);
+  const drawer = rule('.drawer', { position: 'fixed', top: '0', right: '-100vw', width: '100vw', height: '100vh' });
+  groundRules([backdrop, dialog, box, drawer]);
   expect(Object.fromEntries(backdrop.values)).toEqual({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', 'z-index': '980' });
   expect(Object.fromEntries(dialog.values)).toEqual({ position: 'relative', width: '300px' });
-  expect(Object.fromEntries(box.values)).toEqual({ width: 'min(94cqw, 700px)', 'max-width': '.5cqw', 'font-size': '2vw' });
+  expect(Object.fromEntries(box.values)).toEqual({ width: 'min(94cqw, 700px)', 'max-width': '.5cqw', 'min-width': 'var(--width-100vw, 80cqw)', 'font-size': '2vw' });
+  expect(Object.fromEntries(drawer.values)).toEqual({ position: 'relative', display: 'none' });
   expect(box.priorities.get('width')).toBe('important');
 });
