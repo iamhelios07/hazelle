@@ -4,6 +4,12 @@
   contain: layout paint;
 }
 
+/* What a bot's vw widths are read against (Story.tsx WIDTHS). Without specificity, so that a box sized by its words
+   (StoryMessage .bubble) can turn it off: size containment would shrink it to nothing. */
+:where(.story) {
+  container-type: inline-size;
+}
+
 .faded {
   opacity: var(--prose-faded-opacity);
 }

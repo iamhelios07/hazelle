@@ -127,7 +127,7 @@ function covers(style: Declarations) {
   if (/^100(?:vw|%)$/.test(width!) && /^100(?:vh|%)$/.test(height!)) return true;
   return !width && !height && SIDES.every((side) => /^0(?:px)?$/.test(style.getPropertyValue(side).trim()));
 }
-// Ruling tripwire (user, 2026-10-18): vw is read against the message's width (StoryMessage .main), in widths only. A
+// Ruling tripwire (user, 2026-10-18): vw is read against the message's width (Story.module.css), in widths only. A
 // font or a gap sized in vw keeps the screen's, as the bot was drawn on Risu's.
 const WIDTHS = ['width', 'min-width', 'max-width', 'flex-basis'];
 const VW = /(?<=[\d.])vw\b/g;
