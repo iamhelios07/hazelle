@@ -34,6 +34,11 @@ hazelle.app {
 	reverse_proxy app:8080 {
 		# Replies stream as they are written; buffering would hold them until the end.
 		flush_interval -1
+		# A deploy swaps the only app container (drain up to the 90 s stop grace, then boot): hold each request and redial
+		# until the new one answers, instead of a 502 at once. Caddy retries only when the dial failed or the request was
+		# a GET, so a POST the old app already took is never sent twice.
+		lb_try_duration 100s
+		lb_try_interval 250ms
 		# Above the app's 15-minute limit on a provider call.
 		transport http {
 			read_timeout 20m
