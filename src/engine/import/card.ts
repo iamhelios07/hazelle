@@ -23,15 +23,16 @@ export const blankCard = (name: string): Card => ({
 // that name adds a count, as in "name.module(2).charx".
 const MODULE_CHARX = /\.module\s*(?:\(\d+\)\s*)?\.charx$/i;
 
-// Dispatch goes by extension only, as in Risu; nothing is sniffed.
-export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>): ImportResult {
+// Dispatch goes by extension and the way in, as in Risu; nothing is sniffed, since Risu's module export leaves no mark
+// in the card. asModule: the file came in on the module list, where Risu's importModule reads any .charx as a module.
+export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>, asModule = false): ImportResult {
   const extension = fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase();
   try {
     switch (extension) {
       case 'png':
         return fromPng(bytes);
       case 'charx':
-        return MODULE_CHARX.test(fileName) ? fromModuleCharx(bytes) : fromCharx(bytes);
+        return asModule || MODULE_CHARX.test(fileName) ? fromModuleCharx(bytes) : fromCharx(bytes);
       case 'jpg':
       case 'jpeg':
         return fromCharx(bytes);

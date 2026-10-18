@@ -124,7 +124,7 @@ function describeImportFailure({ kind, detail, line }: ImportFailure): string {
 }
 
 // Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,
-// a conversation prompt's editor, a persona's page, or 설정 › 모듈 for 항상. A file of chats that names no character goes to the character found here too.
+// a conversation prompt's editor, a persona's page, or 설정 › 모듈 for 항상, which also reads any .charx as a module. A file of chats that names no character goes to the character found here too.
 function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
   switch (route.kind) {
     case 'shelf':
@@ -199,7 +199,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     const reader = new ImportWorker();
     readers.current.add(reader);
     try {
-      const parsed = await reader.card(file);
+      const parsed = await reader.card(file, place?.kind === 'always');
       if (!parsed.ok) return { kind: 'failed', file: file.name, failure: describeImportFailure(parsed.failure) };
       if ('chat' in parsed || 'risuChats' in parsed) return await saveChats(file.name, parsed, target, place, choose);
       if ('tool' in parsed) {

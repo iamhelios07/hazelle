@@ -305,6 +305,12 @@ describe('importCard', () => {
     expect(result.module.lore[0]).toMatchObject({ name: 'Gate' });
   });
 
+  it('reads any charx as a module when it comes in on the module list, and as a character elsewhere', () => {
+    const bytes = () => own(zipSync({ 'card.json': strToU8(JSON.stringify(v3({ name: 'Phone', creator_notes: 'A phone screen.' }))) }));
+    expect(importCard('Phone.charx', bytes(), true)).toMatchObject({ ok: true, module: { name: 'Phone', description: 'A phone screen.' } });
+    expect(importCard('Phone.charx', bytes())).toMatchObject({ ok: true, card: { card: { name: 'Phone' } } });
+  });
+
   it('imports the card alone when module.risum is unreadable', () => {
     const card = v3({ extensions: { risuai: { customScripts: [{ comment: 'card', in: 'a', out: 'b', type: 'editoutput', ableFlag: false, flag: 'i' }] } } });
     const imported = charx({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': new Uint8Array([111, 0, 255, 255, 255, 255]) });

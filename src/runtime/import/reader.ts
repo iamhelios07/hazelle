@@ -61,7 +61,7 @@ export class ImportReader {
         }
         const chats = request.file.name.toLowerCase().endsWith('.json') ? chatsOf(bytes) : null;
         if (chats) return chats;
-        const result = importCard(request.file.name, bytes);
+        const result = importCard(request.file.name, bytes, request.asModule);
         if (!result.ok) return result;
         if ('persona' in result) return { ok: true, persona: { ...result.persona, picture: this.picture(result.persona.picture) } };
         return 'card' in result ? { ok: true, card: this.card(result.card) } : { ok: true, module: this.module(result.module) };

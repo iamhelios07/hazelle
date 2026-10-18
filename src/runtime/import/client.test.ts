@@ -47,7 +47,7 @@ describe('ImportWorker', () => {
     const { worker, construct } = transport();
     const client = new ImportWorker();
     expect(construct).not.toHaveBeenCalled();
-    const pending = Promise.allSettled([client.backup([file()]), client.card(file())]);
+    const pending = Promise.allSettled([client.backup([file()]), client.card(file(), false)]);
     expect(construct).toHaveBeenCalledExactlyOnceWith('/import-worker.js', { type: 'module' });
     client.close();
     client.close();
@@ -59,7 +59,7 @@ describe('ImportWorker', () => {
       expect(result.reason).toBeInstanceOf(ImportReadError);
       expect(result.reason.message).toBe('closed');
     }
-    await expect(client.card(file())).rejects.toThrow('closed');
+    await expect(client.card(file(), false)).rejects.toThrow('closed');
     expect(worker.terminate).toHaveBeenCalledOnce();
     expect(worker.postMessage).toHaveBeenCalledTimes(2);
     expect(construct).toHaveBeenCalledOnce();
@@ -68,7 +68,7 @@ describe('ImportWorker', () => {
   it('rejects pending imports after a worker crash and refuses subsequent work', async () => {
     const { worker, construct } = transport();
     const client = new ImportWorker();
-    const pending = Promise.allSettled([client.backup([file()]), client.card(file())]);
+    const pending = Promise.allSettled([client.backup([file()]), client.card(file(), false)]);
     worker.onerror?.({ message: 'worker crashed' } as ErrorEvent);
     for (const result of await pending) {
       expect(result.status).toBe('rejected');
@@ -85,14 +85,14 @@ describe('ImportWorker', () => {
     vi.useFakeTimers();
     const { worker } = transport();
     const client = new ImportWorker();
-    const failed = client.card(file()).catch((error: unknown) => error);
+    const failed = client.card(file(), false).catch((error: unknown) => error);
     worker.onmessage?.({ data: { pong: true } } as MessageEvent<Up>);
     await vi.advanceTimersByTimeAsync(8_000);
     expect(worker.terminate).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(3_000);
     expect(await failed).toBeInstanceOf(ImportStuck);
     expect(worker.terminate).toHaveBeenCalledOnce();
-    await expect(client.card(file())).rejects.toThrow('closed');
+    await expect(client.card(file(), false)).rejects.toThrow('closed');
   });
 
   it('fetches only a selected character, assembles pages in order, and releases the worker history', async () => {

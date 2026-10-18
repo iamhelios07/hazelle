@@ -133,7 +133,7 @@ describe('ImportReader', () => {
 
   it('reads a JSON file of chats, this app\'s own or Risu\'s in either form, and any other JSON as a card', async () => {
     const reader = new ImportReader();
-    const read = (value: unknown) => ask(reader, { kind: 'card', file: new File([json(value)], 'file.json') });
+    const read = (value: unknown) => ask(reader, { kind: 'card', file: new File([json(value)], 'file.json'), asModule: false });
     const chat = { name: '등대', message: [{ role: 'user', data: '안녕', time: 1 }, { role: 'char', data: '반가워 {{inlay::a}}', time: 2 }] };
     expect(await read({ type: 'risuChat', ver: 2, data: chat })).toMatchObject({ ok: true, risuChats: [{ title: '등대', greeting: 0, messages: [{ role: 'user', text: '안녕' }, { role: 'assistant' }] }], missed: [{ kind: 'inlay', count: 1 }] });
     expect(await read({ type: 'risuAllChats', ver: 1, data: [chat, { ...chat, name: '둘째', fmIndex: 1 }] })).toMatchObject({ ok: true, risuChats: [{ title: '등대' }, { title: '둘째', greeting: 2 }] });
@@ -157,7 +157,7 @@ describe('ImportReader', () => {
       'second.png': second,
     }, { level: 0 });
     const reader = new ImportReader();
-    const result = await ask(reader, { kind: 'card', file: new File([new Uint8Array(archive)], 'shared.charx') });
+    const result = await ask(reader, { kind: 'card', file: new File([new Uint8Array(archive)], 'shared.charx'), asModule: false });
     if (!result.ok || !('card' in result) || result.card.avatar === null) throw new Error('card did not import');
     for (let attempt = 0; attempt < 2; attempt++) {
       for (const [index, expected] of [PNG, second].entries()) {
@@ -177,10 +177,10 @@ describe('ImportReader', () => {
 it('reads .js as a tool without evaluating it and rejects oversized files before reading bytes', async () => {
   const reader = new ImportReader();
   const file = new File(['//@api 1\n//@name notes\n//@author jin\nthrow new Error("not executed");'], 'notes.JS');
-  expect(await ask(reader, { kind: 'card', file })).toMatchObject({ ok: true, tool: { manifest: { name: 'notes', author: 'jin' } } });
+  expect(await ask(reader, { kind: 'card', file, asModule: false })).toMatchObject({ ok: true, tool: { manifest: { name: 'notes', author: 'jin' } } });
   const large = new File([new Uint8Array(8 * 1024 * 1024 + 1)], 'large.js');
   const whole = vi.spyOn(large, 'arrayBuffer');
-  expect(await ask(reader, { kind: 'card', file: large })).toMatchObject({ ok: false, failure: { detail: 'tool-too-large' } });
+  expect(await ask(reader, { kind: 'card', file: large, asModule: false })).toMatchObject({ ok: false, failure: { detail: 'tool-too-large' } });
   expect(whole).not.toHaveBeenCalled();
 });
 
@@ -188,7 +188,7 @@ it('reads a .risum from slices of the file, never the whole of it', async () => 
   const reader = new ImportReader();
   const file = new File([risumHead({ name: '배경', assets: [['bg', '', 'png']] }), risumBlock(PNG), RISUM_END], '배경.risum');
   const whole = vi.spyOn(file, 'arrayBuffer');
-  const read = await ask(reader, { kind: 'card', file });
+  const read = await ask(reader, { kind: 'card', file, asModule: false });
   if (!read.ok || !('module' in read)) throw new Error('not a module');
   expect(await ask(reader, { kind: 'asset', handle: read.module.assets[0]!.handle })).toEqual(PNG);
   expect(whole).not.toHaveBeenCalled();
@@ -197,6 +197,6 @@ it('reads a .risum from slices of the file, never the whole of it', async () => 
 it('reads a .risup as a preset, whatever the case of its extension, and a cut .risupreset as unreadable', async () => {
   const reader = new ImportReader();
   const bytes = fromBase64(starter.slice(starter.indexOf(',') + 1));
-  expect(await ask(reader, { kind: 'card', file: new File([bytes], 'starter.RISUP') })).toMatchObject({ ok: true, preset: { prompt: { name: '🏓 핑퐁 간소화' } } });
-  expect(await ask(reader, { kind: 'card', file: new File([bytes.subarray(0, 100)], 'cut.risupreset') })).toEqual({ ok: false, failure: { kind: 'unreadable' } });
+  expect(await ask(reader, { kind: 'card', file: new File([bytes], 'starter.RISUP'), asModule: false })).toMatchObject({ ok: true, preset: { prompt: { name: '🏓 핑퐁 간소화' } } });
+  expect(await ask(reader, { kind: 'card', file: new File([bytes.subarray(0, 100)], 'cut.risupreset'), asModule: false })).toEqual({ ok: false, failure: { kind: 'unreadable' } });
 });

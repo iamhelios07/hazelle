@@ -14,7 +14,7 @@ export type ChatsRead = { ok: true; chat: ChatFile } | { ok: true; risuChats: Ri
 
 type Inputs = {
   backup: { files: File[] };
-  card: { file: File };
+  card: { file: File; asModule: boolean };
   character: { key: number };
   persona: { key: number };
   preset: { key: number };

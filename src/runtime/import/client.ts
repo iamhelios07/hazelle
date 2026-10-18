@@ -19,8 +19,8 @@ export class ImportWorker {
   private readonly pending = new PendingRequests<Replies[Method]>();
   private readonly heart = new Heartbeat(() => this.worker?.postMessage({ ping: true } satisfies Down), () => this.end(new ImportStuck('stuck')));
 
-  async card(file: File): Promise<ImportResult | ChatsRead | { ok: true; tool: ImportedTool } | { ok: true; preset: PresetRead }> {
-    const result = await this.ask({ kind: 'card', file });
+  async card(file: File, asModule: boolean): Promise<ImportResult | ChatsRead | { ok: true; tool: ImportedTool } | { ok: true; preset: PresetRead }> {
+    const result = await this.ask({ kind: 'card', file, asModule });
     if (!result.ok || 'tool' in result || 'preset' in result || 'chat' in result || 'risuChats' in result) return result;
     if ('module' in result) return { ok: true, module: this.module(result.module) };
     if ('persona' in result) {
