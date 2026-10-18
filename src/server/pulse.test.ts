@@ -70,14 +70,14 @@ it('shows the board from 10 people this week and a row from 5 people on it, nami
   at(NOON + 10 * 60 * 1000);
   // Four on NovelAI's V5 stay in memory alone; the five through a generic connection make 기타, never its name.
   expect((await board())?.ranking.image).toEqual({
-    merged: [{ model: null, share: 1, people: 5 }],
-    split: [{ model: null, type: 'direct', share: 1, people: 5 }],
+    merged: [{ key: '', model: null, share: 1, people: 5 }],
+    split: [{ key: '', model: null, type: 'direct', share: 1, people: 5 }],
   });
   await call(cookies[4]!, 'image', 'novelai', 'nai-diffusion-5-full');
   at(NOON + 15 * 60 * 1000);
   expect((await board())?.ranking.image.merged).toEqual([
-    { model: 'NovelAI Diffusion V5 Full', share: 1, people: 5 },
-    { model: null, share: 1, people: 5 },
+    { key: 'novelai diffusion v5 full', model: 'NovelAI Diffusion V5 Full', share: 1, people: 5 },
+    { key: '', model: null, share: 1, people: 5 },
   ]);
 });
 
@@ -95,10 +95,10 @@ it('merges one model across lists by its name and ranks 대화 by the last 24 ho
   expect(answer.hours.at(-1)).toEqual({ at: NOON, calls: { chat: 20, aux: 0, image: 0, embedding: 0 } });
   expect(answer.ranking.chat).toEqual({
     merged: [
-      { model: 'GLM-5.2', share: 14 / 19, people: 5, replies: 10 },
-      { model: null, share: 5 / 19, people: 5, replies: 10 },
+      { key: 'glm 5.2', model: 'GLM-5.2', share: 14 / 19, people: 5, replies: 10 },
+      { key: '', model: null, share: 5 / 19, people: 5, replies: 10 },
     ],
-    split: [{ model: null, type: 'openrouter', share: 5 / 19, people: 5, replies: 10 }],
+    split: [{ key: '', model: null, type: 'openrouter', share: 5 / 19, people: 5, replies: 10 }],
   });
 });
 

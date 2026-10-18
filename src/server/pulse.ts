@@ -201,11 +201,11 @@ async function board(db: Db, now: number): Promise<PulseBoard | null> {
   const chat = ranked(
     [...summed.values()].flatMap(({ key, type, name, replies: count }) => {
       const weekRow = weekRows.get(`chat\0${key}\0${type}`);
-      return weekRow ? [{ count, row: { model: name, ...typed(type), share: count / chatCalls, people: weekRow.people, replies: rounded(count) } }] : [];
+      return weekRow ? [{ count, row: { key, model: name, ...typed(type), share: count / chatCalls, people: weekRow.people, replies: rounded(count) } }] : [];
     }),
   );
   const byPeople = (role: PulseRole) =>
-    ranked(models.results.filter((row) => row.role === role).map(({ type, name, people: count }) => ({ count, row: { model: name, ...typed(type), share: count / totals.get(role)!, people: count } })));
+    ranked(models.results.filter((row) => row.role === role).map(({ key, type, name, people: count }) => ({ count, row: { key, model: name, ...typed(type), share: count / totals.get(role)!, people: count } })));
   return {
     week: { from: week, people },
     replies: rounded(chatCalls),

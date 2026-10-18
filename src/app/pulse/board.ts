@@ -40,7 +40,7 @@ export function rankRows(ranking: PulseRanking, split: boolean): Ranked[] {
   const rows = [...shown.filter(({ row }) => row.model !== null), ...shown.filter(({ row }) => row.model === null)];
   const largest = Math.max(0, ...rows.map(({ row }) => row.share));
   return rows.map(({ row, provider }, index) => ({
-    key: `${row.model ?? ''}\0${row.type ?? ''}`,
+    key: `${row.key}\0${row.type ?? ''}`,
     rank: row.model === null ? null : index + 1,
     name: row.model ?? '기타',
     detail: [provider, row.replies === undefined ? null : `응답 ${count(row.replies)}번`, `이번 주 ${count(row.people)}명`].filter(Boolean).join(' · '),
