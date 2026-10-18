@@ -146,6 +146,12 @@ describe('Scripts', () => {
     expect(taken.drawn).toEqual([0]);
   });
 
+  it('says a script drew a box only where its evaluated replacement holds one', () => {
+    const lastOnly = (text: string) => text.replace(/\{\{#if (\d)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, on: string, body: string) => (on === '1' ? body : ''));
+    expect(apply([script('$', '{{#if 1}}<div>panel</div>{{/if}}')], 'hi', { cbs: lastOnly })).toMatchObject({ text: 'hi<div>panel</div>', drawn: [0] });
+    expect(apply([script('$', '{{#if 0}}<div>panel</div>{{/if}}')], 'hi', { cbs: lastOnly })).toMatchObject({ text: 'hi', drawn: [] });
+  });
+
   it('takes a block a script moves as its box', () => {
     const scripts = [script('\\[hp=(\\d+)\\]', '@@move_top <div>HP $1</div>')];
     expect(apply(scripts, 'hi [hp=3]')).toMatchObject({ text: '<div>HP 3</div>\n\nhi ', drawn: [0] });

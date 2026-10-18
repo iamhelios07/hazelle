@@ -36,6 +36,7 @@ const BOX_TAG = /<(?:div|table|details|section|article|aside|figure|center|img|u
 const OPEN = '\uFDD0';
 const CLOSE = '\uFDD1';
 const TAKEN = new RegExp(`${OPEN}([\\s\\S]*?)${CLOSE}`, 'g');
+const MARKS = new RegExp(`[${OPEN}${CLOSE}]`, 'g');
 
 type Pattern = { regex: RegExp; first: RegExp };
 // pattern: null for a dynamic plan, compiled anew per message. plain: no action and no @@ directive, which Risu follows
@@ -100,11 +101,15 @@ export class Scripts {
         );
         boxes.push({ script: place, html: cbs(pieces.join('')), at: marked.slice(0, marked.indexOf(OPEN)).trim() ? 'bottom' : 'top' });
         drawn.push(place);
+      } else if (kind === 'replace' && BOX_TAG.test(argument)) {
+        // Read once evaluated: bots wrap a box in {{#if}} so that only the last message draws it.
+        const marked = cbs(result.replace(regex(), OPEN + argument + CLOSE));
+        if ([...marked.matchAll(TAKEN)].some(([, piece]) => BOX_TAG.test(piece!))) drawn.push(place);
+        result = marked.replace(MARKS, '');
       } else {
         // inject: the match leaves this stage's text. Risu also rewrote the stored message; stored text is never
         // rewritten here, so that half has nothing to do. The backgroundHTML (-1) has no message: Risu replaces there.
         result = cbs(result.replace(regex(), kind === 'inject' && index >= 0 ? '' : argument));
-        if (kind === 'replace' && BOX_TAG.test(argument)) drawn.push(place);
       }
     }
     return { text: result, drawn, boxes };
