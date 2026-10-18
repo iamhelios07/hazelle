@@ -35,7 +35,7 @@ import { MoveFlow } from './MoveFlow';
 import { stepOf } from './saving';
 
 const PRESETS = PRESET_EXTENSIONS.join(',');
-const ACCEPT = `.png,.charx,.jpg,.jpeg,.json,.risum,.bin,.js,${PRESETS}`;
+const ACCEPT = `.png,.charx,.jpg,.jpeg,.json,.lorebook,.risum,.bin,.js,${PRESETS}`;
 const OPENS: { kind: Exclude<ImportOutcome['kind'], 'character'>; icon: LucideIcon; label: string; route: (id: string) => Route }[] = [
   { kind: 'chat', icon: MessageSquare, label: '열기', route: (id) => ({ kind: 'chat', id }) },
   { kind: 'module', icon: Package, label: '모듈 보기', route: (id) => ({ kind: 'module', id, pane: null }) },

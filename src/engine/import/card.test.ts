@@ -311,6 +311,21 @@ describe('importCard', () => {
     expect(importCard('Phone.charx', bytes())).toMatchObject({ ok: true, card: { card: { name: 'Phone' } } });
   });
 
+  it("reads Risu's lorebook and regex exports and SillyTavern's world info as modules made of them", () => {
+    const read = (fileName: string, value: unknown) => {
+      const result = importCard(fileName, own(strToU8(JSON.stringify(value))));
+      if (!result.ok || !('module' in result)) throw new Error('not a module');
+      return result.module;
+    };
+    expect(read('lorebook_export.json', { type: 'risu', ver: 1, data: [{ key: 'gate, door', comment: 'Gate', content: 'A gate.', mode: 'normal', insertorder: 5, bookVersion: 2 }] })).toMatchObject({
+      name: '',
+      lore: [{ name: 'Gate', keys: ['gate', 'door'], content: 'A gate.', insertionOrder: 5 }],
+    });
+    expect(read('regexscript_export.json', { type: 'regex', data: [{ comment: 'trim', in: 'a', out: 'b', type: 'editoutput' }] }).pack.regex).toMatchObject([{ name: 'trim', find: 'a', replace: 'b' }]);
+    const world = { entries: { 0: { uid: 0, key: ['gate'], keysecondary: ['night'], comment: 'Gate', content: 'A gate.', constant: true, selective: true, order: 7 } } };
+    expect(read('World.json', world).lore).toMatchObject([{ name: 'Gate', keys: ['gate'], secondaryKeys: ['night'], content: 'A gate.', constant: true, selective: true, insertionOrder: 7 }]);
+  });
+
   it('imports the card alone when module.risum is unreadable', () => {
     const card = v3({ extensions: { risuai: { customScripts: [{ comment: 'card', in: 'a', out: 'b', type: 'editoutput', ableFlag: false, flag: 'i' }] } } });
     const imported = charx({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': new Uint8Array([111, 0, 255, 255, 255, 255]) });
