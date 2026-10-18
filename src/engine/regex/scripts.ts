@@ -42,7 +42,7 @@ type Pattern = { regex: RegExp; first: RegExp };
 // with a CBS pass whether it matched or not.
 type Plan = { source: string; place: number; order: number; flags: string; dynamic: boolean; plain: boolean; kind: string; argument: string; pattern: Pattern | null };
 // A text with neither reads the same after a CBS pass.
-const CBS_TAG = /\{\{|<(?:user|char|bot)>/i;
+const CBS_TAG = /\{\{|\{#|<(?:user|char|bot)>/i;
 
 export class Scripts {
   private readonly plans: Record<RegexScript['stage'], Plan[]> = { input: [], output: [], process: [], display: [] };
@@ -102,8 +102,8 @@ export class Scripts {
         drawn.push(place);
       } else {
         // inject: the match leaves this stage's text. Risu also rewrote the stored message; stored text is never
-        // rewritten here, so that half has nothing to do.
-        result = cbs(result.replace(regex(), kind === 'inject' ? '' : argument));
+        // rewritten here, so that half has nothing to do. The backgroundHTML (-1) has no message: Risu replaces there.
+        result = cbs(result.replace(regex(), kind === 'inject' && index >= 0 ? '' : argument));
         if (kind === 'replace' && BOX_TAG.test(argument)) drawn.push(place);
       }
     }

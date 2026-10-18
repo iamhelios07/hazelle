@@ -53,6 +53,8 @@ describe('Scripts', () => {
     const twice = (text: string) => text.replace('{{w}}', 'W').replace('{{v}}', '{{w}}');
     expect(apply([script('none', 'x')], '{{v}}', { cbs: twice }).text).toBe('W');
     expect(apply([script('none', 'x', { flags: '<no_end_nl>' })], '{{v}}', { cbs: twice }).text).toBe('{{w}}');
+    const legacy = (text: string) => text.replace('{#w#}', 'W').replace('{{v}}', '{#w#}');
+    expect(apply([script('none', 'x')], '{{v}}', { cbs: legacy }).text).toBe('W');
   });
 
   it('skips a script whose pattern is empty, also after CBS', () => {
@@ -122,7 +124,8 @@ describe('Scripts', () => {
     expect(new Scripts([script('<hp>.*?</hp>', '@@repeat_back end')], edited).apply('display', 'none', { index: 2, cbs }).text).toBe('none<hp>4</hp>');
   });
 
-  it('removes the matches on inject, whatever the replacement says (design §5 row 19)', () => {
+  it('removes the matches on inject, whatever the replacement says (design §5 row 19), and replaces them in the backgroundHTML, as Risu does', () => {
+    expect(apply([script('red', 'blue', { flags: '<inject>' })], '.a{color:red}', { index: -1 }).text).toBe('.a{color:blue}');
     expect(apply([script('\\[\\w\\]', '@@inject')], 'a [x] b [y]').text).toBe('a  b ');
     expect(apply([script('\\[\\w\\]', 'kept?', { flags: '<inject>' })], 'a [x] b [y]').text).toBe('a  b ');
   });

@@ -9,6 +9,7 @@ it("keeps the rule after an @import whose font URL holds a ;", () => {
 
 it('reads the non-breaking spaces a bot indents its CSS with as spaces, as Risu’s parser drops them', () => {
   expect(cleanCss('\u00a0\u00a0.a { color: red }', false)).toBe('  .a { color: red }');
+  expect(cleanCss('[title="a\u00a0b"] { content: \'\u00a0\' }', false)).toBe('[title="a\u00a0b"] { content: \'\u00a0\' }');
 });
 
 it('takes an url( never closed to the end, in one pass however many follow', () => {
