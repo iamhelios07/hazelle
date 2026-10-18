@@ -1,6 +1,8 @@
 import { Check, FolderInput } from 'lucide-react';
+import { useMemo } from 'react';
 import type { Stored } from '../../model/kinds';
-import { toolId } from '../../model/tool';
+import type { ModulePlace } from '../../runtime/modules';
+import { ofSort } from '../../runtime/prompts';
 import { ACTS, importOf } from '../common/acts';
 import { useImport } from '../common/importing';
 import { counted, holdsLine, packParts, type PackParts } from '../common/pack';
@@ -8,7 +10,7 @@ import { useSearch } from '../common/useSearch';
 import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
 import { FolderPath, useMoving, useNaming } from '../common/folders/FolderParts';
 import { ALWAYS, moduleName, PAGES, SCRIPTS } from '../common/words';
-import { useChildrenOf, useLibrary, useModulesAndPlugins, usePersonas, usePrompts, useSettings, useTools } from '../session';
+import { useChildrenOf, useLibrary, useModulesAndPlugins, usePersonas, usePrompts, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Empty, Icon, NavBar, Row, Screen, Section, Table, Tag, type TableColumn, type TableRow } from '../ui';
@@ -18,21 +20,39 @@ export function useModuleParts(modules: readonly Stored<'module'>[]): PackParts[
   const ids = modules.map(({ id }) => id);
   const lore = useChildrenOf('lore', ids);
   const assets = useChildrenOf('asset', ids);
-  const tools = new Set(useTools().map(({ id }) => id));
-  return modules.map(({ id, value }, index) => packParts(value, lore[index]!.length, assets[index]!.length, tools.has(toolId(id))));
+  return modules.map(({ value }, index) => packParts(value, lore[index]!.length, assets[index]!.length));
 }
 
-const holding = (owners: string[][], id: string) => owners.filter((modules) => modules.includes(id)).length;
+export function useModuleOwners() {
+  const prompts = usePrompts();
+  const { characters } = useLibrary();
+  const personas = usePersonas();
+  const settings = useSettings();
+  return useMemo(() => ({ always: settings.modules ?? [], prompts: prompts.filter((prompt) => ofSort(prompt, 'conversation')), characters, personas }), [settings, prompts, characters, personas]);
+}
 
-// Where each module is on, for the 쓰는 곳 column of both 모듈 and 플러그인.
+type Place = ModulePlace['kind'] | 'none';
+type Use = { always: boolean; prompt: number; character: number; persona: number };
+const UNUSED: Use = { always: false, prompt: 0, character: 0, persona: 0 };
+
 export function useModuleUse() {
-  const prompts = usePrompts().flatMap(({ value }) => (value.task === undefined ? [value.modules ?? []] : []));
-  const characters = useLibrary().characters.map(({ character }) => character.modules ?? []);
-  const personas = usePersonas().map(({ value }) => value.modules ?? []);
-  const always = useSettings().modules ?? [];
-  const counts = (id: string) => ({ always: always.includes(id), prompt: holding(prompts, id), character: holding(characters, id), persona: holding(personas, id) });
+  const owners = useModuleOwners();
+  const uses = useMemo(() => {
+    const map = new Map<string, Use>();
+    const of = (id: string) => map.get(id) ?? map.set(id, { ...UNUSED }).get(id)!;
+    for (const id of owners.always) of(id).always = true;
+    for (const { value } of owners.prompts) for (const id of value.modules ?? []) of(id).prompt++;
+    for (const { character } of owners.characters) for (const id of character.modules ?? []) of(id).character++;
+    for (const { value } of owners.personas) for (const id of value.modules ?? []) of(id).persona++;
+    return map;
+  }, [owners]);
+  const use = (id: string) => uses.get(id) ?? UNUSED;
+  const place = (id: string): Place => {
+    const on = use(id);
+    return on.always ? 'always' : on.prompt > 0 ? 'prompt' : on.character > 0 ? 'character' : on.persona > 0 ? 'persona' : 'none';
+  };
   const cell = (id: string) => {
-    const on = counts(id);
+    const on = use(id);
     const used = counted([['프롬프트', on.prompt], ['캐릭터', on.character], ['페르소나', on.persona]]).join(' · ');
     return (
       <>
@@ -42,7 +62,7 @@ export function useModuleUse() {
       </>
     );
   };
-  return { counts, cell };
+  return { place, cell };
 }
 
 const COLUMNS: TableColumn[] = [
@@ -61,14 +81,13 @@ const FOLDER_COLUMNS: TableColumn[] = [
 
 // A module stands in the first place it is on, in the order packs apply (항상, prompt, character, persona); its 쓰는 곳
 // still names every place.
-const SECTIONS = [
+const SECTIONS: { place: Place; title: string }[] = [
   { place: 'always', title: `${ALWAYS} 켠 모듈` },
   { place: 'prompt', title: '프롬프트 모듈' },
   { place: 'character', title: '캐릭터 모듈' },
   { place: 'persona', title: '페르소나 모듈' },
   { place: 'none', title: '안 쓰는 모듈' },
-] as const;
-type Place = (typeof SECTIONS)[number]['place'];
+];
 
 const figure = (count: number) => (count > 0 ? count : null);
 const folderOf = ({ value }: Stored<'module'>) => value.folder ?? null;
@@ -79,10 +98,6 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
   const { pick } = useImport();
   const { modules } = useModulesAndPlugins();
   const use = useModuleUse();
-  const placeOf = (id: string): Place => {
-    const on = use.counts(id);
-    return on.always ? 'always' : on.prompt > 0 ? 'prompt' : on.character > 0 ? 'character' : on.persona > 0 ? 'persona' : 'none';
-  };
   const search = useSearch(modules, '모듈 검색', ({ value }) => [moduleName(value.name)]);
   const index = useFolderIndex('module', modules, folderOf);
   const at = placeIn(index, place, search.words !== '');
@@ -102,11 +117,11 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
     onDropCard: moving.dropInto?.(folder.id),
     onClick: () => go(folder.id),
   }));
-  const rows = shown.map((module, position) => {
+  const rows: TableRow[] = shown.map((module, position) => {
     const { id, value } = module;
     const { lore, regex, triggers, toggles, style } = parts[position]!;
     const path = search.words ? whereIs(index, folderOf(module)) : undefined;
-    const row: TableRow = {
+    return {
       key: id,
       selected: moving.picked ? moving.picked.has(id) : undefined,
       drag: moving.dropInto && id,
@@ -122,9 +137,8 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
       summary: [path, holdsLine(parts[position]!)].filter(Boolean).join(' · '),
       onClick: () => (moving.picked ? moving.toggle(id) : navigate({ kind: 'module', id, pane: null })),
     };
-    return { place: placeOf(id), row };
   });
-  const sections = SECTIONS.map(({ place, title }) => ({ title, rows: rows.flatMap((each) => (each.place === place ? [each.row] : [])) })).filter(({ rows }) => rows.length > 0);
+  const sections = SECTIONS.map(({ place, title }) => ({ title, rows: rows.filter(({ key }) => use.place(key) === place) })).filter(({ rows }) => rows.length > 0);
   return (
     <Screen width="page" top={<NavBar title={PAGES.modules} {...backBar(back)} actions={importing} />}>
       {search.field && <Row kind="toolbar">{search.field}</Row>}

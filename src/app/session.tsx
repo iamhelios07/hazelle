@@ -6,6 +6,7 @@ import type { ChatScope } from '../engine/render';
 import { nest, type Filed } from '../model/folders';
 import { binned, live } from '../model/library';
 import type { Kind, Stored } from '../model/kinds';
+import type { ToolManifest } from '../tool-api/manifest';
 import type { AccountFacts, Standing } from '../runtime/account';
 import type { Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
@@ -155,8 +156,15 @@ export function useModulesAndPlugins() {
   const modules = useModules();
   const tools = useTools();
   return useMemo(() => {
-    const holders = new Set(tools.map(({ parent }) => parent));
-    return { modules: modules.filter(({ id }) => !holders.has(id)), plugins: modules.filter(({ id }) => holders.has(id)) };
+    const manifests = new Map(tools.map(({ id, value }) => [id, value.manifest]));
+    const plain: Stored<'module'>[] = [];
+    const plugins: { module: Stored<'module'>; manifest: ToolManifest }[] = [];
+    for (const module of modules) {
+      const manifest = manifests.get(toolId(module.id));
+      if (manifest) plugins.push({ module, manifest });
+      else plain.push(module);
+    }
+    return { modules: plain, plugins };
   }, [modules, tools]);
 }
 export function useBin() {

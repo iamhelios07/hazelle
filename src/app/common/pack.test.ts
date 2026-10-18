@@ -28,7 +28,7 @@ describe('what a pack holds', () => {
 
   it('gives each part as a count the contents line is written from', () => {
     const pack: Pack = { regex: [], triggers: [{ kind: 'lua', id: 'trigger-0', name: '', code: '' }], toggles: [check('storm'), { kind: 'unread', text: '=' }, check('weather')], background: '<style></style>' };
-    expect(packParts(pack, 6, 2, true)).toEqual({ tool: true, lore: 6, regex: 0, triggers: 1, toggles: 2, assets: 2, style: true });
-    expect(packParts(EMPTY, 0, 0)).toEqual({ tool: false, lore: 0, regex: 0, triggers: 0, toggles: 0, assets: 0, style: false });
+    expect(packParts(pack, 6, 2)).toEqual({ lore: 6, regex: 0, triggers: 1, toggles: 2, assets: 2, style: true });
+    expect(packParts(EMPTY, 0, 0)).toEqual({ lore: 0, regex: 0, triggers: 0, toggles: 0, assets: 0, style: false });
   });
 });

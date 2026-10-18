@@ -1,9 +1,8 @@
-import { toolId } from '../../model/tool';
 import { ACTS, importOf } from '../common/acts';
 import { useImport } from '../common/importing';
 import { useSearch } from '../common/useSearch';
 import { moduleName, PAGES, toolVersion } from '../common/words';
-import { useModulesAndPlugins, useTools } from '../session';
+import { useModulesAndPlugins } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Empty, NavBar, Row, Screen, Table, Tag, type TableColumn, type TableRow } from '../ui';
@@ -18,17 +17,14 @@ const COLUMNS: TableColumn[] = [
 export function PluginsScreen({ back }: { back: Back | null }) {
   const { pick } = useImport();
   const { plugins } = useModulesAndPlugins();
-  const tools = new Map(useTools().map((tool) => [tool.id, tool.value.manifest]));
   const use = useModuleUse();
-  const search = useSearch(plugins, '플러그인 검색', ({ value }) => [moduleName(value.name)]);
+  const search = useSearch(plugins, '플러그인 검색', ({ module }) => [moduleName(module.value.name)]);
   const importing = (
     <Button variant="secondary" icon={ACTS.import.icon} onClick={pick}>
       {importOf(PAGES.plugins)}
     </Button>
   );
-  const rows: TableRow[] = search.found.map(({ id, value }) => {
-    const manifest = tools.get(toolId(id))!;
-    return {
+  const rows: TableRow[] = search.found.map(({ module: { id, value }, manifest }) => ({
       key: id,
       cells: [
         <>
@@ -41,8 +37,7 @@ export function PluginsScreen({ back }: { back: Back | null }) {
       ],
       summary: toolVersion(manifest.version),
       onClick: () => navigate({ kind: 'plugin', id }),
-    };
-  });
+  }));
   return (
     <Screen width="page" top={<NavBar title={PAGES.plugins} {...backBar(back)} actions={importing} />}>
       {search.field && <Row kind="toolbar">{search.field}</Row>}

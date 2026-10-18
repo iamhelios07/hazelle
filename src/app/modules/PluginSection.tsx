@@ -6,27 +6,37 @@ import { ToolSetting } from '../common/ToolSetting';
 import { opensPage } from '../common/ToolView';
 import type { Write } from '../common/saveQueue';
 import { useAutosave } from '../common/useAutosave';
-import { MEMORY_CLAIM_HELP, MODULE_MODELS, moduleModelsHelp, NETWORK, NETWORK_CALLED, NETWORK_HELP, TOOL, toolVersion } from '../common/words';
+import { MEMORY_CLAIM_HELP, MODULE_MODELS, modelsHelp, NETWORK, NETWORK_CALLED, NETWORK_HELP, TOOL, toolVersion, type Asker } from '../common/words';
 import { useSession, useTool, useToolHosts } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Disclosure, Facts, Section, SettingGroup, SettingRow, Stack, Switch } from '../ui';
 
-export function ToolSection({ module }: { module: Stored<'module'> }) {
+const hasLua = ({ id, value }: Stored<'module'>) => scriptsOf([{ id, pack: value, module: { namespace: value.namespace } }]).length > 0;
+
+function ModelsRow({ module, asker }: { module: Stored<'module'>; asker: Asker }) {
   const { store } = useSession();
-  const stored = useTool(module.id);
-  const lua = scriptsOf([{ id: module.id, pack: module.value, module: { namespace: module.value.namespace } }]).length > 0;
-  const models = lua || stored?.value.manifest.uses.some((use) => use === 'model' || use === 'embed');
-  const consent = models && (
+  return (
     <FlagRow
       saveKey={`module-models:${module.id}`}
       label={MODULE_MODELS}
-      help={moduleModelsHelp(stored ? TOOL : '모듈')}
+      help={modelsHelp(asker)}
       stored={module.value.botModels === true}
       write={(on) => setModels(store, { kind: 'module', id: module.id }, on)}
     />
   );
-  if (!stored) return consent ? <SettingGroup label={MODULE_MODELS}>{consent}</SettingGroup> : null;
+}
+
+// A module's Lua may call a model; a plugin's switch sits in its own section.
+export function ModelsConsent({ module }: { module: Stored<'module'> }) {
+  return hasLua(module) ? <SettingGroup label={MODULE_MODELS}><ModelsRow module={module} asker="module" /></SettingGroup> : null;
+}
+
+export function PluginSection({ module }: { module: Stored<'module'> }) {
+  const { store } = useSession();
+  const stored = useTool(module.id);
+  if (!stored) return null;
   const { manifest, settings } = stored.value;
+  const models = hasLua(module) || manifest.uses.some((use) => use === 'model' || use === 'embed');
   const memory = manifest.uses.includes('memory');
   const network = manifest.uses.includes('network');
   return (
@@ -37,7 +47,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
       <Stack gap="group">
         <Facts items={[{ label: '버전', value: toolVersion(manifest.version) }, { label: '제작자', value: manifest.author }]} />
         {(models || memory || network || manifest.settings.length > 0) && <SettingGroup label={`${TOOL} 설정`}>
-          {consent}
+          {models && <ModelsRow module={module} asker="plugin" />}
           {network && (
             <FlagRow
               saveKey={`module-network:${module.id}`}

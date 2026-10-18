@@ -33,15 +33,18 @@ export const BOT_MODELS_HELP = '봇 스크립트가 대화 응답과 별개로 �
 // 캐릭터 편집's switch for scripts that rewrite the card, and what the card that asks it in the chat says first.
 export const CARD_WRITES = '스크립트의 카드 수정';
 export const CARD_WRITES_HELP = '스크립트가 이 캐릭터의 배경 HTML을 바꿔서 저장해요. 바뀐 배경은 이 캐릭터의 모든 채팅에 적용돼요.';
-export const CARD_WRITE_CONSENT = { character: '이 봇이 캐릭터 카드를 수정하려고 해요', module: '이 모듈이 캐릭터 카드를 수정하려고 해요', plugin: '이 플러그인이 캐릭터 카드를 수정하려고 해요' };
 export const CARD_WRITE_ASK_HELP = '허용하면 이 캐릭터의 배경 HTML이 바뀌고 모든 채팅에 적용돼요. 이 캐릭터에서는 한 번만 물어봐요. 나중에 캐릭터 편집에서 다시 바꿀 수 있어요.';
 export const BOT_STUCK = '봇 스크립트가 끝나지 않아서 멈췄어요';
 
 export const TOOL = '플러그인';
 export const RISU_PLUGIN = 'Risu 플러그인';
 export const MODULE_MODELS = '모델 호출';
-export const moduleModelsHelp = (noun: string) => `이 ${noun}이 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.`;
-export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 추가로 호출하려고 해요', plugin: '이 플러그인이 모델을 추가로 호출하려고 해요' };
+// Who a script's question or switch speaks for; a module that holds a tool is a plugin. Each noun takes 이.
+export const ASKER = { character: '봇', module: '모듈', plugin: TOOL };
+export type Asker = keyof typeof ASKER;
+export const modelsHelp = (asker: Asker) => (asker === 'character' ? BOT_MODELS_HELP : `이 ${ASKER[asker]}이 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.`);
+export const modelConsent = (asker: Asker) => `이 ${ASKER[asker]}이 모델을 추가로 호출하려고 해요`;
+export const cardWriteConsent = (asker: Asker) => `이 ${ASKER[asker]}이 캐릭터 카드를 수정하려고 해요`;
 export const MEMORY_CLAIM = '이 플러그인이 장기 기억을 대신 관리하려고 해요';
 export const MEMORY_CLAIM_HELP = '허용하면 이 플러그인을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
 // The ruling (design §6.10) is that the ask says plainly what the network allows, so the card's line is that sentence.

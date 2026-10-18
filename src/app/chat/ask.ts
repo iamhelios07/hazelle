@@ -1,13 +1,12 @@
 import type { ScriptQuestion } from '../../runtime/script-interactions';
-import { BOT_MODELS_HELP, CARD_WRITE_ASK_HELP, CARD_WRITE_CONSENT, MEMORY_CLAIM, MEMORY_CLAIM_HELP, MODEL_CONSENT, moduleModelsHelp, NETWORK_CONSENT, networkAskHelp, TOOL } from '../common/words';
+import { CARD_WRITE_ASK_HELP, cardWriteConsent, MEMORY_CLAIM, MEMORY_CLAIM_HELP, modelConsent, modelsHelp, NETWORK_CONSENT, networkAskHelp, type Asker } from '../common/words';
 import type { AskAnswer } from '../ui';
 
 const CONSENT: AskAnswer = { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] };
 
 // Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
-// option's index, and for a model call, a memory claim, a card write or the network 'yes' or 'no'. owner: who asks, a
-// module that holds a tool being a plugin.
-export function asking(question: ScriptQuestion['question'], owner: 'character' | 'module' | 'plugin'): { text?: string; help?: string; answer: AskAnswer } {
+// option's index, and for a model call, a memory claim, a card write or the network 'yes' or 'no'.
+export function asking(question: ScriptQuestion['question'], asker: Asker): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {
     case 'input':
       return { text: question.text, answer: { kind: 'line' } };
@@ -17,14 +16,14 @@ export function asking(question: ScriptQuestion['question'], owner: 'character' 
       return { text: question.text, answer: { kind: 'choices', choices: question.options.map((label, index) => ({ label, value: String(index) })) } };
     case 'model':
       return {
-        text: MODEL_CONSENT[owner],
-        help: owner === 'character' ? BOT_MODELS_HELP : moduleModelsHelp(owner === 'plugin' ? TOOL : '모듈'),
+        text: modelConsent(asker),
+        help: modelsHelp(asker),
         answer: CONSENT,
       };
     case 'memory':
       return { text: MEMORY_CLAIM, help: MEMORY_CLAIM_HELP, answer: CONSENT };
     case 'card':
-      return { text: CARD_WRITE_CONSENT[owner], help: CARD_WRITE_ASK_HELP, answer: CONSENT };
+      return { text: cardWriteConsent(asker), help: CARD_WRITE_ASK_HELP, answer: CONSENT };
     case 'network':
       return { text: NETWORK_CONSENT, help: networkAskHelp(question.hosts), answer: CONSENT };
   }

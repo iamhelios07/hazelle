@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ToolSection } from './ToolSection';
+import { ModelsConsent } from './PluginSection';
 import type { Stored } from '../../model/kinds';
 import { likenessId } from '../../model/likeness';
 import { isToggle } from '../../model/prompt';
@@ -16,13 +16,13 @@ import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { ALWAYS, BIN_KEEPS, EXPORT, moduleName, promptName } from '../common/words';
-import { useChildren, useFiles, useLibrary, usePersonas, usePrompts, useSettings, useStore, useStored } from '../session';
+import { ALWAYS, BIN_KEEPS, EXPORT, moduleName, PAGES, promptName } from '../common/words';
+import { useChildren, useFiles, useSettings, useStore, useStored } from '../session';
 import { backBar, navigate } from '../shell/router';
-import { characterPage, type Back, type Route } from '../shell/routes';
+import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Avatar, Button, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
-import { useModuleParts } from './ModulesScreen';
+import { useModuleOwners, useModuleParts } from './ModulesScreen';
 
 const ALWAYS_ON = `${ALWAYS} 켜기`;
 const USED_BY = '쓰는 캐릭터';
@@ -32,8 +32,9 @@ const RISU_FILE = 'Risu 모듈 파일';
 const RISU_FILE_HELP =
   'RisuAI 설정 › 모듈에서 가져오거나 창에 끌어다 놓으면 열려요. 이미지는 그대로 담기고, 삽화 프로필은 빠져요. Risu에는 끄기 기능이 없어서 꺼 둔 스크립트와 로어북 항목은 빠지고, 로어북의 우선순위와 위치도 빠지며, 쉼표가 들어간 키는 쉼표 기준으로 나뉘어요. 헤이젤로 다시 가져오면 모두 원래대로 돌아와요. Lua 트리거가 있으면 Risu의 저수준 접근을 켠 채로 내보내요.';
 
-// What a module's page and a plugin's share: noun names the thing, list is where deleting it lands.
-export function useModuleEditor({ id, value }: Stored<'module'>, noun: string, list: Route, back: Back) {
+// What a module's page and a plugin's share; page is the list it belongs to.
+export function useModuleEditor({ id, value }: Stored<'module'>, page: 'modules' | 'plugins', back: Back) {
+  const noun = PAGES[page];
   const store = useStore();
   const toast = useToast();
   const autosave = useAutosave<{ name: string; description: string }>(`module:${id}`, (patch) => editModule(store, id, patch));
@@ -42,7 +43,7 @@ export function useModuleEditor({ id, value }: Stored<'module'>, noun: string, l
 
   function remove() {
     void setModuleDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
-    navigate(list);
+    navigate(page === 'modules' ? { kind: 'modules', place: null } : { kind: 'plugins' });
     toast.undoable(`'${moduleName(name)}' ${noun}을 삭제했어요.`, () => setModuleDeleted(store, id, null), BIN_KEEPS);
   }
 
@@ -76,10 +77,11 @@ export function AlwaysSwitch({ id }: { id: string }) {
 
 export function UsedBy({ id }: { id: string }) {
   const wide = useWide();
-  const always = useSettings().modules?.includes(id) ?? false;
-  const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
-  const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
-  const personas = usePersonas().filter(({ value }) => value.modules?.includes(id));
+  const owners = useModuleOwners();
+  const always = owners.always.includes(id);
+  const users = owners.characters.filter(({ character }) => character.modules?.includes(id));
+  const prompts = owners.prompts.filter(({ value }) => value.modules?.includes(id));
+  const personas = owners.personas.filter(({ value }) => value.modules?.includes(id));
   const usedBy = [
     {
       title: PROMPTS_USING,
@@ -114,7 +116,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
   const holds = holdsLine(useModuleParts([stored])[0]!);
   // A module of scripts alone describes no one, so it offers no 삽화 profiles.
   const describes = useChildren('lore', id).length + useChildren('asset', id).length > 0 || useStored('likeness', likenessId(id)) !== null;
-  const { name, top, describing } = useModuleEditor(stored, '모듈', { kind: 'modules', place: null }, back);
+  const { name, top, describing } = useModuleEditor(stored, 'modules', back);
 
   function exportFile() {
     runExport(
@@ -149,7 +151,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
           }
         />
       </SettingGroup>
-      <ToolSection module={stored} />
+      <ModelsConsent module={stored} />
       <UsedBy id={id} />
       <List box places label="토글">
         <ListItem title="토글" aside={`${value.toggles.filter(isToggle).length}개`} onClick={() => navigate({ kind: 'module', id, pane: 'toggles' })} />
