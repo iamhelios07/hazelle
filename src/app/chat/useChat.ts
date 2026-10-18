@@ -212,7 +212,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       const unstarted = await starting().saved;
       if (unstarted) return toast.failed(unstarted);
     }
-    if (!(await session.scripts.press(chatId, button))) unanswered();
+    const { waits, answered } = session.scripts.press(chatId, button);
+    if (waits) toast.show('앞선 작업이 끝나면 이 버튼이 동작해요.');
+    if (!(await answered)) unanswered();
   }
 
   function ask(target: Target) {

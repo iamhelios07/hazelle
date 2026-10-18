@@ -171,12 +171,12 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const { chat } = await chatWith(session, `onButtonClick = async(function(id, data) setBackgroundEmbedding(id, data) end)`);
       const character = session.store.get('chat', chat)!.value.character!;
-      const pressing = session.scripts.press(chat, { data: '<style>.a{}</style>' });
+      const pressing = session.scripts.press(chat, { data: '<style>.a{}</style>' }).answered;
       await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ chat, question: { kind: 'card' } }]);
       session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
       await pressing;
       expect(session.store.get('character', character)!.value).toMatchObject({ cardWrites: true, card: { background: '<style>.a{}</style>' } });
-      await session.scripts.press(chat, { data: '<style>.b{}</style>' });
+      await session.scripts.press(chat, { data: '<style>.b{}</style>' }).answered;
       expect(session.scripts.snapshot().questions).toEqual([]);
       expect(session.store.get('character', character)!.value.card.background).toBe('<style>.b{}</style>');
     }));
@@ -200,17 +200,37 @@ describe("a turn with the bot's Lua", () => {
   it("answers a button with the script's function and keeps its writes after the last message", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `function open(id) setChatVar(id, 'door', 'open') alertNormal(id, 'opened') end`);
-      expect(await session.scripts.press(chat, { trigger: 'open', id: '' })).toBe(true);
-      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' })).toBe(false);
+      expect(await session.scripts.press(chat, { trigger: 'open', id: '' }).answered).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' }).answered).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
+    }));
+
+  it('says a press waits behind a run calling a model, and joins the same button pressed again before it begins', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `slow = async(function(id) LLM(id, { { role = 'user', content = 'sum' } }) end)
+        function count(id) setChatVar(id, 'n', tostring((tonumber(getChatVar(id, 'n')) or 0) + 1)) end`);
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      const reply = saying('summary');
+      stubRelay(() => new Response(new ReadableStream({ async start(body) { await held; body.enqueue(new Uint8Array(await reply.arrayBuffer())); body.close(); } }), { headers: reply.headers }));
+      const slow = session.scripts.press(chat, { trigger: 'slow', id: '' });
+      expect(slow.waits).toBe(false);
+      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(1);
+      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      const first = session.scripts.press(chat, { trigger: 'count', id: '' });
+      const again = session.scripts.press(chat, { trigger: 'count', id: '' });
+      expect([first.waits, again.waits, again.answered === first.answered]).toEqual([true, true, true]);
+      release();
+      expect(await first.answered).toBe(true);
+      expect(messages()[0]!.after).toEqual([['n', '1']]);
     }));
 
   it('keeps replayed CBS writes on Lua-edited versions after worker-side snapshot preparation', () =>
     server.withSession(async (session) => {
       const { chat, messages, shownTexts } = await chatWith(session, `function edit(id) setChat(id, 0, getChat(id, 0).data .. '!') end`);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '{{setvar::hp::7}}health {{getvar::hp}}' });
-      expect(await session.scripts.press(chat, { trigger: 'edit', id: '' })).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'edit', id: '' }).answered).toBe(true);
       expect(shown(messages()[1]!)).toMatchObject({ text: 'health 7!', staged: true, before: [['hp', '7']] });
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'still {{getvar::hp}}' });
       expect((await shownTexts()).slice(-2)).toEqual(['health 7!', 'still 7']);
@@ -220,7 +240,7 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
       const { chat } = await chatWith(session, `function grow(id) cbs(${doubling}) end`);
-      expect(await session.scripts.press(chat, { trigger: 'grow', id: '' })).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'grow', id: '' }).answered).toBe(true);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'runaway' }]);
     }));
 
@@ -238,8 +258,8 @@ describe("a turn with the bot's Lua", () => {
           { kind: 'add', role: 'char', value: { kind: 'text', text: 'The door is {{getvar::door}} at {{lastmessageid}}.' } },
         ] },
       ]);
-      expect(await session.scripts.press(chat, { trigger: 'open', id: '' })).toBe(true);
-      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' })).toBe(false);
+      expect(await session.scripts.press(chat, { trigger: 'open', id: '' }).answered).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' }).answered).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(messages()[1]).toMatchObject({ role: 'assistant' });
       expect(shown(messages()[1]!)).toMatchObject({ text: 'The door is open at -1.', staged: true });
@@ -266,7 +286,7 @@ describe("the bot scripts' machine", () => {
     const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { lua });
     if (!opened.ok) throw new Error(opened.error);
     const { chat } = await chatWith(opened.data, `function open(id) end`);
-    const pressed = opened.data.scripts.press(chat, { trigger: 'open', id: '' });
+    const pressed = opened.data.scripts.press(chat, { trigger: 'open', id: '' }).answered;
     await vi.waitFor(() => expect(lua).toHaveBeenCalledOnce());
     opened.data.close();
     const close = vi.fn();
@@ -313,7 +333,7 @@ describe("the display with the bot's Lua", () => {
       await vi.waitFor(() => expect(screen.snapshot().display.texts).toEqual(['', '', '']));
       release();
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
-      await session.scripts.press(chat, { trigger: 'hit', id: '' });
+      await session.scripts.press(chat, { trigger: 'hit', id: '' }).answered;
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:9>', '안녕 <0:null>', '왔구나 <1:9>']);
       lua.display.mockRestore();
       leave();
@@ -353,7 +373,7 @@ describe("the display with the bot's Lua", () => {
       screen.setInputs(opening, { width: 1200, height: 800 });
       const leave = screen.subscribe(() => {});
       await vi.waitFor(() => expect(passed).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [-1, 0]]));
-      await session.scripts.press(chat, { trigger: 'again', id: '' });
+      await session.scripts.press(chat, { trigger: 'again', id: '' }).answered;
       await new Promise((resolve) => setTimeout(resolve, 200));
       release();
       await vi.waitFor(() => expect(passed.slice(2).flat()).toContain(-1));
@@ -858,7 +878,7 @@ describe('tool events through Scripts', () => {
       await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
-      const pressed = session.scripts.press(chat, { trigger: 'askModel', id: '' });
+      const pressed = session.scripts.press(chat, { trigger: 'askModel', id: '' }).answered;
       if (!index) {
         await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: added.data.id }, question: { kind: 'model' } }]);
         session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
@@ -890,14 +910,14 @@ it('keeps bounded per-chat hook logs with Lua output and writes, notifies reader
   try {
     await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, null);
     await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
-    expect(await session.scripts.press(chat, { data: 'awake' })).toBe(true);
+    expect(await session.scripts.press(chat, { data: 'awake' }).answered).toBe(true);
     expect(session.scripts.log(chat).entries).toHaveLength(1);
     const entry = session.scripts.log(chat).entries[0]!;
     expect(entry).toMatchObject({ stage: 'button', pack: { kind: 'character', id: character.data.id }, script: 'logger', writes: [['last', 'awake']], missing: ['request'], stopped: true, changed: false, errors: [] });
     expect(entry.logs.map((line) => JSON.parse(line))).toEqual([{ message: 'awake' }]);
     expect(entry.duration).toBeGreaterThanOrEqual(0);
     expect(notify).toHaveBeenCalledTimes(1);
-    for (let n = 0; n < 20; n++) await session.scripts.press(chat, { data: 'flood' });
+    for (let n = 0; n < 20; n++) await session.scripts.press(chat, { data: 'flood' }).answered;
     const log = session.scripts.log(chat);
     expect(log.entries.length).toBeLessThanOrEqual(SCRIPT_LOG_LIMITS.entries);
     expect(log.entries.reduce((size, each) => size + JSON.stringify(each).length, 0)).toBeLessThanOrEqual(SCRIPT_LOG_LIMITS.characters);

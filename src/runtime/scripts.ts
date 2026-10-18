@@ -242,6 +242,8 @@ export class Scripts {
   private readonly logs = new Map<string, { snapshot: ScriptLog; sizes: number[]; characters: number }>();
   private readonly logChanges = new Map<string, { changes: ChangeSignal; users: number }>();
   private readonly lastPrompt = new Map<string, Map<string, Answered>>();
+  // Presses queued behind an earlier run and not begun, by chat and button.
+  private readonly waiting = new Map<string, Promise<boolean>>();
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
@@ -724,18 +726,27 @@ export class Scripts {
     if (at) for (const unit of units) void this.schedule.lane(chat, unit, () => this.dispatch(chat, { tool: unit, event: { kind: 'reply', reply: { ...at, version: reply.id } } }, scope, { version: reply.id }, this.closing.signal));
   }
 
-  // A press on a bot's button, whose writes stay with the last message whichever version it shows. false: no script
-  // answered it.
-  async press(chat: string, button: { trigger: string; id: string } | { data: string }): Promise<boolean> {
+  // A press on a bot's button, whose writes stay with the last message whichever version it shows. waits: an earlier
+  // run holds the chat (an onOutput's model call can take a minute). The same button pressed again before its waiting
+  // press begins joins it: a toggle pressed twice would otherwise land as no change. answered false: no script answered.
+  press(chat: string, button: { trigger: string; id: string } | { data: string }): { waits: boolean; answered: Promise<boolean> } {
+    const key = `${chat}\n${JSON.stringify(button)}`;
+    const joined = this.waiting.get(key);
+    if (joined) return { waits: true, answered: joined };
     const event: Event = 'trigger' in button ? { kind: 'call', name: button.trigger, id: button.id } : { kind: 'button', data: button.data };
-    return (await this.now(chat, event, onLast)) ?? false;
+    const waits = this.schedule.busy(chat);
+    const begun = () => { if (this.waiting.get(key) === answered) this.waiting.delete(key); };
+    const answered: Promise<boolean> = this.now(chat, event, onLast, begun).then((handled) => handled ?? false).finally(begun);
+    if (waits) this.waiting.set(key, answered);
+    return { waits, answered };
   }
 
-  private now(chat: string, event: Event, anchor: (scope: ChatScope) => Anchor | null): Promise<boolean | null> {
+  private now(chat: string, event: Event, anchor: (scope: ChatScope) => Anchor | null, begun?: () => void): Promise<boolean | null> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? triggersOf(packsOf(this.session.store, stored.value)) : [];
     if (!stored || scripts.length === 0) return Promise.resolve(null);
     return this.schedule.queued(chat, async () => {
+      begun?.();
       const scope = scopeOf(this.session, chat, stored.value, this.session.read.chat(chat).snapshot()?.messages ?? []);
       const { outcome } = await this.dispatch(chat, { lua: scripts, event }, scope, anchor(scope));
       return outcome.handled;

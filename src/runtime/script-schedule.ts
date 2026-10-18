@@ -8,6 +8,8 @@ import { toolsOf } from './tools/store';
 export class ScriptSchedule {
   private readonly queues = new Map<string, Promise<unknown>>();
   private readonly lanes = new Map<string, Promise<void>>();
+  // Each chat's runs queued and not yet ended.
+  private readonly held = new Map<string, number>();
 
   constructor(
     private readonly store: ObjectStore,
@@ -23,7 +25,18 @@ export class ScriptSchedule {
     this.interactions.dismiss(chat);
     const next = (this.queues.get(chat) ?? Promise.resolve()).then(() => this.store.projections.evaluate(chat).catch(evaluationFailure)).then(task);
     this.queues.set(chat, next.catch(() => {}));
+    this.held.set(chat, (this.held.get(chat) ?? 0) + 1);
+    void next.catch(() => {}).finally(() => {
+      const left = this.held.get(chat)! - 1;
+      if (left) this.held.set(chat, left);
+      else this.held.delete(chat);
+    });
     return next;
+  }
+
+  // Whether what is queued now waits for an earlier run.
+  busy(chat: string): boolean {
+    return this.held.has(chat);
   }
 
   // One chain per chat and tool, off the send queue: a tool hears reply, change, branch, menu and action in the order
