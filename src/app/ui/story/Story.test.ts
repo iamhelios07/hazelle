@@ -7,6 +7,10 @@ it("keeps the rule after an @import whose font URL holds a ;", () => {
   expect(cleanCss(css, false)).toBe('@import none;\n.vp{background:#ffffff;color:#222222}');
 });
 
+it('reads the non-breaking spaces a bot indents its CSS with as spaces, as Risu’s parser drops them', () => {
+  expect(cleanCss('\u00a0\u00a0.a { color: red }', false)).toBe('  .a { color: red }');
+});
+
 it('takes an url( never closed to the end, in one pass however many follow', () => {
   expect(cleanCss('a{background:url(x.png)} b{background:url(https://e', false)).toBe('a{background:none} b{background:none');
   const start = performance.now();

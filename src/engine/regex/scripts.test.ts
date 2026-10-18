@@ -49,6 +49,12 @@ describe('Scripts', () => {
     expect(read(1)).toBe('noneA1');
   });
 
+  it('reads CBS again after a plain script that matched nothing, as Risu does, and not after one with an action', () => {
+    const twice = (text: string) => text.replace('{{w}}', 'W').replace('{{v}}', '{{w}}');
+    expect(apply([script('none', 'x')], '{{v}}', { cbs: twice }).text).toBe('W');
+    expect(apply([script('none', 'x', { flags: '<no_end_nl>' })], '{{v}}', { cbs: twice }).text).toBe('{{w}}');
+  });
+
   it('skips a script whose pattern is empty, also after CBS', () => {
     const blank = (text: string) => text.replaceAll('{{unset}}', '');
     expect(apply([script('', 'X'), script('{{unset}}', 'X', { flags: '<cbs>' })], 'ab', { cbs: blank })).toMatchObject({ text: 'ab' });

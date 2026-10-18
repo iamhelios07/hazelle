@@ -43,6 +43,15 @@ const scope: ChatScope = {
 };
 
 describe('display', () => {
+  it('passes the backgroundHTML through the display scripts, which fill its placeholders, repeating nothing there', () => {
+    const regex = [
+      { id: 'regex-2', name: 'border', find: '{border}', replace: '3px solid red', stage: 'display' as const, flags: null },
+      { id: 'regex-3', name: 'again', find: 'zzz', replace: 'end', stage: 'display' as const, flags: '<repeat_back>' },
+    ];
+    const { css } = display({ ...scope, packs: [{ ...card, background: '<style>.frame { border: {border} }</style>', regex }] });
+    expect(css.split('\n')[0]).toBe('.frame { border: 3px solid red }');
+  });
+
   it('takes every <style>, one left open too, out of the texts into one stylesheet for the chat, the backgroundHTML’s first, read with the last variables', () => {
     const { texts, css } = display(scope);
     expect(texts).toEqual(['<div class="box">box</div>\n', 'The lamp. <div class="box">HP 7</div>\n']);
@@ -176,6 +185,10 @@ describe('storyHtml', () => {
       '<p><mark risu-mark="quote2">&quot;왜?&quot;</mark> <mark risu-mark="quote1">\'신경 쓰이네\'</mark>라고 생각했다. <mark risu-mark="quote1">‘정말’</mark></p>\n',
     );
     expect(storyHtml(`I don't know, it’s the users' book.`, true)).toBe(`<p>I don't know, it’s the users' book.</p>\n`);
+  });
+
+  it('keeps a paragraph of block-level HTML whole, joined by <br> as Risu does, so a line indented with non-breaking spaces stays beside its siblings', () => {
+    expect(storyHtml('\u00a0<div class="w">\n\u00a0<input id="t">\n\u00a0</div>', true)).toBe('<p>\u00a0<div class="w"><br>\n\u00a0<input id="t"><br>\n\u00a0</div></p>\n');
   });
 
   it('keeps a bot’s HTML block as written and escapes it without bot', () => {

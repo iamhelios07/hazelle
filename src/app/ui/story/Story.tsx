@@ -104,7 +104,9 @@ function termRanges(shadow: ShadowRoot, term: string): Range[] {
 // While 이미지 가리기 is on, the app's own URLs go too: a bot draws its pictures as backgrounds as well.
 // @import is left to the constructed stylesheet, which drops it. A pattern cut it at the first ;, which a font URL
 // holds inside its quotes (wght@600;700), and the rest of the URL swallowed the bot's next rule.
-export const cleanCss = (css: string, veiled: boolean) => css.replaceAll('.x-risu-', '.').replace(veiled ? ANY_URL : OUTSIDE_URL, 'none');
+// Risu re-reads a bot's CSS through a parser, which drops the non-breaking spaces some bots indent it with; a browser
+// reads one ahead of a selector as part of it, and the rule matches nothing.
+export const cleanCss = (css: string, veiled: boolean) => css.replaceAll('\u00a0', ' ').replaceAll('.x-risu-', '.').replace(veiled ? ANY_URL : OUTSIDE_URL, 'none');
 
 // A fixed box would be placed and cut by the message that holds it (Story.module.css): a console centred on Risu's
 // screen shrank to a sliver in an otherwise empty message. It stands where it is written instead, and its offsets and

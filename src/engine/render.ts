@@ -106,7 +106,7 @@ export function renderChat(
   take: ReadonlySet<number> = new Set(),
   lua?: LuaDisplay,
   trace?: VariableTrace,
-): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; unfound: Set<string> | null; stopped: Runaway | null; finish: ((index: number, text: string) => ReturnType<typeof renderStage>) | null; failures: { input: Map<number, Runaway>; display: Map<number, Runaway> } } {
+): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; unfound: Set<string> | null; stopped: Runaway | null; finish: ((index: number, text: string) => ReturnType<typeof renderStage>) | null; failures: { input: Map<number, Runaway>; display: Map<number, Runaway> }; scripts: Scripts } {
   const unfound = stage === 'display' ? new Set<string>() : null;
   const context = contexts(scope, stage, null, '', unfound);
   const scripts = new Scripts(scope.packs.flatMap(({ regex }) => regex), scope.messages);
@@ -207,7 +207,7 @@ export function renderChat(
     drawn[0] = shown.drawn;
     boxes[0] = shown.boxes;
   }
-  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, unfound, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, index === 0 && later ? variables : states.at(index), take) : null, failures };
+  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, unfound, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, index === 0 && later ? variables : states.at(index), take) : null, failures, scripts };
 }
 
 function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof contexts>, index: number, text: string, variables: ReadonlyMap<string, string>, take: ReadonlySet<number>) {

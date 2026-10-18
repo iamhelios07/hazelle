@@ -112,7 +112,8 @@ export function dict(text: string): Record<string, unknown> {
   return isRecord(value) ? value : {};
 }
 const variadic = (args: string[]) => (args.length === 1 ? items(args[0]!) : args);
-const numbers = (args: string[]) => variadic(args).map(Number);
+// A value that is no number counts as 0, as in Risu: an unset variable reads 'null'.
+const numbers = (args: string[]) => variadic(args).map((value) => Number(value) || 0);
 
 const cardText = (field: 'description' | 'personality' | 'scenario' | 'exampleDialogue'): Run => (_, { context, insert }) => (context.card ? insert(context.card[field]) : null);
 define('char bot', 0, (_, { context: { card } }) => card && (card.nickname || card.name));

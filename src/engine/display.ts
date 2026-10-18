@@ -36,11 +36,13 @@ export class DisplayPass {
     this.byVersion = new Map(scope.messages.map(({ id }, index) => [id, index]));
     this.missing = new Set(rendered.missed.map(({ version }) => version));
     this.work = rendered.missed.length ? { items: rendered.missed, staged: rendered.staged, start: rendered.start } : null;
-    // Read with the variables as the last message left them, as Risu reads it with the chat's current ones.
+    // Read with the variables as the last message left them, as Risu reads it with the chat's current ones, and passed
+    // through the display scripts as Risu passes it: bots fill placeholders in their CSS ({border}, <<PCFont>>) there.
+    const cbs = (text: string) => evaluate(text, contexts(scope, 'display', null, '', rendered.unfound)({ seed: 'background' }, rendered.variables));
     for (const { background } of scope.packs) {
       if (!background) continue;
       try {
-        stripStyles(unescapeCbs(evaluate(background, contexts(scope, 'display', null, '', rendered.unfound)({ seed: 'background' }, rendered.variables))), this.background);
+        stripStyles(unescapeCbs(rendered.scripts.apply('display', background, { index: -1, cbs }).text), this.background);
       } catch (error) {
         if (!(error instanceof Runaway)) throw error;
         this.backgroundStop ??= error;
@@ -194,11 +196,17 @@ function formula(state: StateInline, silent: boolean) {
 }
 
 // A tight list's hidden paragraphs keep their breaks.
+// A paragraph holding block-level HTML is the bot's markup that markdown read as text (a line indented with
+// non-breaking spaces starts no HTML block). It stays one paragraph joined by <br>, as Risu renders it: a <p> per line
+// wrapped the bot's elements apart, and an <input> no longer beside the panel its :checked ~ rule opens.
+const BLOCK_HTML = /^<\/?(?:div|table|thead|tbody|tfoot|tr|td|th|section|article|aside|header|footer|nav|main|figure|figcaption|details|summary|ul|ol|li|dl|dt|dd|blockquote|center|h[1-6]|hr|pre)\b/i;
+const holdsMarkup = (token: Token) => token.children!.some((child) => child.type === 'html_inline' && BLOCK_HTML.test(child.content));
+
 function lines(state: StateCore) {
   const out: Token[] = [];
   state.tokens.forEach((token, index) => {
     const open = state.tokens[index - 1]!;
-    if (token.type !== 'inline' || open.type !== 'paragraph_open' || open.hidden) return void out.push(token);
+    if (token.type !== 'inline' || open.type !== 'paragraph_open' || open.hidden || (state.md.options.html && holdsMarkup(token))) return void out.push(token);
     const groups: Token[][] = [[]];
     for (const child of token.children!) {
       if (child.type === 'softbreak') groups.push([]);

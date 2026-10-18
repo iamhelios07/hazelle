@@ -9,7 +9,8 @@ export type Context = {
   // The scripts, by place, whose boxes are taken out of the text instead of drawn in it.
   take?: ReadonlySet<number>;
   // The place, in the messages the Scripts were built over, of the message the text belongs to: the stored message index
-  // display uses, never a position in a filtered history.
+  // display uses, never a position in a filtered history. -1 for the backgroundHTML, where repeat_back copies nothing,
+  // as in Risu.
   index: number;
   cbs: (text: string) => string;
 };
@@ -37,8 +38,11 @@ const CLOSE = '\uFDD1';
 const TAKEN = new RegExp(`${OPEN}([\\s\\S]*?)${CLOSE}`, 'g');
 
 type Pattern = { regex: RegExp; first: RegExp };
-// pattern: null for a dynamic plan, compiled anew per message.
-type Plan = { source: string; place: number; order: number; flags: string; dynamic: boolean; kind: string; argument: string; pattern: Pattern | null };
+// pattern: null for a dynamic plan, compiled anew per message. plain: no action and no @@ directive, which Risu follows
+// with a CBS pass whether it matched or not.
+type Plan = { source: string; place: number; order: number; flags: string; dynamic: boolean; plain: boolean; kind: string; argument: string; pattern: Pattern | null };
+// A text with neither reads the same after a CBS pass.
+const CBS_TAG = /\{\{|<(?:user|char|bot)>/i;
 
 export class Scripts {
   private readonly plans: Record<RegexScript['stage'], Plan[]> = { input: [], output: [], process: [], display: [] };
@@ -64,7 +68,7 @@ export class Scripts {
     const drawn: number[] = [];
     const boxes: Box[] = [];
     let result = cbs(text);
-    for (const { source, place, flags, dynamic, kind, argument, pattern: fixed } of this.plans[stage]) {
+    for (const { source, place, flags, dynamic, plain, kind, argument, pattern: fixed } of this.plans[stage]) {
       const pattern = dynamic ? compile(cbs(source), flags) : fixed;
       if (!pattern) continue;
       const regex = () => reset(pattern.regex);
@@ -74,9 +78,11 @@ export class Scripts {
         for (const box of boxes) if (box.html.search(regex()) !== -1) box.html = cbs(box.html.replace(regex(), kind === 'inject' ? '' : argument));
       }
       if (kind === 'repeat_back') {
-        const copied = matched ? null : this.repeat(once(), index, dynamic);
+        const copied = matched || index < 0 ? null : this.repeat(once(), index, dynamic);
         if (copied !== null) result = cbs((PLACEMENTS.get(argument.trim()) ?? append)(result, copied));
       } else if (!matched) {
+        // A tag an earlier script brought in through a variable is read here, as Risu reads it.
+        if (plain && CBS_TAG.test(result)) result = cbs(result);
         continue;
       } else if (kind === 'move_top' || kind === 'move_bottom') {
         const { block, rest } = cut(result, once, argument);
@@ -161,7 +167,7 @@ function planOf(script: Pick<Script, 'find' | 'replace' | 'flags'>, place: numbe
   const source = script.find;
   const pattern = dynamic ? null : compile(source, flags);
   if (!dynamic && !pattern) return source ? 'invalid' : 'empty';
-  return { source, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern };
+  return { source, place, order, flags, dynamic, plain: actions.size === 0 && !directive, kind, argument: directive ? out.slice(directive[0].length) : out, pattern };
 }
 
 export const checkScript = (script: Pick<Script, 'find' | 'replace' | 'flags'>): ScriptCheck | null => {

@@ -317,6 +317,10 @@ describe('evaluate', () => {
     expect(run('{{objectelement::{"a":1}::a}}')).toBe('1');
   });
 
+  it('counts a value that is no number, an unset variable among them, as 0 in sum, min, max and average', () => {
+    expect(run('{{sum::{{getvar::a1}}::2}} {{min::x::3}} {{max::x::-3}} {{average::x::4}}')).toBe('2 0 0 2');
+  });
+
   it("gives Risu's long escape names the character of their short form", () => {
     const long = '{{displayescapedbracketopen}}{{debc}}{{deabo}}{{displayescapedanglebracketclose}}{{dec}}{{displayescapedsemicolon}}{{displayescapedcurlybracketopen}}{{ddecbc}}';
     expect(unescapeCbs(run(long))).toBe('()<>:;{}}');
