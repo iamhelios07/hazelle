@@ -1,6 +1,9 @@
 // 헤이젤 나우 (design §6.12): the label a client adds to requests it already sends, and the public board's answer.
 // The server counts only labelled requests; it infers nothing from traffic.
 
+// The page's address and name, which the server also writes into the page's link preview (server/static.ts).
+export const PULSE_PAGE = { path: '/now', title: '헤이젤 나우' } as const;
+
 export const PULSE_ROLES = ['chat', 'aux', 'image', 'embedding'] as const;
 export type PulseRole = (typeof PULSE_ROLES)[number];
 

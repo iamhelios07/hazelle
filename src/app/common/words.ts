@@ -4,6 +4,7 @@ import type { RegexScript } from '../../engine/import/types';
 import type { Feature } from '../../model/features';
 import { KEEP_DAYS } from '../../model/library';
 import { FIRST_PROFILE_NAME } from '../../runtime/profiles';
+import { PULSE_PAGE } from '../../contracts/pulse';
 
 // Sentences stay in their screen and are built from these; the phrases these replaced are refused by lint
 // (RETIRED_COPY in eslint.config.js).
@@ -61,7 +62,7 @@ export const SETTINGS = '설정';
 export const DIRECT_CONNECTION = '직접 연결';
 
 // 헤이젤 나우 (design §6.12): the public page, and the account's switch that counts this account in it.
-export const PULSE = { path: '/now', title: '헤이젤 나우', sharing: '헤이젤 나우 집계 참여' };
+export const PULSE = { ...PULSE_PAGE, sharing: `${PULSE_PAGE.title} 집계 참여` };
 
 // Where what is deleted waits KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
 export const BIN = '휴지통';
