@@ -326,6 +326,7 @@ describe('importCard', () => {
             backgroundHTML: '<div>{{getvar::hp}}</div>',
             additionalText: 'extra',
             prebuiltAssetCommand: true,
+            largePortrait: true,
             toggles: 'sims=시뮬레이터 모드\n모드 고르기',
             lowLevelAccess: true,
             triggerscript: [
@@ -354,6 +355,7 @@ describe('importCard', () => {
       { kind: 'background-html', count: 1 },
       { kind: 'additional-text', count: 1 },
       { kind: 'prebuilt-asset-command', count: 1 },
+      { kind: 'large-portrait', count: 1 },
       { kind: 'depth-prompt', count: 1 },
       { kind: 'disable-ui-prompt', count: 1 },
       { kind: 'cbs-tag', count: 3 },

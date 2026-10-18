@@ -87,6 +87,7 @@ export function convert(raw: unknown, module: Json | null, tally: Tally, nativeL
   const pack = packOf({ regex: module ? module.regex : risu.customScripts, trigger: module ? module.trigger : risu.triggerscript, background: risu.backgroundHTML, toggles: risu.toggles }, tally);
   if (text(risu.additionalText).trim()) add(tally, 'additional-text');
   if (risu.prebuiltAssetCommand === true) add(tally, 'prebuilt-asset-command');
+  if (risu.largePortrait === true) add(tally, 'large-portrait');
   if (text(record(extensions.depth_prompt).prompt).trim()) add(tally, 'depth-prompt');
 
   const greetings = [data.first_mes, ...list(data.alternate_greetings)].map(text);

@@ -118,6 +118,7 @@ export const UNSUPPORTED_KINDS = [
   'background-html',
   'additional-text',
   'prebuilt-asset-command',
+  'large-portrait',
   'depth-prompt',
   'disable-ui-prompt',
   'cbs-tag',

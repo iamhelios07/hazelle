@@ -178,6 +178,7 @@ function cardJson(char: Json): Json {
           additionalText: char.additionalText,
           defaultVariables: char.defaultVariables,
           prebuiltAssetCommand: char.prebuiltAssetCommand,
+          largePortrait: char.largePortrait,
           toggles: char.customModuleToggle,
         },
         depth_prompt: char.depth_prompt,
