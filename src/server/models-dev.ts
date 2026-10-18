@@ -13,7 +13,8 @@ const RETRY_MS = 10 * 60 * 1000;
 // A fetch is background work the shutdown drain waits for, so it is bounded.
 const FETCH_MS = 60 * 1000;
 
-type ListedRow = ListedModel & { list: string; model: string };
+// name: models.dev's display name, which 헤이젤 지금 shows (pulse.ts); null where it gives none.
+type ListedRow = ListedModel & { list: string; model: string; name: string | null };
 
 const rate = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
 
@@ -49,7 +50,7 @@ function listedRows(payload: unknown): ListedRow[] | null {
     for (const [model, raw] of Object.entries(provider.models)) {
       if (!isRecord(raw)) continue;
       const modalities = isRecord(raw.modalities) ? raw.modalities : {};
-      const row = { list, model, price: ratesOf(raw.cost), input: modalitiesOf(modalities.input), output: modalitiesOf(modalities.output) };
+      const row = { list, model, name: typeof raw.name === 'string' && raw.name ? raw.name : null, price: ratesOf(raw.cost), input: modalitiesOf(modalities.input), output: modalitiesOf(modalities.output) };
       if (row.price || row.input || row.output) rows.push(row);
     }
   }
@@ -77,8 +78,8 @@ export async function refreshModelsDev(db: Db, outbound: Upstream, now = Date.no
     db.prepare('DELETE FROM models_dev'),
     db
       .prepare(
-        `INSERT INTO models_dev (list, model, price, input, output)
-         SELECT value->>'list', value->>'model', value->>'price', value->>'input', value->>'output' FROM json_each(?)`,
+        `INSERT INTO models_dev (list, model, name, price, input, output)
+         SELECT value->>'list', value->>'model', value->>'name', value->>'price', value->>'input', value->>'output' FROM json_each(?)`,
       )
       .bind(JSON.stringify(rows)),
     db.prepare('UPDATE models_dev_fetch SET fetched_at = ? WHERE id = 1').bind(now),

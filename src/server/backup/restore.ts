@@ -17,6 +17,7 @@ import { takeBackFiles } from '../files/claims';
 import type { Services } from '../http';
 import { cancelRestore, leaveAccount, runRestore } from '../lifecycle';
 import { relayBudget, tokenBucket, uploadBudget, visitorLimits } from '../limits';
+import { openPulse } from '../pulse';
 import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { alerts } from '../alerts';
@@ -152,6 +153,8 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     localProviders: new Set(),
     limits: { relay, calls: tokenBucket(1), botCalls: tokenBucket(1), visitors: visitorLimits(), uploads: uploadBudget() },
     backups: backups(dataDir, 0, alerts(null)),
+
+    pulse: await openPulse(db),
   };
   try {
     const operations: Restored['operations'] = [];

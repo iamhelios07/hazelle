@@ -1,7 +1,9 @@
 import { bareModel } from './chat-completions';
+import { CONNECTOR_MODELS } from './models-dev';
 import type { ConnectionType, Model } from './types';
 
-// Voyage AI documents no model list (docs research/embeddings-spike.md), so its embedding models are written here.
+// Voyage AI documents no model list (docs research/embeddings-spike.md), so its embedding models are written in
+// CONNECTOR_MODELS.
 const embedding = (id: string): Model => ({ ...bareModel(id), input: ['text'], output: ['embedding'], contextLength: 32_000 });
 
 export const voyage: ConnectionType = {
@@ -12,6 +14,6 @@ export const voyage: ConnectionType = {
   keyPage: 'https://dashboard.voyageai.com/organization/api-keys',
   endpoint: { baseUrl: 'https://api.voyageai.com/v1', protocol: 'chat-completions' },
   detect: { key: /^pa-/, host: 'api.voyageai.com' },
-  models: [embedding('voyage-4-lite'), embedding('voyage-4'), embedding('voyage-4-large')],
+  models: CONNECTOR_MODELS.voyage.map(({ id }) => embedding(id)),
   embedPurpose: (as) => ({ input_type: as }),
 };

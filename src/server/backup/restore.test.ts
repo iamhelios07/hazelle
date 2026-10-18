@@ -13,6 +13,7 @@ import { r2Bucket } from '../files/r2-bucket';
 import { DAY_MS, sha256Hex, type Services } from '../http';
 import { beginRestore, cancelRestore, runRestore } from '../lifecycle';
 import { relayBudget, tokenBucket, uploadBudget, visitorLimits } from '../limits';
+import { openPulse } from '../pulse';
 import { streamRegistry } from '../stream-registry';
 import { streamStore } from '../db/streams-db';
 import { proof, sessionCookie, testApp } from '../testing';
@@ -232,6 +233,8 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     localProviders: new Set(),
     limits: { relay, calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() },
     backups: backups(dir, 3, alerts(null)),
+
+    pulse: await openPulse(db),
   };
   const ctx = { waitUntil: () => {}, passThroughOnException: () => {}, props: {} };
   try {

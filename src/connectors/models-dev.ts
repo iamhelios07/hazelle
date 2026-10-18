@@ -28,6 +28,18 @@ export const MODELS_DEV_LISTS: Readonly<Partial<Record<string, { list: string; c
   copilot: { list: 'github-copilot', credit: true },
 };
 
+// The models a connection type lists itself, by id and name: no models.dev list holds them. Kept here so the server names
+// them on 헤이젤 지금 (server/pulse) from the connector's own list. The first is the type's default.
+export const CONNECTOR_MODELS = {
+  novelai: [
+    { id: 'nai-diffusion-5-full', name: 'NovelAI Diffusion V5 Full' },
+    { id: 'nai-diffusion-5-curated', name: 'NovelAI Diffusion V5 Curated' },
+    { id: 'nai-diffusion-4-5-full', name: 'NovelAI Diffusion V4.5 Full' },
+    { id: 'nai-diffusion-4-5-curated', name: 'NovelAI Diffusion V4.5 Curated' },
+  ],
+  voyage: ['voyage-4-lite', 'voyage-4', 'voyage-4-large'].map((id) => ({ id, name: id })),
+} as const satisfies Record<string, readonly { id: string; name: string }[]>;
+
 // models.dev's words for what a model takes and gives, as the app's Modality names them; any other word is dropped.
 export const MODELS_DEV_MODALITIES = { text: 'text', image: 'image', audio: 'audio', video: 'video', pdf: 'file' } as const;
 export type ListedModality = (typeof MODELS_DEV_MODALITIES)[keyof typeof MODELS_DEV_MODALITIES];

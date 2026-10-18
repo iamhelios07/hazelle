@@ -43,6 +43,9 @@ export async function relayCall(c: Context<AppEnv>): Promise<Response> {
     call.leave();
     throw error;
   }
+  const label = c.get('label');
+  // A relay's own refusal is never 2xx (relay.ts).
+  if (label?.kind === 'call' && answer.ok) c.executionCtx.waitUntil(c.env.pulse.call(c.get('account').id, label));
   return holding(answer, call.leave, signal);
 }
 

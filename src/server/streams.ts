@@ -33,7 +33,11 @@ export const streams = new Hono<AppEnv>()
       call.leave();
       return fail(c, 429, 'too-many-bot-calls');
     }
-    return c.env.streams.start(name(c), { id: c.req.param('id')!, key: body.key, request: body.request, bytes: call.bytes, ...(retry !== undefined && { retry }) }, c.req.raw.signal, call.leave);
+    const label = c.get('label');
+    const account = c.get('account').id;
+    const { env, executionCtx } = c;
+    const counted = label?.kind === 'call' ? () => executionCtx.waitUntil(env.pulse.call(account, label)) : undefined;
+    return env.streams.start(name(c), { id: c.req.param('id')!, key: body.key, request: body.request, bytes: call.bytes, ...(retry !== undefined && { retry }) }, c.req.raw.signal, call.leave, counted);
   })
   .get('/:id', (c) => c.env.streams.read(name(c), Number(c.req.query('from') ?? '0') || 0, c.req.raw.signal))
   .post('/:id/stop', (c) => {

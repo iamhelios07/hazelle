@@ -3,12 +3,14 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { AccountState } from '../contracts/admin';
 import type { ServerError } from '../contracts/http';
+import type { PulseLabel } from '../contracts/pulse';
 import type { Refused } from './account-store';
 import type { Backups } from './backup/backups';
 import type { Stores } from './db/account-db';
 import type { Db } from './db/service-db';
 import type { Bucket } from './files/bucket';
 import type { Limiter, RelayBudget, UploadBudget, visitorLimits } from './limits';
+import type { Pulse } from './pulse';
 import type { Upstream } from './relay';
 import type { Streams } from './stream-registry';
 
@@ -21,7 +23,7 @@ export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 // What the process gives every request (node.ts; testing.ts builds the same set over a temp directory). outbound: the
 // one way a provider is reached; localProviders: the hosts it reaches outside the public internet (outbound.ts), which
 // the session tells the client. limits: calls per account, botCalls per account and chat, visitors per visitor on the
-// anonymous share routes (shares.ts), signup and credentials. backups: the daily job.
+// anonymous share routes (shares.ts), signup and credentials. backups: the daily job. pulse: 헤이젤 지금's counts.
 export type Services = {
   db: Db;
   files: Bucket;
@@ -31,9 +33,11 @@ export type Services = {
   localProviders: ReadonlySet<string>;
   limits: { relay: RelayBudget; calls: Limiter; botCalls: Limiter; visitors: ReturnType<typeof visitorLimits>; uploads: UploadBudget };
   backups: Backups;
+  pulse: Pulse;
 };
 
-export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number } };
+// label: the request's 헤이젤 지금 label (worker.ts).
+export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number; label?: PulseLabel } };
 
 export function fail(c: Context, status: ContentfulStatusCode, error: ServerError, detail: Record<string, unknown> = {}) {
   return c.json({ error, ...detail }, status);
