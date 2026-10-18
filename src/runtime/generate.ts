@@ -6,6 +6,7 @@ import { retryWait } from '../contracts/streams';
 import { batchLane, cacheView, laneBusy, resolveConnection, resolveModel, RETRYABLE, withCredential, type CacheView, type Route } from '../connectors/registry';
 import { decodeStream, type InlineThoughts, type Outcome } from '../connectors/stream';
 import type { ModelSettings } from '../connectors/settings';
+import type { PulseLabel } from '../contracts/pulse';
 import { ConnectorError, type Account, type Batches, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase, type Starred } from '../connectors/types';
 import type { Receipt, ReceiptError } from '../model/chat';
 import type { Stored } from '../model/kinds';
@@ -13,6 +14,7 @@ import type { Stream } from '../model/stream';
 import { routeOf } from './assignment';
 import type { CredentialFailure, Credentials } from './credential';
 import type { PoolFailure } from './pool';
+import { callLabel, PULSE_ROLE } from './pulse';
 import type { ObjectStore } from './store';
 import { pause } from './pause';
 import { relay, relayJson, stream, type RelayFailure, type StreamCall } from './relay';
@@ -141,9 +143,10 @@ export async function generate({ credentials, log, connection, model, settings, 
     onText(phase, text);
   };
   const retry = retries ? { times: retries, statuses: RETRYABLE } : null;
+  const pulse = callLabel(PULSE_ROLE[call.logged.purpose], connection, model.id);
   if (batches) {
     const { cancel } = batching!;
-    const asking: Asking = { route, model, batches, ask: (each) => withCredential(route, each, credential.credential), signal, cancel, onText, inline };
+    const asking: Asking = { route, model, batches, ask: (each) => withCredential(route, each, credential.credential), pulse, signal, cancel, onText, inline };
     // Not stopped midway: a batch the provider made with no marker naming it would answer, and be billed, unread.
     const submit = () => relayJson(asking.ask(batches.submit(route.endpoint, model, request, call.id)));
     let submitted = await submit();
@@ -172,7 +175,7 @@ export async function generate({ credentials, log, connection, model, settings, 
     if (error) credentials.pool.stale(connection, serving);
     return reply(outcome, error);
   }
-  const response = await stream(call, withCredential(route, request, credential.credential), signal, retry);
+  const response = await stream(call, withCredential(route, request, credential.credential), signal, retry, pulse);
   tries = call.tries ?? null;
   if (!(response instanceof Response)) return failed(response.kind === 'provider' && laneBusy(route, asked, response.status, response.code ?? null) ? { kind: 'refused', code: 'discount-busy' } : response);
   const read = recorded(response);
@@ -215,8 +218,9 @@ function refusalFields(protocol: string, outcome: Answered[0], error: Reply['err
   return { ...(refusal && { usage: null, cost: null }), calibration: refusal ? { ...completed, eligible: false, refusal } : completed, contextRefusal: refusal };
 }
 
-// ask: a request with the account's credential added. cancel: absent for a reader that cannot cancel the batch.
-type Asking = { route: Route; model: Model; batches: Batches; ask: (request: HttpRequest) => HttpRequest; signal: AbortSignal; cancel?: AbortSignal; onText: GenerateInput['onText']; inline?: InlineThoughts };
+// ask: a request with the account's credential added. pulse: the label of the results read, where the reply arrives;
+// the submit, checks and cancel carry none. cancel: absent for a reader that cannot cancel the batch.
+type Asking = { route: Route; model: Model; batches: Batches; ask: (request: HttpRequest) => HttpRequest; pulse: PulseLabel; signal: AbortSignal; cancel?: AbortSignal; onText: GenerateInput['onText']; inline?: InlineThoughts };
 
 // A batch is asked about through the relay, each ask a short call, so no server object holds it and a deploy cuts
 // nothing. Soon at first, since a batch of one often ends within minutes, then once a minute.
@@ -253,8 +257,8 @@ async function waitBatch(asking: Asking, batch: string, key: string): Promise<An
 
 // Read to its end once the batch ended, a stop meanwhile included: the answer is billed. null: not read this time, for a
 // failure worth waiting through, so the batch is asked about again.
-async function readBatch({ route, model, batches, ask, signal, onText, inline }: Asking, batch: string, key: string): Promise<Answered | null> {
-  const response = await relay(ask(batches.results(route.endpoint, batch)));
+async function readBatch({ route, model, batches, ask, pulse, signal, onText, inline }: Asking, batch: string, key: string): Promise<Answered | null> {
+  const response = await relay(ask(batches.results(route.endpoint, batch)), undefined, undefined, pulse);
   if (!(response instanceof Response)) return response.kind === 'stopped' || passing(response) ? null : failedWith(response);
   let body: string;
   try {
@@ -324,7 +328,7 @@ export async function resume({ store, credentials, log }: { store: ObjectStore; 
     if (lane?.lane !== 'batch') return reply(failedWith({ kind: 'refused', code: 'unknown-connection-type' }));
     const credential = await credentials.get(resolved, route.connection.value.accounts[0]!.secret, signal);
     if (!credential.ok) return reply(credential.failure.kind === 'stopped' ? STOPPED : failedWith(credential.failure));
-    const answered = await waitBatch({ route: routed, model: route.model, batches: lane.batches, ask: (each) => withCredential(routed, each, credential.credential), signal, cancel: turn?.cancel, onText, inline }, value.batch, id);
+    const answered = await waitBatch({ route: routed, model: route.model, batches: lane.batches, ask: (each) => withCredential(routed, each, credential.credential), pulse: callLabel(PULSE_ROLE[who.purpose], route.connection.value, route.model.id), signal, cancel: turn?.cancel, onText, inline }, value.batch, id);
     took = Date.now() - value.at;
     return reply(answered);
   }

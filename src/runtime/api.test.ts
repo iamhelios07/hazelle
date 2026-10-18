@@ -1,9 +1,28 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { api, hearServedVersion, holdAccount, SLOW_ROUTE_WAIT } from './api';
+import { api, fetchApi, hearServedVersion, holdAccount, holdPulse, markSeen, SLOW_ROUTE_WAIT } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
   holdAccount(null);
+  holdPulse(false);
+});
+
+it('labels a call and owes the page-load mark to the next request only while the account shares', async () => {
+  const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json({}));
+  vi.stubGlobal('fetch', fetch);
+  const call = { kind: 'call', role: 'chat', type: 'direct', model: 'glm 5.2' } as const;
+  holdPulse(true);
+  markSeen();
+  await fetchApi('objects');
+  await fetchApi('objects');
+  await fetchApi('relay', { pulse: call });
+  holdPulse(false);
+  markSeen();
+  await fetchApi('relay', { pulse: call });
+  await fetchApi('objects');
+  holdPulse(true);
+  await fetchApi('objects');
+  expect(fetch.mock.calls.map(([, init]) => (init.headers as Record<string, string>)['x-hazelle-pulse'])).toEqual(['seen', undefined, 'chat direct glm%205.2', undefined, undefined, 'seen']);
 });
 
 it('reads a connection that drops inside the answer or a 5xx page the proxy wrote as offline, and another answer that is not JSON as a server error with its status', async () => {

@@ -4,6 +4,7 @@ import type { Receipt } from '../model/chat';
 import type { Route } from './assignment';
 import type { Credentials } from './credential';
 import { receiptError, type ReplyError } from './generate';
+import { callLabel, PULSE_ROLE } from './pulse';
 import { relayJson } from './relay';
 import { redacted, type RequestLog } from './request-log';
 import type { ObjectStore } from './store';
@@ -45,7 +46,7 @@ export async function embedTexts(
   if (!credential.ok) return unsent('failed');
   const at = Date.now();
   const began = performance.now();
-  const answer = await relayJson(withCredential(route, request, credential.credential), signal, bot);
+  const answer = await relayJson(withCredential(route, request, credential.credential), signal, bot, callLabel(PULSE_ROLE.embedding, connection.value, model.id));
   const receipt = (made: Pick<Receipt, 'state' | 'cut' | 'error' | 'usage' | 'cost'>): Receipt => {
     const kept: Receipt = {
       id: crypto.randomUUID(),

@@ -20,6 +20,7 @@ import { evaluatingTask } from './evaluation';
 import type { ReplyError } from './generate';
 import { taskWriter } from './profiles';
 import { illustrationPrompt } from './prompts';
+import { callLabel } from './pulse';
 import { relayBytes, relayJson } from './relay';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
@@ -324,7 +325,7 @@ export class Illustrator {
       if (!asked.ok) return failed(asked.failure);
       if (draws.free.parse(asked.data, picture) !== true) return { kind: 'costs' };
     }
-    const answer = await relayBytes({ ...request, headers: { ...request.headers, ...draws.authHeaders(credential.credential) } }, signal);
+    const answer = await relayBytes({ ...request, headers: { ...request.headers, ...draws.authHeaders(credential.credential) } }, signal, callLabel('image', connection.value, picture.model.id));
     if (!answer.ok) return failed(answer.failure);
     return (await draws.parse(answer.bytes, answer.type)) ?? { kind: 'not-a-picture' };
   }
