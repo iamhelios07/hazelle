@@ -22,6 +22,14 @@ export function Exchange({ sent, answer }: { sent: string | null; answer: ReactN
   );
 }
 
+// A message's row: its first line leads and the rest previews, since a title folds the line breaks the dialog keeps.
+export function messageRow(text: string): { title: string; description?: string } {
+  const end = text.indexOf('\n');
+  if (end < 0) return { title: text };
+  const description = text.slice(end + 1).trim();
+  return description ? { title: text.slice(0, end), description } : { title: text.slice(0, end) };
+}
+
 const status = ({ resolvedAt, reply }: SentReport) => (reply !== null ? '답변 옴' : resolvedAt !== null ? '확인함' : '확인 전');
 
 export function SentScreen({ back }: { back: Back | null }) {
@@ -52,7 +60,7 @@ export function SentSection({ head }: { head: boolean }) {
       {rows && rows.length > 0 && (
         <List label={NOTICES.sent} box>
           {rows.map((report) => (
-            <ListItem key={report.id} title={report.text} tags={[status(report)]} aside={ago(report.createdAt)} onClick={() => setOpen(report)} />
+            <ListItem key={report.id} {...messageRow(report.text)} tags={[status(report)]} aside={ago(report.createdAt)} onClick={() => setOpen(report)} />
           ))}
         </List>
       )}

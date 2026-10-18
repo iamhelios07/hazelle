@@ -6,7 +6,7 @@ import { NOTICES } from '../common/words';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Dialog, Empty, List, ListItem, NavBar, Panel, Screen, Text } from '../ui';
-import { Exchange } from './SentSection';
+import { Exchange, messageRow } from './SentSection';
 
 const REPLY = '내 알림에 대한 답변';
 
@@ -42,7 +42,7 @@ export function NoticesSection({ head, seek }: { head: boolean; seek: boolean })
           {rows.map((notice) => (
             <ListItem
               key={notice.id}
-              title={notice.text}
+              {...messageRow(notice.text)}
               tags={notice.reportId === null ? [] : [REPLY]}
               aside={ago(notice.createdAt)}
               onClick={() => setOpen(notice)}
