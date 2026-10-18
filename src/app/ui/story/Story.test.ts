@@ -42,12 +42,19 @@ it("lets any rule of the bot's beat the story's own looks", () => {
   expect(unlayered).not.toMatch(/\bem\b|mark\[|margin|\[data-picture\] > img/);
 });
 
-it('hides a drawer parked off the screen by its own width until the rule that slides it in, across the message, and leaves a peeking tab shown', () => {
-  const rule = (selectorText: string, declarations: Record<string, string>) => {
-    const values = new Map(Object.entries(declarations));
-    const style = { getPropertyValue: (name: string) => values.get(name) ?? '', setProperty: (name: string, value: string) => void values.set(name, value), removeProperty: (name: string) => (values.delete(name), '') };
-    return { selectorText, style, values };
+const rule = (selectorText: string, declarations: Record<string, string>, important: string[] = []) => {
+  const values = new Map(Object.entries(declarations));
+  const priorities = new Map(important.map((name) => [name, 'important']));
+  const style = {
+    getPropertyValue: (name: string) => values.get(name) ?? '',
+    getPropertyPriority: (name: string) => priorities.get(name) ?? '',
+    setProperty: (name: string, value: string, priority = '') => void (values.set(name, value), priorities.set(name, priority)),
+    removeProperty: (name: string) => (values.delete(name), ''),
   };
+  return { selectorText, style, values, priorities };
+};
+
+it('hides a drawer parked off the screen by its own width until the rule that slides it in, across the message, and leaves a peeking tab shown', () => {
   const panel = rule('.settings-panel', { position: 'fixed', top: '0', width: '33%', height: '100vh', right: '-33%' });
   const opened = rule('.settings-panel[class*="opened"]', { right: '0' });
   const tab = rule('.tab', { position: 'fixed', top: '64%', right: '-23px' });
@@ -55,4 +62,15 @@ it('hides a drawer parked off the screen by its own width until the rule that sl
   expect(Object.fromEntries(panel.values)).toEqual({ position: 'relative', display: 'none' });
   expect(Object.fromEntries(opened.values)).toEqual({ right: '0', display: 'block' });
   expect(Object.fromEntries(tab.values)).toEqual({ position: 'relative' });
+});
+
+it('lays a screen backdrop over the message, and reads vw against the message in widths only', () => {
+  const backdrop = rule('.sys-backdrop', { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', 'z-index': '980' });
+  const dialog = rule('.dialog', { position: 'fixed', top: '0', right: '0', bottom: '0', left: '0', width: '300px' });
+  const box = rule('.box', { width: 'min(94vw, 700px)', 'max-width': '.5vw', 'font-size': '2vw' }, ['width']);
+  groundRules([backdrop, dialog, box]);
+  expect(Object.fromEntries(backdrop.values)).toEqual({ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', 'z-index': '980' });
+  expect(Object.fromEntries(dialog.values)).toEqual({ position: 'relative', width: '300px' });
+  expect(Object.fromEntries(box.values)).toEqual({ width: 'min(94cqw, 700px)', 'max-width': '.5cqw', 'font-size': '2vw' });
+  expect(box.priorities.get('width')).toBe('important');
 });

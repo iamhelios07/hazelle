@@ -117,6 +117,20 @@ export const cleanCss = (css: string, veiled: boolean) => css.replace(NBSP_OUTSI
 const SCREEN_PLACEMENT = ['top', 'right', 'bottom', 'left', 'inset', 'transform', 'translate'];
 // The screen's whole width or height: a backdrop over Risu's page would stand as a screen-sized block in the message.
 const SCREEN_SIZE = ['width', 'height'];
+// A box over the whole screen (a backdrop whose press closes a drawer) covers the message instead, so a press outside
+// the drawer still lands on it.
+// One pinned to all four sides with a size of its own is a centred dialog, not a cover.
+const SIDES = ['top', 'right', 'bottom', 'left'];
+const OVER_MESSAGE = { position: 'absolute', top: '0', left: '0', width: '100%', height: '100%' };
+function covers(style: Declarations) {
+  const [width, height] = SCREEN_SIZE.map((property) => style.getPropertyValue(property).trim());
+  if (/^100(?:vw|%)$/.test(width!) && /^100(?:vh|%)$/.test(height!)) return true;
+  return !width && !height && SIDES.every((side) => /^0(?:px)?$/.test(style.getPropertyValue(side).trim()));
+}
+// Ruling tripwire (user, 2026-10-18): vw is read against the message's width (StoryMessage .main), in widths only. A
+// font or a gap sized in vw keeps the screen's, as the bot was drawn on Risu's.
+const WIDTHS = ['width', 'min-width', 'max-width', 'flex-basis'];
+const VW = /(?<=[\d.])vw\b/g;
 // A drawer Risu kept off the screen by its own extent (right: -33% beside width: 33%) until a rule set that offset back
 // (.panel[class*="opened"] { right: 0 }). Grounded with its offsets gone it would stand open in the message, so it is
 // hidden and that rule shows it, across the message: its extent was a share of the screen it slid over. A box only
@@ -124,7 +138,7 @@ const SCREEN_SIZE = ['width', 'height'];
 const EXTENT = { top: 'height', right: 'width', bottom: 'height', left: 'width' } as const;
 type Side = keyof typeof EXTENT;
 const LENGTH = /^(-?\d*\.?\d+)([a-z%]*)$/;
-type Declarations = Pick<CSSStyleDeclaration, 'getPropertyValue' | 'setProperty' | 'removeProperty'>;
+type Declarations = Pick<CSSStyleDeclaration, 'getPropertyValue' | 'getPropertyPriority' | 'setProperty' | 'removeProperty'>;
 type StyleRule = { selectorText: string; style: Declarations };
 
 function parkedSide(style: Declarations): Side | null {
@@ -157,9 +171,15 @@ export function groundRules(rules: Iterable<object>) {
     });
     return drawer ? [{ rule, display: drawer.display }] : [];
   });
-  for (const { style } of fixed) {
-    style.setProperty('position', 'relative');
+  const covering = new Set(fixed.filter(({ style }) => covers(style)));
+  for (const rule of fixed) {
+    const { style } = rule;
     for (const property of SCREEN_PLACEMENT) style.removeProperty(property);
+    if (covering.has(rule)) {
+      for (const [property, value] of Object.entries(OVER_MESSAGE)) style.setProperty(property, value);
+      continue;
+    }
+    style.setProperty('position', 'relative');
     for (const property of SCREEN_SIZE) if (/^100v[wh]$/.test(style.getPropertyValue(property).trim())) style.removeProperty(property);
   }
   for (const { rule, side } of parked) {
@@ -167,6 +187,13 @@ export function groundRules(rules: Iterable<object>) {
     rule.style.removeProperty(EXTENT[side]);
   }
   for (const { rule, display } of shown) rule.style.setProperty('display', display);
+  for (const { style } of all) {
+    for (const property of WIDTHS) {
+      const value = style.getPropertyValue(property);
+      const read = value.replace(VW, 'cqw');
+      if (read !== value) style.setProperty(property, read, style.getPropertyPriority(property));
+    }
+  }
 }
 
 let base: CSSStyleSheet | null = null;

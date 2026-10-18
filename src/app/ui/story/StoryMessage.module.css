@@ -56,7 +56,9 @@
   mask-image: linear-gradient(to bottom, var(--color-accent) calc(100% - var(--space-24)), transparent);
 }
 
+/* The container a bot's vw widths are read against (Story.tsx WIDTHS). */
 .main {
+  container-type: inline-size;
   flex-grow: 1;
   min-width: 0;
   display: flex;
