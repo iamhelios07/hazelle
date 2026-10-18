@@ -4,17 +4,21 @@ import { Icon } from '../foundation/Icon';
 import styles from './Disclosure.module.css';
 
 // What is folded is made only while open, so a long list of them stays light.
-export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+// menu: a ⋯ at the end of the line, such as an editor's for a toggle group.
+export function Disclosure({ label, menu, children }: { label: string; menu?: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
     <div className={styles.disclosure}>
-      <button type="button" className={styles.toggle} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-        <span className={styles.chevron}>
-          <Icon icon={ChevronRight} size="xs" />
-        </span>
-        {label}
-      </button>
+      <div className={styles.head}>
+        <button type="button" className={styles.toggle} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+          <span className={styles.chevron}>
+            <Icon icon={ChevronRight} size="xs" />
+          </span>
+          {label}
+        </button>
+        {menu}
+      </div>
       <div id={id} className={styles.body} hidden={!open}>
         {open && children}
       </div>

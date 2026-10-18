@@ -22,15 +22,15 @@ import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions,
 import { conditionSnippet, countUses, draftOf, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
 import {
   addBlock,
-  addLine,
+  addLines,
   doing,
   editLine,
   moveBlock,
-  moveLine,
+  moveLines,
   NO_HISTORY,
   redoing,
   removeBlock,
-  removeLine,
+  removeLines,
   renameKey,
   setCache,
   setCount,
@@ -216,12 +216,10 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
     select.current = [start + from, start + to];
     typeInto(area, [start, end], text);
   };
-  const dropLine = (at: number) => {
-    const gone = latest.current.toggles[at];
-    if (!gone) return;
-    const step = perform(removeLine(gone, at));
+  const dropLines = (lines: Parameters<typeof removeLines>[0]) => {
+    const step = perform(removeLines(lines));
     if (!step) return;
-    undoable(`${withParticle(lineTitle(gone), '을/를')} 삭제했어요.`, () => undo(step));
+    undoable(`${withParticle(lineTitle(lines[0].line), '을/를')} 삭제했어요.`, () => undo(step));
   };
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);
@@ -357,11 +355,11 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
       <TogglePane
         lines={draft.toggles}
         uses={(key) => countUses(latest.current, key)}
-        onAdd={(line) => perform(addLine(line, latest.current.toggles.length))}
+        onAdd={(lines) => perform(addLines(lines, latest.current.toggles.length))}
         onEdit={(before, after, at, what) => JSON.stringify(before) !== JSON.stringify(after) && perform(editLine(before, after, at, what))}
-        onMove={(line, from, to) => perform(moveLine(line, from, to))}
+        onMove={(line, move) => perform(moveLines(line, move))}
         onRekey={changeKey}
-        onRemove={dropLine}
+        onRemove={dropLines}
         adding={addingToggle}
         onAdding={setAddingToggle}
       />

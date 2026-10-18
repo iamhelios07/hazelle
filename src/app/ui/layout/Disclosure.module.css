@@ -4,10 +4,16 @@
   gap: var(--space-8);
 }
 
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
 .toggle {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
   gap: var(--space-8);
   min-height: var(--control-tool);
   border-radius: var(--radius-sm);

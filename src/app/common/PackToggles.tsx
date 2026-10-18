@@ -18,11 +18,11 @@ export function PackToggles({ owner, lines }: { owner: PackOwner; lines: ToggleL
     <TogglePane
       lines={lines}
       uses={null}
-      onAdd={(line) => write([...lines, line])}
+      onAdd={(added) => write([...lines, ...added])}
       onEdit={(_, after, at) => write(lines.with(at, after))}
-      onMove={(_, from, to) => write(moved(lines, from, to))}
+      onMove={(_, { from, count, to }) => write(moved(lines, from, to, count))}
       onRekey={(toggle, to) => write(rekeyed(lines, toggle.key, to))}
-      onRemove={(at) => write(lines.toSpliced(at, 1))}
+      onRemove={(gone) => write(lines.filter((_, at) => !gone.some((line) => line.at === at)))}
       adding={adding}
       onAdding={setAdding}
     />

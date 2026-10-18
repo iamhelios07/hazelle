@@ -2,23 +2,29 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useState } from 'react';
 import { readToggles } from '../../engine/import/toggles';
 import { isToggle, type Toggle, type ToggleLine, type ToggleMark, type UnreadLine } from '../../model/prompt';
+import { lineMoves, toggleTree, type LineAt, type LineMove, type ShownLine, type ToggleGroup } from '../../model/toggles';
 import { ACTS, newOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { ToggleChoice } from './ToggleChoice';
-import { keyProblem, LINE_WORDS } from './toggleWords';
-import { Button, Checkbox, ChoiceGroup, Dialog, Empty, Menu, MenuItem, MoreMenu, Row, Section, SettingGroup, SettingRow, Switch, TextField } from '../ui';
+import { laidOut } from './toggleLayout';
+import { ToggleList } from './ToggleList';
+import { keyProblem, LINE_WORDS, lineTitle } from './toggleWords';
+import { useSearch } from './useSearch';
+import { Button, Checkbox, ChoiceGroup, Dialog, Empty, Menu, MenuItem, MoreMenu, Row, Section, SettingRow, Switch, TextField } from '../ui';
 
 type Props = {
   lines: readonly ToggleLine[];
   // How many conditions changing a key rewrites with it; null for an owner whose text it leaves as it is (a pack's
   // lorebook and scripts), which the pane says rather than count none.
   uses: ((key: string) => number) | null;
-  onAdd: (line: ToggleLine) => void;
+  // A group comes with its end, so what is added after it stays out of it.
+  onAdd: (lines: readonly [ShownLine, ...ToggleLine[]]) => void;
   // line: an unread line fixed, the whole line read again.
-  onEdit: (before: ToggleLine, after: ToggleLine, at: number, what: 'label' | 'default' | 'line') => void;
-  onMove: (line: ToggleLine, from: number, to: number) => void;
+  onEdit: (before: ShownLine, after: ToggleLine, at: number, what: 'label' | 'default' | 'line') => void;
+  onMove: (line: ShownLine, move: LineMove) => void;
   onRekey: (toggle: Toggle, to: string) => void;
-  onRemove: (at: number) => void;
+  // In order; a group's head goes with its end, and what it held stays.
+  onRemove: (lines: readonly [LineAt<ShownLine>, ...LineAt[]]) => void;
   // The new-toggle form is open; 조건 삽입's 새 토글 만들기 opens it too.
   adding: boolean;
   onAdding: (adding: boolean) => void;
@@ -26,25 +32,24 @@ type Props = {
 
 type Labeled = Exclude<ToggleMark['kind'], 'groupEnd'>;
 type Field = 'label' | 'key' | 'default' | 'line';
-type Editing = { at: number; field: Field } | { add: Labeled };
+type Editing = (LineAt<ShownLine> & { field: Field }) | { add: Labeled };
 
 const FIELD: Record<Labeled, string> = { divider: '이름', caption: '내용', group: '이름' };
 
-const subOf = (line: ToggleLine) =>
-  isToggle(line)
-    ? `${line.key} · ${LINE_WORDS[line.kind]}${line.kind === 'text' && line.lines ? ' · 여러 줄' : ''}`
-    : line.kind === 'unread'
-      ? line.text
-      : line.kind !== 'groupEnd' && line.label
-        ? LINE_WORDS[line.kind]
-        : undefined;
+const subOf = (line: Toggle | UnreadLine) =>
+  isToggle(line) ? `${line.key} · ${LINE_WORDS[line.kind]}${line.kind === 'text' && line.lines ? ' · 여러 줄' : ''}` : line.text;
 
+// Laid out as a chat's 토글 shows it (common/ToggleList), each line with its ⋯. While searching, only the toggles found
+// show, without the layout lines a few found rows would sit oddly under, and without moves past rows not shown.
 export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemove, adding, onAdding }: Props) {
   const [editing, setEditing] = useState<Editing | null>(null);
-  const count = lines.filter(isToggle).length;
+  const toggles = lines.flatMap((line, at) => (isToggle(line) ? [{ line, at }] : []));
+  const search = useSearch(toggles, '토글 검색', ({ line }) => [line.label, line.key]);
+  const nodes = toggleTree(lines);
+  const groups = new Map(nodes.flatMap((node) => ('head' in node ? [[node.head.at, node] as const] : [])));
   const close = () => setEditing(null);
 
-  function control(line: ToggleLine, at: number) {
+  function control(line: Toggle | UnreadLine, at: number) {
     if (!isToggle(line) || line.kind === 'text') return null;
     return line.kind === 'check' ? (
       <Switch label={`${line.label} 기본값`} checked={line.default === '1'} onChange={(on) => onEdit(line, { ...line, default: on ? '1' : '0' }, at, 'default')} />
@@ -53,7 +58,36 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
     );
   }
 
-  function dialog(line: ToggleLine, at: number, field: Field) {
+  function menu({ line, at }: LineAt<ShownLine>) {
+    const moves = search.words ? null : lineMoves(nodes, at);
+    const group: ToggleGroup | undefined = groups.get(at);
+    return (
+      <MoreMenu of={isToggle(line) ? `'${line.label}'` : lineTitle(line)}>
+        <MenuItem
+          icon={ACTS.rename.icon}
+          label={line.kind === 'caption' || line.kind === 'unread' ? '내용 바꾸기' : ACTS.rename.label}
+          onClick={() => setEditing({ line, at, field: line.kind === 'unread' ? 'line' : 'label' })}
+        />
+        {line.kind === 'text' && <MenuItem label="기본값 바꾸기" onClick={() => setEditing({ line, at, field: 'default' })} />}
+        {isToggle(line) && <MenuItem label="키 바꾸기" sub={uses ? '조건에 쓴 키도 함께 바뀌어요' : undefined} onClick={() => setEditing({ line, at, field: 'key' })} />}
+        {moves?.up && <MenuItem icon={ArrowUp} label="위로 옮기기" onClick={() => onMove(line, moves.up!)} />}
+        {moves?.down && <MenuItem icon={ArrowDown} label="아래로 옮기기" onClick={() => onMove(line, moves.down!)} />}
+        <MenuItem
+          icon={ACTS.remove.icon}
+          label={ACTS.remove.label}
+          sub={group && group.members.length > 0 ? '안의 토글은 남아요' : undefined}
+          tone="warn"
+          onClick={() => onRemove(group?.end ? [{ line, at }, group.end] : [{ line, at }])}
+        />
+      </MoreMenu>
+    );
+  }
+
+  const row = ({ line, at }: LineAt<Toggle | UnreadLine>) => (
+    <SettingRow key={isToggle(line) ? line.key : `unread${at}`} label={isToggle(line) ? line.label : LINE_WORDS.unread} sub={subOf(line)} control={control(line, at)} menu={menu({ line, at })} />
+  );
+
+  function dialog({ line, at, field }: LineAt<ShownLine> & { field: Field }) {
     if (field === 'line' && line.kind === 'unread') {
       return (
         <LineDialog
@@ -95,7 +129,7 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
         />
       );
     }
-    if (field !== 'label' || line.kind === 'groupEnd' || line.kind === 'unread') return null;
+    if (field !== 'label' || line.kind === 'unread') return null;
     return (
       <NameDialog
         title={line.kind === 'caption' ? '내용 바꾸기' : ACTS.rename.label}
@@ -113,7 +147,7 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
   return (
     <Section
       title="토글"
-      note={`${count}개`}
+      note={`${toggles.length}개`}
       help="채팅에서 켜고 끄면 조건에 따라 보내는 내용이 바뀌어요. 구분선과 설명, 그룹으로 채팅의 토글 목록을 정리할 수 있어요."
       action={
         <Row kind="actions">
@@ -121,7 +155,6 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
             <MenuItem label={LINE_WORDS.divider} onClick={() => setEditing({ add: 'divider' })} />
             <MenuItem label={LINE_WORDS.caption} onClick={() => setEditing({ add: 'caption' })} />
             <MenuItem label={LINE_WORDS.group} onClick={() => setEditing({ add: 'group' })} />
-            <MenuItem label={LINE_WORDS.groupEnd} onClick={() => onAdd({ kind: 'groupEnd' })} />
           </Menu>
           <Button variant="secondary" icon={ACTS.create.icon} onClick={() => onAdding(true)}>
             {newOf('토글')}
@@ -129,35 +162,13 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
         </Row>
       }
     >
-      {lines.length === 0 ? (
-        <Empty variant="section">토글이 없어요.</Empty>
+      {search.field && <Row kind="toolbar">{search.field}</Row>}
+      {lines.length === 0 || search.none ? (
+        <Empty variant="section">{search.none ?? '토글이 없어요.'}</Empty>
+      ) : search.words ? (
+        search.found.map(row)
       ) : (
-        <SettingGroup label="토글">
-          {lines.map((line, at) => (
-            <SettingRow
-              key={isToggle(line) ? line.key : `${line.kind}${at}`}
-              label={isToggle(line) || (line.kind !== 'groupEnd' && line.kind !== 'unread' && line.label) ? line.label : LINE_WORDS[line.kind]}
-              sub={subOf(line)}
-              control={control(line, at)}
-              menu={
-                <MoreMenu of={isToggle(line) ? `'${line.label}'` : LINE_WORDS[line.kind]}>
-                  {line.kind !== 'groupEnd' && (
-                    <MenuItem
-                      icon={ACTS.rename.icon}
-                      label={line.kind === 'caption' || line.kind === 'unread' ? '내용 바꾸기' : ACTS.rename.label}
-                      onClick={() => setEditing({ at, field: line.kind === 'unread' ? 'line' : 'label' })}
-                    />
-                  )}
-                  {line.kind === 'text' && <MenuItem label="기본값 바꾸기" onClick={() => setEditing({ at, field: 'default' })} />}
-                  {isToggle(line) && <MenuItem label="키 바꾸기" sub={uses ? '조건에 쓴 키도 함께 바뀌어요' : undefined} onClick={() => setEditing({ at, field: 'key' })} />}
-                  {at > 0 && <MenuItem icon={ArrowUp} label="위로 옮기기" onClick={() => onMove(line, at, at - 1)} />}
-                  {at < lines.length - 1 && <MenuItem icon={ArrowDown} label="아래로 옮기기" onClick={() => onMove(line, at, at + 1)} />}
-                  <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onRemove(at)} />
-                </MoreMenu>
-              }
-            />
-          ))}
-        </SettingGroup>
+        <ToggleList items={laidOut(lines, (line, at) => ({ line, at }))} row={row} menu={menu} />
       )}
       {editing && 'add' in editing && (
         <NameDialog
@@ -168,18 +179,20 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
           onClose={close}
           onSave={(label) => {
             close();
-            if (label.trim() || editing.add === 'divider') onAdd({ kind: editing.add, label: label.trim() });
+            if (!label.trim() && editing.add !== 'divider') return;
+            const line = { kind: editing.add, label: label.trim() };
+            onAdd(line.kind === 'group' ? [line, { kind: 'groupEnd' }] : [line]);
           }}
         />
       )}
-      {editing && 'at' in editing && lines[editing.at] && dialog(lines[editing.at]!, editing.at, editing.field)}
+      {editing && 'at' in editing && dialog(editing)}
       {adding && (
         <NewToggleDialog
           lines={lines}
           onClose={() => onAdding(false)}
           onSave={(toggle) => {
             onAdding(false);
-            onAdd(toggle);
+            onAdd([toggle]);
           }}
         />
       )}

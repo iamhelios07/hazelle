@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Toggle } from './prompt';
-import { chatToggles, toggleValue } from './toggles';
+import { chatToggles, lineMoves, toggleTree, toggleValue } from './toggles';
 
 const check = (key: string, label: string): Toggle => ({ key, label, kind: 'check', default: '0' });
 
@@ -18,5 +18,20 @@ describe('toggles', () => {
     expect(declared.map(({ label }) => label)).toEqual(['시뮬레이터 모드', 'NSFW', '이름']);
     const value = toggleValue(declared, { nsfw: '1', gone: '1', name: '하늘' });
     expect([value('sims'), value('nsfw'), value('name'), value('gone'), value('constructor')]).toEqual(['0', '1', '하늘', null, null]);
+  });
+
+  it('moves a line into and out of a group past its head or end, a group with all it holds, and an endless group past no lone line', () => {
+    const group = (label: string) => ({ kind: 'group', label }) as const;
+    const end = { kind: 'groupEnd' } as const;
+    // 0 a, 1 [G1, 2 b, 3 end], 4 c, 5 [G2, 6 d], 7 [G3, 8 e]
+    const nodes = toggleTree([check('a', 'A'), group('G1'), check('b', 'B'), end, check('c', 'C'), group('G2'), check('d', 'D'), group('G3'), check('e', 'E')]);
+    const one = (from: number, to: number) => ({ from, count: 1, to });
+    expect(lineMoves(nodes, 0)).toEqual({ up: null, down: one(0, 1) });
+    expect(lineMoves(nodes, 2)).toEqual({ up: one(2, 1), down: one(2, 3) });
+    expect(lineMoves(nodes, 4)).toEqual({ up: one(4, 3), down: one(4, 5) });
+    expect(lineMoves(nodes, 6)).toEqual({ up: one(6, 5), down: one(6, 7) });
+    expect(lineMoves(nodes, 1)).toEqual({ up: { from: 1, count: 3, to: 0 }, down: { from: 1, count: 3, to: 2 } });
+    expect(lineMoves(nodes, 5)).toEqual({ up: null, down: { from: 5, count: 2, to: 7 } });
+    expect(lineMoves(nodes, 7)).toEqual({ up: { from: 7, count: 2, to: 5 }, down: null });
   });
 });

@@ -1,50 +1,44 @@
-import { isToggle, type Toggle, type ToggleMark } from '../../model/prompt';
+import type { Toggle, ToggleLine } from '../../model/prompt';
 import type { ChatToggleSet, ToggleSource } from '../../runtime/chat-context';
+import { laidOut, type Laid } from '../common/toggleLayout';
 
 export type ToggleRow = { toggle: Toggle; value: string; changed: boolean };
 
 // A text toggle's typed value waits under this key (common/useAutosave) before it is stored.
 export const toggleSaveKey = (owner: string | null, key: string) => `toggle:${owner ?? ''}:${key}`;
-export type ToggleNote = Extract<ToggleMark, { kind: 'divider' | 'caption' }>;
-export type ToggleItem = ToggleRow | ToggleNote | { kind: 'group'; label: string; items: (ToggleRow | ToggleNote)[] };
-export type ToggleSection = Pick<ToggleSource, 'from' | 'id' | 'name'> & { rows: ToggleRow[]; items: ToggleItem[] };
+export type ToggleSection = Pick<ToggleSource, 'from' | 'id' | 'name'> & { rows: ToggleRow[]; items: Laid<ToggleRow>[] };
 type ToggleRows = { sections: ToggleSection[]; changed: number };
 
 // A key declared again by a later source shows once, in the source that declares it (model/toggles chatToggles keeps
 // the very line, so it is matched by identity). A source with no toggle of its own is left out.
 export function toggleRows({ declared, sources, value }: ChatToggleSet): ToggleRows {
-  const rows = new Map(
+  const rows = new Map<ToggleLine, ToggleRow>(
     declared.map((toggle) => {
       const current = value(toggle.key)!;
       return [toggle, { toggle, value: current, changed: current !== toggle.default }];
     }),
   );
   const sections = sources
-    .map(({ from, id, name, lines }) => {
-      const kept = lines.flatMap<ToggleRow | ToggleMark>((line) => (isToggle(line) ? (rows.get(line) ?? []) : line.kind === 'unread' ? [] : [line]));
-      return { from, id, name, rows: kept.filter((line): line is ToggleRow => 'toggle' in line), items: laidOut(kept) };
-    })
+    .map(({ from, id, name, lines }) => ({
+      from,
+      id,
+      name,
+      rows: lines.flatMap((line) => rows.get(line) ?? []),
+      items: asRisu(laidOut(lines, (line) => rows.get(line) ?? null)),
+    }))
     .filter((section) => section.rows.length > 0);
   return { sections, changed: [...rows.values()].filter((row) => row.changed).length };
 }
 
-// As Risu lays them out: a group holds the lines up to its groupEnd or the next group and is left out when it holds
-// nothing, groups do not nest, and a divider right after one of the same label shows once.
-function laidOut(lines: readonly (ToggleRow | ToggleMark)[]): ToggleItem[] {
-  const items: ToggleItem[] = [];
-  let group: Extract<ToggleItem, { kind: 'group' }> | null = null;
-  for (const line of lines) {
-    if ('toggle' in line || line.kind === 'divider' || line.kind === 'caption') {
-      const into = group ? group.items : items;
-      const last = into.at(-1);
-      const repeated = !('toggle' in line) && line.kind === 'divider' && last && !('toggle' in last) && last.kind === 'divider' && last.label === line.label;
-      if (!repeated) into.push(line);
-      continue;
-    }
-    group = line.kind === 'group' ? { kind: 'group', label: line.label, items: [] } : null;
-    if (group) items.push(group);
-  }
-  return items.filter((item) => !('items' in item) || item.items.length > 0);
+const repeated = (item: Laid<ToggleRow>, last: Laid<ToggleRow> | undefined) =>
+  'note' in item && item.note.line.kind === 'divider' && last !== undefined && 'note' in last && last.note.line.kind === 'divider' && last.note.line.label === item.note.line.label;
+
+// As Risu shows them: a group that holds nothing is left out, and a divider right after one of the same label shows once.
+function asRisu(items: readonly Laid<ToggleRow>[]): Laid<ToggleRow>[] {
+  return items
+    .filter((item, at) => !repeated(item, items[at - 1]))
+    .map((item) => ('group' in item ? { ...item, items: item.items.filter((inner, at) => !repeated(inner, item.items[at - 1])) } : item))
+    .filter((item) => !('group' in item) || item.items.length > 0);
 }
 
 // What the panel shows of a source while searching or filtering: the rows the search and the 변경 filter keep, those

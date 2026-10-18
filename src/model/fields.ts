@@ -4,9 +4,9 @@ export function without<T extends object>(from: T, key: keyof T): T {
   return rest;
 }
 
-export function moved<T>(items: readonly T[], from: number, to: number): T[] {
+// to counts in the list without the items moved.
+export function moved<T>(items: readonly T[], from: number, to: number, count = 1): T[] {
   const next = [...items];
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item!);
+  next.splice(to, 0, ...next.splice(from, count));
   return next;
 }

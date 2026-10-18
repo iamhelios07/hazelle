@@ -2,7 +2,7 @@ import { isToggle, type Block, type ChatRange, type ChatSlot, type RecentSlot, t
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockTitle, MARKS } from './blocks';
 import { moved } from '../../model/fields';
-import { keyInUse } from '../../model/toggles';
+import { keyInUse, type LineAt, type LineMove, type ShownLine } from '../../model/toggles';
 import { SLOT } from '../common/prompt-words';
 import { lineTitle } from '../common/toggleWords';
 import { placedOnce, rekey, withMark, type Draft } from './edits';
@@ -165,18 +165,33 @@ export function setMark(block: TextBlock, mark: TextBlock['mark'], taken: string
   return { label: titled(block, mark ? `${MARKS[mark].label} 표시` : '표시 빼기'), block: block.id, undo, redo: (draft) => ({ blocks: withMark(draft.blocks, block.id, mark).blocks }) };
 }
 
-export function addLine(line: ToggleLine, at: number): Step {
-  const { put, take } = presence(line, at, sameLine, joiningLine);
-  return { label: `${lineTitle(line)} ${isToggle(line) ? '만들기' : '추가'}`, block: null, undo: (draft) => ({ toggles: take(draft.toggles) }), redo: (draft) => togglesOr(put(draft.toggles)) };
+// A group comes with its end; each line takes the place after the one before it.
+export function addLines(lines: readonly [ShownLine, ...ToggleLine[]], at: number): Step {
+  const parts = lines.map((line, index) => presence(line, at + index, sameLine, joiningLine));
+  const [line] = lines;
+  return {
+    label: `${lineTitle(line)} ${isToggle(line) ? '만들기' : '추가'}`,
+    block: null,
+    undo: (draft) => ({ toggles: parts.toReversed().reduce<ToggleLine[]>((toggles, part) => part.take(toggles), [...draft.toggles]) }),
+    redo: (draft) => togglesOr(parts.reduce<ToggleLine[] | Refused>((toggles, part) => ('refused' in toggles ? toggles : part.put(toggles)), [...draft.toggles])),
+  };
 }
 
-export function removeLine(line: ToggleLine, at: number): Step {
-  const { put, take } = presence(line, at, sameLine, joiningLine);
-  return { label: `${lineTitle(line)} 삭제`, block: null, undo: (draft) => togglesOr(put(draft.toggles)), redo: (draft) => ({ toggles: take(draft.toggles) }) };
+// The lines in order, so each is taken from the last and put back from the first at its own place; a group's head
+// goes with its end.
+export function removeLines(lines: readonly [LineAt<ShownLine>, ...LineAt[]]): Step {
+  const parts = lines.map(({ line, at }) => presence(line, at, sameLine, joiningLine));
+  const [{ line }] = lines;
+  return {
+    label: `${lineTitle(line)} 삭제`,
+    block: null,
+    undo: (draft) => togglesOr(parts.reduce<ToggleLine[] | Refused>((toggles, part) => ('refused' in toggles ? toggles : part.put(toggles)), [...draft.toggles])),
+    redo: (draft) => ({ toggles: parts.toReversed().reduce<ToggleLine[]>((toggles, part) => part.take(toggles), [...draft.toggles]) }),
+  };
 }
 
 // The whole line swaps, since nothing is typed into one in place.
-export function editLine(before: ToggleLine, after: ToggleLine, at: number, what: 'label' | 'default' | 'line'): Step {
+export function editLine(before: ShownLine, after: ToggleLine, at: number, what: 'label' | 'default' | 'line'): Step {
   const swap = (from: ToggleLine, to: ToggleLine) => (draft: Draft): PromptPatch => {
     const now = lineAt(draft.toggles, from, at);
     return now === -1 ? {} : { toggles: draft.toggles.map((each, index) => (index === now ? to : each)) };
@@ -185,10 +200,11 @@ export function editLine(before: ToggleLine, after: ToggleLine, at: number, what
   return { label: `${lineTitle(before)} ${words}`, block: null, undo: swap(after, before), redo: swap(before, after) };
 }
 
-export function moveLine(line: ToggleLine, from: number, to: number): Step {
+// line: the run's first, a group's head with what it holds.
+export function moveLines(line: ShownLine, { from, count, to }: LineMove): Step {
   const place = (was: number, index: number) => (draft: Draft): PromptPatch => {
     const now = lineAt(draft.toggles, line, was);
-    return now === -1 ? {} : { toggles: moved(draft.toggles, now, index) };
+    return now === -1 ? {} : { toggles: moved(draft.toggles, now, index, count) };
   };
   return { label: `${lineTitle(line)} 옮기기`, block: null, undo: place(to, from), redo: place(from, to) };
 }

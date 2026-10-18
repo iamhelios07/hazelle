@@ -3,7 +3,8 @@ import { readToggles } from '../../engine/import/toggles';
 import type { ToggleLine, ToggleValues } from '../../model/prompt';
 import { chatToggles, toggleValue } from '../../model/toggles';
 import type { ToggleSource } from '../../runtime/chat-context';
-import { shownRows, toggleRows, type ToggleItem } from './toggles';
+import type { Laid } from '../common/toggleLayout';
+import { shownRows, toggleRows, type ToggleRow } from './toggles';
 
 const PROMPT: ToggleLine[] = [
   { key: 'sims', label: '시뮬레이터 모드', kind: 'check', default: '0' },
@@ -14,7 +15,8 @@ const set = (sources: ToggleSource[], values: ToggleValues) => {
   return { declared, sources, value: toggleValue(declared, values) };
 };
 const source = (from: ToggleSource['from'], name: string, text: string): ToggleSource => ({ from, id: name, name, lines: readToggles(text) });
-const shape = (item: ToggleItem): unknown => ('toggle' in item ? item.toggle.key : item.kind === 'group' ? [item.label, item.items.map(shape)] : `${item.kind}:${item.label}`);
+const shape = (item: Laid<ToggleRow>): unknown =>
+  'row' in item ? item.row.toggle.key : 'group' in item ? [item.group.line.label, item.items.map(shape)] : `${item.note.line.kind}:${item.note.line.label}`;
 
 describe('toggle panel rows', () => {
   it('counts the toggles off their default, and keeps the ones changed at opening first while filtering', () => {

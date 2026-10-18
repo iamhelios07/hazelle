@@ -3,12 +3,13 @@ import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { pinToggle } from '../../runtime/characters';
 import { ToggleChoice } from '../common/ToggleChoice';
+import { ToggleList } from '../common/ToggleList';
 import { useAutosave } from '../common/useAutosave';
 import { useSearch } from '../common/useSearch';
 import { PAGES, RESET, scopeTag } from '../common/words';
 import { useSettings, useStore } from '../session';
-import { Button, Disclosure, Divider, Empty, IconButton, Row, Section, SettingRow, SidePanel, Switch, Tab, Tabs, Text, TextField } from '../ui';
-import { shownRows, toggleSaveKey, type ToggleItem, type ToggleNote, type ToggleRow, type ToggleSection } from './toggles';
+import { Button, Empty, IconButton, Row, Section, SettingRow, SidePanel, Switch, Tab, Tabs, TextField } from '../ui';
+import { shownRows, toggleSaveKey, type ToggleRow, type ToggleSection } from './toggles';
 import type { OpenChat } from './useChat';
 
 const defaultOf = (toggle: Toggle) =>
@@ -65,25 +66,6 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
       }
     />
   );
-  const note = (line: ToggleNote, index: number) =>
-    line.kind === 'divider' ? (
-      <Divider key={`divider${index}`} label={line.label} />
-    ) : (
-      <Text key={`caption${index}`} variant="note">
-        {line.label}
-      </Text>
-    );
-  const item = (line: ToggleItem, index: number) =>
-    'toggle' in line ? (
-      row(line)
-    ) : line.kind === 'group' ? (
-      <Disclosure key={`group${index}`} label={line.label}>
-        {line.items.map((inner, at) => ('toggle' in inner ? row(inner) : note(inner, at)))}
-      </Disclosure>
-    ) : (
-      note(line, index)
-    );
-
   return (
     <SidePanel title="토글" onClose={onClose}>
       {all.length === 0 ? (
@@ -124,7 +106,7 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
                 </Button>
               }
             >
-              {laying ? section.items.map(item) : section.shown.map(row)}
+              {laying ? <ToggleList items={section.items} row={row} /> : section.shown.map(row)}
             </Section>
           ))}
           {visible.length === 0 && <Empty variant="section">{search.none ?? '바꾼 토글이 없어요.'}</Empty>}

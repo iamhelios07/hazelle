@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Block, TextBlock, ToggleLine } from '../../model/prompt';
 import type { Draft } from './edits';
-import { addBlock, doing, editLine, moveLine, NO_HISTORY, removeBlock, removeLine, undoing, type History, type Step, type Turned } from './history';
+import { addBlock, doing, editLine, moveLines, NO_HISTORY, removeBlock, removeLines, undoing, type History, type Step, type Turned } from './history';
 
 const text = (id: string, words: string): TextBlock => ({ id, name: null, kind: 'text', role: 'system', text: words, mark: null });
 const authorNote = (id: string): Block => ({ id, name: null, kind: 'slot', slot: 'authorNote', role: 'system', wrapper: null });
@@ -10,14 +10,14 @@ const after = (draft: Draft, turned: Turned | null): Draft => (turned && 'patch'
 const typed = (draft: Draft, id: string, words: string): Draft => ({ ...draft, blocks: draft.blocks.map((block) => (block.id === id && block.kind === 'text' ? { ...block, text: words } : block)) });
 
 describe('the prompt editor history of toggle lines', () => {
-  const rule: ToggleLine = { kind: 'divider', label: '' };
+  const rule = { kind: 'divider', label: '' } as const;
   const sims: ToggleLine = { key: 'sims', label: '시뮬레이터', kind: 'check', default: '0' };
-  const note: ToggleLine = { kind: 'caption', label: '안내' };
+  const note = { kind: 'caption', label: '안내' } as const;
   const lines = (toggles: ToggleLine[]): Draft => ({ name: '', blocks: [], toggles, authorNote: '' });
   const apply = (draft: Draft, change: ReturnType<Step['redo']>): Draft => ('refused' in change ? draft : { ...draft, ...change });
 
   it('takes out the layout line at its own place among alike ones, and puts it back there', () => {
-    const removal = removeLine(rule, 2);
+    const removal = removeLines([{ line: rule, at: 2 }]);
     const removed = apply(lines([rule, sims, rule, note]), removal.redo(lines([rule, sims, rule, note])));
     expect(removed.toggles).toEqual([rule, sims, note]);
     expect(apply(removed, removal.undo(removed)).toggles).toEqual([rule, sims, rule, note]);
@@ -30,10 +30,25 @@ describe('the prompt editor history of toggle lines', () => {
     draft = lines([rule, ...draft.toggles]);
     expect(apply(draft, edit.undo(draft)).toggles).toEqual([rule, sims, note]);
 
-    const move = moveLine(rule, 0, 2);
+    const move = moveLines(rule, { from: 0, count: 1, to: 2 });
     draft = apply(lines([rule, sims, note]), move.redo(lines([rule, sims, note])));
     expect(draft.toggles).toEqual([sims, note, rule]);
     expect(apply(draft, move.undo(draft)).toggles).toEqual([rule, sims, note]);
+  });
+
+  it("takes a group's head and end out together, leaving what it held, and moves a group back with all it holds", () => {
+    const head = { kind: 'group', label: '모드' } as const;
+    const end: ToggleLine = { kind: 'groupEnd' };
+    const start = lines([note, head, sims, end, rule]);
+    const removal = removeLines([{ line: head, at: 1 }, { line: end, at: 3 }]);
+    const removed = apply(start, removal.redo(start));
+    expect(removed.toggles).toEqual([note, sims, rule]);
+    expect(apply(removed, removal.undo(removed)).toggles).toEqual(start.toggles);
+
+    const move = moveLines(head, { from: 1, count: 3, to: 0 });
+    const moved = apply(start, move.redo(start));
+    expect(moved.toggles).toEqual([head, sims, end, note, rule]);
+    expect(apply(moved, move.undo(moved)).toggles).toEqual(start.toggles);
   });
 });
 
