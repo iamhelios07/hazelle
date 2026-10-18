@@ -4,9 +4,14 @@ import { Icon } from '../foundation/Icon';
 import styles from './Disclosure.module.css';
 
 // What is folded is made only while open, so a long list of them stays light.
-// menu: a ⋯ at the end of the line, such as an editor's for a toggle group.
-export function Disclosure({ label, menu, children }: { label: string; menu?: ReactNode; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+// menu: a ⋯ at the end of the line, such as an editor's for a toggle group. open and onOpen: held by the caller, such
+// as a toggle group's remembered on the device; without them it starts folded every time.
+type Props = { label: string; menu?: ReactNode; open?: boolean; onOpen?: (open: boolean) => void; children: ReactNode };
+
+export function Disclosure({ label, menu, open: held, onOpen, children }: Props) {
+  const [own, setOwn] = useState(false);
+  const open = held ?? own;
+  const setOpen = onOpen ?? setOwn;
   const id = useId();
   return (
     <div className={styles.disclosure}>

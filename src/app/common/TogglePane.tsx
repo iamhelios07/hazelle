@@ -13,6 +13,8 @@ import { useSearch } from './useSearch';
 import { Button, Checkbox, ChoiceGroup, Dialog, Empty, Menu, MenuItem, MoreMenu, Row, Section, SettingRow, Switch, TextField } from '../ui';
 
 type Props = {
+  // The prompt's, character's or module's id (common/ToggleList).
+  owner: string;
   lines: readonly ToggleLine[];
   // How many conditions changing a key rewrites with it; null for an owner whose text it leaves as it is (a pack's
   // lorebook and scripts), which the pane says rather than count none.
@@ -41,7 +43,7 @@ const subOf = (line: Toggle | UnreadLine) =>
 
 // Laid out as a chat's 토글 shows it (common/ToggleList), each line with its ⋯. While searching, only the toggles found
 // show, without the layout lines a few found rows would sit oddly under, and without moves past rows not shown.
-export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemove, adding, onAdding }: Props) {
+export function TogglePane({ owner, lines, uses, onAdd, onEdit, onMove, onRekey, onRemove, adding, onAdding }: Props) {
   const [editing, setEditing] = useState<Editing | null>(null);
   const toggles = lines.flatMap((line, at) => (isToggle(line) ? [{ line, at }] : []));
   const search = useSearch(toggles, '토글 검색', ({ line }) => [line.label, line.key]);
@@ -168,7 +170,7 @@ export function TogglePane({ lines, uses, onAdd, onEdit, onMove, onRekey, onRemo
       ) : search.words ? (
         search.found.map(row)
       ) : (
-        <ToggleList items={laidOut(lines, (line, at) => ({ line, at }))} row={row} menu={menu} />
+        <ToggleList owner={owner} items={laidOut(lines, (line, at) => ({ line, at }))} row={row} menu={menu} />
       )}
       {editing && 'add' in editing && (
         <NameDialog

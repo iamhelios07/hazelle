@@ -106,7 +106,7 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
                 </Button>
               }
             >
-              {laying ? <ToggleList items={section.items} row={row} /> : section.shown.map(row)}
+              {laying ? <ToggleList owner={section.id} items={section.items} row={row} /> : section.shown.map(row)}
             </Section>
           ))}
           {visible.length === 0 && <Empty variant="section">{search.none ?? '바꾼 토글이 없어요.'}</Empty>}

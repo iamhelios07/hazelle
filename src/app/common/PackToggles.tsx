@@ -16,6 +16,7 @@ export function PackToggles({ owner, lines }: { owner: PackOwner; lines: ToggleL
   const write = (next: ToggleLine[]) => void setToggles(store, owner, next).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   return (
     <TogglePane
+      owner={owner.id}
       lines={lines}
       uses={null}
       onAdd={(added) => write([...lines, ...added])}

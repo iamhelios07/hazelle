@@ -353,6 +353,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
       <PicturePane tags={draft.tags} picture={draft.picture} onTags={(tags) => update(() => ({ tags }))} onPicture={(picture) => update(() => ({ picture }))} />
     ) : open === TOGGLES ? (
       <TogglePane
+        owner={stored.id}
         lines={draft.toggles}
         uses={(key) => countUses(latest.current, key)}
         onAdd={(lines) => perform(addLines(lines, latest.current.toggles.length))}
