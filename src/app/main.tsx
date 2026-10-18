@@ -5,6 +5,7 @@ import { legalPage } from './common/LegalPage';
 import { ScreenLoad } from './common/ScreenLoad';
 import { watchProblems } from '../runtime/diagnostics';
 import { applyStoredScheme } from './display';
+import { pulsePage } from './pulse/PulsePage';
 import { sharePage } from './share/SharePage';
 import { markScrollbars } from './ui';
 import './ui/foundation/global.css';
@@ -20,7 +21,7 @@ markScrollbars();
 
 createRoot(root).render(
   <StrictMode>
-    {legalPage(location.pathname) ?? sharePage(location.pathname, location.hash) ?? <AccountFlow>{(unlocked) => <ScreenLoad><Workspace {...unlocked} /></ScreenLoad>}</AccountFlow>}
+    {legalPage(location.pathname) ?? pulsePage(location.pathname) ?? sharePage(location.pathname, location.hash) ?? <AccountFlow>{(unlocked) => <ScreenLoad><Workspace {...unlocked} /></ScreenLoad>}</AccountFlow>}
   </StrictMode>,
 );
 

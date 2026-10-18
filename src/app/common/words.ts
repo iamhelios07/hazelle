@@ -58,6 +58,11 @@ export const TOOL_FIELD_CHANGED = '도구가 바뀌어서 다시 설정해야 �
 
 export const SETTINGS = '설정';
 
+export const DIRECT_CONNECTION = '직접 연결';
+
+// 헤이젤 지금 (design §6.12): the public page, and the account's switch that counts this account in it.
+export const PULSE = { path: '/now', title: '헤이젤 지금', sharing: '헤이젤 지금 집계 참여' };
+
 // Where what is deleted waits KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
 export const BIN = '휴지통';
 // What the toast of a deletion that goes there adds.

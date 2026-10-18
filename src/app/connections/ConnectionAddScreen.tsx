@@ -4,6 +4,7 @@ import type { ConnectionType } from '../../connectors/types';
 import { providerConnection } from '../../runtime/connections';
 import { newOf } from '../common/acts';
 import { noResults } from '../common/search';
+import { DIRECT_CONNECTION } from '../common/words';
 import { useAttempt } from '../common/useAttempt';
 import { useConnections, useSession } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
@@ -45,7 +46,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
           </Button>
         </Stack>
       )}
-      {search.kind === 'address' && <Text variant="note">목록에 없는 주소는 아래의 직접 연결로 추가해요.</Text>}
+      {search.kind === 'address' && <Text variant="note">목록에 없는 주소는 아래의 {DIRECT_CONNECTION}로 추가해요.</Text>}
       {search.kind === 'none' && <Empty>{noResults(query.trim())}</Empty>}
       {failure && (
         <Callout tone="warn" alert>
@@ -74,9 +75,9 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
         ) : null,
       )}
       <Section title="목록에 없는 제공자">
-        <List label="직접 연결" places>
+        <List label={DIRECT_CONNECTION} places>
           <ListItem
-            title="직접 연결"
+            title={DIRECT_CONNECTION}
             description="OpenAI 호환, OpenAI Responses, Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 확인할 수 없어요."
             current={route.kind === 'connect-direct'}
             onClick={() => navigate({ kind: 'connect-direct', address: search.kind === 'address' ? search.baseUrl : '' })}
