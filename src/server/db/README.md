@@ -6,7 +6,8 @@ The file store chosen by `HAZELLE_FILES_BUCKET` owns pictures and snapshot archi
 ```
 lock.sqlite                      the process's exclusive lock (node.ts): a second process on the directory exits
 service.sqlite                   accounts, sessions, vaults, service, installation, reports, admin_log, restores,
-                                 account_files, file_blocks, picture_removals, snapshot_removals, notices, models_dev, models_dev_fetch,
+                                 account_files, file_blocks, picture_removals, snapshot_removals, notices, models_dev, models_dev_fetch, pulse_start,
+                                 pulse_week, pulse_week_roles, pulse_week_models, pulse_hours, pulse_hour_replies,
                                  snapshots, backup_runs, alerts_sent, shares, share_versions, share_files, migrations
 accounts/<incarnation>.sqlite    one account's objects (head, objects, kv), WAL mode
 files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written. With HAZELLE_FILES_BUCKET=r2 the same keys

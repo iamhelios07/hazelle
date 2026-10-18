@@ -12,6 +12,7 @@ import { openDatabase, serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
 import { sha256Hex, type Services } from './http';
 import { relayBudget, tokenBucket, uploadBudget, visitorLimits } from './limits';
+import { openPulse } from './pulse';
 import { reconcile } from './reconcile';
 import type { Upstream } from './relay';
 import { streamRegistry } from './stream-registry';
@@ -40,6 +41,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     localProviders: new Set(),
     limits,
     backups: backups(dir, 3, alerts('https://alerts.test/hook'), async () => disk.freePercent),
+    pulse: await openPulse(db, () => clock.now()),
   };
 
   const pending: Promise<unknown>[] = [];
@@ -54,7 +56,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     const account = await env.db.prepare('SELECT account_id FROM sessions WHERE token_hash = ?').bind(await sha256Hex(cookie.split('=')[1]!)).first<string>('account_id');
     return account ? { cookie, [ACCOUNT_HEADER]: account } : { cookie };
   };
-  const send = async (method: string, path: string, body?: unknown, cookie?: string) => {
+  const send = async (method: string, path: string, body?: unknown, cookie?: string, headers: Record<string, string> = {}) => {
     const bytes = body instanceof Uint8Array;
     const sent = body === undefined ? undefined : bytes ? (body as Uint8Array<ArrayBuffer>) : new TextEncoder().encode(JSON.stringify(body));
     return app.request(
@@ -65,6 +67,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
           ...(method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' }),
           ...(sent && { 'content-length': String(sent.byteLength) }),
           ...(cookie ? await holding(cookie) : {}),
+          ...headers,
         },
         body: sent,
       },
@@ -94,15 +97,16 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       clock.now = () => Date.now();
       env.stores.close();
       await env.db.batch([
-        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'picture_removals', 'snapshot_removals', 'backup_runs', 'alerts_sent'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
+        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'picture_removals', 'snapshot_removals', 'backup_runs', 'alerts_sent', 'pulse_week', 'pulse_week_roles', 'pulse_week_models', 'pulse_hours', 'pulse_hour_replies'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
         env.db.prepare('UPDATE installation SET operator_account = NULL'),
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
       for (const sub of ['accounts', 'files', 'snapshots', 'backup']) rmSync(join(dir, sub), { recursive: true, force: true });
       env.stores = registry();
+      env.pulse = await openPulse(env.db, () => clock.now());
     },
-    get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),
-    post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),
+    get: (path: string, cookie?: string, headers?: Record<string, string>) => send('GET', path, undefined, cookie, headers),
+    post: (path: string, body?: unknown, cookie?: string, headers?: Record<string, string>) => send('POST', path, body, cookie, headers),
     put: (path: string, body?: unknown, cookie?: string) => send('PUT', path, body, cookie),
     delete: (path: string, body?: unknown, cookie?: string) => send('DELETE', path, body, cookie),
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env, ctx),
@@ -132,6 +136,10 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     restartProcess: () => {
       env.stores.close();
       env.stores = registry();
+    },
+    // 헤이젤 지금 as a new process opens it: its sets empty, its start read again from pulse_start.
+    restartPulse: async () => {
+      env.pulse = await openPulse(env.db, () => clock.now());
     },
   };
 }

@@ -22,6 +22,7 @@ import { fail, type Services } from './http';
 import { RELAY_DAILY, relayBudget, tokenBucket, uploadBudget, visitorLimits } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshModelsDev } from './models-dev';
+import { forgetPulseHours, openPulse } from './pulse';
 import { reconcile } from './reconcile';
 import { streamRegistry } from './stream-registry';
 import { streamStore } from './db/streams-db';
@@ -117,6 +118,7 @@ const services: Services = {
   localProviders: local,
   limits,
   backups: backups(dataDir, snapshotHour, operatorAlerts),
+  pulse: await openPulse(db),
 };
 
 // Work a request leaves running after its answer; the shutdown waits for it.
@@ -161,6 +163,7 @@ log('listening', { port, dataDir, files: files.kind, migrationsApplied: applied 
 const hourly = () => {
   ctx.waitUntil(refreshModelsDev(db, outbound));
   ctx.waitUntil(forgetOldRecords(db));
+  ctx.waitUntil(forgetPulseHours(db));
   ctx.waitUntil(reconcile(dataDir, db, files).then(({ removed }) => removed.length && log('reconciled', { removed })));
 };
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });

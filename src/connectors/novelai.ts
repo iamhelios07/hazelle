@@ -1,5 +1,6 @@
 import { unzipSync } from 'fflate';
 import { bareModel } from './chat-completions';
+import { CONNECTOR_MODELS } from './models-dev';
 import { ConnectorError, type ConnectionType, type Meter, type Model, type PictureRequest } from './types';
 import { count, isRecord } from './values';
 
@@ -12,13 +13,7 @@ const V5: Body = { paramsVersion: 4, scale: 7, maxCharacters: 32, grid: false, v
 const V45: Body = { paramsVersion: 3, scale: 5, maxCharacters: 6, grid: true, v5: false };
 const BODIES: Partial<Record<string, Body>> = { 'nai-diffusion-5-full': V5, 'nai-diffusion-5-curated': V5, 'nai-diffusion-4-5-full': V45, 'nai-diffusion-4-5-curated': V45 };
 
-// The first is the default.
-const MODELS: Model[] = [
-  drawing('nai-diffusion-5-full', 'NovelAI Diffusion V5 Full'),
-  drawing('nai-diffusion-5-curated', 'NovelAI Diffusion V5 Curated'),
-  drawing('nai-diffusion-4-5-full', 'NovelAI Diffusion V4.5 Full'),
-  drawing('nai-diffusion-4-5-curated', 'NovelAI Diffusion V4.5 Curated'),
-];
+const MODELS: Model[] = CONNECTOR_MODELS.novelai.map(({ id, name }) => drawing(id, name));
 
 // NovelAI's own list for V4.5 and V5, as NAIWeaver's NaiModel.samplers states it (nai_model.dart).
 const SAMPLERS = [

@@ -32,4 +32,5 @@ it('stores the listed providers models.dev prices and inputs and outputs, pricin
     'priced-only': { price: { input: 1, output: 2, cacheRead: null, cacheWrite: null, tiers: [] }, input: null, output: null },
   });
   expect((await t.get('models-dev?provider=poe', cookie)).status).toBe(400);
+  expect(await t.env.db.prepare("SELECT name FROM models_dev WHERE list = 'github-copilot' AND model = 'gpt-5.4'").first('name')).toBe('GPT-5.4');
 });

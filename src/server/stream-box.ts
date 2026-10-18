@@ -135,7 +135,7 @@ export class StreamBox {
   ) {}
 
   // leave: ends the account's live call (calls.ts), once this start is refused or its call is over.
-  async start({ id, key, request, bytes, retry }: { id: string; key: unknown; request: unknown; bytes: number; retry?: Retry }, signal: AbortSignal, leave: () => void): Promise<Response> {
+  async start({ id, key, request, bytes, retry }: { id: string; key: unknown; request: unknown; bytes: number; retry?: Retry }, signal: AbortSignal, leave: () => void, counted?: () => void): Promise<Response> {
     this.starts++;
     let ran = false;
     try {
@@ -160,7 +160,7 @@ export class StreamBox {
       this.call = new AbortController();
       this.running = true;
       ran = true;
-      this.ended = this.run(request, bytes, retry ?? null, sealing, this.call.signal).finally(leave);
+      this.ended = this.run(request, bytes, retry ?? null, sealing, this.call.signal, counted).finally(leave);
       return await this.read(0, signal);
     } finally {
       if (!ran) leave();
@@ -187,7 +187,7 @@ export class StreamBox {
     if (!this.starts && !this.running && !this.readers) this.idle();
   }
 
-  private async run(envelope: unknown, bytes: number, retry: Retry | null, sealing: Key, signal: AbortSignal) {
+  private async run(envelope: unknown, bytes: number, retry: Retry | null, sealing: Key, signal: AbortSignal, counted: (() => void) | undefined) {
     let limited = false;
     const cut = () => {
       limited = true;
@@ -221,6 +221,7 @@ export class StreamBox {
         this.append(sealing, WAIT, new Uint8Array());
         await sleep(wait, signal);
       }
+      if (response.ok) counted?.();
       this.append(sealing, HEAD, encode(JSON.stringify({ status: response.status, statusText: response.statusText, headers: [...response.headers], tries })));
       const reader = response.body?.getReader();
       while (reader) {

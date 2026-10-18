@@ -1,12 +1,15 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { PULSE_HEADER } from '../contracts/http';
+import { readPulseHeader } from '../contracts/pulse';
 import { accounts } from './accounts';
 import { admin, notices, reports } from './admin';
 import { relayCall } from './calls';
 import { files, MAX_FILE_BYTES } from './files';
-import { fail, type AppEnv } from './http';
+import { fail, type Account, type AppEnv } from './http';
 import { BATCH_LIMITS, objects } from './objects';
 import { modelsDev } from './models-dev';
+import { pulse } from './pulse';
 import { PUBLISH_BYTES, shares } from './shares';
 import { canCall, relayBot, requireSession } from './session';
 import { streams } from './streams';
@@ -26,6 +29,18 @@ app.use(async (c, next) => {
   if (ms > SLOW_MS && !OWN_TIME.some((path) => path.test(c.req.path))) {
     console.warn('slow request', { method: c.req.method, path: c.req.path, status: c.res.status, ms, storeMs: c.get('storeMs') ?? null });
   }
+});
+
+// 헤이젤 지금 counts only labelled requests: one a signed-in account sent and was answered marks it active this week; a
+// call counts where its provider answered (calls.ts, streams.ts). The account is the one requireSession or the session
+// read (accounts.ts) set.
+app.use(async (c, next) => {
+  const label = readPulseHeader(c.req.header(PULSE_HEADER));
+  if (!label) return next();
+  c.set('label', label);
+  await next();
+  const account: Account | undefined = c.get('account');
+  if (account && c.res.ok) c.executionCtx.waitUntil(c.env.pulse.seen(account.id));
 });
 
 // Hono's own handler would answer a route's exception with plain text, which the browser cannot tell from a page the
@@ -79,6 +94,7 @@ app.route('/reports', reports);
 app.route('/notices', notices);
 app.route('/admin', admin);
 app.route('/models-dev', modelsDev);
+app.route('/pulse', pulse);
 app.post('/relay', requireSession, canCall, relayBot, relayCall);
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
