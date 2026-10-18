@@ -6,20 +6,18 @@ import { ACTS } from './acts';
 import { describeFailure } from './failure';
 
 // A failed reload keeps what was shown.
-export function useLoaded<T>(load: () => Promise<ApiResult<T>>) {
+export function useLoaded<T>(load: (signal: AbortSignal) => Promise<ApiResult<T>>) {
   const [data, setData] = useState<T | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    let live = true;
-    void load().then((answer) => {
-      if (!live) return;
+    const abort = new AbortController();
+    void load(abort.signal).then((answer) => {
+      if (abort.signal.aborted) return;
       setFailure(answer.ok ? null : describeFailure(answer));
       if (answer.ok) setData(answer.data);
     });
-    return () => {
-      live = false;
-    };
+    return () => abort.abort();
   }, [attempt]);
   return { data, failure, reload: () => setAttempt((count) => count + 1) };
 }
