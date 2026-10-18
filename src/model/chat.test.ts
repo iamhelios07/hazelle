@@ -281,8 +281,15 @@ describe('recentModels', () => {
 
 describe('previewLine', () => {
   it('passes a status line for the first line of prose, and keeps a message that is all status', () => {
-    expect(previewLine('⏱️[2025-03-15 (토요일) 오후 05:36]\n\n"으응..." 그녀가 눈을 떴다.')).toBe('"으응..." 그녀가 눈을 떴다.');
-    expect(previewLine('# Response\n<div>The moment Steve called</div>')).toBe('The moment Steve called');
-    expect(previewLine('[HP 3/10]\n---')).toBe('[HP 3/10]');
+    const own = (text: string) => previewLine(text, text);
+    expect(own('⏱️[2025-03-15 (토요일) 오후 05:36]\n\n"으응..." 그녀가 눈을 떴다.')).toBe('"으응..." 그녀가 눈을 떴다.');
+    expect(own('# Response\n<div>The moment Steve called</div>')).toBe('The moment Steve called');
+    expect(own('[HP 3/10]\n---')).toBe('[HP 3/10]');
+  });
+
+  it('passes the prose a bot script brought in, such as a settings panel, for the message\'s own', () => {
+    const panel = '<div class="settings-panel"><div>System Configuration</div></div>\n<p>The lobby  buzzed.</p>';
+    expect(previewLine(panel, 'The lobby buzzed.')).toBe('The lobby  buzzed.');
+    expect(previewLine(panel, '{{user}} waits.')).toBe('System Configuration');
   });
 });

@@ -30,7 +30,7 @@ export function ChatBookmarks({ item, messages, texts, names, onShow, onUnmark, 
   // Off the line shown, a message has no displayed text: its stored one stands in, as in the version switcher.
   const start = ({ message }: BookmarkRow) => {
     const at = messages.findIndex((each) => each.id === message.id);
-    return previewLine(at === -1 ? shown(message).text : texts[at]!);
+    return previewLine(at === -1 ? shown(message).text : texts[at]!, shown(message).text);
   };
 
   // A narrow panel covers the story, so it steps aside for the message it points at.

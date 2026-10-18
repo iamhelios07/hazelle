@@ -537,10 +537,15 @@ export const firstLine = (text: string) => lines(text)[0] ?? '';
 
 const prose = (line: string) => !line.startsWith('#') && /\p{L}{2}/u.test(line.replace(/\[[^\]]*\]|\([^)]*\)|【[^】]*】/g, ''));
 
+const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
+
 // Many bots open every reply with the same status line, which tells one chat from the next no better than a blank.
-export function previewLine(text: string): string {
+// story: the message's own text. A line the bot's scripts brought in is passed over too: a settings panel kept off
+// the screen until opened reads as prose.
+export function previewLine(text: string, story: string): string {
   const all = lines(text);
-  return all.find(prose) ?? all[0] ?? '';
+  const own = squash(story.replace(/<[^>]*>/g, ' '));
+  return all.find((line) => prose(line) && own.includes(squash(line))) ?? all.find(prose) ?? all[0] ?? '';
 }
 
 // texts: each message's text as it is displayed (engine/render, which the model cannot call).

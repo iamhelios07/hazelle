@@ -256,14 +256,14 @@ export class ChatProjections {
     const verdict = this.verdict(id);
     // A message is named as the reader reads it: its translation when it has one.
     const texts = display.texts.map((text, index) => shown(messages[index]!).translation?.text ?? text);
-    const last = texts.at(-1);
+    const last = messages.at(-1);
     const summary: Summary = {
       version: VERSION, head, chatRev: stored.rev, rendered,
       dependencies,
       ...(verdict && { stuck: { dependencies: verdict } }),
       character: stored.value.character, count: messages.length,
       title: chatTitle(stored.value, messages, texts).slice(0, 256),
-      preview: last === undefined ? '' : previewLine(last).slice(0, 256),
+      preview: last === undefined ? '' : previewLine(texts.at(-1)!, shown(last).translation?.text ?? shown(last).text).slice(0, 256),
       at, order: head || stored.rev, recent: recentIn(messages),
     };
     return { summary, model: { ...summary, id, chat: stored.value, messages, display }, shown: marks };
