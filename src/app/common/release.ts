@@ -8,6 +8,11 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.21',
+    date: '2026-10-18',
+    lines: ['버튼으로 여닫는 봇 설정 패널이 처음부터 펼쳐져 보이던 문제를 고쳤어요. 이제 버튼을 누르면 메시지 폭에 맞춰 열려요.'],
+  },
+  {
     version: 'v0.2.20',
     date: '2026-10-18',
     lines: [
