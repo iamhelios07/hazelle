@@ -114,7 +114,8 @@ const SCREEN_PLACEMENT = ['top', 'right', 'bottom', 'left', 'inset', 'transform'
 const SCREEN_SIZE = ['width', 'height'];
 // A drawer Risu kept off the screen by its own extent (right: -33% beside width: 33%) until a rule set that offset back
 // (.panel[class*="opened"] { right: 0 }). Grounded with its offsets gone it would stand open in the message, so it is
-// hidden and that rule shows it. A box only partly off the screen (a tab peeking out at right: -23px) stays shown.
+// hidden and that rule shows it, across the message: its extent was a share of the screen it slid over. A box only
+// partly off the screen (a tab peeking out at right: -23px) stays shown.
 const EXTENT = { top: 'height', right: 'width', bottom: 'height', left: 'width' } as const;
 type Side = keyof typeof EXTENT;
 const LENGTH = /^(-?\d*\.?\d+)([a-z%]*)$/;
@@ -156,7 +157,10 @@ export function groundRules(rules: Iterable<object>) {
     for (const property of SCREEN_PLACEMENT) style.removeProperty(property);
     for (const property of SCREEN_SIZE) if (/^100v[wh]$/.test(style.getPropertyValue(property).trim())) style.removeProperty(property);
   }
-  for (const { rule } of parked) rule.style.setProperty('display', 'none');
+  for (const { rule, side } of parked) {
+    rule.style.setProperty('display', 'none');
+    rule.style.removeProperty(EXTENT[side]);
+  }
   for (const { rule, display } of shown) rule.style.setProperty('display', display);
 }
 

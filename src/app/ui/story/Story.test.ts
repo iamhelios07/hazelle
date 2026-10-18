@@ -34,7 +34,7 @@ it("lets any rule of the bot's beat the story's own looks", () => {
   expect(unlayered).not.toMatch(/\bem\b|mark\[|margin|\[data-picture\] > img/);
 });
 
-it('hides a drawer parked off the screen by its own width until the rule that slides it in, drops its screen height, and leaves a peeking tab shown', () => {
+it('hides a drawer parked off the screen by its own width until the rule that slides it in, across the message, and leaves a peeking tab shown', () => {
   const rule = (selectorText: string, declarations: Record<string, string>) => {
     const values = new Map(Object.entries(declarations));
     const style = { getPropertyValue: (name: string) => values.get(name) ?? '', setProperty: (name: string, value: string) => void values.set(name, value), removeProperty: (name: string) => (values.delete(name), '') };
@@ -44,7 +44,7 @@ it('hides a drawer parked off the screen by its own width until the rule that sl
   const opened = rule('.settings-panel[class*="opened"]', { right: '0' });
   const tab = rule('.tab', { position: 'fixed', top: '64%', right: '-23px' });
   groundRules([panel, { cssRules: [opened] }, tab]);
-  expect(Object.fromEntries(panel.values)).toEqual({ position: 'relative', width: '33%', display: 'none' });
+  expect(Object.fromEntries(panel.values)).toEqual({ position: 'relative', display: 'none' });
   expect(Object.fromEntries(opened.values)).toEqual({ right: '0', display: 'block' });
   expect(Object.fromEntries(tab.values)).toEqual({ position: 'relative' });
 });
