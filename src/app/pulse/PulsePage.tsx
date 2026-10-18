@@ -6,7 +6,7 @@ import { describeFailure } from '../common/failure';
 import { LegalNotice } from '../common/LegalNotice';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
-import { inSettings, PULSE } from '../common/words';
+import { PULSE } from '../common/words';
 import { Bars, Brand, Callout, ChoiceGroup, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tab, Tabs, Text } from '../ui';
 import { clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, startsText, weekText } from './board';
 
@@ -46,7 +46,7 @@ function PulsePage() {
 
   return (
     <Screen width="form" top={<Brand />}>
-      <Intro title={PULSE.title}>집계에 참여한 사람의 사용량만 담아요. 참여는 {inSettings('account')} › 앱 정보에서 바꿀 수 있어요.</Intro>
+      <Intro title={PULSE.title} />
       {view.kind === 'loading' && LOADING}
       {view.kind === 'failed' && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: retry }}>{view.failure}</Callout>}
       {view.kind === 'read' && <Answer answer={view.answer} />}
