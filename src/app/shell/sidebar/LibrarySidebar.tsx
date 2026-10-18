@@ -3,7 +3,7 @@ import type { ChatSummary } from '../../../model/chat';
 import type { FolderTree } from '../../../model/folders';
 import type { CharacterShelf, Shelf } from '../../../model/library';
 import { shelfName } from '../../library/shelf';
-import { usePersisted } from '../../common/usePersisted';
+import { storedStrings, usePersisted } from '../../common/usePersisted';
 import { useCharacter, useChatSummary, useLibrary, useWritingChats } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
@@ -13,10 +13,6 @@ import { ShelfChats } from './ShelfChats';
 import { SidebarRail } from './SidebarRail';
 
 const OPEN_FOLDERS = 'risu-alpha:open-folders';
-const openFolderIds = (stored: string): string[] => {
-  const open: unknown = JSON.parse(stored);
-  return Array.isArray(open) ? open.filter((id) => typeof id === 'string') : [];
-};
 
 type Props = {
   page: boolean;
@@ -34,7 +30,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const chat = useChatSummary(route.kind === 'chat' ? route.id : null);
   const wide = useWide();
   const [query, setQuery] = useState('');
-  const [openFolders, setOpenFolders] = usePersisted(OPEN_FOLDERS, openFolderIds, []);
+  const [openFolders, setOpenFolders] = usePersisted(OPEN_FOLDERS, storedStrings, []);
 
   // The rail keeps every face in one place: folders as the tree shows them, names in order inside each, loose ones
   // last. Not recency, which the panel shows (user ruling, 2026-10-04).

@@ -3,10 +3,9 @@ import { useId, useState, type ReactNode } from 'react';
 import { Icon } from '../foundation/Icon';
 import styles from './Disclosure.module.css';
 
+type Props = { label: string; menu?: ReactNode; children: ReactNode } & ({ open: boolean; onOpen: (open: boolean) => void } | { open?: never; onOpen?: never });
+
 // What is folded is made only while open, so a long list of them stays light.
-// menu: a ⋯ at the end of the line, such as an editor's for a toggle group. open and onOpen: held by the caller, such
-// as a toggle group's remembered on the device; without them it starts folded every time.
-type Props = { label: string; menu?: ReactNode; open?: boolean; onOpen?: (open: boolean) => void; children: ReactNode };
 
 export function Disclosure({ label, menu, open: held, onOpen, children }: Props) {
   const [own, setOwn] = useState(false);

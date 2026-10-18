@@ -165,29 +165,24 @@ export function setMark(block: TextBlock, mark: TextBlock['mark'], taken: string
   return { label: titled(block, mark ? `${MARKS[mark].label} 표시` : '표시 빼기'), block: block.id, undo, redo: (draft) => ({ blocks: withMark(draft.blocks, block.id, mark).blocks }) };
 }
 
-// A group comes with its end; each line takes the place after the one before it.
-export function addLines(lines: readonly [ShownLine, ...ToggleLine[]], at: number): Step {
-  const parts = lines.map((line, index) => presence(line, at + index, sameLine, joiningLine));
-  const [line] = lines;
+// The lines in order, so each is put back from the first at its own place and taken from the last.
+function linesPresence(lines: readonly LineAt[]) {
+  const parts = lines.map(({ line, at }) => presence(line, at, sameLine, joiningLine));
   return {
-    label: `${lineTitle(line)} ${isToggle(line) ? '만들기' : '추가'}`,
-    block: null,
-    undo: (draft) => ({ toggles: parts.toReversed().reduce<ToggleLine[]>((toggles, part) => part.take(toggles), [...draft.toggles]) }),
-    redo: (draft) => togglesOr(parts.reduce<ToggleLine[] | Refused>((toggles, part) => ('refused' in toggles ? toggles : part.put(toggles)), [...draft.toggles])),
+    put: (draft: Draft) => togglesOr(parts.reduce<ToggleLine[] | Refused>((toggles, part) => ('refused' in toggles ? toggles : part.put(toggles)), [...draft.toggles])),
+    take: (draft: Draft): PromptPatch => ({ toggles: parts.toReversed().reduce<ToggleLine[]>((toggles, part) => part.take(toggles), [...draft.toggles]) }),
   };
 }
 
-// The lines in order, so each is taken from the last and put back from the first at its own place; a group's head
-// goes with its end.
+export function addLines(lines: readonly [ShownLine, ...ToggleLine[]], at: number): Step {
+  const { put, take } = linesPresence(lines.map((line, index) => ({ line, at: at + index })));
+  const [line] = lines;
+  return { label: `${lineTitle(line)} ${isToggle(line) ? '만들기' : '추가'}`, block: null, undo: take, redo: put };
+}
+
 export function removeLines(lines: readonly [LineAt<ShownLine>, ...LineAt[]]): Step {
-  const parts = lines.map(({ line, at }) => presence(line, at, sameLine, joiningLine));
-  const [{ line }] = lines;
-  return {
-    label: `${lineTitle(line)} 삭제`,
-    block: null,
-    undo: (draft) => togglesOr(parts.reduce<ToggleLine[] | Refused>((toggles, part) => ('refused' in toggles ? toggles : part.put(toggles)), [...draft.toggles])),
-    redo: (draft) => ({ toggles: parts.toReversed().reduce<ToggleLine[]>((toggles, part) => part.take(toggles), [...draft.toggles]) }),
-  };
+  const { put, take } = linesPresence(lines);
+  return { label: `${lineTitle(lines[0].line)} 삭제`, block: null, undo: put, redo: take };
 }
 
 // The whole line swaps, since nothing is typed into one in place.

@@ -1,4 +1,5 @@
 import type { Toggle, ToggleLine } from '../../model/prompt';
+import { toggleTree } from '../../model/toggles';
 import type { ChatToggleSet, ToggleSource } from '../../runtime/chat-context';
 import { laidOut, type Laid } from '../common/toggleLayout';
 
@@ -24,7 +25,7 @@ export function toggleRows({ declared, sources, value }: ChatToggleSet): ToggleR
       id,
       name,
       rows: lines.flatMap((line) => rows.get(line) ?? []),
-      items: asRisu(laidOut(lines, (line) => rows.get(line) ?? null)),
+      items: asRisu(laidOut(toggleTree(lines), (line) => rows.get(line) ?? null)),
     }))
     .filter((section) => section.rows.length > 0);
   return { sections, changed: [...rows.values()].filter((row) => row.changed).length };
@@ -35,9 +36,9 @@ const repeated = (item: Laid<ToggleRow>, last: Laid<ToggleRow> | undefined) =>
 
 // As Risu shows them: a group that holds nothing is left out, and a divider right after one of the same label shows once.
 function asRisu(items: readonly Laid<ToggleRow>[]): Laid<ToggleRow>[] {
-  return items
-    .filter((item, at) => !repeated(item, items[at - 1]))
-    .map((item) => ('group' in item ? { ...item, items: item.items.filter((inner, at) => !repeated(inner, item.items[at - 1])) } : item))
+  const once = <I extends Laid<ToggleRow>>(list: readonly I[]) => list.filter((item, at) => !repeated(item, list[at - 1]));
+  return once(items)
+    .map((item) => ('group' in item ? { ...item, items: once(item.items) } : item))
     .filter((item) => !('group' in item) || item.items.length > 0);
 }
 

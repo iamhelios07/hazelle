@@ -11,11 +11,23 @@ export function readPersisted<T>(key: string, parse: (stored: string) => T, init
   }
 }
 
+// A list of names or ids, such as the folders or toggle groups left open.
+export const storedStrings = (stored: string): string[] => {
+  const list: unknown = JSON.parse(stored);
+  return Array.isArray(list) ? list.filter((each) => typeof each === 'string') : [];
+};
+
+// A new key reads its own value, so a list kept mounted while its owner changes shows that owner's.
 export function usePersisted<T>(key: string, parse: (stored: string) => T, initial: T, format: (value: T) => string = JSON.stringify): [T, (next: T) => void] {
-  const [value, setValue] = useState(() => readPersisted(key, parse, initial));
+  const [held, setHeld] = useState(() => ({ key, value: readPersisted(key, parse, initial) }));
+  let value = held.value;
+  if (held.key !== key) {
+    value = readPersisted(key, parse, initial);
+    setHeld({ key, value });
+  }
 
   const remember = (next: T) => {
-    setValue(next);
+    setHeld({ key, value: next });
     try {
       localStorage.setItem(key, format(next));
     } catch {

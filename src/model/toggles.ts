@@ -31,6 +31,10 @@ export function toggleTree(lines: readonly ToggleLine[]): ToggleNode[] {
   return nodes;
 }
 
+// A group is added and removed with its end, so what is added after it stays out of it.
+export const newGroup = (label: string): [GroupHead, { kind: 'groupEnd' }] => [{ kind: 'group', label }, { kind: 'groupEnd' }];
+export const groupLines = (group: ToggleGroup): [LineAt<GroupHead>, ...LineAt[]] => (group.end ? [group.head, group.end] : [group.head]);
+
 // A run of lines taken out at from and put back at to, counted in the list without them (model/fields moved).
 export type LineMove = { from: number; count: number; to: number };
 
