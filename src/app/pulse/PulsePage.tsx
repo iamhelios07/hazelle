@@ -37,7 +37,7 @@ function PulsePage() {
 
   return (
     <Screen width="form" top={<Brand />}>
-      <Intro title={PULSE.title}>집계에 참여한 사람만 세요. 참여는 {inSettings('account')} › 앱 정보에서 바꿀 수 있어요.</Intro>
+      <Intro title={PULSE.title}>집계에 참여한 사람의 사용량만 담아요. 참여는 {inSettings('account')} › 앱 정보에서 바꿀 수 있어요.</Intro>
       {view.kind === 'loading' && <Text variant="note">불러오는 중…</Text>}
       {view.kind === 'failed' && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: retry }}>{view.failure}</Callout>}
       {view.kind === 'read' && <Answer answer={view.answer} />}
@@ -49,7 +49,7 @@ function PulsePage() {
 
 function Answer({ answer }: { answer: PulseAnswer }) {
   // Ruled (design §6.12): counting starts a day after the notice; this branch goes once that date has passed.
-  if (answer.at < answer.starts) return <Empty variant="section">{startsText(answer.starts)}부터 세기 시작해요.</Empty>;
+  if (answer.at < answer.starts) return <Empty variant="section">{startsText(answer.starts)}부터 집계를 시작해요.</Empty>;
   if (!answer.board) return <Empty variant="section">이번 주 집계에 참여한 사람이 {PULSE_FLOORS.board}명이 되면 보여 드려요.</Empty>;
   return <Board board={answer.board} at={answer.at} />;
 }

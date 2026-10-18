@@ -20,7 +20,6 @@ export const startsText = (at: number) => startFormat.format(at);
 export const hourText = (at: number) => hourFormat.format(at);
 export const clockText = (at: number) => clockFormat.format(at);
 
-// An hour's 대화 replies first, then the other roles' calls it had.
 export const hourDetail = (calls: Record<PulseRole, number>) =>
   PULSE_ROLES.filter((role) => role === 'chat' || calls[role] > 0)
     .map((role) => `${role === 'chat' ? '응답' : PULSE_ROLE_NAMES[role]} ${count(calls[role])}번`)
