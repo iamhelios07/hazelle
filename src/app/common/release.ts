@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.24',
+    date: '2026-10-18',
+    lines: [
+      'Risu에서 내보낸 로어북·정규식 파일과 SillyTavern 월드 인포(.json, .lorebook)를 모듈로 가져올 수 있어요. 설정 › 모듈에서는 .charx 파일을 모두 모듈로 읽어요.',
+      '봇이 꾸민 상자가 메시지 폭보다 넓어 잘리던 문제를 고쳤어요. 설정 패널은 바깥을 누르면 다시 닫혀요.',
+      '채팅 목록 미리보기에 봇 설정 패널 글 대신 대화 첫 문장이 보여요. 이미 있던 채팅은 한 번 열면 바뀌어요.',
+      '상태창으로 지정하기 메뉴가 상태창을 그린 메시지에만 떠요.',
+      '알림 목록에서 줄바꿈이 사라지던 문제를 고쳤어요.',
+    ],
+  },
+  {
     version: 'v0.2.23',
     date: '2026-10-18',
     lines: [
