@@ -3,6 +3,7 @@ import { Agent, createServer, request, type ClientRequest } from 'node:http';
 import { isIPv6, type BlockList } from 'node:net';
 import { parentPort, workerData } from 'node:worker_threads';
 import { VISITOR_HEADER } from '../contracts/http';
+import type { PulseAnswer } from '../contracts/pulse';
 import type { ShareCover } from '../contracts/shares';
 import { endToEnd } from './hop-by-hop';
 import { clientFiles } from './static';
@@ -19,7 +20,13 @@ async function cover(id: string): Promise<ShareCover | null> {
     return null;
   }
 }
-const files = getRequestListener(clientFiles(clientDir, cover).fetch);
+// 헤이젤 나우's numbers for its page's embed, from the API's memoed answer.
+async function pulse(): Promise<PulseAnswer> {
+  const answer = await fetch(`http://127.0.0.1:${apiPort}/api/pulse`);
+  if (!answer.ok) throw new Error(`pulse ${answer.status}`);
+  return (await answer.json()) as PulseAnswer;
+}
+const files = getRequestListener(clientFiles(clientDir, cover, pulse).fetch);
 // A finite socket timeout lets Node honor the API's shorter keep-alive hint; zero keeps idle sockets until
 // the server closes them and races reuse. The agent destroys timed-out free sockets, not active requests.
 const agent = new Agent({ keepAlive: true, timeout: 5000 });
