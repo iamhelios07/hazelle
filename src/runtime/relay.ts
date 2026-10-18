@@ -7,6 +7,7 @@ import { HEAD, DATA, END, PING, WAIT, type Retry } from '../contracts/streams';
 import { providerCode, providerMessage } from '../connectors/errors';
 import { isRecord } from '../connectors/values';
 import type { HttpRequest } from '../connectors/types';
+import type { PulseLabel } from '../contracts/pulse';
 import { streamOpener } from '../vault/streams';
 import { fetchApi } from './api';
 import { pause } from './pause';
@@ -26,8 +27,10 @@ export type JsonAnswer = { ok: true; data: unknown } | { ok: false; failure: Rel
 
 const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 'stopped' } : { kind: 'offline' });
 
-// The provider's answer, whatever its status. bot: the chat whose bot's script makes the call (BOT_HEADER).
-export async function relayRaw(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
+// The provider's answer, whatever its status. bot: the chat whose bot's script makes the call (BOT_HEADER). pulse: a
+// provider call's 헤이젤 지금 label, sent to this app's server beside the request and never in request.headers, which
+// the relay forwards to the provider.
+export async function relayRaw(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<Response | RelayFailure> {
   let response: Response;
   try {
     response = await fetchApi('relay', {
@@ -35,6 +38,7 @@ export async function relayRaw(request: HttpRequest, signal?: AbortSignal, bot?:
       headers: { 'content-type': 'application/json', ...(bot !== undefined && { [BOT_HEADER]: bot }) },
       body: JSON.stringify(request),
       signal,
+      pulse,
     });
   } catch {
     return lost(signal);
@@ -62,19 +66,19 @@ async function answered(response: Response | RelayFailure): Promise<Response | R
   return { kind: 'provider', status: response.status, detail: providerMessage(text), ...(code !== null && { code }), ...(retryAfter !== null && { retryAfter }) };
 }
 
-export async function relay(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
-  return answered(await relayRaw(request, signal, bot));
+export async function relay(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<Response | RelayFailure> {
+  return answered(await relayRaw(request, signal, bot, pulse));
 }
 
-export async function relayJson(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<JsonAnswer> {
-  return readJson(await relay(request, signal, bot), signal);
+export async function relayJson(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<JsonAnswer> {
+  return readJson(await relay(request, signal, bot, pulse), signal);
 }
 
 export type BytesAnswer = { ok: true; bytes: Uint8Array<ArrayBuffer>; type: string | null } | { ok: false; failure: RelayFailure };
 
 // A body that is not text, such as a picture, with its content type.
-export async function relayBytes(request: HttpRequest, signal?: AbortSignal): Promise<BytesAnswer> {
-  const response = await relay(request, signal);
+export async function relayBytes(request: HttpRequest, signal: AbortSignal, pulse: PulseLabel): Promise<BytesAnswer> {
+  const response = await relay(request, signal, undefined, pulse);
   if (!(response instanceof Response)) return { ok: false, failure: response };
   try {
     return { ok: true, bytes: new Uint8Array(await response.arrayBuffer()), type: response.headers.get('content-type') };
@@ -116,13 +120,14 @@ export type StreamCall = { preflight?: (settings: ModelSettings, signal: AbortSi
 // (stream-gone); or once the session is gone (no-session), when no read can reach it. This page's other failures to
 // reach it are tried again until the page stops reading; failing the read on them would save that failure as the
 // call's result and drop a call still running.
-// retry: how the server sends again a try that failed before any of it came, absent for none.
-export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal, retry: Retry | null = null): Promise<Response | RelayFailure> {
+// retry: how the server sends again a try that failed before any of it came, absent for none. pulse: the start's label
+// (relayRaw); a read of a call already started carries none, since its start counted it.
+export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal, retry: Retry | null = null, pulse?: PulseLabel): Promise<Response | RelayFailure> {
   let body: ReadableStream<Uint8Array>;
   if (request) {
     let response: Response;
     try {
-      response = await fetchApi(`streams/${call.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request, ...(call.bot && { bot: call.bot }), ...(retry && { retry }) }), signal });
+      response = await fetchApi(`streams/${call.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request, ...(call.bot && { bot: call.bot }), ...(retry && { retry }) }), signal, pulse });
     } catch {
       return lost(signal);
     }

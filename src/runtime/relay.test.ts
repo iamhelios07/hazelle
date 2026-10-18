@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HttpRequest } from '../connectors/types';
 import { streamKey } from '../vault/streams';
-import { holdAccount } from './api';
+import { holdAccount, holdPulse } from './api';
 import { dropStream, relay, relayJson, stopStream, stream } from './relay';
 
 const request: HttpRequest = { url: 'https://example.com/models', method: 'GET', headers: {}, body: null };
@@ -10,6 +10,7 @@ const broken = () => new Response(new ReadableStream({ start: (controller) => co
 afterEach(() => {
   vi.unstubAllGlobals();
   holdAccount(null);
+  holdPulse(false);
 });
 
 describe('relayJson', () => {
@@ -64,6 +65,16 @@ it('states the account the page holds on the relay and on every stream request',
     [`/api/streams/${id}/stop`, 'account-a'],
     [`/api/streams/${id}`, 'account-a'],
   ]);
+});
+
+it('labels the start of a call and not a read of one already started', async () => {
+  const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json({ error: 'no-session' }, { status: 401 }));
+  vi.stubGlobal('fetch', fetch);
+  holdPulse(true);
+  const id = crypto.randomUUID();
+  await stream({ id, key: {}, public: 'k' }, request, new AbortController().signal, null, { kind: 'call', role: 'aux', type: 'openai', model: 'gpt-5' });
+  await stream({ id, key: {} }, null, new AbortController().signal);
+  expect(fetch.mock.calls.map(([, init]) => (init.headers as Record<string, string>)['x-hazelle-pulse'])).toEqual(['aux openai gpt-5', undefined]);
 });
 
 // Frames as server/stream-box seals them, for a call this page holds the key to.

@@ -1,4 +1,5 @@
-import { ACCOUNT_HEADER, RELAY_HEADER, ACCOUNT_USAGE_HEADERS, UNREAD_NOTICES_HEADER, VERSION_HEADER } from '../contracts/http';
+import { ACCOUNT_HEADER, RELAY_HEADER, ACCOUNT_USAGE_HEADERS, PULSE_HEADER, UNREAD_NOTICES_HEADER, VERSION_HEADER } from '../contracts/http';
+import { pulseHeader, type PulseLabel } from '../contracts/pulse';
 import { isRecord } from '../connectors/values';
 
 export type ApiFailure = { ok: false; error: string; retryAfter?: number; status?: number };
@@ -23,6 +24,20 @@ export function holdAccount(account: string | null, onHeard: ((heard: Heard) => 
   hear = onHeard;
 }
 
+// 헤이젤 지금 (design §6.12): the session holds the account's switch here, and fetchApi alone decides whether a request
+// carries a label. seen: the page-load mark, owed until the next request goes out while sharing.
+let sharing = false;
+let seenOwed = false;
+
+export function holdPulse(on: boolean) {
+  sharing = on;
+  if (!on) seenOwed = false;
+}
+
+export function markSeen() {
+  seenOwed = true;
+}
+
 // The release the server last said it runs, and who hears when that changes; apart from holdAccount's listener, since
 // the release is not of the account.
 let served: string | null = null;
@@ -34,8 +49,11 @@ export function hearServedVersion(listener: ((version: string) => void) | null) 
 }
 
 // Every request to this app's server leaves through here (api, and runtime/relay's raw ones).
-export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {}): Promise<Response> {
-  const response = await fetch(`/api/${path}`, { ...init, headers: { ...(held === null ? {} : { [ACCOUNT_HEADER]: held }), ...init.headers } });
+// pulse: a provider call's label, which marks the account active too and so settles an owed seen.
+export async function fetchApi(path: string, { pulse, ...init }: Omit<RequestInit, 'headers'> & { headers?: Record<string, string>; pulse?: PulseLabel } = {}): Promise<Response> {
+  const label = sharing ? (pulse ?? (seenOwed ? ({ kind: 'seen' } as const) : null)) : null;
+  if (label) seenOwed = false;
+  const response = await fetch(`/api/${path}`, { ...init, headers: { ...(held === null ? {} : { [ACCOUNT_HEADER]: held }), ...(label && { [PULSE_HEADER]: pulseHeader(label) }), ...init.headers } });
   // An immutable answer (a picture) may come from the browser's cache, carrying the release that first served it.
   const version = response.headers.get('cache-control')?.includes('immutable') ? null : response.headers.get(VERSION_HEADER);
   if (version !== null && version !== served) {

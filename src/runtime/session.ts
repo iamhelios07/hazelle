@@ -4,7 +4,7 @@ import { createTools } from './tools/host';
 import type { LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
 import { SETTINGS_ID } from '../model/settings';
-import { api, type ApiResult } from './api';
+import { api, holdPulse, markSeen, type ApiResult } from './api';
 import { AssetUrls, UnfoundAssets } from './assets';
 import { Catalogs } from './catalog';
 import { purgeExpired } from './removal';
@@ -22,6 +22,7 @@ import { RequestLog } from './request-log';
 import { addFirstPersona, recordChatPersonas } from './personas';
 import { addFirstProfile } from './profiles';
 import { addDefaults } from './prompts';
+import { sharesPulse } from './pulse';
 import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
@@ -90,6 +91,13 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     store.close();
     return { ok: false, error: 'stopped' };
   }
+  // The opening pull is sent before the switch is read, so the page-load mark rides the next request.
+  const holdSharing = () => holdPulse(sharesPulse(store.get('settings', SETTINGS_ID)?.value));
+  holdSharing();
+  markSeen();
+  const stopSharing = store.subscribe((changes) => {
+    if (changes.some(({ kind }) => kind === 'settings')) holdSharing();
+  });
 
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
@@ -166,6 +174,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
 
   const close = () => {
     closing.abort();
+    stopSharing();
+    holdPulse(false);
     stopSync();
     read.close();
     display.close();

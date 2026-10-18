@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveConnection } from '../connectors/registry';
 import type { Connection } from '../connectors/types';
 import { firstTurns } from '../model/turns';
 import { appendUserMessage, startChat } from './chat-log';
+import { fetchApi } from './api';
 import { editPersona } from './personas';
+import { setPulseSharing } from './pulse';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
@@ -66,4 +68,25 @@ describe('session', () => {
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: 'bye, {{user}}' });
       expect(session.read.chat(chat).snapshot()?.preview).toBe('bye, Mina');
     }));
+
+  it('sends the page-load mark once and labels calls only while the account’s switch is on, and none once closed', async () => {
+    const label = { kind: 'call', role: 'chat', type: 'openai', model: 'gpt-5' } as const;
+    const sent: (string | undefined)[] = [];
+    const call = () => fetchApi('objects?since=0', { pulse: label });
+    await server.withSession(async (session) => {
+      const fetch = globalThis.fetch;
+      vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
+        sent.push((init.headers as Record<string, string>)['x-hazelle-pulse']);
+        return fetch(url, init);
+      });
+      await session.store.pull();
+      await session.store.pull();
+      await setPulseSharing(session.store, false);
+      await call();
+      await setPulseSharing(session.store, true);
+      await call();
+    });
+    await call();
+    expect(sent).toEqual(['seen', undefined, undefined, undefined, undefined, 'chat openai gpt-5', undefined]);
+  });
 });
