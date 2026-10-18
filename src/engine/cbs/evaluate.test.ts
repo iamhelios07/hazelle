@@ -203,7 +203,7 @@ describe('evaluate', () => {
     expect(run(tags, { messages, greeting: { index: 1 }, source: { message: 2 } })).toBe('1 0 0 char Hello hi 1 Hello hi');
     expect(run('{{firstmsgindex}}', { messages, greeting: { index: 0 } })).toBe('-1');
     expect(run('{{chatindex}} {{isfirstmsg}} {{role}}', { messages, source: { message: 0 } })).toBe('-1 1 char');
-    expect(run('{{chatindex}} {{isfirstmsg}}', { messages })).toBe('{{chatindex}} 0');
+    expect(run('{{chatindex}} {{isfirstmsg}}', { messages })).toBe('-1 0');
     const plain = messages.slice(1);
     expect(run('{{chatindex}} {{lastmessageid}} {{previouschatlog::0}} {{previouschatlog::-1}} {{firstmsgindex}}', { messages: plain, greeting: null, source: { message: 1 } })).toBe(
       '1 1 hi Out of range {{firstmsgindex}}',

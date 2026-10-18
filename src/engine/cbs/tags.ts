@@ -335,9 +335,10 @@ define('history messages', 0, (args, { context }) =>
 );
 define('userhistory', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'user').map(messageObject)));
 define('charhistory', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'assistant').map(messageObject)));
+// Outside a message (the background HTML, a prompt) Risu reads -1, the greeting's number too.
 define('chatindex', 0, (_, { context }) => {
   const index = messageIndex(context);
-  return index === null ? null : String(index - opened(context));
+  return String(index === null ? -1 : index - opened(context));
 });
 // Risu's fmIndex: the card's first message -1 and its first alternate greeting 0, one less than card.greetings counts.
 define('firstmsgindex', 0, (_, { context: { greeting } }) => (greeting && greeting.index !== null ? String(greeting.index - 1) : null));
