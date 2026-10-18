@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Story stream</title></head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { createElement as h, useState } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { Story } from '../../src/app/ui/story/Story';
+      import '../../src/app/ui/foundation/global.css';
+
+      const PICTURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+      const css = '@keyframes pulse { to { opacity: 0.5 } } .pulse { animation: pulse 1s infinite alternate }';
+      function Reply() {
+        const [paragraphs, setParagraphs] = useState(['Mira lights the lantern']);
+        const html = `<p><img src="${PICTURE}"></p><p class="pulse">The marsh hums.</p>${paragraphs.map((text) => `<p>${text}</p>`).join('')}`;
+        return h('div', null,
+          h('button', { onClick: () => setParagraphs((all) => [...all.slice(0, -1), `${all.at(-1)} and waits`]) }, 'Word'),
+          h('button', { onClick: () => setParagraphs((all) => [...all, 'Rain']) }, 'Paragraph'),
+          h(Story, { html, css, cursor: true }),
+        );
+      }
+      createRoot(document.getElementById('root')).render(h(Reply));
+    </script>
+  </body>
+</html>
