@@ -45,7 +45,8 @@ it('reports a tool import or a version replacement without retaining the code', 
   const { manifest } = read.tool;
   const placement = { at: 'always' as const, failure: null };
   const fresh = toolOutcome('notes.js', manifest, { id: 'm', previous: null }, placement);
-  expect(fresh).toMatchObject({ kind: 'module', holds: '도구 · 1.1', placed: { text: '항상 켰어요.' } });
+  expect(fresh).toMatchObject({ kind: 'plugin', holds: '버전 1.1', placed: { text: '항상 켰어요.' } });
+  expect(toolOutcome('notes.js', manifest, { id: 'm', previous: null }, { at: null, failure: null }).placed?.text).toBe('아직 어디에도 켜지 않았어요. 설정 › 플러그인에서 켤 수 있어요.');
   const previous = { manifest: { ...manifest, version: '1.0' }, file: { id: 'f', key: 'k' }, size: 10, settings: {} };
   const updated = toolOutcome('notes.js', manifest, { id: 'm', previous }, placement);
   expect(updated.holds).toBe('버전을 바꿨어요 · 1.0 → 1.1');

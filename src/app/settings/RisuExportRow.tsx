@@ -35,7 +35,7 @@ export function RisuExportRow() {
         running.current = null;
       },
       (made) => {
-        const detail = [risuLeftOut(made), made.tools ? `${TOOL}가 든 모듈 ${made.tools}개는 빼고 내보냈어요.` : ''].filter(Boolean).join(' ');
+        const detail = [risuLeftOut(made), made.tools ? `${TOOL} ${made.tools}개는 빼고 내보냈어요.` : ''].filter(Boolean).join(' ');
         toast.show(`${LABEL}을 내보냈어요.`, detail ? { detail } : undefined);
       },
     );

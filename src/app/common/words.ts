@@ -33,29 +33,29 @@ export const BOT_MODELS_HELP = '봇 스크립트가 대화 응답과 별개로 �
 // 캐릭터 편집's switch for scripts that rewrite the card, and what the card that asks it in the chat says first.
 export const CARD_WRITES = '스크립트의 카드 수정';
 export const CARD_WRITES_HELP = '스크립트가 이 캐릭터의 배경 HTML을 바꿔서 저장해요. 바뀐 배경은 이 캐릭터의 모든 채팅에 적용돼요.';
-export const CARD_WRITE_CONSENT = { character: '이 봇이 캐릭터 카드를 수정하려고 해요', module: '이 모듈이 캐릭터 카드를 수정하려고 해요' };
+export const CARD_WRITE_CONSENT = { character: '이 봇이 캐릭터 카드를 수정하려고 해요', module: '이 모듈이 캐릭터 카드를 수정하려고 해요', plugin: '이 플러그인이 캐릭터 카드를 수정하려고 해요' };
 export const CARD_WRITE_ASK_HELP = '허용하면 이 캐릭터의 배경 HTML이 바뀌고 모든 채팅에 적용돼요. 이 캐릭터에서는 한 번만 물어봐요. 나중에 캐릭터 편집에서 다시 바꿀 수 있어요.';
 export const BOT_STUCK = '봇 스크립트가 끝나지 않아서 멈췄어요';
 
-export const TOOL = '도구';
+export const TOOL = '플러그인';
 export const RISU_PLUGIN = 'Risu 플러그인';
 export const MODULE_MODELS = '모델 호출';
-export const MODULE_MODELS_HELP = '이 모듈이 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.';
-export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 추가로 호출하려고 해요' };
-export const MEMORY_CLAIM = '이 모듈이 장기 기억을 대신 관리하려고 해요';
-export const MEMORY_CLAIM_HELP = '허용하면 이 모듈을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
+export const moduleModelsHelp = (noun: string) => `이 ${noun}이 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.`;
+export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 추가로 호출하려고 해요', plugin: '이 플러그인이 모델을 추가로 호출하려고 해요' };
+export const MEMORY_CLAIM = '이 플러그인이 장기 기억을 대신 관리하려고 해요';
+export const MEMORY_CLAIM_HELP = '허용하면 이 플러그인을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
 // The ruling (design §6.10) is that the ask says plainly what the network allows, so the card's line is that sentence.
 export const NETWORK = '외부 연결';
-export const NETWORK_HELP = '켜면 이 모듈이 대화 내용을 앱 밖으로 보낼 수 있어요. 바깥 이미지와 글꼴은 화면을 새로고침한 뒤부터 보여요.';
-export const NETWORK_CONSENT = '이 모듈이 대화 내용을 앱 밖으로 보낼 수 있어요';
-export const networkAskHelp = (hosts: string[]) => ['허용하면 이 모듈이 바깥 주소에 연결해요. 이 모듈에서는 한 번만 물어보고, 모듈 화면에서 다시 바꿀 수 있어요.', ...(hosts.length ? [`코드에 적힌 주소: ${hosts.join(', ')}`] : [])].join(' ');
+export const NETWORK_HELP = '켜면 이 플러그인이 대화 내용을 앱 밖으로 보낼 수 있어요. 바깥 이미지와 글꼴은 화면을 새로고침한 뒤부터 보여요.';
+export const NETWORK_CONSENT = '이 플러그인이 대화 내용을 앱 밖으로 보낼 수 있어요';
+export const networkAskHelp = (hosts: string[]) => ['허용하면 이 플러그인이 바깥 주소에 연결해요. 이 플러그인에서는 한 번만 물어보고, 플러그인 화면에서 다시 바꿀 수 있어요.', ...(hosts.length ? [`코드에 적힌 주소: ${hosts.join(', ')}`] : [])].join(' ');
 export const NETWORK_CALLED = '연결한 곳';
-export const TOOL_LATE = '도구 응답이 늦어져서 이번에는 빼고 보냈어요';
-export const TOOL_STALE = '이미 다음 응답이 나와서 도구가 바꾼 내용은 반영하지 않았어요';
+export const TOOL_LATE = '플러그인 응답이 늦어져서 이번에는 빼고 보냈어요';
+export const TOOL_STALE = '이미 다음 응답이 나와서 플러그인이 바꾼 내용은 반영하지 않았어요';
 export const toolVersion = (version: string) => version || UNKNOWN;
-export const TOOL_STUCK = '도구가 응답하지 않아서 멈췄어요';
-export const TOOL_DISABLED = '도구가 세 번 연속 멈춰서 껐어요. 화면을 새로고침하면 다시 켜져요';
-export const TOOL_FIELD_CHANGED = '도구가 바뀌어서 다시 설정해야 해요.';
+export const TOOL_STUCK = '플러그인이 응답하지 않아서 멈췄어요';
+export const TOOL_DISABLED = '플러그인이 세 번 연속 멈춰서 껐어요. 화면을 새로고침하면 다시 켜져요';
+export const TOOL_FIELD_CHANGED = '플러그인이 바뀌어서 다시 설정해야 해요.';
 
 export const SETTINGS = '설정';
 
@@ -83,7 +83,7 @@ export const ILLUSTRATE_NOTE = '삽화 노트';
 export const ILLUSTRATE_NOTE_UNSENT = `삽화 프롬프트에 '${ILLUSTRATE_NOTE}' 블록을 추가해야 노트가 적용돼요.`;
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
-export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', labs: '실험실', translator: '번역기', account: '계정', usage: '사용량', admin: '운영' };
+export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', plugins: '플러그인', display: '디스플레이', labs: '실험실', translator: '번역기', account: '계정', usage: '사용량', admin: '운영' };
 
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집's and a prompt's 모듈 section (항상 켜짐).

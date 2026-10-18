@@ -20,11 +20,11 @@ const CARD = {
   })),
 };
 
-async function importModule(page: Page, name: string) {
-  await page.goto('/modules');
-  const report = await importFile(page, '모듈 가져오기', fixture(name));
-  await report.getByRole('button', { name: '모듈 보기', exact: true }).click();
-  // Importing from 설정 › 모듈 places the new module in 항상 without a second activation write.
+async function importPlugin(page: Page, name: string) {
+  await page.goto('/plugins');
+  const report = await importFile(page, '플러그인 가져오기', fixture(name));
+  await report.getByRole('button', { name: '플러그인 보기', exact: true }).click();
+  // Importing from 설정 › 플러그인 places the new plugin in 항상 without a second activation write.
   await expect(page.getByRole('switch', { name: '항상 켜기', exact: true })).toBeChecked();
 }
 
@@ -70,9 +70,9 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
   });
 
   await test.step('import the reference notepad in settings and capture its tool section', async () => {
-    await importModule(page, 'notepad');
+    await importPlugin(page, 'notepad');
     await expect(page.getByRole('textbox', { name: '메모 제목', exact: true })).toHaveValue('메모장');
-    await expect(page.getByRole('heading', { name: '도구', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '플러그인', exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath('module-tool-section.png'), fullPage: true });
   });
 
@@ -98,12 +98,12 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
 
   const chat = page.url();
   await test.step('import memory and consent to its first auxiliary call as the module', async () => {
-    await importModule(page, 'memory');
+    await importPlugin(page, 'memory');
     await expect(page.getByRole('switch', { name: '모델 호출', exact: true })).not.toBeChecked();
     await page.goto(chat);
     await page.getByLabel('메시지', { exact: true }).fill('The gate is open now.');
     await page.getByRole('button', { name: '보내기', exact: true }).click();
-    await expect(page.getByText('이 모듈이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect(page.getByRole('article').last()).toContainText(summary(1));
     expect(aux()).toHaveLength(1);
@@ -122,7 +122,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
     await page.getByRole('menuitem', { name: '응답 정보', exact: true }).click();
     const panel = page.getByRole('complementary', { name: '응답 정보', exact: true });
     await panel.getByRole('button', { name: '요청 원문', exact: true }).click();
-    await panel.getByRole('button', { name: /^도구 · 간단 기억 / }).click();
+    await panel.getByRole('button', { name: /^플러그인 · 간단 기억 / }).click();
     await expect(panel).toContainText(summary(1));
     await page.getByRole('button', { name: '응답 정보 닫기', exact: true }).click();
   });
@@ -188,7 +188,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_EMBED}`) }).first().click();
     await saved;
     await expect(picker).toContainText(FAKE_EMBED);
-    await importModule(page, 'recall');
+    await importPlugin(page, 'recall');
     await expect(page.getByRole('switch', { name: '장기 기억 맡기기', exact: true })).not.toBeChecked();
   });
 
@@ -197,11 +197,11 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     const report = await importFile(page, pickBot, RECALL_CARD);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     await send('We climb the stairs.');
-    await expect(page.getByText('이 모듈이 장기 기억을 대신 관리하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 장기 기억을 대신 관리하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await send('The lamp is cold.');
     await send('We light the lamp.');
-    await expect(page.getByText('이 모듈이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect.poll(() => embedded.length).toBe(1);
     expect(embedded[0]).toMatchObject({ model: FAKE_EMBED, input: [node(1)] });
@@ -282,14 +282,14 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
       return page.getByRole('complementary', { name: '장기 기억', exact: true });
     };
     const panel = await memoryPanel();
-    await expect(panel).toContainText('회상 기억 도구가 장기 기억을 관리하고 있어요.');
-    await page.goto('/modules');
+    await expect(panel).toContainText('회상 기억 플러그인이 장기 기억을 관리하고 있어요.');
+    await page.goto('/plugins');
     await page.getByRole('button', { name: /회상 기억/ }).click();
     const saved = saving(page);
     await page.getByRole('switch', { name: '항상 켜기', exact: true }).click();
     await saved;
     await expect(page.getByRole('switch', { name: '항상 켜기', exact: true })).not.toBeChecked();
     await page.goto(chat);
-    await expect(await memoryPanel()).not.toContainText('도구가 장기 기억을 관리하고 있어요');
+    await expect(await memoryPanel()).not.toContainText('플러그인이 장기 기억을 관리하고 있어요');
   });
 });

@@ -32,7 +32,10 @@ export type Route =
   | { kind: 'persona'; id: string }
   | { kind: 'modules'; place: string | null }
   | { kind: 'module'; id: string; pane: 'toggles' | null }
-  | { kind: 'tool-page'; module: string }
+  // A plugin is stored as a module that holds a tool; id is that module's.
+  | { kind: 'plugins' }
+  | { kind: 'plugin'; id: string }
+  | { kind: 'plugin-page'; id: string }
   | { kind: 'models' }
   | { kind: 'profile'; id: string }
   // model: a starred model's id, which may hold any character; the path carries it escaped.
@@ -125,8 +128,15 @@ export function parseRoute(at: string): Route {
   if (top === 'modules') {
     if (id === undefined) return { kind: 'modules', place: placeOf(params) };
     if (!ID.test(id)) return HOME;
-    if (sub === 'page') return { kind: 'tool-page', module: id };
+    // A plugin's page before 플러그인 had a page of its own.
+    if (sub === 'page') return { kind: 'plugin-page', id };
     return sub === undefined ? { kind: 'module', id, pane: params.get('pane') === 'toggles' ? 'toggles' : null } : HOME;
+  }
+  if (top === 'plugins') {
+    if (id === undefined) return { kind: 'plugins' };
+    if (!ID.test(id)) return HOME;
+    if (sub === 'page') return { kind: 'plugin-page', id };
+    return sub === undefined ? { kind: 'plugin', id } : HOME;
   }
   if (top === 'models') {
     if (id === undefined) return { kind: 'models' };
@@ -200,8 +210,12 @@ export function href(route: Route): string {
       return placed('/modules', route.place);
     case 'module':
       return `/modules/${route.id}${route.pane ? `?pane=${route.pane}` : ''}`;
-    case 'tool-page':
-      return `/modules/${route.module}/page`;
+    case 'plugins':
+      return '/plugins';
+    case 'plugin':
+      return `/plugins/${route.id}`;
+    case 'plugin-page':
+      return `/plugins/${route.id}/page`;
     case 'models':
       return '/models';
     case 'profile':
@@ -254,7 +268,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection'> | n
   }
 }
 
-export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'translator' | 'labs' | 'account' | 'admin';
+export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'plugins' | 'display' | 'translator' | 'labs' | 'account' | 'admin';
 
 // 'list' for 설정's own list, or null outside 설정. While it is not null, the settings layer stands in for the library.
 export function settingsPage(route: Route): SettingsPage | 'list' | null {
@@ -267,8 +281,11 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return 'personas';
     case 'modules':
     case 'module':
-    case 'tool-page':
       return 'modules';
+    case 'plugins':
+    case 'plugin':
+    case 'plugin-page':
+      return 'plugins';
     case 'models':
     case 'profile':
     case 'model':
@@ -339,6 +356,7 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'modules':
       if (route.place !== null) return { ...route, place: null };
     // falls through
+    case 'plugins':
     case 'connections':
     case 'models':
     case 'account':
@@ -368,8 +386,10 @@ export function up(route: Below, chatShelf?: string | null): Route {
       return { kind: 'personas', place: null };
     case 'module':
       return route.pane ? { ...route, pane: null } : { kind: 'modules', place: null };
-    case 'tool-page':
-      return { kind: 'module', id: route.module, pane: null };
+    case 'plugin':
+      return { kind: 'plugins' };
+    case 'plugin-page':
+      return { kind: 'plugin', id: route.id };
     case 'profile':
     case 'model':
       return { kind: 'models' };

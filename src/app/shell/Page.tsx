@@ -10,7 +10,7 @@ import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
 import { NO_CHARACTER } from '../common/words';
 import { ShareArrival } from '../library/ShareArrival';
-import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
+import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored, useTool } from '../session';
 import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, useSplit, useWide } from '../ui';
 import { backBar, navigate } from './router';
 import { backTo, HOME, listOf, up, type Back, type Below, type Route } from './routes';
@@ -35,6 +35,8 @@ const ProfileScreen = lazy(() => import('../models/ProfileScreen').then(({ Profi
 const ModelsScreen = lazy(() => import('../models/ModelsScreen').then(({ ModelsScreen }) => ({ default: ModelsScreen })));
 const ModuleScreen = lazy(() => import('../modules/ModuleScreen').then(({ ModuleScreen }) => ({ default: ModuleScreen })));
 const ModulesScreen = lazy(() => import('../modules/ModulesScreen').then(({ ModulesScreen }) => ({ default: ModulesScreen })));
+const PluginScreen = lazy(() => import('../modules/PluginScreen').then(({ PluginScreen }) => ({ default: PluginScreen })));
+const PluginsScreen = lazy(() => import('../modules/PluginsScreen').then(({ PluginsScreen }) => ({ default: PluginsScreen })));
 const PersonaEditor = lazy(() => import('../personas/PersonaEditor').then(({ PersonaEditor }) => ({ default: PersonaEditor })));
 const PersonaList = lazy(() => import('../personas/PersonaList').then(({ PersonaList }) => ({ default: PersonaList })));
 const PromptScreen = lazy(() => import('../prompts/PromptScreen').then(({ PromptScreen }) => ({ default: PromptScreen })));
@@ -108,9 +110,13 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'modules':
         return <ModulesScreen place={at.place} back={sideBack(at)} />;
       case 'module':
-        return <ItemPage at={at} back={back(at)}>{(stored) => <ModuleScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
-      case 'tool-page':
-        return <ItemPage at={{ kind: 'module', id: at.module }} back={backTo({ kind: 'modules', place: null }, wide)}>{(stored) => <ToolPageScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
+        return <ItemPage at={at} back={back(at)}>{(stored) => <ModulePage key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
+      case 'plugins':
+        return <PluginsScreen back={sideBack(at)} />;
+      case 'plugin':
+        return <ItemPage at={{ kind: 'module', id: at.id }} back={back(at)}>{(stored) => <PluginScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
+      case 'plugin-page':
+        return <ItemPage at={{ kind: 'module', id: at.id }} back={backTo({ kind: 'plugins' }, wide)}>{(stored) => <ToolPageScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'models':
         return <ModelsScreen back={sideBack(at)} />;
       case 'profile':
@@ -239,6 +245,15 @@ function ItemPage<K extends 'prompt' | 'persona' | 'module' | 'profile'>({ at, b
   const shown = live(stored);
   if (!shown) return <Missing what={absentItem(at.kind, stored)} back={back} />;
   return children(shown);
+}
+
+// A plugin's page was a module's until 플러그인 had a page of its own, so an old link to one lands on its new place.
+function ModulePage({ stored, pane, back }: { stored: Stored<'module'>; pane: 'toggles' | null; back: Back }) {
+  const plugin = useTool(stored.id) !== null;
+  useLayoutEffect(() => {
+    if (plugin) navigate({ kind: 'plugin', id: stored.id }, { replace: true });
+  }, [plugin, stored.id]);
+  return plugin ? null : <ModuleScreen stored={stored} pane={pane} back={back} />;
 }
 
 function ConnectionPage({ at, back }: { at: At<'connection'>; back: Back }) {

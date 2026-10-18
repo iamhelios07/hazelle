@@ -42,7 +42,9 @@ const EXAMPLES = {
     { kind: 'module', id: CHAT, pane: null },
     { kind: 'module', id: CHAT, pane: 'toggles' },
   ],
-  'tool-page': [{ kind: 'tool-page', module: CHAT }],
+  plugins: [{ kind: 'plugins' }],
+  plugin: [{ kind: 'plugin', id: CHAT }],
+  'plugin-page': [{ kind: 'plugin-page', id: CHAT }],
   models: [{ kind: 'models' }],
   profile: [{ kind: 'profile', id: CHAT }],
   model: [
@@ -84,9 +86,10 @@ describe('routes', () => {
     const model = { kind: 'model', connection: CHAT, model: 'anthropic/claude-opus-5.5' } as const;
     expect(parseRoute(`/models/${CHAT}/anthropic%2Fclaude-opus-5.5`)).toEqual(model);
     expect(href(model)).toBe(`/models/${CHAT}/anthropic/claude-opus-5.5`);
+    expect(parseRoute(`/modules/${CHAT}/page`)).toEqual({ kind: 'plugin-page', id: CHAT });
   });
 
-  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/modules/abc', `/modules/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x', '/settings/chat/nope', '/settings/chat/memory/x'])(
+  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/modules/abc', `/modules/${CHAT}/x`, '/plugins/abc', `/plugins/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x', '/settings/chat/nope', '/settings/chat/memory/x'])(
     '%s is home',
     (at) => {
       expect(parseRoute(at)).toEqual(HOME);
@@ -111,12 +114,12 @@ describe('routes', () => {
 });
 
 
-it('opens a tool page without a list pane or chat, with its module as the way back', () => {
-  const route = { kind: 'tool-page', module: CHAT } as const;
-  expect(href(route)).toBe(`/modules/${CHAT}/page`);
-  expect(up(route)).toEqual({ kind: 'module', id: CHAT, pane: null });
+it("opens a plugin's page without a list pane or chat, with the plugin as the way back", () => {
+  const route = { kind: 'plugin-page', id: CHAT } as const;
+  expect(href(route)).toBe(`/plugins/${CHAT}/page`);
+  expect(up(route)).toEqual({ kind: 'plugin', id: CHAT });
   expect(listOf(route)).toBeNull();
-  expect(settingsPage(route)).toBe('modules');
+  expect(settingsPage(route)).toBe('plugins');
   expect(shelfOf(route)).toBeUndefined();
 });
 

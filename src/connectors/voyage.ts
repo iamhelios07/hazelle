@@ -10,7 +10,7 @@ export const voyage: ConnectionType = {
   id: 'voyage',
   label: 'Voyage AI',
   group: 'maker',
-  description: '장기 기억 도구가 쓰는 임베딩 모델이에요.',
+  description: '장기 기억과 플러그인이 쓰는 임베딩 모델이에요.',
   keyPage: 'https://dashboard.voyageai.com/organization/api-keys',
   endpoint: { baseUrl: 'https://api.voyageai.com/v1', protocol: 'chat-completions' },
   detect: { key: /^pa-/, host: 'api.voyageai.com' },

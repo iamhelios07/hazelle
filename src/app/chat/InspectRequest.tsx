@@ -22,7 +22,7 @@ function later(steps: AfterEnter[]): string[] {
       case 'input-translation':
         return '입력 번역';
       case 'tools':
-        return '도구의 새 답';
+        return '플러그인의 새 답';
       case 'retrieval':
         return '기억 검색';
     }

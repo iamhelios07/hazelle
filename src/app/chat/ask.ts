@@ -1,13 +1,13 @@
-import type { PackOwner } from '../../model/library';
 import type { ScriptQuestion } from '../../runtime/script-interactions';
-import { BOT_MODELS_HELP, CARD_WRITE_ASK_HELP, CARD_WRITE_CONSENT, MEMORY_CLAIM, MEMORY_CLAIM_HELP, MODEL_CONSENT, MODULE_MODELS_HELP, NETWORK_CONSENT, networkAskHelp } from '../common/words';
+import { BOT_MODELS_HELP, CARD_WRITE_ASK_HELP, CARD_WRITE_CONSENT, MEMORY_CLAIM, MEMORY_CLAIM_HELP, MODEL_CONSENT, moduleModelsHelp, NETWORK_CONSENT, networkAskHelp, TOOL } from '../common/words';
 import type { AskAnswer } from '../ui';
 
 const CONSENT: AskAnswer = { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] };
 
 // Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
-// option's index, and for a model call, a memory claim, a card write or the network 'yes' or 'no'.
-export function asking(question: ScriptQuestion['question'], owner: PackOwner['kind']): { text?: string; help?: string; answer: AskAnswer } {
+// option's index, and for a model call, a memory claim, a card write or the network 'yes' or 'no'. owner: who asks, a
+// module that holds a tool being a plugin.
+export function asking(question: ScriptQuestion['question'], owner: 'character' | 'module' | 'plugin'): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {
     case 'input':
       return { text: question.text, answer: { kind: 'line' } };
@@ -18,7 +18,7 @@ export function asking(question: ScriptQuestion['question'], owner: PackOwner['k
     case 'model':
       return {
         text: MODEL_CONSENT[owner],
-        help: owner === 'module' ? MODULE_MODELS_HELP : BOT_MODELS_HELP,
+        help: owner === 'character' ? BOT_MODELS_HELP : moduleModelsHelp(owner === 'plugin' ? TOOL : '모듈'),
         answer: CONSENT,
       };
     case 'memory':

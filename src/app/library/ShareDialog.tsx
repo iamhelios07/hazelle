@@ -99,7 +99,7 @@ function LinkDialog({ character, name, links, reload, onClose }: { character: st
     }
     const published = await publishShare(store, files, character, link ? link.covered : covered);
     if (!published.ok) return finish(describeFailure(published));
-    const tools = published.data.tools ? { detail: `${TOOL}가 들어 있는 모듈 ${published.data.tools}개는 빼고 공유했어요.` } : undefined;
+    const tools = published.data.tools ? { detail: `${TOOL} ${published.data.tools}개는 빼고 공유했어요.` } : undefined;
     toast.show(link ? '새 버전으로 바꿨어요.' : '공유 링크를 만들었어요.', tools);
     finish(null);
     reload();

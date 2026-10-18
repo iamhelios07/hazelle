@@ -17,7 +17,7 @@ import { cardMissed, missedLines, presetMissed } from './missed';
 // Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
 // when the file held several. paired: the prompts a module, or the modules a prompt, was turned on with because a Risu
 // preset named the module. verdict: how much of a Risu plugin works here. replaced: the older versions a module took over from.
-export type ImportOutcome = { file: string; title: string; holds: string; verdict: Line | null; replaced: Line | null; placed: Line | null; paired: Line | null; missed: string[]; unused: string | null } & ({ kind: 'character' | 'module' | 'prompt' | 'persona'; id: string } | { kind: 'chat'; id: string | null });
+export type ImportOutcome = { file: string; title: string; holds: string; verdict: Line | null; replaced: Line | null; placed: Line | null; paired: Line | null; missed: string[]; unused: string | null } & ({ kind: 'character' | 'module' | 'plugin' | 'prompt' | 'persona'; id: string } | { kind: 'chat'; id: string | null });
 type Line = { text: string; failed: boolean; help?: { label: string; text: string } };
 // at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
 export type Placement = { at: ModulePlace['kind'] | null; failure: string | null };
@@ -52,7 +52,7 @@ export function moduleOutcome(file: string, module: ImportedModule, id: string, 
     kind: 'module', file, id, title: `모듈 · ${module.name}`,
     holds: packHolds(module.pack, module.lore.length, module.assets.length - unsupportedCount(unsupported)),
     // On for a prompt, or where the version it replaced was, it is not "on nowhere".
-    verdict: null, replaced, placed: placement.at === null && elsewhere ? null : modulePlacement(placement),
+    verdict: null, replaced, placed: placement.at === null && elsewhere ? null : placedLine('modules', placement),
     paired,
     missed: missedLines(mergeUnsupported(module.unsupported, unsupported)), unused: null,
   };
@@ -82,18 +82,18 @@ export function personaOutcome(file: string, { id, value }: Stored<'persona'>): 
   return { kind: 'persona', file, id, title: `페르소나 · ${aliased(value.name, value.alias)}`, holds, verdict: null, replaced: null, placed: null, paired: null, missed: cardMissed([], value.picture === null), unused: null };
 }
 
-const modulePlacement = ({ at, failure }: Placement): ImportOutcome['placed'] => at === null
-      ? { text: `아직 어디에도 켜지 않았어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
+const placedLine = (page: 'modules' | 'plugins', { at, failure }: Placement): ImportOutcome['placed'] => at === null
+      ? { text: `아직 어디에도 켜지 않았어요. ${inSettings(page)}에서 켤 수 있어요.`, failed: false }
       : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true };
 
 export function toolOutcome(file: string, manifest: ToolManifest, saved: ToolImport, placement: Placement): ImportOutcome {
   return {
-    kind: 'module', file, id: saved.id, title: `모듈 · ${manifest.displayName}`,
-    holds: !saved.previous ? [TOOL, manifest.version].filter(Boolean).join(' · ')
+    kind: 'plugin', file, id: saved.id, title: `${TOOL} · ${manifest.displayName}`,
+    holds: !saved.previous ? `버전 ${toolVersion(manifest.version)}`
       : saved.previous.manifest.version === manifest.version ? '같은 버전을 다시 가져왔어요'
       : `버전을 바꿨어요 · ${toolVersion(saved.previous.manifest.version)} → ${toolVersion(manifest.version)}`,
     verdict: manifest.risu ? risuVerdict(manifest.risu) : null, replaced: null,
-    placed: saved.previous ? null : modulePlacement(placement), paired: null, missed: [], unused: null,
+    placed: saved.previous ? null : placedLine('plugins', placement), paired: null, missed: [], unused: null,
   };
 }
 

@@ -1,6 +1,6 @@
 import { importTool, undoToolImport } from '../../runtime/tools/store';
 import { useToast } from '../toast';
-import { Check, FileText, MessageSquare, MessageSquarePlus, Package, UserRound, type LucideIcon } from 'lucide-react';
+import { Check, FileText, MessageSquare, MessageSquarePlus, Package, Puzzle, UserRound, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { EXPANSION, METADATA_BYTES } from '../../engine/import/inflate';
 import { PRESET_EXTENSIONS } from '../../engine/import/preset';
@@ -39,6 +39,7 @@ const ACCEPT = `.png,.charx,.jpg,.jpeg,.json,.lorebook,.risum,.bin,.js,${PRESETS
 const OPENS: { kind: Exclude<ImportOutcome['kind'], 'character'>; icon: LucideIcon; label: string; route: (id: string) => Route }[] = [
   { kind: 'chat', icon: MessageSquare, label: '열기', route: (id) => ({ kind: 'chat', id }) },
   { kind: 'module', icon: Package, label: '모듈 보기', route: (id) => ({ kind: 'module', id, pane: null }) },
+  { kind: 'plugin', icon: Puzzle, label: '플러그인 보기', route: (id) => ({ kind: 'plugin', id }) },
   { kind: 'prompt', icon: FileText, label: '프롬프트 보기', route: (id) => ({ kind: 'prompt', id, pane: null }) },
   { kind: 'persona', icon: UserRound, label: '페르소나 보기', route: (id) => ({ kind: 'persona', id }) },
 ];
@@ -72,9 +73,9 @@ const DETAIL_FAILURE: Record<string, string> = {
   'not-preset': 'Risu 파일이지만 프리셋 파일이 아니에요.',
   'decrypt-failed': '프리셋을 열지 못했어요. 파일이 깨졌을 수 있어요.',
   'no-template': '프롬프트 템플릿을 쓰지 않는 프리셋은 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
-  'tool-too-large': '도구 파일 용량이 너무 커요.',
+  'tool-too-large': '플러그인 파일 용량이 너무 커요.',
   'tool-encoding': 'UTF-8 형식의 텍스트 파일이 아니에요.',
-  'tool-api': '헤이젤 도구 파일이 아니에요. 파일 맨 위에 //@api 1이 있어야 해요.',
+  'tool-api': '헤이젤 플러그인 파일이 아니에요. 파일 맨 위에 //@api 1이 있어야 해요.',
   'tool-identity': '//@name과 //@author가 꼭 있어야 하고, 글자와 숫자, _ . - 기호만 쓸 수 있어요.',
   'tool-setting': '설정 줄을 읽지 못했어요.',
   'tool-menu': '메뉴 줄을 읽지 못했어요.',
@@ -144,7 +145,9 @@ function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
       return live(store.get('persona', route.id)) ? { kind: 'persona', id: route.id } : null;
     case 'modules':
     case 'module':
-    case 'tool-page':
+    case 'plugins':
+    case 'plugin':
+    case 'plugin-page':
       return { kind: 'always' };
     default:
       return null;

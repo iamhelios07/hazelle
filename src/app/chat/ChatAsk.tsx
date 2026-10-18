@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { toolId } from '../../model/tool';
 import { scriptVoice } from '../common/script-voice';
 import { useScripts, useSession } from '../session';
 import { AskCard } from '../ui';
@@ -16,11 +17,12 @@ export function ChatAsk({ id, onTyped }: { id: string | null; onTyped: () => voi
     if (orphan !== null) scripts.answer(orphan, null);
   }, [orphan]);
   if (!asked || !from) return null;
+  const owner = asked.from.kind === 'module' && store.get('tool', toolId(asked.from.id)) ? 'plugin' : asked.from.kind;
   return (
     <AskCard
       key={asked.id}
       from={from}
-      {...asking(asked.question, asked.from.kind)}
+      {...asking(asked.question, owner)}
       onAnswer={(answer) => {
         scripts.answer(asked.id, answer);
         if (asked.question.kind === 'input') onTyped();

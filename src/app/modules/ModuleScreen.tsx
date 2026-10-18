@@ -16,10 +16,10 @@ import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { ALWAYS, BIN_KEEPS, EXPORT, moduleName, promptName, TOOL } from '../common/words';
+import { ALWAYS, BIN_KEEPS, EXPORT, moduleName, promptName } from '../common/words';
 import { useChildren, useFiles, useLibrary, usePersonas, usePrompts, useSettings, useStore, useStored } from '../session';
 import { backBar, navigate } from '../shell/router';
-import { characterPage, type Back } from '../shell/routes';
+import { characterPage, type Back, type Route } from '../shell/routes';
 import { useToast } from '../toast';
 import { Avatar, Button, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
 import { useModuleParts } from './ModulesScreen';
@@ -30,54 +30,56 @@ const PROMPTS_USING = '쓰는 프롬프트';
 const PERSONAS_USING = '쓰는 페르소나';
 const RISU_FILE = 'Risu 모듈 파일';
 const RISU_FILE_HELP =
-  'RisuAI 설정 › 모듈에서 가져오거나 창에 끌어다 놓으면 열려요. 이미지는 그대로 담기고, 도구와 삽화 프로필은 빠져요. Risu에는 끄기 기능이 없어서 꺼 둔 스크립트와 로어북 항목은 빠지고, 로어북의 우선순위와 위치도 빠지며, 쉼표가 들어간 키는 쉼표 기준으로 나뉘어요. 헤이젤로 다시 가져오면 모두 원래대로 돌아와요. Lua 트리거가 있으면 Risu의 저수준 접근을 켠 채로 내보내요.';
+  'RisuAI 설정 › 모듈에서 가져오거나 창에 끌어다 놓으면 열려요. 이미지는 그대로 담기고, 삽화 프로필은 빠져요. Risu에는 끄기 기능이 없어서 꺼 둔 스크립트와 로어북 항목은 빠지고, 로어북의 우선순위와 위치도 빠지며, 쉼표가 들어간 키는 쉼표 기준으로 나뉘어요. 헤이젤로 다시 가져오면 모두 원래대로 돌아와요. Lua 트리거가 있으면 Risu의 저수준 접근을 켠 채로 내보내요.';
 
-export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>; pane: 'toggles' | null; back: Back }) {
+// What a module's page and a plugin's share: noun names the thing, list is where deleting it lands.
+export function useModuleEditor({ id, value }: Stored<'module'>, noun: string, list: Route, back: Back) {
   const store = useStore();
-  const files = useFiles();
   const toast = useToast();
-  const wide = useWide();
-  const [exporting, setExporting] = useState<string | null>(null);
-  const { id, value } = stored;
-  const always = useSettings().modules?.includes(id) ?? false;
-  const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
-  const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
-  const personas = usePersonas().filter(({ value }) => value.modules?.includes(id));
-  const holds = holdsLine(useModuleParts([stored])[0]!);
-  // A module of scripts alone describes no one, so it offers no 삽화 profiles.
-  const describes = useChildren('lore', id).length + useChildren('asset', id).length > 0 || useStored('likeness', likenessId(id)) !== null;
   const autosave = useAutosave<{ name: string; description: string }>(`module:${id}`, (patch) => editModule(store, id, patch));
   const name = autosave.unsaved.name ?? value.name;
   const description = autosave.unsaved.description ?? value.description;
 
+  function remove() {
+    void setModuleDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
+    navigate(list);
+    toast.undoable(`'${moduleName(name)}' ${noun}을 삭제했어요.`, () => setModuleDeleted(store, id, null), BIN_KEEPS);
+  }
+
+  const top = (
+    <NavBar
+      title={name}
+      rename={{ label: `${noun} 이름`, placeholder: moduleName(''), onChange: (next) => autosave.change({ name: next }) }}
+      status={autosave.status ? SAVE_STATUS[autosave.status] : undefined}
+      {...backBar(back)}
+      menu={{ of: noun, items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
+    />
+  );
+  const describing = <TextField label="설명" lines={3} value={description} onChange={(next) => autosave.change({ description: next })} />;
+  return { name, top, describing };
+}
+
+export function AlwaysSwitch({ id }: { id: string }) {
+  const store = useStore();
+  const toast = useToast();
+  const always = useSettings().modules?.includes(id) ?? false;
   async function setAlways(on: boolean) {
     const saved = await setModuleAlways(store, id, on);
     if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
   }
+  return (
+    <SettingGroup label={ALWAYS_ON}>
+      <SettingRow label={ALWAYS_ON} help="켜면 모든 채팅에 적용돼요." control={<Switch label={ALWAYS_ON} checked={always} onChange={(on) => void setAlways(on)} />} />
+    </SettingGroup>
+  );
+}
 
-  function exportFile() {
-    runExport(
-      toast,
-      fileNamed(name, moduleName(''), 'risum'),
-      (output, progress) => exportModule(store, files, id, output, progress),
-      setExporting,
-      ({ tools }) => toast.show(`'${moduleName(name)}' 모듈을 내보냈어요.`, tools ? { detail: `${TOOL}는 빼고 내보냈어요.` } : undefined),
-    );
-  }
-
-  function remove() {
-    void setModuleDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
-    navigate({ kind: 'modules', place: null });
-    toast.undoable(`'${moduleName(name)}' 모듈을 삭제했어요.`, () => setModuleDeleted(store, id, null), BIN_KEEPS);
-  }
-
-  if (pane === 'toggles')
-    return (
-      <Screen width="form" top={<NavBar title={moduleName(name)} {...backBar(back)} />}>
-        <PackToggles owner={{ kind: 'module', id }} lines={value.toggles} />
-      </Screen>
-    );
-
+export function UsedBy({ id }: { id: string }) {
+  const wide = useWide();
+  const always = useSettings().modules?.includes(id) ?? false;
+  const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
+  const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
+  const personas = usePersonas().filter(({ value }) => value.modules?.includes(id));
   const usedBy = [
     {
       title: PROMPTS_USING,
@@ -95,28 +97,47 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
       none: always ? '직접 켠 페르소나가 없어요.' : '켜 둔 페르소나가 없어요.',
     },
   ];
+  return usedBy.map(({ title, items, none }) => (
+    <Section key={title} title={title}>
+      {items.length > 0 ? <List label={title}>{items}</List> : <Empty variant="section">{none}</Empty>}
+    </Section>
+  ));
+}
+
+export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>; pane: 'toggles' | null; back: Back }) {
+  const store = useStore();
+  const files = useFiles();
+  const toast = useToast();
+  const wide = useWide();
+  const [exporting, setExporting] = useState<string | null>(null);
+  const { id, value } = stored;
+  const holds = holdsLine(useModuleParts([stored])[0]!);
+  // A module of scripts alone describes no one, so it offers no 삽화 profiles.
+  const describes = useChildren('lore', id).length + useChildren('asset', id).length > 0 || useStored('likeness', likenessId(id)) !== null;
+  const { name, top, describing } = useModuleEditor(stored, '모듈', { kind: 'modules', place: null }, back);
+
+  function exportFile() {
+    runExport(
+      toast,
+      fileNamed(name, moduleName(''), 'risum'),
+      (output, progress) => exportModule(store, files, id, output, progress),
+      setExporting,
+      () => toast.show(`'${moduleName(name)}' 모듈을 내보냈어요.`),
+    );
+  }
+
+  if (pane === 'toggles')
+    return (
+      <Screen width="form" top={<NavBar title={moduleName(name)} {...backBar(back)} />}>
+        <PackToggles owner={{ kind: 'module', id }} lines={value.toggles} />
+      </Screen>
+    );
+
   return (
-    <Screen
-      width="form"
-      top={
-        <NavBar
-          title={name}
-          rename={{ label: '모듈 이름', placeholder: moduleName(''), onChange: (next) => autosave.change({ name: next }) }}
-          status={autosave.status ? SAVE_STATUS[autosave.status] : undefined}
-          {...backBar(back)}
-          menu={{ of: '모듈', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
-        />
-      }
-    >
-      <TextField label="설명" lines={3} value={description} onChange={(next) => autosave.change({ description: next })} />
+    <Screen width="form" top={top}>
+      {describing}
       <Text variant="note">{holds}</Text>
-      <SettingGroup label={ALWAYS_ON}>
-        <SettingRow
-          label={ALWAYS_ON}
-          help="켜면 모든 채팅에 적용돼요."
-          control={<Switch label={ALWAYS_ON} checked={always} onChange={(on) => void setAlways(on)} />}
-        />
-      </SettingGroup>
+      <AlwaysSwitch id={id} />
       <SettingGroup label={EXPORT}>
         <SettingRow
           label={RISU_FILE}
@@ -129,11 +150,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
         />
       </SettingGroup>
       <ToolSection module={stored} />
-      {usedBy.map(({ title, items, none }) => (
-        <Section key={title} title={title}>
-          {items.length > 0 ? <List label={title}>{items}</List> : <Empty variant="section">{none}</Empty>}
-        </Section>
-      ))}
+      <UsedBy id={id} />
       <List box places label="토글">
         <ListItem title="토글" aside={`${value.toggles.filter(isToggle).length}개`} onClick={() => navigate({ kind: 'module', id, pane: 'toggles' })} />
       </List>

@@ -39,7 +39,7 @@ function moduleTags(module: ModuleContribution): string[] {
     ...(module.triggers.lua ? [`Lua ${module.triggers.lua}개`] : []),
     ...(module.triggers.blocks ? [`트리거 ${module.triggers.blocks}개`] : []),
     ...(module.toggles.length ? [`토글 ${module.toggles.length}개`] : []),
-    ...(module.tools.length ? [`도구 ${module.tools.length}개`] : []),
+    ...(module.tools.length ? [`플러그인 ${module.tools.length}개`] : []),
   ];
 }
 

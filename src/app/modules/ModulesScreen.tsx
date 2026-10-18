@@ -8,10 +8,10 @@ import { useSearch } from '../common/useSearch';
 import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
 import { FolderPath, useMoving, useNaming } from '../common/folders/FolderParts';
 import { ALWAYS, moduleName, PAGES, SCRIPTS } from '../common/words';
-import { useChildrenOf, useLibrary, useModules, usePersonas, usePrompts, useSettings, useTools } from '../session';
+import { useChildrenOf, useLibrary, useModulesAndPlugins, usePersonas, usePrompts, useSettings, useTools } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Empty, Icon, NavBar, Row, Screen, Table, Tag, type TableColumn, type TableRow } from '../ui';
+import { Button, Empty, Icon, NavBar, Row, Screen, Section, Table, Tag, type TableColumn, type TableRow } from '../ui';
 
 // The table's columns and each module's contents line both come from these parts, so the two always agree.
 export function useModuleParts(modules: readonly Stored<'module'>[]): PackParts[] {
@@ -24,6 +24,27 @@ export function useModuleParts(modules: readonly Stored<'module'>[]): PackParts[
 
 const holding = (owners: string[][], id: string) => owners.filter((modules) => modules.includes(id)).length;
 
+// Where each module is on, for the 쓰는 곳 column of both 모듈 and 플러그인.
+export function useModuleUse() {
+  const prompts = usePrompts().flatMap(({ value }) => (value.task === undefined ? [value.modules ?? []] : []));
+  const characters = useLibrary().characters.map(({ character }) => character.modules ?? []);
+  const personas = usePersonas().map(({ value }) => value.modules ?? []);
+  const always = useSettings().modules ?? [];
+  const counts = (id: string) => ({ always: always.includes(id), prompt: holding(prompts, id), character: holding(characters, id), persona: holding(personas, id) });
+  const cell = (id: string) => {
+    const on = counts(id);
+    const used = counted([['프롬프트', on.prompt], ['캐릭터', on.character], ['페르소나', on.persona]]).join(' · ');
+    return (
+      <>
+        {on.always && <Tag>{ALWAYS}</Tag>}
+        {on.always && used && ' '}
+        {used}
+      </>
+    );
+  };
+  return { counts, cell };
+}
+
 const COLUMNS: TableColumn[] = [
   { label: PAGES.modules, size: 'name' },
   { label: '로어북', size: 'figure' },
@@ -33,6 +54,21 @@ const COLUMNS: TableColumn[] = [
   { label: '스타일', size: 'figure' },
   { label: '쓰는 곳', size: 'fill', keep: true },
 ];
+const FOLDER_COLUMNS: TableColumn[] = [
+  { label: '폴더', size: 'name' },
+  { label: '담긴 것', size: 'fill', keep: true },
+];
+
+// A module stands in the first place it is on, in the order packs apply (항상, prompt, character, persona); its 쓰는 곳
+// still names every place.
+const SECTIONS = [
+  { place: 'always', title: `${ALWAYS} 켠 모듈` },
+  { place: 'prompt', title: '프롬프트 모듈' },
+  { place: 'character', title: '캐릭터 모듈' },
+  { place: 'persona', title: '페르소나 모듈' },
+  { place: 'none', title: '안 쓰는 모듈' },
+] as const;
+type Place = (typeof SECTIONS)[number]['place'];
 
 const figure = (count: number) => (count > 0 ? count : null);
 const folderOf = ({ value }: Stored<'module'>) => value.folder ?? null;
@@ -41,12 +77,12 @@ const go = (place: string | null) => navigate({ kind: 'modules', place });
 // place: the folder it stands in.
 export function ModulesScreen({ place, back }: { place: string | null; back: Back | null }) {
   const { pick } = useImport();
-  const modules = useModules();
-  const prompts = usePrompts().flatMap(({ value }) => (value.task === undefined ? [value.modules ?? []] : []));
-  const characters = useLibrary().characters.map(({ character }) => character.modules ?? []);
-  const personas = usePersonas().map(({ value }) => value.modules ?? []);
-  const always = useSettings().modules ?? [];
-  const where = (id: string) => counted([['프롬프트', holding(prompts, id)], ['캐릭터', holding(characters, id)], ['페르소나', holding(personas, id)]]).join(' · ');
+  const { modules } = useModulesAndPlugins();
+  const use = useModuleUse();
+  const placeOf = (id: string): Place => {
+    const on = use.counts(id);
+    return on.always ? 'always' : on.prompt > 0 ? 'prompt' : on.character > 0 ? 'character' : on.persona > 0 ? 'persona' : 'none';
+  };
   const search = useSearch(modules, '모듈 검색', ({ value }) => [moduleName(value.name)]);
   const index = useFolderIndex('module', modules, folderOf);
   const at = placeIn(index, place, search.words !== '');
@@ -62,17 +98,15 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
   const folderRows: TableRow[] = at.folders.map((folder) => ({
     key: folder.id,
     folder: true,
-    cells: [folder.value.name, '', '', '', '', '', folderNote('module', index.byFolder.get(folder.id)!)],
+    cells: [folder.value.name, folderNote('module', index.byFolder.get(folder.id)!)],
     onDropCard: moving.dropInto?.(folder.id),
     onClick: () => go(folder.id),
   }));
-  const rows: TableRow[] = shown.map((module, position) => {
+  const rows = shown.map((module, position) => {
     const { id, value } = module;
     const { lore, regex, triggers, toggles, style } = parts[position]!;
-    const on = always.includes(id);
-    const used = where(id);
     const path = search.words ? whereIs(index, folderOf(module)) : undefined;
-    return {
+    const row: TableRow = {
       key: id,
       selected: moving.picked ? moving.picked.has(id) : undefined,
       drag: moving.dropInto && id,
@@ -83,16 +117,14 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
         figure(triggers),
         figure(toggles),
         style ? <Icon icon={Check} size="sm" /> : null,
-        <>
-          {on && <Tag>{ALWAYS}</Tag>}
-          {on && used && ' '}
-          {used}
-        </>,
+        use.cell(id),
       ],
       summary: [path, holdsLine(parts[position]!)].filter(Boolean).join(' · '),
       onClick: () => (moving.picked ? moving.toggle(id) : navigate({ kind: 'module', id, pane: null })),
     };
+    return { place: placeOf(id), row };
   });
+  const sections = SECTIONS.map(({ place, title }) => ({ title, rows: rows.flatMap((each) => (each.place === place ? [each.row] : [])) })).filter(({ rows }) => rows.length > 0);
   return (
     <Screen width="page" top={<NavBar title={PAGES.modules} {...backBar(back)} actions={importing} />}>
       {search.field && <Row kind="toolbar">{search.field}</Row>}
@@ -106,7 +138,14 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
       {search.none !== null ? (
         <Empty>{search.none}</Empty>
       ) : folderRows.length + rows.length > 0 ? (
-        <Table label={PAGES.modules} columns={COLUMNS} rows={[...folderRows, ...rows]} />
+        <>
+          {folderRows.length > 0 && <Table label="폴더" columns={FOLDER_COLUMNS} rows={folderRows} />}
+          {sections.map(({ title, rows }) => (
+            <Section key={title} title={title} note={`${rows.length}개`}>
+              <Table label={title} columns={COLUMNS} rows={rows} />
+            </Section>
+          ))}
+        </>
       ) : at.here ? (
         <Empty>비어 있는 폴더예요.</Empty>
       ) : (

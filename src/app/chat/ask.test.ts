@@ -12,3 +12,7 @@ it("answers each kind of a bot's question in the values its script reads", () =>
   expect(values({ kind: 'select', options: ['검', '활', '지팡이'] })).toEqual(['0', '1', '2']);
   expect(values({ kind: 'model' })).toEqual(['yes', 'no']);
 });
+
+it('names a module that holds a tool a plugin when it asks', () => {
+  expect(asking({ kind: 'model' }, 'plugin').text).toBe('이 플러그인이 모델을 추가로 호출하려고 해요');
+});

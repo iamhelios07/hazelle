@@ -1,10 +1,10 @@
-import { FileText, FlaskConical, Languages, Layers, Lock, MessageSquare, Package, Plug, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
+import { FileText, FlaskConical, Languages, Layers, Lock, MessageSquare, Package, Plug, Puzzle, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useSearch } from '../../common/useSearch';
 import { PAGES, SETTINGS } from '../../common/words';
 import { presetOf } from '../../common/reading';
 import { useDisplay } from '../../display';
-import { useAccount, useConnections, useModules, usePersonas, usePrompts, useSession } from '../../session';
+import { useAccount, useConnections, useModulesAndPlugins, usePersonas, usePrompts, useSession } from '../../session';
 import { Empty, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
 import type { Route, SettingsPage } from '../routes';
@@ -25,6 +25,7 @@ const GROUPS: Place[][] = [
     { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts', place: null } },
     { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas', place: null } },
     { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules', place: null } },
+    { page: 'plugins', label: PAGES.plugins, icon: Puzzle, route: { kind: 'plugins' } },
   ],
 ];
 const APP: Place[] = [
@@ -43,7 +44,7 @@ function useApp(): Place[] {
 function useHolds(): Record<SettingsPage, string | undefined> {
   const prompts = usePrompts();
   const personas = usePersonas();
-  const modules = useModules();
+  const { modules, plugins } = useModulesAndPlugins();
   const connections = useConnections();
   const { username } = useSession();
   const { reading, display, presets } = useDisplay();
@@ -54,6 +55,7 @@ function useHolds(): Record<SettingsPage, string | undefined> {
     prompts: `${prompts.length}개`,
     personas: `${personas.length}개`,
     modules: `${modules.length}개`,
+    plugins: `${plugins.length}개`,
     display: presetOf(presets, reading, display)?.name,
     translator: undefined,
     labs: undefined,

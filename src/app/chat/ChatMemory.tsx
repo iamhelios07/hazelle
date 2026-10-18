@@ -106,8 +106,8 @@ export function ChatMemory({ record, item, messages, busy, onClose, onTool, onEd
     <SidePanel title="장기 기억" actions={holder ? undefined : more} onClose={onClose}>
       {holder && (
         <Row kind="spread">
-          <Text>{`${holder.tool.manifest.displayName} 도구가 장기 기억을 관리하고 있어요.`}</Text>
-          {holder.tool.manifest.page && <Button variant="secondary" size="sm" onClick={() => onTool(holder.module)}>도구 열기</Button>}
+          <Text>{`${holder.tool.manifest.displayName} 플러그인이 장기 기억을 관리하고 있어요.`}</Text>
+          {holder.tool.manifest.page && <Button variant="secondary" size="sm" onClick={() => onTool(holder.module)}>플러그인 열기</Button>}
         </Row>
       )}
       {writing ? (

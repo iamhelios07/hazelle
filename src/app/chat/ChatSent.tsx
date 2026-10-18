@@ -262,7 +262,7 @@ export function SentMemory({ entry, memory, onRecord }: { entry: LogEntry | null
     return (
       <>
         {unsent}
-        <Facts variant="tiles" items={[{ label: '기억을 맡은 도구', value: used.by }, { label: '기억에 담긴 메시지', value: `${used.covered}개` }, cut]} />
+        <Facts variant="tiles" items={[{ label: '기억을 맡은 플러그인', value: used.by }, { label: '기억에 담긴 메시지', value: `${used.covered}개` }, cut]} />
         {used.slot && used.text.trim() && (
           <Section level={3} title="보낸 기억">
             <CodeBlock variant="prose">{used.text}</CodeBlock>

@@ -4,7 +4,7 @@ import type { OutlineKind } from '../ui';
 import { FEATURE_NAMES, ILLUSTRATE_NOTE, inFeature, TOOL, TRANSLATOR_NOTE } from './words';
 
 export const SLOT = {
-  tool: { name: TOOL, hint: '도구가 보탠 내용', line: '켜 둔 도구가 이번 대화에 덧붙인 내용이 들어가요.', kind: 'note', icon: NotebookPen },
+  tool: { name: TOOL, hint: `${TOOL}이 보탠 내용`, line: `켜 둔 ${TOOL}이 이번 대화에 덧붙인 내용이 들어가요.`, kind: 'note', icon: NotebookPen },
   description: { name: '캐릭터 설명', hint: '카드의 설명 · 성격 · 상황 · 예시 대화', line: '캐릭터 카드의 설명과 성격, 시나리오, 예시 대화가 여기에 들어가요.', kind: 'char', icon: IdCard },
   persona: { name: '페르소나', hint: '이 채팅에서 쓰는 페르소나의 설명', line: '이 채팅에서 쓰는 페르소나 설명이 여기에 들어가요.', kind: 'char', icon: UserRound },
   lorebook: {

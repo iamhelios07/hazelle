@@ -6,7 +6,7 @@ import { ToolSetting } from '../common/ToolSetting';
 import { opensPage } from '../common/ToolView';
 import type { Write } from '../common/saveQueue';
 import { useAutosave } from '../common/useAutosave';
-import { MEMORY_CLAIM_HELP, MODULE_MODELS, MODULE_MODELS_HELP, NETWORK, NETWORK_CALLED, NETWORK_HELP, TOOL, toolVersion } from '../common/words';
+import { MEMORY_CLAIM_HELP, MODULE_MODELS, moduleModelsHelp, NETWORK, NETWORK_CALLED, NETWORK_HELP, TOOL, toolVersion } from '../common/words';
 import { useSession, useTool, useToolHosts } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Disclosure, Facts, Section, SettingGroup, SettingRow, Stack, Switch } from '../ui';
@@ -20,7 +20,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
     <FlagRow
       saveKey={`module-models:${module.id}`}
       label={MODULE_MODELS}
-      help={MODULE_MODELS_HELP}
+      help={moduleModelsHelp(stored ? TOOL : '모듈')}
       stored={module.value.botModels === true}
       write={(on) => setModels(store, { kind: 'module', id: module.id }, on)}
     />
@@ -32,7 +32,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
   return (
     <Section
       title={TOOL}
-      action={opensPage(manifest) && <Button variant="secondary" icon={ExternalLink} onClick={() => navigate({ kind: 'tool-page', module: module.id })}>열기</Button>}
+      action={opensPage(manifest) && <Button variant="secondary" icon={ExternalLink} onClick={() => navigate({ kind: 'plugin-page', id: module.id })}>열기</Button>}
     >
       <Stack gap="group">
         <Facts items={[{ label: '버전', value: toolVersion(manifest.version) }, { label: '제작자', value: manifest.author }]} />

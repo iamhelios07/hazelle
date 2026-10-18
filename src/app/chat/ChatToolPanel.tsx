@@ -8,6 +8,6 @@ export function ChatToolPanel({ chat, module, onClose }: { chat: string; module:
   const tool = useTool(module);
   const title = moduleName(stored?.value.name ?? '');
   return <SidePanel title={title} expandable fill onClose={onClose}>
-    {tool && opensPage(tool.value.manifest) ? <ToolView module={module} chat={chat} title={title} onClose={onClose} /> : <Empty variant="section">도구를 열 수 없어요.</Empty>}
+    {tool && opensPage(tool.value.manifest) ? <ToolView module={module} chat={chat} title={title} onClose={onClose} /> : <Empty variant="section">플러그인을 열 수 없어요.</Empty>}
   </SidePanel>;
 }

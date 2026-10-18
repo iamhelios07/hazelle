@@ -55,9 +55,9 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
   });
 
   await test.step('import the port as a module and make its chunks small', async () => {
-    await page.goto('/modules');
-    const report = await importFile(page, '모듈 가져오기', HYPAPLUS);
-    await report.getByRole('button', { name: '모듈 보기', exact: true }).click();
+    await page.goto('/plugins');
+    const report = await importFile(page, '플러그인 가져오기', HYPAPLUS);
+    await report.getByRole('button', { name: '플러그인 보기', exact: true }).click();
     await expect(page.getByRole('switch', { name: '항상 켜기', exact: true })).toBeChecked();
     await expect(page.getByRole('switch', { name: '장기 기억 맡기기', exact: true })).not.toBeChecked();
     const settings = [['청크 크기', '2'], ['자동 요약 기준', '3'], ['최근 노드 수', '1']] as const;
@@ -75,10 +75,10 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
     const report = await importFile(page, pickBot, CARD);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     await send('We climb the stairs.');
-    await expect(page.getByText('이 모듈이 장기 기억을 대신 관리하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 장기 기억을 대신 관리하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await send('The lamp is cold.');
-    await expect(page.getByText('이 모듈이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect.poll(() => embedded.length).toBe(1);
     expect(summaries()).toHaveLength(1);
@@ -126,7 +126,7 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
   });
 
   await test.step('turn the port off so later specs in this account keep the built-in memory', async () => {
-    await page.goto('/modules');
+    await page.goto('/plugins');
     await page.getByRole('button', { name: /HypaPlus/ }).click();
     const saved = saving(page);
     await page.getByRole('switch', { name: '항상 켜기', exact: true }).click();

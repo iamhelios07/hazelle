@@ -150,6 +150,15 @@ export function useModules() {
   const all = useKind('module');
   return useMemo(() => modulesOf(store), [store, all]);
 }
+// A plugin is a module that holds a tool. 설정 lists the two on pages of their own; everything else treats both as modules.
+export function useModulesAndPlugins() {
+  const modules = useModules();
+  const tools = useTools();
+  return useMemo(() => {
+    const holders = new Set(tools.map(({ parent }) => parent));
+    return { modules: modules.filter(({ id }) => !holders.has(id)), plugins: modules.filter(({ id }) => holders.has(id)) };
+  }, [modules, tools]);
+}
 export function useBin() {
   const modules = useKind('module');
   const prompts = useKind('prompt');

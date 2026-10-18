@@ -1,4 +1,4 @@
-import { ANSWER_INSTRUCTION_LABEL, DEFAULT_MODELS, FEATURE_NAMES, FEATURES_TITLE, LORE_BUDGET_LABEL, MODEL_ROLES, MODEL_SETTINGS, RETRY_COUNT, SCRIPTS, TRANSLATOR_NOTE } from '../../common/words';
+import { ANSWER_INSTRUCTION_LABEL, DEFAULT_MODELS, FEATURE_NAMES, FEATURES_TITLE, LORE_BUDGET_LABEL, MODEL_ROLES, MODEL_SETTINGS, NETWORK, RETRY_COUNT, SCRIPTS, TRANSLATOR_NOTE } from '../../common/words';
 import { LABS } from '../../common/labs';
 import { FEATURES, type Feature } from '../../../model/features';
 import type { Route, SettingsPage } from '../routes';
@@ -14,6 +14,7 @@ export const TERMS: Record<SettingsPage, string[]> = {
   prompts: ['기본 프롬프트', 'Risu 프리셋 가져오기', '새 프롬프트'],
   personas: ['새 페르소나', '삽화 프로필'],
   modules: ['모듈 가져오기', '로어북', SCRIPTS.regex, SCRIPTS.triggers, '토글'],
+  plugins: ['플러그인 가져오기', NETWORK],
   display: ['색', '테마', '이미지 가리기', '글꼴', '글자 크기', '줄 간격', '읽기 폭', '자동 스크롤', '헤더 숨기기', '입력창 접기', '프리셋'],
   account: ['저장 공간', '사용량', '잠그기', '로그아웃', '백업', '이전 시점으로 복원', '공유한 링크', '운영자가 보낸 알림', '운영자에게 알리기', '새 소식', '앱 정보', '버전', '탈퇴'],
   admin: ['가입 정원', '계정당 텍스트 한도', '계정당 이미지 한도', '기록', '신고'],

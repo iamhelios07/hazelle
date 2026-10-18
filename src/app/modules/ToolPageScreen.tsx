@@ -11,7 +11,7 @@ export function ToolPageScreen({ stored, back }: { stored: Stored<'module'>; bac
   const title = moduleName(stored.value.name);
   return (
     <Screen width="wide" fill top={<NavBar title={title} {...backBar(back)} />}>
-      {tool && opensPage(tool.value.manifest) ? <ToolView module={stored.id} chat={null} title={title} onClose={() => navigate(back.to)} /> : <Empty variant="section">이 모듈에는 도구 페이지가 없어요.</Empty>}
+      {tool && opensPage(tool.value.manifest) ? <ToolView module={stored.id} chat={null} title={title} onClose={() => navigate(back.to)} /> : <Empty variant="section">이 플러그인에는 페이지가 없어요.</Empty>}
     </Screen>
   );
 }
