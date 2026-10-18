@@ -8,6 +8,16 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.25',
+    date: '2026-10-19',
+    lines: [
+      '설정에 플러그인 페이지가 생겼어요. 플러그인은 설정 › 플러그인에서 따로 보고 설정할 수 있어요.',
+      '설정 › 모듈은 항상 · 프롬프트 · 캐릭터 · 페르소나 · 안 쓰는 모듈로 나눠 보여요.',
+      '응답이 나오는 동안 앞 문단의 이미지와 애니메이션이 계속 처음부터 다시 그려지던 문제를 고쳤어요.',
+      '앞선 실행이 끝나기 전에 봇 버튼을 누르면 기다리는 중이라고 알려 줘요. 같은 버튼을 여러 번 눌러도 한 번만 처리해요.',
+    ],
+  },
+  {
     version: 'v0.2.24',
     date: '2026-10-18',
     lines: [
