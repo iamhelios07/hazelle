@@ -1,5 +1,5 @@
 import { CONNECTION_TYPES } from '../../connectors/registry';
-import { DIRECT_TYPE, PULSE_ROLES, type PulseRanking, type PulseRole } from '../../contracts/pulse';
+import { DIRECT_TYPE, PULSE_ROLES, type PulseOrder, type PulsePlace, type PulseRanking, type PulseRole } from '../../contracts/pulse';
 import { count } from '../common/typedNumber';
 import type { Ranked } from '../ui';
 import { DIRECT_CONNECTION, ROLE_TAGS } from '../common/words';
@@ -17,9 +17,11 @@ const KST = 'Asia/Seoul';
 const startFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, month: 'long', day: 'numeric', weekday: 'short', hour: 'numeric' });
 const hourFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, hour: 'numeric' });
 const clockFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, hour: 'numeric', minute: '2-digit' });
+const dayFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, month: 'long', day: 'numeric' });
 export const startsText = (at: number) => startFormat.format(at);
 export const hourText = (at: number) => hourFormat.format(at);
 export const clockText = (at: number) => clockFormat.format(at);
+export const weekText = (from: number) => `${dayFormat.format(from)} 주`;
 
 export const hourDetail = (calls: Record<PulseRole, number>) =>
   PULSE_ROLES.filter((role) => role === 'chat' || calls[role] > 0)
@@ -28,23 +30,51 @@ export const hourDetail = (calls: Record<PulseRole, number>) =>
 
 export const percent = (share: number) => (share > 0 && share < 0.005 ? '1% 미만' : `${Math.round(share * 100)}%`);
 
+const OTHERS = '기타';
+
+// The one identity of a row across periods (contracts/pulse.ts): its key and type, never its model's spelling.
+const rowId = (place: PulsePlace) => `${place.key}\0${place.type ?? ''}`;
+
 // The server ranks 기타 by its count among the models; here it holds no place and goes last, so a pool never takes a medal.
-// A split row whose provider this build cannot name is left out, and places run without gaps.
-export function rankRows(ranking: PulseRanking, split: boolean): Ranked[] {
+// A split row whose provider this build cannot name is left out, and places run without gaps. The earlier order goes
+// through this too, so a mark compares places counted the same way.
+function placeRows<T extends PulsePlace>(order: { merged: T[]; split: T[] }, split: boolean): { row: T; provider: string | null; rank: number | null }[] {
   const shown = split
-    ? ranking.split.flatMap((row) => {
+    ? order.split.flatMap((row) => {
         const provider = row.type === undefined ? null : providerName(row.type);
         return provider === null ? [] : [{ row, provider }];
       })
-    : ranking.merged.map((row) => ({ row, provider: null }));
-  const rows = [...shown.filter(({ row }) => row.model !== null), ...shown.filter(({ row }) => row.model === null)];
+    : order.merged.map((row) => ({ row, provider: null }));
+  const named = shown.filter(({ row }) => row.key !== '');
+  return [...named.map((each, index) => ({ ...each, rank: index + 1 })), ...shown.filter(({ row }) => row.key === '').map((each) => ({ ...each, rank: null }))];
+}
+
+function moveOf(rank: number, was: number | undefined): Ranked['move'] {
+  if (was === undefined) return { tone: 'new', text: 'NEW', label: '새로 올랐어요' };
+  if (was > rank) return { tone: 'up', text: `▲${was - rank}`, label: `${was - rank}계단 올랐어요` };
+  if (was < rank) return { tone: 'down', text: `▼${rank - was}`, label: `${rank - was}계단 내려갔어요` };
+  return undefined;
+}
+
+const OTHERS_HELP = `이름을 확인할 수 없는 모델은 ${OTHERS}로 묶어 보여 줘요. 제공자의 models.dev 목록에 없는 모델과 ${DIRECT_CONNECTION}로 쓴 모델이에요. 개인 모델 이름이 드러나지 않게 하려고요.`;
+
+// before: null where the earlier period was not counted whole, which marks no row at all. earlier: a past week's
+// ranking, whose people are that week's.
+export function rankRows(ranking: PulseRanking, before: PulseOrder | null, split: boolean, earlier: boolean): Ranked[] {
+  const rows = placeRows(ranking, split);
+  const was = before && new Map(placeRows(before, split).flatMap(({ row, rank }) => (rank === null ? [] : [[rowId(row), rank] as const])));
   const largest = Math.max(0, ...rows.map(({ row }) => row.share));
-  return rows.map(({ row, provider }, index) => ({
-    key: `${row.key}\0${row.type ?? ''}`,
-    rank: row.model === null ? null : index + 1,
-    name: row.model ?? '기타',
-    detail: [provider, row.replies === undefined ? null : `응답 ${count(row.replies)}번`, `이번 주 ${count(row.people)}명`].filter(Boolean).join(' · '),
-    value: percent(row.share),
-    share: largest ? row.share / largest : 0,
-  }));
+  return rows.map(({ row, provider, rank }) => {
+    const move = was && rank !== null ? moveOf(rank, was.get(rowId(row))) : undefined;
+    return {
+      key: rowId(row),
+      rank,
+      name: row.model ?? OTHERS,
+      detail: [provider, row.replies === undefined ? null : `응답 ${count(row.replies)}번`, `${earlier ? '' : '이번 주 '}${count(row.people)}명`].filter(Boolean).join(' · '),
+      value: percent(row.share),
+      share: largest ? row.share / largest : 0,
+      ...(move && { move }),
+      ...(rank === null && { help: OTHERS_HELP }),
+    };
+  });
 }

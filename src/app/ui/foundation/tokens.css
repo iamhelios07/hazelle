@@ -147,6 +147,10 @@
   --color-rank-3: var(--palette-bronze-400);
   --color-on-rank: var(--palette-ink-900);
   --color-rank-1-text: var(--palette-gold-400);
+  /* A rank change mark reads as Korean charts do: a climb red, a fall blue. */
+  --color-rank-up: var(--palette-coral-400);
+  --color-rank-down: var(--palette-sky-400);
+  --color-rank-new: var(--palette-mint-400);
   --color-focus: var(--color-accent);
   --color-scrim: var(--palette-scrim);
   --color-you-bg: var(--palette-mint-800);
@@ -537,6 +541,9 @@
   --color-success: var(--palette-mint-700);
   --color-rank-2: var(--palette-paper-500);
   --color-rank-1-text: var(--palette-gold-700);
+  --color-rank-up: var(--palette-coral-700);
+  --color-rank-down: var(--palette-sky-700);
+  --color-rank-new: var(--palette-mint-700);
   --color-scrim: var(--palette-scrim-soft);
   --color-you-bg: var(--palette-mint-150);
   --color-you-text: var(--palette-mint-900);
