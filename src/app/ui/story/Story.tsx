@@ -110,17 +110,54 @@ export const cleanCss = (css: string, veiled: boolean) => css.replaceAll('.x-ris
 // screen shrank to a sliver in an otherwise empty message. It stands where it is written instead, and its offsets and
 // transform go with fixed, since they placed it on the screen (top: 50% with translate(-50%, -50%) to centre it).
 const SCREEN_PLACEMENT = ['top', 'right', 'bottom', 'left', 'inset', 'transform', 'translate'];
-function ground(style: CSSStyleDeclaration) {
-  if (style.getPropertyValue('position').trim() !== 'fixed') return;
-  style.setProperty('position', 'relative');
-  for (const property of SCREEN_PLACEMENT) style.removeProperty(property);
+// The screen's whole width or height: a backdrop over Risu's page would stand as a screen-sized block in the message.
+const SCREEN_SIZE = ['width', 'height'];
+// A drawer Risu kept off the screen by its own extent (right: -33% beside width: 33%) until a rule set that offset back
+// (.panel[class*="opened"] { right: 0 }). Grounded with its offsets gone it would stand open in the message, so it is
+// hidden and that rule shows it. A box only partly off the screen (a tab peeking out at right: -23px) stays shown.
+const EXTENT = { top: 'height', right: 'width', bottom: 'height', left: 'width' } as const;
+type Side = keyof typeof EXTENT;
+const LENGTH = /^(-?\d*\.?\d+)([a-z%]*)$/;
+type Declarations = Pick<CSSStyleDeclaration, 'getPropertyValue' | 'setProperty' | 'removeProperty'>;
+type StyleRule = { selectorText: string; style: Declarations };
+
+function parkedSide(style: Declarations): Side | null {
+  for (const side of Object.keys(EXTENT) as Side[]) {
+    const offset = LENGTH.exec(style.getPropertyValue(side).trim());
+    if (!offset || Number(offset[1]) >= 0) continue;
+    const away = -Number(offset[1]);
+    const extent = LENGTH.exec(style.getPropertyValue(EXTENT[side]).trim());
+    if ((away >= 100 && ['%', 'vw', 'vh'].includes(offset[2]!)) || (extent && extent[2] === offset[2] && away >= Number(extent[1]))) return side;
+  }
+  return null;
 }
 
-function groundRules(rules: CSSRuleList) {
-  for (const rule of rules) {
-    if (rule instanceof CSSStyleRule) ground(rule.style);
-    if ('cssRules' in rule) groundRules((rule as CSSGroupingRule).cssRules);
+const lastCompounds = ({ selectorText }: StyleRule) => selectorText.split(',').map((selector) => /[^\s>+~]+$/.exec(selector.trim())?.[0] ?? '');
+const styleRules = (rules: Iterable<object>): StyleRule[] =>
+  [...rules].flatMap((rule) => [...('selectorText' in rule && 'style' in rule ? [rule as StyleRule] : []), ...('cssRules' in rule ? styleRules(rule.cssRules as Iterable<object>) : [])]);
+
+// Every value is read before any is changed: a rule that slides a drawer in may itself be fixed, and lose its offset.
+export function groundRules(rules: Iterable<object>) {
+  const all = styleRules(rules);
+  const fixed = all.filter(({ style }) => style.getPropertyValue('position').trim() === 'fixed');
+  const parked = fixed.flatMap((rule) => {
+    const side = parkedSide(rule.style);
+    return side ? [{ rule, side, compounds: lastCompounds(rule).filter(Boolean), display: rule.style.getPropertyValue('display') || 'block' }] : [];
+  });
+  const shown = all.flatMap((rule) => {
+    const drawer = parked.find(({ rule: own, side, compounds }) => {
+      const offset = LENGTH.exec(rule.style.getPropertyValue(side).trim());
+      return own !== rule && offset && Number(offset[1]) >= 0 && lastCompounds(rule).some((compound) => compounds.some((name) => compound.startsWith(name) && /^(?:$|[[.:#])/.test(compound.slice(name.length))));
+    });
+    return drawer ? [{ rule, display: drawer.display }] : [];
+  });
+  for (const { style } of fixed) {
+    style.setProperty('position', 'relative');
+    for (const property of SCREEN_PLACEMENT) style.removeProperty(property);
+    for (const property of SCREEN_SIZE) if (/^100v[wh]$/.test(style.getPropertyValue(property).trim())) style.removeProperty(property);
   }
+  for (const { rule } of parked) rule.style.setProperty('display', 'none');
+  for (const { rule, display } of shown) rule.style.setProperty('display', display);
 }
 
 let base: CSSStyleSheet | null = null;
@@ -184,7 +221,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
   const fragment = DOMPurify.sanitize(setStylesAside(html), CONFIG);
   for (const element of fragment.querySelectorAll<HTMLElement | SVGElement>(`[${SET_ASIDE}]`)) {
     element.style.cssText = cleanCss(element.getAttribute(SET_ASIDE)!, veil !== null);
-    ground(element.style);
+    groundRules([{ selectorText: '', style: element.style }]);
     element.removeAttribute(SET_ASIDE);
   }
   for (const element of fragment.querySelectorAll('[class]')) element.setAttribute('class', element.getAttribute('class')!.replace(/(^|\s)x-risu-/g, '$1'));

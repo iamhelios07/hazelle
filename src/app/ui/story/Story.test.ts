@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { cleanCss, setStylesAside } from './Story';
+import { cleanCss, groundRules, setStylesAside } from './Story';
 import shadowCss from './Story.shadow.css?raw';
 
 it("keeps the rule after an @import whose font URL holds a ;", () => {
@@ -32,4 +32,19 @@ it("lets any rule of the bot's beat the story's own looks", () => {
   const unlayered = shadowCss.slice(0, open) + shadowCss.slice(close + 1);
   expect(shadowCss.slice(open, close)).toContain('mark[risu-mark]');
   expect(unlayered).not.toMatch(/\bem\b|mark\[|margin|\[data-picture\] > img/);
+});
+
+it('hides a drawer parked off the screen by its own width until the rule that slides it in, drops its screen height, and leaves a peeking tab shown', () => {
+  const rule = (selectorText: string, declarations: Record<string, string>) => {
+    const values = new Map(Object.entries(declarations));
+    const style = { getPropertyValue: (name: string) => values.get(name) ?? '', setProperty: (name: string, value: string) => void values.set(name, value), removeProperty: (name: string) => (values.delete(name), '') };
+    return { selectorText, style, values };
+  };
+  const panel = rule('.settings-panel', { position: 'fixed', top: '0', width: '33%', height: '100vh', right: '-33%' });
+  const opened = rule('.settings-panel[class*="opened"]', { right: '0' });
+  const tab = rule('.tab', { position: 'fixed', top: '64%', right: '-23px' });
+  groundRules([panel, { cssRules: [opened] }, tab]);
+  expect(Object.fromEntries(panel.values)).toEqual({ position: 'relative', width: '33%', display: 'none' });
+  expect(Object.fromEntries(opened.values)).toEqual({ right: '0', display: 'block' });
+  expect(Object.fromEntries(tab.values)).toEqual({ position: 'relative' });
 });
