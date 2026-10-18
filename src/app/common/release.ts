@@ -8,6 +8,14 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.23',
+    date: '2026-10-18',
+    lines: [
+      '헤이젤 나우를 열었어요. 헤이젤을 쓰는 사람들이 요즘 어떤 모델을 많이 쓰는지 순위로 볼 수 있어요. 로그인 화면 아래나 설정 › 계정 › 앱 정보에서 들어갈 수 있어요.',
+      '집계는 10월 19일부터 시작해요. 대화 내용은 보내지 않고, 원하지 않으면 설정 › 계정 › 앱 정보 › 헤이젤 나우 집계 참여에서 끌 수 있어요.',
+    ],
+  },
+  {
     version: 'v0.2.22',
     date: '2026-10-18',
     lines: [
