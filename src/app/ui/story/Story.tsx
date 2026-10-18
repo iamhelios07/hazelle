@@ -383,11 +383,47 @@ export function storySelection(story: HTMLElement): { pieces: string[]; end: Sel
   return { pieces: [text(range.startContainer, range.startOffset, first, first.childNodes.length), text(last, 0, range.endContainer, range.endOffset)], end };
 }
 
-// Set over any the bot's HTML wrote. A picture already loaded is measured before the frame is drawn.
+// A picture removed before it loaded has no line left to mark.
+const mark = (picture: HTMLImageElement) => picture.parentElement?.toggleAttribute(WIDE, picture.naturalWidth > picture.naturalHeight);
+const markLoaded = (event: Event) => mark(event.target as HTMLImageElement);
+
+// Set over any the bot's HTML wrote. A picture already loaded is measured before the frame is drawn. One shared
+// listener, since a kept picture is marked again on every draw and the same listener added twice is added once.
 function markWide(picture: HTMLImageElement) {
-  const mark = () => picture.parentElement!.toggleAttribute(WIDE, picture.naturalWidth > picture.naturalHeight);
-  if (picture.complete) mark();
-  else picture.addEventListener('load', mark, { once: true });
+  if (picture.complete) mark(picture);
+  else picture.addEventListener('load', markLoaded, { once: true });
+}
+
+// Brings live to want's shape in place, keeping every node both hold, so a picture, video or animation drawn before a
+// streamed chunk goes on through it. By position, since a reply grows at its end. want's new nodes are moved, not copied.
+function morph(live: ParentNode, want: ParentNode) {
+  let at = live.firstChild;
+  for (const node of [...want.childNodes]) {
+    if (!at) {
+      live.append(node);
+      continue;
+    }
+    const next = at.nextSibling;
+    if (!at.isEqualNode(node)) fit(at, node);
+    at = next;
+  }
+  while (at) {
+    const next = at.nextSibling;
+    at.remove();
+    at = next;
+  }
+}
+
+function fit(at: ChildNode, node: ChildNode) {
+  if (at instanceof Element && node instanceof Element && at.namespaceURI === node.namespaceURI && at.localName === node.localName) {
+    for (const { namespaceURI, localName } of [...at.attributes]) if (!node.hasAttributeNS(namespaceURI, localName)) at.removeAttributeNS(namespaceURI, localName);
+    for (const { namespaceURI, localName, name, value } of node.attributes) if (at.getAttributeNS(namespaceURI, localName) !== value) at.setAttributeNS(namespaceURI, name, value);
+    morph(at, node);
+  } else if (at instanceof CharacterData && at.nodeType === node.nodeType) {
+    at.data = (node as CharacterData).data;
+  } else {
+    at.replaceWith(node);
+  }
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
@@ -412,11 +448,11 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     }
     // After the cursor, which would otherwise go into the slot.
     for (const [index, mark] of marks.entries()) placeInlay(fragment, mark, inlayName(index));
-    root().replaceChildren(fragment);
+    morph(root(), fragment);
     for (const picture of root().querySelectorAll<HTMLImageElement>(`[${PICTURE}] > img`)) markWide(picture);
   }, [html, cursor, pictures, veil, veilTaps, whole, placed, math]);
 
-  // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
+  // After the text is drawn, so the ranges lie over the nodes it now holds. Without the API, nothing is lit.
   useEffect(() => {
     if (!term || !('highlights' in CSS)) return;
     if (!foundTerm) CSS.highlights.set(FOUND_TERM, (foundTerm = new Highlight()));
