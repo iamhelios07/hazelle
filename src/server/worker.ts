@@ -31,16 +31,16 @@ app.use(async (c, next) => {
   }
 });
 
-// 헤이젤 지금 counts only labelled requests: one a signed-in account sent and was answered marks it active this week; a
-// call counts where its provider answered (calls.ts, streams.ts). The account is the one requireSession or the session
-// read (accounts.ts) set.
+// 헤이젤 지금 counts only labelled requests. One a signed-in account sent marks it active this week whatever the route
+// answered, since the page's one seen mark may ride a pick-up that finds its stream gone; a call counts where its
+// provider answered (calls.ts, streams.ts). The account is the one requireSession or the session read (accounts.ts) set.
 app.use(async (c, next) => {
   const label = readPulseHeader(c.req.header(PULSE_HEADER));
   if (!label) return next();
   c.set('label', label);
   await next();
   const account: Account | undefined = c.get('account');
-  if (account && c.res.ok) c.executionCtx.waitUntil(c.env.pulse.seen(account.id));
+  if (account) c.executionCtx.waitUntil(c.env.pulse.seen(account.id));
 });
 
 // Hono's own handler would answer a route's exception with plain text, which the browser cannot tell from a page the
