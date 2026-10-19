@@ -20,17 +20,20 @@ const LUA = StreamLanguage.define(lua);
 const MARK: Record<NonNullable<Piece['mark']>, string> = { tag: styles.tag!, separator: styles.separator!, argument: styles.argument!, comment: styles.comment!, slot: styles.slot!, angle: styles.angle! };
 const LINE = { body: null, heading: styles.heading!, rule: styles.rule! };
 
+const DECORATIONS = new Map<string, Decoration>();
+const decoration = (name: string) => DECORATIONS.get(name) ?? DECORATIONS.set(name, Decoration.mark({ class: name })).get(name)!;
+
 // Prose also shows its headings, rules and <angle> tags, as MarkupArea does inline.
 function spanned(read: (text: string) => CodeSpan[], prose: boolean) {
   const marks = (view: EditorView) => {
     const text = view.state.doc.toString();
     const spans = read(text);
-    if (!prose) return Decoration.set(spans.map(({ from, to, kind }) => Decoration.mark({ class: MARK[kind] }).range(from, to)));
+    if (!prose) return Decoration.set(spans.map(({ from, to, kind }) => decoration(MARK[kind]).range(from, to)));
     const ranges = [];
     let at = 0;
     for (const piece of markup(text, spans)) {
       const name = [LINE[piece.line], piece.mark && MARK[piece.mark]].filter(Boolean).join(' ');
-      if (name) ranges.push(Decoration.mark({ class: name }).range(at, at + piece.text.length));
+      if (name) ranges.push(decoration(name).range(at, at + piece.text.length));
       at += piece.text.length;
     }
     return Decoration.set(ranges);
@@ -91,7 +94,7 @@ function languageExtensions(language: CodeLanguage, label: string, prose: boolea
     const place = /string/.test(node) ? 'string' : /comment/.test(node) ? 'comment' : 'code';
     const found = language.complete(context.state.doc.toString(), context.pos, place, context.explicit);
     if (!found) return null;
-    const options = found.items.map(({ label: name, kind, detail, template, closing, boost, doc }): Completion => ({ label: name, type: kind, detail, boost, ...(template !== undefined && { apply: applyTemplate(template, closing) }), ...(doc && { info: () => docNode(doc) }) }));
+    const options = found.items.map(({ label: name, kind, detail, template, boost, doc }): Completion => ({ label: name, type: kind, detail, boost, ...(template !== undefined && { apply: applyTemplate(template, found.closing) }), ...(doc && { info: () => docNode(doc) }) }));
     return { from: found.from, options, validFor: found.validFor };
   };
   const lint = async (view: EditorView): Promise<Diagnostic[]> =>

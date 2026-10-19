@@ -1,4 +1,4 @@
-import { editDistance } from './edit-distance';
+import { nearest } from './edit-distance';
 
 // A bot's own picture or video (design §6.4). module: the namespace of the module it came with, null for a module that has none;
 // absent for the character's own.
@@ -42,12 +42,5 @@ export function findAsset<A extends { name: string }>(assets: readonly A[], name
   const wanted = name.toLowerCase();
   const same = assets.filter((asset) => asset.name.toLowerCase() === wanted);
   if (same.length) return same[Math.floor(random() * same.length)]!;
-  const target = bare(wanted);
-  let nearest: A | null = null;
-  let best = NEAR + 1;
-  for (const asset of assets) {
-    const distance = editDistance(target, bare(asset.name.toLowerCase()));
-    if (distance < best) [nearest, best] = [asset, distance];
-  }
-  return nearest;
+  return nearest(bare(wanted), assets, (asset) => bare(asset.name.toLowerCase()), NEAR);
 }

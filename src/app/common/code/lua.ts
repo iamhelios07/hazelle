@@ -1,8 +1,8 @@
 import type { SyntaxProblem } from '../../../engine/lua/run';
+import { nearest } from '../../../engine/edit-distance';
 import type { CodeCompletion, CodeDoc, CodeItem, CodeLanguage, CodeProblem } from '../../ui';
 import { withParticle } from '../particles';
 import { LUA_API, LUA_EVENTS, LUA_INTERNAL, LUA_UNSUPPORTED, type LuaFunction } from './luaApi';
-import { nearest } from './nearest';
 import { variableDoc, variableItems, type Defaults } from './variables';
 
 const KEYWORDS = new Set(['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while']);
@@ -94,7 +94,7 @@ function lint(text: string): CodeProblem[] {
       continue;
     }
     if (KNOWN.has(name)) continue;
-    const near = nearest(name, API.keys(), (known) => known.toLowerCase());
+    const near = nearest(name.toLowerCase(), API.keys(), (known) => known.toLowerCase(), 2);
     if (near) problems.push({ from, to: from + name.length, severity: 'warning', message: `${near}의 오타 같아요.`, fix: { label: `${withParticle(near, '으로/로')} 바꾸기`, insert: near } });
   }
   return problems;

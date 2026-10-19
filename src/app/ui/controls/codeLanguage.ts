@@ -5,11 +5,12 @@ export type CodeDoc = { form: string; text: string; facts?: [string, string][] }
 export type CodeProblem = { from: number; to: number; severity: 'error' | 'warning'; message: string; fix?: { label: string; insert: string } };
 
 // template: what accepting it inserts, its stops written ${1:이름} and the caret's last place ${0}; a line's leading
-// tabs become the editor's indent. closing: the end the template writes itself, which it replaces when it already
-// follows the caret (the `}}` that closing brackets typed after `{{`).
-export type CodeItem = { label: string; kind: 'function' | 'keyword' | 'variable' | 'namespace'; detail?: string; template?: string; closing?: string; boost?: number; doc?: CodeDoc };
+// tabs become the editor's indent.
+export type CodeItem = { label: string; kind: 'function' | 'keyword' | 'variable' | 'namespace'; detail?: string; template?: string; boost?: number; doc?: CodeDoc };
 
-export type CodeCompletion = { from: number; items: CodeItem[]; validFor: RegExp };
+// closing: the end its templates write themselves, which one replaces when it already follows the caret (the `}}` that
+// closing brackets typed after `{{`).
+export type CodeCompletion = { from: number; items: CodeItem[]; validFor: RegExp; closing?: string };
 
 // A language that reads its own text marks it in spans, which never overlap: text with tags in it, where a tag is its
 // braces and name, separators between its arguments, and its arguments.

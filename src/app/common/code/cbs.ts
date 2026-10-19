@@ -1,15 +1,15 @@
-import { blockHead, conditionSteps, isBlockName, isProse, isRawBlock, separatorOf, whenArgs } from '../../../engine/cbs/evaluate';
+import { blockHead, blockNames, conditionSteps, isBlockName, isProse, isRawBlock, separatorOf, whenArgs } from '../../../engine/cbs/evaluate';
 import { parse, type Block, type Legacy, type Node, type Tag } from '../../../engine/cbs/parse';
 import { handlerFor, isUnsupportedTag, normalize } from '../../../engine/cbs/tags';
+import { nearest } from '../../../engine/edit-distance';
 import type { CodeCompletion, CodeDoc, CodeItem, CodeLanguage, CodeProblem, CodeSpan } from '../../ui';
 import { particleOf, withParticle } from '../particles';
 import { COMMANDS, type Command } from './cbsCommands';
-import { nearest } from './nearest';
 import { variableDoc, variableItems, type Defaults } from './variables';
 
 // Text one field puts in before CBS runs: a card's instructions take {{original}} (pipeline.ts), a regex's
 // replacement {{data}} (regex/scripts.ts). Both replace only the exact spelling.
-export type CbsPlaceholder = 'original' | 'data';
+type CbsPlaceholder = 'original' | 'data';
 const PLACEHOLDERS: Record<CbsPlaceholder, string> = {
   original: '이 칸이 대신하는 프롬프트 텍스트가 그 자리에 들어가요.',
   data: '패턴이 찾은 텍스트 전체가 그 자리에 들어가요.',
@@ -20,10 +20,16 @@ const ENTRIES = COMMANDS.flatMap((group) => group.commands.map((command) => ({ c
 // By normalized name; a block by its head, `#when`.
 const BY_NAME = new Map<string, Command>();
 for (const { command, head } of ENTRIES) for (const name of command.names.length ? command.names : [head]) BY_NAME.set(head.startsWith('#') ? head : normalize(name), command);
-const BLOCK_HEADS = ENTRIES.filter(({ head }) => head.startsWith('#')).map(({ head }) => head.slice(1));
-const NAMES = ENTRIES.flatMap(({ command, head }) => (command.names.length ? command.names : head.startsWith('#') ? [] : [head]));
+// The evaluator reads `{{? 1+1}}` as calc.
+BY_NAME.set('?', BY_NAME.get('calc')!);
+const known = (name: string) => handlerFor(name) !== undefined || BY_NAME.has(normalize(name));
+// The names a typo is matched against, as written and as compared.
+const pool = (names: string[]) => names.map((name) => ({ name, key: normalize(name) }));
+const TAG_POOL = pool(ENTRIES.flatMap(({ command, head }) => (command.names.length ? command.names : head.startsWith('#') ? [] : [head])));
+const BLOCK_POOL = pool(blockNames());
 const WRITERS = new Set(['setvar', 'addvar', 'setdefaultvar']);
 const VARIABLE_TAGS = new Set(['getvar', ...WRITERS]);
+const VARIABLE_SLOT = new RegExp(`\\{\\{\\s*(?:${[...VARIABLE_TAGS].join('|')})::([^:{}]*)$`, 'i');
 
 // A form's words become tab stops: `{{getvar::이름}}` → `getvar::${1:이름}}}${0}`, written after the `{{` typed.
 export function formTemplate(form: string) {
@@ -51,7 +57,22 @@ function commandDoc(command: Command): CodeDoc {
 type Found = { from: number; to: number; name: string | null; nameAt: number; value: { from: number; to: number } | null };
 type Reading = { spans: CodeSpan[]; problems: CodeProblem[]; tags: Found[] };
 
-function read(text: string, known: (name: string) => boolean, placeholder: CbsPlaceholder | undefined): Reading {
+// The text of a tag with no tag inside it.
+const plain = (node: Tag) => (node.parts.length === 1 && typeof node.parts[0] === 'string' ? node.parts[0] : null);
+
+// Where a tag's name ends in its leading text, rest being that text past its spaces; -1 when a tag inside it makes the name.
+function nameLength(lead: string, rest: string, whole: boolean) {
+  const mark = /^[#/][^\s:]*/.exec(rest);
+  if (mark) return mark[0].length;
+  if (/^:(else)?\s*$/.test(rest)) return rest.trimEnd().length;
+  // As the evaluator reads it: only at the very start.
+  if (lead.startsWith('? ')) return 1;
+  const colon = rest.indexOf(':');
+  if (colon !== -1) return colon;
+  return whole ? rest.trimEnd().length : -1;
+}
+
+function read(text: string, placeholder: CbsPlaceholder | undefined): Reading {
   const spans: CodeSpan[] = [];
   const problems: CodeProblem[] = [];
   const tags: Found[] = [];
@@ -88,13 +109,13 @@ function read(text: string, known: (name: string) => boolean, placeholder: CbsPl
     } else if (placeholder && word === placeholder) {
       const exact = `{{${placeholder}}}`;
       if (text.slice(node.at, node.end) !== exact) problem(node.at, node.end, 'warning', `${exact} 그대로 적어야 바뀌어요.`, { label: `${exact}${particleOf(placeholder, '으로/로')} 바꾸기`, insert: exact });
-    } else if (name === '?' || known(name)) return;
+    } else if (known(name)) return;
     else if (isUnsupportedTag(word)) problem(node.at, node.end, 'warning', '헤이젤에 없는 명령어라 적은 그대로 남아요.');
-    else if (!isProse(word)) unknown(name, found, NAMES);
+    else if (!isProse(word)) unknown(name, found, TAG_POOL);
   };
 
-  const unknown = (name: string, { nameAt }: Found, pool: readonly string[]) => {
-    const near = nearest(name.replace(/^#/, ''), pool, normalize);
+  const unknown = (name: string, { nameAt }: Found, names: typeof TAG_POOL) => {
+    const near = nearest(normalize(name.replace(/^#/, '')), names, ({ key }) => key, 2)?.name;
     const at = name.startsWith('#') ? nameAt + 1 : nameAt;
     const to = nameAt + name.length;
     if (near) problem(at, to, 'warning', `${near}의 오타 같아요.`, { label: `${withParticle(near, '으로/로')} 바꾸기`, insert: near });
@@ -103,10 +124,11 @@ function read(text: string, known: (name: string) => boolean, placeholder: CbsPl
 
   const blockOf = (node: Block) => {
     const head = tag(node.head);
-    const name = head?.name ? normalize(head.name.slice(1)) : null;
-    if (head?.name && name !== null) {
-      if (!isBlockName(name) && !isProse(name)) unknown(head.name, head, BLOCK_HEADS);
-      const whole = node.head.parts.every((part) => typeof part === 'string') ? node.head.parts.join('') : null;
+    const written = head?.name ? head.name.slice(1) : null;
+    const name = written === null ? null : normalize(written);
+    if (head && name !== null) {
+      if (!isBlockName(name) && !isProse(name)) unknown(head.name!, head, BLOCK_POOL);
+      const whole = plain(node.head);
       if (name === 'when' && whole !== null) {
         const { condition } = whenArgs(blockHead(whole)!.rest);
         if (condition.length === 0 || !conditionSteps(condition).valid) problem(node.head.at, node.head.end, 'warning', '조건을 읽을 수 없어서 늘 아닐 때 쪽이 들어가요.');
@@ -114,10 +136,8 @@ function read(text: string, known: (name: string) => boolean, placeholder: CbsPl
     }
     // A raw block's body is text, whatever it holds.
     if (name === null || !isRawBlock(name)) level(node.body, node.head.end, name);
-    const close = tag(node.close);
-    const shut = close?.name ? normalize(close.name.slice(1)) : '';
-    if (head?.name && name !== null && shut && shut !== name) {
-      const written = head.name.slice(1);
+    const shut = tag(node.close)?.name?.slice(1);
+    if (written !== null && shut && normalize(shut) !== name) {
       problem(node.close.at, node.close.end, 'warning', `#${written} 블록을 닫는 태그예요.`, { label: `/${written}${particleOf(written, '으로/로')} 바꾸기`, insert: `{{/${written}}}` });
     }
   };
@@ -135,23 +155,22 @@ function read(text: string, known: (name: string) => boolean, placeholder: CbsPl
       span(node.at, node.end, 'comment');
       return null;
     }
-    const whole = node.parts.length === 1 && typeof node.parts[0] === 'string' ? lead : null;
-    if (whole === 'slot') {
+    const whole = plain(node) !== null;
+    if (whole && lead === 'slot') {
       span(node.at, node.end, 'slot');
-      tags.push({ from: node.at, to: node.end, name: 'slot', nameAt: node.at + 2, value: null });
-      return tags.at(-1)!;
+      const found: Found = { from: node.at, to: node.end, name: 'slot', nameAt: node.at + 2, value: null };
+      tags.push(found);
+      return found;
     }
-    const skip = lead.length - lead.trimStart().length;
-    const rest = lead.slice(skip);
-    const length = /^[#/]/.test(rest) ? /^[#/][^\s:]*/.exec(rest)![0].length : /^:(else)?\s*$/.test(rest) ? rest.trimEnd().length : rest.startsWith('? ') ? 1 : rest.indexOf(':') !== -1 ? rest.indexOf(':') : whole !== null ? rest.trimEnd().length : -1;
+    const rest = lead.trimStart();
+    const skip = lead.length - rest.length;
+    const length = nameLength(lead, rest, whole);
     const partial = length === -1 || (skip + length === lead.length && node.parts.length > 1);
-    const nameTo = node.at + 2 + skip + Math.max(length, 0);
+    const after = partial ? node.at + 2 : node.at + 2 + skip + length;
     const found: Found = { from: node.at, to: node.end, name: partial ? null : rest.slice(0, length).trimEnd(), nameAt: node.at + 2 + skip, value: null };
     tags.push(found);
-    span(node.at, partial ? node.at + 2 : nameTo, 'tag');
-    const separator = separatorOf(lead) ?? '::';
-    const first = partial ? node.parts : [lead.slice(skip + length), ...node.parts.slice(1)];
-    found.value = parts(first, partial ? node.at + 2 : nameTo, separator);
+    span(node.at, after, 'tag');
+    found.value = parts(partial ? node.parts : [lead.slice(skip + length), ...node.parts.slice(1)], after, separatorOf(lead) ?? '::');
     span(node.end - 2, node.end, 'tag');
     return found;
   };
@@ -195,20 +214,20 @@ function openBlock(before: string): string | null {
 
 // variables: the character's 기본 변수, offered and explained by name. placeholder: the field's own, when it has one.
 export function cbsLanguage({ variables = [], placeholder }: { variables?: Defaults; placeholder?: CbsPlaceholder } = {}): CodeLanguage {
-  const known = (name: string) => handlerFor(name) !== undefined || BY_NAME.has(normalize(name));
   let last: { text: string; reading: Reading } | null = null;
-  const reading = (text: string) => (last?.text === text ? last.reading : (last = { text, reading: read(text, known, placeholder) }).reading);
+  const reading = (text: string) => (last?.text === text ? last.reading : (last = { text, reading: read(text, placeholder) }).reading);
+  const own = placeholder && { name: placeholder, doc: { form: `{{${placeholder}}}`, text: PLACEHOLDERS[placeholder] } };
   // The names the text's setters write, but the one being typed at at.
   const written = (text: string, at: number) =>
     reading(text).tags.flatMap(({ name, value }) => (name && WRITERS.has(normalize(name)) && value && !(value.from <= at && at <= value.to) ? [text.slice(value.from, value.to)] : [])).filter((name) => name && !name.includes('{{'));
   const items: CodeItem[] = [
-    ...ENTRIES.map(({ command, group, head }): CodeItem => ({ label: head, kind: head.startsWith('#') ? 'keyword' : 'function', detail: group, template: formTemplate(command.form), closing: '}}', ...(command.uses && { boost: 1 }), doc: commandDoc(command) })),
-    ...(placeholder ? [{ label: placeholder, kind: 'variable', detail: '이 칸', template: `${placeholder}}}\${0}`, closing: '}}', boost: 2, doc: { form: `{{${placeholder}}}`, text: PLACEHOLDERS[placeholder] } } satisfies CodeItem] : []),
+    ...ENTRIES.map(({ command, group, head }): CodeItem => ({ label: head, kind: head.startsWith('#') ? 'keyword' : 'function', detail: group, template: formTemplate(command.form), ...(command.uses && { boost: 1 }), doc: commandDoc(command) })),
+    ...(own ? [{ label: own.name, kind: 'variable', detail: '이 칸', template: `${own.name}}}\${0}`, boost: 2, doc: own.doc } satisfies CodeItem] : []),
   ];
 
   const complete = (text: string, at: number): CodeCompletion | null => {
     const before = text.slice(0, at);
-    const slot = /\{\{\s*(?:getvar|setvar|addvar|setdefaultvar)::([^:{}]*)$/i.exec(before);
+    const slot = VARIABLE_SLOT.exec(before);
     if (slot) {
       return { from: at - slot[1]!.length, items: variableItems(variables, written(text, at)), validFor: /^[^:{}]*$/ };
     }
@@ -216,8 +235,8 @@ export function cbsLanguage({ variables = [], placeholder }: { variables?: Defau
     if (!word) return null;
     const from = at - word[1]!.length;
     const block = word[1]!.startsWith('/') ? openBlock(text.slice(0, from - 2)) : null;
-    const close: CodeItem[] = block ? [{ label: `/${block}`, kind: 'keyword', detail: `#${block} 닫기`, template: `/${block}}}\${0}`, closing: '}}', boost: 99 }] : [];
-    return { from, items: [...close, ...items], validFor: /^[#/]?[\w가-힣?-]*$/ };
+    const close: CodeItem[] = block ? [{ label: `/${block}`, kind: 'keyword', detail: `#${block} 닫기`, template: `/${block}}}\${0}`, boost: 99 }] : [];
+    return { from, items: [...close, ...items], validFor: /^[#/]?[\w가-힣?-]*$/, closing: '}}' };
   };
 
   const explain = (text: string, at: number) => {
@@ -228,8 +247,8 @@ export function cbsLanguage({ variables = [], placeholder }: { variables?: Defau
       const name = text.slice(found.value.from, found.value.to);
       return name.includes('{{') ? null : { from: found.from, to: found.to, doc: variableDoc(name, variables) };
     }
-    if (placeholder && word === placeholder) return { from: found.from, to: found.to, doc: { form: `{{${placeholder}}}`, text: PLACEHOLDERS[placeholder] } };
-    const command = found.name.startsWith('#') || found.name.startsWith('/') ? BY_NAME.get(`#${found.name.slice(1).toLowerCase()}`) : (BY_NAME.get(word) ?? (found.name === '?' ? BY_NAME.get('calc') : undefined));
+    if (own && word === own.name) return { from: found.from, to: found.to, doc: own.doc };
+    const command = found.name.startsWith('#') || found.name.startsWith('/') ? BY_NAME.get(`#${normalize(found.name.slice(1))}`) : BY_NAME.get(word);
     return command ? { from: found.from, to: found.to, doc: commandDoc(command) } : null;
   };
 
@@ -237,7 +256,7 @@ export function cbsLanguage({ variables = [], placeholder }: { variables?: Defau
     syntax: (text) => reading(text).spans,
     comment: { open: '{{// ', close: '}}' },
     lint: (text) => reading(text).problems,
-    complete: (text, at) => complete(text, at),
+    complete,
     explain,
   };
 }

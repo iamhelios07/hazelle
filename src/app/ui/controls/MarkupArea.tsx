@@ -37,10 +37,27 @@ function weightClass(weight: number | null): string | undefined {
   return weight < 1.3 ? styles.weightUp2 : styles.weightUp3;
 }
 
-const spansOf = (kind: Props['kind'], language: CodeLanguage | undefined, text: string) =>
-  kind === 'tags'
-    ? tagWeights(text).map(({ text: piece, weight }) => ({ text: piece, className: weightClass(weight) }))
-    : markup(text, typeof language?.syntax === 'function' ? language.syntax(text) : []).map((piece) => ({ text: piece.text, className: pieceClass(piece) }));
+type Run = { text: string; className: string | undefined };
+
+// Neighbours of one class are one span: a tag's name, separators and arguments share a color.
+function joined(runs: Run[]): Run[] {
+  const out: Run[] = [];
+  for (const run of runs) {
+    const last = out.at(-1);
+    if (last && last.className === run.className) last.text += run.text;
+    else out.push({ ...run });
+  }
+  return out;
+}
+
+function spansOf(kind: Props['kind'], language: CodeLanguage | undefined, text: string): Run[] {
+  const runs =
+    kind === 'tags'
+      ? tagWeights(text).map(({ text: piece, weight }) => ({ text: piece, className: weightClass(weight) }))
+      : markup(text, typeof language?.syntax === 'function' ? language.syntax(text) : []).map((piece) => ({ text: piece.text, className: pieceClass(piece) }));
+  // A last empty line has no height in the layer until something is on it.
+  return joined(text === '' || text.endsWith('\n') ? [...runs, { text: '\u200b', className: undefined }] : runs);
+}
 
 // Not a state write: that would skip the browser's undo stack, so Ctrl+Z could not take the insert back.
 // insertText lands on it and fires input, which reaches onChange.
@@ -56,8 +73,7 @@ type FrameProps = Pick<Props, 'value' | 'onChange' | 'placeholder' | 'kind' | 'l
 // textarea does: it never changes weight, size, spacing or font (a heading is brighter, not bolder), or the caret
 // drifts from the letters. The layer is in the flow and the textarea covers it, so the box grows with the text.
 function Frame({ value, onChange, placeholder, kind, language, ref, id }: FrameProps) {
-  // A last empty line has no height in the layer until something is on it.
-  const pieces = useMemo(() => spansOf(kind, language, value === '' || value.endsWith('\n') ? `${value}\u200b` : value), [kind, language, value]);
+  const pieces = useMemo(() => spansOf(kind, language, value), [kind, language, value]);
   return (
     <div className={styles.frame}>
       <div className={styles.layer} aria-hidden>

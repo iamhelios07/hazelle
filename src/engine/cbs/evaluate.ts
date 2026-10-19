@@ -216,6 +216,7 @@ const BLOCKS = new Map<string, (block: Block, rest: string, frame: Frame) => str
 ]);
 // name: normalized, as blockHead gives it.
 export const isBlockName = (name: string) => RAW.has(name) || BLOCKS.has(name);
+export const blockNames = () => [...RAW.keys(), ...BLOCKS.keys()];
 
 function evaluateBlock(block: Block, frame: Frame): string {
   const head = evaluateNodes(block.head.parts, frame);

@@ -33,7 +33,7 @@ describe('cbsLanguage', () => {
       ['{{#when::a::b}}', '조건을 읽을 수 없어서 늘 아닐 때 쪽이 들어가요.', undefined],
       ['{{#if 1}}', '블록을 닫는 {{/if}} 태그가 없어요.', undefined],
     ]);
-    expect(problems('{{original}} {{position::a}} {{ }} {{-}} {{getvar::{{user}}}}', cbsLanguage({ placeholder: 'original' }))).toEqual([]);
+    expect(problems('{{original}} {{position::a}} {{ }} {{-}} {{getvar::{{user}}}} {{? 1+1}}', cbsLanguage({ placeholder: 'original' }))).toEqual([]);
     expect(problems('{{original}}')).toEqual([['original', '모르는 명령어라 적은 그대로 남아요.', undefined]]);
     expect(problems('{{data}} {{DATA}} {{data::x}}', cbsLanguage({ placeholder: 'data' }))).toEqual([
       ['{{DATA}}', '{{data}} 그대로 적어야 바뀌어요.', '{{data}}'],
@@ -44,8 +44,8 @@ describe('cbsLanguage', () => {
 
   it('completes a tag after {{ as a snippet over the }} already typed, a variable in its slot, and the open block’s close', () => {
     const tag = language.complete('{{getv}}', 6, 'code', false)!;
-    expect(tag.from).toBe(2);
-    expect(tag.items.find((item) => item.label === 'getvar')).toMatchObject({ template: 'getvar::${1:이름}}}${0}', closing: '}}' });
+    expect(tag).toMatchObject({ from: 2, closing: '}}' });
+    expect(tag.items.find((item) => item.label === 'getvar')).toMatchObject({ template: 'getvar::${1:이름}}}${0}' });
 
     const typed = '{{setvar::기분::좋음}}{{#pure}}{{setvar::날것::1}}{{/pure}}{{Set_Var:mood:happy}}{{getvar::호}}';
     const slot = language.complete(typed, typed.length - 2, 'code', false)!;

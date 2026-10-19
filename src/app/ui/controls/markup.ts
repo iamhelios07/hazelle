@@ -4,8 +4,7 @@ export type Piece = { text: string; line: 'body' | 'heading' | 'rule'; mark: Cod
 
 const HEADING = /^#{1,6}\s/;
 const RULE = /^\s*-{3,}\s*$/;
-const ANGLE = /^<\/?[A-Za-z][^<>\n]{0,60}>/;
-const ANGLE_MOST = 64;
+const ANGLE = /<\/?[A-Za-z][^<>\n]{0,60}>/y;
 
 // The pieces joined give back the text exactly, so the layer and the textarea above it wrap alike. spans: the text's
 // tags as its language reads them, in order; an <angle> tag is marked only outside them.
@@ -42,8 +41,9 @@ export function markup(text: string, spans: readonly CodeSpan[]): Piece[] {
       }
       plain += text.slice(at, open);
       at = open;
-      const angle = ANGLE.exec(text.slice(open, Math.min(stop, open + ANGLE_MOST)));
-      if (angle) {
+      ANGLE.lastIndex = open;
+      const angle = ANGLE.exec(text);
+      if (angle && open + angle[0].length <= stop) {
         push(open + angle[0].length, 'angle');
       } else {
         plain += '<';
