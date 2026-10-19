@@ -1,0 +1,67 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+}
+
+.label {
+  composes: fieldLabel from '../foundation/type.module.css';
+}
+
+/* --ratio is the picture's width over its height; --x and --y a chip's place, set by SceneBoard. */
+.board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--ratio);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+/* The chip slides over its point as the point nears an edge (left of it at 0, right of it at 1), so it never passes
+   the board's edge, which would scroll the dialog sideways. */
+.chip {
+  position: absolute;
+  top: calc(var(--y) * 100%);
+  left: calc(var(--x) * 100%);
+  display: flex;
+  align-items: center;
+  max-width: var(--chip-max-width-narrow);
+  padding-inline-start: var(--space-8);
+  border: var(--border-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+  translate: calc(var(--x) * -100%) calc(var(--y) * -100%);
+}
+
+.held {
+  z-index: var(--layer-raised);
+  border-color: var(--color-accent-border);
+  box-shadow: var(--shadow-popover);
+}
+
+.move {
+  min-width: 0;
+  height: var(--control-tool);
+  padding: 0 var(--space-4);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.held .move {
+  cursor: grabbing;
+}
+
+.name {
+  composes: ellipsis from '../foundation/a11y.module.css';
+  display: block;
+}
