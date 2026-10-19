@@ -123,13 +123,27 @@ function outfit(value: unknown): Outfit | null {
   return isRecord(value) && isText(value.name) && isText(value.tags) ? { name: value.name.trim(), tags: value.tags.trim() } : null;
 }
 
-function portrait(value: unknown, sources: readonly BuiltSource[], artist: string): Portrait | null {
-  if (!isRecord(value)) return null;
-  const { name, aliases, look, outfits, source } = value;
-  if (!isText(name) || !name.trim() || !Array.isArray(aliases) || !aliases.every(isText) || !isText(look) || !Array.isArray(outfits) || !sources.includes(source as BuiltSource)) return null;
+// A portrait's own fields, as a model's answer and a 삽화 프로필 file both hold them.
+function fields(value: Record<string, unknown>): Omit<Portrait, 'artist' | 'source'> | null {
+  const { name, aliases, look, outfits } = value;
+  if (!isText(name) || !Array.isArray(aliases) || !aliases.every(isText) || !isText(look) || !Array.isArray(outfits)) return null;
   const read = outfits.map(outfit);
   if (read.some((each) => each === null)) return null;
-  return { name: name.trim(), aliases: aliases.map((alias) => alias.trim()).filter(Boolean), look: look.trim(), outfits: read as Outfit[], artist, source: source as BuiltSource };
+  return { name: name.trim(), aliases: aliases.map((alias) => alias.trim()).filter(Boolean), look: look.trim(), outfits: read as Outfit[] };
+}
+
+function portrait(value: unknown, sources: readonly BuiltSource[], artist: string): Portrait | null {
+  if (!isRecord(value) || !sources.includes(value.source as BuiltSource)) return null;
+  const read = fields(value);
+  return read?.name ? { ...read, artist, source: value.source as BuiltSource } : null;
+}
+
+// The file's source is not read: an imported portrait is the user's, which 다시 만들기 keeps. An unnamed one is kept as
+// the editor holds it, which asks for its name.
+function filePortrait(value: unknown): Portrait | null {
+  if (!isRecord(value) || !isText(value.artist)) return null;
+  const read = fields(value);
+  return read && { ...read, artist: value.artist.trim(), source: 'user' };
 }
 
 // artist: the pack's, from its pictures' metadata (artistOf), set on every portrait; the model writes none. Nothing
@@ -143,6 +157,25 @@ export function parseLikeness(text: string, { sources, artist, most }: { sources
   return portraits.some((each) => each === null) ? { ok: false, reason: 'fields' } : { ok: true, portraits: portraits as Portrait[] };
 }
 
+// A 삽화 프로필 file, which passes a pack's profiles from one account to another.
+const PORTRAIT_FILE = { hazelle: 'portraits', version: 1 } as const;
+
+export const writePortraitFile = (portraits: readonly Portrait[]) => JSON.stringify({ ...PORTRAIT_FILE, portraits }, null, 2);
+
+// other: not JSON, not this file, or another version of it. portrait: the one at index is malformed.
+export function readPortraitFile(text: string): { ok: true; portraits: Portrait[] } | { ok: false; reason: 'other' } | { ok: false; reason: 'portrait'; index: number } {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: 'other' };
+  }
+  if (!isRecord(value) || value.hazelle !== PORTRAIT_FILE.hazelle || value.version !== PORTRAIT_FILE.version || !Array.isArray(value.portraits)) return { ok: false, reason: 'other' };
+  const portraits = value.portraits.map(filePortrait);
+  const index = portraits.indexOf(null);
+  return index === -1 ? { ok: true, portraits: portraits as Portrait[] } : { ok: false, reason: 'portrait', index };
+}
+
 // Exact after these, never fuzzy: a figure a scene names otherwise is drawn from its own tags (engine/illustrate).
 export const nameKey = (name: string) => name.trim().normalize('NFC').toLowerCase();
 
@@ -154,6 +187,14 @@ export function rebuiltPortraits(before: readonly Portrait[], built: readonly Po
   const kept = before.filter(({ source }) => source === 'user');
   const taken = new Set(kept.flatMap(namesOf));
   return [...kept, ...built.filter((portrait) => !namesOf(portrait).some((key) => taken.has(key)))].slice(0, most);
+}
+
+// What an import writes over the portraits there (runtime/likeness): one sharing a name or alias with an imported one
+// gives way to it, and the imported come last.
+export function importedPortraits(before: readonly Portrait[], imported: readonly Portrait[]): { portraits: Portrait[]; replaced: number } {
+  const taken = new Set(imported.flatMap(namesOf));
+  const kept = before.filter((portrait) => !namesOf(portrait).some((key) => taken.has(key)));
+  return { portraits: [...kept, ...imported], replaced: before.length - kept.length };
 }
 
 // The artist stretches the most pictures share, as one tag list; a tie goes to the earlier picture (the card's own is

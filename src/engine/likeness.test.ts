@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Portrait } from '../model/likeness';
-import { artistOf, likenessRequest, parseLikeness, rebuiltPortraits, sample, sourcesOf, TEXT_MOST, type LikenessInput } from './likeness';
+import { artistOf, importedPortraits, likenessRequest, parseLikeness, readPortraitFile, rebuiltPortraits, sample, sourcesOf, TEXT_MOST, writePortraitFile, type LikenessInput } from './likeness';
 
 const answer = { characters: [{ name: ' Ari ', aliases: ['아리', ' '], look: 'girl, silver hair', outfits: [{ name: 'usual', tags: 'white dress' }], source: 'text' }] };
 const reading = { sources: ['text' as const], artist: 'artist:a', most: 2 };
@@ -70,4 +70,29 @@ it('a rebuild keeps the user’s portraits first and leaves out a built one shar
   const built = [made('Lotta', [], 'vision'), made('Mina', [], 'vision'), made('Rei', [], 'vision')];
   expect(rebuiltPortraits(before, built, 8)).toEqual([lotta, built[1], built[2]]);
   expect(rebuiltPortraits(before, built, 2)).toEqual([lotta, built[1]]);
+});
+
+describe('삽화 프로필 file', () => {
+  const ari: Portrait = { name: 'Ari', aliases: ['아리'], look: 'girl, silver hair', outfits: [{ name: 'usual', tags: 'white dress' }], artist: 'artist:a', source: 'vision' };
+
+  it('reads back what it wrote, an unnamed portrait too, every portrait the user’s', () => {
+    const unnamed: Portrait = { name: '', aliases: [], look: '', outfits: [], artist: '', source: 'user' };
+    expect(readPortraitFile(writePortraitFile([ari, unnamed]))).toEqual({ ok: true, portraits: [{ ...ari, source: 'user' }, unnamed] });
+  });
+
+  it('refuses another version of the file', () => {
+    expect(readPortraitFile(JSON.stringify({ hazelle: 'portraits', version: 2, portraits: [ari] }))).toEqual({ ok: false, reason: 'other' });
+  });
+
+  it('refuses a malformed portrait and names its place', () => {
+    const file = { hazelle: 'portraits', version: 1, portraits: [ari, { ...ari, outfits: [{ name: 'usual' }] }] };
+    expect(readPortraitFile(JSON.stringify(file))).toEqual({ ok: false, reason: 'portrait', index: 1 });
+  });
+});
+
+it('an import replaces the portraits sharing a name or alias with an imported one and appends the imported', () => {
+  const made = (name: string, aliases: string[]): Portrait => ({ name, aliases, look: '', outfits: [], artist: '', source: 'user' });
+  const before = [made('Charlotte', ['Lotta']), made('Mina', []), made('Rei', [])];
+  const imported = [made('lotta', []), made('Sora', [])];
+  expect(importedPortraits(before, imported)).toEqual({ portraits: [before[1], before[2], ...imported], replaced: 1 });
 });
