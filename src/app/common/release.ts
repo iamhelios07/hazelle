@@ -8,6 +8,19 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.3.0',
+    date: '2026-10-19',
+    lines: [
+      '크게 편집이 코드 편집기가 됐어요. CBS와 Lua에 색이 입혀지고, 명령어를 치면 자동완성과 설명이 떠요. 오타나 닫히지 않은 블록은 밑줄로 알려 줘요.',
+      '크게 편집의 시험해 보기에서 고친 코드를 예시 채팅이나 내 채팅에 바로 돌려 볼 수 있어요. 채팅은 바뀌지 않아요. CBS는 명령어마다 나온 결과를 단계별로 보여 줘요.',
+      '변수 이름에 마우스를 올리면 기본값, 고른 채팅의 지금 값, 그 값을 정한 곳이 보여요.',
+      '같은 모델을 이름과 설정을 달리해 여러 번 추가할 수 있어요. 대화용과 보조용을 따로 두기 좋아요. 추가한 모델을 빼도 되돌릴 수 있어요.',
+      '번역에 원문 함께 보기, 코드·HTML을 지키는 보호 패턴, 번역가의 노트 초안 만들기가 생겼어요.',
+      '삽화에 페르소나 시점과 만화 그리기가 생겼어요. 직전 장면을 이어 그리고, 장면 바꾸기에서 인물 위치를 옮기거나 뺄 수 있어요. 인물 프로필을 파일로 주고받을 수 있어요.',
+      '캐릭터 편집에 기본 변수 항목이 생겼어요.',
+    ],
+  },
+  {
     version: 'v0.2.27',
     date: '2026-10-19',
     lines: [
