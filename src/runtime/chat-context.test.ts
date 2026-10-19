@@ -21,7 +21,7 @@ describe('evaluateChat', () => {
     const created = await store.create('inlay', { name: 'risu-id', type: 'image/png', size: 2, file: saved.data[0]! }, { parent: id });
     if (!created.ok) throw new Error(created.error);
     const { texts } = await evaluateChat({ store }, id, chat, fold(store.children('entry', id)));
-    expect(texts).toEqual([`봐 <img src="inlay:${created.data.id}"><span data-inlay-missing></span>`]);
+    expect(texts).toEqual([`봐 <img src="inlay:${created.data.id}"/><span data-inlay-missing></span>`]);
   });
 });
 

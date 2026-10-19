@@ -51,8 +51,6 @@ export type CbsContext = {
   // The pictures of the chat's packs, and the faces {{source}} shows: the character's and the persona's pictures as data:
   // URLs, each null when there is none.
   assets: readonly BotAsset[];
-  // The chat's own pictures, brought from Risu's inlay store, each named by its tag's id exactly; never one of assets.
-  inlays: readonly { id: string; name: string; type: string }[];
   // The names the display's asset tags found no picture for, added as they are met; null outside a display.
   unfound: Set<string> | null;
   // What a request's text left wrong, added as it is met; null outside a request (pipeline lay).

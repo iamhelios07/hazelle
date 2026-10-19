@@ -7,6 +7,7 @@ import type { Card, Pack } from './import/types';
 import type { LoreEntries } from './lorebook/activate';
 import { progressed } from './progress';
 import { Scripts, type Box } from './regex/scripts';
+import { placeInlays } from './assets';
 
 export type Stage = 'display' | 'prompt';
 
@@ -41,7 +42,8 @@ export type ChatScope = {
   axModel: CbsContext['axModel'];
   clock: CbsContext['clock'];
   assets: CbsContext['assets'];
-  inlays: CbsContext['inlays'];
+  // The chat's own pictures, brought from Risu's inlay store, each named by its tag's id exactly; never one of assets.
+  inlays: readonly { id: string; name: string; type: string }[];
   modules: CbsContext['modules'];
   faces: CbsContext['faces'];
   // The window the chat is shown in, which only the display reads; null in a turn and in a chat's preview.
@@ -63,7 +65,7 @@ const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prom
 
 // toggles: the bot's Lua reads them from its globals as they stand mid-run.
 export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null, triggerId: string, unfound: CbsContext['unfound']): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
-  const { card, persona, prompt, note, messages, greeting, toggles, model, axModel, clock, assets, inlays, modules, faces, screen, pick } = scope;
+  const { card, persona, prompt, note, messages, greeting, toggles, model, axModel, clock, assets, modules, faces, screen, pick } = scope;
   const fixed = {
     stage,
     card,
@@ -81,7 +83,6 @@ export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles:
     clock,
     language,
     assets,
-    inlays,
     unfound,
     // Each text of a request collects its own (pipeline lay).
     problems: null,
@@ -153,7 +154,7 @@ export function renderChat(
       }
       edited = held?.text ?? '';
     }
-    const shown = renderStage(stage, scripts, context, index, edited, variables, take);
+    const shown = renderStage(stage, scripts, context, scope.inlays, index, edited, variables, take);
     if (shown.stopped) { stopped ??= shown.stopped; failures.display.set(index, shown.stopped); }
     return shown;
   };
@@ -207,10 +208,10 @@ export function renderChat(
     drawn[0] = shown.drawn;
     boxes[0] = shown.boxes;
   }
-  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, unfound, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, index === 0 && later ? variables : states.at(index), take) : null, failures, scripts };
+  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, unfound, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, scope.inlays, index, text, index === 0 && later ? variables : states.at(index), take) : null, failures, scripts };
 }
 
-function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof contexts>, index: number, text: string, variables: ReadonlyMap<string, string>, take: ReadonlySet<number>) {
+function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof contexts>, inlays: ChatScope['inlays'], index: number, text: string, variables: ReadonlyMap<string, string>, take: ReadonlySet<number>) {
   progressed();
   const read = new Map(variables);
   let stopped: Runaway | null = null;
@@ -222,7 +223,9 @@ function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof 
     stopped = error;
     result = { text, drawn: [], boxes: [] };
   }
-  return { text: unescapeCbs(result.text), drawn: result.drawn, boxes: result.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })), stopped };
+  // Before unescapeCbs, so an escaped tag stays text.
+  const finished = (html: string) => unescapeCbs(stage === 'display' ? placeInlays(html, inlays) : html);
+  return { text: finished(result.text), drawn: result.drawn, boxes: result.boxes.map((box) => ({ ...box, html: finished(box.html) })), stopped };
 }
 
 // Recorded by the canonical input/output pass, including before/after writes. A Lua result changes only a row's

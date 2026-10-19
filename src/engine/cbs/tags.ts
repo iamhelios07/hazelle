@@ -1,6 +1,6 @@
 import { isRecord } from '../../connectors/values';
 import { UNSET } from '../script-api';
-import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture, isVideo, SIGNATURE, type BotAsset } from '../assets';
+import { assetUrl, findAsset, isVideo, type BotAsset } from '../assets';
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
@@ -159,10 +159,11 @@ const assetTag = (render: (url: string, asset: BotAsset) => string): Run => ([na
 const video = (url: string) => `<video src="${url}" controls autoplay loop></video>`;
 const mutedVideo = (url: string) => `<video src="${url}" autoplay muted loop></video>`;
 define('raw path', 1, assetTag((url) => url));
-define('img', 1, assetTag((url) => `<img src="${url}">`));
-define('image', 1, assetTag((url) => `<div class="risu-inlay-image"><img src="${url}"></div>\n`));
+// Self-closed as Risu writes them: a bot's display regex for the model's own <img src="name"> must not catch these.
+define('img', 1, assetTag((url) => `<img src="${url}"/>`));
+define('image', 1, assetTag((url) => `<div class="risu-inlay-image"><img src="${url}"/></div>\n`));
 // Risu tells a video by its file's extension; Hazelle by the type the file was kept as.
-define('asset', 1, assetTag((url, { type }) => `${isVideo(type) ? mutedVideo(url) : `<img src="${url}">`}\n`));
+define('asset', 1, assetTag((url, { type }) => `${isVideo(type) ? mutedVideo(url) : `<img src="${url}"/>`}\n`));
 define('video', 1, assetTag(video));
 define('videoimg', 1, assetTag(mutedVideo));
 define('source', 1, ([name], { context: { stage, faces } }) => {
@@ -176,16 +177,8 @@ define('chardisplayasset', 0, (_, { context: { card } }) => (card ? '[]' : null)
 define('moduleenabled', 1, ([namespace], { context }) => (context.modules.includes(namespace!) ? '1' : '0'));
 define('moduleassetlist', 1, ([namespace], { context: { modules, assets } }) => (modules.includes(namespace!) ? serialize(assets.filter((asset) => asset.module === namespace).map(({ name }) => name)) : ''));
 
-// Items of Risu's own inlay store, which the chat holds as its inlays by the tag's id exactly, never by findAsset's near
-// match: the prompt drops them. A Gemini signature is never drawn; an item the chat lacks shows the app's mark.
-const inlayTag = (render: (id: string) => string): Run => ([id], { context }) => {
-  if (context.stage !== 'display') return '';
-  const inlay = context.inlays.find(({ name }) => name === id);
-  if (!inlay) return inlayMissing;
-  return inlay.type === SIGNATURE ? '' : render(inlay.id);
-};
-define('inlay', 1, inlayTag(inlayPicture));
-define('inlayed inlayeddata', 1, inlayTag((id) => `${inlayBlock(id)}\n`));
+// The prompt drops a chat's inlays; the display keeps the tag for placeInlays (engine/assets.ts), after its regex.
+define('inlay inlayed inlayeddata', 1, (_, { context }) => (context.stage === 'display' ? null : ''));
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
 define('setvar', 2, ([name, value], { context, writes }) => {

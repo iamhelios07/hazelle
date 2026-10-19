@@ -146,14 +146,14 @@ describe('asset tags', () => {
 
   it('show a picture by name in any case, or the nearest name, on screen only, and list the names everywhere', () => {
     expect(run('{{img::smile.png}}|{{raw::smiling}}|{{image::none of these}}|{{source::char}}{{source::user}}', 'display')).toBe(
-      `<img src="asset:${smile}">|asset:${smile}||data:char`,
+      `<img src="asset:${smile}"/>|asset:${smile}||data:char`,
     );
     expect(run('{{img::smile.png}} {{assetlist}}', 'prompt')).toBe('{{img::smile.png}} ["Smile.png","wave","clip"]');
   });
 
   it('show a video as Risu draws it, the asset tag choosing by what the file is', () => {
     expect(run('{{video::clip}}|{{video-img::clip}}|{{asset::clip}}|{{asset::wave}}', 'display')).toBe(
-      `<video src="asset:${clip}" controls autoplay loop></video>|<video src="asset:${clip}" autoplay muted loop></video>|<video src="asset:${clip}" autoplay muted loop></video>\n|<img src="asset:${wave}">\n`,
+      `<video src="asset:${clip}" controls autoplay loop></video>|<video src="asset:${clip}" autoplay muted loop></video>|<video src="asset:${clip}" autoplay muted loop></video>\n|<img src="asset:${wave}"/>\n`,
     );
   });
 
