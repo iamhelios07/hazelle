@@ -4,7 +4,8 @@ import { FolderMark } from './FolderMark';
 import styles from './SettingGroup.module.css';
 
 // A row in a group is one of its ruled rows; a row outside one stands bare among fields with no inset of its own.
-const Grouped = createContext(false);
+// Inside the kit only: rows under a Disclosure's row head take the group's hairlines too.
+export const Grouped = createContext(false);
 
 export function SettingGroup({ label, children }: { label: string; children: ReactNode }) {
   return (

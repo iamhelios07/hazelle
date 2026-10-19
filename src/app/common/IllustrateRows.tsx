@@ -11,7 +11,7 @@ import { ACTS, addOf, newOf } from './acts';
 import { describeIllustrateFailure } from './failure';
 import { readTyped } from './typedNumber';
 import { appliesTo, TaskModelRow, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
-import { detailLabel, follows, NOT_STARRED } from './words';
+import { DETAIL, detailMeta, follows, NOT_STARRED } from './words';
 
 type Props = {
   illustrate: IllustrateSetup;
@@ -54,30 +54,28 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
         />
         {children}
       </SettingGroup>
-      <Disclosure label={detailLabel(set)}>
-        <SettingGroup label="세부 설정">
-          <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
-          <SettingRow
-            label="페르소나 시점으로 그리기"
-            help="페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
-            control={<Switch label="페르소나 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
-          />
-          <SettingRow
-            label="만화로 그리기"
-            help="한 장을 여러 컷이 있는 만화 페이지로 그려요. 말풍선 글자는 모델이 그려서 읽을 수 없어요."
-            control={<Switch label="만화로 그리기" checked={illustrate.comic} onChange={(comic) => onChange({ comic })} />}
-          />
-          <SettingRow
-            label="무료가 아니어도 만들기"
-            help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 물어보지 않고 바로 만들어요. 이때는 요금이 나가요."
-            control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
-          />
-          <SettingRow
-            label="삽화 프롬프트"
-            control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
-          />
-          <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name} onEdit={onEditPrompt} />
-        </SettingGroup>
+      <Disclosure variant="row" label={DETAIL} meta={detailMeta(set)}>
+        <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
+        <SettingRow
+          label="페르소나 시점으로 그리기"
+          help="페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
+          control={<Switch label="페르소나 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
+        />
+        <SettingRow
+          label="만화로 그리기"
+          help="한 장을 여러 컷이 있는 만화 페이지로 그려요. 말풍선 글자는 모델이 그려서 읽을 수 없어요."
+          control={<Switch label="만화로 그리기" checked={illustrate.comic} onChange={(comic) => onChange({ comic })} />}
+        />
+        <SettingRow
+          label="무료가 아니어도 만들기"
+          help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 물어보지 않고 바로 만들어요. 이때는 요금이 나가요."
+          control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
+        />
+        <SettingRow
+          label="삽화 프롬프트"
+          control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
+        />
+        <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name} onEdit={onEditPrompt} />
       </Disclosure>
     </>
   );

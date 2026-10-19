@@ -191,7 +191,10 @@ export const CHAT_LORE = '채팅 로어북';
 export const defaultMark = (isDefault: boolean, name: string) => (isDefault && name.trim() !== FIRST_PROFILE_NAME ? '기본' : undefined);
 
 // The fold that keeps a page's rarely changed settings out of sight, saying how many of them are set.
-export const detailLabel = (set: number) => (set ? `세부 설정 · ${set}개 정함` : '세부 설정');
+export const DETAIL = '세부 설정';
+
+// The fold's end: how many of its values are set, nothing while none is.
+export const detailMeta = (set: number) => (set ? `${set}개 정함` : undefined);
 
 // A value nobody reported, said as such rather than as a made-up figure.
 export const UNKNOWN = '알 수 없음';

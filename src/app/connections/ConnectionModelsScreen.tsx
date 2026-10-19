@@ -13,12 +13,12 @@ import { NameDialog } from '../common/NameDialog';
 import { useSearch } from '../common/useSearch';
 import { RetriesRow } from '../common/RetriesRow';
 import { followsRetries, profileLine } from '../common/settingWords';
-import { detailLabel, MODEL_SETTINGS } from '../common/words';
+import { DETAIL, detailMeta, MODEL_SETTINGS } from '../common/words';
 import { useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Columns, Disclosure, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingGroup, Stack, Text, usePane } from '../ui';
+import { Button, Callout, ChoiceGroup, Columns, Disclosure, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, Stack, Text, usePane } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionKeyDialog } from './ConnectionKeyDialog';
 import { ConnectionMeters } from './ConnectionMeters';
@@ -204,14 +204,12 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           )}
         </Panel>
       </Columns>
-      <Disclosure label={detailLabel(connection.retries === undefined ? 0 : 1)}>
-        <SettingGroup label="세부 설정">
-          <RetriesRow
-            value={connection.retries}
-            follows={followsRetries('shared', shared ?? RETRIES)}
-            onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
-          />
-        </SettingGroup>
+      <Disclosure variant="row" label={DETAIL} meta={detailMeta(connection.retries === undefined ? 0 : 1)}>
+        <RetriesRow
+          value={connection.retries}
+          follows={followsRetries('shared', shared ?? RETRIES)}
+          onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
+        />
       </Disclosure>
     </>
   );
