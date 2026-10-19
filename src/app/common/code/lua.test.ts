@@ -22,7 +22,8 @@ describe('Lua code editor', () => {
   });
 
   it('offers variable names inside a variable call’s name string', () => {
-    expect(labels('setChatVar(id, "관계", 1)\ngetChatVar(id, "', 'string')).toEqual(['호감도', '관계']);
+    const text = 'setChatVar(id, "관계", 1)\ngetChatVar(id, "관';
+    expect(language.complete(`${text}")`, text.length, 'string', false)?.items.map((item) => item.label)).toEqual(['호감도', '관계']);
   });
 
   it('marks a typo with its fix and an unsupported call, not a function the code defines', async () => {

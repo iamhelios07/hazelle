@@ -132,7 +132,11 @@ const variableDoc = (name: string, value: string | null): CodeDoc => ({ form: na
 function complete(text: string, at: number, place: 'code' | 'string' | 'comment', explicit: boolean, defaults: readonly (readonly [string, string])[]): CodeCompletion | null {
   const before = text.slice(0, at);
   const slot = VARIABLE_SLOT.exec(before);
-  if (slot && place === 'string') return { from: at - slot[1]!.length, items: variableNames(text, defaults), validFor: /^[^"\n]*$/ };
+  if (slot && place === 'string') {
+    const from = at - slot[1]!.length;
+    // The name being typed is no name the code has yet.
+    return { from, items: variableNames(text.slice(0, from) + text.slice(at), defaults), validFor: /^[^"\n]*$/ };
+  }
   if (place !== 'code') return null;
   const member = /\b(string|table|math|json|os)\.(\w*)$/.exec(before);
   if (member) {
