@@ -45,6 +45,11 @@ const VEILED = 'data-veiled';
 const COVER = 'data-cover';
 // Named in Story.shadow.css and in engine/assets.ts (inlayMissing), whose mark stands where a chat's inlay is missing.
 const INLAY_MISSING = 'data-inlay-missing';
+// Named in Story.shadow.css. chat/withOriginal ends each line of an original shown under its translation with the mark,
+// last so a line's own markdown (# , - , a bot's <div) still reads; the block it ends takes the attribute.
+const ORIGINAL = 'data-original';
+export const ORIGINAL_MARK = '';
+const ORIGINAL_BLOCK = 'p, li, h1, h2, h3, h4, h5, h6';
 const pictureKey = (picture: Element) => `${picture.getAttribute(PICTURE)}:${picture.querySelector('img')!.getAttribute('src')}`;
 // Sent from a message when the reader opens or closes one of its pictures, so the chat keeps its view where it is.
 export const READER_RESIZED = 'readerresized';
@@ -333,6 +338,12 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
     }
   }
   for (const missing of fragment.querySelectorAll(`[${INLAY_MISSING}]`)) missing.textContent = '옮기지 못한 이미지';
+  const texts = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+  for (let node = texts.nextNode() as Text | null; node; node = texts.nextNode() as Text | null) {
+    if (!node.data.includes(ORIGINAL_MARK)) continue;
+    node.data = node.data.replaceAll(ORIGINAL_MARK, '');
+    node.parentElement?.closest(ORIGINAL_BLOCK)?.setAttribute(ORIGINAL, '');
+  }
   for (const [index, block] of [...fragment.children].entries()) {
     const only = block.childElementCount === 1 && block.firstElementChild!.tagName === 'IMG' && !block.textContent!.trim();
     if (only && block.matches('p, .risu-inlay-image')) block.setAttribute(PICTURE, String(index));
