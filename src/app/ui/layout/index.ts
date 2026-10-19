@@ -3,6 +3,7 @@ export { ChatFrame, ChatTitle, readingDefault, useMarginRoom, type Reading, type
 export { Columns } from './Columns';
 export { Disclosure } from './Disclosure';
 export { FaceRow } from './FaceRow';
+export { FieldRow } from './FieldRow';
 export { EditorFrame } from './EditorFrame';
 export { ItemSection } from './ItemSection';
 export { ListDetail, usePane } from './ListDetail';

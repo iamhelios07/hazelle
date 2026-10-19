@@ -37,7 +37,7 @@ import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Stack, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FieldRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 import { useNoteDraft } from './useNoteDraft';
@@ -363,10 +363,11 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           removed={(index) => `${index + 1}번째 변수를 삭제했어요.`}
         >
           {({ value: [name, value], index, name: label, set, remove }) => (
-            <Stack gap="related">
-              <TextField label={`${label} 이름`} kind="key" value={name} onChange={(next) => set([next, value])} error={variableError(text.variables, index)} action={remove} />
-              <TextField label={`${label} 값`} kind="key" value={value} onChange={(next) => set([name, next])} />
-            </Stack>
+            <FieldRow
+              name={<TextField label={`${label} 이름`} showLabel={false} placeholder="이름" kind="key" value={name} onChange={(next) => set([next, value])} error={variableError(text.variables, index)} />}
+              value={<TextField label={`${label} 값`} showLabel={false} placeholder="값" kind="key" value={value} onChange={(next) => set([name, next])} />}
+              action={remove}
+            />
           )}
         </EntryList>
       </Section>
