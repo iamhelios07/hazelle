@@ -95,6 +95,16 @@ describe('토큰 절약', () => {
       expect(fold(session.store.children('entry', chat))).toHaveLength(3);
     }));
 
+  it('sends the whole prompt with no call when the user asks to send unshortened', () =>
+    server.withSession(async (session) => {
+      const chat = await chatted(session);
+      const log = stubRelay(inTurn([saying('The reply.')]));
+      expect(await takeTurn(session, chat, { kind: 'answer' }, null, true)).toBeNull();
+      expect(log).toHaveLength(1);
+      expect(bodyOf(log, 0)).toContain('The knight swore an oath.');
+      expect(lastReply(session, chat).receipt!.preread).toBeUndefined();
+    }));
+
   it('packs the material into a PDF on a route that takes one, the instruction left out of it', () =>
     server.withSession(async (session) => {
       const chat = await chatted(session);

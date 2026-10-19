@@ -131,7 +131,8 @@ function shownReceived({ store }: Pick<Session, 'store'>, chat: string, reply: W
 // create would be refused.
 export type Starting = { greeting: string | null; saved: Promise<ApiFailure | null> };
 
-export function takeTurn(session: Session, chat: string, target: Target, start: Starting | null = null): Promise<TurnFailure | null> {
+// unshortened: this turn skips 토큰 절약, which the user asks for after it failed.
+export function takeTurn(session: Session, chat: string, target: Target, start: Starting | null = null, unshortened = false): Promise<TurnFailure | null> {
   const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
   const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
   if (start) {
@@ -142,7 +143,7 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
       if (unstarted) return { kind: 'unstarted', failure: unstarted };
       // The chat was just saved and a new chat's target names no message, so it is there.
       const turn = (await gatheredTurn(session, chat, target, ids))!;
-      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again, prereading);
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again, unshortened ? null : prereading);
     }));
   }
   const lease = session.store.retainChat(chat);
@@ -156,7 +157,7 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
       if (unpulled) return { kind: 'unpulled', failure: unpulled };
       const turn = await gatheredTurn(session, chat, target, ids);
       if (turn === null) return { kind: 'gone' };
-      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again, prereading);
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again, unshortened ? null : prereading);
     }));
   };
   const sending = lease.ready.then((failure): Promise<TurnFailure | null> => failure ? Promise.resolve({ kind: 'unpulled', failure }) : send());
@@ -179,7 +180,8 @@ async function gatheredTurn(session: Pick<Session, 'store' | 'read'>, chat: stri
   return evaluated && 'kind' in evaluated ? evaluated : gatherTurn(session, chat, target, ids);
 }
 
-async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => Promise<TurnContext | Blocked | Unevaluated | null>, prereading: () => void): Promise<Ask | Halted | TurnFailure> {
+// prereading null: this turn skips 토큰 절약.
+async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => Promise<TurnContext | Blocked | Unevaluated | null>, prereading: (() => void) | null): Promise<Ask | Halted | TurnFailure> {
   const translated = gathered.said && chatTranslate(session.store, gathered.chat).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
   if ('kind' in translated) return translated;
   const started = await session.scripts.starting(chat, translated, again, signal);
@@ -202,7 +204,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in rewritten) return { ...rewritten, ...kept };
   // After the scripts, so a bot's Lua sees the prompt as built and never the brief; before the forecast and the refit,
   // which compare and fit what is sent.
-  const shortened = featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, prereading) : { prompt: rewritten, preread: null };
+  const shortened = prereading && featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, prereading) : { prompt: rewritten, preread: null };
   if ('kind' in shortened) return { kind: 'preread', failure: shortened, ...kept };
   const sent = shortened.prompt;
   const before = [...(reply.before ?? []), ...requested.writes];

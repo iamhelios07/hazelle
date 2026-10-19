@@ -134,6 +134,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
   const problem = stopped ? blocked(session, chat) : null;
+  // A failed 토큰 절약 call, shown on the composer until the next turn, which may ask again without it.
+  const [unshortened, setUnshortened] = useState<{ failure: TurnFailure; target: Target } | null>(null);
 
   useEffect(() => {
     if (id) session.memory.check(id);
@@ -160,9 +162,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (replyTarget && panel?.kind === 'info') setInfoPick(pickStarted(messages, replyTarget));
   }, [replyTarget]);
 
-  function report(failure: TurnFailure | null) {
+  function report(failure: TurnFailure | null, target?: Target) {
     if (!failure) return;
     if (isBlocked(failure)) return setStopped(true);
+    if (target && failure.kind === 'preread' && failure.failure.kind !== 'stopped') return setUnshortened({ failure, target });
     const kept = failure.kind === 'unsaved' ? failure.reply : null;
     toast.error(describeTurnFailure(failure), kept === null ? undefined : { action: { label: '다시 저장', onClick: () => void talk.saveAgain(kept).then(report) } });
   }
@@ -174,30 +177,32 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function asking() {
     beforeTurn();
+    setUnshortened(null);
     setPinned(null);
   }
 
   // The one way a message goes out, typed or one of 오토파일럿's.
-  async function say(text: string) {
+  async function say(text: string, skip = false) {
     setStopped(false);
     asking();
-    const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
-    report(failure);
+    const target = { kind: 'send' as const, text };
+    const failure = await takeTurn(session, chatId, target, id === null ? starting() : null, skip);
+    report(failure, target);
     return failure;
   }
 
   // Nothing typed asks for a reply after the last message (응답 받기), as RisuAI's empty send does.
-  async function send() {
+  async function send(skip = false) {
     if (busy) return;
     if (!draft.text.trim()) {
-      if (answerable) ask({ kind: 'answer' });
+      if (answerable) ask({ kind: 'answer' }, skip);
       return;
     }
     if (blocked(session, chat)) return setStopped(true);
     const text = drafts.text(draft.key).trim();
     if (!text || talk.snapshot(chatId)) return;
     drafts.set(draft.key, '');
-    const failure = await say(text);
+    const failure = await say(text, skip);
     // An unsaved reply or a kept failure means the user's message was saved. Any other failure's text goes back to the
     // chat's draft, wherever that is by now: a new chat may have been saved before the failure, or not at all.
     if (failure && failure.kind !== 'unsaved' && !failure.kept) drafts.putBack(store.get('chat', chatId) ? chatId : draft.key, text);
@@ -217,11 +222,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!(await answered)) unanswered();
   }
 
-  function ask(target: Target) {
+  function ask(target: Target, skip = false) {
     if (!id || busy) return;
     asking();
-    void takeTurn(session, id, target).then(report);
+    void takeTurn(session, id, target, null, skip).then((failure) => report(failure, target));
   }
+
+  // A send's text went back to the draft, or was kept when its message was saved; either way the composer sends again.
+  const sendUnshortened = (target: Target) => (target.kind === 'send' ? void send(true) : ask(target, true));
 
   function select(message: Shown, index: number) {
     if (!id) return;
@@ -332,6 +340,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     found,
     search,
     problem,
+    unshortened,
     editing,
     pinned,
     branching,
@@ -353,7 +362,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       ...remarkActions,
       ...bookmarkActions,
       ...settingActions,
-      send,
+      send: () => void send(),
+      sendUnshortened: () => unshortened && sendUnshortened(unshortened.target),
       say,
       retryRegex,
       stop: () => talk.stop(chatId),

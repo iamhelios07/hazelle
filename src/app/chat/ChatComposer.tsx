@@ -33,7 +33,7 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, answerable, busy, problem, stuck, translate, sendLanguage, modelMenu, shelf, route, actions } = chat;
+  const { draft, messages, last, answerable, busy, problem, unshortened, stuck, translate, sendLanguage, modelMenu, shelf, route, actions } = chat;
   // A model whose own 모델 설정 is gone picks another on its page; a missing default is set in 설정 › 모델.
   const profilePage = problem?.kind === 'profile-missing' && problem.own && !('kind' in route) ? { kind: 'model' as const, ...refOf(route.connection.id, route.model) } : { kind: 'models' as const };
   const chips: Record<Chip, { onClick: () => void }> = {
@@ -76,6 +76,11 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
       {problem && (
         <Callout tone="warn" action={{ label: FIX[problem.kind].label, onClick: chips[FIX[problem.kind].chip].onClick }}>
           {describeTurnFailure(problem)}
+        </Callout>
+      )}
+      {unshortened && (
+        <Callout tone="warn" action={{ label: '줄이지 않고 보내기', onClick: actions.sendUnshortened }}>
+          {describeTurnFailure(unshortened.failure)}
         </Callout>
       )}
       {stuck && (
