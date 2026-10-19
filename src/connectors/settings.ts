@@ -26,7 +26,7 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   serviceTier?: ServiceTier;
   // 할인 받기 (design §6.7): the connection type's discount lane (ConnectionType discount), where it has one.
   discount?: true;
-  // PDF로 보내기: the Gemini codec packs the earlier conversation into one PDF (connectors/gemini-pdf).
+  // PDF로 보내기: sending() packs the earlier conversation through its codec's pack (Gemini: connectors/gemini-pdf).
   pdf?: Pdf;
   // 실패하면 다시 보내기 for the models using this 묶음, over their connection's (runtime/connections retriesOf). Never
   // sent: no request builder reads it.

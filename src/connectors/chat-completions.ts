@@ -131,7 +131,6 @@ export const chatCompletions: Codec = {
     stop: true,
     verbosity: true,
     serviceTier: false,
-    pdf: false,
   },
 
   // The standard has no cache points; a connection type whose provider takes them says how (cachePoints).

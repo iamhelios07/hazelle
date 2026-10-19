@@ -1,6 +1,6 @@
 import { unzlibSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { pdfMessage, planPdf, textPdf, wrap } from './gemini-pdf';
+import { packPdf, planPdf, textPdf, wrap } from './gemini-pdf';
 import type { ChatMessage } from './types';
 
 const said = (role: ChatMessage['role'], content: string): ChatMessage => ({ role, content });
@@ -44,8 +44,8 @@ describe('PDF로 보내기', () => {
     expect(read.offsetsHold).toBe(true);
   });
 
-  it('carries the packed messages’ pictures after the PDF', () => {
-    const plan = planPdf([said('user', '봐'), { role: 'user', content: '이거', pictures: [{ type: 'image/png', data: 'PNG' }] }, said('user', '끝')], { keep: 'recent', recent: 1 })!;
-    expect(pdfMessage(plan).pictures!.map(({ type }) => type)).toEqual(['application/pdf', 'image/png']);
+  it('packs into one message carrying the transcript as its document and the packed messages’ pictures', () => {
+    const packed = packPdf([said('user', '봐'), { role: 'user', content: '이거', pictures: [{ type: 'image/png', data: 'PNG' }] }, said('user', '끝')], { keep: 'recent', recent: 1 });
+    expect(packed.map(({ document, pictures }) => [document, pictures?.map(({ type }) => type)])).toEqual([['[user]\n봐\n\n[user]\n이거', ['image/png']], [undefined, undefined]]);
   });
 });

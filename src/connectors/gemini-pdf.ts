@@ -29,14 +29,15 @@ const PARAGRAPH = ' ';
 const INSTRUCTION =
   'The attached PDF holds the earlier part of this conversation, in order; each message there starts with its role in brackets. A U+2029 character in its text marks a paragraph break, which was a blank line in the original.';
 
-// The packed messages as one user message: the PDF first, then the pictures they carried, never dropped.
-export function pdfMessage(plan: PdfPlan): ChatMessage {
-  return {
-    role: 'user',
-    content: INSTRUCTION,
-    pictures: [{ type: 'application/pdf', data: base64(textPdf(plan.transcript)) }, ...plan.packed.flatMap((message) => message.pictures ?? [])],
-  };
+// Codec.pack. The pictures the packed messages carried go along, never dropped.
+export function packPdf(messages: ChatMessage[], pdf: Pdf): ChatMessage[] {
+  const plan = planPdf(messages, pdf);
+  if (!plan) return messages;
+  const pictures = plan.packed.flatMap((message) => message.pictures ?? []);
+  return [...plan.lead, { role: 'user', content: INSTRUCTION, document: plan.transcript, ...(pictures.length > 0 && { pictures }) }, ...plan.tail];
 }
+
+export const pdfData = (transcript: string) => base64(textPdf(transcript));
 
 // US Letter in points. Every glyph advances half an em, the font's default width, so a line holds a fixed count.
 // 0.1 pt is not a slip: each page bills as a picture (about 266 tokens at LOW) while the model reads the text layer,

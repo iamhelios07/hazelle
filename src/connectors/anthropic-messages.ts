@@ -111,7 +111,6 @@ export const anthropicMessages: Codec = {
     stop: true,
     verbosity: false,
     serviceTier: true,
-    pdf: false,
   },
 
   cache: { mark: { kind: 'part' }, accepted: true },

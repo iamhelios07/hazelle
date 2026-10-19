@@ -1,4 +1,3 @@
-import { planPdf } from './gemini-pdf';
 import { chatRequest, sending, type Route } from './registry';
 import type { ChatRequest, HttpRequest } from './types';
 import { isRecord, list } from './values';
@@ -28,10 +27,10 @@ export function prepareChat(route: Route, asked: ChatRequest): PreparedChat {
       if (isRecord(body.systemInstruction)) { wire.messages++; content(body.systemInstruction.parts, 'system'); }
       break;
   }
-  // The PDF counts as a picture, which keeps the call out of calibration; the model still reads every word in it, so
+  // A document counts as a picture, which keeps the call out of calibration; the model still reads every word in it, so
   // the budget counts them.
-  const pdf = settings.pdf ? planPdf(sent, settings.pdf) : null;
-  if (pdf) wire.segments.push({ role: 'user', text: pdf.transcript });
+  const documents = sent.flatMap(({ role, document }) => (document === undefined ? [] : [{ role, text: document }]));
+  wire.segments.push(...documents);
   const messages = route.endpoint.protocol === 'responses' ? body.input : route.endpoint.protocol === 'gemini' ? body.contents : body.messages;
   for (const message of list(messages)) {
     if (!isRecord(message)) continue;
@@ -41,7 +40,7 @@ export function prepareChat(route: Route, asked: ChatRequest): PreparedChat {
   // Text and cache routing keys vary per prompt. Everything else describes the actual request regime.
   const variable = new Set(['messages', 'system', 'systemInstruction', 'contents', 'input', 'prompt_cache_key', 'stream']);
   const regime = Object.fromEntries(Object.entries(body).filter(([key]) => !variable.has(key)).sort(([a], [b]) => a.localeCompare(b)));
-  return { request, wire, pdf: pdf !== null, identity: JSON.stringify([route.endpoint.baseUrl, route.endpoint.protocol, asked.model.id, settings.systemAsUser === true, settings.cache ?? null, regime]) };
+  return { request, wire, pdf: documents.length > 0, identity: JSON.stringify([route.endpoint.baseUrl, route.endpoint.protocol, asked.model.id, settings.systemAsUser === true, settings.cache ?? null, regime]) };
 }
 
 export type ContextRefusal = { actual: number | null; maximum: number | null };

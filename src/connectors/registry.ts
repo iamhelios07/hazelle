@@ -157,6 +157,7 @@ function carries(route: Route, model: Model): Carries {
     // accepted null is unknown, not refused.
     cache: way ? way.accepted : false,
     discount: route.type?.discount ? route.type.discount.accepted : false,
+    pdf: route.codec.pack !== undefined,
   };
 }
 
@@ -177,7 +178,8 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
 export function sending(route: Route, { model, messages, settings: stored }: ChatRequest): ChatRequest {
   const { settings } = fit(settingsSchema(carries(route, model), model), stored);
   const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
-  return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
+  const placed = cachePoints(roled, settings.cache !== undefined);
+  return { model, messages: settings.pdf && route.codec.pack ? route.codec.pack(placed, settings.pdf) : placed, settings };
 }
 
 // Retry on failure (design §6.7): the answers worth a try sent again, the provider refusing for a moment. A bad key or a

@@ -1,5 +1,5 @@
 import type { Rates } from './models-dev';
-import type { Accepts, Carries, ModelSettings, Takes } from './settings';
+import type { Accepts, Carries, ModelSettings, Pdf, Takes } from './settings';
 
 export type Protocol = 'chat-completions' | 'anthropic-messages' | 'gemini' | 'responses';
 
@@ -69,7 +69,8 @@ export type Starred = Model & { profile?: string };
 // caching on sends it, and a codec never puts the field itself on the wire.
 // pictures: shown to the model with a user message's text, each codec in its own wire shape. Sent only to a model that
 // sees pictures (seesPictures); a request carrying them to any other is refused before sending.
-export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true; pictures?: InputPicture[] };
+// document: words the codec sends as a file of its own (Codec.pack), ahead of the pictures; set only by its pack.
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true; document?: string; pictures?: InputPicture[] };
 // type: the media type; data: the bytes as base64.
 export type InputPicture = { type: string; data: string };
 // A model whose catalog does not say takes no picture: an unknown is never sent one.
@@ -125,13 +126,15 @@ export type Codec = {
   listModels(endpoint: Endpoint): HttpRequest;
   // null when the payload is not a model list at all, which is not the same as an empty one.
   parseModels(payload: unknown): Model[] | null;
-  carries: Omit<Carries, 'cache' | 'discount'>;
+  carries: Omit<Carries, 'cache' | 'discount' | 'pdf'>;
   // null for a format with no cache mark of its own; a connection type may state one (ConnectionType cachePoints).
   cache: CacheWay | null;
   // The wire sends every system message ahead of the others (Messages' system field), so a provider's cache reads them
   // first, whatever their place in the prompt.
   systemFirst: boolean;
   // fields are the connection type's own, laid over the format's body. mark: how the route writes a cache point.
+  // PDF로 보내기, where the format has it: rewrites the messages sending() hands chat, after its cache points.
+  pack?(messages: ChatMessage[], pdf: Pdf): ChatMessage[];
   chat(endpoint: Endpoint, request: ChatRequest, fields: Record<string, unknown>, mark: CacheMark | null): HttpRequest;
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
   terminal(event: unknown): Terminal | null;
