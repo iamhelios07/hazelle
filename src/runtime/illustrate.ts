@@ -3,19 +3,21 @@ import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
 import { imageSize } from '../engine/import/card';
-import { parseScenes, pictureRequest, toldProfiles, type SceneInvalid } from '../engine/illustrate';
-import type { RanAway } from '../engine/pipeline';
+import { asPov, parseScenes, pictureRequest, toldProfiles, type Earlier, type SceneInvalid } from '../engine/illustrate';
+import { namesOf } from '../engine/likeness';
+import type { IllustrationInput, RanAway } from '../engine/pipeline';
 import { fold, shown, standing, type Chat, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
 import { paragraphsOf, pictureCount, type Attached, type Illustration, type Scene } from '../model/illustration';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
-import type { Portrait } from '../model/likeness';
+import { likenessId, type Portrait } from '../model/likeness';
 import type { IllustratePrompt } from '../model/prompt';
 import type { ApiFailure, ApiResult } from './api';
 import type { Route, RouteFailure } from './assignment';
 import { chatIllustrate } from './features';
 import { pinned, scopeOf } from './chat-context';
+import { chatPersona } from './personas';
 import { evaluatingTask } from './evaluation';
 import type { ReplyError } from './generate';
 import { taskWriter } from './profiles';
@@ -221,15 +223,23 @@ export class Illustrator {
     if (prompt.kind === 'missing') return { kind: 'prompt-missing', own: prompt.own };
     // Before the scene call, which is told their names; a pack whose build fails is drawn without its portraits.
     const portraits = await this.deps.likenesses.portraits(stored.value, prompt.prompt.value, signal);
+    const persona = switches.pov ? chatPersona(store, stored.value) : null;
+    const viewer = persona?.kind === 'persona' ? persona.persona : null;
     let scenes = given ? [given] : [];
     let receipt: Receipt | null = null;
     if (!given) {
       const paragraphs = paragraphsOf(text);
       if (!paragraphs.length) return { kind: 'empty' };
       const history = [...messages.slice(0, index), { ...messages[index]!, selected }];
-      const written = await this.scenes(chat, stored.value, history, paragraphs, pictureCount(switches.ladder, text), portraits, prompt.prompt.value, auto, signal);
+      const looks = { pov: viewer?.value.name ?? null, comic: switches.comic };
+      const written = await this.scenes(chat, stored.value, history, paragraphs, pictureCount(switches.ladder, text), portraits, looks, prompt.prompt.value, auto, signal);
       if ('kind' in written) return written;
       ({ scenes, receipt } = written);
+      // A scene the user changed is drawn as given, the persona in it too.
+      if (viewer) {
+        const names = [viewer.value.name, ...(store.get('likeness', likenessId(viewer.id))?.value.portraits ?? []).flatMap(namesOf)];
+        scenes = scenes.map((scene) => asPov(scene, names));
+      }
       this.update(message, (drawing) => ({ ...drawing, writing: false, sketches: scenes.map((scene) => ({ scene, failure: null })) }));
     }
     const drawn = { chat, message, version, route, prompt: prompt.prompt.value, portraits, spend: spend || switches.spend, signal };
@@ -269,13 +279,18 @@ export class Illustrator {
     return created.ok ? null : { kind: 'unsaved', failure: created };
   }
 
-  private async scenes(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, portraits: Portrait[], prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
+  private async scenes(
+    chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], count: number, portraits: Portrait[], looks: Pick<IllustrationInput, 'pov' | 'comic'>, prompt: IllustratePrompt, auto: boolean, signal: AbortSignal,
+  ): Promise<{ scenes: Scene[]; receipt: Receipt } | IllustrateFailure | Stopped> {
     const { store } = this.deps;
     const writer = taskWriter(store, value, prompt.model);
     if ('kind' in writer) return writer;
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await evaluatingTask(store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: toldProfiles(portraits, this.drawnBefore(store, chat, history)), note: value.illustrateNote ?? '', seed: crypto.randomUUID() }, signal));
+    const drawn = this.drawnBefore(store, chat, history);
+    const assembled = await evaluatingTask(
+      store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, count, portraits: toldProfiles(portraits, drawn), note: value.illustrateNote ?? '', last: drawn.at(-1) ?? null, ...looks, seed: crypto.randomUUID() }, signal),
+    );
     if ('kind' in assembled) return assembled;
     const answer = await pageAnswer(this.deps, writer, 'illustration', chat, assembled.messages, signal);
     if ('kind' in answer) return answer;
@@ -285,8 +300,9 @@ export class Illustrator {
   }
 
   // The scenes of the chat's pictures for the shown version of each message up to the one drawn, by message, paragraph
-  // and time, each with its distance from the message drawn: what each figure was last drawn in (toldProfiles).
-  private drawnBefore(store: ObjectStore, chat: string, history: ReturnType<typeof fold>): { scene: Scene; ago: number }[] {
+  // and time, each with its distance from the message drawn: what each figure was last drawn in (toldProfiles), and the
+  // last of them the picture the next follows on from (lastScene).
+  private drawnBefore(store: ObjectStore, chat: string, history: ReturnType<typeof fold>): Earlier[] {
     const order = new Map(history.map((message, index) => [shown(message).id, index]));
     const versions = standing(history);
     return store

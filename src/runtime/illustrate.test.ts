@@ -7,7 +7,7 @@ import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { blankCard } from '../engine/import/card';
 import { placeMark, type Drawn } from '../model/illustration';
-import { severalScenes } from '../engine/illustrate';
+import { COMIC_PAGE, lastScene, seenBy, severalScenes } from '../engine/illustrate';
 import { takeTurn } from './turn';
 import { removeIllustration, restoreIllustration } from './illustrate';
 import { likenessId } from '../model/likeness';
@@ -127,6 +127,41 @@ describe('Illustrator', () => {
       await takeTurn(session, chat, { kind: 'answer' });
       await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(1), { timeout: 5000 });
       expect(log.map(({ sent }) => sent.url)).not.toContain('https://image.example/free');
+    }));
+
+  it('tells the scene call the last picture, draws through the persona’s eyes and as a manga page only while switched on, and takes the persona out', () =>
+    server.withSession(async (session) => {
+      const chat = await painted(session);
+      const jin = await addPersona(session.store, { name: 'Jin', description: '', picture: null });
+      if (!jin.ok) throw new Error(jin.error);
+      await session.store.update('chat', chat, (current) => ({ ...current, persona: jin.data.id }));
+      await setIllustrate(session.store, null, { auto: true, spend: true });
+      const both = { ...scene, characters: [...scene.characters, { name: 'jin', look: 'boy', outfit: '', action: 'wave', x: 0.2, y: 0.5 }] };
+      const log = stubRelay((sent) => (sent.body?.includes('You direct the illustrations') ? saying(JSON.stringify(both)) : sent.url.endsWith('/generate') ? picture() : saying(REPLY)));
+      await takeTurn(session, chat, { kind: 'answer' });
+      const reply = fold(session.store.children('entry', chat))[1]!;
+      const drawn = async (count: number) => {
+        await vi.waitFor(() => {
+          expect(session.store.children('illustration', chat)).toHaveLength(count);
+          expect(session.illustrator.snapshot().has(reply.id)).toBe(false);
+        }, { timeout: 5000 });
+        return session.store.children('illustration', chat).map(({ value }) => value as Drawn).sort((a, b) => a.at - b.at).at(-1)!;
+      };
+      const first = await drawn(1);
+      await setIllustrate(session.store, null, { pov: true, comic: true });
+      session.illustrator.draw(chat, reply.id, shown(reply).id);
+      const second = await drawn(2);
+      const [before, after] = log.filter(({ sent }) => sent.body?.includes('You direct the illustrations')).map(({ sent }) => sent.body!);
+      const told = (text: string) => JSON.stringify(text).slice(1, -1);
+      for (const direction of [seenBy('Jin'), COMIC_PAGE]) {
+        expect(before).not.toContain(told(direction));
+        expect(after).toContain(told(direction));
+      }
+      expect(before).not.toContain('The last picture of this chat');
+      expect(after).toContain(told(lastScene({ scene: first.scene, ago: 0 })));
+      expect(first.scene.characters.map(({ name }) => name)).toEqual(['Ari', 'jin']);
+      expect(second.scene).toMatchObject({ framing: 'pov, cowboy shot', characters: [{ name: 'Ari' }] });
+      expect(second.scene.characters).toHaveLength(1);
     }));
 
   it('refuses before any call when no starred model draws, and keeps the failure for the slot', () =>

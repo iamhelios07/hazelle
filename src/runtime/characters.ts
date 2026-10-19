@@ -322,12 +322,12 @@ export const setTranslate = (store: ObjectStore, character: string | null, chang
 
 export const setOwnTranslate = (store: ObjectStore, character: string, own: boolean) => setOwnScoped(store, character, 'translate', own);
 
-// Absent auto and spend are off; an absent ladder draws one picture. A chat reads them through 기능 (runtime/features chatIllustrate).
-export type IllustrateSetup = Omit<IllustrateSwitches, 'auto' | 'spend' | 'ladder'> & { auto: boolean; spend: boolean; ladder: Rung[]; own: boolean };
+// Absent auto, spend, pov and comic are off; an absent ladder draws one picture. A chat reads them through 기능 (runtime/features chatIllustrate).
+export type IllustrateSetup = Omit<IllustrateSwitches, 'auto' | 'spend' | 'ladder' | 'pov' | 'comic'> & { auto: boolean; spend: boolean; ladder: Rung[]; pov: boolean; comic: boolean; own: boolean };
 
 export function illustrateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): IllustrateSetup {
   const { switches, own } = scoped(store, character, 'illustrate');
-  return { ...switches, auto: switches?.auto ?? false, spend: switches?.spend ?? false, ladder: switches?.ladder ?? [], own };
+  return { ...switches, auto: switches?.auto ?? false, spend: switches?.spend ?? false, ladder: switches?.ladder ?? [], pov: switches?.pov ?? false, comic: switches?.comic ?? false, own };
 }
 
 export const setIllustrate = (store: ObjectStore, character: string | null, change: Partial<IllustrateSwitches>) => setScoped(store, character, 'illustrate', change);
