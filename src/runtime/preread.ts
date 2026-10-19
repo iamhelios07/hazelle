@@ -1,3 +1,4 @@
+import { resolveRole, sameModelRef } from '../connectors/assignment';
 import { costUnit, modelSettings, resolveConnection } from '../connectors/registry';
 import type { Pdf } from '../connectors/settings';
 import type { Cost } from '../connectors/types';
@@ -27,6 +28,16 @@ export const PREREAD_STARTS: PrereadSettings = { parts: { chat: true, system: fa
 export function prereadSetup(store: Pick<ObjectStore, 'get'>): PrereadSettings {
   const own = store.get('settings', SETTINGS_ID)?.value.preread;
   return { parts: { ...PREREAD_STARTS.parts, ...own?.parts }, recent: own?.recent ?? PREREAD_STARTS.recent, batch: own?.batch ?? PREREAD_STARTS.batch };
+}
+
+// Whether 공용 leaves the brief to the 대화 모델 itself: no model on the 토큰 절약 prompt and no 보조 모델, so the expensive
+// model reads the whole material and then writes the reply too.
+export function briefsWithChatModel(store: Pick<ObjectStore, 'get'>): boolean {
+  const models = store.get('settings', SETTINGS_ID)?.value.models ?? {};
+  const prompt = prereadPrompt(store);
+  const writer = (prompt.kind === 'prompt' ? prompt.prompt.value.model : undefined) ?? resolveRole('aux', [models]);
+  const main = resolveRole('main', [models]);
+  return writer !== null && main !== null && sameModelRef(writer, main);
 }
 
 export const setPreread = (store: ObjectStore, change: Partial<PrereadSettings>) =>

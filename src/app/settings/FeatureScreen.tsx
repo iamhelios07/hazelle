@@ -3,7 +3,7 @@ import type { Feature } from '../../model/features';
 import type { PrereadParts } from '../../model/settings';
 import { illustrateSwitches, setIllustrate, setTranslate, translateSwitches } from '../../runtime/characters';
 import { availableFeatures } from '../../runtime/features';
-import { PREREAD_STARTS, prereadSetup, setPreread } from '../../runtime/preread';
+import { briefsWithChatModel, PREREAD_STARTS, prereadSetup, setPreread } from '../../runtime/preread';
 import { sceneWriterOf } from '../../runtime/illustrate';
 import { setDefaultPrompt } from '../../runtime/prompts';
 import { sendsNotes, translatorOf } from '../../runtime/translate';
@@ -14,12 +14,12 @@ import { TaskPromptMenu, type PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
 import { typedText } from '../common/typed';
 import { readOptional } from '../common/typedNumber';
-import { FEATURE_NAMES, MODEL_ROLES, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
+import { FEATURE_NAMES, inSettings, MODEL_ROLES, NOTE_UNSENT, noteLines, opens, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { NavBar, NumberInput, Screen, SettingGroup, SettingRow, Switch } from '../ui';
+import { Callout, NavBar, NumberInput, Screen, SettingGroup, SettingRow, Switch } from '../ui';
 import { FEATURE_HELP, FeatureSwitch } from './FeatureDefaults';
 import { GlobalNoteField } from './GlobalNoteField';
 import { MemoryDefaults } from './MemoryDefaults';
@@ -150,6 +150,11 @@ function PrereadDefaults() {
   const save = (change: Parameters<typeof setPreread>[1]) => void setPreread(store, change).then((saved) => saved.ok || toast.failed(saved));
   return (
     <>
+      {briefsWithChatModel(store) && (
+        <Callout tone="warn" action={{ label: opens(inSettings('models')), onClick: () => navigate({ kind: 'models' }) }}>
+          {`${MODEL_ROLES.aux}이 없어서 ${MODEL_ROLES.main}이 직접 줄여요. 이러면 비용이 오히려 늘 수 있어요.`}
+        </Callout>
+      )}
       <SettingGroup label="줄일 부분">
         {(Object.entries(PRE_READ_PARTS) as [keyof PrereadParts, string][]).map(([part, label]) => (
           <SettingRow

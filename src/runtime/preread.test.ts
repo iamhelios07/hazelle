@@ -6,7 +6,7 @@ import { EMPTY_SETTINGS } from '../model/settings';
 import { setDefaultModel } from './assignment';
 import { appendUserMessage, startChat } from './chat-log';
 import { featuresOf, setFeatureAt } from './features';
-import { setPreread } from './preread';
+import { briefsWithChatModel, setPreread } from './preread';
 import { addDefaults } from './prompts';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testConnection, testServer, upstream } from './testing';
@@ -34,6 +34,16 @@ const bodyOf = (log: ReturnType<typeof stubRelay>, at: number) => log[at]!.sent.
 const lastReply = (session: Session, chat: string) => shown(fold(session.store.children('entry', chat)).at(-1)!);
 
 describe('토큰 절약', () => {
+  it('tells when the 대화 모델 would write the brief itself, with no 보조 모델 or model of its own', () =>
+    server.withSession(async (session) => {
+      await chatted(session);
+      expect(briefsWithChatModel(session.store)).toBe(true);
+      const other = await session.store.create('connection', testConnection);
+      if (!other.ok) throw new Error(other.error);
+      await setDefaultModel(session.store, 'aux', { connection: other.data.id, model: bareModel('flash').id });
+      expect(briefsWithChatModel(session.store)).toBe(false);
+    }));
+
   it('sends the chat model the brief in place of the older messages, keeps the latest user message, and reuses the brief on 다시 생성', () =>
     server.withSession(async (session) => {
       const chat = await chatted(session);
