@@ -4,7 +4,7 @@ import type { Connection } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
-import { addConnection, addCopy, addModel, changeKey, providerConnection, refreshStarred, retriesOf, setSharedRetries } from './connections';
+import { addConnection, addCopy, addModel, changeKey, providerConnection, putModelBack, refreshStarred, removeModel, retriesOf, setSharedRetries } from './connections';
 import { bareModel } from '../connectors/chat-completions';
 import type { Model } from '../connectors/types';
 import { stubRelay, testModel, testServer, upstream } from './testing';
@@ -100,6 +100,20 @@ describe('addCopy', () => {
       const copy = store.get('connection', id)!.value.starred[1]!;
       expect(copied).toEqual({ ok: true, data: copy.entry });
       expect(store.get('profile', copy.profile!)?.value).toEqual({ name: 'M (low)용', settings: { temperature: 1 } });
+    }));
+});
+
+describe('removeModel', () => {
+  it('puts a removed copy back whole, in its place, under the key every reference names', () =>
+    server.withSession(async ({ store }) => {
+      const copy = { ...testModel, entry: '#low', label: 'M (low)', profile: 'low' };
+      const starred = [testModel, copy, { ...testModel, id: 'other' }];
+      const saved = await store.create('connection', { ...openRouter, starred });
+      const id = saved.ok ? saved.data.id : '';
+      const removed = await removeModel(store, id, '#low');
+      expect(store.get('connection', id)?.value.starred).toEqual([testModel, { ...testModel, id: 'other' }]);
+      await putModelBack(store, id, removed.ok ? removed.data : { entry: copy, index: 1 });
+      expect(store.get('connection', id)?.value.starred).toEqual(starred);
     }));
 });
 

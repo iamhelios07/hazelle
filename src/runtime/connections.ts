@@ -109,8 +109,24 @@ export function addCopy(store: ObjectStore, id: string, model: Model, label: str
   return ownProfile(store, { name: model.name, ...own }, choice.kind === 'profile' ? choice.profile.value.settings : {}, (profile) => addModel(store, id, model, { ...own, profile }));
 }
 
-export const removeModel = (store: ObjectStore, id: string, key: string) =>
-  store.update('connection', id, (current) => ({ ...current, starred: current.starred.filter((model) => entryKey(model) !== key) }));
+// What removeModel took, for putModelBack: the entry whole, so its key, name and 설정 come back with it and every
+// reference to it names it again.
+type TakenModel = { entry: Starred; index: number };
+
+export async function removeModel(store: ObjectStore, id: string, key: string): Promise<ApiResult<TakenModel>> {
+  let taken: TakenModel | null = null;
+  const saved = await store.update('connection', id, (current) => {
+    const index = current.starred.findIndex((model) => entryKey(model) === key);
+    if (index < 0) return null;
+    taken = { entry: current.starred[index]!, index };
+    return { ...current, starred: current.starred.toSpliced(index, 1) };
+  });
+  return saved.ok ? { ok: true, data: taken! } : saved;
+}
+
+// A key added again meanwhile is not doubled.
+export const putModelBack = (store: ObjectStore, id: string, { entry, index }: TakenModel) =>
+  store.update('connection', id, (current) => (current.starred.some((model) => entryKey(model) === entryKey(entry)) ? null : { ...current, starred: current.starred.toSpliced(index, 0, entry) }));
 
 export const renameModel = (store: ObjectStore, id: string, key: string, label: string) =>
   store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (entryKey(model) === key ? { ...without(model, 'label'), ...ownLabel(model.name, label) } : model)) }));

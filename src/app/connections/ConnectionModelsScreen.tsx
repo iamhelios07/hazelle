@@ -6,7 +6,7 @@ import { refOf } from '../../connectors/assignment';
 import { entryKey, entryName, type Model, type Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
-import { addCopy, addModel, refreshStarred, removeConnection, removeModel, renameConnection, restoreConnection, setRetries } from '../../runtime/connections';
+import { addCopy, addModel, putModelBack, refreshStarred, removeConnection, removeModel, renameConnection, restoreConnection, setRetries } from '../../runtime/connections';
 import { modelProfile } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
 import { describeCatalogFailure } from '../common/failure';
@@ -111,6 +111,13 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     if (modelId) add((catalog?.ok ? catalog.models.find((model) => model.id === modelId) : undefined) ?? entries.find((entry) => entry.id === modelId) ?? bareModel(modelId));
   }
 
+  function removeEntry(entry: Starred) {
+    void removeModel(store, id, entryKey(entry)).then((result) => {
+      if (!result.ok) return toast.failed(result);
+      toast.undoable(`'${entryName(entry)}' 모델을 뺐어요.`, () => putModelBack(store, id, result.data));
+    });
+  }
+
   function entryRow(entry: Starred) {
     const name = entryName(entry);
     const listed = !listedIds || listedIds.has(entry.id);
@@ -129,7 +136,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
                 {MODEL_SETTINGS}
               </Button>
             )}
-            <IconButton icon={X} label={`${name} 빼기`} onClick={() => void removeModel(store, id, entryKey(entry)).then((result) => result.ok || toast.failed(result))} />
+            <IconButton icon={X} label={`${name} 빼기`} onClick={() => removeEntry(entry)} />
           </Row>
         }
       />
