@@ -130,7 +130,7 @@ it('drops the viewer’s figures by name or alias and leads the framing with pov
   const figure = { name: 'Ari', look: 'girl', outfit: '', action: 'smile', x: 0.5, y: 0.5 };
   const scene = { paragraph: 0, shape: 'square' as const, setting: '2girls', framing: 'wide shot', characters: [figure, { ...figure, name: 'Jin' }] };
   const seen = asPov(scene, ['jin ', 'Traveler']);
-  expect(seen).toEqual({ ...scene, framing: 'pov, wide shot', characters: [figure] });
-  expect(asPov({ ...scene, characters: [{ ...figure, name: 'TRAVELER' }] }, ['Jin', 'traveler']).characters).toEqual([]);
+  expect(seen).toEqual({ ...scene, setting: '1girl', framing: 'pov, wide shot', characters: [figure] });
+  expect(asPov({ ...scene, characters: [{ ...figure, name: 'TRAVELER' }] }, ['Jin', 'traveler'])).toMatchObject({ setting: 'no humans', characters: [] });
   expect(asPov(seen, ['Jin']).framing).toBe('pov, wide shot');
 });

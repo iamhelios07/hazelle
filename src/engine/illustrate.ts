@@ -83,12 +83,33 @@ export const seenBy = (name: string) =>
 export const COMIC_PAGE =
   'Draw the moment as one manga page of several panels. Begin "setting" with the tags comic, multiple views, speech bubble, then the count tags, place, time of day and lighting. In "framing", describe the panels from top to bottom: how many there are and what each one shows. List each character once, with x and y at 0.5. Use the portrait shape.';
 
-// The scene drawn through the eyes of the one names belong to (seenBy): their figures out, and framing led by pov. The
-// count tags in setting are left as written.
+// The Danbooru count tags the writer puts first in setting (INSTRUCTIONS).
+const COUNTS = /^(?:(?:\d+\+?(?:girls?|boys?)|multiple (?:girls|boys)|no humans)(?:\s*,\s*|\s*$))+/i;
+
+const counted = (count: number, word: 'girl' | 'boy') => (count === 0 ? [] : count === 1 ? [`1${word}`] : [`${count >= 6 ? '6+' : count}${word}s`]);
+
+// A figure is a girl or a boy by the first word of its look; any other look is counted as neither.
+function countTags(scene: Scene): string[] {
+  if (!scene.characters.length) return ['no humans'];
+  const first = scene.characters.map(({ look }) => look.trim().split(/[\s,]+/)[0]!.toLowerCase());
+  return [...counted(first.filter((word) => word === 'girl').length, 'girl'), ...counted(first.filter((word) => word === 'boy').length, 'boy')];
+}
+
+// The scene with the count tags leading its setting written again for the figures it holds now; a setting that does
+// not start with count tags is left as written.
+export function recounted(scene: Scene): Scene {
+  const setting = scene.setting.trimStart();
+  const leading = COUNTS.exec(setting);
+  if (!leading) return scene;
+  const rest = setting.slice(leading[0].length);
+  return { ...scene, setting: [...countTags(scene), ...(rest ? [rest] : [])].join(', ') };
+}
+
+// The scene drawn through the eyes of the one names belong to (seenBy): their figures out, and framing led by pov.
 export function asPov(scene: Scene, names: readonly string[]): Scene {
   const viewer = new Set(names.map(nameKey).filter(Boolean));
   const framing = scene.framing.split(',').some((tag) => nameKey(tag) === 'pov') ? scene.framing : tags('pov', scene.framing);
-  return { ...scene, framing, characters: scene.characters.filter(({ name }) => !viewer.has(nameKey(name))) };
+  return recounted({ ...scene, framing, characters: scene.characters.filter(({ name }) => !viewer.has(nameKey(name))) });
 }
 
 const portraitsByName = (portraits: readonly Portrait[]) => {

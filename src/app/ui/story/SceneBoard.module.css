@@ -16,7 +16,8 @@
 /* --ratio is the picture's width over its height; --x and --y a chip's place, set by SceneBoard. */
 .board {
   position: relative;
-  width: 100%;
+  width: min(100%, calc(var(--scene-board-max-height) * var(--ratio)));
+  margin-inline: auto;
   aspect-ratio: var(--ratio);
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-md);

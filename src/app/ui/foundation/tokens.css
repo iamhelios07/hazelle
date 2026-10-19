@@ -328,6 +328,8 @@
   /* A picture line's defaults (Story.shadow.css); a character's own replace them (ChatFrame's pictures). */
   --story-picture-peek: 40vh;
   --story-picture-widest: 100%;
+  /* 장면 바꾸기's position board (SceneBoard): as tall at most, its width following the picture's shape. */
+  --scene-board-max-height: 40vh;
   --story-picture-wide: 100%;
 
   --space-2: 2px;
