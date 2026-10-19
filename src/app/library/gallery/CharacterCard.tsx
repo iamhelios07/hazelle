@@ -4,6 +4,7 @@ import type { CharacterShelf } from '../../../model/library';
 import { ACTS, exportOf } from '../../common/acts';
 import { RISU_CHAT_FILE, SHARE } from '../../common/words';
 import { aliased } from '../../common/alias';
+import { OrderItems, type Ordering } from '../../common/folders/FolderParts';
 import { navigate } from '../../shell/router';
 import { enterShelf } from '../../shell/routes';
 import { FaceCard, MenuItem, MoreMenu, useMenuHandle, useMenuOpener, useWide } from '../../ui';
@@ -21,11 +22,12 @@ type Props = {
   onPurge: () => void;
   // The folder path, shown before the note where cards from every folder stand together.
   where?: string;
-  // The card drags onto a folder.
+  // The card drags onto a folder, and beside other cards where it has an order.
   drag?: boolean;
+  order?: Ordering;
 };
 
-export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge, where, drag = false }: Props) {
+export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge, where, drag = false, order }: Props) {
   const wide = useWide();
   const name = aliased(shelf.character.card.name, shelf.character.alias);
   const handle = useMenuHandle();
@@ -41,6 +43,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       ) : (
         <>
           <MenuItem icon={SquarePen} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
+          {order && <OrderItems order={order} />}
           <CharacterActionItems shelf={shelf} actions={actions} />
         </>
       )}
@@ -55,6 +58,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       selected={picked}
       menu={shows ? menu : undefined}
       drag={drag ? shelf.id : undefined}
+      onPlace={drag ? order?.onPlace : undefined}
       {...press}
     />
   );

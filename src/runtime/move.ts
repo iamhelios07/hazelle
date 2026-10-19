@@ -12,7 +12,7 @@ import type { MemorySettings } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { createFolder } from './folders';
-import { importCharacter, saveAssets, setToggle, type ImportedCharacter, type Progress } from './characters';
+import { importCharacter, orderFirst, saveAssets, setToggle, type ImportedCharacter, type Progress } from './characters';
 import { setLoreBudget } from './chat-context';
 import { chatWrites, saveNewChats } from './chat-log';
 import type { Files } from './files';
@@ -191,6 +191,10 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, unsupported: mergeUnsupported(character.report.unsupported, unsupported), faceless, missed, unused: unused(character.card) });
   }
   if (due.length) landed('characters', due.length, due.length);
+  // Risu's order comes along, ahead of what was here. A failed write leaves them first by name (model/order), which is no
+  // reason to report the move failed.
+  const brings = new Map(moved.map(({ risu, id }) => [risu, id]));
+  if (moved.length) await orderFirst(store, characters.flatMap(({ id }) => brings.get(id) ?? []));
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules, loreBudget, toggles: moved.length > 0 ? Object.keys(backup.catalog.toggles).length : unset.length } };
 }
 

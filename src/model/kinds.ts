@@ -6,6 +6,7 @@ import type { Asset, Avatar, Character, Lore, Module } from './library';
 import type { Illustration } from './illustration';
 import type { Likeness } from './likeness';
 import type { Remark } from './mascot';
+import { ORDER_ID, type Order } from './order';
 import type { Memory, Vectors } from './memory';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
@@ -41,6 +42,7 @@ export type Values = {
   remark: Remark;
   connection: Connection;
   settings: Settings;
+  order: Order;
   ledger: Ledger;
   prompt: Prompt;
   persona: Persona;
@@ -83,6 +85,7 @@ export const KINDS = {
   inlay: { parent: 'chat', file: true },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
+  order: { parent: null, id: ORDER_ID },
   ledger: { parent: 'settings', appendOnly: true },
   prompt: { parent: null },
   persona: { parent: null },
@@ -218,6 +221,7 @@ const SHAPES = {
     retries: (value) => value === undefined || num(value),
   }),
   settings: shape({ models: isRecord }),
+  order: shape({ ids: listOf(str) }),
   ledger: (value) => isRecord(value) && ((value.type === 'call' || value.type === 'input-refusal')
     ? shape({ at: num, call: shape({ ...all(str, 'id', 'connection', 'model', 'modelName', 'source'), calibration }), chat: orNull(str), character: orNull(str) })(value)
     : value.type === 'cost' && shape({ call: str, cost: orNull(isRecord), at: num })(value)),

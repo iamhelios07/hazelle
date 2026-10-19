@@ -11,6 +11,26 @@
   min-width: 0;
 }
 
+/* Where a dragged card would land: a line in the gap beside this one. */
+.placeBefore::before,
+.placeAfter::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--focus-ring-width);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  content: '';
+}
+
+.placeBefore::before {
+  left: calc((var(--card-gap) + var(--focus-ring-width)) / -2);
+}
+
+.placeAfter::before {
+  right: calc((var(--card-gap) + var(--focus-ring-width)) / -2);
+}
+
 .menu {
   position: absolute;
   top: var(--space-8);

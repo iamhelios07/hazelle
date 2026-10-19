@@ -10,7 +10,7 @@ import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../common/importing';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useNewCharacter } from '../../library/useCharacterActions';
-import { useLibrary } from '../../session';
+import { useCharacterSort, useSortedLibrary } from '../../common/characterOrder';
 import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, Viewport } from '../../ui';
 import { navigate } from '../router';
 import { SettingsButton } from './SettingsButton';
@@ -25,7 +25,8 @@ type Props = {
 };
 
 export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
-  const { characters, none, folders, byFolder, loose } = useLibrary();
+  const [sort] = useCharacterSort();
+  const { characters, none, folders, byFolder, loose } = useSortedLibrary(sort);
   const { pick, move } = useImport();
   const create = useNewCharacter();
   const empty = characters.length === 0 && none.chats.length === 0;

@@ -1,6 +1,7 @@
 import { strFromU8, strToU8 } from 'fflate';
 import { isRecord } from '../connectors/values';
 import { KINDS, parentKinds, type Kind, type Stored } from '../model/kinds';
+import { ORDER_ID } from '../model/order';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import { toBase64 } from '../vault/aead';
@@ -26,7 +27,7 @@ const FILES = 'files/';
 const HELD_BYTES = 8 * 1024 * 1024;
 const PICTURE_ROWS = 12;
 
-const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, ILLUSTRATOR_ID, COMMENTATOR_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
+const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, ILLUSTRATOR_ID, COMMENTATOR_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
 
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 

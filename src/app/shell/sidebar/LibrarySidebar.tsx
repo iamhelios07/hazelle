@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { FolderTree } from '../../../model/folders';
-import type { CharacterShelf, Shelf } from '../../../model/library';
-import { shelfName } from '../../library/shelf';
+import type { Shelf } from '../../../model/library';
 import { storedStrings, usePersisted } from '../../common/usePersisted';
-import { useCharacter, useChatSummary, useLibrary, useWritingChats } from '../../session';
+import { useSortedLibrary } from '../../common/characterOrder';
+import { useCharacter, useChatSummary, useWritingChats } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { enterShelf, shelfOf } from '../routes';
@@ -24,7 +24,7 @@ type Props = {
 // character (user ruling, 2026-10-11). Phones: the list of characters is the home page. Its search and open folders
 // outlast a visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
-  const { none, folders, byFolder, loose } = useLibrary();
+  const { none, folders, byFolder, loose } = useSortedLibrary('own');
   const writing = useWritingChats();
   const route = useRoute();
   const chat = useChatSummary(route.kind === 'chat' ? route.id : null);
@@ -32,17 +32,16 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const [query, setQuery] = useState('');
   const [openFolders, setOpenFolders] = usePersisted(OPEN_FOLDERS, storedStrings, []);
 
-  // The rail keeps every face in one place: folders as the tree shows them, names in order inside each, loose ones
-  // last. Not recency, which the panel shows (user ruling, 2026-10-04).
+  // The rail keeps every face in one place, 직접 순서 whatever the list shows: folders as the tree shows them, loose ones
+  // last. Never recency, which the panel shows (user rulings, 2026-10-04 and 2026-10-19).
   const railShelves = useMemo(() => {
-    const byName = (shelves: CharacterShelf<ChatSummary>[]) => [...shelves].sort((a, b) => shelfName(a).localeCompare(shelfName(b), 'ko'));
     const result: Shelf<ChatSummary>[] = [];
     const visit = (folder: FolderTree) => {
       folder.children.forEach(visit);
-      result.push(...byName(byFolder.get(folder.id)!.direct));
+      result.push(...byFolder.get(folder.id)!.direct);
     };
     folders.forEach(visit);
-    result.push(...byName(loose), none);
+    result.push(...loose, none);
     return result;
   }, [folders, byFolder, loose, none]);
 

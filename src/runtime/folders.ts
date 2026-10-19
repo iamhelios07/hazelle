@@ -2,6 +2,7 @@ import { filedIn, holds, nest, withInside, type Filed } from '../model/folders';
 import type { Stored, Values } from '../model/kinds';
 import { without } from '../model/fields';
 import { allWritten } from './api';
+import { orderFirst } from './characters';
 import type { ObjectStore } from './store';
 
 type Placement = { id: string; folder: string | null };
@@ -19,7 +20,11 @@ function place(store: ObjectStore, kind: Filed, placements: Placement[], still: 
   }));
 }
 
-export const moveInto = (store: ObjectStore, kind: Filed, ids: string[], folder: string | null) => place(store, kind, ids.map((id) => ({ id, folder })));
+// A character filed somewhere stands first there (model/order).
+export function moveInto(store: ObjectStore, kind: Filed, ids: string[], folder: string | null) {
+  const moved = place(store, kind, ids.map((id) => ({ id, folder })));
+  return kind === 'character' ? allWritten([moved, orderFirst(store, ids)]) : moved;
+}
 
 export const createFolder = (store: ObjectStore, kind: Filed, name: string, parent: string | null) =>
   store.create('folder', { name, ...(parent !== null && { parent }), ...(kind !== 'character' && { of: kind }) });

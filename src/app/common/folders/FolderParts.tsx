@@ -1,4 +1,4 @@
-import { FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpToLine, FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { FOLDER_DEPTH, pathName, pathOf, withInside, type Filed, type FolderContents, type FolderIndex, type FolderTree } from '../../../model/folders';
 import { Button, Divider, FolderCard, IconButton, Menu, MenuItem, MoreMenu, PathBar, Row, SelectionBar, useWide } from '../../ui';
@@ -10,6 +10,18 @@ import { useFolderActions } from './useFolderActions';
 
 // What a card dragged onto a folder does; to: the folder's id, null for out of every folder.
 export type Drop = (to: string | null) => (key: string) => void;
+
+// A card's place among its own in 직접 순서: let go beside another card, or sent to either end.
+export type Ordering = { onPlace: (key: string, after: boolean) => void; first: () => void; last: () => void };
+
+export function OrderItems({ order }: { order: Ordering }) {
+  return (
+    <>
+      <MenuItem icon={ArrowUpToLine} label="맨 앞으로" onClick={order.first} />
+      <MenuItem icon={ArrowDownToLine} label="맨 뒤로" onClick={order.last} />
+    </>
+  );
+}
 
 // A folder being named: a new one (id null), inside parent when it has one, or one being renamed.
 export type Naming = { id: string | null; name: string; parent?: FolderTree };
@@ -71,12 +83,13 @@ export function FolderPath({ kind, path, onGo, onName, dropInto, trail, children
 }
 
 // depth: the folder's level, 1 at the top. onRemoved: where its things went (null: out of every folder).
-export function FolderMenu({ kind, folder, depth, onName, onRemoved }: { kind: Filed; folder: FolderTree; depth: number; onName: (naming: Naming) => void; onRemoved?: (up: string | null) => void }) {
+export function FolderMenu({ kind, folder, depth, onName, onRemoved, order }: { kind: Filed; folder: FolderTree; depth: number; onName: (naming: Naming) => void; onRemoved?: (up: string | null) => void; order?: Ordering }) {
   const { remove } = useFolderActions(kind);
   return (
     <MoreMenu of={`${folder.value.name} 폴더`}>
       <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
       {depth < FOLDER_DEPTH && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
+      {order && <OrderItems order={order} />}
       <MenuItem
         icon={ACTS.remove.icon}
         label="폴더 삭제"
@@ -90,8 +103,8 @@ export function FolderMenu({ kind, folder, depth, onName, onRemoved }: { kind: F
   );
 }
 
-// A folder among cards. faces: up to four of what it holds.
-export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dropInto }: { kind: Filed; contents: FolderContents<T>; depth: number; faces: { image: string | null; name: string }[]; onOpen: () => void; onName?: (naming: Naming) => void; dropInto?: Drop }) {
+// A folder among cards. faces: up to four of what it holds. drag: the card drags beside other folders (order.onPlace).
+export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dropInto, order, drag = false }: { kind: Filed; contents: FolderContents<T>; depth: number; faces: { image: string | null; name: string }[]; onOpen: () => void; onName?: (naming: Naming) => void; dropInto?: Drop; order?: Ordering; drag?: boolean }) {
   const { folder } = contents;
   return (
     <FolderCard
@@ -100,7 +113,9 @@ export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dr
       faces={faces}
       onClick={onOpen}
       onDropCard={dropInto?.(folder.id)}
-      menu={onName && <FolderMenu kind={kind} folder={folder} depth={depth} onName={onName} />}
+      drag={drag ? folder.id : undefined}
+      onPlace={drag ? order?.onPlace : undefined}
+      menu={onName && <FolderMenu kind={kind} folder={folder} depth={depth} onName={onName} order={order} />}
     />
   );
 }

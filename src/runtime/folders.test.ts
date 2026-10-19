@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { addPersona, removePersona } from './personas';
+import { createCharacter, seedOrder } from './characters';
+import { ORDER_ID } from '../model/order';
 import { createFolder, folderRemoval, moveInto, removeFolder, restoreFolder } from './folders';
 import { testServer } from './testing';
 
 const server = testServer();
 
 describe('folders', () => {
+  it('keeps the first order written and files a character first in 직접 순서', async () => {
+    const { store } = await server.account();
+    const order = () => store.get('order', ORDER_ID)?.value.ids;
+    const [a, b, c] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    for (const id of [a, b, c]) await createCharacter(store, id, id);
+    await seedOrder(store, [a, b, c]);
+    await seedOrder(store, [c, b, a]);
+    expect(order()).toEqual([a, b, c]);
+    const folder = await createFolder(store, 'character', '즐겨찾기', null);
+    await moveInto(store, 'character', [c], folder.ok ? folder.data.id : null);
+    expect(order()).toEqual([c, a, b]);
+  });
+
+
   it("takes a middle folder with the folders inside it and moves its kind's things, 휴지통's too, to the folder it sat in, and brings all back", async () => {
     const { store } = await server.account();
     const made = async (name: string, parent: string | null, kind: 'persona' | 'character' = 'persona') => {

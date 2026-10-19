@@ -3,10 +3,12 @@ import type { Tools } from './tools/facade';
 import { createTools } from './tools/host';
 import type { LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
+import { withInside } from '../model/folders';
 import { SETTINGS_ID } from '../model/settings';
 import { api, holdPulse, markSeen, type ApiResult } from './api';
 import { AssetUrls, UnfoundAssets } from './assets';
 import { Catalogs } from './catalog';
+import { seedOrder } from './characters';
 import { purgeExpired } from './removal';
 import { Costs } from './cost';
 import { Credentials } from './credential';
@@ -164,6 +166,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
       }
       if (closing.signal.aborted) return;
       streams.pickUp();
+      const library = read.library.snapshot();
+      void seedOrder(store, [...library.folders.flatMap(withInside), ...library.characters].map(({ id }) => id));
       void backfillSummaries(store, closing.signal);
       // A purge before the ledger's fill took a chat's calls would lose them: the trash empties only once it has.
       void usage.fill(closing.signal).then(() => {

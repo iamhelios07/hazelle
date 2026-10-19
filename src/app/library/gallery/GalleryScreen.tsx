@@ -4,11 +4,12 @@ import type { ChatSummary } from '../../../model/chat';
 import type { Stored } from '../../../model/kinds';
 import { characterTexts, KEEP_DAYS, type CharacterShelf, type Shelf } from '../../../model/library';
 import { placeIn, whereIs } from '../../common/folders/filing';
-import { FolderPath, FolderTile, useMoving, useNaming } from '../../common/folders/FolderParts';
+import { FolderPath, FolderTile, useMoving, useNaming, type Ordering } from '../../common/folders/FolderParts';
+import { CHARACTER_SORTS, useCharacterSort, useReorder, useSortedLibrary } from '../../common/characterOrder';
 import { TASK_NAMES } from '../../common/prompt-words';
 import { useSearch } from '../../common/useSearch';
 import { BIN, MODEL_SETTINGS, PAGES } from '../../common/words';
-import { useBin, useLibrary } from '../../session';
+import { useBin } from '../../session';
 import { backBar, navigate } from '../../shell/router';
 import { BIN_PLACE, type Back } from '../../shell/routes';
 import { Avatar, Button, CardGrid, ChoiceGroup, Empty, List, NavBar, Row, Screen, Section, Text } from '../../ui';
@@ -21,9 +22,6 @@ import { PurgeDialog } from './PurgeDialog';
 import { useInBin } from './useInBin';
 import { ShareDialog } from '../ShareDialog';
 
-const ORDERS = [{ value: 'recent', label: '최근 대화' }, { value: 'name', label: '이름' }] as const;
-const byName = new Intl.Collator('ko').compare;
-
 // A row of 휴지통 other than a character, under the section it is listed in.
 type BinEntry = { section: string; key: string; texts: string[]; render: () => ReactNode };
 type Entry = CharacterShelf<ChatSummary> | BinEntry;
@@ -33,13 +31,14 @@ const go = (place: string | null) => navigate({ kind: 'gallery', place });
 
 // place: a folder's id, BIN_PLACE for 휴지통, or null for the top (shell/routes).
 export function GalleryScreen({ place, back }: { place: string | null; back: Back | null }) {
-  const library = useLibrary();
+  const [sort, setSort] = useCharacterSort();
+  const library = useSortedLibrary(sort);
+  const reorder = useReorder(setSort);
   const { characters, none, deleted, deletedChats, byCharacter } = library;
   const bin = useBin();
   const inBin = useInBin();
   const characterActions = useCharacterActions();
   const naming = useNaming('character');
-  const [order, setOrder] = useState<'recent' | 'name'>('recent');
   const [purging, setPurging] = useState<Binned | null>(null);
 
   const binned = place === BIN_PLACE;
@@ -73,7 +72,23 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
   const found = search.found.filter((entry): entry is CharacterShelf<ChatSummary> => !isBinEntry(entry));
   const shown = binned ? found : at.placed(found);
   const folderCards = binned ? [] : at.folders;
-  if (order === 'name') shown.sort((a, b) => byName(a.character.card.name, b.character.card.name));
+  // One place's own cards have an order; search results from every folder have none.
+  const ordering = !binned && search.words === '';
+  const characterIds = shown.map(({ id }) => id);
+  const folderIds = folderCards.map(({ id }) => id);
+  const orderOf = (ids: string[], id: string): Ordering | undefined => {
+    if (!ordering) return undefined;
+    const rest = ids.filter((each) => each !== id);
+    return {
+      onPlace: (key, after) => {
+        if (key === id || !ids.includes(key)) return;
+        const others = ids.filter((each) => each !== key);
+        reorder(ids, key, after ? (others[others.indexOf(id) + 1] ?? null) : id);
+      },
+      first: () => reorder(ids, id, rest[0] ?? null),
+      last: () => reorder(ids, id, null),
+    };
+  };
   const binFound = search.found.filter(isBinEntry);
   const listed = ['채팅', PAGES.modules, PAGES.prompts, PAGES.personas, MODEL_SETTINGS].map((title) => [title, binFound.filter(({ section }) => section === title)] as const).filter(([, items]) => items.length > 0);
   const { picked, dropInto } = moving;
@@ -82,7 +97,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
     <Screen width="wide" top={back && <NavBar title="캐릭터" {...backBar(back)} />}>
       <Row kind="toolbar">
         {search.field}
-        <ChoiceGroup label="정렬" showLabel layout="segmented" options={[...ORDERS]} value={order} onChange={setOrder} />
+        {!binned && <ChoiceGroup label="정렬" showLabel layout="segmented" options={[...CHARACTER_SORTS]} value={sort} onChange={setSort} />}
         {!binned && (
           <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
             {picked ? '완료' : '선택해서 옮기기'}
@@ -103,7 +118,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
             if (index < folderCards.length) {
               const contents = library.byFolder.get(folderCards[index]!.id)!;
               const faces = contents.inside.slice(0, 4).map(({ face, character }) => ({ image: face, name: aliased(character.card.name, character.alias) }));
-              return <FolderTile key={contents.folder.id} kind="character" contents={contents} depth={at.path.length + 1} faces={faces} onOpen={() => go(contents.folder.id)} onName={naming.name} dropInto={dropInto} />;
+              return <FolderTile key={contents.folder.id} kind="character" contents={contents} depth={at.path.length + 1} faces={faces} onOpen={() => go(contents.folder.id)} onName={naming.name} dropInto={dropInto} order={orderOf(folderIds, contents.folder.id)} drag={dropInto !== undefined && ordering} />;
             }
             const shelf = shown[index - folderCards.length]!;
             return (
@@ -117,6 +132,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
               actions={characterActions}
               onPurge={() => setPurging(binnedCharacter(shelf))}
               drag={dropInto !== undefined}
+              order={orderOf(characterIds, shelf.id)}
               where={search.words ? whereIs(library, shelf.character.folder) : undefined}
             />
             );

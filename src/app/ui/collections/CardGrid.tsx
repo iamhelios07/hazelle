@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
-import { cardDrag, useCardDrop } from './cardDrag';
+import { bothDrops, cardDrag, useCardDrop, useCardPlace } from './cardDrag';
 import { FolderMark } from './FolderMark';
 import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
@@ -66,14 +66,19 @@ type CardProps = {
   expanded?: boolean;
   ref?: Ref<HTMLButtonElement>;
   menu?: ReactNode;
-  // The card can be dragged onto a FolderCard or a PathBar part, carrying this key.
+  // The card can be dragged onto a FolderCard or a PathBar part, or beside another card, carrying this key.
   drag?: string;
+  // Another card's key let go beside this one.
+  onPlace?: (key: string, after: boolean) => void;
 };
 
-export function FaceCard({ image, video = false, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag }: CardProps) {
+const placing = { before: styles.placeBefore, after: styles.placeAfter };
+
+export function FaceCard({ image, video = false, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag, onPlace }: CardProps) {
   const slot = useMenuSlot();
+  const place = useCardPlace(onPlace, 'card');
   return (
-    <div className={styles.cardBox} onContextMenu={slot.onContextMenu}>
+    <div className={place.side ? `${styles.cardBox} ${placing[place.side]}` : styles.cardBox} onContextMenu={slot.onContextMenu}>
       <button
         ref={ref}
         type="button"
@@ -84,6 +89,7 @@ export function FaceCard({ image, video = false, name, note, selected, current =
         aria-expanded={expanded}
         onClick={onClick}
         {...(drag === undefined ? {} : cardDrag(drag))}
+        {...place.props}
       >
         <span className={styles.picture}>
           <Face image={image} video={video} name={name} still={drag !== undefined} />
@@ -105,16 +111,18 @@ export function FaceCard({ image, video = false, name, note, selected, current =
 
 // A folder among the cards, shaped as one: a tab over a body holding up to four faces of what it holds, each a quarter
 // however few there are, so one face never fills it as a card's picture does. onDropCard: a dragged FaceCard's key,
-// let go over this folder.
-type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode; onDropCard?: (key: string) => void };
+// let go over this folder. drag: the folder card drags beside another, carrying this key; onPlace: another folder's key
+// let go beside this one.
+type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode; onDropCard?: (key: string) => void; drag?: string; onPlace?: (key: string, after: boolean) => void };
 
-export function FolderCard({ name, note, faces, onClick, menu, onDropCard }: FolderCardProps) {
+export function FolderCard({ name, note, faces, onClick, menu, onDropCard, drag, onPlace }: FolderCardProps) {
   const drop = useCardDrop(onDropCard);
+  const place = useCardPlace(onPlace, 'folder');
   const slot = useMenuSlot();
   const shown = faces.slice(0, 4);
   return (
-    <div className={styles.cardBox} onContextMenu={slot.onContextMenu}>
-      <button type="button" className={drop.over ? `${styles.card} ${styles.dropping}` : styles.card} onClick={onClick} {...drop.props}>
+    <div className={place.side ? `${styles.cardBox} ${placing[place.side]}` : styles.cardBox} onContextMenu={slot.onContextMenu}>
+      <button type="button" className={drop.over ? `${styles.card} ${styles.dropping}` : styles.card} onClick={onClick} {...(drag === undefined ? {} : cardDrag(drag, 'folder'))} {...bothDrops(drop.props, place.props)}>
         <span className={styles.folder}>
           <span className={styles.tab} />
           <span className={styles.body}>
@@ -123,7 +131,7 @@ export function FolderCard({ name, note, faces, onClick, menu, onDropCard }: Fol
                 <FolderMark size="lg" />
               </span>
             ) : (
-              [...shown, ...Array<null>(4 - shown.length).fill(null)].map((face, index) => <span key={index} className={styles.slot}>{face && <Face {...face} />}</span>)
+              [...shown, ...Array<null>(4 - shown.length).fill(null)].map((face, index) => <span key={index} className={styles.slot}>{face && <Face {...face} still={drag !== undefined} />}</span>)
             )}
           </span>
         </span>

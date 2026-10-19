@@ -8,6 +8,7 @@ import type { Stored, Values } from '../model/kinds';
 import { readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
 import { likenessId, type Likeness } from '../model/likeness';
 import type { ToggleValues } from '../model/prompt';
+import { ORDER_ID, rearrange, toFront } from '../model/order';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
@@ -248,6 +249,18 @@ export function setToggle(store: ObjectStore, character: string | null, key: str
   if (character === null) return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
   return store.update('character', character, (current) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
 }
+
+// The first open after 직접 순서 shipped keeps the order the screens showed by then (ids: folders by name, then
+// characters by their latest chat), so the rail only moves when the user moves something. Another device's seed wins.
+export async function seedOrder(store: ObjectStore, ids: string[]): Promise<void> {
+  if (store.get('order', ORDER_ID)) return;
+  await store.upsert('order', (current) => current ?? { ids });
+}
+
+// sequence: one place's characters, or its folders, in their new order.
+export const setOrder = (store: ObjectStore, sequence: string[]) => store.upsert('order', (current) => ({ ids: rearrange(current?.ids ?? [], sequence) }));
+
+export const orderFirst = (store: ObjectStore, ids: string[]) => store.upsert('order', (current) => ({ ids: toFront(current?.ids ?? [], ids) }));
 
 export function pinToggle(store: ObjectStore, key: string, pinned: boolean): Promise<ApiResult<Stored<'settings'>>> {
   return store.upsert('settings', (current = EMPTY_SETTINGS) => {
