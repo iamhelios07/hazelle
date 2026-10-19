@@ -125,11 +125,12 @@ function CbsSteps({ text, read: { steps, omitted }, reveal, stale }: { text: str
   );
 }
 
-const KEPT = { unknown: '모르는 명령어라 쓴 그대로 남아요.', unsupported: '헤이젤이 지원하지 않는 명령어라 쓴 그대로 남아요.', args: '인자를 읽을 수 없어서 쓴 그대로 남아요.' } as const;
+const KEPT = { unknown: '모르는 명령어라 쓴 그대로 남아요.', unsupported: '헤이젤이 지원하지 않는 명령어라 쓴 그대로 남아요.', args: '인자가 모자라거나 읽을 수 없어서 쓴 그대로 남아요.' } as const;
 
 function shownStep(text: string, { at, end, headEnd, depth, result, kept, erased, held, condition }: CbsStep): StepRow {
   const source = text.slice(at, headEnd ?? end);
-  if (kept) return { source, result, depth, note: KEPT[kept], tone: 'warn' };
+  // Not a warning for args: a wrapper's {{slot}} stays as written on purpose.
+  if (kept) return { source, result, depth, note: KEPT[kept], ...(kept !== 'args' && { tone: 'warn' as const }) };
   if (erased) return { source, result, depth, note: '앞에 쓴 글을 지워요.' };
   if (held === undefined) return { source, result, depth };
   const verdict = held ? '맞아요' : '안 맞아요';
