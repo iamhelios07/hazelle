@@ -12,13 +12,14 @@ let lua: Promise<Lua> | null = null;
 const displays = new Map<string, { revision: number; snapshot: Snapshot }>();
 let history: ChatScope['messages'] = [];
 let calls = 0;
-const waiting = new Map<number, (value: never) => void>();
+const runs = new Map<number, AbortController>();
+const waiting = new Map<number, { id: number; resolve: (value: never) => void; reject: (error: unknown) => void }>();
 
 const host = (id: number): Host => {
   const asked = <T>(send: (call: number) => Up) =>
-    new Promise<T>((resolve) => {
+    new Promise<T>((resolve, reject) => {
       const call = ++calls;
-      waiting.set(call, resolve);
+      waiting.set(call, { id, resolve, reject });
       scope.postMessage(send(call));
     });
   return {
@@ -34,8 +35,19 @@ const host = (id: number): Host => {
 
 addEventListener('message', ({ data }: MessageEvent<Down>) => {
   if (data.kind === 'ping') return scope.postMessage({ kind: 'pong' });
+  if (data.kind === 'cancel') {
+    const run = runs.get(data.id);
+    if (!run) return;
+    run.abort(new Error('Lua run cancelled'));
+    for (const [call, pending] of waiting) {
+      if (pending.id !== data.id) continue;
+      waiting.delete(call);
+      pending.reject(run.signal.reason);
+    }
+    return;
+  }
   if (data.kind === 'answer') {
-    waiting.get(data.call)?.(data.value as never);
+    waiting.get(data.call)?.resolve(data.value as never);
     waiting.delete(data.call);
     return;
   }
@@ -47,10 +59,12 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
   const eventScope = data.kind === 'run' ? { ...data.input.scope, messages: history = applyTail(history, data.input.history) } : null;
   lua ??= Lua.create({ wasm });
   const { id } = data;
+  const controller = data.kind === 'run' ? new AbortController() : null;
+  if (controller) runs.set(id, controller);
   lua
     .then<ScriptOutcome | DisplayBatch | SyntaxProblem | null>(async (machine) => {
       if (data.kind === 'check') return machine.check(data.code);
-      if (data.kind === 'run') return runEvent(machine, data.owner, data.triggers, eventScope!, data.event, host(id), data.lane);
+      if (data.kind === 'run') return runEvent(machine, data.owner, data.triggers, eventScope!, data.event, host(id), data.lane, controller!.signal);
       if (data.kind === 'display') return machine.display(data.owner, data.revision, data.size);
       const previous = displays.get(data.owner)?.snapshot;
       const { install } = data;
@@ -59,6 +73,7 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
       await machine.installDisplay(data.owner, install.revision, install.scripts, snapshot, install.items);
       return null;
     })
+    .finally(() => runs.delete(id))
     .then(
       (result) => scope.postMessage({ kind: 'done', id, result }),
       (error: unknown) => scope.postMessage({ kind: 'failed', id, message: String(error) }),

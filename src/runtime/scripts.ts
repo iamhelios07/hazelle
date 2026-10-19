@@ -436,7 +436,7 @@ export class Scripts {
     let touched = false;
     let input: string | null = null;
     const run = async (event: Event, at: ChatScope) => {
-      const outcome = await until(this.bindings.lua().then((runner) => runner.run(chat, scripts, at, event, this.quiet(chat, at, heard, signal), 'preview')), signal);
+      const outcome = await until(this.bindings.lua().then((runner) => runner.run(chat, scripts, at, event, this.quiet(chat, at, heard, signal), 'preview', signal)), signal);
       trace.entries.push(...(outcome.trace?.entries ?? []));
       trace.omitted += outcome.trace?.omitted ?? 0;
       const next = applied(chat, at, outcome);
@@ -481,7 +481,7 @@ export class Scripts {
   // chat: the one scope is read from, or 'sample'. Each run has an owner of its own, so it starts on fresh Lua globals.
   async trial(chat: string, scope: ChatScope, unit: ScriptUnit, event: Event, signal: AbortSignal): Promise<Trial> {
     const heard = unheard();
-    const outcome = await until(this.bindings.lua().then((runner) => runner.run(`trial:${crypto.randomUUID()}`, [unit], scope, event, this.quiet(chat, scope, heard, signal), 'preview')), signal);
+    const outcome = await until(this.bindings.lua().then((runner) => runner.run(`trial:${crypto.randomUUID()}`, [unit], scope, event, this.quiet(chat, scope, heard, signal), 'preview', signal)), signal);
     return { ...heard, outcome };
   }
 

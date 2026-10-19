@@ -83,12 +83,12 @@ export class Lua {
 
   // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
   // the event is its own.
-  async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host, lane: RunLane): Promise<Outcome & { trace: HookTrace }> {
+  async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host, lane: RunLane, signal?: AbortSignal): Promise<Outcome & { trace: HookTrace }> {
     const workset = this.hold(owner, lane, triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
     try {
       const trace: HookTrace = { entries: [], omitted: 0 };
       let active: HookLog | null = null;
-      const run: Run & { host: Host } = { owner: null, chat: owner, lore: new Map(), quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new ObservedWrites((name, value) => { if (active) boundedItem(active, active.writes, [clipped(active, name), clipped(active, value)]); }), messages: working(snapshot), host, stop: false, reload: false, missing: new ObservedMissing((name) => { if (active && !active.missing.includes(name)) boundedItem(active, active.missing, clipped(active, name)); }), ranAway: false, triggerId: event.kind === 'call' ? event.id : '' };
+      const run: Run & { host: Host } = { owner: null, chat: owner, lore: new Map(), quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new ObservedWrites((name, value) => { if (active) boundedItem(active, active.writes, [clipped(active, name), clipped(active, value)]); }), messages: working(snapshot), host, signal, stop: false, reload: false, missing: new ObservedMissing((name) => { if (active && !active.missing.includes(name)) boundedItem(active, active.missing, clipped(active, name)); }), ranAway: false, triggerId: event.kind === 'call' ? event.id : '' };
       const errors: ScriptError[] = [];
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
@@ -392,7 +392,11 @@ export class Lua {
   }
 
   private declare(engine: Engine) {
-    const set = (name: string, api: (run: Run, ...args: never[]) => unknown) => engine.lua.global.set(name, (_key: unknown, ...args: never[]) => (engine.run ? api(engine.run, ...args) : undefined));
+    const bind = (name: string, api: (...args: never[]) => unknown) => engine.lua.global.set(name, (...args: never[]) => {
+      engine.run?.signal?.throwIfAborted();
+      return api(...args);
+    });
+    const set = (name: string, api: (run: Run, ...args: never[]) => unknown) => bind(name, (_key: unknown, ...args: never[]) => (engine.run ? api(engine.run, ...args) : undefined));
     // What a run does outside itself, which an editDisplay pass and a script outliving its run do not.
     const act = (name: string, api: (run: Acting, ...args: never[]) => unknown) => set(name, (run, ...args) => (run.quiet || !run.host || !run.owner ? undefined : api(run as Acting, ...args)));
     const last = (run: Run, role: Working['role']) => run.messages.findLast((message) => message.role === role)?.data;
@@ -443,7 +447,7 @@ export class Lua {
     });
 
     // Risu's cbs takes no id before its text.
-    engine.lua.global.set('cbs', (value: unknown) => (engine.run ? cbs(engine.run, text(value)) : undefined));
+    bind('cbs', (value: unknown) => (engine.run ? cbs(engine.run, text(value)) : undefined));
     // The entries of that name in the chat's lorebook, the modules' included, as Risu's own lore reads, each content
     // with its CBS evaluated. The chat's own come first, as Risu lists them here, unlike the prompt's order; a write
     // of this run takes the place of the chat's own of its name.
@@ -499,7 +503,7 @@ export class Lua {
     act('similarity', (run, source: unknown, values: unknown) => ranked(run, text(source), Object.values((values ?? {}) as Record<string, unknown>).map(text)));
 
     set('hash', async (_run, value: unknown) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text(value))))].map((byte) => byte.toString(16).padStart(2, '0')).join(''));
-    engine.lua.global.set('logMain', (value: string) => {
+    bind('logMain', (value: string) => {
       if (engine.log) boundedItem(engine.log, engine.log.logs, clipped(engine.log, value));
     });
     for (const name of UNSUPPORTED) set(name, (run) => void run.missing.add(name));
