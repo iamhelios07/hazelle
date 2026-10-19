@@ -19,6 +19,7 @@ export type Stream = ({ key: JsonWebKey } | { batch: string }) & {
     | { kind: 'reply'; message: string | null; replaces: string | null; follows?: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes }
     | { kind: 'translation'; version: string }
     | { kind: 'input'; typed: string; language: string; follows?: string | null }
+    | { kind: 'note'; character: string }
     // chapter: the records a chapter call summarizes again; absent for a records call.
     | { kind: 'memory'; sources: Source[]; print: string; chapter?: string[] };
 };

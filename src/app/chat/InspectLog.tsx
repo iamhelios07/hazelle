@@ -15,6 +15,7 @@ const PURPOSES: Record<CallPurpose, string> = {
   reply: '응답',
   translation: FEATURE_NAMES.translate,
   input: '입력 번역',
+  note: '번역가의 노트',
   memory: FEATURE_NAMES.memory,
   script: `${SCRIPTS.part}·${TOOL}`,
   illustration: FEATURE_NAMES.illustrate,
