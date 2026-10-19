@@ -1,25 +1,27 @@
 import { useState, type ComponentType } from 'react';
+import { entryName } from '../../connectors/types';
 import type { Feature } from '../../model/features';
 import type { PrereadParts } from '../../model/settings';
 import { illustrateSwitches, setIllustrate, setTranslate, translateSwitches } from '../../runtime/characters';
 import { availableFeatures } from '../../runtime/features';
-import { briefsWithChatModel, PREREAD_STARTS, prereadSetup, setPreread } from '../../runtime/preread';
+import { briefsWithChatModel, briefWriterOf, PREREAD_STARTS, prereadSetup, setPreread } from '../../runtime/preread';
+import { describePrereadFailure } from '../common/failure';
 import { sceneWriterOf } from '../../runtime/illustrate';
-import { setDefaultPrompt } from '../../runtime/prompts';
+import { prereadPrompt, setDefaultPrompt } from '../../runtime/prompts';
 import { sendsNotes, translatorOf } from '../../runtime/translate';
 import { TRANSLATOR_CHAT } from '../../runtime/turn';
 import { IllustrateRows } from '../common/IllustrateRows';
 import { Missing } from '../common/Missing';
-import { TaskPromptMenu, type PromptDoor } from '../common/TaskPrompt';
+import { TaskModelRow, TaskPromptMenu, type PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
 import { typedText } from '../common/typed';
 import { readOptional } from '../common/typedNumber';
-import { FEATURE_NAMES, inSettings, MODEL_ROLES, NOTE_UNSENT, noteLines, opens, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
+import { detailLabel, FEATURE_NAMES, MODEL_ROLES, MODEL_SETTINGS, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Callout, NavBar, NumberInput, Screen, SettingGroup, SettingRow, Switch } from '../ui';
+import { Callout, Disclosure, NavBar, NumberInput, Screen, SettingGroup, SettingRow, Switch } from '../ui';
 import { FEATURE_HELP, FeatureSwitch } from './FeatureDefaults';
 import { GlobalNoteField } from './GlobalNoteField';
 import { MemoryDefaults } from './MemoryDefaults';
@@ -144,17 +146,24 @@ function PrereadDefaults() {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
-  // chosenPrompt reads these.
+  // chosenPrompt and briefWriterOf read these.
   usePrompts();
+  useConnections();
+  const choice = prereadPrompt(store);
+  const writer = briefWriterOf(store, TRANSLATOR_CHAT);
   const setup = prereadSetup(store);
+  const set = [setup.recent !== PREREAD_STARTS.recent, setup.batch !== PREREAD_STARTS.batch, setup.thinkLess !== PREREAD_STARTS.thinkLess].filter(Boolean).length;
   const save = (change: Parameters<typeof setPreread>[1]) => void setPreread(store, change).then((saved) => saved.ok || toast.failed(saved));
   return (
     <>
-      {briefsWithChatModel(store) && (
-        <Callout tone="warn" action={{ label: opens(inSettings('models')), onClick: () => navigate({ kind: 'models' }) }}>
-          {`${MODEL_ROLES.aux}이 없어서 ${MODEL_ROLES.main}이 직접 줄여요. 이러면 비용이 오히려 늘 수 있어요.`}
+      {briefsWithChatModel(store, TRANSLATOR_CHAT) && (
+        <Callout tone="warn" action={{ label: `${PRE_READ} 모델 선택`, onClick: () => editPrompt(choice.kind === 'prompt' ? { id: choice.prompt.id, pane: 'model' } : null) }}>
+          {`${PRE_READ} 모델이 ${MODEL_ROLES.main}과 같아요. 이러면 비용이 오히려 늘 수 있어요.`}
         </Callout>
       )}
+      <SettingGroup label={PRE_READ}>
+        <TaskModelRow label={`${PRE_READ} 모델`} noun={PRE_READ} choice={choice} model={'kind' in writer ? describePrereadFailure(writer) : entryName(writer.route.model)} onEdit={editPrompt} />
+      </SettingGroup>
       <SettingGroup label="줄일 부분">
         {(Object.entries(PRE_READ_PARTS) as [keyof PrereadParts, string][]).map(([part, label]) => (
           <SettingRow
@@ -166,24 +175,32 @@ function PrereadDefaults() {
           />
         ))}
       </SettingGroup>
-      <SettingGroup label={PRE_READ}>
-        <CountRow label="원문으로 둘 최근 대화" unit="개" help="마지막으로 보낸 내 메시지는 이 수와 상관없이 그대로 보내요." value={setup.recent} start={PREREAD_STARTS.recent} onChange={(recent) => save({ recent })} />
-        <CountRow label="한 번에 줄일 분량" unit="토큰" help="줄일 내용이 이만큼 쌓이면 그때 줄여요. 그보다 적으면 그냥 보내요." value={setup.batch} start={PREREAD_STARTS.batch} onChange={(batch) => save({ batch })} />
-        <SettingRow
-          label={`${PRE_READ} 프롬프트`}
-          help={`응답마다 ${MODEL_ROLES.aux}을 한 번 더 불러요. PDF를 읽는 Gemini 모델이면 PDF로 보내서 더 아껴요. ${PRE_READ} 프롬프트에서 다른 모델을 고를 수 있어요.`}
-          control={
-            <TaskPromptMenu
-              task="preread"
-              chosen={settings.prereadPrompt}
-              heading="모든 채팅에 적용돼요."
-              opens="down"
-              onPick={(prompt) => void setDefaultPrompt(store, prompt!).then((saved) => saved.ok || toast.failed(saved))}
-              onEdit={editPrompt}
-            />
-          }
-        />
-      </SettingGroup>
+      <Disclosure label={detailLabel(set)}>
+        <SettingGroup label="세부 설정">
+          <CountRow label="원문으로 둘 최근 대화" unit="개" help="마지막으로 보낸 내 메시지는 이 수와 상관없이 그대로 보내요." value={setup.recent} start={PREREAD_STARTS.recent} onChange={(recent) => save({ recent })} />
+          <CountRow label="한 번에 줄일 분량" unit="토큰" help="줄일 내용이 이만큼 쌓이면 그때 줄여요. 그보다 적으면 그냥 보내요." value={setup.batch} start={PREREAD_STARTS.batch} onChange={(batch) => save({ batch })} />
+          <SettingRow
+            label="생각 줄이기"
+            help={`줄이는 모델이 생각을 가장 적게 하게 해서 비용과 기다림을 아껴요. 끄면 그 모델의 ${MODEL_SETTINGS}을 따라요.`}
+            changed={setup.thinkLess !== PREREAD_STARTS.thinkLess}
+            control={<Switch label="생각 줄이기" checked={setup.thinkLess} onChange={(thinkLess) => save({ thinkLess })} />}
+          />
+          <SettingRow
+            label={`${PRE_READ} 프롬프트`}
+            help={`응답마다 ${MODEL_ROLES.aux}을 한 번 더 불러요. PDF를 읽는 Gemini 모델이면 PDF로 보내서 더 아껴요. ${PRE_READ} 프롬프트에서 다른 모델을 고를 수 있어요.`}
+            control={
+              <TaskPromptMenu
+                task="preread"
+                chosen={settings.prereadPrompt}
+                heading="모든 채팅에 적용돼요."
+                opens="down"
+                onPick={(prompt) => void setDefaultPrompt(store, prompt!).then((saved) => saved.ok || toast.failed(saved))}
+                onEdit={editPrompt}
+              />
+            }
+          />
+        </SettingGroup>
+      </Disclosure>
     </>
   );
 }

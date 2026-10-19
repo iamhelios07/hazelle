@@ -4,7 +4,7 @@ import openRouterModels from './fixtures/openrouter-models.json';
 import vercelModels from './fixtures/vercel-models.json';
 import { bareModel } from './chat-completions';
 import { cacheView, chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel, type Route } from './registry';
-import { fit, type ModelSettings } from './settings';
+import { fit, leastReasoning, type ModelSettings } from './settings';
 import type { ChatMessage, Connection, Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Connection => ({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra });
@@ -66,6 +66,16 @@ describe('what a model takes', () => {
     expect(schema).toMatchObject({ stop: null, reasoning: { off: null, level: null, budget: { accepted: false }, adaptive: false }, prefill: null });
     const anthropic = modelSettings(connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'anthropic-messages' }), bare)!;
     expect(anthropic.numbers).toMatchObject({ maxOutput: { accepted: true }, temperature: { accepted: null }, seed: { accepted: false } });
+  });
+});
+
+describe('생각 줄이기', () => {
+  it('asks for the least thinking a model is known to take, whatever order its catalog lists levels in', () => {
+  const schema = modelSettings(connection('openrouter'), listed('openrouter', openRouterModels, 'anthropic/claude-opus-5.5'))!;
+  expect(leastReasoning(schema)).toEqual({ kind: 'level', level: 'low' });
+  expect(leastReasoning({ ...schema, reasoning: { ...schema.reasoning, off: true } })).toEqual({ kind: 'off' });
+  expect(leastReasoning({ ...schema, reasoning: { ...schema.reasoning, level: false, budget: { accepted: true, min: 1024, max: null, whole: true } } })).toEqual({ kind: 'budget', tokens: 1024 });
+  expect(leastReasoning({ ...schema, reasoning: { ...schema.reasoning, level: false } })).toBeNull();
   });
 });
 

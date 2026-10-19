@@ -284,7 +284,7 @@ export function describeTurnFailure(failure: TurnFailure): string {
   }
 }
 
-function describePrereadFailure(failure: Exclude<PrereadFailure, { kind: 'stopped' }>): string {
+export function describePrereadFailure(failure: Exclude<PrereadFailure, { kind: 'stopped' }>): string {
   switch (failure.kind) {
     case 'no-model':
     case 'model-gone':

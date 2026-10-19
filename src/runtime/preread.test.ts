@@ -9,7 +9,7 @@ import { featuresOf, setFeatureAt } from './features';
 import { briefsWithChatModel, setPreread } from './preread';
 import { addDefaults } from './prompts';
 import type { Session } from './session';
-import { answerable, inTurn, saying, stubRelay, testConnection, testServer, upstream } from './testing';
+import { answerable, inTurn, saying, stubRelay, testConnection, testModel, testServer, upstream } from './testing';
 import { takeTurn } from './turn';
 
 const server = testServer();
@@ -34,14 +34,15 @@ const bodyOf = (log: ReturnType<typeof stubRelay>, at: number) => log[at]!.sent.
 const lastReply = (session: Session, chat: string) => shown(fold(session.store.children('entry', chat)).at(-1)!);
 
 describe('토큰 절약', () => {
-  it('tells when the 대화 모델 would write the brief itself, with no 보조 모델 or model of its own', () =>
+  it('tells when the 대화 모델 would write the brief itself', () =>
     server.withSession(async (session) => {
-      await chatted(session);
-      expect(briefsWithChatModel(session.store)).toBe(true);
+      const chat = () => session.store.get('chat', id)!.value;
+      const id = await chatted(session);
+      expect(briefsWithChatModel(session.store, chat())).toBe(true);
       const other = await session.store.create('connection', testConnection);
       if (!other.ok) throw new Error(other.error);
-      await setDefaultModel(session.store, 'aux', { connection: other.data.id, model: bareModel('flash').id });
-      expect(briefsWithChatModel(session.store)).toBe(false);
+      await setDefaultModel(session.store, 'aux', { connection: other.data.id, model: testModel.id });
+      expect(briefsWithChatModel(session.store, chat())).toBe(false);
     }));
 
   it('sends the chat model the brief in place of the older messages, keeps the latest user message, and reuses the brief on 다시 생성', () =>
@@ -52,6 +53,9 @@ describe('토큰 절약', () => {
       expect(log).toHaveLength(2);
       expect(bodyOf(log, 0)).toContain('You prepare reading notes');
       expect(bodyOf(log, 0)).toContain('[chat · user]\\nThe knight swore an oath.');
+      // 생각 줄이기, on by default: the brief call asks for the least thinking, the reply keeps its 설정 묶음.
+      expect(bodyOf(log, 0)).toContain('minimal');
+      expect(bodyOf(log, 1)).not.toContain('minimal');
       expect(bodyOf(log, 0)).not.toContain('Go on');
       expect(bodyOf(log, 1)).toContain('NOTES: an oath, a key.');
       expect(bodyOf(log, 1)).toContain('Go on');
@@ -84,6 +88,25 @@ describe('토큰 절약', () => {
       expect(bodyOf(log, 2)).toContain('The reply.');
       expect(bodyOf(log, 2)).not.toContain('The knight swore');
       expect(lastReply(session, chat).receipt!.preread).toMatchObject({ reused: true });
+    }));
+
+  it("counts the saving in the reply's own tokens, not o200k's", () =>
+    server.withSession(async (session) => {
+      const chat = await chatted(session);
+      const price = { input: 2, output: 10, cacheRead: null, cacheWrite: null, tiers: [] };
+      const priced = await session.store.create('connection', { ...testConnection, starred: [{ ...testModel, price }] });
+      if (!priced.ok) throw new Error(priced.error);
+      await setDefaultModel(session.store, 'main', { connection: priced.data.id, model: testModel.id });
+      const answered = (text: string, input: number) =>
+        new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }], usage: { prompt_tokens: input, completion_tokens: 10 } })}\n\ndata: [DONE]\n\n`, { headers: { [RELAY_HEADER]: 'upstream' } });
+      stubRelay(inTurn([answered('NOTES: an oath, a key.', 40), answered('The reply.', 500)]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      const { receipt } = lastReply(session, chat);
+      const { material, brief, saved } = receipt!.preread!;
+      const measured = receipt!.calibration!.measurement;
+      if (measured.kind !== 'measured') throw new Error('not measured');
+      const spent = (40 * 2 + 10 * 10) / 1e6;
+      expect(saved!.amount).toBeCloseTo(((material - brief) * (500 / measured.o200k) * 2) / 1e6 - spent, 9);
     }));
 
   it('sends the request as it is, with no call, while the material is under the batch', () =>

@@ -84,6 +84,19 @@ export type SettingsSchema = {
   pdf: Accepts;
 };
 
+// Effort names from least to most. Catalogs list them in either order (OpenRouter's Claude: max first).
+const EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+
+// The least thinking the model is known to take: off only where the catalog says it can be turned off (Gemini 3
+// refuses a zero budget), else its least named level, else its smallest budget; null where nothing is known.
+export function leastReasoning({ reasoning }: SettingsSchema): Reasoning | null {
+  if (reasoning.off === true) return { kind: 'off' };
+  const level = EFFORT_ORDER.find((name) => reasoning.levels.includes(name));
+  if (reasoning.level !== false && level) return { kind: 'level', level };
+  if (reasoning.budget.accepted === true && reasoning.budget.min !== null) return { kind: 'budget', tokens: reasoning.budget.min };
+  return null;
+}
+
 // left-out: the model does not take it, or not the level named. capped: brought within the model's bounds, to that value.
 export type Change = { setting: Setting | 'context' | 'cache' | 'discount' | 'pdf'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
 export type Fitted = { settings: ModelSettings; changes: Change[] };

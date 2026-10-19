@@ -6,6 +6,7 @@ import type { ModelSettings } from '../connectors/settings';
 import type { InlineThoughts } from '../connectors/stream';
 import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
+import type { Settle } from './preread';
 import type { CacheForecast } from '../model/cache';
 import type { Message, Receipt, Writes } from '../model/chat';
 import { without } from '../model/fields';
@@ -52,9 +53,9 @@ export type Shown = Message & { live: string | null; whole?: true; batch?: true;
 
 // The prompt, which the reply's id seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model.
 // said: the user's message as it is saved, which a message sent translated saves translated; null when prepare saved it
-// itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt. preread: the
-// 토큰 절약 call that shortened the prompt, kept on its receipt.
-export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast; preread?: NonNullable<Receipt['preread']> };
+// itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt. preread: makes
+// the record of the 토큰 절약 call that shortened the prompt from the reply's receipt, which keeps it.
+export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast; preread?: Settle };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
@@ -343,7 +344,8 @@ export class Talk {
   }
 
   private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply, at: number, forecast?: CacheForecast, preread?: Ask['preread']): Written {
-    const receipt: Receipt = { ...receiptOf(call, answer), ...(forecast && { forecast }), ...(preread && { preread }), ...(reply.continues && { continues: reply.continues.receipt }) };
+    const made: Receipt = { ...receiptOf(call, answer), ...(forecast && { forecast }), ...(reply.continues && { continues: reply.continues.receipt }) };
+    const receipt: Receipt = preread ? { ...made, preread: preread(made) } : made;
     return { id: reply.id, message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), at, text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   }
 }

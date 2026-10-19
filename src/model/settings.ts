@@ -16,9 +16,10 @@ export type LabId = 'preread';
 export const labOn = (settings: Pick<Settings, 'labs'> | undefined, id: LabId) => settings?.labs?.includes(id) ?? false;
 
 // What the 보조 model reads for 토큰 절약 (runtime/preread): which parts of the prompt, how many of the latest chat
-// messages stay as written, and batch: how many o200k tokens of material no brief holds yet make a call worth it.
+// messages stay as written, batch: how many o200k tokens of material no brief holds yet make a call worth it, and
+// thinkLess: the call asks for the least thinking its model takes, over its 설정 묶음.
 export type PrereadParts = { chat: boolean; system: boolean; lore: boolean };
-export type PrereadSettings = { parts: PrereadParts; recent: number; batch: number };
+export type PrereadSettings = { parts: PrereadParts; recent: number; batch: number; thinkLess: boolean };
 
 // prompt: the default prompt, absent only until the starter prompt is added; translatePrompt the default translation
 // prompt, memoryPrompt the default memory prompt, illustratePrompt the default 삽화 prompt, mascotPrompt the default 마스코트
