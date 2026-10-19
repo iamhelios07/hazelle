@@ -40,8 +40,9 @@ export const paragraphOf = (picture: Illustration) => ('tool' in picture ? pictu
 // picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
 // absent for the first one starred. Absent fields are read through runtime/characters illustrateSwitches.
 // spend: draw a picture not known to be free (runtime/illustrate costs) without asking each time. ladder: the rungs of
-// pictureCount, each with a longer length and more pictures than the one before.
-export type IllustrateSwitches = { auto?: boolean; spend?: boolean; prompt?: string; model?: ModelRef; ladder?: Rung[] };
+// pictureCount, each with a longer length and more pictures than the one before. pov: draw through the chat's persona's
+// eyes, the persona out of the picture. comic: each picture one manga page of panels.
+export type IllustrateSwitches = { auto?: boolean; spend?: boolean; prompt?: string; model?: ModelRef; ladder?: Rung[]; pov?: boolean; comic?: boolean };
 
 // A reply at least from characters long gets count pictures.
 export type Rung = { from: number; count: number };

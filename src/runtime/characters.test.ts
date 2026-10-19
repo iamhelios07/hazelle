@@ -462,15 +462,15 @@ describe('삽화 switches', () => {
   it('start with auto and spend off, are shared by every chat and 캐릭터 없이, and a character’s own replaces them while on', async () => {
     const { store } = await server.account();
     const [luna, sol] = await Promise.all([store.create('character', bare('루나')), store.create('character', bare('솔'))]).then((made) => made.map((each) => (each.ok ? each.data.id : '')));
-    expect([illustrateSwitches(store, luna!), illustrateSwitches(store, null)]).toEqual([{ auto: false, spend: false, ladder: [], own: false }, { auto: false, spend: false, ladder: [], own: false }]);
+    expect([illustrateSwitches(store, luna!), illustrateSwitches(store, null)]).toEqual([{ auto: false, spend: false, ladder: [], pov: false, comic: false, own: false }, { auto: false, spend: false, ladder: [], pov: false, comic: false, own: false }]);
 
     const model = { connection: 'c', model: 'nai-diffusion-5' };
     await setIllustrate(store, luna!, { auto: true, spend: false, model });
-    expect([illustrateSwitches(store, sol!), illustrateSwitches(store, null)]).toEqual([{ auto: true, spend: false, ladder: [], model, own: false }, { auto: true, spend: false, ladder: [], model, own: false }]);
+    expect([illustrateSwitches(store, sol!), illustrateSwitches(store, null)]).toEqual([{ auto: true, spend: false, ladder: [], pov: false, comic: false, model, own: false }, { auto: true, spend: false, ladder: [], pov: false, comic: false, model, own: false }]);
     await setOwnIllustrate(store, luna!, true);
     await setIllustrate(store, luna!, { prompt: 'p', model: undefined });
-    expect([illustrateSwitches(store, luna!), illustrateSwitches(store, sol!)]).toEqual([{ auto: true, spend: false, ladder: [], prompt: 'p', own: true }, { auto: true, spend: false, ladder: [], model, own: false }]);
+    expect([illustrateSwitches(store, luna!), illustrateSwitches(store, sol!)]).toEqual([{ auto: true, spend: false, ladder: [], pov: false, comic: false, prompt: 'p', own: true }, { auto: true, spend: false, ladder: [], pov: false, comic: false, model, own: false }]);
     await setOwnIllustrate(store, luna!, false);
-    expect(illustrateSwitches(store, luna!)).toEqual({ auto: true, spend: false, ladder: [], model, own: false });
+    expect(illustrateSwitches(store, luna!)).toEqual({ auto: true, spend: false, ladder: [], pov: false, comic: false, model, own: false });
   });
 });

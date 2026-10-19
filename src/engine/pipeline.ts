@@ -13,7 +13,7 @@ import { prepareLore, merge, type Activation, type Fired, type LoreBook, type Lo
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, recordsTarget, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import { retrieval, retrievalRoom } from './retrieval';
-import { numbered, profileNames, severalScenes, type Told } from './illustrate';
+import { COMIC_PAGE, lastScene, numbered, profileNames, seenBy, severalScenes, type Earlier, type Told } from './illustrate';
 import { mascotSheet } from './mascot';
 import type { TranslationRequest } from './translate';
 
@@ -450,6 +450,11 @@ export type IllustrationInput = {
   portraits: Told[];
   // The chat's 삽화 노트, '' for none.
   note: string;
+  // The chat's latest picture before this call, null for none.
+  last: Earlier | null;
+  // The name of the persona the picture is seen through, null when not drawn from the persona's eyes.
+  pov: string | null;
+  comic: boolean;
   seed: string;
   countTokens: (text: string) => number;
 };
@@ -457,11 +462,17 @@ export type IllustrationInput = {
 // Like a translation, a 삽화 task holds no chat, so entries placed at a depth are not sent in it.
 export const assembleIllustration = (input: IllustrationInput): { messages: ChatMessage[] } | RanAway => stoppable(() => illustration(input));
 
-function illustration({ scope, take, prompt, index, paragraphs, count, portraits, note, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
+function illustration({ scope, take, prompt, index, paragraphs, count, portraits, note, last, pov, comic, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
   const { texts, variables } = renderChat('display', scope, take);
   const laid = lay(scope, prompt.blocks, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', note, recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
-  const asked = [...(portraits.length ? [profileNames(portraits)] : []), ...(count > 1 ? [severalScenes(count)] : [])];
+  const asked = [
+    ...(portraits.length ? [profileNames(portraits)] : []),
+    ...(last ? [lastScene(last)] : []),
+    ...(pov === null ? [] : [seenBy(pov)]),
+    ...(comic ? [COMIC_PAGE] : []),
+    ...(count > 1 ? [severalScenes(count)] : []),
+  ];
   return { messages: [...taskMessages(parts), ...asked.map((content) => ({ role: 'user' as const, content }))] };
 }
 

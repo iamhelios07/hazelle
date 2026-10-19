@@ -62,6 +62,35 @@ export const profileNames = (portraits: readonly Told[]) =>
     }),
   ].join('\n');
 
+// A picture of the chat drawn before the scene call, and how many messages before the one drawn (runtime/illustrate
+// drawnBefore).
+export type Earlier = { scene: Scene; ago: number };
+
+// Sent after the 삽화 prompt, the engine's for the same reason as severalScenes, as are seenBy and COMIC_PAGE: the
+// chat's latest picture, so the next keeps its place, cast and clothes. ago 0 is the same message drawn again by hand.
+export const lastScene = ({ scene, ago }: Earlier) =>
+  [
+    `The last picture of this chat was drawn ${messagesAgo(ago)}. Keep what still holds in it, such as the place, who is there and what they wear, unless the story has moved on, and never draw the same moment again.`,
+    `- setting: ${scene.setting}`,
+    `- framing: ${scene.framing}`,
+    ...(scene.characters.length ? scene.characters.map(({ name, outfit, action }) => `- ${name}; outfit: ${outfit}; action: ${action}`) : ['- no one in it']),
+  ].join('\n');
+
+// asPov takes out a figure the writer gives the viewer anyway.
+export const seenBy = (name: string) =>
+  `Draw the picture through ${name}'s own eyes: the viewer is ${name}. Never list ${name} in "characters", nor count them in the count tags. Begin "framing" with the tag pov, and add pov hands when ${name}'s hands or arms would be in view. Anyone speaking to ${name} looks at the viewer.`;
+
+export const COMIC_PAGE =
+  'Draw the moment as one manga page of several panels. Begin "setting" with the tags comic, multiple views, speech bubble, then the count tags, place, time of day and lighting. In "framing", describe the panels from top to bottom: how many there are and what each one shows. List each character once, with x and y at 0.5. Use the portrait shape.';
+
+// The scene drawn through the eyes of the one names belong to (seenBy): their figures out, and framing led by pov. The
+// count tags in setting are left as written.
+export function asPov(scene: Scene, names: readonly string[]): Scene {
+  const viewer = new Set(names.map(nameKey).filter(Boolean));
+  const framing = scene.framing.split(',').some((tag) => nameKey(tag) === 'pov') ? scene.framing : tags('pov', scene.framing);
+  return { ...scene, framing, characters: scene.characters.filter(({ name }) => !viewer.has(nameKey(name))) };
+}
+
 const portraitsByName = (portraits: readonly Portrait[]) => {
   const byName = new Map<string, Portrait>();
   for (const portrait of portraits) for (const key of namesOf(portrait)) if (!byName.has(key)) byName.set(key, portrait);
@@ -81,7 +110,7 @@ const outfitsWorn = (portrait: Portrait, outfit: string): (Outfit | string)[] =>
 
 // drawn: the scenes of the chat's pictures in their order, each with how many messages before the one drawn it is;
 // a later one's figure overrides.
-export function toldProfiles(portraits: readonly Portrait[], drawn: readonly { scene: Scene; ago: number }[]): Told[] {
+export function toldProfiles(portraits: readonly Portrait[], drawn: readonly Earlier[]): Told[] {
   const byName = portraitsByName(portraits);
   const worn = new Map<Portrait, Told['worn']>();
   for (const { scene, ago } of drawn) {

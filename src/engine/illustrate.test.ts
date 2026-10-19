@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Model } from '../connectors/types';
 import type { Portrait } from '../model/likeness';
-import { illustratorPrompt, parseScene, pictureRequest, PICTURE_DEFAULTS, profileNames, sceneText, sentText, toldProfiles } from './illustrate';
+import { asPov, illustratorPrompt, lastScene, parseScene, pictureRequest, PICTURE_DEFAULTS, profileNames, sceneText, sentText, toldProfiles } from './illustrate';
 
 const answer = {
   after: 2,
@@ -117,4 +117,20 @@ describe('pictureRequest with portraits', () => {
     expect(prompts([{ name: 'Mina', outfit: '' }], portraits).prompt).toMatch(/^artist:module, indoors/);
     expect(prompts([{ name: 'Ari', outfit: '' }], portraits, 'artist:chosen').prompt).toMatch(/^artist:chosen, indoors/);
   });
+});
+
+it('tells the scene writer the last picture’s setting, framing, figures and how long ago', () => {
+  const figure = { name: 'Ari', look: 'girl', outfit: 'white dress', action: 'sitting', x: 0.3, y: 0.6 };
+  const last = { paragraph: 0, shape: 'landscape' as const, setting: '2girls, cafe, night', framing: 'wide shot', characters: [figure, { ...figure, name: 'Jin', outfit: 'coat', action: 'waving' }] };
+  expect(lastScene({ scene: last, ago: 3 })).toMatch(/^The last picture of this chat was drawn 3 messages ago\..*\n- setting: 2girls, cafe, night\n- framing: wide shot\n- Ari; outfit: white dress; action: sitting\n- Jin; outfit: coat; action: waving$/);
+  expect(lastScene({ scene: { ...last, characters: [] }, ago: 0 })).toMatch(/^The last picture of this chat was drawn in this message\.[^]*\n- no one in it$/);
+});
+
+it('drops the viewer’s figures by name or alias and leads the framing with pov, once', () => {
+  const figure = { name: 'Ari', look: 'girl', outfit: '', action: 'smile', x: 0.5, y: 0.5 };
+  const scene = { paragraph: 0, shape: 'square' as const, setting: '2girls', framing: 'wide shot', characters: [figure, { ...figure, name: 'Jin' }] };
+  const seen = asPov(scene, ['jin ', 'Traveler']);
+  expect(seen).toEqual({ ...scene, framing: 'pov, wide shot', characters: [figure] });
+  expect(asPov({ ...scene, characters: [{ ...figure, name: 'TRAVELER' }] }, ['Jin', 'traveler']).characters).toEqual([]);
+  expect(asPov(seen, ['Jin']).framing).toBe('pov, wide shot');
 });
