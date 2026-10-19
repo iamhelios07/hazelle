@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { PulseAnswer, PulseBoard } from '../contracts/pulse';
-import { clientFiles, CSP, SANDBOX_CSP, SANDBOX_NETWORK_CSP } from './static';
+import { clientFiles, CSP, pageCsp, SANDBOX_CSP, SANDBOX_NETWORK_CSP } from './static';
 
 let dir: string;
 let client: ReturnType<typeof clientFiles>;
@@ -28,6 +28,8 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const PAGE = { accept: 'text/html,application/xhtml+xml,*/*;q=0.8' };
 const ANY = { accept: '*/*' };
+const nonceOf = (policy: string | null) => /'nonce-([^']+)'/.exec(policy ?? '')?.[1] ?? '';
+const pagePolicy = (response: Response) => pageCsp(nonceOf(response.headers.get('content-security-policy')));
 
 describe('the client files', () => {
   it('serves hashed assets as immutable with their types, other files and the page as no-cache, all under the CSP', async () => {
@@ -37,12 +39,12 @@ describe('the client files', () => {
       ['/assets/tokenizer-h3.wasm', 'application/wasm', 'public, max-age=31536000, immutable', 'wasm'],
       ['/license.txt', 'text/plain; charset=utf-8', 'no-cache', 'license'],
       ['/source.tar.gz', 'application/gzip', 'no-cache', 'source'],
-      ['/', 'text/html; charset=utf-8', 'no-cache', '<!doctype html>page'],
+      ['/', 'text/html; charset=UTF-8', 'no-cache', '<!doctype html>page'],
     ];
     for (const [path, type, cache, body] of cases) {
       const response = await client.request(path, { headers: ANY });
       expect([path, response.status, response.headers.get('content-type'), response.headers.get('cache-control'), await response.text()]).toEqual([path, 200, type, cache, body]);
-      expect(response.headers.get('content-security-policy')).toBe(CSP);
+      expect(response.headers.get('content-security-policy')).toBe(path === '/' ? pagePolicy(response) : CSP);
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
       expect(response.headers.get('referrer-policy')).toBe('no-referrer');
       expect(response.headers.get('access-control-allow-origin')).toBe(path.startsWith('/assets/') ? '*' : null);
@@ -53,7 +55,7 @@ describe('the client files', () => {
     for (const path of ['/terms', '/privacy', '/models/c1/vendor/model-4.5', '/chats/abc']) {
       const response = await client.request(path, { headers: PAGE });
       expect([path, response.status, response.headers.get('cache-control'), await response.text()]).toEqual([path, 200, 'no-cache', '<!doctype html>page']);
-      expect(response.headers.get('content-security-policy')).toBe(CSP);
+      expect(response.headers.get('content-security-policy')).toBe(pagePolicy(response));
     }
   });
 
@@ -62,7 +64,7 @@ describe('the client files', () => {
     const covered = await (await client.request('/s/covered-share-id', { headers: PAGE })).text();
     expect(covered).toBe('<title>Mira &#60;b&#62; · jin &#38; co</title><meta name="description" content="$&#38; &#34;quoted&#34;" /><meta property="og:title" content="Mira &#60;b&#62; · jin &#38; co" /><meta property="og:description" content="$&#38; &#34;quoted&#34;" /><meta name="twitter:card" content="summary" />');
     const bare = await client.request('/s/no-cover-share00', { headers: PAGE });
-    expect([bare.headers.get('content-security-policy'), await bare.text()]).toEqual([CSP, '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta name="twitter:card" content="summary" />']);
+    expect([bare.headers.get('content-security-policy'), await bare.text()]).toEqual([pagePolicy(bare), '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta name="twitter:card" content="summary" />']);
     writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
   });
 
@@ -80,6 +82,16 @@ describe('the client files', () => {
       pulse = answer;
       expect(await page()).toBe(html);
     }
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
+  });
+
+  it("gives each page load its own nonce, in the page where Vite left the placeholder and in the page's policy", async () => {
+    writeFileSync(join(dir, 'index.html'), '<meta property="csp-nonce" nonce="HAZELLE_NONCE">');
+    const loads = await Promise.all(['/', '/chats/abc'].map((path) => client.request(path, { headers: PAGE })));
+    const nonces = loads.map((load) => nonceOf(load.headers.get('content-security-policy')));
+    expect(await Promise.all(loads.map((load) => load.text()))).toEqual(nonces.map((nonce) => `<meta property="csp-nonce" nonce="${nonce}">`));
+    expect(nonces[0]).toMatch(/^[A-Za-z0-9+/]{24}$/);
+    expect(nonces[0]).not.toBe(nonces[1]);
     writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
   });
 
@@ -112,7 +124,8 @@ it('serves the opaque tool document with a classic script and its own CSP, never
   expect(SANDBOX_CSP).toContain("frame-src 'none'");
   expect(CSP).toContain("frame-src 'self'");
   expect(CSP).not.toContain('sandbox allow-scripts');
-  expect((await client.request('/', { headers: PAGE })).headers.get('content-security-policy')).toBe(CSP);
+  const app = await client.request('/', { headers: PAGE });
+  expect(app.headers.get('content-security-policy')).toBe(pagePolicy(app));
 });
 
 it('serves a frame with network consent pictures, fonts and stylesheets from outside, and never a connection', async () => {

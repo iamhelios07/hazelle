@@ -3,7 +3,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
 import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
 import { featherless } from '../src/connectors/featherless';
-import { CSP } from '../src/server/static';
+import { pageCsp } from '../src/server/static';
 import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, pickBot, SCRIPTED, settingsPage } from './helpers';
 
 const PASSWORD = 'e2e-password';
@@ -23,7 +23,8 @@ test('a new account imports a card, chats through the fake provider and finds th
 
   await test.step('sign up and reach the library', async () => {
     const response = await page.goto('/');
-    expect(response?.headers()['content-security-policy']).toBe(CSP);
+    const policy = response?.headers()['content-security-policy'] ?? '';
+    expect(policy).toBe(pageCsp(/'nonce-([^']+)'/.exec(policy)?.[1] ?? ''));
     await page.getByLabel('아이디', { exact: true }).fill('e2e');
     await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
     await page.getByLabel('비밀번호 확인', { exact: true }).fill(PASSWORD);
@@ -302,5 +303,16 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(added).toContainText('목록에 없음');
     await added.getByRole('button', { name: `${last.name} 빼기`, exact: true }).click();
     await expect(added).toHaveCount(0);
+  });
+
+  await test.step('크게 편집 draws the code editor with its own stylesheet, which the page policy admits by its nonce', async () => {
+    await page.goto('/');
+    await page.getByRole('complementary', { name: '캐릭터 바로가기' }).getByRole('button', { name: /^Mira/ }).first().click();
+    await page.getByRole('complementary', { name: '캐릭터 목록' }).getByRole('button', { name: /^Mira/ }).first().click();
+    await page.getByRole('navigation', { name: '개요' }).getByRole('button', { name: '캐릭터', exact: true }).click();
+    await page.getByRole('textbox', { name: '설명' }).click();
+    await page.keyboard.press('Control+Shift+X');
+    await expect(page.locator('.cm-scroller')).toHaveCSS('display', 'flex');
+    expect(violations).toEqual([]);
   });
 });

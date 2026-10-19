@@ -7,6 +7,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), sandbox(), compressedAssets()],
   server: { proxy: { '/api': 'http://localhost:8080' } },
+  // The server swaps this placeholder for each page load's own nonce (server/static NONCE).
+  html: { cspNonce: 'HAZELLE_NONCE' },
   // Inlined assets become data: URLs, which the CSP refuses (the CSP constant the server sends); every asset ships as a file.
   // An explicit ?inline import (the starter prompt, runtime/prompts) is read in code as a string and never
   // loaded as a URL, so it stays within the CSP.

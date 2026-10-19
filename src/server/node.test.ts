@@ -13,13 +13,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VISITOR_HEADER } from '../contracts/http';
 import { MAX_FILE_BYTES } from './files';
 import { sha256Hex } from './http';
-import { CSP } from './static';
+import { pageCsp } from './static';
 import { sessionCookie, signupBody } from './testing';
 
 let dir: string;
 let bundle: string;
 let client: string;
 const children: ChildProcess[] = [];
+const pagePolicy = (page: Response) => pageCsp(/'nonce-([^']+)'/.exec(page.headers.get('content-security-policy') ?? '')?.[1] ?? '');
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-node-'));
@@ -224,7 +225,7 @@ describe('the server process', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const page = await fetch(origin, { headers: { accept: 'text/html' }, signal: AbortSignal.timeout(2_000) });
       expect(await page.text()).toBe('page');
-      expect(page.headers.get('content-security-policy')).toBe(CSP);
+      expect(page.headers.get('content-security-policy')).toBe(pagePolicy(page));
       expect(page.headers.get('server-timing')).toMatch(/^static;dur=/);
       expect(finished).toBe(false);
     } finally {
@@ -263,7 +264,7 @@ describe('the server process', () => {
     const unknown = await fetch(`http://127.0.0.1:${port}/api/nowhere`, { headers: { accept: 'text/html' } });
     expect([unknown.status, unknown.headers.get('content-security-policy')]).toEqual([404, null]);
     const page = await fetch(`http://127.0.0.1:${port}/models/c1/vendor/model-4.5`, { headers: { accept: 'text/html' } });
-    expect([page.status, page.headers.get('content-security-policy'), await page.text()]).toEqual([200, CSP, 'page']);
+    expect([page.status, page.headers.get('content-security-policy'), await page.text()]).toEqual([200, pagePolicy(page), 'page']);
     expect(server.log()).toContain(`"migrationsApplied":${JSON.stringify(readdirSync('migrations').filter((name) => name.endsWith('.sql')).sort())}`);
 
     const second = start(data, await freePort());

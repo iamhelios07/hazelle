@@ -140,6 +140,8 @@ function extensions(own: Compartment, language: CodeLanguage, label: string, pro
     Prec.highest(keymap.of([{ key: 'Tab', run: acceptCompletion }])),
     PHRASES,
     EditorView.lineWrapping,
+    // CodeMirror mounts its own stylesheet as a <style>, which the page's CSP admits only with the page's nonce.
+    EditorView.cspNonce.of(document.querySelector<HTMLMetaElement>('meta[property=csp-nonce]')?.nonce ?? ''),
     keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, ...lintKeymap, indentWithTab]),
     EditorView.updateListener.of((update) => update.docChanged && changed(update.state.doc.toString())),
   ];
