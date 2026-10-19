@@ -203,7 +203,7 @@ describe('evaluate', () => {
     expect(run(tags, { messages, greeting: { index: 1 }, source: { message: 2 } })).toBe('1 0 0 char Hello hi 1 Hello hi');
     expect(run('{{firstmsgindex}}', { messages, greeting: { index: 0 } })).toBe('-1');
     expect(run('{{chatindex}} {{isfirstmsg}} {{role}}', { messages, source: { message: 0 } })).toBe('-1 1 char');
-    expect(run('{{chatindex}} {{isfirstmsg}}', { messages })).toBe('-1 0');
+    expect(run('{{chatindex}} {{isfirstmsg}} {{role}}', { messages })).toBe('-1 0 null');
     const plain = messages.slice(1);
     expect(run('{{chatindex}} {{lastmessageid}} {{previouschatlog::0}} {{previouschatlog::-1}} {{firstmsgindex}}', { messages: plain, greeting: null, source: { message: 1 } })).toBe(
       '1 1 hi Out of range {{firstmsgindex}}',
@@ -215,6 +215,19 @@ describe('evaluate', () => {
     expect(JSON.parse(run('{{history}}', { messages })).map((each: string) => JSON.parse(each))).toEqual([{ role: 'char', data: 'a' }, { role: 'user', data: 'k', time: 5 }]);
     expect(run('{{messages::role}}', { messages })).toBe('["user: k"]');
     expect(run('{{history::text::role}}', { messages })).toBe('["user: k"]');
+  });
+
+  it("reads Risu's aliases of userhistory, charhistory, firstmsgindex, isfirstmsg, objectassert, makedict and fixnum", () => {
+    const over = { messages: [message('g', 'assistant', 'Hello'), message('u', 'user', 'hi'), message('a', 'assistant', 'yo')], greeting: { index: 1 }, source: { message: 1 } };
+    const aliases = '{{usermessages}}|{{charmessages}}|{{firstmessageindex}}|{{isfirstmessage}}|{{dictassert::{}::a::1}}|{{makeobject::a=1}}|{{fixnumber::3.14159::2}}';
+    const primaries = '{{userhistory}}|{{charhistory}}|{{firstmsgindex}}|{{isfirstmsg}}|{{objectassert::{}::a::1}}|{{makedict::a=1}}|{{fixnum::3.14159::2}}';
+    expect(run(aliases, over)).toBe(run(primaries, over));
+  });
+
+  it("lists the lorebook as Risu does: each entry a JSON string in Risu's fields, its content raw", () => {
+    const entry = { name: 'Gate', keys: ['gate', 'door'], secondaryKeys: [], content: '{{user}} opens', enabled: true, constant: false, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 3, priority: null, position: null };
+    const items = JSON.parse(run('{{lorebook}}', { lore: [entry] })) as string[];
+    expect(items.map((item) => JSON.parse(item))).toEqual([{ key: 'gate, door', secondkey: '', comment: 'Gate', content: '{{user}} opens', insertorder: 3, alwaysActive: false, selective: false, useRegex: false, mode: 'normal' }]);
   });
 
   it('leaves the greeting out of userhistory, charhistory and messageunixtimearray, as Risu does', () => {

@@ -248,10 +248,10 @@ function block(item: Json): Block | Counted {
   return 'unread-item';
 }
 
-// Risu slices [rangeStart, rangeEnd): negative counts from the end, 'end' is the end, and -1000 means all,
-// read here as the far end on either side.
-function chatRange(start: unknown, end: unknown): ChatRange | null {
-  const from = start === -1000 ? 0 : start;
+// Risu slices [rangeStart, rangeEnd): negative counts from the end and 'end' is the end. A rangeStart of -1000 is the
+// whole chat whatever rangeEnd says; a rangeEnd of -1000 is read here as the end.
+function chatRange(from: unknown, end: unknown): ChatRange | null {
+  if (from === -1000) return { from: 0, to: null };
   const to = end === 'end' || end === -1000 ? null : end;
   if (typeof from !== 'number' || !Number.isInteger(from)) return null;
   if (to !== null && (typeof to !== 'number' || !Number.isInteger(to))) return null;

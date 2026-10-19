@@ -18,6 +18,7 @@ const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   'additional-text': () => '추가 설명(임베딩)',
   'prebuilt-asset-command': () => '에셋 명령',
   'large-portrait': () => '큰 초상화로 보기',
+  'view-screen': () => '추가 캐릭터 스크린(감정 이미지·이미지 생성)',
   'depth-prompt': () => '깊이 프롬프트',
   'disable-ui-prompt': (count) => `@@disable_ui_prompt ${count}곳`,
   'cbs-tag': (count) => `지원하지 않는 ${COMMAND} ${count}개`,

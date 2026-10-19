@@ -179,6 +179,7 @@ function cardJson(char: Json): Json {
           defaultVariables: char.defaultVariables,
           prebuiltAssetCommand: char.prebuiltAssetCommand,
           largePortrait: char.largePortrait,
+          viewScreen: char.viewScreen,
           toggles: char.customModuleToggle,
         },
         depth_prompt: char.depth_prompt,
