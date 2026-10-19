@@ -1,5 +1,5 @@
 import { connectApi } from './api';
-import { installRisu } from './risu';
+import { installRisu, risuScript } from './risu';
 
 declare const BACKGROUND_SOURCE: string;
 let connected = false;
@@ -27,7 +27,7 @@ addEventListener('message', (event: MessageEvent) => {
   if (event.data.role === 'frame') {
     connectApi(port, (code, api) => {
       unload = installRisu(api, globalThis as unknown as Record<string, unknown>);
-      return (0, eval)(code) as void | Promise<void>;
+      return (0, eval)(risuScript(code)) as Promise<void>;
     });
     return;
   }

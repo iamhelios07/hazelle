@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import { RISU_MAPPED } from '../tool-api/risu-methods';
-import { installRisu } from './risu';
+import { installRisu, risuScript } from './risu';
 
 type Handler = (...args: never[]) => unknown;
 
@@ -64,7 +64,7 @@ describe('the Risu adapter', () => {
     const characterIndex = await Risuai.getCurrentCharacterIndex!() as number;
     const chatIndex = await Risuai.getCurrentChatIndex!() as number;
     expect((await Risuai.getDatabase!(['characters'] as never) as { characters: { chaId: string }[] }).characters[characterIndex]?.chaId).toBe('character-1');
-    expect(await Risuai.getChatFromIndex!(characterIndex as never, chatIndex as never)).toEqual({ message: [{ role: 'user', data: 'hello', time: 1, chatId: 'm0' }, { role: 'char', data: 'hi there', time: 2, chatId: 'm1' }] });
+    expect(await Risuai.getChatFromIndex!(characterIndex as never, chatIndex as never)).toEqual({ id: 'chat-1', message: [{ role: 'user', data: 'hello', time: 1, chatId: 'm0' }, { role: 'char', data: 'hi there', time: 2, chatId: 'm1' }] });
     expect(await Risuai.getChatFromIndex!(characterIndex as never, (chatIndex + 1) as never)).toBeNull();
     await Risuai.setChatToIndex!(characterIndex as never, chatIndex as never, { message: [{ role: 'user', data: 'hello' }, { role: 'char', data: 'edited' }, { role: 'user', data: 'more' }] } as never);
     expect(fake.edits).toEqual([[1, 'edited']]);
@@ -103,6 +103,13 @@ describe('the Risu adapter', () => {
     await vi.waitFor(() => expect(panel).toHaveBeenCalledTimes(1));
     await Risuai.unregisterUIPart!('chat' as never);
     expect(fake.menus.at(-1)).toEqual([{ id: 'side', label: 'SimCore' }]);
+  });
+
+  it('runs a plugin whose top level awaits, as Risu does', async () => {
+    const fake = fakeApi();
+    const scope = install(fake);
+    await runInNewContext(risuScript("await risuai.registerButton({ name: '용사', location: 'chat', id: 'hero' }, () => {}); // last line"), scope);
+    expect(fake.menus.at(-1)).toEqual([{ id: 'hero', label: '용사' }]);
   });
 
   it('maps exactly the shared list; any other name throws by name and is told to 점검 once', async () => {
@@ -294,7 +301,7 @@ const load = async (path: string) => {
     TextEncoder, TextDecoder, URL, URLSearchParams, AbortController, AbortSignal, queueMicrotask, structuredClone, performance, location: standIn(), localStorage: standIn(),
   };
   installRisu(fake.api, scope);
-  await runInNewContext(readFileSync(port(path), 'utf8'), scope, { timeout: 20_000 });
+  await runInNewContext(risuScript(readFileSync(port(path), 'utf8')), scope, { timeout: 20_000 });
   return fake;
 };
 

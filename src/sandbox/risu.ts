@@ -30,7 +30,7 @@ const character = (card: Hazelle.Card, lorebook: Hazelle.LoreEntry[]) => ({
   globalLore: lorebook.filter(({ owner }) => owner.kind === 'character').map(loreEntry),
 });
 
-const chatOf = (messages: Hazelle.Message[]) => ({ message: messages.map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })) });
+const chatOf = (id: string, messages: Hazelle.Message[]) => ({ id, message: messages.map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })) });
 
 const MODEL_ROLES = new Set(['system', 'user', 'assistant']);
 // A Response with one of these statuses throws when given a body.
@@ -73,6 +73,10 @@ const once = <T>(read: () => Promise<T>) => {
   return () => held ??= read();
 };
 
+// Risu runs a plugin as the body of an async function (apiV3/factory.ts), so a top-level await works (선택지 용사) and
+// its declarations stay its own. The line break keeps a closing line comment from swallowing the brace.
+export const risuScript = (code: string) => `(async () => {${code}\n})()`;
+
 // Installs Risuai, risuai and the dialog shims into scope; answers the frame's stop, which runs onUnload callbacks.
 export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   const frame = api.frame!;
@@ -91,7 +95,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   const read = async (chat: Hazelle.Chat) => {
     const messages = await chat.messages();
     for (const message of messages) place(chat, message);
-    return chatOf(messages);
+    return chatOf(chat.id, messages);
   };
   // Risu's three button places (action, chat, hamburger) are one ⋯ here, so a button a plugin offers in two of them
   // (Asset Maid, SimCore) is listed once. Splitting by place instead would strand one only in the side menu (Fishing's 도감).
