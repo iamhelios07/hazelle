@@ -148,8 +148,9 @@ async function starterBytes(): Promise<Uint8Array<ArrayBuffer>> {
 }
 
 // Only the fields given, merged into the current prompt, so an edit to another field on another device survives.
-// authorNote is a conversation prompt's only, tags and picture a 삽화 prompt's; tags undefined goes back to the app's.
-export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: ToggleLine[]; authorNote: string; tags: PictureTags; picture: PictureSettings }>;
+// authorNote is a conversation prompt's only, tags and picture a 삽화 prompt's, protect a translation prompt's; tags
+// undefined goes back to the app's, protect undefined stores no 보호 패턴.
+export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: ToggleLine[]; authorNote: string; tags: PictureTags; picture: PictureSettings; protect: string[] }>;
 
 export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current): Prompt => ({ ...current, ...patch }));
 

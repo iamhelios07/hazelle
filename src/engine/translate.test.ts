@@ -82,4 +82,13 @@ describe('the default translation prompt', () => {
     expect(messages[3]!.content).toMatch(/\n---\nMaster -> 주인님\n\nLuna -> 루나$/);
     expect(messages[4]!.content).toMatch(/:\n\n\[jin\]\nIs the LAMP lit\?$/);
   });
+
+  it('sends the source with its protected spans as tokens, told to keep them just before it, and refuses a pattern that does not read', () => {
+    const { source, messages, spans } = translate({ request: { kind: 'input', text: '<img src="a.png"> Hi, [[Luna]].' }, language: 'Korean', prompt: { ...translatorPrompt(), protect: ['\\[\\[.*?\\]\\]'] } });
+    expect(source).toBe('⟦1⟧ Hi, ⟦2⟧.');
+    expect(spans).toEqual(['<img src="a.png">', '[[Luna]]']);
+    expect(messages.at(-2)).toEqual({ role: 'system', content: expect.stringContaining('Keep every token exactly as written') });
+    expect(messages.at(-1)).toEqual({ role: 'user', content: '⟦1⟧ Hi, ⟦2⟧.' });
+    expect(assembleTranslation({ scope, take: new Set(), prompt: { ...translatorPrompt(), protect: ['(open'] }, translations: [], notes: '', request: { kind: 'input', text: 'Hi' }, language: 'Korean', seed: 'seed', countTokens: (text) => text.length })).toEqual({ kind: 'protect-invalid', pattern: '(open' });
+  });
 });

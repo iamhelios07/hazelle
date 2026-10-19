@@ -298,6 +298,10 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
       return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 내용이 비어 있는 번역 결과를 보냈어요.';
     case 'unsaved':
       return `번역 결과를 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+    case 'protected-lost':
+      return `보호한 부분 ${failure.count}곳이 번역에서 빠졌어요. 다시 번역해 주세요.`;
+    case 'protect-invalid':
+      return `번역 프롬프트의 보호 패턴을 읽을 수 없어요: ${failure.pattern}`;
   }
 }
 

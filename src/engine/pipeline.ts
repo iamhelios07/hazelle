@@ -16,6 +16,7 @@ import { retrieval, retrievalRoom } from './retrieval';
 import { COMIC_PAGE, lastScene, numbered, profileNames, seenBy, severalScenes, type Earlier, type Told } from './illustrate';
 import { mascotSheet } from './mascot';
 import type { TranslationRequest } from './translate';
+import { protect, protectRules, type ProtectInvalid } from './protect';
 
 export type PromptInput = {
   tools: { module: string; name: string; text: string }[];
@@ -408,18 +409,28 @@ export type TranslationInput = {
 // source is what goes out to be translated: a message as it is displayed (after its CBS and display scripts), which
 // is what the reader would otherwise read, or the user's input. A translation holds no chat, so entries placed at a
 // depth, or into a text a card replaces, are not sent in it.
-export const assembleTranslation = (input: TranslationInput): { source: string; messages: ChatMessage[] } | RanAway => stoppable(() => translation(input));
+// spans: what the tokens in source stand for (engine/protect), which the answer must bring back; none when the prompt
+// sends no source.
+export const assembleTranslation = (input: TranslationInput): { source: string; messages: ChatMessage[]; spans: string[] } | ProtectInvalid | RanAway => stoppable(() => translation(input));
 
 // A message whose CBS ran away is its source as shown, tags as written, and the display says so.
-function translation({ scope, take, prompt, translations, notes, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
+function translation({ scope, take, prompt, translations, notes, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[]; spans: string[] } | ProtectInvalid {
+  const rules = protectRules(prompt.protect ?? []);
+  if ('kind' in rules) return rules;
   const { texts, variables } = renderChat('display', scope, take);
   const before = request.kind === 'message' ? request.index : texts.length;
-  const source = request.kind === 'message' ? texts[request.index]! : request.text;
+  const { masked: source, spans } = protect(request.kind === 'message' ? texts[request.index]! : request.text, rules);
   const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, message: seed, seed, role: 'user' as const, text: request.text, time: null }];
   const laid = lay(scope, prompt.blocks, history, variables, seed, remembered(countTokens), language);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', note: notes, recent: recentOf(scope, texts, before, translations), source });
-  return { source, messages: taskMessages(parts) };
+  const sent = parts.find((part): part is Sent => 'message' in part && part.from.kind === 'block' && part.from.slot === 'source');
+  if (!sent) return { source, messages: taskMessages(parts), spans: [] };
+  if (spans.length) parts.splice(parts.indexOf(sent), 0, { message: { role: 'system', content: keepTokens(spans.length) }, from: sent.from });
+  return { source, messages: taskMessages(parts), spans };
 }
+
+const keepTokens = (count: number) =>
+  `Tokens like ⟦1⟧ stand for parts of the source kept out of the translation; it holds ${count}, ⟦1⟧ to ⟦${count}⟧. Keep every token exactly as written, in its place; never translate, drop, change or add one.`;
 
 // 이전 메시지: the messages before the one at before, as displayed, each with its translation unless the slot holds none.
 const recentOf = (scope: ChatScope, texts: string[], before: number, translations: (string | null)[]) => ({ count, translations: withTranslations }: RecentSlot) => {

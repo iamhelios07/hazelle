@@ -3,6 +3,7 @@ import { ChangeSignal } from '../change-signal';
 import type { RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
+import { restore, type ProtectInvalid } from '../engine/protect';
 import type { Chat, Receipt, Translation, Version } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { TranslatePrompt } from '../model/prompt';
@@ -29,7 +30,8 @@ import { evaluatingTask, type Lane } from './evaluation';
 // null for a text of no chat (translateText).
 export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest; language: string; lane: Lane<'translation' | 'auto-translation'> | null };
 
-// failed: the call's receipt says why, and a cut one that wrote nothing is failed too.
+// failed: the call's receipt says why, and a cut one that wrote nothing is failed too. protected-lost: the answer left
+// out count of the source's protected spans, so it is not saved as if whole.
 export type TranslateFailure =
   | RouteFailure
   | { kind: 'prompt-missing'; own: boolean }
@@ -38,15 +40,20 @@ export type TranslateFailure =
   | { kind: 'failed'; receipt: Receipt }
   | { kind: 'stopped' }
   | { kind: 'unsaved'; failure: ApiFailure }
+  | { kind: 'protected-lost'; count: number }
+  | ProtectInvalid
   | RanAway;
+
+export type TranslationTarget = Omit<CallTarget, 'for'> & { for: Extract<Stream['for'], { kind: 'translation' | 'input' }> };
 
 type Deps = { store: ObjectStore; credentials: Credentials; log: RequestLog; tokens: Tokens };
 
-// A translation cut at its length keeps what it wrote, and its receipt says it was cut.
+// A translation cut at its length keeps what it wrote, and its receipt says it was cut, unless the cut took a protected
+// span (protected-lost).
 export async function translate(
   { store, credentials, log, tokens }: Deps,
   { chat, scope, take, translations, request, language, lane }: TranslateInput,
-  target: CallTarget,
+  target: TranslationTarget,
   signal: AbortSignal,
   onText: (text: string) => void,
 ): Promise<Translated> {
@@ -57,7 +64,8 @@ export async function translate(
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
   const assembled = await evaluatingTask(store.evaluation.translation(lane, { scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal));
   if ('kind' in assembled) return { ok: false, failure: assembled };
-  const text = gather(onText);
+  const { spans } = assembled;
+  const text = gather((live) => onText(restore(live, spans).text));
   const answer = await generate({
     credentials,
     log,
@@ -66,28 +74,32 @@ export async function translate(
     settings: profile.profile.value.settings,
     retries: retriesOf(store, route.connection.value, profile.profile.value.settings),
     messages: assembled.messages,
-    call: await newCall({ store, tokens }, route, target),
+    call: await newCall({ store, tokens }, route, spans.length ? { ...target, for: { ...target.for, spans } } : target),
     signal,
     onText: text.add,
   });
-  return translated(callOf(route), answer, text.value(), language);
+  return translated(callOf(route), answer, text.value(), spans, language);
 }
 
 // A translation the server was already making when this page came (tech-spec §6, Detached replies). Only a saved
 // chat's translations are picked up, so no language is needed: a greeting's translation is never one of them.
 export async function resumeTranslation(deps: Pick<Deps, 'store' | 'credentials' | 'log'>, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
-  const text = gather(onText);
+  const purpose = stream.value.for;
+  const spans = 'spans' in purpose ? (purpose.spans ?? []) : [];
+  const text = gather((live) => onText(restore(live, spans).text));
   const answer = await resume(deps, stream, signal, text.add);
-  return translated(stream.value.call, answer, text.value(), null);
+  return translated(stream.value.call, answer, text.value(), spans, null);
 }
 
 type Translated = { ok: true; translation: Translation; language: string | null } | { ok: false; failure: TranslateFailure };
 
-function translated(call: Stream['call'], answer: Reply, text: string, language: string | null): Translated {
+function translated(call: Stream['call'], answer: Reply, text: string, spans: readonly string[], language: string | null): Translated {
   if (answer.cut === 'stopped') return { ok: false, failure: { kind: 'stopped' } };
   const receipt = receiptOf(call, answer);
   if (answer.state === 'failed' || !text.trim()) return { ok: false, failure: { kind: 'failed', receipt } };
-  return { ok: true, translation: { text: text.trim(), receipt, at: Date.now() }, language };
+  const restored = restore(text, spans);
+  if (restored.missing) return { ok: false, failure: { kind: 'protected-lost', count: restored.missing } };
+  return { ok: true, translation: { text: restored.text.trim(), receipt, at: Date.now() }, language };
 }
 
 export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt: TranslatePrompt; route: Route } | { ok: false; failure: RouteFailure | { kind: 'prompt-missing'; own: boolean } } {
@@ -155,7 +167,7 @@ export class Translator {
   // Settles once the translation is saved or has failed; one already running for the version is not waited for.
   translate(chat: string, { id: version, text: original }: Version, input: TranslateInput): Promise<void> {
     if (this.closed || this.aborts.has(version)) return Promise.resolve();
-    const target: CallTarget = { id: crypto.randomUUID(), chat: this.store.get('chat', chat) ? chat : null, result: crypto.randomUUID(), for: { kind: 'translation', version } };
+    const target: TranslationTarget = { id: crypto.randomUUID(), chat: this.store.get('chat', chat) ? chat : null, result: crypto.randomUUID(), for: { kind: 'translation', version } };
     return this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials, log: this.log, tokens: this.tokens }, input, target, signal, onText), (made) =>
       this.store.get('chat', chat)
         ? appendTranslation(this.store, chat, version, made.translation, target.result)
