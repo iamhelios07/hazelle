@@ -44,16 +44,14 @@ function TranslateDefaults() {
   const unsent = noteLines(settings.translatorNote) > 0 && translation.ok && !sendsNotes(translation.prompt);
   return (
     <>
-      <SettingGroup label={FEATURE_NAMES.translate}>
-        <TranslateRows
-          translate={translateSwitches(store, null)}
-          translation={translation}
-          card={null}
-          opens="down"
-          onChange={(change) => void setTranslate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
-          onEditPrompt={editPrompt}
-        />
-      </SettingGroup>
+      <TranslateRows
+        translate={translateSwitches(store, null)}
+        translation={translation}
+        card={null}
+        opens="down"
+        onChange={(change) => void setTranslate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
+        onEditPrompt={editPrompt}
+      />
       <GlobalNoteField error={unsent ? NOTE_UNSENT : undefined} />
     </>
   );

@@ -5,7 +5,7 @@ import { TranslateRows } from '../common/TranslateRows';
 import { inFeature, NOTE_UNSENT, opens, scopeTag, TRANSLATOR_NOTE } from '../common/words';
 import { useSettings } from '../session';
 import { navigate } from '../shell/router';
-import { Button, Divider, Menu, Section, SettingRow, Stack, ToolButton } from '../ui';
+import { Button, Menu, Section, SettingRow, Stack, ToolButton } from '../ui';
 import type { TranslateSetup } from '../../runtime/characters';
 import type { TranslationActions } from './useChatTranslation';
 
@@ -22,7 +22,7 @@ type Props = {
 };
 
 export function ChatTranslate({ translate, translation, card, note, onChange, onOwnChange, onEditPrompt, onEditCharacter }: Props) {
-  const on = [translate.replies && '응답 번역', translate.input && '내 메시지 번역', translate.reverse && '반전 모드', translate.original && '원문 함께 보기'].filter(Boolean).join(', ');
+  const on = [translate.replies && '응답 번역', translate.input && '내 메시지 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
   return (
     <Menu
       kind="dialog"
@@ -37,17 +37,13 @@ export function ChatTranslate({ translate, translation, card, note, onChange, on
             translate={translate}
             translation={translation}
             card={card}
-            note={
-              <>
-                <Divider variant="menu" />
-                <NoteRow note={note} translation={translation} onEdit={onEditCharacter} />
-              </>
-            }
+            note={<NoteRow note={note} translation={translation} onEdit={onEditCharacter} />}
             opens="up"
             onChange={onChange}
             onEditPrompt={onEditPrompt}
-          />
-          <PerCharacter card={card} own={translate.own} onChange={onOwnChange} />
+          >
+            <PerCharacter card={card} own={translate.own} onChange={onOwnChange} />
+          </TranslateRows>
         </Stack>
       </Section>
     </Menu>
