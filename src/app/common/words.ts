@@ -172,7 +172,6 @@ export const UNSET = `모델 ${ORIGINAL}`;
 export const DISCOUNT = '할인 받기';
 export const DISCOUNT_WAITING = '할인 받는 중이에요. 답이 다 만들어지면 한 번에 보여요.';
 export const DISCOUNT_STOPPING = '멈추는 중이에요. 그사이에 응답이 다 만들어지면 완성된 응답을 보여 줘요.';
-// A 설정 묶음's PDF packing of the earlier conversation (connectors/gemini-pdf), and a receipt's mark of it.
 export const PDF_SEND = 'PDF로 보내기';
 
 // A reply whose try failed before any of it came, sent again (design §6.7, retry on failure): the shared count, a

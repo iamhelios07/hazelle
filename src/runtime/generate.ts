@@ -76,7 +76,7 @@ export async function generate({ credentials, log, connection, model, settings, 
   // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
   let built: Reply['request'] = null;
   let cached: CacheView | null = null;
-  let pdf: true | undefined;
+  let pdf = false;
   let account: Account | null = null;
   let tries: number | null = null;
   let protocol = "";
@@ -93,7 +93,7 @@ export async function generate({ credentials, log, connection, model, settings, 
     request: built,
     response: answered?.() ?? null,
     cache: cached,
-    ...(pdf && { pdf }),
+    ...(pdf && { pdf: true as const }),
   });
 
   // Refusals the connector can see coming are made here, before anything is sent.
@@ -110,7 +110,7 @@ export async function generate({ credentials, log, connection, model, settings, 
     // A batch answers whole, and both batch formats refuse a request that streams.
     const prepared = prepareChat(route, { model, messages, settings: batches ? { ...settings, streaming: false } : settings });
     request = prepared.request;
-    if (prepared.pdf) pdf = true;
+    pdf = prepared.pdf;
     if (call.measure) call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), measurement: await call.measure(prepared) };
     if (call.preflight) {
       const checked = await call.preflight(settings, signal);
