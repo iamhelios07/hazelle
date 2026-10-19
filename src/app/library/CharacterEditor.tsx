@@ -37,7 +37,7 @@ import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, Hint, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 import { useNoteDraft } from './useNoteDraft';
@@ -329,14 +329,11 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           value={noteText}
           onChange={(note) => noteSave.change({ note })}
           placeholder={NOTE_PLACEHOLDER}
-          help={{ text: '이 캐릭터를 번역할 때만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
+          help={{ text: '이 캐릭터를 번역할 때만 들어가요. 초안 만들기는 카드를 읽고 이름 표기, 말투, 호칭을 정리해 노트 아래에 적어요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
           action={
-            <>
-              <Button variant="ghost" size="sm" icon={Sparkles} busy={noteDraft.running} onClick={noteDraft.start}>
-                {noteDraft.running ? '쓰는 중…' : '초안 만들기'}
-              </Button>
-              <Hint label="초안 만들기">카드를 읽고 이름 표기, 말투, 호칭을 정리해 노트 아래에 적어요. 고쳐 쓸 수 있어요.</Hint>
-            </>
+            <Button variant="ghost" size="sm" icon={Sparkles} busy={noteDraft.running} onClick={noteDraft.start}>
+              {noteDraft.running ? '쓰는 중…' : '초안 만들기'}
+            </Button>
           }
         />
       </Section>
