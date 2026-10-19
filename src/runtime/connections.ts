@@ -1,7 +1,7 @@
 import { fitsRole } from '../connectors/assignment';
 import { RETRIES } from '../connectors/registry';
 import type { ModelSettings } from '../connectors/settings';
-import { entryKey, type Account, type Connection, type ConnectionType, type Model, type Starred, type Turns } from '../connectors/types';
+import { entriesOf, entryKey, ownOf, snapshotOf, type Account, type Connection, type ConnectionType, type Model, type Starred, type Turns } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Stored } from '../model/kinds';
 import { without } from '../model/fields';
@@ -9,7 +9,7 @@ import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import { firstTurns, groupOf, putBack, removeAccount as withoutAccount, signedIn } from '../model/turns';
 import type { ApiFailure, ApiResult } from './api';
 import { imageOnly, setDefaultModel } from './assignment';
-import { modelProfile, ownProfile, type Owned } from './profiles';
+import { modelProfile, ownProfile } from './profiles';
 import type { CatalogFailure } from './catalog';
 import type { MetersFailure } from './meters';
 import type { Session } from './session';
@@ -91,8 +91,6 @@ export async function addModel(store: ObjectStore, id: string, model: Model, own
   return { ok: true, data: key };
 }
 
-const snapshotOf = (model: Starred): Model => without(without(without(model, 'entry'), 'label'), 'profile');
-
 // A blank name, or the catalog's own, is none, so the entry's name follows the list again.
 function ownLabel(name: string, label: string): Pick<Starred, 'label'> {
   const trimmed = label.trim();
@@ -101,12 +99,14 @@ function ownLabel(name: string, label: string): Pick<Starred, 'label'> {
 
 // A further copy starts on a 설정 of its own, a copy of the one the model's first entry uses: copies exist to differ, and
 // on a shared 설정 an edit on one copy's page would change the other. A model that only draws takes no 설정.
-export function addCopy(store: ObjectStore, id: string, model: Model, label: string): Promise<Owned<string>> {
+export async function addCopy(store: ObjectStore, id: string, model: Model, label: string): Promise<ApiResult<string>> {
   const own = ownLabel(model.name, label);
-  const first = store.get('connection', id)?.value.starred.find((each) => each.id === model.id);
+  const connection = store.get('connection', id);
+  const first = connection && entriesOf(connection.value, model.id)[0];
   if (!first || imageOnly(first)) return addModel(store, id, model, own);
   const choice = modelProfile(store, first);
-  return ownProfile(store, { name: model.name, ...own }, choice.kind === 'profile' ? choice.profile.value.settings : {}, (profile) => addModel(store, id, model, { ...own, profile }));
+  const made = await ownProfile(store, { name: model.name, ...own }, choice.kind === 'profile' ? choice.profile.value.settings : {});
+  return made.ok ? addModel(store, id, model, { ...own, profile: made.data }) : made;
 }
 
 // What removeModel took, for putModelBack: the entry whole, so its key, name and 설정 come back with it and every
@@ -138,7 +138,7 @@ const sameValue = (a: unknown, b: unknown) => {
 };
 
 // A loaded model list makes the snapshot of every entry of a listed model what the list says of it now, keeping the
-// entry's own fields (entry, label, profile). A model the list no longer has keeps its snapshot, and one it leaves
+// entry's own fields (connectors ownOf). A model the list no longer has keeps its snapshot, and one it leaves
 // unpriced, or whose inputs or outputs it leaves unknown, keeps what it had: a models.dev list that did not load reads
 // the same.
 export async function refreshStarred(store: ObjectStore, id: string, models: Model[]): Promise<void> {
@@ -151,9 +151,7 @@ export async function refreshStarred(store: ObjectStore, id: string, models: Mod
       input: listed.input ?? model.input,
       output: listed.output ?? model.output,
       ...(listed.price === undefined && model.price !== undefined && { price: model.price }),
-      ...(model.profile !== undefined && { profile: model.profile }),
-      ...(model.entry !== undefined && { entry: model.entry }),
-      ...(model.label !== undefined && { label: model.label }),
+      ...ownOf(model),
     };
   };
   if (store.get('connection', id)?.value.starred.every((model) => sameValue(fresh(model), model)) !== false) return;

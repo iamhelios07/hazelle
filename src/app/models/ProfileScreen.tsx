@@ -1,5 +1,5 @@
 import { refOf } from '../../connectors/assignment';
-import { entryKey, entryName } from '../../connectors/types';
+import { entryKey, entryName, entryTerms } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { addProfile, modelProfile, removeProfile, restoreProfile, setDefaultProfile, setModelProfile, setProfileSettings, type ProfileUser } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
@@ -145,7 +145,7 @@ type Group = { connection: Stored<'connection'>; models: ProfileUser['model'][] 
 // Mounted only while the menu is open, so each opening starts with an empty search.
 function AddChoices({ groups, now, onPick }: { groups: Group[]; now: (model: Group['models'][number]) => string; onPick: (connection: string, model: string) => void }) {
   const choices = groups.flatMap(({ connection, models }) => models.map((model) => ({ connection, model })));
-  const search = useSearch(choices, '모델 검색', ({ connection, model }) => [entryName(model), model.name, model.id, connection.value.label]);
+  const search = useSearch(choices, '모델 검색', ({ connection, model }) => [...entryTerms(model), connection.value.label]);
   const shown = groups.flatMap(({ connection }) => {
     const found = search.found.filter((choice) => choice.connection === connection);
     return found.length === 0 ? [] : [

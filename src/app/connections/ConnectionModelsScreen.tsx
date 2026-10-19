@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { bareModel } from '../../connectors/chat-completions';
 import { modelSettings, resolveConnection, RETRIES } from '../../connectors/registry';
 import { refOf } from '../../connectors/assignment';
-import { entryKey, entryName, type Model, type Starred } from '../../connectors/types';
+import { entriesOf, entryKey, entryName, entryTerms, type Model, type Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
 import { addCopy, addModel, putModelBack, refreshStarred, removeConnection, removeModel, renameConnection, restoreConnection, setRetries } from '../../runtime/connections';
@@ -34,6 +34,7 @@ const FILTERS: Record<Exclude<Filter, 'all'>, { label: string; test: (model: Mod
   vision: { label: '비전', test: (model) => model.input?.includes('image') === true },
   tools: { label: '도구', test: (model) => model.tools === true },
 };
+const FILTER_CHOICES = [{ value: 'all' as const, label: '전체' }, ...(Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label }))];
 
 // Only what the catalog says a model can do. An unknown capability gets no tag.
 function tags(model: Model): string[] {
@@ -72,24 +73,18 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   }, [key, attempt]);
 
   const entries = connection.starred;
-  const added = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const entry of entries) counts.set(entry.id, (counts.get(entry.id) ?? 0) + 1);
-    return counts;
-  }, [entries]);
   const listedIds = useMemo(() => (catalog?.ok ? new Set(catalog.models.map((model) => model.id)) : null), [catalog]);
-  const rows = useMemo(() => [...entries.map((entry) => ({ entry })), ...(catalog?.ok ? catalog.models.map((model) => ({ model })) : [])], [catalog, entries]);
+  const rows = useMemo(() => [...entries.map((model) => ({ model, added: true })), ...(catalog?.ok ? catalog.models.map((model: Starred) => ({ model, added: false })) : [])], [catalog, entries]);
 
-  const known = rows.some((row) => tags('entry' in row ? row.entry : row.model).length > 0);
-  const filters = [{ value: 'all' as const, label: '전체' }, ...(Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label }))];
-  const search = useSearch(rows, '모델 검색', (row) => ('entry' in row ? [entryName(row.entry), row.entry.name, row.entry.id] : [row.model.name, row.model.id]));
-  const shown = search.found.filter((row) => filter === 'all' || FILTERS[filter].test('entry' in row ? row.entry : row.model));
-  const entriesShown = shown.flatMap((row) => ('entry' in row ? [row.entry] : []));
-  const modelsShown = shown.flatMap((row) => ('model' in row ? [row.model] : []));
+  const known = rows.some(({ model }) => tags(model).length > 0);
+  const search = useSearch(rows, '모델 검색', ({ model }) => entryTerms(model));
+  const shown = search.found.filter(({ model }) => filter === 'all' || FILTERS[filter].test(model));
+  const entriesShown = shown.flatMap(({ model, added }) => (added ? [model] : []));
+  const modelsShown = shown.flatMap(({ model, added }) => (added ? [] : [model]));
 
   // The first add stays on the list; a model already added asks the new entry's name.
   function add(model: Model) {
-    if (added.has(model.id)) setCopying(model);
+    if (entriesOf(connection, model.id).length > 0) setCopying(model);
     else void addModel(store, id, model).then((result) => result.ok || toast.failed(result));
   }
 
@@ -98,7 +93,6 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     setCopying(null);
     void addCopy(store, id, model, label).then((result) => {
       if (result.ok) navigate({ kind: 'model', connection: id, model: result.data });
-      else if ('unmade' in result) toast.failed(result.unmade, `${MODEL_SETTINGS}을 만들지 못했어요.`);
       else toast.failed(result);
     });
   }
@@ -144,7 +138,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   }
 
   function modelRow(model: Model) {
-    const count = added.get(model.id) ?? 0;
+    const count = entriesOf(connection, model.id).length;
     const status = count === 0 ? [] : [count > 1 ? `추가됨 ${count}` : '추가됨'];
     return (
       <ListItem
@@ -190,7 +184,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     <>
       {naming && <NameDialog title="연결 이름 바꾸기" value={connection.label} onSave={rename} onClose={() => setNaming(false)} />}
       {keying && resolved && <ConnectionKeyDialog id={id} type={resolved.type} onClose={() => setKeying(false)} />}
-      {copying && <NameDialog title={addOf(copying.name)} value={`${copying.name} ${(added.get(copying.id) ?? 0) + 1}`} hint="이미 추가한 모델이에요. 이름과 모델 설정을 따로 두고 하나 더 추가해요." onSave={(label) => copy(copying, label)} onClose={() => setCopying(null)} />}
+      {copying && <NameDialog title={addOf(copying.name)} value={`${copying.name} ${entriesOf(connection, copying.id).length + 1}`} hint="이미 추가한 모델이에요. 이름과 모델 설정을 따로 두고 하나 더 추가해요." onSave={(label) => copy(copying, label)} onClose={() => setCopying(null)} />}
       {adding && <NameDialog title={BY_ID} field="모델 ID" value="" hint="목록에 없는 새 모델도 제공자가 쓰는 ID로 추가할 수 있어요." onSave={addById} onClose={() => setAdding(false)} />}
     </>
   );
@@ -216,7 +210,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           <Text variant="note">{[listed, entries.length ? `추가한 모델 ${entries.length}개` : ''].filter(Boolean).join(' · ')}</Text>
           <Row kind="toolbar">
             {search.field}
-            {known && <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />}
+            {known && <ChoiceGroup label="모델 필터" options={FILTER_CHOICES} value={filter} onChange={setFilter} />}
           </Row>
           {catalog && !catalog.ok && (
             <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((count) => count + 1) }}>

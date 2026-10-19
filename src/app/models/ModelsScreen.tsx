@@ -1,5 +1,5 @@
 import { refOf, rolesOf, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
-import { entryKey, entryName } from '../../connectors/types';
+import { entryKey, entryName, entryTerms } from '../../connectors/types';
 import { imageOnly, setDefaultModel } from '../../runtime/assignment';
 import { addDefaultProfile, modelProfile, profileUsers, setDefaultProfile } from '../../runtime/profiles';
 import { TASK_NAMES } from '../common/prompt-words';
@@ -40,7 +40,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
     if (!found) return {};
     return { values: imageOnly(found.model) ? undefined : profileLine(found.choice, settings.profile), open: () => navigate({ kind: 'model', ...refOf(found.connection.id, found.model) }) };
   };
-  const search = useSearch(models, `${STARRED} 검색`, ({ connection, model }) => [entryName(model), model.name, model.id, connection.value.label]);
+  const search = useSearch(models, `${STARRED} 검색`, ({ connection, model }) => [...entryTerms(model), connection.value.label]);
   const sorted = defaultFirst(profiles, settings.profile);
   const defaultProfile = profiles.find((profile) => profile.id === settings.profile);
   const ownModels = prompts.flatMap((prompt) => (prompt.value.task && prompt.value.model ? [{ prompt, task: prompt.value.task, model: prompt.value.model }] : []));

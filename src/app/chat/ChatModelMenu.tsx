@@ -1,7 +1,7 @@
 import { Layers } from 'lucide-react';
 import { sameModelRef, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
-import { entryOf } from '../../connectors/types';
+import { entryOf, entryTerms } from '../../connectors/types';
 import { modelProfile } from '../../runtime/profiles';
 import { byConnection, starredModels } from '../common/RolePicker';
 import { profileLine } from '../common/settingWords';
@@ -54,7 +54,7 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
     RECENT,
   ).flatMap((ref) => starred.filter((choice) => sameModelRef(choice.ref, ref)));
   const rest = starred.filter((choice) => !recent.includes(choice));
-  const search = useSearch(starred, '추가한 모델 검색', (choice) => [choice.name, choice.model.name, choice.model.id, choice.source]);
+  const search = useSearch(starred, '추가한 모델 검색', (choice) => [...entryTerms(choice.model), choice.source]);
 
   // Recent models and search results mix connections, so each names its own; the rest sit under connection headings.
   const item = (choice: (typeof starred)[number], sub?: string) => (

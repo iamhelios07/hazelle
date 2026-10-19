@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
-import { entryKey, entryName, type Starred } from '../../connectors/types';
+import { entriesOf, entryKey, entryName, type Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { modelUsage } from '../../model/usage';
 import { refOf, rolesOf } from '../../connectors/assignment';
@@ -101,8 +101,8 @@ function ChatModelScreen({ connection, model, back }: Props) {
   const ledger = useLedger();
   const rename = useRename(connection, model);
   // Usage counts the provider's model, so every copy's page shows one total.
-  const usage = useMemo(() => (ledger.view.kind === 'read' ? modelUsage(ledger.view.calls, { connection: connection.id, model: model.id }) : null), [ledger.view, connection.id, model.id]);
-  const copies = connection.value.starred.filter((entry) => entry.id === model.id).length;
+  const usage = useMemo(() => (ledger.view.kind === 'read' ? modelUsage(ledger.view.calls, connection.id, model.id) : null), [ledger.view, connection.id, model.id]);
+  const copies = entriesOf(connection.value, model.id).length;
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
@@ -115,12 +115,11 @@ function ChatModelScreen({ connection, model, back }: Props) {
   }
 
   // The new 설정 shows in place: the page stays this model's, and its rows edit the 설정 just made.
-  function own() {
-    void ownProfile(store, model, current?.value.settings ?? {}, (profile) => setModelProfile(store, connection.id, entryKey(model), profile)).then((result) => {
-      if (result.ok) return;
-      if ('unmade' in result) toast.failed(result.unmade, `${MODEL_SETTINGS}을 만들지 못했어요.`);
-      else toast.failed(result, '바꾸지 못했어요.');
-    });
+  async function own() {
+    const made = await ownProfile(store, model, current?.value.settings ?? {});
+    if (!made.ok) return toast.failed(made, `${MODEL_SETTINGS}을 만들지 못했어요.`);
+    const saved = await setModelProfile(store, connection.id, entryKey(model), made.data);
+    if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
   }
 
   const sent = current && (schema ? changeWords(fit(schema, current.value.settings).changes) : NOT_CALLABLE);
@@ -139,7 +138,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
         <MenuItem key={profile.id} label={profile.value.name} tag={defaultMark(profile.id === settings.profile, profile.value.name)} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
       ))}
       <Divider variant="menu" />
-      <MenuItem label="이 모델 전용 설정 만들기" onClick={own} />
+      <MenuItem label="이 모델 전용 설정 만들기" onClick={() => void own()} />
     </Menu>
   );
 

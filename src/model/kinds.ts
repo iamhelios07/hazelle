@@ -148,9 +148,8 @@ const unread = shape({ text: str });
 const toggleLine: Check = (value) =>
   isRecord(value) && (value.kind === 'groupEnd' || (value.kind === 'divider' || value.kind === 'caption' || value.kind === 'group' ? mark : value.kind === 'unread' ? unread : toggle)(value));
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(toggleLine) });
-// filed: the folder a thing sits in, absent for none (model/folders).
-const filed: Check = (value) => value === undefined || str(value);
-const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord, folder: filed });
+const optStr: Check = (value) => value === undefined || str(value);
+const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord, folder: optStr });
 const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate' || value === 'mascot', model: (value) => value === undefined || isRecord(value) });
 
 const SHAPES = {
@@ -172,7 +171,7 @@ const SHAPES = {
     folder: orNull(str),
     loreFolders: listOf(shape({ id: str, name: str })),
   }),
-  module: shape({ name: str, description: str, namespace: orNull(str), folder: filed, regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: listOf(toggleLine), loreFolders: listOf(shape({ id: str, name: str })) }),
+  module: shape({ name: str, description: str, namespace: orNull(str), folder: optStr, regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: listOf(toggleLine), loreFolders: listOf(shape({ id: str, name: str })) }),
   tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model' || value === 'embed' || value === 'memory' || value === 'network'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
   tooldata: shape({ key: str, value: (value) => value !== undefined }),
   toolchat: shape({ module: str, key: orNull(str), value: (value) => value !== undefined }),
@@ -197,12 +196,12 @@ const SHAPES = {
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   // A batch's marker holds no key: no server object holds its call.
-  stream: (value) => shape({ calibration, call: shape({ ...all(str, 'connection', 'source', 'model', 'modelName'), entry: (entry) => entry === undefined || str(entry) }), at: num, result: str, for: shape({ kind: str }) })(value) && (shape({ key: isRecord })(value) || shape({ batch: str })(value)),
+  stream: (value) => shape({ calibration, call: shape({ ...all(str, 'connection', 'source', 'model', 'modelName'), entry: optStr }), at: num, result: str, for: shape({ kind: str }) })(value) && (shape({ key: isRecord })(value) || shape({ batch: str })(value)),
   vectors: shape({ model: str, items: isRecord }),
   cacheprint: shape({ ...all(str, 'call', 'connection', 'model'), account: orNull(str), messages: listOf(shape({ role: str, hash: str, tokens: num, from: isRecord })) }),
   memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), chapters: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, records: listOf(shape({ id: str, at: num })) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
   illustration: (value) => shape({ ...all(str, 'message', 'version', 'type'), file: shape({ id: str, key: str }), size: num, at: num })(value) && (isRecord(value) && 'tool' in value
-    ? shape({ ...all(num, 'paragraph', 'width', 'height'), tool: shape(all(str, 'module', 'name')), caption: (caption) => caption === undefined || str(caption) })(value)
+    ? shape({ ...all(num, 'paragraph', 'width', 'height'), tool: shape(all(str, 'module', 'name')), caption: optStr })(value)
     : shape({
       scene: shape({ paragraph: num, shape: str, setting: str, framing: str, characters: listOf(shape({ ...all(str, 'name', 'look', 'outfit', 'action'), x: num, y: num })) }),
       receipt: orNull(isRecord),
@@ -217,7 +216,7 @@ const SHAPES = {
     protocol: orNull(str),
     accounts: listOf(shape({ id: str, secret: str })),
     turns: orNull(shape({ day: num, groups: listOf(shape({ id: str, name: str, accounts: listOf(str) })), anchor: shape({ group: str, cycle: num }) })),
-    starred: listOf(shape({ id: str, name: str, entry: (entry) => entry === undefined || str(entry), label: (label) => label === undefined || str(label) })),
+    starred: listOf(shape({ id: str, name: str, entry: optStr, label: optStr })),
     retries: (value) => value === undefined || num(value),
   }),
   settings: shape({ models: isRecord }),
@@ -226,7 +225,7 @@ const SHAPES = {
     ? shape({ at: num, call: shape({ ...all(str, 'id', 'connection', 'model', 'modelName', 'source'), calibration }), chat: orNull(str), character: orNull(str) })(value)
     : value.type === 'cost' && shape({ call: str, cost: orNull(isRecord), at: num })(value)),
   prompt: (value) => prompt(value) && (conversation(value) || task(value)),
-  persona: shape({ name: str, description: str, picture: orNull(str), folder: filed }),
+  persona: shape({ name: str, description: str, picture: orNull(str), folder: optStr }),
   profile: shape({ name: str, settings: isRecord }),
 } satisfies Record<Kind, Check>;
 

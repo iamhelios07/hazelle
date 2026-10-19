@@ -162,7 +162,7 @@ describe("a turn with the bot's Lua", () => {
       expect((JSON.parse(log[1]!.sent.body!) as { messages: unknown }).messages).toEqual([{ role: 'user', content: 'sum' }]);
       expect(shown(messages()[2]!).calls).toMatchObject([{ receipt: { state: 'done', model: 'm' } }]);
       const ledger = await session.usage.read(new AbortController().signal);
-      expect(ledger.ok && modelUsage(ledger.data, { connection: shown(messages()[2]!).receipt!.connection, model: 'm' }).calls).toBe(2);
+      expect(ledger.ok && modelUsage(ledger.data, shown(messages()[2]!).receipt!.connection, 'm').calls).toBe(2);
       expect(calls).toHaveLength(2);
       await vi.waitFor(async () => expect((await fetchApi(calls[1]!.slice('/api/'.length))).status).toBe(404));
     }));

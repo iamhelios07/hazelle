@@ -67,7 +67,7 @@ describe('modelUsage', () => {
       usageCall(receipt({ cost: { unit: 'usd', amount: 0.25, source: 'reported' } }), 12),
       usageCall(receipt({ cost: { unit: 'credit', amount: 3, source: 'reported' } }), 13),
     );
-    expect(modelUsage(made, { connection: 'c1', model: 'm1' })).toMatchObject({
+    expect(modelUsage(made, 'c1', 'm1')).toMatchObject({
       calls: 4,
       costs: [{ unit: 'usd', amount: 0.75, estimated: false }, { unit: 'credit', amount: 5, estimated: true }],
       costUnknown: 0,
@@ -78,7 +78,7 @@ describe('modelUsage', () => {
     const cut = receipt({ usage: { inputTokens: 100, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 50, reasoningTokens: null }, cost: { unit: 'usd', amount: 0.5, source: 'reported' }, totalMs: 500 });
     const continued = receipt({ continues: cut, cost: { unit: 'usd', amount: 0.25, source: 'price-list' } });
     const made = [bot('b1', '하나', continued), bot('b2', '둘', { model: 'm2' })];
-    expect(modelUsage(calls(...loggedCalls(made.map(({ value }) => value)).calls), { connection: 'c1', model: 'm1' })).toEqual({
+    expect(modelUsage(calls(...loggedCalls(made.map(({ value }) => value)).calls), 'c1', 'm1')).toEqual({
       calls: 2,
       last: made[0]!.value.at,
       input: { total: 100, unknown: 1 },

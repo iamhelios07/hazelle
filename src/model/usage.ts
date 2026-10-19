@@ -1,4 +1,3 @@
-import type { ModelRef } from '../connectors/assignment';
 import type { Cost } from '../connectors/types';
 import type { Receipt } from './chat';
 
@@ -54,7 +53,8 @@ function sum(made: Iterable<UsageCall>): ModelUsage {
   return usage;
 }
 
-export const modelUsage = (calls: Counted[], { connection, model }: ModelRef) =>
+// model: the provider's id, so the copies of one model count as one (not a ModelRef, whose model is an entry's key).
+export const modelUsage = (calls: Counted[], connection: string, model: string) =>
   sum(calls.filter(({ call }) => call.connection === connection && call.model === model));
 
 export type UsageWindow = 'hour' | 'today' | 'week' | 'month';

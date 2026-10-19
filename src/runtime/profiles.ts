@@ -6,7 +6,7 @@ import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { Profile } from '../model/profile';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
-import type { ApiFailure, ApiResult } from './api';
+import type { ApiResult } from './api';
 import { imageOnly, taskModel, type Route, type RouteFailure } from './assignment';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
@@ -101,13 +101,8 @@ export function setModelProfile(store: ObjectStore, connection: string, key: str
   }));
 }
 
-// unmade: the 설정 was not made, so nothing points at it.
-export type Owned<T> = ApiResult<T> | { ok: false; unmade: ApiFailure };
-
-// An entry's own 설정, named for the entry, from the given values: point gives it to the entry, or saves the entry with it.
-export async function ownProfile<T>(store: ObjectStore, entry: Pick<Starred, 'name' | 'label'>, settings: ModelSettings, point: (profile: string) => Promise<ApiResult<T>>): Promise<Owned<T>> {
-  const id = crypto.randomUUID();
-  // The entry takes the profile only once it exists: a create that fails must leave no entry pointing at it.
-  const made = await addProfile(store, { name: `${entryName(entry)}용`, settings }, id);
-  return made.ok ? point(id) : { ok: false, unmade: made };
+// Answers the id only once the 설정 exists, so no entry can point at one whose create failed.
+export async function ownProfile(store: ObjectStore, entry: Pick<Starred, 'name' | 'label'>, settings: ModelSettings): Promise<ApiResult<string>> {
+  const made = await addProfile(store, { name: `${entryName(entry)}용`, settings });
+  return made.ok ? { ok: true, data: made.data.id } : made;
 }
