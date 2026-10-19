@@ -31,6 +31,26 @@
   right: calc((var(--card-gap) + var(--focus-ring-width)) / -2);
 }
 
+.handle {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  cursor: grab;
+  touch-action: none;
+}
+
+.held .picture {
+  opacity: var(--card-held-opacity);
+}
+
 .menu {
   position: absolute;
   top: var(--space-8);

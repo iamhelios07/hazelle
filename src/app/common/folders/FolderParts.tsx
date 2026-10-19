@@ -103,8 +103,9 @@ export function FolderMenu({ kind, folder, depth, onName, onRemoved, order }: { 
   );
 }
 
-// A folder among cards. faces: up to four of what it holds. drag: the card drags beside other folders (order.onPlace).
-export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dropInto, order, drag = false }: { kind: Filed; contents: FolderContents<T>; depth: number; faces: { image: string | null; name: string }[]; onOpen: () => void; onName?: (naming: Naming) => void; dropInto?: Drop; order?: Ordering; drag?: boolean }) {
+// A folder among cards. faces: up to four of what it holds. drag: the card drags beside other folders (order.onPlace);
+// arranging: 순서 바꾸기 is on, so it moves by its handle.
+export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dropInto, order, drag = false, arranging = false }: { kind: Filed; contents: FolderContents<T>; depth: number; faces: { image: string | null; name: string }[]; onOpen: () => void; onName?: (naming: Naming) => void; dropInto?: Drop; order?: Ordering; drag?: boolean; arranging?: boolean }) {
   const { folder } = contents;
   return (
     <FolderCard
@@ -114,7 +115,8 @@ export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dr
       onClick={onOpen}
       onDropCard={dropInto?.(folder.id)}
       drag={drag ? folder.id : undefined}
-      onPlace={drag ? order?.onPlace : undefined}
+      onPlace={drag || arranging ? order?.onPlace : undefined}
+      arrange={arranging && order ? { key: folder.id, label: `${folder.value.name} 폴더 순서 바꾸기` } : undefined}
       menu={onName && <FolderMenu kind={kind} folder={folder} depth={depth} onName={onName} order={order} />}
     />
   );

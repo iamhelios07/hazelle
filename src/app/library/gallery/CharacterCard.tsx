@@ -25,14 +25,16 @@ type Props = {
   // The card drags onto a folder, and beside other cards where it has an order.
   drag?: boolean;
   order?: Ordering;
+  // 순서 바꾸기 is on: the card moves by its handle and opens nothing.
+  arranging?: boolean;
 };
 
-export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge, where, drag = false, order }: Props) {
+export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge, where, drag = false, order, arranging = false }: Props) {
   const wide = useWide();
   const name = aliased(shelf.character.card.name, shelf.character.alias);
   const handle = useMenuHandle();
   const card = useMenuOpener(handle);
-  const shows = picked === null && busy === null;
+  const shows = picked === null && busy === null && !arranging;
   const menu = (
     <MoreMenu handle={handle} of={name}>
       {binned ? (
@@ -49,7 +51,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       )}
     </MoreMenu>
   );
-  const press = picked !== null ? { onClick: onPick } : binned ? (shows ? card : { onClick: () => {} }) : { onClick: () => navigate(enterShelf(shelf, wide)) };
+  const press = arranging ? { onClick: () => {} } : picked !== null ? { onClick: onPick } : binned ? (shows ? card : { onClick: () => {} }) : { onClick: () => navigate(enterShelf(shelf, wide)) };
   return (
     <FaceCard
       image={shelf.face}
@@ -58,7 +60,8 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       selected={picked}
       menu={shows ? menu : undefined}
       drag={drag ? shelf.id : undefined}
-      onPlace={drag ? order?.onPlace : undefined}
+      onPlace={drag || arranging ? order?.onPlace : undefined}
+      arrange={arranging && order ? { key: shelf.id, label: `${name} 순서 바꾸기` } : undefined}
       {...press}
     />
   );

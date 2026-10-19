@@ -388,6 +388,7 @@
   --face-min-width: 104px;
   --face-min-width-phone: 68px;
   --card-gap: var(--space-16);
+  --card-held-opacity: 0.5;
   --gallery-max-width: 1120px;
   /* 설정's pages: the widest a page grows beside the settings sidebar, and the narrowest column of its grids (Columns). */
   --page-max-width: 1200px;

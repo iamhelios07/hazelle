@@ -25,6 +25,13 @@ export type Seek = { key: string; revision: number; align: 'center' | 'top' };
 export const ROWS_RESIZED = 'rowsresized';
 
 // Uses its existing scroll ancestor: the feature keeps one scroller and one follow policy.
+// The nearest ancestor that scrolls, or null where the page itself does.
+export function scrollAncestor(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement;
+  while (parent && !/(auto|scroll)/.test(getComputedStyle(parent).overflowY)) parent = parent.parentElement;
+  return parent;
+}
+
 export function Viewport({ keys: given, children, variant = 'list', list, keep = [], seek, current, traverse = true }: Props) {
   const stable = useRef(given);
   if (given !== stable.current && (given.length !== stable.current.length || given.some((key, index) => key !== stable.current[index]))) stable.current = given;
@@ -88,8 +95,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
 
   useLayoutEffect(() => {
     const element = root.current!;
-    let parent = element.parentElement;
-    while (parent && !/(auto|scroll)/.test(getComputedStyle(parent).overflowY)) parent = parent.parentElement;
+    const parent = scrollAncestor(element);
     const frame = parent ?? document.scrollingElement as HTMLElement;
     scroll.current = frame;
     const events = parent ? frame : window;

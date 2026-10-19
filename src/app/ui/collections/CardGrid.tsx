@@ -1,6 +1,7 @@
-import { Check } from 'lucide-react';
+import { Check, GripVertical } from 'lucide-react';
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { bothDrops, cardDrag, useCardDrop, useCardPlace } from './cardDrag';
+import { CardOrderScope, useOrderHandle } from './cardOrder';
 import { FolderMark } from './FolderMark';
 import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
@@ -41,9 +42,11 @@ export function CardGrid({ label, keys, variant = 'portrait', current, children 
   }
   return <div ref={root} className={variant === 'face' ? `${styles.grid} ${styles.face}` : styles.grid} role="group" aria-label={label} onKeyDown={move}>
     <div className={styles.window}>
-      <Viewport keys={rows} variant="grid" current={at === -1 ? undefined : rows[Math.floor(at / columns)]}>{(row) => <div className={styles.cards} style={{ '--card-columns': columns } as CSSProperties}>
-        {keys.slice(row * columns, (row + 1) * columns).map((key, column) => <Fragment key={key}>{children(row * columns + column)}</Fragment>)}
-      </div>}</Viewport>
+      <CardOrderScope root={root} keys={keys}>
+        <Viewport keys={rows} variant="grid" current={at === -1 ? undefined : rows[Math.floor(at / columns)]}>{(row) => <div className={styles.cards} style={{ '--card-columns': columns } as CSSProperties}>
+          {keys.slice(row * columns, (row + 1) * columns).map((key, column) => <Fragment key={key}>{children(row * columns + column)}</Fragment>)}
+        </div>}</Viewport>
+      </CardOrderScope>
     </div>
   </div>;
 }
@@ -70,15 +73,29 @@ type CardProps = {
   drag?: string;
   // Another card's key let go beside this one.
   onPlace?: (key: string, after: boolean) => void;
+  // 순서 바꾸기: the card shows a handle that moves it (cardOrder), labelled label.
+  arrange?: { key: string; label: string };
 };
 
 const placing = { before: styles.placeBefore, after: styles.placeAfter };
 
-export function FaceCard({ image, video = false, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag, onPlace }: CardProps) {
+type Handle = NonNullable<ReturnType<typeof useOrderHandle>>;
+const boxClass = (side: 'before' | 'after' | null, handle: Handle | null) => [styles.cardBox, side && placing[side], handle?.held && styles.held].filter(Boolean).join(' ');
+
+function OrderHandle({ handle }: { handle: Handle }) {
+  return (
+    <button type="button" className={styles.handle} {...handle.handle}>
+      <Icon icon={GripVertical} size="sm" />
+    </button>
+  );
+}
+
+export function FaceCard({ image, video = false, name, note, selected, current = false, tag, faint = false, onClick, popup, expanded, ref, menu, drag, onPlace, arrange }: CardProps) {
   const slot = useMenuSlot();
   const place = useCardPlace(onPlace, 'card');
+  const handle = useOrderHandle(arrange, 'card', onPlace);
   return (
-    <div className={place.side ? `${styles.cardBox} ${placing[place.side]}` : styles.cardBox} onContextMenu={slot.onContextMenu}>
+    <div className={boxClass(place.side ?? handle?.side ?? null, handle)} onContextMenu={slot.onContextMenu} {...handle?.box}>
       <button
         ref={ref}
         type="button"
@@ -100,6 +117,7 @@ export function FaceCard({ image, video = false, name, note, selected, current =
         {/* After the name, so the card is named by its name first; drawn over the picture's corner. */}
         {tag && <span className={styles.tag}><Tag tone="accent">{tag}</Tag></span>}
       </button>
+      {handle && <OrderHandle handle={handle} />}
       {menu && (
         <div className={styles.menu}>
           <MenuSlot value={slot.held}>{menu}</MenuSlot>
@@ -112,16 +130,17 @@ export function FaceCard({ image, video = false, name, note, selected, current =
 // A folder among the cards, shaped as one: a tab over a body holding up to four faces of what it holds, each a quarter
 // however few there are, so one face never fills it as a card's picture does. onDropCard: a dragged FaceCard's key,
 // let go over this folder. drag: the folder card drags beside another, carrying this key; onPlace: another folder's key
-// let go beside this one.
-type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode; onDropCard?: (key: string) => void; drag?: string; onPlace?: (key: string, after: boolean) => void };
+// let go beside this one; arrange as FaceCard's.
+type FolderCardProps = { name: string; note: string; faces: { image: string | null; name: string }[]; onClick: () => void; menu?: ReactNode; onDropCard?: (key: string) => void; drag?: string; onPlace?: (key: string, after: boolean) => void; arrange?: { key: string; label: string } };
 
-export function FolderCard({ name, note, faces, onClick, menu, onDropCard, drag, onPlace }: FolderCardProps) {
+export function FolderCard({ name, note, faces, onClick, menu, onDropCard, drag, onPlace, arrange }: FolderCardProps) {
   const drop = useCardDrop(onDropCard);
   const place = useCardPlace(onPlace, 'folder');
+  const handle = useOrderHandle(arrange, 'folder', onPlace);
   const slot = useMenuSlot();
   const shown = faces.slice(0, 4);
   return (
-    <div className={place.side ? `${styles.cardBox} ${placing[place.side]}` : styles.cardBox} onContextMenu={slot.onContextMenu}>
+    <div className={boxClass(place.side ?? handle?.side ?? null, handle)} onContextMenu={slot.onContextMenu} {...handle?.box}>
       <button type="button" className={drop.over ? `${styles.card} ${styles.dropping}` : styles.card} onClick={onClick} {...(drag === undefined ? {} : cardDrag(drag, 'folder'))} {...bothDrops(drop.props, place.props)}>
         <span className={styles.folder}>
           <span className={styles.tab} />
@@ -138,6 +157,7 @@ export function FolderCard({ name, note, faces, onClick, menu, onDropCard, drag,
         <span className={styles.name}>{name}</span>
         <span className={styles.note}>{note}</span>
       </button>
+      {handle && <OrderHandle handle={handle} />}
       {menu && (
         <div className={styles.menu}>
           <MenuSlot value={slot.held}>{menu}</MenuSlot>

@@ -1,4 +1,4 @@
-import { FolderInput } from 'lucide-react';
+import { ArrowUpDown, FolderInput } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Stored } from '../../../model/kinds';
@@ -40,10 +40,11 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
   const characterActions = useCharacterActions();
   const naming = useNaming('character');
   const [purging, setPurging] = useState<Binned | null>(null);
+  const [arranging, setArranging] = useState(false);
 
   const binned = place === BIN_PLACE;
   // 휴지통 cannot be moved: there no pick shows and no card drags.
-  const moving = useMoving('character', library, (id) => byCharacter.get(id)?.character.folder ?? null, { off: binned });
+  const moving = useMoving('character', library, (id) => byCharacter.get(id)?.character.folder ?? null, { off: binned || arranging });
   const candidates = binned ? deleted : characters;
   // shelve lists only the deleted chats of a character not deleted, or of none.
   const shelfOf = ({ chat }: ChatSummary): Shelf<ChatSummary> => (chat.character === null ? none : byCharacter.get(chat.character)!);
@@ -98,7 +99,12 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
       <Row kind="toolbar">
         {search.field}
         {!binned && <ChoiceGroup label="정렬" showLabel layout="segmented" options={[...CHARACTER_SORTS]} value={sort} onChange={setSort} />}
-        {!binned && (
+        {!binned && !picked && (
+          <Button variant="secondary" size="sm" icon={ArrowUpDown} onClick={() => setArranging(!arranging)}>
+            {arranging ? '완료' : '순서 바꾸기'}
+          </Button>
+        )}
+        {!binned && !arranging && (
           <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
             {picked ? '완료' : '선택해서 옮기기'}
           </Button>
@@ -118,7 +124,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
             if (index < folderCards.length) {
               const contents = library.byFolder.get(folderCards[index]!.id)!;
               const faces = contents.inside.slice(0, 4).map(({ face, character }) => ({ image: face, name: aliased(character.card.name, character.alias) }));
-              return <FolderTile key={contents.folder.id} kind="character" contents={contents} depth={at.path.length + 1} faces={faces} onOpen={() => go(contents.folder.id)} onName={naming.name} dropInto={dropInto} order={orderOf(folderIds, contents.folder.id)} drag={dropInto !== undefined && ordering} />;
+              return <FolderTile key={contents.folder.id} kind="character" contents={contents} depth={at.path.length + 1} faces={faces} onOpen={() => arranging || go(contents.folder.id)} onName={arranging ? undefined : naming.name} dropInto={dropInto} order={orderOf(folderIds, contents.folder.id)} drag={dropInto !== undefined && ordering} arranging={arranging} />;
             }
             const shelf = shown[index - folderCards.length]!;
             return (
@@ -133,6 +139,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
               onPurge={() => setPurging(binnedCharacter(shelf))}
               drag={dropInto !== undefined}
               order={orderOf(characterIds, shelf.id)}
+              arranging={arranging}
               where={search.words ? whereIs(library, shelf.character.folder) : undefined}
             />
             );
