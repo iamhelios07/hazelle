@@ -11,7 +11,7 @@ import type { Stored } from '../../model/kinds';
 import { aliased } from '../common/alias';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
-import { ALWAYS, inSettings, NO_CHARACTER, promptName, RISU_PLUGIN, SCRIPTS, TOOL, toolVersion } from '../common/words';
+import { ALWAYS, DEFAULT_VARIABLES, inSettings, NO_CHARACTER, promptName, RISU_PLUGIN, SCRIPTS, TOOL, toolVersion } from '../common/words';
 import { cardMissed, missedLines, presetMissed } from './missed';
 
 // Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
@@ -34,7 +34,7 @@ export function characterOutcome(file: string, imported: Imported, { id, unsuppo
     `첫인사 ${card.greetings.length}개`,
     lore.length > 0 && `로어북 ${lore.length}개`,
     card.regex.length > 0 && `${SCRIPTS.regex} ${card.regex.length}개`,
-    card.variables.length > 0 && `기본 변수 ${card.variables.length}개`,
+    card.variables.length > 0 && `${DEFAULT_VARIABLES} ${card.variables.length}개`,
     card.toggles.some(isToggle) && '토글',
     assets.length - unsupportedCount(unsupported) > 0 && `에셋 ${assets.length - unsupportedCount(unsupported)}개`,
   ].filter(Boolean).join(' · ');

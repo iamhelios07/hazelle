@@ -3,7 +3,7 @@ import { useOwnUndo } from '../toast';
 import { Button, IconButton } from '../ui';
 import { ACTS } from './acts';
 
-type Entry<T> = { value: T; name: string; set: (value: T) => void; remove: ReactNode };
+type Entry<T> = { value: T; index: number; name: string; set: (value: T) => void; remove: ReactNode };
 
 type Props<T> = {
   entries: T[];
@@ -33,6 +33,7 @@ export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed
         <Fragment key={index}>
           {children({
             value,
+            index,
             name: name(index),
             set: (next) => onChange(entries.map((old, at) => (at === index ? next : old))),
             remove: <IconButton icon={ACTS.remove.icon} label={`${name(index)} ${ACTS.remove.label}`} size="sm" onClick={() => remove(index)} />,

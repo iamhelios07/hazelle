@@ -1,6 +1,6 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Sparkles, Square, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Sparkles, Square, ToggleRight, UserRound, Variable, type LucideIcon } from 'lucide-react';
 import { useRef, useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -28,7 +28,7 @@ import type { Frame } from '../common/frame';
 import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePercent';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, DEFAULT_VARIABLES, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
 import { CharacterActionItems } from './gallery/CharacterCard';
 import { ShareDialog } from './ShareDialog';
@@ -37,7 +37,7 @@ import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Stack, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 import { useNoteDraft } from './useNoteDraft';
@@ -58,16 +58,25 @@ const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
   features: { label: FEATURES_TITLE, icon: ToggleRight },
   scripts: { label: SCRIPTS.part, icon: Braces },
   toggles: { label: '토글', icon: SlidersHorizontal },
+  variables: { label: DEFAULT_VARIABLES, icon: Variable },
   assets: { label: '에셋', icon: Images },
   illustration: { label: '삽화', icon: Palette },
   display: { label: '표시', icon: Eye },
 };
 const GROUPS: CharacterPart[][] = [
   ['profile', 'character', 'greetings'],
-  ['instructions', 'lore', 'modules', 'features', 'scripts', 'toggles'],
+  ['instructions', 'lore', 'modules', 'features', 'scripts', 'toggles', 'variables'],
   ['assets', 'illustration', 'display'],
 ];
 const LIST = '캐릭터 항목';
+// Risu stores these as `name=value` lines and reads a name up to the first `=`, so a name with one, or a value over
+// several lines, would not come back from an export; the fields are single-line for that reason.
+const variableError = (variables: [string, string][], index: number) => {
+  const name = variables[index]![0];
+  if (!name) return '이름을 입력해 주세요.';
+  if (name.includes('=')) return '이름에 =는 쓸 수 없어요.';
+  return variables.some(([other], at) => at > index && other === name) ? '아래에 같은 이름이 있어서 이 값은 쓰이지 않아요.' : undefined;
+};
 type Reading = 'source' | 'translated';
 const READINGS: { value: Reading; label: string }[] = [
   { value: 'source', label: '원문' },
@@ -343,6 +352,25 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
     features: <FeatureSwitches owner={{ kind: 'character', id }} own={character.features} />,
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
     toggles: <PackToggles owner={{ kind: 'character', id }} lines={card.toggles} />,
+    variables: (
+      <Section title={DEFAULT_VARIABLES} help="새 채팅이 이 값에서 시작해요. 이미 있는 채팅에서도 아직 바뀌지 않은 변수는 이 값을 따라요.">
+        <EntryList
+          entries={text.variables}
+          onChange={(variables) => change('variables', variables)}
+          name={(index) => `변수 ${index + 1}`}
+          blank={['', ''] as [string, string]}
+          addLabel="변수 추가"
+          removed={(index) => `${index + 1}번째 변수를 삭제했어요.`}
+        >
+          {({ value: [name, value], index, name: label, set, remove }) => (
+            <Stack gap="related">
+              <TextField label={`${label} 이름`} kind="key" value={name} onChange={(next) => set([next, value])} error={variableError(text.variables, index)} action={remove} />
+              <TextField label={`${label} 값`} kind="key" value={value} onChange={(next) => set([name, next])} />
+            </Stack>
+          )}
+        </EntryList>
+      </Section>
+    ),
     assets: <AssetsEditor owner={id} />,
     illustration: <PortraitsEditor owner={id} />,
     display: (
@@ -383,6 +411,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
     features: featureHolds(store, { kind: 'character', id }, character.features),
     scripts: scriptHolds(card) || undefined,
     toggles: `${card.toggles.filter(isToggle).length}개`,
+    variables: `${text.variables.length}개`,
     assets: `${assets.length}개`,
     illustration: likeness ? `${likeness.value.portraits.length}명` : undefined,
   };

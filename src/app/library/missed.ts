@@ -2,7 +2,7 @@ import type { PresetUnsupported } from '../../engine/import/preset';
 import type { MoveUnsupported, MoveUnsupportedKind, Unsupported, UnsupportedKind } from '../../engine/import/types';
 import type { Dropped } from '../../runtime/chat-log';
 import { SLOT } from '../common/prompt-words';
-import { CAST, COMMAND, inSettings } from '../common/words';
+import { CAST, COMMAND, DEFAULT_VARIABLES, inSettings } from '../common/words';
 
 const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   'extra-icon': (count) => `추가 아이콘 ${count}개`,
@@ -55,7 +55,7 @@ const PRESET_UNSUPPORTED: Record<Exclude<PresetUnsupported['kind'], 'repeated-sl
   'preset-text': (count) => `템플릿 밖의 텍스트 ${count}개(Risu에서도 보내지 않던 것)`,
   'regex-off': UNSUPPORTED['regex-off'],
   'regex-stage': UNSUPPORTED['regex-stage'],
-  variables: (count) => `기본 변수 ${count}개`,
+  variables: (count) => `${DEFAULT_VARIABLES} ${count}개`,
   'prompt-settings': (count) => `Risu 프롬프트 설정 ${count}개(헤이젤에는 없음)`,
   settings: () => `모델과 생성 설정(${inSettings('models')}에서 정할 수 있음)`,
 };

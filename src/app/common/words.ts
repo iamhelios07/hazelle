@@ -135,6 +135,8 @@ export const CAST = '등장인물';
 // A message's tool, the chat ⋯ item and the list it opens.
 export const BOOKMARK = '북마크';
 
+export const DEFAULT_VARIABLES = '기본 변수';
+
 // A pack's scripts, 정규식 and 트리거 (Lua and block ones), under one 스크립트.
 export const SCRIPTS = { part: '스크립트', regex: '정규식', triggers: '트리거' };
 export const STAGES: Record<RegexScript['stage'], string> = { input: '입력', output: '응답', process: '요청', display: '화면' };
