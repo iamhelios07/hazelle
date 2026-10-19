@@ -44,7 +44,7 @@ export const LUA_API: readonly LuaFunction[] = [
   fn('getPersonaDescription(id)', '페르소나 설명이에요.'),
   fn('getAuthorsNote(id)', '채팅 노트예요.'),
   fn('getBackgroundEmbedding(id)', '캐릭터의 배경 HTML이에요.'),
-  fn('setBackgroundEmbedding(id, html)', '캐릭터의 배경 HTML을 바꾸고, 바꿨으면 true예요. 처음에는 허락을 물어요.'),
+  fn('setBackgroundEmbedding(id, html)', '캐릭터의 배경 HTML을 바꿔요. async 함수 안에서는 바꿨으면 true, 밖에서는 nil이에요. 처음에는 허락을 물어요.'),
 
   fn('getLoreBooks(id, 이름)', '그 이름의 로어북 항목들이에요. 내용의 CBS는 계산돼 있어요.'),
   fn('loadLoreBooks(id, 남길 토큰)', '지금 프롬프트에 들어갈 로어북 항목들이에요.'),
