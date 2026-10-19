@@ -8,7 +8,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import { chatModel, setPromptModel } from './assignment';
 import { setChatOwn } from './chat-log';
-import { addDefaults, addPrompt, COMMENTATOR_ID, ILLUSTRATOR_ID, chatPrompt, copyPrompt, removePrompt, savePreset, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
+import { addDefaults, addPrompt, COMMENTATOR_ID, ILLUSTRATOR_ID, chatPrompt, copyPrompt, editPrompt, removePrompt, resetPromptBlocks, savePreset, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import starter from './starter-prompt.risup?inline';
 import { testConnection, testServer } from './testing';
 
@@ -123,6 +123,17 @@ describe('prompts', () => {
     const original = store.get('prompt', id)!.value;
     expect(copied.ok && copied.data.value).toEqual({ ...original, name: '핑퐁 (사본)', origin: { id, name: '🏓 핑퐁 간소화' }, imported: undefined });
     expect(copied.ok && 'imported' in copied.data.value).toBe(false);
+  });
+
+  it('puts a task prompt’s blocks back to the built-in’s, keeping its name, and refuses a conversation prompt', async () => {
+    const { store } = await server.account();
+    await addDefaults(store);
+    const translator = store.get('prompt', TRANSLATOR_ID)!.value;
+    await editPrompt(store, TRANSLATOR_ID, { name: '내 번역', blocks: translator.blocks.filter((block) => block.kind !== 'slot' || block.slot !== 'note') });
+    expect(store.get('prompt', TRANSLATOR_ID)!.value.blocks.map(outline)).not.toEqual(translator.blocks.map(outline));
+    const reset = await resetPromptBlocks(store, TRANSLATOR_ID);
+    expect(reset.ok && reset.data.value).toMatchObject({ name: '내 번역', blocks: translator.blocks.map((block) => ({ ...block, id: expect.any(String) })) });
+    expect(await resetPromptBlocks(store, STARTER_ID)).toEqual({ ok: false, error: 'gone' });
   });
 
   it('refuses to delete the default prompt, and brings back another from 휴지통', async () => {

@@ -4,7 +4,7 @@ import { holdsPersona } from '../../engine/pipeline';
 import type { Stored } from '../../model/kinds';
 import { isToggle, slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
-import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
+import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, resetPromptBlocks, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
 import { FeatureSwitches } from '../common/FeatureSwitches';
 import { ModuleSwitches } from '../common/ModuleSwitches';
@@ -236,6 +236,13 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
     onCopied(made);
     toast.show('사본을 만들었어요.');
   };
+  const resetBlocks = async () => {
+    if (!(await save.flush())) return;
+    const { blocks, toggles } = latest.current;
+    const reset = await resetPromptBlocks(store, stored.id);
+    if (!reset.ok) return toast.failed(reset, '기본 블록으로 되돌리지 못했어요.');
+    toast.undoable('기본 블록으로 되돌렸어요.', () => editPrompt(store, stored.id, { blocks, toggles }));
+  };
   const makeDefault = async () => {
     const saved = await setDefaultPrompt(store, stored.id);
     if (!saved.ok) toast.failed(saved, '기본 프롬프트로 지정하지 못했어요.');
@@ -435,6 +442,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
           {ofSort(stored, 'conversation') && <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />}
           {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
+          {sort !== 'conversation' && <MenuItem label="기본 블록으로 되돌리기" sub="블록을 앱의 기본으로 바꿔요. 이름과 모델은 그대로예요." onClick={() => void resetBlocks()} />}
           <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void erase()} />
         </>
       ),

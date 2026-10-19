@@ -153,6 +153,16 @@ export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: Togg
 
 export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current): Prompt => ({ ...current, ...patch }));
 
+// A task prompt's blocks and toggles back to the built-in's. The built-in changes with the app (the 번역가의 노트 slot
+// came after many accounts' 기본 번역 was made) and a stored copy follows it no other way. Name, model, origin and a 삽화
+// prompt's tags and picture values stay.
+export function resetPromptBlocks(store: ObjectStore, id: string): Promise<ApiResult<Stored<'prompt'>>> {
+  const prompt = store.get('prompt', id)?.value;
+  if (!prompt || prompt.task === undefined) return Promise.resolve({ ok: false, error: 'gone' });
+  const { blocks, toggles } = BUILT_IN[prompt.task]();
+  return editPrompt(store, id, { blocks, toggles });
+}
+
 // A fork that goes its own way, model layer and toggles included. It remembers its origin, and is the user's
 // own rather than an imported preset, so no module imported later is paired with it.
 export function copyPrompt(store: ObjectStore, id: string, name: string, copy?: string): Promise<ApiResult<Stored<'prompt'>>> {

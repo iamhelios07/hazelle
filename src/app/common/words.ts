@@ -81,9 +81,9 @@ export const UNREADABLE_IMAGE = '이 이미지는 열 수 없어요.';
 export const TRANSLATOR_NOTE = '번역가의 노트';
 export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 유지해 주세요';
 export const noteLines = (note: string | undefined) => (note ?? '').split('\n').filter((line) => line.trim()).length;
-export const NOTE_UNSENT = `번역 프롬프트에 '${TRANSLATOR_NOTE}' 블록을 추가해야 노트가 적용돼요.`;
+export const NOTE_UNSENT = `번역 프롬프트에 '${TRANSLATOR_NOTE}' 블록을 추가하거나 기본 블록으로 되돌려야 노트가 적용돼요.`;
 export const ILLUSTRATE_NOTE = '삽화 노트';
-export const ILLUSTRATE_NOTE_UNSENT = `삽화 프롬프트에 '${ILLUSTRATE_NOTE}' 블록을 추가해야 노트가 적용돼요.`;
+export const ILLUSTRATE_NOTE_UNSENT = `삽화 프롬프트에 '${ILLUSTRATE_NOTE}' 블록을 추가하거나 기본 블록으로 되돌려야 노트가 적용돼요.`;
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
 export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', plugins: '플러그인', display: '디스플레이', labs: '실험실', translator: '번역기', account: '계정', usage: '사용량', admin: '운영' };
