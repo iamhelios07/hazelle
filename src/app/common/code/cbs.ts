@@ -8,7 +8,7 @@ import { nearest } from './nearest';
 import { variableDoc, variableItems, type Defaults } from './variables';
 
 // Text one field puts in before CBS runs: a card's instructions take {{original}} (pipeline.ts), a regex's
-// replacement {{data}} (regex/scripts.ts).
+// replacement {{data}} (regex/scripts.ts). Both replace only the exact spelling.
 export type CbsPlaceholder = 'original' | 'data';
 const PLACEHOLDERS: Record<CbsPlaceholder, string> = {
   original: '이 칸이 대신하는 프롬프트 텍스트가 그 자리에 들어가요.',
@@ -22,7 +22,8 @@ const BY_NAME = new Map<string, Command>();
 for (const { command, head } of ENTRIES) for (const name of command.names.length ? command.names : [head]) BY_NAME.set(head.startsWith('#') ? head : normalize(name), command);
 const BLOCK_HEADS = ENTRIES.filter(({ head }) => head.startsWith('#')).map(({ head }) => head.slice(1));
 const NAMES = ENTRIES.flatMap(({ command, head }) => (command.names.length ? command.names : head.startsWith('#') ? [] : [head]));
-const VARIABLE_TAGS = new Set(['getvar', 'setvar', 'addvar', 'setdefaultvar']);
+const WRITERS = new Set(['setvar', 'addvar', 'setdefaultvar']);
+const VARIABLE_TAGS = new Set(['getvar', ...WRITERS]);
 
 // A form's words become tab stops: `{{getvar::이름}}` → `getvar::${1:이름}}}${0}`, written after the `{{` typed.
 export function formTemplate(form: string) {
@@ -50,7 +51,7 @@ function commandDoc(command: Command): CodeDoc {
 type Found = { from: number; to: number; name: string | null; nameAt: number; value: { from: number; to: number } | null };
 type Reading = { spans: CodeSpan[]; problems: CodeProblem[]; tags: Found[] };
 
-function read(text: string, known: (name: string) => boolean): Reading {
+function read(text: string, known: (name: string) => boolean, placeholder: CbsPlaceholder | undefined): Reading {
   const spans: CodeSpan[] = [];
   const problems: CodeProblem[] = [];
   const tags: Found[] = [];
@@ -68,7 +69,7 @@ function read(text: string, known: (name: string) => boolean): Reading {
         at += node.length;
       } else {
         visit(node, block);
-        at = node.kind === 'block' ? node.close.end : node.end;
+        at = node.end;
       }
     }
   };
@@ -84,6 +85,9 @@ function read(text: string, known: (name: string) => boolean): Reading {
     else if (name.startsWith('/')) problem(node.at, node.end, 'error', '열린 블록 없이 닫는 태그예요.');
     else if (name === ':else') {
       if (block !== 'when') problem(node.at, node.end, 'warning', '{{:else}}는 #when 블록 안에서만 써요.');
+    } else if (placeholder && word === placeholder) {
+      const exact = `{{${placeholder}}}`;
+      if (text.slice(node.at, node.end) !== exact) problem(node.at, node.end, 'warning', `${exact} 그대로 적어야 바뀌어요.`, { label: `${exact}${particleOf(placeholder, '으로/로')} 바꾸기`, insert: exact });
     } else if (name === '?' || known(name)) return;
     else if (isUnsupportedTag(word)) problem(node.at, node.end, 'warning', '헤이젤에 없는 명령어라 적은 그대로 남아요.');
     else if (!isProse(word)) unknown(name, found, NAMES);
@@ -131,7 +135,7 @@ function read(text: string, known: (name: string) => boolean): Reading {
       span(node.at, node.end, 'comment');
       return null;
     }
-    const whole = node.parts.length === 1 ? lead : null;
+    const whole = node.parts.length === 1 && typeof node.parts[0] === 'string' ? lead : null;
     if (whole === 'slot') {
       span(node.at, node.end, 'slot');
       tags.push({ from: node.at, to: node.end, name: 'slot', nameAt: node.at + 2, value: null });
@@ -159,7 +163,7 @@ function read(text: string, known: (name: string) => boolean): Reading {
     for (const node of nodes) {
       if (typeof node !== 'string') {
         visit(node, null);
-        at = node.kind === 'block' ? node.close.end : node.end;
+        at = node.end;
         continue;
       }
       let from = 0;
@@ -189,13 +193,14 @@ function openBlock(before: string): string | null {
   return head === undefined ? null : /^#([^\s:]*)/.exec(head.trimStart())![1]! || null;
 }
 
-const writtenNames = (text: string) => [...text.matchAll(/\{\{\s*(?:setvar|addvar|setdefaultvar)::([^:{}]+)/gi)].map((found) => found[1]!);
-
 // variables: the character's 기본 변수, offered and explained by name. placeholder: the field's own, when it has one.
 export function cbsLanguage({ variables = [], placeholder }: { variables?: Defaults; placeholder?: CbsPlaceholder } = {}): CodeLanguage {
-  const known = (name: string) => handlerFor(name) !== undefined || BY_NAME.has(normalize(name)) || (placeholder !== undefined && normalize(name) === placeholder);
+  const known = (name: string) => handlerFor(name) !== undefined || BY_NAME.has(normalize(name));
   let last: { text: string; reading: Reading } | null = null;
-  const reading = (text: string) => (last?.text === text ? last.reading : (last = { text, reading: read(text, known) }).reading);
+  const reading = (text: string) => (last?.text === text ? last.reading : (last = { text, reading: read(text, known, placeholder) }).reading);
+  // The names the text's setters write, but the one being typed at at.
+  const written = (text: string, at: number) =>
+    reading(text).tags.flatMap(({ name, value }) => (name && WRITERS.has(normalize(name)) && value && !(value.from <= at && at <= value.to) ? [text.slice(value.from, value.to)] : [])).filter((name) => name && !name.includes('{{'));
   const items: CodeItem[] = [
     ...ENTRIES.map(({ command, group, head }): CodeItem => ({ label: head, kind: head.startsWith('#') ? 'keyword' : 'function', detail: group, template: formTemplate(command.form), closing: '}}', ...(command.uses && { boost: 1 }), doc: commandDoc(command) })),
     ...(placeholder ? [{ label: placeholder, kind: 'variable', detail: '이 칸', template: `${placeholder}}}\${0}`, closing: '}}', boost: 2, doc: { form: `{{${placeholder}}}`, text: PLACEHOLDERS[placeholder] } } satisfies CodeItem] : []),
@@ -205,9 +210,7 @@ export function cbsLanguage({ variables = [], placeholder }: { variables?: Defau
     const before = text.slice(0, at);
     const slot = /\{\{\s*(?:getvar|setvar|addvar|setdefaultvar)::([^:{}]*)$/i.exec(before);
     if (slot) {
-      const from = at - slot[1]!.length;
-      // The name being typed is no name the text has yet.
-      return { from, items: variableItems(variables, writtenNames(text.slice(0, from) + text.slice(at))), validFor: /^[^:{}]*$/ };
+      return { from: at - slot[1]!.length, items: variableItems(variables, written(text, at)), validFor: /^[^:{}]*$/ };
     }
     const word = /\{\{([#/]?[\w가-힣?-]*)$/.exec(before);
     if (!word) return null;

@@ -35,6 +35,11 @@ describe('cbsLanguage', () => {
     ]);
     expect(problems('{{original}} {{position::a}} {{ }} {{-}} {{getvar::{{user}}}}', cbsLanguage({ placeholder: 'original' }))).toEqual([]);
     expect(problems('{{original}}')).toEqual([['original', '모르는 명령어라 적은 그대로 남아요.', undefined]]);
+    expect(problems('{{data}} {{DATA}} {{data::x}}', cbsLanguage({ placeholder: 'data' }))).toEqual([
+      ['{{DATA}}', '{{data}} 그대로 적어야 바뀌어요.', '{{data}}'],
+      ['{{data::x}}', '{{data}} 그대로 적어야 바뀌어요.', '{{data}}'],
+    ]);
+    expect(problems('{{{{getvr::a}}}}')).toEqual([['getvr', 'getvar의 오타 같아요.', 'getvar']]);
   });
 
   it('completes a tag after {{ as a snippet over the }} already typed, a variable in its slot, and the open block’s close', () => {
@@ -42,11 +47,12 @@ describe('cbsLanguage', () => {
     expect(tag.from).toBe(2);
     expect(tag.items.find((item) => item.label === 'getvar')).toMatchObject({ template: 'getvar::${1:이름}}}${0}', closing: '}}' });
 
-    const typed = '{{setvar::기분::좋음}}{{getvar::호}}';
+    const typed = '{{setvar::기분::좋음}}{{#pure}}{{setvar::날것::1}}{{/pure}}{{Set_Var:mood:happy}}{{getvar::호}}';
     const slot = language.complete(typed, typed.length - 2, 'code', false)!;
     expect(slot.items.map((item) => [item.label, item.detail])).toEqual([
       ['호감도', '30'],
       ['기분', undefined],
+      ['mood', undefined],
     ]);
 
     const blocks = '{{#each 가 as 나}}{{#when::1}}x{{/}}';

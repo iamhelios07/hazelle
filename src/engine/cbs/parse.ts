@@ -4,8 +4,8 @@ export type Node = string | Tag | Block | Legacy;
 // at: where the tag's `{{` stands in the text it was read from; it places the tag's random rolls. end: just past its `}}`.
 export type Tag = { kind: 'tag'; at: number; end: number; parts: Node[] };
 // A block is any tag starting with `#`, up to the next `{{/…}}` on its level, whatever name follows
-// the slash. raw is the body's source.
-export type Block = { kind: 'block'; at: number; head: Tag; body: Node[]; raw: string; close: Tag };
+// the slash. raw is the body's source. end: just past the close's `}}`.
+export type Block = { kind: 'block'; at: number; end: number; head: Tag; body: Node[]; raw: string; close: Tag };
 // Risu's deprecated `{#if condition` newline body `#}`, still in imported bots. at: where its `{#` stands, end: just past its `#}`.
 export type Legacy = { kind: 'legacy'; at: number; end: number; parts: Node[] };
 
@@ -59,7 +59,7 @@ export function parse(text: string): Node[] {
       stack.push({ kind: 'block', head: tag, from: at, nodes: [] });
     } else if (lead.startsWith('/') && !lead.startsWith('//') && parent.kind === 'block') {
       stack.pop();
-      append(top().nodes, { kind: 'block', at: parent.head.at, head: parent.head, body: parent.nodes, raw: text.slice(parent.from, tag.at), close: tag });
+      append(top().nodes, { kind: 'block', at: parent.head.at, end: tag.end, head: parent.head, body: parent.nodes, raw: text.slice(parent.from, tag.at), close: tag });
     } else {
       append(parent.nodes, tag);
     }

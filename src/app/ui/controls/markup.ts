@@ -13,6 +13,8 @@ export function markup(text: string, spans: readonly CodeSpan[]): Piece[] {
   const pieces: Piece[] = [];
   let next = 0;
   let start = 0;
+  // Searched forward only, so a text with no `<` ahead is not scanned again on every line.
+  let open = text.indexOf('<');
   for (const whole of text.split(/(?<=\n)/)) {
     const line = HEADING.test(whole) ? 'heading' : RULE.test(whole) ? 'rule' : 'body';
     const end = start + whole.length;
@@ -32,7 +34,7 @@ export function markup(text: string, spans: readonly CodeSpan[]): Piece[] {
         continue;
       }
       const stop = span ? Math.min(span.from, end) : end;
-      const open = text.indexOf('<', at);
+      if (open !== -1 && open < at) open = text.indexOf('<', at);
       if (open === -1 || open >= stop) {
         plain += text.slice(at, stop);
         at = stop;

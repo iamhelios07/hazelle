@@ -43,15 +43,8 @@ export function renameToggle(text: string, from: string, to: string): string {
 const NESTED = '﷐';
 type Written = { content: string; start: number };
 
-const sourceLength = (node: Node): number =>
-  typeof node === 'string'
-    ? node.length
-    : node.kind !== 'block'
-      ? '{{}}'.length + node.parts.reduce((sum: number, part) => sum + sourceLength(part), 0)
-      : sourceLength(node.head) + node.raw.length + sourceLength(node.close);
-
 function source(tag: Tag): Written {
-  return { content: tag.parts.map((part) => (typeof part === 'string' ? part : NESTED.repeat(sourceLength(part)))).join(''), start: tag.at + 2 };
+  return { content: tag.parts.map((part) => (typeof part === 'string' ? part : NESTED.repeat(part.end - part.at))).join(''), start: tag.at + 2 };
 }
 
 function note(key: string, at: number, uses: ToggleUse[]) {
