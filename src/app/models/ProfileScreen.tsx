@@ -1,3 +1,5 @@
+import { refOf } from '../../connectors/assignment';
+import { entryKey, entryName } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { addProfile, modelProfile, removeProfile, restoreProfile, setDefaultProfile, setModelProfile, setProfileSettings, type ProfileUser } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
@@ -27,12 +29,12 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   const { status, name, rename, flush, clear, removing, shown, users, rows } = useProfileEditor(stored);
   const summary = (user: User) => (user.schema ? changeWords(user.changes) : NOT_CALLABLE);
 
-  const using = new Set(users.map((user) => `${user.connection.id}/${user.model.id}`));
+  const using = new Set(users.map((user) => `${user.connection.id}/${entryKey(user.model)}`));
   const profileName = (model: ProfileUser['model']) => {
     const choice = modelProfile(store, model);
     return choice.kind === 'profile' ? choice.profile.value.name : '없음';
   };
-  const others = connections.map((connection) => ({ connection, models: connection.value.starred.filter((model) => !using.has(`${connection.id}/${model.id}`)) })).filter((group) => group.models.length > 0);
+  const others = connections.map((connection) => ({ connection, models: connection.value.starred.filter((model) => !using.has(`${connection.id}/${entryKey(model)}`)) })).filter((group) => group.models.length > 0);
   const attach = (connection: string, model: string) => void setModelProfile(store, connection, model, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
 
   async function copy() {
@@ -120,11 +122,11 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           <List label={USERS}>
             {users.map((user) => (
               <ListItem
-                key={`${user.connection.id}/${user.model.id}`}
-                title={user.model.name}
+                key={`${user.connection.id}/${entryKey(user.model)}`}
+                title={entryName(user.model)}
                 tags={[user.connection.value.label]}
                 description={summary(user)}
-                onClick={() => navigate({ kind: 'model', connection: user.connection.id, model: user.model.id })}
+                onClick={() => navigate({ kind: 'model', ...refOf(user.connection.id, user.model) })}
               />
             ))}
           </List>
@@ -143,12 +145,12 @@ type Group = { connection: Stored<'connection'>; models: ProfileUser['model'][] 
 // Mounted only while the menu is open, so each opening starts with an empty search.
 function AddChoices({ groups, now, onPick }: { groups: Group[]; now: (model: Group['models'][number]) => string; onPick: (connection: string, model: string) => void }) {
   const choices = groups.flatMap(({ connection, models }) => models.map((model) => ({ connection, model })));
-  const search = useSearch(choices, '모델 검색', ({ connection, model }) => [model.name, connection.value.label]);
+  const search = useSearch(choices, '모델 검색', ({ connection, model }) => [entryName(model), model.name, model.id, connection.value.label]);
   const shown = groups.flatMap(({ connection }) => {
     const found = search.found.filter((choice) => choice.connection === connection);
     return found.length === 0 ? [] : [
       <MenuHeading key={connection.id}>{connection.value.label}</MenuHeading>,
-      ...found.map(({ model }) => <MenuItem key={`${connection.id}/${model.id}`} label={model.name} sub={`지금: ${now(model)}`} onClick={() => onPick(connection.id, model.id)} />),
+      ...found.map(({ model }) => <MenuItem key={`${connection.id}/${entryKey(model)}`} label={entryName(model)} sub={`지금: ${now(model)}`} onClick={() => onPick(connection.id, entryKey(model))} />),
     ];
   });
   return (

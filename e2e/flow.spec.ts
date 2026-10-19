@@ -8,6 +8,7 @@ import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MOD
 
 const PASSWORD = 'e2e-password';
 const NICKNAME = 'rich-steve';
+const COPY = `${FAKE_MODEL} low`;
 const GREETING = /Welcome to the inn\. Tonight's omen is (amber|birch)\./;
 
 test('a new account imports a card, chats through the fake provider and finds the chat after a reload', async ({ page }) => {
@@ -39,12 +40,30 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByLabel('주소', { exact: true }).fill(FAKE_ADDRESS);
     await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();
     await page.getByRole('button', { name: '모델 선택', exact: true }).click();
-    await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기` }).click();
+    await page.getByRole('button', { name: `${FAKE_MODEL} 추가`, exact: true }).click();
     await settingsPage(page, '모델');
     const main = page.getByRole('button', { name: /^대화 모델 · / });
     await main.click();
     await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();
     await expect(main).toContainText(FAKE_MODEL);
+  });
+
+  await test.step('add the model again as a named copy, on its own 설정, and make it the 보조 모델', async () => {
+    await settingsPage(page, 'API 연결');
+    await page.getByRole('button', { name: `${FAKE_MODEL} 추가`, exact: true }).click();
+    const naming = page.getByRole('dialog', { name: `${FAKE_MODEL} 추가`, exact: true });
+    const name = naming.getByLabel('이름', { exact: true });
+    await expect(name).toHaveValue(`${FAKE_MODEL} 2`);
+    await name.fill(COPY);
+    await naming.getByRole('button', { name: '저장', exact: true }).click();
+    await expect(page.getByRole('heading', { name: COPY, exact: true })).toBeVisible();
+    await expect(page.getByText(`${COPY}용`, { exact: true })).toBeVisible();
+    await settingsPage(page, '모델');
+    const aux = page.getByRole('button', { name: /^보조 모델 · / });
+    await aux.click();
+    await page.getByRole('menuitemradio', { name: new RegExp(`^${COPY}`) }).click();
+    await expect(aux).toContainText(COPY);
+    await expect(page.getByRole('button', { name: /^대화 모델 · / })).not.toContainText(COPY);
   });
 
   await test.step('give the default persona a 별명, which lists show and no request carries', async () => {
@@ -222,7 +241,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     expect(violations).toEqual([]);
   });
 
-  await test.step('a large catalog windows its rows without losing search, filters, stars or missing starred models', async () => {
+  await test.step('a large catalog windows its rows without losing search, filters, added models or ones no longer listed', async () => {
     const recorded = process.env.CATALOG_FIXTURE;
     const payload = recorded ? JSON.parse(readFileSync(recorded, 'utf8')) as typeof featherlessModels : {
       data: [
@@ -262,28 +281,26 @@ test('a new account imports a card, chats through the fake provider and finds th
       while (frame && !/auto|scroll/.test(getComputedStyle(frame).overflowY)) frame = frame.parentElement;
       (frame ?? document.scrollingElement).scrollTop = (frame ?? document.scrollingElement).scrollHeight;
     })()`);
-    await expect(page.getByRole('button', { name: `${last.name} 즐겨찾기`, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: `${last.name} 추가`, exact: true })).toBeVisible();
     expect(await rows.count()).toBeLessThan(100);
     const search = page.getByRole('searchbox', { name: '모델 검색' });
     await search.fill(last.id);
-    await page.getByRole('button', { name: `${last.name} 즐겨찾기`, exact: true }).click();
-    const starred = page.getByRole('list', { name: '즐겨찾기한 모델', exact: true });
-    await expect(starred).toContainText(last.name);
+    await page.getByRole('button', { name: `${last.name} 추가`, exact: true }).click();
+    const added = page.getByRole('list', { name: '추가한 모델', exact: true });
+    await expect(added).toContainText(last.name);
+    await expect(list).toContainText('추가됨');
     await search.fill('');
     await page.getByRole('button', { name: '비전', exact: true }).click();
     await expect(rows.first()).toBeVisible();
     expect(await rows.count()).toBeLessThan(100);
     await expect(rows.first()).toContainText('비전');
-    await page.getByRole('button', { name: '즐겨찾기', exact: true }).click();
-    await expect(starred).toContainText(last.name);
-    await expect(list).toHaveCount(0);
     expect(bodies).toHaveLength(2);
     expect(Math.max(...bodies)).toBeLessThan(1024);
     missing = true;
     await page.reload();
     await expect(page.getByText(`모델 ${models.length - 1}개`)).toBeVisible();
-    await expect(starred).toContainText('목록에 없음');
-    await starred.getByRole('button', { name: `${last.name} 즐겨찾기 해제`, exact: true }).click();
-    await expect(starred).toHaveCount(0);
+    await expect(added).toContainText('목록에 없음');
+    await added.getByRole('button', { name: `${last.name} 빼기`, exact: true }).click();
+    await expect(added).toHaveCount(0);
   });
 });

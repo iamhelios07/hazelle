@@ -1,18 +1,18 @@
 import type { ModelRef } from '../connectors/assignment';
 import type { ModelSettings } from '../connectors/settings';
-import type { Starred } from '../connectors/types';
+import { entryKey, entryName, type Starred } from '../connectors/types';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { Profile } from '../model/profile';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
-import type { ApiResult } from './api';
+import type { ApiFailure, ApiResult } from './api';
 import { imageOnly, taskModel, type Route, type RouteFailure } from './assignment';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
 
-// Every write of `profile` objects, of the default 묶음, and of the 묶음 a starred model uses.
+// Every write of `profile` objects, of the default 묶음, and of the 묶음 an added model uses.
 
 // Fixed, so two devices adding the first 묶음 at once meet in a version conflict instead of making two.
 export const FIRST_PROFILE_ID = '00000000-0000-4000-8000-000000000003';
@@ -93,10 +93,21 @@ export async function addDefaultProfile(store: ObjectStore) {
 }
 
 // The default 묶음 is what a model without its own uses, so putting a model on it clears the model's own.
-export function setModelProfile(store: ObjectStore, connection: string, model: string, profile: string): Promise<ApiResult<Stored<'connection'>>> {
+export function setModelProfile(store: ObjectStore, connection: string, key: string, profile: string): Promise<ApiResult<Stored<'connection'>>> {
   const isDefault = profile === store.get('settings', SETTINGS_ID)?.value.profile;
   return store.update('connection', connection, (current) => ({
     ...current,
-    starred: current.starred.map((entry) => (entry.id !== model ? entry : isDefault ? without(entry, 'profile') : { ...entry, profile })),
+    starred: current.starred.map((entry) => (entryKey(entry) !== key ? entry : isDefault ? without(entry, 'profile') : { ...entry, profile })),
   }));
+}
+
+// unmade: the 설정 was not made, so nothing points at it.
+export type Owned<T> = ApiResult<T> | { ok: false; unmade: ApiFailure };
+
+// An entry's own 설정, named for the entry, from the given values: point gives it to the entry, or saves the entry with it.
+export async function ownProfile<T>(store: ObjectStore, entry: Pick<Starred, 'name' | 'label'>, settings: ModelSettings, point: (profile: string) => Promise<ApiResult<T>>): Promise<Owned<T>> {
+  const id = crypto.randomUUID();
+  // The entry takes the profile only once it exists: a create that fails must leave no entry pointing at it.
+  const made = await addProfile(store, { name: `${entryName(entry)}용`, settings }, id);
+  return made.ok ? point(id) : { ok: false, unmade: made };
 }

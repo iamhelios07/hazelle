@@ -61,8 +61,12 @@ export type Receipt = {
   tries?: number;
   // The connection's and the model's names when the reply was made; either may be renamed or deleted later.
   source: string;
+  // The provider's model id and the catalog's name; entry: the key of the further copy the call went through (connectors
+  // Starred entry), absent for a model's first entry. 최근 and a resumed stream route by the key (callRef); usage and the
+  // ledger group by model, so the copies count as one model.
   model: string;
   modelName: string;
+  entry?: string;
   state: 'done' | 'cut' | 'failed';
   cut: 'length' | 'no-terminal' | 'stopped' | null;
   error: ReceiptError | null;
@@ -612,9 +616,11 @@ export function loggedCalls(entries: Iterable<Entry>): { calls: UsageCall[]; boo
   return { calls: [...kept.values()], booked: booked.flatMap(({ replyId, cost }) => (replies.get(replyId) ?? []).map((call) => ({ call, cost }))) };
 }
 
+export const callRef = ({ connection, model, entry }: Pick<Receipt, 'connection' | 'model' | 'entry'>): ModelRef => ({ connection, model: entry ?? model });
+
 export function recentIn(messages: Message[]): RecentModel[] {
   const used = messages.flatMap((message) => message.versions)
-    .flatMap((version) => (version.receipt ? [{ at: version.at, ref: { connection: version.receipt.connection, model: version.receipt.model } }] : []))
+    .flatMap((version) => (version.receipt ? [{ at: version.at, ref: callRef(version.receipt) }] : []))
     .sort((a, b) => b.at - a.at);
   const latest: RecentModel[] = [];
   for (const model of used) {

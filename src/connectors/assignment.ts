@@ -1,4 +1,4 @@
-import type { Model, Modality } from './types';
+import { entryKey, type Model, type Modality, type Starred } from './types';
 
 // A role that no layer sets takes the role it falls back to, so every chain but 임베딩 모델's ends at 대화 모델. A task
 // (번역) has no role: its prompt holds its own model, and without one the task takes 보조 모델. 임베딩 모델 is set in
@@ -11,8 +11,11 @@ export const ROLES: Record<Role, { needs: Modality; fallsBackTo: Role | null }> 
   embed: { needs: 'embedding', fallsBackTo: null },
 };
 
+// model: the entry's key (types entryKey), not the id the provider is sent.
 export type ModelRef = { connection: string; model: string };
 export type Assignment = Partial<Record<Role, ModelRef>>;
+
+export const refOf = (connection: string, model: Starred): ModelRef => ({ connection, model: entryKey(model) });
 
 export const sameModelRef = (a: ModelRef, b: ModelRef): boolean => a.connection === b.connection && a.model === b.model;
 

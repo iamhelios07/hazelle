@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit, SERVICE_TIERS, VERBOSITY, WHOLE, type Change, type ModelSettings, type PdfKeep, type Reasoning, type SettingsSchema } from '../../connectors/settings';
-import type { Starred } from '../../connectors/types';
+import { entryName, type Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { profileUsers, renameProfile, setProfileSettings, withSettings, type ProfileUser } from '../../runtime/profiles';
 import { choices } from '../common/reading';
@@ -80,8 +80,8 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
 
   function noteFor(setting: Change['setting']): string | undefined {
     if (model) return undefined;
-    const left = users.filter((user) => user.changes.some((change) => change.setting === setting && change.change === 'left-out')).map((user) => user.model.name);
-    const capped = users.flatMap((user) => user.changes.flatMap((change) => (change.setting === setting && change.change === 'capped' ? [`${user.model.name} ${count(change.to)}`] : [])));
+    const left = users.filter((user) => user.changes.some((change) => change.setting === setting && change.change === 'left-out')).map((user) => entryName(user.model));
+    const capped = users.flatMap((user) => user.changes.flatMap((change) => (change.setting === setting && change.change === 'capped' ? [`${entryName(user.model)} ${count(change.to)}`] : [])));
     return changeLine(left, capped);
   }
 

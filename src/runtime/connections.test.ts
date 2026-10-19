@@ -4,7 +4,7 @@ import type { Connection } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
-import { addConnection, changeKey, providerConnection, refreshStarred, retriesOf, setSharedRetries, setStarred } from './connections';
+import { addConnection, addCopy, addModel, changeKey, providerConnection, refreshStarred, retriesOf, setSharedRetries } from './connections';
 import { bareModel } from '../connectors/chat-completions';
 import type { Model } from '../connectors/types';
 import { stubRelay, testModel, testServer, upstream } from './testing';
@@ -66,28 +66,53 @@ describe('changeKey', () => {
     }));
 });
 
-describe('setStarred', () => {
-  it('makes the first starred model that can talk the 대화 모델, and leaves one already set alone', () =>
+describe('addModel', () => {
+  it('makes the first model added that can talk the 대화 모델, and leaves one already set alone', () =>
     server.withSession(async ({ store }) => {
       const saved = await store.create('connection', openRouter);
       const id = saved.ok ? saved.data.id : '';
       const model = (name: string, output: Model['output'] = null): Model => ({ ...bareModel(name), output });
-      await setStarred(store, id, model('painter', ['image']), true);
-      await setStarred(store, id, model('first'), true);
-      await setStarred(store, id, model('second'), true);
+      await addModel(store, id, model('painter', ['image']));
+      await addModel(store, id, model('first'));
+      await addModel(store, id, model('second'));
       expect(store.get('settings', SETTINGS_ID)?.value.models.main).toEqual({ connection: id, model: 'first' });
+    }));
+
+  it("keys a model's first entry by its id and a second one by an entry of its own", () =>
+    server.withSession(async ({ store }) => {
+      const saved = await store.create('connection', openRouter);
+      const id = saved.ok ? saved.data.id : '';
+      const first = await addModel(store, id, testModel);
+      const second = await addModel(store, id, testModel, { label: 'M (low)' });
+      expect(first).toEqual({ ok: true, data: testModel.id });
+      expect(second.ok && second.data).toMatch(/^#/);
+      expect(store.get('connection', id)?.value.starred).toEqual([testModel, { ...testModel, label: 'M (low)', entry: second.ok && second.data }]);
+    }));
+});
+
+describe('addCopy', () => {
+  it("makes the copy's own 설정 from the first entry's before the entry points at it", () =>
+    server.withSession(async ({ store }) => {
+      const profile = await store.create('profile', { name: 'high', settings: { temperature: 1 } });
+      const saved = await store.create('connection', { ...openRouter, starred: [{ ...testModel, profile: profile.ok ? profile.data.id : '' }] });
+      const id = saved.ok ? saved.data.id : '';
+      const copied = await addCopy(store, id, testModel, 'M (low)');
+      const copy = store.get('connection', id)!.value.starred[1]!;
+      expect(copied).toEqual({ ok: true, data: copy.entry });
+      expect(store.get('profile', copy.profile!)?.value).toEqual({ name: 'M (low)용', settings: { temperature: 1 } });
     }));
 });
 
 describe('refreshStarred', () => {
-  it('takes what the list says of each starred model now, keeping its 설정 묶음, a price and inputs the list leaves out, and a model it no longer lists', () =>
+  it('takes what the list says of each entry of a listed model now, keeping its own fields, a price and inputs the list leaves out, and a model it no longer lists', () =>
     server.withSession(async ({ store }) => {
       const price = { input: 1, output: 2, cacheRead: null, cacheWrite: null, tiers: [] };
-      const saved = await store.create('connection', { ...openRouter, starred: [{ ...testModel, input: ['text', 'image'], price, profile: 'p' }, { ...testModel, id: 'gone' }] });
+      const copy = { ...testModel, entry: '#low', label: 'M (low)', profile: 'q' };
+      const saved = await store.create('connection', { ...openRouter, starred: [{ ...testModel, input: ['text', 'image'], price, profile: 'p' }, copy, { ...testModel, id: 'gone' }] });
       const id = saved.ok ? saved.data.id : '';
       const listed = { ...testModel, name: 'M 2', protocol: 'anthropic-messages' as const, later: 'a field a later version adds' };
       await refreshStarred(store, id, [listed]);
-      expect(store.get('connection', id)?.value.starred).toEqual([{ ...listed, input: ['text', 'image'], price, profile: 'p' }, { ...testModel, id: 'gone' }]);
+      expect(store.get('connection', id)?.value.starred).toEqual([{ ...listed, input: ['text', 'image'], price, profile: 'p' }, { ...listed, entry: '#low', label: 'M (low)', profile: 'q' }, { ...testModel, id: 'gone' }]);
       const rev = store.get('connection', id)!.rev;
       await refreshStarred(store, id, [{ ...listed }]);
       expect(store.get('connection', id)!.rev).toBe(rev);

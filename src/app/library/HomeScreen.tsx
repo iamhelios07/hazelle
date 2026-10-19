@@ -24,7 +24,7 @@ export function Welcome() {
         {connections.length === 0 ? (
           <ActionCard icon={Plug} title={newOf('연결')} description="제공자를 선택하고 API 키를 입력해요" onClick={() => navigate({ kind: 'add-connection' })} />
         ) : (
-          <ActionCard icon={Plug} title="연결" description={`연결 ${connections.length}개 · 모델 즐겨찾기`} onClick={() => navigate({ kind: 'connections' })} />
+          <ActionCard icon={Plug} title="연결" description={`연결 ${connections.length}개 · 모델 추가`} onClick={() => navigate({ kind: 'connections' })} />
         )}
       </Stack>
     </Stack>

@@ -1,6 +1,7 @@
 import { MessageSquarePlus } from 'lucide-react';
 import { lazy, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
+import { entryOf } from '../../connectors/types';
 import { binsChat, isBinned, live } from '../../model/library';
 import type { SideAt } from '../chat/ChatScreen';
 import { ACTS } from '../common/acts';
@@ -263,8 +264,8 @@ function ConnectionPage({ at, back }: { at: At<'connection'>; back: Back }) {
 
 function ModelPage({ at, back }: { at: At<'model'>; back: Back }) {
   const connection = useStored('connection', at.connection);
-  const model = connection?.value.starred.find((candidate) => candidate.id === at.model);
-  return connection && model ? <ModelScreen key={`${connection.id}/${model.id}`} connection={connection} model={model} back={back} /> : <Missing what="model" back={back} />;
+  const model = connection && entryOf(connection.value, at.model);
+  return connection && model ? <ModelScreen key={`${connection.id}/${at.model}`} connection={connection} model={model} back={back} /> : <Missing what="model" back={back} />;
 }
 
 function AdminPage({ closeSettings, children }: { closeSettings: () => void; children: ReactNode }) {

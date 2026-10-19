@@ -1,3 +1,4 @@
+import { entryName } from '../../connectors/types';
 import { FEATURES, type Feature } from '../../model/features';
 import { MASCOT, MASCOTS } from '../../model/mascot';
 import { illustrateSwitches, translateSwitches } from '../../runtime/characters';
@@ -27,7 +28,8 @@ const LINES: Record<Feature, (store: ObjectStore, routes: ReturnType<typeof draw
   },
   illustrate: (store, routes) => {
     const illustrate = illustrateSwitches(store, null);
-    const model = routes.length ? (imageModelOf(routes, illustrate)?.model.name ?? NOT_STARRED) : '이미지 모델 없음';
+    const image = imageModelOf(routes, illustrate)?.model;
+    const model = !routes.length ? '이미지 모델 없음' : image ? entryName(image) : NOT_STARRED;
     return `자동 삽화 ${state(illustrate.auto)} · ${model}`;
   },
   memory: (store) => {

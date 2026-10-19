@@ -1,4 +1,6 @@
 import { toolMenu } from './toolMenu';
+import { refOf } from '../../connectors/assignment';
+import { entryName } from '../../connectors/types';
 import { BookKey, BookOpen, Bookmark, Brain, Keyboard, MessageSquarePlus, Package, PlaneTakeoff, ScanSearch, Search, SlidersHorizontal, SquarePen, ToggleRight, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { FeatureSwitches } from '../common/FeatureSwitches';
@@ -46,8 +48,8 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const openCast = useMenuOpener(castMenu);
   const featuresMenu = useMenuHandle();
   const openFeatures = useMenuOpener(featuresMenu);
-  const label = 'kind' in route ? '모델 선택' : route.model.name;
-  const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
+  const label = 'kind' in route ? '모델 선택' : entryName(route.model);
+  const current = 'kind' in route ? null : refOf(route.connection.id, route.model);
   return (
     <>
       <ChatPromptPicker prompt={chat.prompt} open={chat.dialog === 'prompt'} onOpen={() => actions.openDialog('prompt')} />

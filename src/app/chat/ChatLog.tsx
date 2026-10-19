@@ -1,3 +1,4 @@
+import { entryName } from '../../connectors/types';
 import { GitBranch } from 'lucide-react';
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
 import { shown } from '../../model/chat';
@@ -15,7 +16,7 @@ export function speakers({ card, shelf, persona, route }: OpenChat) {
   return {
     character: card && { name: card.nickname || card.name, image: shelf!.face },
     me: persona.kind === 'persona' ? { name: persona.persona.value.name, image: persona.persona.value.picture } : null,
-    modelName: 'kind' in route ? null : route.model.name,
+    modelName: 'kind' in route ? null : entryName(route.model),
   };
 }
 

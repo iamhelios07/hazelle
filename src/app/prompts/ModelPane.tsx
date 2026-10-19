@@ -24,7 +24,7 @@ function tuning(picked: ModelRef | undefined, connections: readonly Stored<'conn
   const model = picked && findStarred(picked, connections);
   return {
     text: `온도 같은 값은 ${MODEL_SETTINGS}에서 정해요.`,
-    open: model ? { label: opens(model.name), onClick: () => navigate({ kind: 'model', connection: picked.connection, model: picked.model }) } : { label: opens(inSettings('models')), onClick: () => navigate({ kind: 'models' }) },
+    open: model ? { label: opens(model.name), onClick: () => navigate({ kind: 'model', ...picked }) } : { label: opens(inSettings('models')), onClick: () => navigate({ kind: 'models' }) },
   };
 }
 

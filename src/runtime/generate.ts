@@ -8,7 +8,7 @@ import { decodeStream, type InlineThoughts, type Outcome } from '../connectors/s
 import type { ModelSettings } from '../connectors/settings';
 import type { PulseLabel } from '../contracts/pulse';
 import { ConnectorError, type Account, type Batches, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase, type Starred } from '../connectors/types';
-import type { Receipt, ReceiptError } from '../model/chat';
+import { callRef, type Receipt, type ReceiptError } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
 import { routeOf } from './assignment';
@@ -321,7 +321,7 @@ export async function resume({ store, credentials, log }: { store: ObjectStore; 
   let protocol = '';
   const who: Logged = { chat: parent!, purpose: value.for.kind, call: value.call };
   const reply = ([outcome, error]: Answered): Reply => logReply(log, who, value.at, true, { ...outcome, ...refusalFields(protocol, outcome, error, value.calibration), call: id, account: null, tries, error, firstTextMs: null, totalMs: took, request: null, response: null, cache: null });
-  const route = routeOf(store, value.call);
+  const route = routeOf(store, callRef(value.call));
   const resolved = 'kind' in route ? null : resolveConnection(route.connection.value);
   if ('kind' in route || !resolved) return reply(failedWith({ kind: 'refused', code: 'model-gone' }));
   const routed = resolveModel(resolved, route.model);

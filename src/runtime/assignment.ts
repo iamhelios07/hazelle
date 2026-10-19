@@ -1,6 +1,6 @@
 import { resolveRole, type Assignment, type ModelRef, type Role } from '../connectors/assignment';
 import { embedRoute } from '../connectors/registry';
-import type { Model } from '../connectors/types';
+import { entryOf, type Model, type Starred } from '../connectors/types';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
@@ -12,7 +12,7 @@ import type { ObjectStore } from './store';
 // The chat layer lives in the chat object and the prompt layer in the prompt, which runtime/chat-log and runtime/prompts
 // write otherwise; their `models` fields are written only here.
 
-export type Route = { connection: Stored<'connection'>; model: Model };
+export type Route = { connection: Stored<'connection'>; model: Starred };
 // image-only: the model draws and writes no text, so it cannot answer a chat or a task (design §6.6).
 export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' } | { kind: 'image-only' };
 
@@ -29,7 +29,7 @@ export function chatModel(store: Pick<ObjectStore, 'get'>, chat: Chat, role: Rol
 }
 
 // 임베딩 모델 is set in 공용 alone (connectors/assignment ROLES). A model whose connection serves no embeddings is gone
-// for this role, as an unstarred one is.
+// for this role, as one no longer added is.
 export function embedModel(store: Pick<ObjectStore, 'get'>): Route | RouteFailure {
   const ref = store.get('settings', SETTINGS_ID)?.value.models.embed;
   if (!ref) return { kind: 'no-model' };
@@ -43,7 +43,7 @@ export function taskModel(store: Pick<ObjectStore, 'get'>, chat: Chat, own: Mode
 
 export function routeOf(store: Pick<ObjectStore, 'get'>, ref: ModelRef): Route | RouteFailure {
   const connection = store.get('connection', ref.connection);
-  const model = connection?.value.starred.find((starred) => starred.id === ref.model);
+  const model = connection && entryOf(connection.value, ref.model);
   return connection && model ? { connection, model } : { kind: 'model-gone' };
 }
 

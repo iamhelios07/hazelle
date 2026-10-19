@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react';
+import { refOf } from '../../connectors/assignment';
 import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
@@ -34,7 +35,7 @@ const FIX = {
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
   const { draft, messages, last, answerable, busy, problem, stuck, translate, sendLanguage, modelMenu, shelf, route, actions } = chat;
   // A model whose own 모델 설정 is gone picks another on its page; a missing default is set in 설정 › 모델.
-  const profilePage = problem?.kind === 'profile-missing' && problem.own && !('kind' in route) ? { kind: 'model' as const, connection: route.connection.id, model: route.model.id } : { kind: 'models' as const };
+  const profilePage = problem?.kind === 'profile-missing' && problem.own && !('kind' in route) ? { kind: 'model' as const, ...refOf(route.connection.id, route.model) } : { kind: 'models' as const };
   const chips: Record<Chip, { onClick: () => void }> = {
     model: useMenuOpener(modelMenu),
     prompt: { onClick: () => actions.openDialog('prompt') },

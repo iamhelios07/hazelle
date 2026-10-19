@@ -1,3 +1,4 @@
+import { entryName } from '../../connectors/types';
 import { ArrowRight, ChevronDown, ChevronUp, Eraser, Languages, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { translateSwitches } from '../../runtime/characters';
@@ -88,7 +89,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
               label="번역 모델"
               trigger={(opener) => (
                 <ChipButton
-                  label={translator.ok ? translator.route.model.name : '번역 모델 없음'}
+                  label={translator.ok ? entryName(translator.route.model) : '번역 모델 없음'}
                   title="번역 모델"
                   tone={translator.ok ? 'default' : 'warn'}
                   leading={<Icon icon={Languages} size="xs" />}
