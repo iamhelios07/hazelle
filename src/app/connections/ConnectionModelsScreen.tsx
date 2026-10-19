@@ -81,7 +81,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const rows = useMemo(() => [...entries.map((entry) => ({ entry })), ...(catalog?.ok ? catalog.models.map((model) => ({ model })) : [])], [catalog, entries]);
 
   const known = rows.some((row) => tags('entry' in row ? row.entry : row.model).length > 0);
-  const filters = [{ value: 'all' as const, label: '전체' }, ...(known ? (Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label })) : [])];
+  const filters = [{ value: 'all' as const, label: '전체' }, ...(Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label }))];
   const search = useSearch(rows, '모델 검색', (row) => ('entry' in row ? [entryName(row.entry), row.entry.name, row.entry.id] : [row.model.name, row.model.id]));
   const shown = search.found.filter((row) => filter === 'all' || FILTERS[filter].test('entry' in row ? row.entry : row.model));
   const entriesShown = shown.flatMap((row) => ('entry' in row ? [row.entry] : []));
@@ -209,7 +209,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           <Text variant="note">{[listed, entries.length ? `추가한 모델 ${entries.length}개` : ''].filter(Boolean).join(' · ')}</Text>
           <Row kind="toolbar">
             {search.field}
-            <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
+            {known && <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />}
           </Row>
           {catalog && !catalog.ok && (
             <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((count) => count + 1) }}>
