@@ -414,10 +414,16 @@ function morph(live: ParentNode, want: ParentNode) {
   }
 }
 
+const isStyle = (namespaceURI: string | null, localName: string) => namespaceURI === null && localName === 'style';
+
 function fit(at: ChildNode, node: ChildNode) {
   if (at instanceof Element && node instanceof Element && at.namespaceURI === node.namespaceURI && at.localName === node.localName) {
-    for (const { namespaceURI, localName } of [...at.attributes]) if (!node.hasAttributeNS(namespaceURI, localName)) at.removeAttributeNS(namespaceURI, localName);
-    for (const { namespaceURI, localName, name, value } of node.attributes) if (at.getAttributeNS(namespaceURI, localName) !== value) at.setAttributeNS(namespaceURI, name, value);
+    for (const { namespaceURI, localName } of [...at.attributes]) if (!isStyle(namespaceURI, localName) && !node.hasAttributeNS(namespaceURI, localName)) at.removeAttributeNS(namespaceURI, localName);
+    for (const { namespaceURI, localName, name, value } of node.attributes) if (!isStyle(namespaceURI, localName) && at.getAttributeNS(namespaceURI, localName) !== value) at.setAttributeNS(namespaceURI, name, value);
+    // Through CSSOM, as the draw applies it: a style attribute set by script changes the attribute and, under the CSP,
+    // not the declarations, so a backdrop that gained its picture kept drawing none.
+    const style = (at as HTMLElement).style;
+    if (style.cssText !== (node as HTMLElement).style.cssText) style.cssText = (node as HTMLElement).style.cssText;
     morph(at, node);
   } else if (at instanceof CharacterData && at.nodeType === node.nodeType) {
     at.data = (node as CharacterData).data;
