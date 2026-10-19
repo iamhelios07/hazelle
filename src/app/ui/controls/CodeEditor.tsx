@@ -5,15 +5,49 @@ import { lua } from '@codemirror/legacy-modes/mode/lua';
 import { linter, lintGutter, lintKeymap, type Diagnostic } from '@codemirror/lint';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, Prec } from '@codemirror/state';
-import { crosshairCursor, drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, hoverTooltip, keymap, lineNumbers, rectangularSelection } from '@codemirror/view';
+import { crosshairCursor, Decoration, drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, hoverTooltip, keymap, lineNumbers, rectangularSelection, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
-import type { Caret, CodeDoc, CodeLanguage } from './codeLanguage';
+import type { Caret, CodeDoc, CodeLanguage, CodeSpan } from './codeLanguage';
 import styles from './CodeEditor.module.css';
+import { markup, type Piece } from './markup';
 
-export type CodeEditorProps = { label: string; value: string; onChange: (value: string) => void; language: CodeLanguage; caret?: (handle: Caret | null) => void };
+// prose: text with code in it (a prompt, a character's description), set in the text's own type.
+export type CodeEditorProps = { label: string; value: string; onChange: (value: string) => void; language: CodeLanguage; prose?: boolean; caret?: (handle: Caret | null) => void };
 
-const SYNTAX = { lua: StreamLanguage.define(lua) };
+const LUA = StreamLanguage.define(lua);
+
+const MARK: Record<NonNullable<Piece['mark']>, string> = { tag: styles.tag!, separator: styles.separator!, argument: styles.argument!, comment: styles.comment!, slot: styles.slot!, angle: styles.angle! };
+const LINE = { body: null, heading: styles.heading!, rule: styles.rule! };
+
+// Prose also shows its headings, rules and <angle> tags, as MarkupArea does inline.
+function spanned(read: (text: string) => CodeSpan[], prose: boolean) {
+  const marks = (view: EditorView) => {
+    const text = view.state.doc.toString();
+    const spans = read(text);
+    if (!prose) return Decoration.set(spans.map(({ from, to, kind }) => Decoration.mark({ class: MARK[kind] }).range(from, to)));
+    const ranges = [];
+    let at = 0;
+    for (const piece of markup(text, spans)) {
+      const name = [LINE[piece.line], piece.mark && MARK[piece.mark]].filter(Boolean).join(' ');
+      if (name) ranges.push(Decoration.mark({ class: name }).range(at, at + piece.text.length));
+      at += piece.text.length;
+    }
+    return Decoration.set(ranges);
+  };
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = marks(view);
+      }
+      update(update: ViewUpdate) {
+        if (update.docChanged) this.decorations = marks(update.view);
+      }
+    },
+    { decorations: (plugin) => plugin.decorations },
+  );
+}
 
 const highlight = HighlightStyle.define([
   { tag: tags.keyword, class: styles.keyword },
@@ -46,13 +80,18 @@ function docNode(doc: CodeDoc) {
   return box;
 }
 
-function languageExtensions(language: CodeLanguage, label: string) {
+function applyTemplate(template: string, closing: string | undefined) {
+  const insert = snippet(template);
+  return (view: EditorView, completion: Completion, from: number, to: number) => insert(view, completion, from, closing && view.state.sliceDoc(to, to + closing.length) === closing ? to + closing.length : to);
+}
+
+function languageExtensions(language: CodeLanguage, label: string, prose: boolean) {
   const complete = (context: CompletionContext) => {
     const node = syntaxTree(context.state).resolveInner(context.pos, -1).name;
     const place = /string/.test(node) ? 'string' : /comment/.test(node) ? 'comment' : 'code';
     const found = language.complete(context.state.doc.toString(), context.pos, place, context.explicit);
     if (!found) return null;
-    const options = found.items.map(({ label: name, kind, detail, template, boost, doc }): Completion => ({ label: name, type: kind, detail, boost, ...(template !== undefined && { apply: snippet(template) }), ...(doc && { info: () => docNode(doc) }) }));
+    const options = found.items.map(({ label: name, kind, detail, template, closing, boost, doc }): Completion => ({ label: name, type: kind, detail, boost, ...(template !== undefined && { apply: applyTemplate(template, closing) }), ...(doc && { info: () => docNode(doc) }) }));
     return { from: found.from, options, validFor: found.validFor };
   };
   const lint = async (view: EditorView): Promise<Diagnostic[]> =>
@@ -64,8 +103,10 @@ function languageExtensions(language: CodeLanguage, label: string) {
     const found = language.explain(view.state.doc.toString(), pos);
     return found && { pos: found.from, end: found.to, above: true, create: () => ({ dom: docNode(found.doc) }) };
   });
+  const { syntax, comment } = language;
   return [
-    SYNTAX[language.syntax],
+    syntax === 'lua' ? LUA : spanned(syntax, prose),
+    comment ? EditorState.languageData.of(() => [{ commentTokens: { block: comment } }]) : [],
     autocompletion({ override: [complete], icons: false }),
     linter(lint, { delay: 400 }),
     hover,
@@ -73,9 +114,9 @@ function languageExtensions(language: CodeLanguage, label: string) {
   ];
 }
 
-function extensions(own: Compartment, language: CodeLanguage, label: string, changed: (text: string) => void) {
+function extensions(own: Compartment, language: CodeLanguage, label: string, prose: boolean, changed: (text: string) => void) {
   return [
-    own.of(languageExtensions(language, label)),
+    own.of(languageExtensions(language, label, prose)),
     lineNumbers(),
     lintGutter(),
     highlightActiveLine(),
@@ -104,7 +145,7 @@ function extensions(own: Compartment, language: CodeLanguage, label: string, cha
 // Loaded only when 크게 편집 first opens one (CodeField), so the page never pays for CodeMirror until then. The value
 // is the caller's: a change the editor did not make (the field's own typing) replaces its text. The editor is made
 // once, so its undo history and selection outlive a new language or label, which are swapped in.
-export default function CodeEditor({ label, value, onChange, language, caret }: CodeEditorProps) {
+export default function CodeEditor({ label, value, onChange, language, prose = false, caret }: CodeEditorProps) {
   const box = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const own = useRef(new Compartment());
@@ -112,7 +153,7 @@ export default function CodeEditor({ label, value, onChange, language, caret }: 
   latest.current = onChange;
 
   useEffect(() => {
-    const editor = new EditorView({ parent: box.current!, state: EditorState.create({ doc: value, extensions: extensions(own.current, language, label, (text) => latest.current(text)) }) });
+    const editor = new EditorView({ parent: box.current!, state: EditorState.create({ doc: value, extensions: extensions(own.current, language, label, prose, (text) => latest.current(text)) }) });
     view.current = editor;
     caret?.({
       focus: () => editor.focus(),
@@ -127,8 +168,8 @@ export default function CodeEditor({ label, value, onChange, language, caret }: 
   }, []);
 
   useEffect(() => {
-    view.current?.dispatch({ effects: own.current.reconfigure(languageExtensions(language, label)) });
-  }, [language, label]);
+    view.current?.dispatch({ effects: own.current.reconfigure(languageExtensions(language, label, prose)) });
+  }, [language, label, prose]);
 
   // CodeMirror keeps \n lines whatever it was given: code stored with \r\n (a bot written on Windows) is the same
   // text, and replacing it would mark the script changed on open.
@@ -137,5 +178,5 @@ export default function CodeEditor({ label, value, onChange, language, caret }: 
     if (editor && editor.state.doc.toString() !== value.replace(/\r\n?/g, '\n')) editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });
   }, [value]);
 
-  return <div ref={box} className={styles.editor} />;
+  return <div ref={box} className={prose ? `${styles.editor} ${styles.prose}` : styles.editor} />;
 }

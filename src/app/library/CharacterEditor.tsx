@@ -1,7 +1,7 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
 import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Sparkles, Square, ToggleRight, UserRound, Variable, type LucideIcon } from 'lucide-react';
-import { useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
@@ -12,6 +12,7 @@ import { editCharacter, setAvatar, setCardWrites, setDecor, setKeepThoughts, set
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
 import { aliased } from '../common/alias';
+import { cbsLanguage } from '../common/code/cbs';
 import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { AssetsEditor } from '../common/AssetsEditor';
@@ -100,6 +101,8 @@ type Props = {
 export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }: Props) {
   const { id, character, face } = shelf;
   const { card, origin } = character;
+  const cbs = useMemo(() => cbsLanguage({ variables: card.variables }), [card.variables]);
+  const instructions = useMemo(() => cbsLanguage({ variables: card.variables, placeholder: 'original' }), [card.variables]);
   const store = useStore();
   const files = useFiles();
   const toast = useToast();
@@ -281,10 +284,10 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           </>
         ) : (
           <>
-            <TextField label="설명" lines={20} expand={SHORTCUTS.bigEdit.keys} value={text.description} onChange={(value) => change('description', value)} />
-            {legacy.personality && <TextField label="성격" lines={4} expand={SHORTCUTS.bigEdit.keys} value={text.personality} onChange={(value) => change('personality', value)} />}
-            {legacy.scenario && <TextField label="상황" lines={4} expand={SHORTCUTS.bigEdit.keys} value={text.scenario} onChange={(value) => change('scenario', value)} />}
-            <TextField label="예시 대화" lines={6} expand={SHORTCUTS.bigEdit.keys} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
+            <TextField label="설명" lines={20} expand={SHORTCUTS.bigEdit.keys} language={cbs} value={text.description} onChange={(value) => change('description', value)} />
+            {legacy.personality && <TextField label="성격" lines={4} expand={SHORTCUTS.bigEdit.keys} language={cbs} value={text.personality} onChange={(value) => change('personality', value)} />}
+            {legacy.scenario && <TextField label="상황" lines={4} expand={SHORTCUTS.bigEdit.keys} language={cbs} value={text.scenario} onChange={(value) => change('scenario', value)} />}
+            <TextField label="예시 대화" lines={6} expand={SHORTCUTS.bigEdit.keys} language={cbs} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
           </>
         )}
       </Section>
@@ -303,7 +306,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
             addLabel="첫인사 추가"
             removed={(index) => `${index + 1}번째 첫인사를 삭제했어요.`}
           >
-            {({ value, name, set, remove }) => <TextField label={name} lines={6} expand={SHORTCUTS.bigEdit.keys} value={value} onChange={set} action={remove} />}
+            {({ value, name, set, remove }) => <TextField label={name} lines={6} expand={SHORTCUTS.bigEdit.keys} language={cbs} value={value} onChange={set} action={remove} />}
           </EntryList>
         )}
       </Section>
@@ -314,6 +317,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           label="시스템 프롬프트"
           lines={6}
           expand={SHORTCUTS.bigEdit.keys}
+          language={instructions}
           value={text.systemPrompt}
           onChange={(value) => change('systemPrompt', value)}
           help={{ text: '비워 두면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts', place: null }) } }}
@@ -322,6 +326,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           label="대화 뒤 지시문"
           lines={4}
           expand={SHORTCUTS.bigEdit.keys}
+          language={instructions}
           value={text.postHistoryInstructions}
           onChange={(value) => change('postHistoryInstructions', value)}
           help="대화 기록 바로 뒤에 붙어요."
@@ -347,7 +352,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
         />
       </Section>
     ),
-    lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
+    lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} variables={card.variables} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
     features: <FeatureSwitches owner={{ kind: 'character', id }} own={character.features} />,
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} variables={card.variables} />,

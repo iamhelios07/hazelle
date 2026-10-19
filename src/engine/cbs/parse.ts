@@ -1,13 +1,13 @@
 // The whole tree is read before anything is evaluated, so a #when evaluates only the branch it takes and a pure
 // block still has its source.
 export type Node = string | Tag | Block | Legacy;
-// at: where the tag's `{{` stands in the text it was read from; it places the tag's random rolls.
-export type Tag = { kind: 'tag'; at: number; parts: Node[] };
+// at: where the tag's `{{` stands in the text it was read from; it places the tag's random rolls. end: just past its `}}`.
+export type Tag = { kind: 'tag'; at: number; end: number; parts: Node[] };
 // A block is any tag starting with `#`, up to the next `{{/…}}` on its level, whatever name follows
 // the slash. raw is the body's source.
 export type Block = { kind: 'block'; at: number; head: Tag; body: Node[]; raw: string; close: Tag };
-// Risu's deprecated `{#if condition` newline body `#}`, still in imported bots. at: where its `{#` stands.
-export type Legacy = { kind: 'legacy'; at: number; parts: Node[] };
+// Risu's deprecated `{#if condition` newline body `#}`, still in imported bots. at: where its `{#` stands, end: just past its `#}`.
+export type Legacy = { kind: 'legacy'; at: number; end: number; parts: Node[] };
 
 type Frame = { nodes: Node[] } & ({ kind: 'root' } | { kind: 'tag' | 'legacy'; at: number } | { kind: 'block'; head: Tag; from: number });
 
@@ -41,7 +41,7 @@ export function parse(text: string): Node[] {
       append(frame.nodes, text.slice(from, index));
       at = from = index + 2;
       stack.pop();
-      append(top().nodes, { kind: 'legacy', at: frame.at, parts: frame.nodes });
+      append(top().nodes, { kind: 'legacy', at: frame.at, end: at, parts: frame.nodes });
       continue;
     }
     at = index + 2;
@@ -51,7 +51,7 @@ export function parse(text: string): Node[] {
     append(frame.nodes, text.slice(from, index));
     from = at;
     stack.pop();
-    const tag: Tag = { kind: 'tag', at: frame.at, parts: frame.nodes };
+    const tag: Tag = { kind: 'tag', at: frame.at, end: at, parts: frame.nodes };
     const first = tag.parts[0];
     const lead = typeof first === 'string' ? first.trimStart() : '';
     const parent = top();

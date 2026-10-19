@@ -124,7 +124,7 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
 const asWritten = (content: string) => `{{${content}}}`;
 
 // Read only after the lookup fails: (, ), <, >, : and ; name handlers too.
-const isProse = (name: string) => !/[a-z]/i.test(name);
+export const isProse = (name: string) => !/[a-z]/i.test(name);
 
 // At `::`, or at `:` when the first colon is single, so {{getvar:x}} works.
 export function separatorOf(content: string): string | null {
@@ -196,34 +196,35 @@ const RAW = new Map<string, (raw: string, rest: string) => string>([
 ]);
 export const isRawBlock = (name: string) => RAW.has(name);
 
+// null: the block stays as written, as one no handler takes does, without counting as unknown.
+const BLOCKS = new Map<string, (block: Block, rest: string, frame: Frame) => string | null>([
+  ['when', when],
+  ['if', (block, rest, frame) => (truthy(rest.trim()) ? evaluateNodes(trimLines(block.body), frame) : '')],
+  ['ifpure', (block, rest, frame) => (truthy(rest.trim()) ? evaluateNodes(block.body, frame) : '')],
+  ['each', each],
+  ['code', (block, _rest, frame) => unbackslash(evaluateNodes(block.body, frame).replace(/[\n\r\t]/g, ''))],
+  [
+    'func',
+    (block, rest, frame) => {
+      // Names after the function's are not read: a body reads its arguments as {{arg::1}} on.
+      const name = rest.trim().split(/\s+/)[0];
+      if (!name) return null;
+      frame.run.functions.set(name, blankEnds(block.body));
+      return '';
+    },
+  ],
+]);
+// name: normalized, as blockHead gives it.
+export const isBlockName = (name: string) => RAW.has(name) || BLOCKS.has(name);
+
 function evaluateBlock(block: Block, frame: Frame): string {
   const head = evaluateNodes(block.head.parts, frame);
   const { name, rest } = blockHead(head)!;
-  const unknown = () => asWritten(head) + evaluateNodes(block.body, frame) + asWritten(evaluateNodes(block.close.parts, frame));
   const raw = RAW.get(name);
   if (raw) return raw(block.raw, rest);
-  switch (name) {
-    case 'when':
-      return when(block, rest, frame);
-    case 'if':
-      return truthy(rest.trim()) ? evaluateNodes(trimLines(block.body), frame) : '';
-    case 'ifpure':
-      return truthy(rest.trim()) ? evaluateNodes(block.body, frame) : '';
-    case 'each':
-      return each(block, rest, frame) ?? unknown();
-    case 'code':
-      return unbackslash(evaluateNodes(block.body, frame).replace(/[\n\r\t]/g, ''));
-    case 'func': {
-      // Names after the function's are not read: a body reads its arguments as {{arg::1}} on.
-      const name = rest.trim().split(/\s+/)[0];
-      if (!name) return unknown();
-      frame.run.functions.set(name, blankEnds(block.body));
-      return '';
-    }
-    default:
-      if (!isProse(name)) frame.run.context.problems?.push({ kind: 'unknown-tag', text: asWritten(head) });
-      return unknown();
-  }
+  const run = BLOCKS.get(name);
+  if (!run && !isProse(name)) frame.run.context.problems?.push({ kind: 'unknown-tag', text: asWritten(head) });
+  return run?.(block, rest, frame) ?? asWritten(head) + evaluateNodes(block.body, frame) + asWritten(evaluateNodes(block.close.parts, frame));
 }
 
 // Only the branch taken is evaluated. Risu evaluates both and keeps one, so a setvar in the other ran too.

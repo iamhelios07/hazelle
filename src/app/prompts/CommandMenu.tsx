@@ -4,13 +4,15 @@ import type { PromptSort } from '../../model/prompt';
 import { useSearch } from '../common/useSearch';
 import { COMMAND } from '../common/words';
 import { Button, CodeBlock, Dialog, Empty, MarkupArea, Menu, MenuHeading, MenuItem, Row, Stack, Text } from '../ui';
-import { commandSnippet, COMMANDS, type Command } from './commands';
-import type { Snippet } from './edits';
-import { GUIDES, SAMPLE_NOTE, tryExample, type Example, type GuideId } from './guides';
+import { cbsLanguage } from '../common/code/cbs';
+import { COMMANDS, type Command, type GuideId } from '../common/code/cbsCommands';
+import { commandSnippet, type Snippet } from './edits';
+import { GUIDES, SAMPLE_NOTE, tryExample, type Example } from './guides';
 
 type Props = { sort: PromptSort; onInsert: (snippet: Snippet) => void };
 
 const LABEL = `${COMMAND} 삽입`;
+const CBS = cbsLanguage();
 
 export function CommandMenu({ sort, onInsert }: Props) {
   const [guide, setGuide] = useState<GuideId | null>(null);
@@ -101,7 +103,7 @@ function Tryout({ example, onInsert }: { example: Example; onInsert: (text: stri
   const result = tryExample(written, example.inMessage);
   return (
     <Stack gap="related">
-      <MarkupArea label="예시" variant="field" value={written} onChange={setWritten} />
+      <MarkupArea label="예시" variant="field" language={CBS} value={written} onChange={setWritten} />
       <Text variant="note">{result === null ? '결과: 출력이 너무 길어서 중단됨' : result ? '결과' : '결과: 빈 텍스트'}</Text>
       {result && <CodeBlock variant="prose">{result}</CodeBlock>}
       <Row kind="actions">

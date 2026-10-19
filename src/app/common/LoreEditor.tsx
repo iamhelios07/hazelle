@@ -8,8 +8,10 @@ import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, remove
 import { useChildren, useStore, useStored } from '../session';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
+import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeLanguage } from '../ui';
 import { ACTS, addOf } from './acts';
+import { cbsLanguage } from './code/cbs';
+import type { Defaults } from './code/variables';
 import { NameDialog } from './NameDialog';
 import { SLOT } from './prompt-words';
 import { typedText } from './typed';
@@ -69,9 +71,10 @@ function when({ enabled, constant, keys }: Lore) {
 
 type Naming = { folder: LoreFolder | null; name: string };
 
-// folders: the owner's loreFolders as stored now.
-export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: LoreFolder[] }) {
+// folders: the owner's loreFolders as stored now. variables: a character's 기본 변수, offered in an entry's text.
+export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; folders: LoreFolder[]; variables?: Defaults }) {
   const store = useStore();
+  const language = useMemo(() => cbsLanguage({ variables }), [variables]);
   const toast = useToast();
   const entries = useChildren('lore', owner.id);
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
@@ -105,7 +108,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
     );
   }
 
-  const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} startOpen={entry.id === added} />);
+  const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} language={language} startOpen={entry.id === added} />);
   const [loose, ...grouped] = groups;
   const search = useSearch(entries, '로어북 검색', ({ value }) => [loreName(value.name), ...value.keys]);
   const listed = search.words ? (
@@ -168,10 +171,10 @@ function FolderItem({ name, count, menu, children }: { name: string; count: numb
   return <ListItem title={name} aside={`${count}개`} expanded={open} onClick={() => setOpen(!open)} control={<MoreMenu of={`'${name}'`}>{menu}</MoreMenu>} detail={open && <Stack gap="related">{children}</Stack>} />;
 }
 
-type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; startOpen: boolean };
+type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; language: CodeLanguage; startOpen: boolean };
 
 // Its edits wait in its own save queue, so the line shows them before they are stored.
-function EntryRow({ stored, folders, startOpen }: RowProps) {
+function EntryRow({ stored, folders, language, startOpen }: RowProps) {
   const store = useStore();
   const toast = useToast();
   const save = useAutosave<Lore>(`lore:${stored.id}`, (patch) => editLore(store, stored.id, patch));
@@ -191,7 +194,7 @@ function EntryRow({ stored, folders, startOpen }: RowProps) {
       trailing={<Tag>{when(shown)}</Tag>}
       expanded={open}
       onClick={() => setOpen(!open)}
-      detail={open && <EntryFields shown={shown} folders={folders} change={save.change} status={save.status} remove={() => void remove()} />}
+      detail={open && <EntryFields shown={shown} folders={folders} language={language} change={save.change} status={save.status} remove={() => void remove()} />}
     />
   );
 }
@@ -199,12 +202,13 @@ function EntryRow({ stored, folders, startOpen }: RowProps) {
 type FieldsProps = {
   shown: Lore;
   folders: LoreFolder[];
+  language: CodeLanguage;
   change: (patch: Partial<Lore>, valid?: boolean) => void;
   status: keyof typeof SAVE_STATUS | null;
   remove: () => void;
 };
 
-function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
+function EntryFields({ shown, folders, language, change, status, remove }: FieldsProps) {
   const [typed, setTyped] = useState<{ order?: string; priority?: string }>({});
   const order = typedText(typed.order, (draft) => readNumber(draft) ?? null, shown.insertionOrder, String);
   const priority = typedText(typed.priority, readNumber, shown.priority ?? undefined, (value) => (value === undefined ? '' : String(value)));
@@ -240,7 +244,7 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
         {toggle('useRegex', '정규식 사용', '키워드를 /패턴/ 또는 /패턴/플래그 형식의 정규식으로 인식해요.')}
         {toggle('caseSensitive', '대소문자 구분')}
       </SettingGroup>
-      <TextField label="내용" lines={8} expand={SHORTCUTS.bigEdit.keys} value={shown.content} onChange={(content) => change({ content })} help="@@로 시작하는 줄은 삽입 방식을 정하는 명령이에요. 예: @@depth 0" />
+      <TextField label="내용" lines={8} expand={SHORTCUTS.bigEdit.keys} language={language} value={shown.content} onChange={(content) => change({ content })} help="@@로 시작하는 줄은 삽입 방식을 정하는 명령이에요. 예: @@depth 0" />
       <SettingGroup label="삽입">
         {toggle('enabled', '켬')}
         {toggle('constant', '항상 삽입', '키워드와 상관없이 항상 넣어요.')}

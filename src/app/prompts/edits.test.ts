@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { conditionSnippet } from './edits';
+import { commandSnippet, conditionSnippet } from './edits';
 
 describe('conditionSnippet', () => {
   it('puts the selected text in the first branch and selects the next branch to write', () => {
@@ -15,5 +15,13 @@ describe('conditionSnippet', () => {
   it('puts in a text toggle’s value after the selected text, since no condition holds for a typed value', () => {
     const text = conditionSnippet({ key: 'name', label: '이름', kind: 'text', default: '' }, '이름: ');
     expect(text).toEqual({ text: '이름: {{getglobalvar::toggle_name}}', select: [33, 33] });
+  });
+});
+
+describe('commandSnippet', () => {
+  it('selects the first place to write, or puts the caret after a tag that takes none', () => {
+    const get = commandSnippet({ names: ['getvar'], form: '{{getvar::이름}}', what: '' });
+    expect(get.text.slice(...get.select)).toBe('이름');
+    expect(commandSnippet({ names: ['char'], form: '{{char}}', what: '' }).select).toEqual([8, 8]);
   });
 });

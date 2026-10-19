@@ -1,53 +1,55 @@
-export type Piece = { text: string; line: 'body' | 'heading' | 'rule'; mark: 'cbs' | 'slot' | 'angle' | null };
+import type { CodeSpan } from './codeLanguage';
+
+export type Piece = { text: string; line: 'body' | 'heading' | 'rule'; mark: CodeSpan['kind'] | 'angle' | null };
 
 const HEADING = /^#{1,6}\s/;
 const RULE = /^\s*-{3,}\s*$/;
 const ANGLE = /^<\/?[A-Za-z][^<>\n]{0,60}>/;
+const ANGLE_MOST = 64;
 
-// The pieces joined give back the text exactly, so the layer and the textarea above it wrap alike.
-export function markup(text: string): Piece[] {
+// The pieces joined give back the text exactly, so the layer and the textarea above it wrap alike. spans: the text's
+// tags as its language reads them, in order; an <angle> tag is marked only outside them.
+export function markup(text: string, spans: readonly CodeSpan[]): Piece[] {
   const pieces: Piece[] = [];
+  let next = 0;
+  let start = 0;
   for (const whole of text.split(/(?<=\n)/)) {
     const line = HEADING.test(whole) ? 'heading' : RULE.test(whole) ? 'rule' : 'body';
+    const end = start + whole.length;
     let plain = '';
-    const push = (piece: string, mark: Piece['mark']) => {
+    let at = start;
+    const push = (to: number, mark: Piece['mark']) => {
       if (plain) pieces.push({ text: plain, line, mark: null });
       plain = '';
-      pieces.push({ text: piece, line, mark });
+      pieces.push({ text: text.slice(at, to), line, mark });
+      at = to;
     };
-    const ends = closings(whole);
-    let at = 0;
-    while (at < whole.length) {
-      const end = whole.startsWith('{{', at) ? ends[at + 2]! : -1;
-      if (end !== -1) {
-        const tag = whole.slice(at, end);
-        push(tag, tag === '{{slot}}' ? 'slot' : 'cbs');
-        at = end;
+    while (at < end) {
+      while (next < spans.length && spans[next]!.to <= at) next += 1;
+      const span = spans[next];
+      if (span && span.from <= at) {
+        push(Math.min(span.to, end), span.kind);
         continue;
       }
-      const angle = whole[at] === '<' ? ANGLE.exec(whole.slice(at)) : null;
+      const stop = span ? Math.min(span.from, end) : end;
+      const open = text.indexOf('<', at);
+      if (open === -1 || open >= stop) {
+        plain += text.slice(at, stop);
+        at = stop;
+        continue;
+      }
+      plain += text.slice(at, open);
+      at = open;
+      const angle = ANGLE.exec(text.slice(open, Math.min(stop, open + ANGLE_MOST)));
       if (angle) {
-        push(angle[0], 'angle');
-        at += angle[0].length;
-        continue;
+        push(open + angle[0].length, 'angle');
+      } else {
+        plain += '<';
+        at += 1;
       }
-      plain += whole[at];
-      at += 1;
     }
     if (plain) pieces.push({ text: plain, line, mark: null });
+    start = end;
   }
   return pieces;
-}
-
-// For each place in the line, where a tag open before it ends when read on from there: just past the `}}` that closes
-// it, the tags opened on the way closed first, or -1 when the line ends first. Filled from the line's end back, each
-// place from the ones after it, so a line of unclosed `{{` costs its length, not its square.
-function closings(line: string): Int32Array {
-  const ends = new Int32Array(line.length + 1).fill(-1);
-  for (let at = line.length - 2; at >= 0; at--) {
-    if (line.startsWith('}}', at)) ends[at] = at + 2;
-    else if (line.startsWith('{{', at)) ends[at] = ends[at + 2] === -1 ? -1 : ends[ends[at + 2]!]!;
-    else ends[at] = ends[at + 1]!;
-  }
-  return ends;
 }
