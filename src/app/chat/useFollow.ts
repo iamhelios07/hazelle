@@ -53,28 +53,28 @@ export function useFollow(count: number, streaming: boolean, anchor: string | nu
 
   // A reply grows between the renders of the story as it is revealed (useReveal), so the view follows its size too, a
   // row's as soon as the story has it (ROWS_RESIZED); not a size the reader changed (Story sends READER_RESIZED), which
-  // moves the bottom without a scroll. The border box holds the room kept for the composer, which grows as it is typed in.
+  // moves the bottom without a scroll. The border box holds the room kept for the composer, which grows as it is typed
+  // in.
   useLayoutEffect(() => {
     const element = scrollRef.current;
     const content = element?.firstElementChild;
     if (!element || !content) return;
-    let kept = false;
-    const keep = () => (kept = true);
-    const grown = () => {
-      if (!kept) toBottom();
+    // The view stays where the reader opened or closed a picture, off the end until it is at the end again.
+    const leave = () => {
+      stick.current = false;
+      placed.current = null;
     };
     const observer = new ResizeObserver(() => {
-      if (!kept) toBottom();
-      kept = false;
+      toBottom();
       onScroll();
     });
     observer.observe(content, { box: 'border-box' });
-    element.addEventListener(READER_RESIZED, keep);
-    element.addEventListener(ROWS_RESIZED, grown);
+    element.addEventListener(READER_RESIZED, leave);
+    element.addEventListener(ROWS_RESIZED, toBottom);
     return () => {
       observer.disconnect();
-      element.removeEventListener(READER_RESIZED, keep);
-      element.removeEventListener(ROWS_RESIZED, grown);
+      element.removeEventListener(READER_RESIZED, leave);
+      element.removeEventListener(ROWS_RESIZED, toBottom);
     };
   }, []);
 

@@ -35,7 +35,9 @@ type Props = {
 const NAMED = '[risu-trigger], [risu-btn]';
 // Named in Story.shadow.css.
 const PICTURE = 'data-picture';
+// Opened by a tap, and kept open (pictures); opened while the pointer is over it.
 const OPEN = 'data-open';
+const HOVER = 'data-hover';
 // Named in Story.shadow.css: on a picture's line whose picture is wider than tall, which CSS cannot tell.
 const WIDE = 'data-wide';
 const PICTURES = Symbol('pictures');
@@ -397,6 +399,10 @@ export function storySelection(story: HTMLElement): { pieces: string[]; end: Sel
 // A picture removed before it loaded has no line left to mark.
 const mark = (picture: HTMLImageElement) => picture.parentElement?.toggleAttribute(WIDE, picture.naturalWidth > picture.naturalHeight);
 const markLoaded = (event: Event) => mark(event.target as HTMLImageElement);
+// The build writes a token's 250ms as .25s.
+const milliseconds = (time: string) => parseFloat(time) * (time.trim().endsWith('ms') ? 1 : 1000);
+// A picture's line easing open or shut (Story's reshape), so a turn midway takes over from it.
+const running = new WeakMap<Element, Animation>();
 
 // Set over any the bot's HTML wrote. A picture already loaded is measured before the frame is drawn. One shared
 // listener, since a kept picture is marked again on every draw and the same listener added twice is added once.
@@ -446,6 +452,8 @@ function fit(at: ChildNode, node: ChildNode) {
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
 export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [], ref }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
+  // The picture the pointer holds open, kept over a draw as a tapped one is.
+  const hovered = useRef<string | null>(null);
   const veil = useVeil();
   const quotes = useQuoteShape();
   // A veil tapped open or shut changes only veil.revealed, which no render sees.
@@ -462,6 +470,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     const fragment = sanitize(math ? math(marked) : marked, cursor, veil);
     for (const picture of fragment.querySelectorAll(`[${PICTURE}]`)) {
       if (whole || pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
+      else if (pictureKey(picture) === hovered.current) picture.setAttribute(HOVER, '');
     }
     // After the cursor, which would otherwise go into the slot.
     for (const [index, mark] of marks.entries()) placeInlay(fragment, mark, inlayName(index));
@@ -488,6 +497,41 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
 
   useEffect(() => {
     const shadow = root();
+    // Its height eased from where it is drawn to where change leaves it. From the drawn height, so a line turned again
+    // midway goes on from there; content heights, as max-height reads them whatever the bot's box-sizing.
+    const reshape = (line: HTMLElement, change: () => void) => {
+      const height = () => getComputedStyle(line).height;
+      const from = height();
+      running.get(line)?.cancel();
+      change();
+      const to = height();
+      if (from === to) return;
+      const tokens = getComputedStyle(host.current!);
+      const duration = tokens.getPropertyValue(matchMedia('(prefers-reduced-motion: reduce)').matches ? '--duration-instant' : '--duration-slow');
+      const animation = line.animate({ maxHeight: [from, to] }, { duration: milliseconds(duration), easing: tokens.getPropertyValue('--ease-enter') });
+      running.set(line, animation);
+      host.current!.dispatchEvent(new Event(READER_RESIZED, { bubbles: true }));
+    };
+    // Unpinned by a tap while the pointer is still over it: it stays shut until the pointer leaves.
+    const resting = new WeakSet<Element>();
+    const clipped = (line: Element) => line.scrollHeight > line.clientHeight;
+    // Only a pointer moved over it: a picture the story scrolls under a still pointer opens nothing.
+    const enter = (event: Event) => {
+      const { pointerType, movementX, movementY } = event as PointerEvent;
+      if (pointerType !== 'mouse' || (!movementX && !movementY)) return;
+      const line = (event.target as Element).closest<HTMLElement>(`[${PICTURE}]`);
+      if (!line || line.hasAttribute(OPEN) || line.hasAttribute(HOVER) || resting.has(line) || !clipped(line)) return;
+      hovered.current = pictureKey(line);
+      reshape(line, () => line.setAttribute(HOVER, ''));
+    };
+    const leave = (event: Event) => {
+      const line = (event.target as Element).closest<HTMLElement>(`[${PICTURE}]`);
+      if (!line || line.contains((event as PointerEvent).relatedTarget as Node | null)) return;
+      resting.delete(line);
+      if (!line.hasAttribute(HOVER)) return;
+      hovered.current = null;
+      reshape(line, () => line.removeAttribute(HOVER));
+    };
     const press = (event: Event) => {
       // The inlay's own controls are the app's, slotted in from outside the root, and never a bot's button.
       if (!shadow.contains(event.target as Node)) return;
@@ -506,13 +550,21 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
         event.preventDefault();
         return;
       }
-      const picture = (event.target as Element).closest(`[${PICTURE}]`);
+      const picture = (event.target as Element).closest<HTMLElement>(`[${PICTURE}]`);
       // A short picture, or one its character shows whole, has nothing to open, and a tap on it is the message's.
-      if (picture && (picture.hasAttribute(OPEN) || picture.scrollHeight > picture.clientHeight)) {
-        const opened = picture.toggleAttribute(OPEN);
+      if (picture && (picture.hasAttribute(OPEN) || picture.hasAttribute(HOVER) || clipped(picture))) {
+        const pin = !picture.hasAttribute(OPEN);
         const source = pictureKey(picture);
-        if (opened) pictures?.add(source);
-        else pictures?.delete(source);
+        if (hovered.current === source) hovered.current = null;
+        reshape(picture, () => {
+          picture.toggleAttribute(OPEN, pin);
+          picture.removeAttribute(HOVER);
+        });
+        if (pin) pictures?.add(source);
+        else {
+          pictures?.delete(source);
+          resting.add(picture);
+        }
         event.preventDefault();
         return;
       }
@@ -524,16 +576,13 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
       const trigger = named?.getAttribute('risu-trigger') ?? null;
       onPress?.(trigger !== null ? { trigger, id: named!.getAttribute('risu-id') ?? '' } : named ? { data: named.getAttribute('risu-btn')! } : null);
     };
-    // transitionend, not transitionstart: it lands in the frame of the new size, before that frame's resize observers.
-    const resized = (event: Event) => {
-      if ((event as TransitionEvent).propertyName !== 'max-height' || !(event.target as Element).hasAttribute(PICTURE)) return;
-      host.current!.dispatchEvent(new Event(READER_RESIZED, { bubbles: true }));
-    };
     shadow.addEventListener('click', press);
-    shadow.addEventListener('transitionend', resized);
+    shadow.addEventListener('pointermove', enter);
+    shadow.addEventListener('pointerout', leave);
     return () => {
       shadow.removeEventListener('click', press);
-      shadow.removeEventListener('transitionend', resized);
+      shadow.removeEventListener('pointermove', enter);
+      shadow.removeEventListener('pointerout', leave);
     };
   }, [onPress, pictures, veil]);
 

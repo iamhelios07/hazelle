@@ -124,24 +124,18 @@
   background-color: var(--color-found-term);
 }
 
-/* A line that is only a picture, as a bot draws its character's tall portrait, shows its top until it is pointed at (a
-   moment later, so a pointer the story scrolls under opens nothing) or tapped. The line is cut, not the picture, so a
-   small one is never stretched; the picture itself is only shrunk to the most it may be (in the layer above). */
+/* A line that is only a picture, as a bot draws its character's tall portrait, shows its top until the pointer moves
+   over it or it is tapped; Story.tsx sets the attributes and eases the height, since none cannot be eased to. The line
+   is cut, not the picture, so a small one is never stretched; the picture itself is only shrunk to the most it may be
+   (in the layer above). */
 [data-picture] {
   max-height: var(--story-picture-peek);
   overflow: hidden;
-  transition: max-height var(--duration-instant) allow-discrete;
 }
 
-[data-picture][data-open] {
+[data-picture][data-open],
+[data-picture][data-hover] {
   max-height: none;
-}
-
-@media (hover: hover) {
-  [data-picture]:hover {
-    max-height: none;
-    transition-delay: var(--duration-intent);
-  }
 }
 
 /* Story.tsx's controls while 이미지 가리기 is on: the stand-in for a picture or video, and 가리기 beside one tapped open. They
