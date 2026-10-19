@@ -15,6 +15,7 @@ type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snap
 
 export type Down =
   | { kind: 'run'; id: number; owner: string; triggers: ScriptUnit[]; input: EventInput; event: Event; lane: RunLane }
+  | { kind: 'cancel'; id: number }
   | { kind: 'install-display'; id: number; owner: string; install: DisplayInstall }
   | { kind: 'display'; id: number; owner: string; revision: number; size: number }
   | { kind: 'forget-display'; owner: string; revision: number }
@@ -49,11 +50,11 @@ export class LuaWorker implements LuaRunner {
   private history: ChatScope['messages'] = [];
   private readonly heart = new Heartbeat(() => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
 
-  run(owner: string, triggers: ScriptUnit[], scope: ChatScope, event: Event, host: Host, lane: RunLane): Promise<ScriptOutcome> {
+  run(owner: string, triggers: ScriptUnit[], scope: ChatScope, event: Event, host: Host, lane: RunLane, signal?: AbortSignal): Promise<ScriptOutcome> {
     const { messages, ...fixed } = scope;
     const input: EventInput = { scope: fixed, history: changedTail(this.history, messages, sameHistory) };
     this.history = messages;
-    return this.send((id) => ({ kind: 'run', id, owner, triggers, input, event, lane }), host) as Promise<ScriptOutcome>;
+    return this.send((id) => ({ kind: 'run', id, owner, triggers, input, event, lane }), host, signal) as Promise<ScriptOutcome>;
   }
 
   installDisplay(owner: string, revision: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {
@@ -86,13 +87,19 @@ export class LuaWorker implements LuaRunner {
     this.end(new LuaStuck('closed'));
   }
 
-  private send(message: (id: number) => Down, host: Host | null): Promise<Result> {
+  private send(message: (id: number) => Down, host: Host | null, signal?: AbortSignal): Promise<Result> {
     const { id, promise } = this.pending.add(host);
     try {
       this.open().postMessage(message(id));
       this.heart.start(STUCK_MS);
     } catch (error) { this.end(new LuaStuck(String(error))); }
-    return promise;
+    if (!signal) return promise;
+    const cancel = () => {
+      if (this.pending.context(id)) this.worker?.postMessage({ kind: 'cancel', id } satisfies Down);
+    };
+    if (signal.aborted) cancel();
+    else signal.addEventListener('abort', cancel, { once: true });
+    return promise.finally(() => signal.removeEventListener('abort', cancel));
   }
 
   private open(): Worker {

@@ -41,6 +41,7 @@ export type Run = {
   written: Map<string, string>;
   messages: Working[];
   host: Host | null;
+  signal?: AbortSignal;
   stop: boolean;
   reload: boolean;
   missing: Set<string>;

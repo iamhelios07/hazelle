@@ -13,6 +13,17 @@ const run = (code: string, event: Event, over: Partial<Host> = {}, snapshot = SN
 const blocks = (on: string, effects: unknown[], conditions: unknown[] = []): Blocks => ({ owner: OWNER, kind: 'blocks', name: 'blocks', on, conditions: blockConditions(conditions), effects: blockEffects(effects) });
 
 describe('Lua runs', () => {
+  it('ends a cancelled yielding loop without another host call', async () => {
+    const controller = new AbortController();
+    const tokens = vi.fn<Host['tokens']>(async () => {
+      if (tokens.mock.calls.length === 3) controller.abort(new Error('Lua run cancelled'));
+      return 1;
+    });
+    const outcome = await lua.run(String(owner++), [{ owner: OWNER, kind: 'lua', name: 'loop', code: 'onStart = async(function(id) while true do getTokens(id, "x"):await() end end)' }], SNAPSHOT, { kind: 'start' }, host({ tokens }), 'preview', controller.signal);
+    expect(outcome.errors).toEqual([expect.objectContaining({ script: 'loop', message: expect.stringContaining('Lua run cancelled') })]);
+    expect(tokens).toHaveBeenCalledTimes(3);
+  });
+
   it('pins complete nine-script worksets across stretches and lanes, then evicts idle worksets as a whole', async () => {
     const machine = await Lua.create();
     const starts = vi.spyOn(LuaFactory.prototype, 'createEngine');
