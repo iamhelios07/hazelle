@@ -23,6 +23,7 @@ describe('a .js file', () => {
     });
     expect(read('//@name notes\n//@api 3.0\n//@arg turns float Turns')).toEqual({ ok: false, failure: { kind: 'unreadable', detail: 'tool-setting', line: '//@arg turns float Turns' } });
     expect(read('//@api 3.0\n//@display-name Notes')).toMatchObject({ ok: false, failure: { detail: 'risu-name' } });
+    expect(read('//@name Asset Maid\n//@api 3.0')).toMatchObject({ ok: true, tool: { manifest: { name: 'Asset Maid' } } });
   });
 
   it('reads Side Phone 0.1.0 and Fishing 1.2.3 as working in full', () => {

@@ -12,9 +12,11 @@ type Handler = (content: string) => unknown;
 type Listener = (arg: { char: unknown; chat: unknown; characterIndex: number; chatIndex: number; messageIndex: number }) => unknown;
 type Scope = Record<string, unknown>;
 
-// Risu numbers characters and chats by their place in its database; here a stable number of the id stands for it, so
-// keys a plugin builds from them stay apart per chat and survive a reload.
-const index = (id: string) => {
+// Risu numbers a chat by its place in its character's chats, a list Hazelle does not offer; a stable number of the id
+// stands for it, so keys a plugin builds from it stay apart per chat and survive a reload. A character's number is its
+// real place in the list getDatabase hands out (characterAt): plugins write characters[index], and a hash there builds
+// an array hundreds of millions long (Asset Maid, 2026-10).
+const chatNumber = (id: string) => {
   let hash = 2166136261;
   for (let at = 0; at < id.length; at++) hash = Math.imul(hash ^ id.charCodeAt(at), 16777619);
   return hash >>> 1;
@@ -91,6 +93,12 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     for (const message of messages) place(chat, message);
     return chatOf(messages);
   };
+  // Risu's three button places (action, chat, hamburger) are one ⋯ here, so a button a plugin offers in two of them
+  // (Asset Maid, SimCore) is listed once. Splitting by place instead would strand one only in the side menu (Fishing's 도감).
+  const listedButtons = () => {
+    const labels = new Set<string>();
+    return [...buttons].flatMap(([id, { label }]) => labels.has(label) ? [] : (labels.add(label), [{ id, label }]));
+  };
   const listedActions = () => [...messageActions].map(([id, { label }]) => ({ id, label }));
   const settings = new Map<string, Callback>();
   const replacers = { beforeRequest: new Set<Replacer>(), afterRequest: new Set<Replacer>() };
@@ -100,10 +108,11 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   // Risu does not await a button or setting; holding the tool's lane for a whole screen would stall its other events.
   const press = (run: Callback | undefined) => { if (run) void Promise.resolve().then(run).catch((error: unknown) => console.error(error)); };
 
+  const characterAt = async (id: string) => (await api.account()).characters.findIndex((each) => each.id === id);
   const opened = async () => {
     const chat = await frame.chat();
     const card = chat && await chat.card();
-    return chat && { chat, card, characterIndex: card ? index(card.id) : -1, chatIndex: index(chat.id) };
+    return chat && { chat, card, characterIndex: card ? await characterAt(card.id) : -1, chatIndex: chatNumber(chat.id) };
   };
   const characterOf = async (current: NonNullable<Awaited<ReturnType<typeof opened>>>) => current.card && character(current.card, await current.chat.lorebook());
   const at = async (characterIndex: number, chatIndex: number) => {
@@ -143,7 +152,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     registerButton: async (arg: { name: string; id?: string }, callback: Callback) => {
       const id = arg.id ?? crypto.randomUUID();
       buttons.set(id, { label: arg.name, run: callback });
-      frame.menu([...buttons].map(([id, { label }]) => ({ id, label })));
+      frame.menu(listedButtons());
       return { id };
     },
     registerSetting: async (_name: string, callback: Callback, _icon?: string, _iconType?: string, id = crypto.randomUUID()) => {
@@ -152,7 +161,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     },
     unregisterUIPart: async (id: string) => {
       settings.delete(id);
-      if (buttons.delete(id)) frame.menu([...buttons].map(([id, { label }]) => ({ id, label })));
+      if (buttons.delete(id)) frame.menu(listedButtons());
     },
     onUnload: async (callback: Callback) => { unloads.push(callback); },
     log: async (message: string) => console.log(message),
@@ -323,7 +332,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   api.on('reply', async (chat, reply) => {
     if (!listeners.size) return;
     const card = await chat.card();
-    const arg = { char: card && character(card, await chat.lorebook()), chat: await read(chat), characterIndex: card ? index(card.id) : -1, chatIndex: index(chat.id), messageIndex: reply.index };
+    const arg = { char: card && character(card, await chat.lorebook()), chat: await read(chat), characterIndex: card ? await characterAt(card.id) : -1, chatIndex: chatNumber(chat.id), messageIndex: reply.index };
     for (const listener of [...listeners]) await listener(arg);
   });
 

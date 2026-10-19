@@ -84,7 +84,7 @@ const DETAIL_FAILURE: Record<string, string> = {
   'tool-uses': '//@uses에는 model, embed, memory만 쓸 수 있어요.',
   'tool-unknown': '알 수 없는 줄이에요.',
   'risu-old': `예전 버전의 ${RISU_PLUGIN}이라 가져올 수 없어요. API 3.0 플러그인만 쓸 수 있어요.`,
-  'risu-name': '//@name이 꼭 있어야 하고, 글자와 숫자, _ . - 기호만 쓸 수 있어요.',
+  'risu-name': '//@name이 꼭 있어야 해요.',
   'persona-unreadable': 'Risu 페르소나 PNG 파일이지만 내용을 읽지 못했어요.',
   'persona-incomplete': '이름이나 설명이 빠진 페르소나라 가져올 수 없어요.',
   'expands-too-far': `압축을 풀면 파일 크기의 ${EXPANSION}배가 넘어서 가져올 수 없어요.`,

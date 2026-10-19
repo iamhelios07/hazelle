@@ -25,8 +25,9 @@ const ARG_META = /\{\{([\w-]+)::(.*?)\}\}/g;
 // //@update-url is left unread on purpose: a tool updates through Hazelle only (design §6.10).
 function readRisuPlugin(header: HeaderLine[], body: string, bytes: Uint8Array<ArrayBuffer>): ToolRead {
   const last = (key: string) => header.findLast((line) => line.key === key)?.value;
-  const name = last('name') ?? '';
-  if (!identity(name)) return failed('risu-name');
+  // Risu takes any name, spaces included (Asset Maid); only Hazelle's own tools keep to identity().
+  const name = last('name')?.trim() ?? '';
+  if (!name) return failed('risu-name');
   const settings: ToolField[] = [];
   for (const { key, value, written } of header) {
     if (key !== 'arg') continue;

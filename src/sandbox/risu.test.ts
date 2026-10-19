@@ -63,7 +63,7 @@ describe('the Risu adapter', () => {
     const { Risuai } = install(fake);
     const characterIndex = await Risuai.getCurrentCharacterIndex!() as number;
     const chatIndex = await Risuai.getCurrentChatIndex!() as number;
-    expect(Number.isSafeInteger(characterIndex) && characterIndex >= 0).toBe(true);
+    expect((await Risuai.getDatabase!(['characters'] as never) as { characters: { chaId: string }[] }).characters[characterIndex]?.chaId).toBe('character-1');
     expect(await Risuai.getChatFromIndex!(characterIndex as never, chatIndex as never)).toEqual({ message: [{ role: 'user', data: 'hello', time: 1, chatId: 'm0' }, { role: 'char', data: 'hi there', time: 2, chatId: 'm1' }] });
     expect(await Risuai.getChatFromIndex!(characterIndex as never, (chatIndex + 1) as never)).toBeNull();
     await Risuai.setChatToIndex!(characterIndex as never, chatIndex as never, { message: [{ role: 'user', data: 'hello' }, { role: 'char', data: 'edited' }, { role: 'user', data: 'more' }] } as never);
@@ -90,6 +90,19 @@ describe('the Risu adapter', () => {
     expect(first).not.toHaveBeenCalled();
     await Risuai.unregisterUIPart!('cast' as never);
     expect(fake.menus.at(-1)).toEqual([]);
+  });
+
+  it('lists a button a plugin offers in two Risu places once, and the other once the first is gone', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    const panel = vi.fn();
+    await Risuai.registerButton!({ name: 'SimCore', location: 'chat', id: 'chat' } as never, panel as never);
+    await Risuai.registerButton!({ name: 'SimCore', location: 'hamburger', id: 'side' } as never, panel as never);
+    expect(fake.menus.at(-1)).toEqual([{ id: 'chat', label: 'SimCore' }]);
+    fake.fire('menu', fake.chat, 'chat');
+    await vi.waitFor(() => expect(panel).toHaveBeenCalledTimes(1));
+    await Risuai.unregisterUIPart!('chat' as never);
+    expect(fake.menus.at(-1)).toEqual([{ id: 'side', label: 'SimCore' }]);
   });
 
   it('maps exactly the shared list; any other name throws by name and is told to 점검 once', async () => {
