@@ -272,7 +272,7 @@ export function pinToggle(store: ObjectStore, key: string, pinned: boolean): Pro
 
 // What a switch not stored reads as. Switches stored before 반전 모드, the languages and the prompt choice existed
 // hold none of those, and read as these.
-const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, replyLanguage: 'Korean', inputLanguage: 'English' };
+const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, original: false, replyLanguage: 'Korean', inputLanguage: 'English' };
 
 // 번역's and 삽화's switches: shared by every chat (Settings), or a character's own copy in their place (캐릭터별 설정).
 const OWN = { translate: 'ownTranslate', illustrate: 'ownIllustrate' } as const;

@@ -101,13 +101,16 @@ export type ConversationPrompt = {
 };
 
 // model: the one place a translation's model is chosen; without one, the chat's 보조 모델. Its text blocks carry no mark,
-// since a card never replaces a translator's text.
+// since a card never replaces a translator's text. protect: 보호 패턴 the user adds, each a JavaScript regular
+// expression source, matched with the flags g and u; what they match goes through the translation unchanged, together
+// with the spans the engine always keeps (engine/protect).
 export type TranslatePrompt = {
   task: 'translate';
   name: string;
   model?: ModelRef;
   blocks: Block[];
   toggles: ToggleLine[];
+  protect?: string[];
   origin?: { id: string; name: string };
 };
 
