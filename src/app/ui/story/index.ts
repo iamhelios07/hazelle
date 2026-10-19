@@ -5,6 +5,7 @@ export { ReadingPreview, type PreviewRow } from './ReadingPreview';
 export { MascotRemark } from './MascotRemark';
 export { StatusBox } from './StatusBox';
 export { StoryPicture } from './StoryPicture';
+export { SceneBoard } from './SceneBoard';
 export { SelectionButton, type SelectionEnd } from './SelectionButton';
 export { inlaid } from './inlay';
 export { LogExport, type LogRow } from './LogExport';

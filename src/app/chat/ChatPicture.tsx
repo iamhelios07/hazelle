@@ -12,7 +12,8 @@ import { moduleName } from '../common/words';
 import { describeIllustrateFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
-import { Button, Dialog, Failure, IconButton, StoryPicture, Switcher, Text, TextField } from '../ui';
+import { Button, Dialog, Failure, IconButton, SceneBoard, StoryPicture, Switcher, Text, TextField } from '../ui';
+import { moveFigure, removeFigure } from './sceneEdit';
 import type { IllustrationActions, Reshaping } from './useChatIllustrations';
 
 // What a place of a message holds: a scene being drawn or failed comes before the picture paged to there. A run that
@@ -141,16 +142,32 @@ const UNREAD: Record<SceneInvalid, (paragraphs: number) => string> = {
   paragraph: (paragraphs) => `after에는 1부터 ${paragraphs} 사이의 숫자를 입력해야 해요.`,
 };
 
-// 어떻게 바꿀까요?: the scene as the writer answers it, read back through parseScene before anything is drawn.
+// 어떻게 바꿀까요?: the scene as the writer answers it, read back through parseScene before anything is drawn. typed: the
+// text as the user left it, null while it follows the scene; a typed text that does not read keeps the last scene that
+// did on the board.
 export function SceneDialog({ reshaping, onDraw, onClose }: { reshaping: Reshaping; onDraw: IllustrationActions['draw']; onClose: () => void }) {
-  const [text, setText] = useState(() => sceneText(reshaping.scene));
+  const [scene, setScene] = useState(reshaping.scene);
+  const [typed, setTyped] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
+  const text = typed ?? sceneText(scene);
+  const changed = sceneText(scene) !== sceneText(reshaping.scene);
+  function type(value: string) {
+    setTyped(value);
+    const read = parseScene(value, reshaping.paragraphs);
+    if (read.ok) setScene(read.scene);
+  }
+  function place(next: Scene) {
+    setScene(next);
+    setTyped(null);
+    setError(undefined);
+  }
   function submit() {
     const read = parseScene(text, reshaping.paragraphs);
     if (!read.ok) return setError(UNREAD[read.reason](reshaping.paragraphs));
     onDraw(reshaping.message, reshaping.version, read.scene);
     onClose();
   }
+  const { width, height } = SIZES[scene.shape];
   return (
     <Dialog
       title="장면 바꾸기"
@@ -163,8 +180,19 @@ export function SceneDialog({ reshaping, onDraw, onClose }: { reshaping: Reshapi
         </Button>
       }
     >
-      <TextField label="장면" kind="key" lines={14} value={text} onChange={setText} error={error} help="after는 삽화가 들어갈 문단 번호이고, 나머지는 Danbooru 태그예요." />
-      <TextField label="보낸 태그" kind="key" lines={6} readOnly value={sentText(reshaping.scene, reshaping.sent)} onChange={() => {}} help="이름이 프로필과 같은 인물은 외모와 옷을 프로필의 태그로 바꿔 보내요. 장면을 고쳐 다시 그려도 같은 규칙을 거쳐요." />
+      {scene.characters.length > 0 && (
+        <SceneBoard
+          label="인물 위치"
+          help="끌거나 방향키로 옮기면 그 자리에 그려요. ×로 뺀 인물은 그리지 않아요."
+          width={width}
+          height={height}
+          figures={scene.characters}
+          onMove={(index, x, y) => place(moveFigure(scene, index, x, y))}
+          onRemove={(index) => place(removeFigure(scene, index))}
+        />
+      )}
+      <TextField label="장면" kind="key" lines={14} value={text} onChange={type} error={error} help="after는 삽화가 들어갈 문단 번호이고, 나머지는 Danbooru 태그예요." />
+      <TextField label={changed ? '지난번에 보낸 태그' : '보낸 태그'} kind="key" lines={6} readOnly value={sentText(reshaping.scene, reshaping.sent)} onChange={() => {}} help="이름이 프로필과 같은 인물은 외모와 옷을 프로필의 태그로 바꿔 보내요. 장면을 고쳐 다시 그려도 같은 규칙을 거쳐요." />
     </Dialog>
   );
 }
