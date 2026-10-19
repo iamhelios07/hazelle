@@ -3,6 +3,7 @@ import { LuaFactory, type LuaEngine } from 'wasmoon';
 import { runBlocks, type Blocks } from './blocks';
 import { ranked } from './similar';
 import { chatLorebook } from '../import/convert';
+import { asRisuLore } from '../cbs/tags';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
 import { add, cbs, read, text, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
@@ -458,7 +459,7 @@ export class Lua {
       const own = written ? [written] : named.filter(({ parent }) => parent === run.chat).map(({ value }) => value);
       return JSON.stringify(
         [...own, ...named.filter(({ parent }) => parent !== run.chat).map(({ value }) => value)]
-          .map((value) => ({ key: value.keys.join(', '), secondkey: value.secondaryKeys.join(', '), comment: value.name, content: cbs(run, value.content), insertorder: value.insertionOrder, alwaysActive: value.constant, selective: value.selective, useRegex: value.useRegex, mode: 'normal' })),
+          .map((value) => asRisuLore(value, cbs(run, value.content))),
       );
     });
     // The entry Risu's binding writes, read as the chat's own lorebook is, whose defaults for an option left out are

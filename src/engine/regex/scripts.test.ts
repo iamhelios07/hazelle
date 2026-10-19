@@ -111,6 +111,11 @@ describe('Scripts', () => {
     expect(at('@@repeat_back end', 'now <hp>4</hp>')).toBe('now <hp>4</hp>');
   });
 
+  it('runs a <repeat_back> flag as a plain replacement on a message that has a match, as Risu does', () => {
+    const scripts = new Scripts([script('<hp>(\\d+)</hp>', 'HP $1 {{x}}', { flags: '<repeat_back>' })], [message('assistant', '<hp>9</hp>', 0), message('assistant', 'now <hp>4</hp>', 1)]);
+    expect(scripts.apply('display', 'now <hp>4</hp>', { index: 1, cbs: (text) => text.replaceAll('{{x}}', 'cbs') }).text).toBe('now HP 4 cbs');
+  });
+
   it('shares raw-history matches within a pass without mixing roles, expanded patterns, flags or edited snapshots', () => {
     const messages = [message('assistant', '<HP>9</HP>', 0), message('user', '<hp>1</hp>', 1), message('assistant', '<hp>8</hp>', 2), message('assistant', 'none', 3)];
     const scripts = [script('{{pattern}}', '@@repeat_back end', { flags: 'i<cbs>' })];

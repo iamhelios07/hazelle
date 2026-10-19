@@ -5,6 +5,7 @@ import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
 import type { HistoryMessage } from '../history';
+import type { LoreEntry } from '../import/types';
 import { calc } from './math';
 import { calendarDate, clockTime, duration, formatTime } from './time';
 
@@ -127,7 +128,20 @@ const promptText = (field: 'main' | 'globalNote' | 'authorNote'): Run => (_, { c
 define('mainprompt systemprompt', 0, promptText('main'));
 define('globalnote systemnote ujb', 0, promptText('globalNote'));
 define('authornote', 0, promptText('authorNote'));
-define('lorebook worldinfo', 0, (_, { context }) => serialize(context.lore));
+// An entry in Risu's own lore fields, which bots read back from {{lorebook}} and Lua's getLoreBooks.
+export const asRisuLore = (entry: Pick<LoreEntry, 'name' | 'keys' | 'secondaryKeys' | 'insertionOrder' | 'constant' | 'selective' | 'useRegex'>, content: string) => ({
+  key: entry.keys.join(', '),
+  secondkey: entry.secondaryKeys.join(', '),
+  comment: entry.name,
+  content,
+  insertorder: entry.insertionOrder,
+  alwaysActive: entry.constant,
+  selective: entry.selective,
+  useRegex: entry.useRegex,
+  mode: 'normal',
+});
+// Each entry a JSON string, raw, as Risu lists them.
+define('lorebook worldinfo', 0, (_, { context }) => serialize(context.lore.map((entry) => JSON.stringify(asRisuLore(entry, entry.content)))));
 
 // Risu's markup, which the display dims until a bot's buttons can run (design §6.4).
 define('button', 2, ([label, trigger]) => `<button class="button-default" risu-trigger="${trigger}">${label}</button>`);
@@ -233,7 +247,7 @@ define('ceil', 1, ([n]) => String(Math.ceil(Number(n))));
 define('abs', 1, ([n]) => String(Math.abs(Number(n))));
 define('remaind', 2, ([a, b]) => String(Number(a) % Number(b)));
 define('pow', 2, ([a, b]) => String(Number(a) ** Number(b)));
-define('fixnum', 2, ([n, digits]) => Number(n).toFixed(Number(digits)));
+define('fixnum fixnumber', 2, ([n, digits]) => Number(n).toFixed(Number(digits)));
 define('min', 1, (args) => String(Math.min(...numbers(args))));
 define('max', 1, (args) => String(Math.max(...numbers(args))));
 define('sum', 1, (args) => String(numbers(args).reduce((total, n) => total + n, 0)));
@@ -333,21 +347,22 @@ define('history messages', 0, (args, { context }) =>
       : afterGreeting(context).map(({ role, text }) => (args.includes('role') ? `${luaRole(role)}: ${text}` : text)),
   ),
 );
-define('userhistory', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'user').map(messageObject)));
-define('charhistory', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'assistant').map(messageObject)));
+define('userhistory usermessages', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'user').map(messageObject)));
+define('charhistory charmessages', 0, (_, { context }) => serialize(afterGreeting(context).filter(({ role }) => role === 'assistant').map(messageObject)));
 // Outside a message (the background HTML, a prompt) Risu reads -1, the greeting's number too.
 define('chatindex', 0, (_, { context }) => {
   const index = messageIndex(context);
   return String(index === null ? -1 : index - opened(context));
 });
 // Risu's fmIndex: the card's first message -1 and its first alternate greeting 0, one less than card.greetings counts.
-define('firstmsgindex', 0, (_, { context: { greeting } }) => (greeting && greeting.index !== null ? String(greeting.index - 1) : null));
-// Risu names a character's message `char`, which bots compare against.
+define('firstmsgindex firstmessageindex', 0, (_, { context: { greeting } }) => (greeting && greeting.index !== null ? String(greeting.index - 1) : null));
+// Risu names a character's message `char`, which bots compare against. Outside a message Risu gives a prompt block its
+// own role; the CBS context does not carry the block, so every text outside a message reads Risu's other answer, unset.
 define('role', 0, (_, { context }) => {
   const role = currentMessage(context)?.role;
-  return role === undefined ? null : role === 'user' ? 'user' : 'char';
+  return role === undefined ? UNSET : role === 'user' ? 'user' : 'char';
 });
-define('isfirstmsg', 0, (_, { context }) => bool(context.greeting !== null && messageIndex(context) === 0));
+define('isfirstmsg isfirstmessage', 0, (_, { context }) => bool(context.greeting !== null && messageIndex(context) === 0));
 
 define('replace', 3, ([text, find, replacement]) => text!.replaceAll(find!, replacement!));
 define('split', 2, ([text, separator]) => serialize(text!.split(separator!)));
@@ -397,7 +412,7 @@ define('crypt crypto caesar encrypt decrypt', 1, ([text, shift]) => {
 });
 
 define('makearray array a', 0, (args) => serialize(args));
-define('makedict dict object o d', 0, (args) =>
+define('makedict dict object o d makeobject', 0, (args) =>
   serialize(Object.fromEntries(args.flatMap((pair) => (pair.includes('=') ? [[pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]] : [])))),
 );
 define('arraylength', 1, ([array]) => String(items(array!).length));
@@ -413,7 +428,7 @@ define('element ele', 1, ([root, ...path]) => {
   return value === undefined ? UNSET : asText(value);
 });
 // These return the changed array or dict, not the item removed as JS's shift and pop do, so a setvar can keep it.
-define('objectassert', 3, ([object, key, value]) => {
+define('objectassert dictassert', 3, ([object, key, value]) => {
   const current = dict(object!);
   return serialize(Object.hasOwn(current, key!) ? current : { ...current, [key!]: value });
 });

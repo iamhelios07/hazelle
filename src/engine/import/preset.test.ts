@@ -63,6 +63,12 @@ it("reads a slot's role from role2, as current Risu writes it, and from role in 
   expect(read.prompt.blocks.map((block) => 'role' in block && block.role)).toEqual(['user', 'assistant']);
 });
 
+it('reads a chat rangeStart of -1000 as the whole chat whatever its rangeEnd, as Risu does', () => {
+  const read = convertPreset({ name: 'p', promptTemplate: [{ type: 'chat', rangeStart: -1000, rangeEnd: -3 }] });
+  if (!read.ok) throw new Error(read.failure.kind);
+  expect(read.prompt.blocks.map((block) => 'range' in block && block.range)).toEqual([{ from: 0, to: null }]);
+});
+
 it('writes a .risup that Risu opens (msgpackr, AES-GCM) into the same prompt, keeping its model fields null', async () => {
   const blocks: Block[] = [
     { id: 'a', name: '메인', kind: 'text', role: 'system', text: '{{char}}', mark: 'main' },

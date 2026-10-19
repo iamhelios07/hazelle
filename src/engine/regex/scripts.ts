@@ -40,8 +40,8 @@ const MARKS = new RegExp(`[${OPEN}${CLOSE}]`, 'g');
 
 type Pattern = { regex: RegExp; first: RegExp };
 // pattern: null for a dynamic plan, compiled anew per message. plain: no action and no @@ directive, which Risu follows
-// with a CBS pass whether it matched or not.
-type Plan = { source: string; place: number; order: number; flags: string; dynamic: boolean; plain: boolean; kind: string; argument: string; pattern: Pattern | null };
+// with a CBS pass whether it matched or not. directive: the kind is written as @@kind in the replacement, not as a <kind> flag.
+type Plan = { source: string; place: number; order: number; flags: string; dynamic: boolean; plain: boolean; directive: boolean; kind: string; argument: string; pattern: Pattern | null };
 // A text with neither reads the same after a CBS pass.
 const CBS_TAG = /\{\{|\{#|<(?:user|char|bot)>/i;
 
@@ -69,12 +69,15 @@ export class Scripts {
     const drawn: number[] = [];
     const boxes: Box[] = [];
     let result = cbs(text);
-    for (const { source, place, flags, dynamic, plain, kind, argument, pattern: fixed } of this.plans[stage]) {
+    for (const { source, place, flags, dynamic, plain, directive, kind: planned, argument, pattern: fixed } of this.plans[stage]) {
       const pattern = dynamic ? compile(cbs(source), flags) : fixed;
       if (!pattern) continue;
       const regex = () => reset(pattern.regex);
       const once = () => reset(pattern.first);
       const matched = result.search(regex()) !== -1;
+      // On a match Risu runs a <repeat_back> flag as a plain replacement. The @@repeat_back form writes nothing then:
+      // Risu writes the directive's own text (design §5 row 22).
+      const kind = planned === 'repeat_back' && matched && !directive ? 'replace' : planned;
       if (kind === 'replace' || kind === 'inject') {
         for (const box of boxes) if (box.html.search(regex()) !== -1) box.html = cbs(box.html.replace(regex(), kind === 'inject' ? '' : argument));
       }
@@ -172,7 +175,7 @@ function planOf(script: Pick<Script, 'find' | 'replace' | 'flags'>, place: numbe
   const source = script.find;
   const pattern = dynamic ? null : compile(source, flags);
   if (!dynamic && !pattern) return source ? 'invalid' : 'empty';
-  return { source, place, order, flags, dynamic, plain: actions.size === 0 && !directive, kind, argument: directive ? out.slice(directive[0].length) : out, pattern };
+  return { source, place, order, flags, dynamic, plain: actions.size === 0 && !directive, directive: directive !== null, kind, argument: directive ? out.slice(directive[0].length) : out, pattern };
 }
 
 export const checkScript = (script: Pick<Script, 'find' | 'replace' | 'flags'>): ScriptCheck | null => {

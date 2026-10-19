@@ -282,6 +282,15 @@ describe('readBackup', () => {
     expect([plain.own, plain.missed.some(({ kind }) => kind === 'escape-output')]).toEqual([null, false]);
   });
 
+  it("counts a character's 추가 캐릭터 스크린 only when Risu's is on", async () => {
+    const screen = async (viewScreen: string) => {
+      const result = await readBackup([backupFile(database({ ...db, characters: db.characters.map((char) => (char === mira ? { ...mira, viewScreen, inlayViewScreen: true } : char)) }))]);
+      if (!result.ok) throw new Error(result.failure.kind);
+      return (await result.backup.character(1)).report.unsupported.some(({ kind }) => kind === 'view-screen');
+    };
+    expect([await screen('emotion'), await screen('none')]).toEqual([true, false]);
+  });
+
   it('carries the toggle values by key, and no other global variable', async () => {
     expect((await read()).catalog.toggles).toEqual({ tagger: '1', style: '2' });
   });
