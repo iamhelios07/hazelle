@@ -234,4 +234,32 @@ describe('Translator', () => {
       expect(sent.some(({ content }) => content.includes('Luna -> 루나'))).toBe(true);
       expect(sent.filter(({ content }) => content.includes(card.description))).toHaveLength(1);
     }));
+
+  it('puts protected spans back into the translation, and fails one that lost a span rather than save it', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const log = stubRelay(inTurn([saying('⟦1⟧ 안녕.'), saying('안녕.')]));
+      const live: string[] = [];
+      const made = await translateText(session, TRANSLATOR_CHAT, '<img src="a.png"> Hi.', 'Korean', new AbortController().signal, (text) => live.push(text));
+      expect(made).toMatchObject({ ok: true, translation: { text: '<img src="a.png"> 안녕.' } });
+      expect(live.at(-1)).toBe('<img src="a.png"> 안녕.');
+      expect(JSON.parse(log[0]!.sent.body!).messages.at(-1)).toEqual({ role: 'user', content: '⟦1⟧ Hi.' });
+      expect(await translateText(session, TRANSLATOR_CHAT, '<img src="a.png"> Hi.', 'Korean', new AbortController().signal, () => {})).toEqual({ ok: false, failure: { kind: 'protected-lost', count: 1 } });
+    }));
+
+  it('keeps the protected spans on the call’s marker, for a page that picks the call up after a reload', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      const opened = { title: null, character: null, models: {} };
+      await startChat(session.store, chat, opened, null);
+      const stream = new TransformStream<Uint8Array, Uint8Array>();
+      stubRelay(inTurn([new Response(stream.readable, { headers: { 'x-relay': 'upstream' } })]));
+      const version = { id: 'v', seed: 'v', text: '<img src="a.png"> Hi.', receipt: null, edited: false, at: 0 };
+      void session.translator.translate(chat, version, translationInput(session, chat, opened, [], { kind: 'input', text: version.text }));
+      await vi.waitFor(() => expect(session.store.list('stream').map(({ value }) => value.for)).toEqual([{ kind: 'translation', version: 'v', spans: ['<img src="a.png">'] }]));
+      session.translator.close();
+      await stream.writable.close();
+    }));
 });

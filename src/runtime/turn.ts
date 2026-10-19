@@ -15,8 +15,8 @@ import { appendUserMessage, type Written } from './chat-log';
 import { keepRow } from './usage';
 import type { Ask, TalkFailure } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
-import { endCall, type CallTarget } from './streams';
-import { resumeTranslation, translate, type TranslateFailure, type TranslateInput } from './translate';
+import { endCall } from './streams';
+import { resumeTranslation, translate, type TranslateFailure, type TranslateInput, type TranslationTarget } from './translate';
 import { findRecords } from './retrieval';
 
 // A turn also stops before sending on a new chat that was not saved, a pull that failed, a chat or message another
@@ -45,7 +45,7 @@ export const TRANSLATOR_CHAT: Chat = { title: null, character: null, models: {} 
 // The call ends however it went, stopped too: the abort only stops reading, and no reload picks this call up.
 export function translateText(session: Pick<Session, 'store' | 'credentials' | 'log' | 'tokens'>, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
   const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language, lane: null };
-  const target: CallTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
+  const target: TranslationTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
   return translate(session, input, target, signal, onText).then(async (made) => {
     if (made.ok) await keepRow(session.store, made.translation.receipt!, made.translation.at, { chat: null, character: chat.character });
     return made;
@@ -240,7 +240,7 @@ async function sendTranslated(session: Session, chat: string, turn: TurnContext,
   const messages = session.read.chat(chat).snapshot()!.messages;
   const input = translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text });
   const { language } = input;
-  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language, ...(typed.follows !== undefined && { follows: typed.follows }) } };
+  const target: TranslationTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language, ...(typed.follows !== undefined && { follows: typed.follows }) } };
   session.streams.reading.add(target.id);
   const made = await translate(session, input, target, signal, () => {}).finally(() =>
     session.streams.reading.delete(target.id),

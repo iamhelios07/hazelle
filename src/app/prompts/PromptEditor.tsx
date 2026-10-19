@@ -47,6 +47,7 @@ import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPan
 import { chatWarning } from './ranges';
 import { PicturePane } from './PicturePane';
 import { PresetExport } from './PresetExport';
+import { ProtectRules } from './ProtectRules';
 import { TogglePane } from '../common/TogglePane';
 import { withParticle } from '../common/particles';
 import { lineTitle } from '../common/toggleWords';
@@ -333,6 +334,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
           drill={!split}
         />
       </Section>
+      {sort === 'translate' && <ProtectRules rules={draft.protect ?? []} onChange={(protect) => update(() => ({ protect }))} />}
       {ofSort(stored, 'conversation') && (
         <>
           <ModuleSwitches owner={{ kind: 'prompt', prompt: stored }} own={stored.value.modules ?? []} />
