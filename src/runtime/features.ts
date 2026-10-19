@@ -1,7 +1,7 @@
 import type { Chat } from '../model/chat';
-import { FEATURE_STARTS, FEATURES, type Feature, type FeatureSwitches } from '../model/features';
+import { FEATURE_LABS, FEATURE_STARTS, FEATURES, type Feature, type FeatureSwitches } from '../model/features';
 import { without } from '../model/fields';
-import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
+import { EMPTY_SETTINGS, labOn, SETTINGS_ID, type Settings } from '../model/settings';
 import type { ApiResult } from './api';
 import { illustrateSwitches, translateSwitches, type IllustrateSetup, type TranslateSetup } from './characters';
 import { chatPrompt } from './prompts';
@@ -12,10 +12,19 @@ type Reader = Pick<ObjectStore, 'get'>;
 type Place = Pick<Chat, 'character' | 'prompt' | 'features'>;
 export type FeatureOwner = { kind: 'settings' } | { kind: 'prompt' | 'character' | 'chat'; id: string };
 
+// The features a screen lists: an experiment's only while its 실험실 switch is on.
+export const availableFeatures = (settings: Pick<Settings, 'labs'> | undefined): Feature[] =>
+  FEATURES.filter((feature) => {
+    const lab = FEATURE_LABS[feature];
+    return lab === undefined || labOn(settings, lab);
+  });
+
 // Nearest first: the first layer that sets a feature decides it (가까운 쪽을 따른다); one no layer sets starts as
-// FEATURE_STARTS has it.
-const decided = (layers: (FeatureSwitches | undefined)[]): Features =>
-  Object.fromEntries(FEATURES.map((feature) => [feature, layers.find((layer) => layer?.[feature] !== undefined)?.[feature] ?? FEATURE_STARTS[feature]])) as Features;
+// FEATURE_STARTS has it. An experiment switched off reads off whatever a layer kept.
+function decided(store: Reader, layers: (FeatureSwitches | undefined)[]): Features {
+  const available = availableFeatures(store.get('settings', SETTINGS_ID)?.value);
+  return Object.fromEntries(FEATURES.map((feature) => [feature, available.includes(feature) && (layers.find((layer) => layer?.[feature] !== undefined)?.[feature] ?? FEATURE_STARTS[feature])])) as Features;
+}
 
 const settingsLayer = (store: Reader) => store.get('settings', SETTINGS_ID)?.value.features;
 const characterLayer = (store: Reader, character: string | null) => (character === null ? undefined : store.get('character', character)?.value.features);
@@ -24,16 +33,16 @@ function promptLayer(store: Reader, chat: Pick<Chat, 'prompt'>) {
   return prompt.kind === 'prompt' ? prompt.prompt.value.features : undefined;
 }
 
-export const featuresOf = (store: Reader, chat: Place): Features => decided([chat.features, characterLayer(store, chat.character), promptLayer(store, chat), settingsLayer(store)]);
+export const featuresOf = (store: Reader, chat: Place): Features => decided(store, [chat.features, characterLayer(store, chat.character), promptLayer(store, chat), settingsLayer(store)]);
 
 // 공용's, the farthest layer, which follows nothing.
-export const sharedFeatures = (store: Reader): Features => decided([settingsLayer(store)]);
+export const sharedFeatures = (store: Reader): Features => decided(store, [settingsLayer(store)]);
 
 // What a layer that sets nothing reads: the layers past it. A character's is what a new chat of it reads, through the
 // default prompt.
 export function inherited(store: Reader, owner: Exclude<FeatureOwner, { kind: 'settings' }>): Features {
   if (owner.kind === 'prompt') return sharedFeatures(store);
-  if (owner.kind === 'character') return decided([promptLayer(store, {}), settingsLayer(store)]);
+  if (owner.kind === 'character') return decided(store, [promptLayer(store, {}), settingsLayer(store)]);
   const chat = store.get('chat', owner.id)?.value;
   return chat ? featuresOf(store, { ...chat, features: undefined }) : sharedFeatures(store);
 }

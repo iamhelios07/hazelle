@@ -4,7 +4,7 @@ import { fitChat, remembered, type ChatSent, type ProviderFit, type Part, type T
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
 import type { MascotId } from '../model/mascot';
-import type { Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
+import type { Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, PrereadPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway, type CbsContext, type CbsProblem, type CbsTrace } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -73,7 +73,9 @@ export type From =
   | { kind: 'answer' }
   | { kind: 'retrieval' }
   | { kind: 'script' }
-  | { kind: 'tool'; name: string };
+  | { kind: 'tool'; name: string }
+  // 토큰 절약's brief, in place of the parts it shortened (engine/preread).
+  | { kind: 'preread' };
 
 // parts[i] says where messages[i] came from (origin as Sent's) and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. invalidKeys: regex keys that
@@ -208,6 +210,7 @@ type Filling =
   | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'illustrate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'mascot'; recent: (block: RecentSlot) => string; source: string; sheet: string }
+  | { sort: 'preread'; source: string }
   | { sort: 'memory'; memory: string; span: string };
 
 const loreMessage = ({ entry }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: entry(id, body) });
@@ -281,7 +284,7 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
           if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot') verbatim(block, filling.recent(block));
           break;
         case 'source':
-          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot') verbatim(block, filling.source);
+          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot' || filling.sort === 'preread') verbatim(block, filling.source);
           break;
         case 'memory':
           if (filling.sort === 'conversation' || filling.sort === 'memory') memory = verbatim(block, filling.memory);
@@ -519,6 +522,26 @@ function remark({ scope, take, prompt, index, mascot, said, seed, countTokens }:
   const laid = lay(scope, prompt.blocks, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'mascot', recent: recentOf(scope, texts, index, []), source: texts[index]!, sheet: mascotSheet(mascot, said) });
   return { messages: taskMessages(parts) };
+}
+
+export type PrereadInput = {
+  // The chat's, as the request being shortened was built from it.
+  scope: ChatScope;
+  prompt: PrereadPrompt;
+  // What the 보조 model reads (engine/preread prereadPlan).
+  material: string;
+  seed: string;
+  countTokens: (text: string) => number;
+};
+
+// The material is the request's own text, already rendered, so it goes into the source slot as it is.
+export const assemblePreread = (input: PrereadInput): { messages: ChatMessage[] } | RanAway => stoppable(() => preread(input));
+
+function preread({ scope, prompt, material, seed, countTokens }: PrereadInput): { messages: ChatMessage[] } {
+  const { variables, stopped } = renderChat('prompt', scope);
+  if (stopped) throw stopped;
+  const laid = lay(scope, prompt.blocks, scope.messages, variables, seed, remembered(countTokens), null);
+  return { messages: taskMessages(templateOf(prompt.blocks, laid, scope.persona, { sort: 'preread', source: material }).parts) };
 }
 
 export type MemoryTaskInput = {

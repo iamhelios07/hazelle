@@ -4,7 +4,7 @@ import type { FeatureSwitches } from './features';
 
 export type Role = 'system' | 'user' | 'assistant';
 
-export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate' | 'mascot';
+export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate' | 'mascot' | 'preread';
 
 // A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 텍스트 with
 // {{slot}} where its content goes; role is the one a new block of it starts with (app/prompts/edits newBlock).
@@ -24,8 +24,8 @@ export const SLOTS = {
   illustrateNote: { wrapped: true, role: 'system', repeats: false, sorts: ['illustrate'] },
   recent: { wrapped: true, role: 'system', repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
   // In a 삽화 task, the message's paragraphs, numbered (model/illustration paragraphsOf); in a 마스코트 task, the reply as
-  // shown.
-  source: { wrapped: true, role: 'user', repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
+  // shown; in a 토큰 절약 task, the parts of the request it shortens, each headed by its kind (engine/preread).
+  source: { wrapped: true, role: 'user', repeats: false, sorts: ['translate', 'illustrate', 'mascot', 'preread'] },
   // The mascot's own sheet, which the engine writes (engine/mascot): its voice, faces, last lines and answer shape.
   mascot: { wrapped: true, role: 'system', repeats: false, sorts: ['mascot'] },
   // 장기 기억: in a conversation, the chat's memory as sent; in a memory task, the memory the new records follow.
@@ -155,7 +155,17 @@ export type MascotPrompt = {
   origin?: { id: string; name: string };
 };
 
-export type Prompt = (ConversationPrompt | TranslatePrompt | MemoryPrompt | IllustratePrompt | MascotPrompt) & Mark;
-export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt; illustrate: IllustratePrompt; mascot: MascotPrompt }[S];
+// model: the one place the 토큰 절약 model is chosen; without one, the chat's 보조 모델, then its 대화 모델.
+export type PrereadPrompt = {
+  task: 'preread';
+  name: string;
+  model?: ModelRef;
+  blocks: Block[];
+  toggles: ToggleLine[];
+  origin?: { id: string; name: string };
+};
+
+export type Prompt = (ConversationPrompt | TranslatePrompt | MemoryPrompt | IllustratePrompt | MascotPrompt | PrereadPrompt) & Mark;
+export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt; illustrate: IllustratePrompt; mascot: MascotPrompt; preread: PrereadPrompt }[S];
 
 export const sortOf = (prompt: Prompt): PromptSort => prompt.task ?? 'conversation';

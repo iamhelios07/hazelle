@@ -2,7 +2,7 @@ import { rewritten, type ProviderFit } from '../engine/prompt-budget';
 import type { CbsTrace } from '../engine/cbs/evaluate';
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { speakersOf, standing, type Standing } from '../engine/memory';
-import { activeLore, assemble, assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, renderAfter, type Assembled, type IllustrationInput, type MascotInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
+import { activeLore, assemble, assembleIllustration, assembleMascot, assembleMemory, assemblePreread, assembleTranslation, renderAfter, type Assembled, type IllustrationInput, type MascotInput, type MemoryTaskInput, type PrereadInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
 import type { RegexScript } from '../engine/import/types';
 import { trySample } from '../engine/regex/scripts';
 import { inspectVariables, renderChat, type VariableInspection, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
@@ -20,6 +20,7 @@ export type EvaluationJob =
   | { kind: 'memory'; input: Omit<MemoryTaskInput, 'scope' | 'countTokens'> }
   | { kind: 'illustration'; input: Omit<IllustrationInput, 'scope' | 'countTokens'> }
   | { kind: 'mascot'; input: Omit<MascotInput, 'scope' | 'countTokens'> }
+  | { kind: 'preread'; input: Omit<PrereadInput, 'scope' | 'countTokens'> }
   | { kind: 'read'; memory: { memory: Memory; shown: Source[]; budget: number } | null }
   | { kind: 'lore'; seed: string; limit: number }
   | { kind: 'state'; prefix: string }
@@ -45,7 +46,7 @@ export type EvaluationResult =
   | DisplayEvaluation
   | DisplayPatch
   | EvaluatedPrompt
-  | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ReturnType<typeof assembleMascot> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
+  | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ReturnType<typeof assembleMascot> | ReturnType<typeof assemblePreread> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | { sampled: string }
   | TrialRead
   | null;
@@ -130,6 +131,8 @@ export class Evaluator {
           return assembleIllustration({ ...job.input, scope, countTokens });
         case 'mascot':
           return assembleMascot({ ...job.input, scope, countTokens });
+        case 'preread':
+          return assemblePreread({ ...job.input, scope, countTokens });
         case 'read': {
           const { texts } = renderChat('prompt', scope);
           const sent = job.memory && standing(job.memory.memory, { shown: job.memory.shown, roles: messages.map(({ role }) => role), speakers: speakersOf(scope), texts }, job.memory.budget, countTokens);

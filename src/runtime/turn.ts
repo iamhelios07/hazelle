@@ -18,10 +18,11 @@ import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evalua
 import { endCall } from './streams';
 import { resumeTranslation, translate, type TranslateFailure, type TranslateInput, type TranslationTarget } from './translate';
 import { findRecords } from './retrieval';
+import { preread, type PrereadFailure } from './preread';
 
 // A turn also stops before sending on a new chat that was not saved, a pull that failed, a chat or message another
-// device deleted, a user's message that was not translated, a tokenizer that did not load, or a prompt over the
-// model's budget.
+// device deleted, a user's message that was not translated, a tokenizer that did not load, a prompt over the model's
+// budget, or a 토큰 절약 call that failed.
 // kept: the user's message was saved all the same (a bot with Lua has it saved before its onStart runs), so the
 // screen does not hand its text back.
 export type TurnFailure = (
@@ -34,6 +35,7 @@ export type TurnFailure = (
   | { kind: 'unpulled'; failure: ApiFailure }
   | { kind: 'gone' }
   | { kind: 'untranslated'; failure: TranslateFailure }
+  | { kind: 'preread'; failure: PrereadFailure }
 ) & { kept?: true };
 
 // 설정 › 번역기 translates as a new 캐릭터 없이 chat would: the shared switches' prompt, that chat's 보조 모델 and the
@@ -135,26 +137,26 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
   if (start) {
     const { greeting } = start;
     const said = target.kind === 'send' ? { id: ids.said, text: target.text, follows: greeting } : null;
-    return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, follows: said ? said.id : greeting, continues: null } }, async (signal) => {
+    return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, follows: said ? said.id : greeting, continues: null } }, async (signal, prereading) => {
       const unstarted = await start.saved;
       if (unstarted) return { kind: 'unstarted', failure: unstarted };
       // The chat was just saved and a new chat's target names no message, so it is there.
       const turn = (await gatheredTurn(session, chat, target, ids))!;
-      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again, prereading);
     }));
   }
   const lease = session.store.retainChat(chat);
   const send = (): Promise<TurnFailure | null> => {
     const showing = gatherTurn(session, chat, target, ids);
     if (showing === null || 'kind' in showing) return Promise.resolve(showing);
-    return unhalted(session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
+    return unhalted(session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal, prereading) => {
       // Another device may have written to this chat while this page stood open without focus or a timer's pull, so the
       // prompt is gathered again after a pull. A turn it cannot pull does not send on what may be stale.
       const unpulled = await session.store.pull();
       if (unpulled) return { kind: 'unpulled', failure: unpulled };
       const turn = await gatheredTurn(session, chat, target, ids);
       if (turn === null) return { kind: 'gone' };
-      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again, prereading);
     }));
   };
   const sending = lease.ready.then((failure): Promise<TurnFailure | null> => failure ? Promise.resolve({ kind: 'unpulled', failure }) : send());
@@ -177,7 +179,7 @@ async function gatheredTurn(session: Pick<Session, 'store' | 'read'>, chat: stri
   return evaluated && 'kind' in evaluated ? evaluated : gatherTurn(session, chat, target, ids);
 }
 
-async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => Promise<TurnContext | Blocked | Unevaluated | null>): Promise<Ask | Halted | TurnFailure> {
+async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => Promise<TurnContext | Blocked | Unevaluated | null>, prereading: () => void): Promise<Ask | Halted | TurnFailure> {
   const translated = gathered.said && chatTranslate(session.store, gathered.chat).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
   if ('kind' in translated) return translated;
   const started = await session.scripts.starting(chat, translated, again, signal);
@@ -196,8 +198,13 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, answerInstruction: answerInstructionOf(session.store), memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, turn, prompt);
-  const sent = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));
-  if ('kind' in sent) return { ...sent, ...kept };
+  const rewritten = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));
+  if ('kind' in rewritten) return { ...rewritten, ...kept };
+  // After the scripts, so a bot's Lua sees the prompt as built and never the brief; before the forecast and the refit,
+  // which compare and fit what is sent.
+  const shortened = featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, prereading) : { prompt: rewritten, preread: null };
+  if ('kind' in shortened) return { kind: 'preread', failure: shortened, ...kept };
+  const sent = shortened.prompt;
   const before = [...(reply.before ?? []), ...requested.writes];
   const send = cacheSend({ turn, prompt: sent, calibration }, session.credentials.pool.peek(route.connection.value)?.id ?? null);
   const against = send && forecast(prior(session.store, chat, session.read.chat(chat).snapshot()!.messages, Date.now()), send)?.against;
@@ -207,7 +214,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
     const fitted = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt: sent, messages: sent.messages, fit: { ...fit, allowance: decision.allowance } }, signal));
     return 'kind' in fitted ? null : { prompt: fitted, fit: decision, retries: [...calibration.retries] };
   };
-  return { route, settings, prompt: sent, calibration: { fit: calibration.fit, retries: [] }, refit, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }) };
+  return { route, settings, prompt: sent, calibration: { fit: calibration.fit, retries: [] }, refit, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }), ...(shortened.preread && { preread: shortened.preread }) };
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or

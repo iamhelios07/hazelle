@@ -2,7 +2,7 @@ import type { Assignment, ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
 import { findStarred, RolePicker } from '../common/RolePicker';
-import { AUX_HELP, DEFAULT_MODELS, follows, inSettings, MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, opens } from '../common/words';
+import { AUX_HELP, DEFAULT_MODELS, follows, inSettings, MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, opens, PRE_READ } from '../common/words';
 import { navigate } from '../shell/router';
 import { Section, SettingGroup, type Help } from '../ui';
 
@@ -44,7 +44,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
   );
 }
 
-const TASK_LABELS = { translate: '번역 모델', memory: '기억 모델', illustrate: '장면 모델', mascot: '대사 모델' } satisfies Record<Task, string>;
+const TASK_LABELS = { translate: '번역 모델', memory: '기억 모델', illustrate: '장면 모델', mascot: '대사 모델', preread: `${PRE_READ} 모델` } satisfies Record<Task, string>;
 
 type TaskProps = { task: Task; own: ModelRef | undefined; connections: readonly Stored<'connection'>[]; onPick: (ref: ModelRef | null) => void };
 

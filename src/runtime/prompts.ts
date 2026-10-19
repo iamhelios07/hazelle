@@ -2,12 +2,13 @@ import { importPreset, writePreset, type PresetRead } from '../engine/import/pre
 import { illustratorPrompt } from '../engine/illustrate';
 import { commentatorPrompt } from '../engine/mascot';
 import { memoryTaskPrompt } from '../engine/memory';
+import { prereadTaskPrompt } from '../engine/preread';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live, type Module } from '../model/library';
 import { sortOf, type Block, type ConversationPrompt, type PictureSettings, type PictureTags, type Prompt, type PromptOf, type PromptSort, type ToggleLine } from '../model/prompt';
-import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
+import { EMPTY_SETTINGS, labOn, SETTINGS_ID, type LabId, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiResult } from './api';
 import type { BackupOutput } from './backup-zip';
@@ -27,9 +28,10 @@ export const TRANSLATOR_ID = '00000000-0000-4000-8000-000000000004';
 export const MEMORY_PROMPT_ID = '00000000-0000-4000-8000-000000000005';
 export const ILLUSTRATOR_ID = '00000000-0000-4000-8000-000000000006';
 export const COMMENTATOR_ID = '00000000-0000-4000-8000-000000000007';
+export const PREREADER_ID = '00000000-0000-4000-8000-000000000008';
 
 // Each task's built-in prompt, which a new prompt of its sort starts from while the account's default is gone.
-const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt, illustrate: illustratorPrompt, mascot: commentatorPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
+const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt, illustrate: illustratorPrompt, mascot: commentatorPrompt, preread: prereadTaskPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
 
 const DEFAULTS = {
   conversation: { setting: 'prompt', id: STARTER_ID, make: starter },
@@ -37,7 +39,9 @@ const DEFAULTS = {
   memory: { setting: 'memoryPrompt', id: MEMORY_PROMPT_ID, make: () => Promise.resolve(BUILT_IN.memory()) },
   illustrate: { setting: 'illustratePrompt', id: ILLUSTRATOR_ID, make: () => Promise.resolve(BUILT_IN.illustrate()) },
   mascot: { setting: 'mascotPrompt', id: COMMENTATOR_ID, make: () => Promise.resolve(BUILT_IN.mascot()) },
-} as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null> } };
+  // Added once its 실험실 switch is on (addDefaults), so an account that never turns it on holds none.
+  preread: { setting: 'prereadPrompt', id: PREREADER_ID, make: () => Promise.resolve(BUILT_IN.preread()), lab: 'preread' },
+} as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null>; lab?: LabId } };
 
 export type StoredPrompt<S extends PromptSort> = Stored<'prompt'> & { value: PromptOf<S> };
 export const ofSort = <S extends PromptSort>(prompt: Stored<'prompt'>, sort: S): prompt is StoredPrompt<S> => sortOf(prompt.value) === sort;
@@ -63,6 +67,9 @@ export const illustrationPrompt = (store: Pick<ObjectStore, 'get'>, chosen: stri
 
 // The account's only: the mascot is on 공용 alone (design §6.11), so no chat or character chooses its own.
 export const mascotPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, 'mascot', undefined);
+
+// The account's only, as the mascot's: 토큰 절약's values are 공용's alone.
+export const prereadPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, 'preread', undefined);
 
 // A new conversation prompt holds every slot once, the context before the chat with 장기 기억 last. Memory changing
 // at a boundary leaves the rest of the fixed part cached (design §6.2, Cache). 도구 follows the chat, so its text
@@ -119,11 +126,13 @@ export async function exportPreset(store: Pick<ObjectStore, 'get'>, prompt: Conv
 
 // An account that has never had a sort's default prompt gets that sort's bundled prompt as its default, once. The
 // session awaits it when it opens; a failure is tried again next time.
-// The settings are written once for every default added, since opening writes them from several places at once.
+// The settings are written once for every default added, since opening writes them from several places at once. An
+// experiment's default waits for its 실험실 switch, which runs this again when turned on.
 export async function addDefaults(store: ObjectStore): Promise<void> {
   const added = await Promise.all(
     Object.values(DEFAULTS).map(async (entry) => {
-      if (store.get('settings', SETTINGS_ID)?.value[entry.setting] !== undefined) return [];
+      const settings = store.get('settings', SETTINGS_ID)?.value;
+      if (settings?.[entry.setting] !== undefined || ('lab' in entry && !labOn(settings, entry.lab))) return [];
       if (store.get('prompt', entry.id)) return [entry];
       const made = await entry.make();
       return made && (await store.create('prompt', made, { id: entry.id })).ok ? [entry] : [];

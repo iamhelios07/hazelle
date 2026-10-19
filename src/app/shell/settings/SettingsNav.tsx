@@ -4,11 +4,11 @@ import { useSearch } from '../../common/useSearch';
 import { PAGES, SETTINGS } from '../../common/words';
 import { presetOf } from '../../common/reading';
 import { useDisplay } from '../../display';
-import { useAccount, useConnections, useModulesAndPlugins, usePersonas, usePrompts, useSession } from '../../session';
+import { useAccount, useConnections, useModulesAndPlugins, usePersonas, usePrompts, useSession, useSettings } from '../../session';
 import { Empty, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
 import type { Route, SettingsPage } from '../routes';
-import { SUBPAGES, TERMS } from './terms';
+import { subpages, TERMS } from './terms';
 
 type Place = { page: SettingsPage; label: string; icon: LucideIcon; route: Route };
 
@@ -70,9 +70,10 @@ type Hit = { term: string; place: Place; where: string | undefined; to: Route };
 // 설정 검색: a page by its label, or by a title or label shown on it; a hit opens the page and clears the words.
 function useSettingsSearch(places: Place[]) {
   const query = useState('');
+  const subs = subpages(useSettings());
   const hits: Hit[] = places.flatMap((place) => [
     ...[place.label, ...TERMS[place.page]].map((term) => ({ term, place, where: term === place.label ? undefined : place.label, to: place.route })),
-    ...(SUBPAGES[place.page] ?? []).flatMap((sub) =>
+    ...(subs[place.page] ?? []).flatMap((sub) =>
       [sub.label, ...sub.terms].map((term) => ({ term, place, where: term === sub.label ? place.label : `${place.label} › ${sub.label}`, to: sub.route })),
     ),
   ]);

@@ -21,6 +21,7 @@ const PURPOSES: Record<CallPurpose, string> = {
   illustration: FEATURE_NAMES.illustrate,
   likeness: '삽화 프로필',
   mascot: FEATURE_NAMES.mascot,
+  preread: FEATURE_NAMES.preread,
   embedding: ROLE_TAGS.embed,
 };
 

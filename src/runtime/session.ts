@@ -16,6 +16,7 @@ import { Files } from './files';
 import { Illustrator } from './illustrate';
 import { Likenesses } from './likeness';
 import { Commentator } from './mascot';
+import type { Briefs } from './preread';
 import { deviceCache } from './device-cache';
 import { Drafts } from './drafts';
 import type { DeviceCache } from './object-cache';
@@ -54,6 +55,7 @@ export type Session = {
   illustrator: Illustrator;
   likenesses: Likenesses;
   commentator: Commentator;
+  briefs: Briefs;
   drafts: Drafts;
   streams: Streams;
   scripts: Scripts;
@@ -119,6 +121,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const likenesses = new Likenesses({ tokens, store, credentials, log, files, catalogs });
   const illustrator = new Illustrator({ tokens, store, credentials, log, files, likenesses });
   const commentator = new Commentator({ tokens, store, credentials, log });
+  const briefs: Briefs = new Map();
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
   const scripts: Scripts = new Scripts({ tokens, store, read, credentials, log, costs, display }, { lua: machine, tools });
   const memory = new Rememberer({ store, read, credentials, log, costs, scripts, tokens }, reading);
@@ -203,6 +206,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, briefs, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

@@ -2,7 +2,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { chatToggles } from '../model/toggles';
 import type { Toggle } from '../model/prompt';
 import { chatPrompt } from './prompts';
-import { chatTranslate } from './features';
+import { chatTranslate, featuresOf } from './features';
 import { retrievalOf } from './retrieval';
 import { triggersOf } from './scripts';
 import { toolsOf } from './tools/store';
@@ -164,7 +164,8 @@ export function previewRequest({ turn, prompt }: Sending): SentRequest | null {
 export type AfterEnter =
   | { kind: 'input-translation' }
   | { kind: 'tools'; modules: string[] }
-  | { kind: 'retrieval' };
+  | { kind: 'retrieval' }
+  | { kind: 'preread' };
 
 export function afterEnter({ store }: Reader, chat: string, turn: TurnContext): AfterEnter[] {
   const result: AfterEnter[] = [];
@@ -172,6 +173,7 @@ export function afterEnter({ store }: Reader, chat: string, turn: TurnContext): 
   const tools = toolsOf(store, turn.chat);
   if (tools.length) result.push({ kind: 'tools', modules: tools.map(({ module }) => module) });
   if (turn.memory?.kind === 'built-in' && retrievalOf(store, chat, turn.scope.messages)) result.push({ kind: 'retrieval' });
+  if (featuresOf(store, turn.chat).preread) result.push({ kind: 'preread' });
   return result;
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankCard } from '../engine/import/card';
+import { EMPTY_SETTINGS } from '../model/settings';
 import { above, chatIllustrate, chatTranslate, featuresOf, inherited, setFeatureAt } from './features';
 import { addPrompt } from './prompts';
 import { setIllustrate, setTranslate } from './characters';
@@ -18,7 +19,7 @@ describe('features', () => {
       const chat = () => store.get('chat', created.data.id)!.value;
       const at = { settings: { kind: 'settings' }, prompt: { kind: 'prompt', id: prompt.data.id }, character: { kind: 'character', id: character.data.id }, chat: { kind: 'chat', id: created.data.id } } as const;
 
-      expect(featuresOf(store, chat())).toEqual({ translate: true, illustrate: true, memory: true, mascot: false });
+      expect(featuresOf(store, chat())).toEqual({ translate: true, illustrate: true, memory: true, mascot: false, preread: false });
       await setFeatureAt(store, at.character, 'mascot', true);
       expect(featuresOf(store, chat()).mascot).toBe(true);
       await setFeatureAt(store, at.character, 'mascot', null);
@@ -55,5 +56,15 @@ describe('features', () => {
       expect(chatTranslate(store, chat)).toMatchObject({ replies: false, input: false, reverse: false, replyLanguage: 'Japanese' });
       expect(chatIllustrate(store, chat).auto).toBe(false);
       expect(chatTranslate(store, { character: null }).replies).toBe(true);
+    }));
+
+  it('reads an experiment off on every layer while its 실험실 switch is off', () =>
+    server.withSession(async ({ store }) => {
+      const created = await store.create('chat', { title: null, character: null, models: {}, features: { preread: true } });
+      if (!created.ok) throw new Error(created.error);
+      const chat = () => store.get('chat', created.data.id)!.value;
+      expect(featuresOf(store, chat()).preread).toBe(false);
+      await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, labs: ['preread'] }));
+      expect(featuresOf(store, chat()).preread).toBe(true);
     }));
 });

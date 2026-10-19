@@ -14,7 +14,7 @@ import { budgetCut } from './infoReply';
 import { navigate } from '../shell/router';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
-import { ANSWER_INSTRUCTION_LABEL, CHAPTER, COMMAND, inSettings, LORE_BUDGET_LABEL, loreName, opens } from '../common/words';
+import { ANSWER_INSTRUCTION_LABEL, CHAPTER, COMMAND, inSettings, LORE_BUDGET_LABEL, loreName, opens, PRE_READ } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
@@ -41,6 +41,8 @@ export function partName(from: From, role: Role): string {
       return `${SLOT.tool.name} · ${from.name}`;
     case 'script':
       return '봇의 스크립트';
+    case 'preread':
+      return PRE_READ;
   }
 }
 

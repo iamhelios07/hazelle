@@ -16,7 +16,7 @@ import { describeFailedReply, describeTranslateFailure } from '../common/failure
 import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
-import { DISCOUNT_STOPPING, DISCOUNT_WAITING, RETRYING } from '../common/words';
+import { DISCOUNT_STOPPING, DISCOUNT_WAITING, PRE_READ_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
@@ -206,7 +206,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       />
     );
   } else if (live && empty) {
-    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : null;
+    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : message.prereading ? PRE_READ_WAITING : null;
     body = (
       <>
         <Waiting />

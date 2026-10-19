@@ -1,7 +1,7 @@
 import { Runaway } from '../engine/cbs/evaluate';
 import type { DisplayPatch } from '../engine/display';
 import type { RegexScript } from '../engine/import/types';
-import type { assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, IllustrationInput, MascotInput, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
+import type { assembleIllustration, assembleMascot, assembleMemory, assemblePreread, assembleTranslation, IllustrationInput, MascotInput, MemoryTaskInput, PrereadInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
 import type { ChatScope, VariableInspection } from '../engine/render';
 import type { ApiFailure } from './api';
 import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState, TrialRead } from './evaluation-core';
@@ -107,6 +107,12 @@ export class Evaluation {
 
   rewrite(lane: Lane<'send'>, scope: ChatScope, input: Omit<Extract<EvaluationJob, { kind: 'rewrite' }>, 'kind'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'rewrite', ...input }, signal) as Promise<EvaluatedPrompt>;
+  }
+
+  // On the send's own lane, after its rewrite: the worker holds the turn's history already.
+  preread(lane: Lane<'send'>, input: Omit<PrereadInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assemblePreread>>> {
+    const { scope, ...rest } = input;
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'preread', input: rest }, signal) as Promise<Counted<ReturnType<typeof assemblePreread>>>;
   }
 
   memory(lane: Lane<'memory'>, input: Omit<MemoryTaskInput, 'countTokens'>): Promise<Counted<ReturnType<typeof assembleMemory>>> {

@@ -7,7 +7,7 @@ import { afterEnter, previewRequest, type AfterEnter, type Sending } from '../..
 import { describeTurnFailure, runaway } from '../common/failure';
 import { MESSAGE_ROLES, SLOT } from '../common/prompt-words';
 import { cost, tokens } from '../common/receipt';
-import { MODEL_SETTINGS, opens, UNKNOWN } from '../common/words';
+import { MODEL_SETTINGS, opens, PRE_READ, UNKNOWN } from '../common/words';
 import { useSession, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { Callout, CodeBlock, Disclosure, Empty, Facts, Gauge, List, ListItem, Section, Stack, Text } from '../ui';
@@ -26,6 +26,8 @@ function later(steps: AfterEnter[]): string[] {
         return '플러그인의 새 답';
       case 'retrieval':
         return '기억 검색';
+      case 'preread':
+        return PRE_READ;
     }
   });
 }

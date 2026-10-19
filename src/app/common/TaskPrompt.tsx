@@ -1,9 +1,9 @@
 import type { PromptSort } from '../../model/prompt';
-import { ofSort, translationPrompt, illustrationPrompt, mascotPrompt, type PromptChoice } from '../../runtime/prompts';
+import { ofSort, translationPrompt, illustrationPrompt, mascotPrompt, prereadPrompt, type PromptChoice } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import type { PromptPane } from '../shell/routes';
 import { byPromptName } from './promptCopies';
-import { defaultMark, DELETED_PROMPT, follows, taskModelHelp } from './words';
+import { defaultMark, DELETED_PROMPT, follows, PRE_READ, taskModelHelp } from './words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag, Text } from '../ui';
 type NamedCharacter = { name: string } | null;
@@ -25,12 +25,13 @@ export function PerCharacter({ card, own, onChange }: { card: NamedCharacter; ow
   );
 }
 
-// switches: a chat's switches choose their own prompt, else follow the default. The mascot's is the account's default
-// alone (design §6.11), so its menu sets that default and has nothing to follow.
+// switches: a chat's switches choose their own prompt, else follow the default. The mascot's and 토큰 절약's are the
+// account's default alone (design §6.11), so their menus set that default and have nothing to follow.
 const TASKS = {
   translate: { noun: '번역', setting: 'translatePrompt', choose: translationPrompt, pane: null, switches: true },
   illustrate: { noun: '삽화', setting: 'illustratePrompt', choose: illustrationPrompt, pane: 'picture', switches: true },
   mascot: { noun: '마스코트', setting: 'mascotPrompt', choose: mascotPrompt, pane: null, switches: false },
+  preread: { noun: PRE_READ, setting: 'prereadPrompt', choose: prereadPrompt, pane: null, switches: false },
 } as const;
 
 // The prompt a task's switches run, by name; a deleted or absent one is named as such, never as another prompt.

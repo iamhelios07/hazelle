@@ -1,4 +1,4 @@
-export type RequestClass = 'conversation' | 'translation' | 'memory' | 'illustration' | 'likeness' | 'script' | 'mascot';
+export type RequestClass = 'conversation' | 'translation' | 'memory' | 'illustration' | 'likeness' | 'script' | 'mascot' | 'preread';
 
 export type EstimateSource = 'prior' | 'model' | 'chat' | 'drift-reset' | 'unavailable';
 

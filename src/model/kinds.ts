@@ -150,7 +150,7 @@ const toggleLine: Check = (value) =>
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(toggleLine) });
 const optStr: Check = (value) => value === undefined || str(value);
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord, folder: optStr });
-const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate' || value === 'mascot', model: (value) => value === undefined || isRecord(value) });
+const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate' || value === 'mascot' || value === 'preread', model: (value) => value === undefined || isRecord(value) });
 
 const SHAPES = {
   character: shape({

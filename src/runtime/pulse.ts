@@ -27,6 +27,7 @@ export const PULSE_ROLE: Record<CallPurpose, PulseRole> = {
   illustration: 'aux',
   likeness: 'aux',
   mascot: 'aux',
+  preread: 'aux',
   embedding: 'embedding',
 };
 

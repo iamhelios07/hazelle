@@ -11,7 +11,7 @@ import { ModuleSwitches } from '../common/ModuleSwitches';
 import { NO_PERSONA_SLOT, SLOT } from '../common/prompt-words';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, promptName } from '../common/words';
+import { BIN_KEEPS, PRE_READ, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import type { PromptPane } from '../shell/routes';
 import { typing, useShortcut } from '../shortcuts';
@@ -62,6 +62,7 @@ const SORT_WORDS = {
   memory: { default: '기본 기억 프롬프트', makeDefault: '장기 기억을 이 프롬프트로 정리해요' },
   illustrate: { default: '기본 삽화 프롬프트', makeDefault: '삽화 프롬프트를 따로 선택하지 않은 채팅에 써요' },
   mascot: { default: '기본 마스코트 프롬프트', makeDefault: '마스코트가 이 프롬프트로 대사를 써요' },
+  preread: { default: `기본 ${PRE_READ} 프롬프트`, makeDefault: '이 프롬프트로 긴 내용을 먼저 줄여요' },
 } satisfies Record<PromptSort, { default: string; makeDefault: string }>;
 const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
 

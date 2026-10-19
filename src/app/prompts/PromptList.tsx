@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, FolderInput } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
+import { availableFeatures } from '../../runtime/features';
 import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import { ACTS } from '../common/acts';
 import type { Frame } from '../common/frame';
@@ -9,7 +10,7 @@ import { TASK_NAMES } from '../common/prompt-words';
 import { useSearch } from '../common/useSearch';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { defaultMark, PAGES, promptName } from '../common/words';
+import { defaultMark, MODEL_ROLES, PAGES, PRE_READ, promptName } from '../common/words';
 import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
 import { taskModelWords } from './ModelPane';
 import { useImport } from '../common/importing';
@@ -18,13 +19,14 @@ import { byLastUse, byPromptName, groupPrompts, promptFolder as folderOf } from 
 import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
 import { FolderMenu, FolderPath, useMoving, useNaming } from '../common/folders/FolderParts';
 
-const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트', illustrate: '새 삽화 프롬프트', mascot: '새 마스코트 프롬프트' } satisfies Record<PromptSort, string>;
+const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트', illustrate: '새 삽화 프롬프트', mascot: '새 마스코트 프롬프트', preread: `새 ${PRE_READ} 프롬프트` } satisfies Record<PromptSort, string>;
 const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] = [
   { sort: 'conversation', label: '대화', none: '대화 프롬프트가 없어요.' },
   { sort: 'translate', label: '번역', hint: '받은 응답과 보낼 메시지를 번역할 때 쓰는 프롬프트예요.', none: '번역 프롬프트가 없어요.' },
   { sort: 'memory', label: '기억', hint: '지난 대화를 장기 기억으로 정리할 때 쓰는 프롬프트예요.', none: '기억 프롬프트가 없어요.' },
   { sort: 'illustrate', label: '삽화', hint: '메시지에 넣을 삽화의 장면을 정할 때 쓰는 프롬프트예요.', none: '삽화 프롬프트가 없어요.' },
   { sort: 'mascot', label: '마스코트', hint: '응답마다 마스코트가 한마디 할 때 쓰는 프롬프트예요.', none: '마스코트 프롬프트가 없어요.' },
+  { sort: 'preread', label: PRE_READ, hint: `응답마다 ${MODEL_ROLES.aux}이 긴 내용을 먼저 줄일 때 쓰는 프롬프트예요.`, none: `${PRE_READ} 프롬프트가 없어요.` },
 ];
 type Order = 'name' | 'recent';
 
@@ -46,6 +48,12 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
   const connections = useConnections();
   const grouped = useMemo(() => groupPrompts(prompts), [prompts]);
   const settings = useSettings();
+  // An experiment's prompts show only while its 실험실 switch is on.
+  const sorts = useMemo(() => {
+    const available = availableFeatures(settings);
+    return SORTS.filter(({ sort }) => sort === 'conversation' || available.includes(sort));
+  }, [settings]);
+  const listed = useMemo(() => prompts.filter((prompt) => sorts.some(({ sort }) => ofSort(prompt, sort))), [prompts, sorts]);
   const uses = usePromptUse();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [shown, setShown] = useState<PromptSort>('conversation');
@@ -79,7 +87,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
   const byName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byPromptName(a, b);
   const recentFirst = shown === 'conversation' && order === 'recent';
   const top = (filing ? at.placed(conversations) : grouped.top.filter((prompt) => ofSort(prompt, shown))).sort(recentFirst ? byLastUse(uses, grouped.copies) : byName);
-  const current = SORTS.find(({ sort }) => sort === shown)!;
+  const current = sorts.find(({ sort }) => sort === shown)!;
 
   const row = (prompt: Stored<'prompt'>, nested = false) => {
     const copies = grouped.copies.get(prompt.id) ?? [];
@@ -124,7 +132,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
   const defaultCards = defaults && (
     <Section title="기본 프롬프트">
       <Columns>
-        {SORTS.map(({ sort, label }) => {
+        {sorts.map(({ sort, label }) => {
           const prompt = prompts.find((each) => ofSort(each, sort) && isDefaultPrompt(settings, each));
           if (!prompt) return <PickCard key={sort} label={label} value="없음" tone="warn" onClick={() => setShown(sort)} />;
           const model = prompt.value.task && prompt.value.model;
@@ -134,7 +142,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
     </Section>
   );
 
-  const search = useSearch(prompts, '프롬프트 검색', (prompt) => [promptName(prompt.value.name)]);
+  const search = useSearch(listed, '프롬프트 검색', (prompt) => [promptName(prompt.value.name)]);
 
   const adding = (
     <Button variant="secondary" icon={ACTS.create.icon} onClick={() => add(shown)}>
@@ -158,7 +166,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
           {!search.words && (
             <>
               <Tabs label="프롬프트 종류">
-                {SORTS.map(({ sort, label }) => (
+                {sorts.map(({ sort, label }) => (
                   <Tab key={sort} label={label} count={prompts.filter((prompt) => ofSort(prompt, sort)).length} current={sort === shown} onClick={() => setShown(sort)} />
                 ))}
               </Tabs>

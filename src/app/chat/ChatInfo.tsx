@@ -6,8 +6,9 @@ import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
+import { money } from '../common/money';
 import { cost, finish, seconds, speed, tokens } from '../common/receipt';
-import { DISCOUNT, PDF_SEND, UNKNOWN } from '../common/words';
+import { DISCOUNT, PDF_SEND, PRE_READ, UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
 import type { InfoTab, Side } from './panels';
 import type { OpenChat } from './useChat';
@@ -116,6 +117,7 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
               <Text variant="note">{`${earlier.length + 1}번 호출해서 이어 쓴 응답이에요. 비용은 호출할 때마다 발생해요.`}</Text>
             )}
             <Call receipt={receipt} />
+            {receipt.preread && <PrereadCall preread={receipt.preread} />}
             {translated && <TranslationCall receipt={translated} />}
             {thought}
             {earlier.length > 0 && (
@@ -154,6 +156,17 @@ function TranslationCall({ receipt }: { receipt: Receipt }) {
       </Section>
       <Fitting receipt={receipt} title="번역 토큰 맞추기" />
     </>
+  );
+}
+
+// The brief's own call, apart from the reply's: its 입력 is the shortened prompt, and the pair shows what was saved.
+function PrereadCall({ preread: { material, brief, receipt, reused, saved } }: { preread: NonNullable<Receipt['preread']> }) {
+  const net = saved && { label: '아낀 비용', value: `약 ${money(saved.unit, Math.abs(saved.amount))} ${saved.amount < 0 ? '더 들었어요' : '아꼈어요'}` };
+  return (
+    <Section level={3} title={PRE_READ} note={`원문 약 ${tokens(material)} → 줄인 뒤 ${tokens(brief)}`}>
+      <Text variant="note">{reused ? '앞 응답에서 줄인 내용을 다시 썼어요. 이번에는 비용이 들지 않았어요.' : `${receipt.modelName} · ${receipt.source}`}</Text>
+      <Facts variant="tiles" items={[net || { label: '아낀 비용', value: UNKNOWN, tone: 'muted' as const }, ...(reused ? [] : callFacts(receipt))]} />
+    </Section>
   );
 }
 

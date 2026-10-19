@@ -6,6 +6,7 @@ import type { IllustrateFailure } from '../../runtime/illustrate';
 import type { LikenessFailure } from '../../runtime/likeness';
 import type { MascotFailure } from '../../runtime/mascot';
 import type { MemoryFailure } from '../../runtime/memory';
+import type { PrereadFailure } from '../../runtime/preread';
 import type { KeyFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
 import type { MetersFailure } from '../../runtime/meters';
@@ -14,7 +15,7 @@ import type { TranslateFailure, TranslatorFailure } from '../../runtime/translat
 import type { TurnFailure } from '../../runtime/turn';
 import { SHARE_LIMITS } from '../../contracts/shares';
 import { count } from './typedNumber';
-import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, SHARE, UNREADABLE_IMAGE } from './words';
+import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, PRE_READ, SHARE, UNREADABLE_IMAGE } from './words';
 
 // The server's codes left on the generic fallback, which names the code for the operator. Every other server code needs
 // words in MESSAGES; its remaining keys are codes the runtime makes itself.
@@ -278,6 +279,28 @@ export function describeTurnFailure(failure: TurnFailure): string {
       return `응답을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
     case 'untranslated':
       return failure.failure.kind === 'stopped' ? '번역을 멈춰서 메시지를 보내지 않았어요.' : `메시지를 번역하지 못해서 보내지 않았어요. ${describeTranslateFailure(failure.failure)}`;
+    case 'preread':
+      return failure.failure.kind === 'stopped' ? `${PRE_READ} 중에 멈춰서 메시지를 보내지 않았어요.` : `${PRE_READ}에 실패해서 메시지를 보내지 않았어요. ${describePrereadFailure(failure.failure)}`;
+  }
+}
+
+function describePrereadFailure(failure: Exclude<PrereadFailure, { kind: 'stopped' }>): string {
+  switch (failure.kind) {
+    case 'no-model':
+    case 'model-gone':
+    case 'image-only':
+    case 'profile-missing':
+      return describeRoute(failure, `${PRE_READ} 모델`, PRE_READ);
+    case 'prompt-missing':
+      return `기본 ${PRE_READ} 프롬프트가 없어요. ${inSettings('prompts')}에서 ${PRE_READ} 프롬프트 하나를 기본으로 지정해 주세요.`;
+    case 'tokenizer':
+      return TOKENIZER;
+    case 'runaway':
+      return runaway('줄이기 전에');
+    case 'failed':
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : EMPTY_REPLY;
+    case 'unsaved':
+      return describeFailure(failure.failure);
   }
 }
 

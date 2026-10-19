@@ -1,16 +1,17 @@
 import { entryName } from '../../connectors/types';
-import { FEATURES, type Feature } from '../../model/features';
+import type { Feature } from '../../model/features';
 import { MASCOT, MASCOTS } from '../../model/mascot';
 import { illustrateSwitches, translateSwitches } from '../../runtime/characters';
-import { setFeatureAt, sharedFeatures } from '../../runtime/features';
+import { availableFeatures, setFeatureAt, sharedFeatures } from '../../runtime/features';
 import { drawingModels } from '../../runtime/illustrate';
 import { defaultMemory } from '../../runtime/memory-read';
+import { prereadSetup } from '../../runtime/preread';
 import type { ObjectStore } from '../../runtime/store';
 import { imageModelOf } from '../common/IllustrateRows';
 import { languageLabel } from '../common/languages';
 import { chosenPrompt } from '../common/TaskPrompt';
 import { count } from '../common/typedNumber';
-import { FEATURE_NAMES, FEATURES_TITLE, NOT_STARRED } from '../common/words';
+import { FEATURE_NAMES, FEATURES_TITLE, NOT_STARRED, PRE_READ_PARTS } from '../common/words';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -37,6 +38,11 @@ const LINES: Record<Feature, (store: ObjectStore, routes: ReturnType<typeof draw
     return `새 채팅에서 ${state(memory.on)} · 기록 ${count(memory.budget)} 토큰`;
   },
   mascot: (store) => `${MASCOTS[MASCOT].name} · ${chosenPrompt(store, 'mascot', undefined).label}`,
+  preread: (store) => {
+    const { parts, recent } = prereadSetup(store);
+    const chosen = (Object.keys(PRE_READ_PARTS) as (keyof typeof PRE_READ_PARTS)[]).filter((part) => parts[part]).map((part) => PRE_READ_PARTS[part]);
+    return [chosen.length ? chosen.join('·') : '줄일 부분 없음', `최근 대화 ${recent}개는 원문`].join(' · ');
+  },
 };
 
 // 공용's availability, the bottom rung of the 기능 ladder: a switch with no layer above it to follow.
@@ -57,13 +63,13 @@ export function FeatureSwitch({ feature }: { feature: Feature }) {
 export function FeatureDefaults() {
   const store = useStore();
   // Subscribed for LINES, which read the settings, the prompts and the image models from the store.
-  useSettings();
+  const settings = useSettings();
   usePrompts();
   const routes = drawingModels(useConnections());
   return (
     <Section title={FEATURES_TITLE} help={FEATURE_HELP}>
       <List label={FEATURES_TITLE} box places>
-        {FEATURES.map((feature) => (
+        {availableFeatures(settings).map((feature) => (
           <ListItem
             key={feature}
             title={FEATURE_NAMES[feature]}

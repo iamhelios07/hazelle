@@ -1,6 +1,8 @@
-import { ANSWER_INSTRUCTION_LABEL, DEFAULT_MODELS, FEATURE_NAMES, FEATURES_TITLE, LORE_BUDGET_LABEL, MODEL_ROLES, MODEL_SETTINGS, NETWORK, RETRY_COUNT, SCRIPTS, TRANSLATOR_NOTE } from '../../common/words';
+import { ANSWER_INSTRUCTION_LABEL, DEFAULT_MODELS, FEATURE_NAMES, FEATURES_TITLE, LORE_BUDGET_LABEL, MODEL_ROLES, MODEL_SETTINGS, NETWORK, PRE_READ, RETRY_COUNT, SCRIPTS, TRANSLATOR_NOTE } from '../../common/words';
 import { LABS } from '../../common/labs';
-import { FEATURES, type Feature } from '../../../model/features';
+import type { Feature } from '../../../model/features';
+import type { Settings } from '../../../model/settings';
+import { availableFeatures } from '../../../runtime/features';
 import type { Route, SettingsPage } from '../routes';
 
 // 설정 검색's index: the section titles and setting labels each page shows, beside its own label. A page that renames or
@@ -25,9 +27,10 @@ const FEATURE_TERMS: Record<Feature, string[]> = {
   illustrate: ['자동 삽화', '무료가 아니어도 만들기', '이미지 모델', '삽화 프롬프트'],
   memory: ['기록 최대 분량', '임베딩 모델로 찾는 기록', '원문으로 보낼 최근 대화', '한 번에 정리할 분량'],
   mascot: ['마스코트 프롬프트'],
+  preread: ['줄일 부분', '원문으로 둘 최근 대화', '한 번에 줄일 분량', `${PRE_READ} 프롬프트`],
 };
 
 // A page's own pages, a feature's under 설정 › 채팅: a hit on one of their labels or terms opens that page.
-export const SUBPAGES: Partial<Record<SettingsPage, { label: string; route: Route; terms: string[] }[]>> = {
-  chat: FEATURES.map((feature) => ({ label: FEATURE_NAMES[feature], route: { kind: 'feature', feature }, terms: FEATURE_TERMS[feature] })),
-};
+export const subpages = (settings: Settings): Partial<Record<SettingsPage, { label: string; route: Route; terms: string[] }[]>> => ({
+  chat: availableFeatures(settings).map((feature) => ({ label: FEATURE_NAMES[feature], route: { kind: 'feature', feature }, terms: FEATURE_TERMS[feature] })),
+});

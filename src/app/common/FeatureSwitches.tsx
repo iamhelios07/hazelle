@@ -1,5 +1,6 @@
-import { FEATURES, type Feature, type FeatureSwitches as Switches } from '../../model/features';
-import { above, inherited, setFeatureAt, type FeatureOwner } from '../../runtime/features';
+import type { Feature, FeatureSwitches as Switches } from '../../model/features';
+import { availableFeatures, above, inherited, setFeatureAt, type FeatureOwner } from '../../runtime/features';
+import { SETTINGS_ID } from '../../model/settings';
 import type { ObjectStore } from '../../runtime/store';
 import { useLibrary, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
@@ -19,9 +20,9 @@ const WORKS: Record<Owner['kind'], string> = {
 const ABOVE: Record<ReturnType<typeof above>, string> = { settings: SCOPE.default, prompt: '프롬프트', character: '캐릭터' };
 const followsAbove = (store: ObjectStore, owner: Owner) => follows(ABOVE[above(store, owner)]);
 
-// A layer's line in a list of parts: what it follows while it sets nothing, else what it sets, 번역 끔 · 삽화 켬.
+// A layer's line in a list of parts: what it follows while it sets nothing shown, else what it sets, 번역 끔 · 삽화 켬.
 export const featureHolds = (store: ObjectStore, owner: Owner, own: Switches | undefined) =>
-  own ? FEATURES.flatMap((feature) => (own[feature] === undefined ? [] : [`${FEATURE_NAMES[feature]} ${own[feature] ? '켬' : '끔'}`])).join(' · ') : followsAbove(store, owner);
+  availableFeatures(store.get('settings', SETTINGS_ID)?.value).flatMap((feature) => (own?.[feature] === undefined ? [] : [`${FEATURE_NAMES[feature]} ${own[feature] ? '켬' : '끔'}`])).join(' · ') || followsAbove(store, owner);
 
 const choiceOf = (value: boolean | undefined): Choice => (value === undefined ? 'default' : value ? 'on' : 'off');
 
@@ -30,7 +31,7 @@ export function FeatureSwitches({ owner, own }: { owner: Owner; own: Switches | 
   const store = useStore();
   const toast = useToast();
   // Subscribed for inherited, which reads the farther layers from the store.
-  useSettings();
+  const settings = useSettings();
   usePrompts();
   useLibrary();
   const from = inherited(store, owner);
@@ -43,7 +44,7 @@ export function FeatureSwitches({ owner, own }: { owner: Owner; own: Switches | 
   return (
     <Section level={owner.kind === 'chat' ? 3 : undefined} title={FEATURES_TITLE} help={WORKS[owner.kind]} tag={owner.kind === 'prompt' || !own ? undefined : scopeTag(owner.kind)}>
       <SettingGroup label={FEATURES_TITLE}>
-        {FEATURES.map((feature) => (
+        {availableFeatures(settings).map((feature) => (
           <SettingRow
             key={feature}
             label={FEATURE_NAMES[feature]}

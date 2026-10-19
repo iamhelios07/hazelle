@@ -88,6 +88,11 @@ export type Receipt = {
   discount?: 'tier' | 'batch';
   // PDF로 보내기 sent the earlier conversation as a PDF; absent when it did not, or the request was not this page's.
   pdf?: true;
+  // 토큰 절약: the 보조 call whose brief shortened the request, the o200k count of what the brief stood in for in it
+  // (material) and of the brief, and what that saved at the chat model's price when it was sent (engine/preread
+  // savedCost; null where unknown). reused: a brief an earlier reply's call made, which this reply paid nothing for.
+  // Never among calls(): that call made no part of the reply's text.
+  preread?: { material: number; brief: number; receipt: Receipt; reused?: true; saved: Cost | null };
   // 이어 쓰기: the receipt of the reply this one continued, as it read then, so every call and its cost stays
   // visible after the continued version replaces the cut one. It nests when a continuation is continued again.
   continues?: Receipt;

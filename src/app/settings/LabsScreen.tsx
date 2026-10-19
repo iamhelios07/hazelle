@@ -1,6 +1,7 @@
-import { EMPTY_SETTINGS } from '../../model/settings';
+import { EMPTY_SETTINGS, type LabId } from '../../model/settings';
 import { switched } from '../../runtime/modules';
-import { LABS, type LabId } from '../common/labs';
+import { addDefaults } from '../../runtime/prompts';
+import { LABS } from '../common/labs';
 import { PAGES } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
@@ -19,6 +20,8 @@ export function LabsScreen({ back }: { back: Back | null }) {
   async function flip(id: LabId, next: boolean) {
     const saved = await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, labs: switched(settings.labs, id, next) }));
     if (!saved.ok) toast.failed(saved);
+    // An experiment's default prompt is added once it is on (runtime/prompts addDefaults).
+    else if (next) await addDefaults(store);
   }
 
   return (

@@ -2,6 +2,7 @@ import type { LeftOut } from '../../runtime/risu-export';
 import type { Role } from '../../connectors/assignment';
 import type { RegexScript } from '../../engine/import/types';
 import type { Feature } from '../../model/features';
+import type { PrereadParts } from '../../model/settings';
 import { KEEP_DAYS } from '../../model/library';
 import { FIRST_PROFILE_NAME } from '../../runtime/profiles';
 import { PULSE_PAGE } from '../../contracts/pulse';
@@ -115,7 +116,12 @@ export const SCOPE = { default: '공용', chat: '이 채팅만', character: '이
 export const scopeTag = (scope: keyof typeof SCOPE) => ({ label: SCOPE[scope], tone: scope === 'default' ? 'plain' : 'accent' }) as const;
 
 export const FEATURES_TITLE = '기능';
-export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억', mascot: '마스코트' };
+// 토큰 절약 (runtime/preread), a 실험실 experiment whose name may still change: every screen names it through this.
+export const PRE_READ = '토큰 절약';
+export const PRE_READ_HELP = `${MODEL_ROLES.aux}이 긴 내용을 먼저 읽고 줄여서 ${MODEL_ROLES.main} 입력을 아껴요. 답이 늦게 시작되고, 빠진 내용은 답에 안 나올 수 있어요. pdf-pod 플러그인에서 가져온 아이디어예요.`;
+export const PRE_READ_PARTS: Record<keyof PrereadParts, string> = { chat: '대화', system: '시스템 프롬프트', lore: '로어북' };
+export const PRE_READ_WAITING = `${MODEL_ROLES.aux}이 긴 내용을 먼저 줄이고 있어요.`;
+export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억', mascot: '마스코트', preread: PRE_READ };
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;
