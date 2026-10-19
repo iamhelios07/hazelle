@@ -26,7 +26,8 @@ const KEY = 'lua';
 const DEAF = Symbol('no listener');
 const TRIGGER_DEPTH = 10;
 
-const UNSUPPORTED = [
+// Risu's functions this app lacks: a call records the name in the run's missing list (and the code editor marks it).
+export const UNSUPPORTED = [
   'setChatRole', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
   'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage',
 ];
@@ -36,6 +37,7 @@ type Lane = RunLane | 'display';
 // preview: the 점검 panel's rehearsal of a send, whose engines never share a Lua global with the events' (or the
 // reverse), so a rehearsal neither sees nor leaves state a real turn reads.
 export type RunLane = 'event' | 'preview';
+export type SyntaxProblem = { line: number | null; message: string };
 type Workset = { engines: Map<string, Promise<Engine>>; codes: Set<string>; held: number; retired: boolean };
 
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -64,6 +66,7 @@ export class Lua {
   private readonly worksets = new Map<string, Workset>();
   private readonly displays = new Map<string, DisplaySession>();
   private readonly active = new Map<Lane, Workset>();
+  private checker: Promise<LuaEngine> | null = null;
 
   private constructor(
     private readonly factory: LuaFactory,
@@ -264,6 +267,8 @@ export class Lua {
     }
     this.worksets.clear();
     this.active.clear();
+    void this.checker?.then((engine) => engine.global.close());
+    this.checker = null;
   }
 
   // The value after the engine's listeners for the stage, or DEAF when it holds none.
@@ -341,6 +346,21 @@ export class Lua {
       workset.engines.set(script.code, engine);
     }
     return engine;
+  }
+
+  // A draft's first syntax error, or null; nothing in it runs, so one engine serves every check.
+  async check(code: string): Promise<SyntaxProblem | null> {
+    const { global } = await (this.checker ??= this.factory.createEngine());
+    const top = global.getTop();
+    try {
+      global.loadString(code, '=code');
+      return null;
+    } catch (error) {
+      const found = /^code:(\d+): (.*)$/s.exec(describe(error));
+      return found ? { line: Number(found[1]), message: found[2]! } : { line: null, message: describe(error) };
+    } finally {
+      global.setTop(top);
+    }
   }
 
   private async start(script: Script): Promise<Engine> {

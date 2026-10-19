@@ -350,7 +350,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
     features: <FeatureSwitches owner={{ kind: 'character', id }} own={character.features} />,
-    scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
+    scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} variables={card.variables} />,
     toggles: <PackToggles owner={{ kind: 'character', id }} lines={card.toggles} />,
     variables: (
       <Section title={DEFAULT_VARIABLES} help="새 채팅이 이 값에서 시작해요. 이미 있는 채팅에서도 아직 바뀌지 않은 변수는 이 값을 따라요.">

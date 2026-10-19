@@ -69,7 +69,7 @@ function Frame({ value, onChange, placeholder, kind, ref, id, label, big }: Fram
 export function MarkupArea({ label, value, onChange, placeholder, variant = 'page', kind = 'prompt', expand, ref }: Props) {
   const id = useId();
   const shared = { value, onChange, placeholder, kind };
-  const big = useBigEdit(expand, label, () => <Frame {...shared} label={label} big />);
+  const big = useBigEdit(expand, label, (copy) => <Frame {...shared} ref={copy.area} label={label} big />);
   const frame = <Frame {...shared} id={id} ref={ref} />;
   return (
     <>

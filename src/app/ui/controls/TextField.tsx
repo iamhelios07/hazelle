@@ -1,6 +1,8 @@
 import { useId, type ChangeEvent, type ReactNode } from 'react';
 import type { Chord } from '../foundation/keys';
 import { Hint, type Help } from '../overlays/Hint';
+import type { CodeLanguage } from './codeLanguage';
+import { CodeField } from './CodeField';
 import styles from './TextField.module.css';
 import { useBigEdit } from './useBigEdit';
 
@@ -29,9 +31,11 @@ type Props = {
   action?: ReactNode;
   // A text area's keys for its big editor, which a button by its label opens too.
   expand?: readonly Chord[];
+  // Code in that language: its big editor is the code editor.
+  language?: CodeLanguage;
 };
 
-export function TextField({ label, showLabel = true, kind = 'text', value, onChange, placeholder, hint, help, error, lines, readOnly, action, expand }: Props) {
+export function TextField({ label, showLabel = true, kind = 'text', value, onChange, placeholder, hint, help, error, lines, readOnly, action, expand, language }: Props) {
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
@@ -44,7 +48,9 @@ export function TextField({ label, showLabel = true, kind = 'text', value, onCha
     readOnly,
     'aria-invalid': error ? true : undefined,
   };
-  const big = useBigEdit(expand, label, () => <textarea className={`${look} ${styles.big}`} aria-label={label} data-autofocus {...typed} {...shared} />);
+  const big = useBigEdit(expand, label, (copy) =>
+    language ? <CodeField label={label} value={value} onChange={onChange} language={language} area={copy.area} caret={copy.caret} /> : <textarea ref={copy.area} className={`${look} ${styles.big}`} aria-label={label} data-autofocus {...typed} {...shared} />,
+  );
   const own = { id, 'aria-label': showLabel ? undefined : label, 'aria-describedby': note ? noteId : undefined, ...shared };
   return (
     <>

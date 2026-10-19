@@ -1,5 +1,5 @@
 import wasm from 'wasmoon/dist/glue.wasm?url';
-import { Lua, type DisplayBatch } from '../../engine/lua/run';
+import { Lua, type DisplayBatch, type SyntaxProblem } from '../../engine/lua/run';
 import type { Snapshot } from '../../engine/lua/state';
 import type { Host } from '../../engine/script-api';
 import type { ChatScope } from '../../engine/render';
@@ -48,7 +48,8 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
   lua ??= Lua.create({ wasm });
   const { id } = data;
   lua
-    .then<ScriptOutcome | DisplayBatch | null>(async (machine) => {
+    .then<ScriptOutcome | DisplayBatch | SyntaxProblem | null>(async (machine) => {
+      if (data.kind === 'check') return machine.check(data.code);
       if (data.kind === 'run') return runEvent(machine, data.owner, data.triggers, eventScope!, data.event, host(id), data.lane);
       if (data.kind === 'display') return machine.display(data.owner, data.revision, data.size);
       const previous = displays.get(data.owner)?.snapshot;

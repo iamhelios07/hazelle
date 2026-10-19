@@ -178,7 +178,7 @@ export function testServer() {
         items: (module) => store.get('tool', toolId(module))?.value.manifest.menu ?? [], actions: (module) => store.get('tool', toolId(module))?.value.manifest.actions ?? [], hears: () => true,
       })), lua: async () => {
         const machine = await lua;
-        return { run: (chat, units, scope, event, host, lane) => runEvent(machine, chat, units, scope, event, host, lane), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
+        return { run: (chat, units, scope, event, host, lane) => runEvent(machine, chat, units, scope, event, host, lane), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), check: (code) => machine.check(code), close: () => machine.close() };
       } });
       if (!opened.ok) throw new Error(opened.error);
       try {

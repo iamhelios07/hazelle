@@ -1,13 +1,15 @@
 import { ChevronDown, ChevronLeft, ChevronUp, type LucideIcon } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Pack, RegexScript, Trigger } from '../../engine/import/types';
 import { checkScript, type ScriptCheck } from '../../engine/regex/scripts';
 import type { ApiResult } from '../../runtime/api';
 import { addLua, addRegex, editRegex, editTrigger, moveScript, neighbour, removeScript, restoreScript, sampleScript, setScriptOff, type RemovedScript, type ScriptList } from '../../runtime/pack';
 import type { PackOwner } from '../../model/library';
-import { useStore } from '../session';
+import { useSession, useStore } from '../session';
+import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
+import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeLanguage } from '../ui';
+import { luaLanguage } from './code/lua';
 import { ACTS, addOf } from './acts';
 import { withParticle } from './particles';
 import { choices } from './reading';
@@ -24,9 +26,12 @@ const ON: Record<string, string> = { start: '채팅 시작', input: STAGES.input
 const OFF = '꺼짐';
 
 // One script open at a time. drill: the open script stands alone in place of the lists, for a narrow panel or page.
-// status: the ids of the character's 상태창 지정 scripts, tagged in its list.
-export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: PackOwner; pack: Pack; drill: boolean; status?: readonly string[] }) {
+// status: the ids of the character's 상태창 지정 scripts, tagged in its list. variables: the character's 기본 변수, which
+// the code editor offers by name.
+export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { owner: PackOwner; pack: Pack; drill: boolean; status?: readonly string[]; variables?: readonly [string, string][] }) {
   const store = useStore();
+  const { scripts } = useSession();
+  const lua = useMemo(() => luaLanguage((code) => scripts.check(code), variables), [scripts, variables]);
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   // Lua code typed and not applied yet, by script; it goes when the editor does.
@@ -55,7 +60,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
     const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null) };
     if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={search.words !== ''} />;
     const trigger = pack.triggers[place]!;
-    return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
+    return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} language={lua} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
   };
 
   const search = useSearch(
@@ -238,8 +243,8 @@ function useTried(owner: PackOwner, script: RegexScript, text: string) {
 }
 
 // Its code is stored only on 적용, never as it is typed, since a chat beside it runs what is stored.
-function LuaItem(props: ItemProps & { trigger: Lua; draft: string | null; onDraft: (code: string) => void; onApplied: (code: string) => void }) {
-  const { owner, place, trigger, draft, onDraft, onApplied } = props;
+function LuaItem(props: ItemProps & { trigger: Lua; language: CodeLanguage; draft: string | null; onDraft: (code: string) => void; onApplied: (code: string) => void }) {
+  const { owner, place, trigger, language, draft, onDraft, onApplied } = props;
   const store = useStore();
   const save = useAutosave<Lua>(`script:${owner.id}:${trigger.id}`, (patch) => editTrigger(store, owner, trigger.id, patch));
   const shown: Lua = { ...trigger, ...save.unsaved };
@@ -256,7 +261,7 @@ function LuaItem(props: ItemProps & { trigger: Lua; draft: string | null; onDraf
   return (
     <Item {...props} title={name} tag={tag}>
       <TextField label="이름" value={shown.name} onChange={(value) => save.change({ name: value })} />
-      <TextField label="코드" kind="key" lines={20} value={code} onChange={onDraft} />
+      <TextField label="코드" kind="key" lines={20} expand={SHORTCUTS.bigEdit.keys} language={language} value={code} onChange={onDraft} />
       <Row kind="actions">
         <Button variant="primary" size="sm" disabled={!pending} onClick={() => void apply()}>
           적용

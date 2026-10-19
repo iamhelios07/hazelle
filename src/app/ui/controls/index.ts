@@ -2,6 +2,7 @@ export { Button } from './Button';
 export { Checkbox } from './Checkbox';
 export { ChipButton } from './ChipButton';
 export { ChoiceGroup } from './ChoiceGroup';
+export type { CodeCompletion, CodeDoc, CodeItem, CodeLanguage, CodeProblem } from './codeLanguage';
 export { FontPicker } from './FontPicker';
 export { Composer } from './Composer';
 export { EditBox } from './EditBox';

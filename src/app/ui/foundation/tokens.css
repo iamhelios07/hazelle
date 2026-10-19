@@ -203,6 +203,10 @@
   --color-markup-slot: var(--palette-gold-300);
   --color-markup-slot-bg: color-mix(in srgb, var(--palette-gold-400) 18%, transparent);
   --color-markup-angle: var(--palette-blue-300);
+  /* Code in the code editor (controls/CodeEditor): keywords, strings, numbers. */
+  --color-code-keyword: var(--palette-violet-300);
+  --color-code-string: var(--palette-mint-400);
+  --color-code-number: var(--palette-rose-400);
   /* Image tags by their weight (controls/weights): warmer and brighter up, cooler and dimmer down. */
   --color-weight-up-1: var(--palette-gold-300);
   --color-weight-up-2: var(--palette-gold-500);
@@ -370,6 +374,9 @@
   --chart-height: 120px;
   --chart-bar-max: 40px;
   --screen-narrow: 440px;
+  /* The code editor's completion list and the explanation beside it or on hover. */
+  --code-list-height: 18em;
+  --code-doc-width: 360px;
   --toast-width: 380px;
   --toast-peek: var(--space-8);
   --toast-shrink: 0.05;
@@ -586,6 +593,9 @@
   --color-markup-cbs: var(--palette-gold-650);
   --color-markup-slot: var(--palette-gold-800);
   --color-markup-angle: var(--palette-blue-700);
+  --color-code-keyword: var(--palette-violet-700);
+  --color-code-string: var(--palette-mint-700);
+  --color-code-number: var(--palette-rose-700);
   --color-weight-up-1: var(--palette-gold-650);
   --color-weight-up-2: var(--palette-gold-800);
   --color-weight-up-3: var(--palette-coral-700);

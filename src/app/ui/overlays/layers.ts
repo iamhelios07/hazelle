@@ -113,7 +113,8 @@ export function useFocusTrap(box: RefObject<HTMLElement | null>) {
     return () => opener?.focus();
   }, [box]);
   return (event: ReactKeyboardEvent) => {
-    if (event.key !== 'Tab' || !box.current) return;
+    // A Tab the focused control took (the code editor's indent and completion) moves nothing.
+    if (event.key !== 'Tab' || event.defaultPrevented || !box.current) return;
     const stops = [...box.current.querySelectorAll<HTMLElement>(TAB_STOPS)];
     const edge = event.shiftKey ? stops[0] : stops.at(-1);
     if (document.activeElement !== edge) return;

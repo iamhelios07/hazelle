@@ -290,7 +290,7 @@ describe("the bot scripts' machine", () => {
     await vi.waitFor(() => expect(lua).toHaveBeenCalledOnce());
     opened.data.close();
     const close = vi.fn();
-    made({ run: () => Promise.reject(new Error('closed')), installDisplay: () => Promise.reject(new Error('closed')), forgetDisplay() {}, display: () => Promise.reject(new Error('closed')), close });
+    made({ run: () => Promise.reject(new Error('closed')), installDisplay: () => Promise.reject(new Error('closed')), forgetDisplay() {}, display: () => Promise.reject(new Error('closed')), check: () => Promise.reject(new Error('closed')), close });
     await pressed;
     expect(close).toHaveBeenCalledOnce();
   });

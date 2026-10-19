@@ -1,6 +1,6 @@
 import type { LuaRunner } from '../script-binding';
 import type { Event, Host, ScriptUnit } from '../../engine/script-api';
-import type { DisplayBatch, DisplayItem, RunLane, Script } from '../../engine/lua/run';
+import type { DisplayBatch, DisplayItem, RunLane, Script, SyntaxProblem } from '../../engine/lua/run';
 import type { LuaMessage, Snapshot } from '../../engine/lua/state';
 import type { ChatBasis, ChatScope } from '../../engine/render';
 import type { ScriptOutcome } from './event';
@@ -18,10 +18,11 @@ export type Down =
   | { kind: 'install-display'; id: number; owner: string; install: DisplayInstall }
   | { kind: 'display'; id: number; owner: string; revision: number; size: number }
   | { kind: 'forget-display'; owner: string; revision: number }
+  | { kind: 'check'; id: number; code: string }
   | { kind: 'answer'; call: number; value: unknown }
   | { kind: 'ping' };
 export type Up =
-  | { kind: 'done'; id: number; result: ScriptOutcome | DisplayBatch | null }
+  | { kind: 'done'; id: number; result: Result }
   | { kind: 'failed'; id: number; message: string }
   | { kind: 'say'; id: number; args: Parameters<Host['say']> }
   | { kind: 'ask'; id: number; call: number; args: Parameters<Host['ask']> }
@@ -38,9 +39,11 @@ const STUCK_MS = 8000;
 
 export class LuaStuck extends Error {}
 
+type Result = ScriptOutcome | DisplayBatch | SyntaxProblem | null;
+
 export class LuaWorker implements LuaRunner {
   private worker: Worker | null = null;
-  private readonly pending = new PendingRequests<ScriptOutcome | DisplayBatch | null, Host | null>();
+  private readonly pending = new PendingRequests<Result, Host | null>();
   private readonly displays = new Map<string, { revision: number; snapshot: Snapshot }>();
   // One ordered event transport, not a cache per chat; the receiver applies each tail before awaiting Lua.
   private history: ChatScope['messages'] = [];
@@ -70,6 +73,10 @@ export class LuaWorker implements LuaRunner {
     return this.send((id) => ({ kind: 'display', id, owner, revision, size }), null) as Promise<DisplayBatch>;
   }
 
+  check(code: string): Promise<SyntaxProblem | null> {
+    return this.send((id) => ({ kind: 'check', id, code }), null) as Promise<SyntaxProblem | null>;
+  }
+
   forgetDisplay(owner: string, revision: number) {
     if (this.displays.get(owner)?.revision === revision) this.displays.delete(owner);
     this.worker?.postMessage({ kind: 'forget-display', owner, revision } satisfies Down);
@@ -79,7 +86,7 @@ export class LuaWorker implements LuaRunner {
     this.end(new LuaStuck('closed'));
   }
 
-  private send(message: (id: number) => Down, host: Host | null): Promise<ScriptOutcome | DisplayBatch | null> {
+  private send(message: (id: number) => Down, host: Host | null): Promise<Result> {
     const { id, promise } = this.pending.add(host);
     try {
       this.open().postMessage(message(id));
