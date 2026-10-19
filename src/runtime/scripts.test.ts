@@ -124,9 +124,10 @@ describe("a turn with the bot's Lua", () => {
       expect(await takeTurn(session, chat, { kind: 'send', text: '/roll' })).toBeNull();
       expect(log).toHaveLength(0);
       expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', after: [['handled', '/roll']] });
+      expect(session.scripts.snapshot().notes).toEqual([]);
     }));
 
-  it('ends the turn on a stopChat from onInput, running nothing after it and keeping the message with what was written', () =>
+  it('ends the turn on a stopChat from onInput, running nothing after it, keeping the message with what was written and saying so', () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(
         session,
@@ -140,6 +141,7 @@ describe("a turn with the bot's Lua", () => {
       expect(messages()).toHaveLength(2);
       expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', before: [['seen', '1']] });
       expect(shown(messages()[1]!).after).toBeUndefined();
+      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'input-stop' }]);
     }));
 
   it("asks before the bot's first model call, keeps the answer on the character, counts the call in the chat's usage, and ends it on the server", () =>

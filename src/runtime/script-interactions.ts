@@ -19,7 +19,8 @@ import { toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
 // stuck: disabled once a tool stalled too often, until reload. memory-held: a tool the user let take the memory slot
 // cannot, since another tool before it in the chat holds it.
 // unsaved: what a run did to the chat could not be saved. runaway: the script's commands were stopped for making too
-// much text.
+// much text. input-stop: a script stopped a send before onStart (design §6.8: Risu ignores it there and replies), told
+// once per chat, so the missing reply is not read as a dead bot.
 type Note =
   | { kind: 'said'; tone: 'normal' | 'error'; text: string }
   | { kind: 'failed'; message: string }
@@ -31,7 +32,8 @@ type Note =
   | { kind: 'stale-reply' }
   | { kind: 'flood' }
   | { kind: 'unsaved'; failure: ApiFailure }
-  | { kind: 'runaway' };
+  | { kind: 'runaway' }
+  | { kind: 'input-stop' };
 export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
 // Consent is saved on the spender, not the chat's character: 'yes' allows it and 'no' refuses it.
 // A dismissal leaves it to be asked again. memory: a tool's claim on the memory slot, saved on its module.

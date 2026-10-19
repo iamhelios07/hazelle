@@ -383,6 +383,7 @@ export class Scripts {
         const last = turn.scope.messages.at(-1);
         const saved = end.stage === 'onStart' && last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: end.writes } }));
         if (saved && !saved.ok) this.interactions.note(chat, { kind: 'unsaved', failure: saved });
+        if (end.stage === 'onInput' || end.stage === 'editInput') this.interactions.tell(chat, 'input-stop', { kind: 'input-stop' });
         return halted;
       }
       if (end.kind !== 'started') return end;
