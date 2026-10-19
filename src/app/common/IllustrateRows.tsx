@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { sameModelRef } from '../../connectors/assignment';
 import type { IllustrateSwitches, Rung } from '../../model/illustration';
 import type { IllustrateSetup } from '../../runtime/characters';
@@ -6,12 +6,12 @@ import { drawingModels, type ImageRoute, type sceneWriterOf } from '../../runtim
 import { illustrationPrompt } from '../../runtime/prompts';
 import { useConnections, useSession } from '../session';
 import { navigate } from '../shell/router';
-import { Button, ChipButton, IconButton, Menu, MenuHeading, MenuItem, NumberInput, SettingRow, Switch } from '../ui';
+import { Button, ChipButton, Disclosure, IconButton, Menu, MenuHeading, MenuItem, NumberInput, SettingGroup, SettingRow, Switch } from '../ui';
 import { ACTS, addOf, newOf } from './acts';
 import { describeIllustrateFailure } from './failure';
 import { readTyped } from './typedNumber';
 import { appliesTo, TaskModelRow, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
-import { follows, NOT_STARRED } from './words';
+import { detailLabel, follows, NOT_STARRED } from './words';
 
 type Props = {
   illustrate: IllustrateSetup;
@@ -20,54 +20,65 @@ type Props = {
   opens: 'up' | 'down';
   onChange: (change: Partial<IllustrateSwitches>) => void;
   onEditPrompt: (door: PromptDoor) => void;
+  // Rows that belong with the switch, such as the chat's 캐릭터별 설정.
+  children?: ReactNode;
 };
 
-// 삽화's shared values, the same rows in the chat's 삽화 dialog and on 설정 › 채팅's 삽화 page.
-export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange, onEditPrompt }: Props) {
+// 삽화's shared values, the same rows in the chat's 삽화 dialog and on 설정 › 채팅's 삽화 page: the switch and the
+// image model, then the rest folded as 세부 설정, which names how many of them are set.
+export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange, onEditPrompt, children }: Props) {
   const { store } = useSession();
   const routes = drawingModels(useConnections());
   const prompt = illustrationPrompt(store, illustrate.prompt);
+  const set = [illustrate.ladder.length > 0, illustrate.pov, illustrate.comic, illustrate.spend, illustrate.model !== undefined, illustrate.prompt !== undefined].filter(Boolean).length;
   return (
     <>
-      <SettingRow
-        label="자동 삽화"
-        help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 연결된 이미지 모델의 사용량이 차감돼요."
-        control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => onChange({ auto })} />}
-      />
-      <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
-      <SettingRow
-        label="페르소나 시점으로 그리기"
-        help="페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
-        control={<Switch label="페르소나 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
-      />
-      <SettingRow
-        label="만화로 그리기"
-        help="한 장을 여러 컷이 있는 만화 페이지로 그려요. 말풍선 글자는 모델이 그려서 읽을 수 없어요."
-        control={<Switch label="만화로 그리기" checked={illustrate.comic} onChange={(comic) => onChange({ comic })} />}
-      />
-      <SettingRow
-        label="무료가 아니어도 만들기"
-        help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 물어보지 않고 바로 만들어요. 이때는 요금이 나가요."
-        control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
-      />
-      <SettingRow
-        label="이미지 모델"
-        sub={routes.length ? undefined : '이미지를 만들 모델이 없어요'}
-        control={
-          routes.length ? (
-            <ImageModelMenu routes={routes} illustrate={illustrate} card={card} opens={opens} onPick={onChange} />
-          ) : (
-            <Button variant="ghost" size="sm" onClick={() => navigate({ kind: 'add-connection' })}>
-              {newOf('연결')}
-            </Button>
-          )
-        }
-      />
-      <SettingRow
-        label="삽화 프롬프트"
-        control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
-      />
-      <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name} onEdit={onEditPrompt} />
+      <SettingGroup label="삽화">
+        <SettingRow
+          label="자동 삽화"
+          help="응답을 받을 때마다 삽화를 만들어요. 만들 때마다 연결된 이미지 모델의 사용량이 차감돼요."
+          control={<Switch label="자동 삽화" checked={illustrate.auto} onChange={(auto) => onChange({ auto })} />}
+        />
+        <SettingRow
+          label="이미지 모델"
+          sub={routes.length ? undefined : '이미지를 만들 모델이 없어요'}
+          control={
+            routes.length ? (
+              <ImageModelMenu routes={routes} illustrate={illustrate} card={card} opens={opens} onPick={onChange} />
+            ) : (
+              <Button variant="ghost" size="sm" onClick={() => navigate({ kind: 'add-connection' })}>
+                {newOf('연결')}
+              </Button>
+            )
+          }
+        />
+        {children}
+      </SettingGroup>
+      <Disclosure label={detailLabel(set)}>
+        <SettingGroup label="세부 설정">
+          <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
+          <SettingRow
+            label="페르소나 시점으로 그리기"
+            help="페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
+            control={<Switch label="페르소나 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
+          />
+          <SettingRow
+            label="만화로 그리기"
+            help="한 장을 여러 컷이 있는 만화 페이지로 그려요. 말풍선 글자는 모델이 그려서 읽을 수 없어요."
+            control={<Switch label="만화로 그리기" checked={illustrate.comic} onChange={(comic) => onChange({ comic })} />}
+          />
+          <SettingRow
+            label="무료가 아니어도 만들기"
+            help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 물어보지 않고 바로 만들어요. 이때는 요금이 나가요."
+            control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
+          />
+          <SettingRow
+            label="삽화 프롬프트"
+            control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
+          />
+          <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name} onEdit={onEditPrompt} />
+        </SettingGroup>
+      </Disclosure>
     </>
   );
 }

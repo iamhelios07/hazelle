@@ -36,8 +36,9 @@ export function ChatIllustrate({ id, illustrate, note, sceneWriter, card, onChan
     >
       <Section level={3} title="삽화" tag={scopeTag(card && illustrate.own ? 'character' : 'default')}>
         <Stack gap="related">
-          <IllustrateRows illustrate={illustrate} sceneWriter={sceneWriter} card={card} opens="up" onChange={onChange} onEditPrompt={onEditPrompt} />
-          <PerCharacter card={card} own={illustrate.own} onChange={onOwnChange} />
+          <IllustrateRows illustrate={illustrate} sceneWriter={sceneWriter} card={card} opens="up" onChange={onChange} onEditPrompt={onEditPrompt}>
+            <PerCharacter card={card} own={illustrate.own} onChange={onOwnChange} />
+          </IllustrateRows>
           <Divider variant="menu" />
           <NoteEditor id={id} note={note} prompt={illustrate.prompt} onSave={onSaveNote} />
         </Stack>

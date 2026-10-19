@@ -68,16 +68,14 @@ function IllustrateDefaults() {
   useConnections();
   useProfiles();
   return (
-    <SettingGroup label={FEATURE_NAMES.illustrate}>
-      <IllustrateRows
-        illustrate={illustrateSwitches(store, null)}
-        sceneWriter={sceneWriterOf(store, TRANSLATOR_CHAT)}
-        card={null}
-        opens="down"
-        onChange={(change) => void setIllustrate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
-        onEditPrompt={editPrompt}
-      />
-    </SettingGroup>
+    <IllustrateRows
+      illustrate={illustrateSwitches(store, null)}
+      sceneWriter={sceneWriterOf(store, TRANSLATOR_CHAT)}
+      card={null}
+      opens="down"
+      onChange={(change) => void setIllustrate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
+      onEditPrompt={editPrompt}
+    />
   );
 }
 
