@@ -29,6 +29,7 @@ import type { Editing, EditPart } from './useMessageEdit';
 import { seenText } from './search';
 import { useReveal } from './useReveal';
 import { useSelectedPart } from './useSelectedPart';
+import { withOriginal } from './withOriginal';
 
 type Props = {
   message: Shown;
@@ -54,6 +55,7 @@ type Props = {
   canIllustrate: boolean;
   awaited: boolean;
   flipped: boolean;
+  showOriginal: boolean;
   replyNext: boolean;
   // Who replies: the chat's character, or with none, the model named on each reply.
   character: { name: string; image: string | null } | null;
@@ -89,7 +91,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, replyNext, character, me, modelName, opening, last, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -111,7 +113,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const anchors = useRef<(HTMLDivElement | null)[]>([]);
   // A translation never goes through the display, so it takes its marks here, by the same paragraphs.
   const originalShown = text === original;
-  const storyText = !paragraphs.size ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraphs) : withMarks(text, paragraphs);
+  const translatedText = !paragraphs.size ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraphs) : withMarks(text, paragraphs);
+  // A message sent translated keeps 보낸 메시지 보기 only. Not left off while editing a part: findPart's lines are this text's.
+  const both = showOriginal && translation !== null && !sentTranslated && translatingText === null && !originalShown;
+  const storyText = both ? withOriginal(translatedText, original) : translatedText;
   const part = editing?.part ?? null;
   const drawnText = part ? markPart(storyText, part.shown) : storyText;
   const html = useMemo(() => shownHtml(drawnText, decor), [drawnText, decor.bot, decor.url]);
@@ -278,7 +283,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       <Marker reason="translation" label="원문 수정됨" action={canTranslate ? again : undefined} />
     ) : null;
   const translateTool = translation ? (
-    <IconButton icon={Languages} size="xs" label={sentTranslated ? '보낸 메시지 보기' : '원문 보기'} pressed={flipped} onClick={() => actions.flipTranslation(message)} />
+    !both && <IconButton icon={Languages} size="xs" label={sentTranslated ? '보낸 메시지 보기' : '원문 보기'} pressed={flipped} onClick={() => actions.flipTranslation(message)} />
   ) : (
     canTranslate && !empty && !failed && <IconButton icon={Languages} size="xs" label="번역" disabled={translatingText !== null} onClick={translateHere} />
   );

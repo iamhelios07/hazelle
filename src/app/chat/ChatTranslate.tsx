@@ -22,7 +22,7 @@ type Props = {
 };
 
 export function ChatTranslate({ translate, translation, card, note, onChange, onOwnChange, onEditPrompt, onEditCharacter }: Props) {
-  const on = [translate.replies && '응답 번역', translate.input && '내 메시지 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
+  const on = [translate.replies && '응답 번역', translate.input && '내 메시지 번역', translate.reverse && '반전 모드', translate.original && '원문 함께 보기'].filter(Boolean).join(', ');
   return (
     <Menu
       kind="dialog"

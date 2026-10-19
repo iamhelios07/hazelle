@@ -323,6 +323,7 @@
   --prose-sans-shrink: 1px;
   --prose-sans-tighten: 0.1;
   --prose-faded-opacity: 0.5;
+  --prose-original-size: 0.875em;
   /* A bot's button that nothing answers (design §6.4). */
   --story-inert-opacity: 0.45;
   /* A picture line's defaults (Story.shadow.css); a character's own replace them (ChatFrame's pictures). */

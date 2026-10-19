@@ -42,6 +42,11 @@ export function TranslateRows({ translate, translation, card, note, opens, onCha
         help="모델에게도 화면에 보이는 내용 그대로 보내요."
         control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => onChange({ reverse })} />}
       />
+      <SettingRow
+        label="원문 함께 보기"
+        help="번역한 문단마다 그 아래에 원문을 작게 보여요."
+        control={<Switch label="원문 함께 보기" checked={translate.original} onChange={(original) => onChange({ original })} />}
+      />
       {note}
       <SettingRow
         label="번역 프롬프트"

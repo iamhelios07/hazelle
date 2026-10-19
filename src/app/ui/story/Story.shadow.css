@@ -106,6 +106,17 @@
   [data-picture][data-wide] > img {
     max-width: var(--story-picture-wide);
   }
+
+  :host > [data-original] {
+    margin-top: var(--space-4);
+  }
+}
+
+/* Story.tsx marks an original shown under its translation (원문 함께 보기). Outside the layer, so a bot's rule for its
+   paragraphs leaves it set apart; faded rather than recolored, so it stays readable on the bot's own background. */
+[data-original] {
+  font-size: var(--prose-original-size);
+  opacity: var(--prose-faded-opacity);
 }
 
 /* Story.tsx registers it: the chat search's term in every mounted message. */
