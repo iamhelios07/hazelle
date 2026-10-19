@@ -1,3 +1,4 @@
+import { entryName } from '../../connectors/types';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import type { Chat, ChatItem } from '../../model/chat';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
@@ -237,7 +238,7 @@ function WriterRow({ chat, onEditPrompt }: { chat: Chat; onEditPrompt: (door: Pr
       noun="기억"
       choice={prompt}
       sub={prompt.kind === 'prompt' && !prompt.prompt.value.model ? follows(MODEL_ROLES.aux) : undefined}
-      model={'kind' in writer ? describeMemoryFailure(writer) : writer.route.model.name}
+      model={'kind' in writer ? describeMemoryFailure(writer) : entryName(writer.route.model)}
       onEdit={onEditPrompt}
     />
   );

@@ -126,9 +126,9 @@ export const promptName = (name: string) => name || '이름 없는 프롬프트'
 export const DELETED_PROMPT = '삭제된 프롬프트';
 export const loreName = (name: string) => name.trim() || '이름 없는 항목';
 
-export const NOT_STARRED = '즐겨찾기에 없음';
+export const NOT_STARRED = '추가한 모델에 없음';
 
-export const noStarred = (then: string) => `즐겨찾기한 모델이 없어요. ${inSettings('connections')}에서 모델을 즐겨찾기에 추가하면 여기서 ${then}.`;
+export const noStarred = (then: string) => `추가한 모델이 없어요. ${inSettings('connections')}에서 모델을 추가하면 여기서 ${then}.`;
 
 export const CAST = '등장인물';
 

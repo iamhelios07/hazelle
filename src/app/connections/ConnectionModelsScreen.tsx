@@ -1,13 +1,14 @@
-import { KeyRound, Star } from 'lucide-react';
+import { KeyRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { bareModel } from '../../connectors/chat-completions';
 import { modelSettings, resolveConnection, RETRIES } from '../../connectors/registry';
-import type { Model } from '../../connectors/types';
+import { refOf } from '../../connectors/assignment';
+import { entryKey, entryName, type Model, type Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
-import { refreshStarred, removeConnection, renameConnection, restoreConnection, setRetries, setStarred } from '../../runtime/connections';
+import { addCopy, addModel, refreshStarred, removeConnection, removeModel, renameConnection, restoreConnection, setRetries } from '../../runtime/connections';
 import { modelProfile } from '../../runtime/profiles';
-import { ACTS } from '../common/acts';
+import { ACTS, addOf } from '../common/acts';
 import { describeCatalogFailure } from '../common/failure';
 import { NameDialog } from '../common/NameDialog';
 import { useSearch } from '../common/useSearch';
@@ -26,9 +27,9 @@ import { ConnectionSent } from './ConnectionSent';
 
 const BY_ID = '모델 ID로 추가';
 
-type Filter = 'all' | 'starred' | 'reasoning' | 'vision' | 'tools';
+type Filter = 'all' | 'reasoning' | 'vision' | 'tools';
 
-const FILTERS: Record<Exclude<Filter, 'all' | 'starred'>, { label: string; test: (model: Model) => boolean }> = {
+const FILTERS: Record<Exclude<Filter, 'all'>, { label: string; test: (model: Model) => boolean }> = {
   reasoning: { label: '추론', test: (model) => model.reasoning === true },
   vision: { label: '비전', test: (model) => model.input?.includes('image') === true },
   tools: { label: '도구', test: (model) => model.tools === true },
@@ -51,6 +52,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [filter, setFilter] = useState<Filter>('all');
   const [naming, setNaming] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [copying, setCopying] = useState<Model | null>(null);
   const [keying, setKeying] = useState(false);
   // Under API 연결's cards the connection is a part of that page, not a page of its own.
   const stacked = usePane() === 'stack';
@@ -69,62 +71,81 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     // The stored object is replaced on every sync; only a change to its endpoint or key means a new list.
   }, [key, attempt]);
 
-  const starred = connection.starred;
-  const starredIds = useMemo(() => new Set(starred.map((model) => model.id)), [starred]);
+  const entries = connection.starred;
+  const added = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of entries) counts.set(entry.id, (counts.get(entry.id) ?? 0) + 1);
+    return counts;
+  }, [entries]);
   const listedIds = useMemo(() => (catalog?.ok ? new Set(catalog.models.map((model) => model.id)) : null), [catalog]);
-  const models = useMemo(() => {
-    // A starred model the provider no longer lists stays visible, so it can be unstarred.
-    const missing = starred.filter((model) => !listedIds?.has(model.id));
-    return [...missing, ...(catalog?.ok ? catalog.models : [])];
-  }, [catalog, listedIds, starred]);
+  const rows = useMemo(() => [...entries.map((entry) => ({ entry })), ...(catalog?.ok ? catalog.models.map((model) => ({ model })) : [])], [catalog, entries]);
 
-  const known = models.some((model) => tags(model).length > 0);
-  const filters = [
-    { value: 'all' as const, label: '전체' },
-    { value: 'starred' as const, label: '즐겨찾기' },
-    ...(known ? (Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label })) : []),
-  ];
-  const search = useSearch(models, '모델 검색', (model) => [model.name, model.id]);
-  const shown = search.found.filter((model) => filter === 'all' || (filter === 'starred' ? starredIds.has(model.id) : FILTERS[filter].test(model)));
-  const starredShown = shown.filter((model) => starredIds.has(model.id));
-  const restShown = shown.filter((model) => !starredIds.has(model.id));
+  const known = rows.some((row) => tags('entry' in row ? row.entry : row.model).length > 0);
+  const filters = [{ value: 'all' as const, label: '전체' }, ...(known ? (Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label })) : [])];
+  const search = useSearch(rows, '모델 검색', (row) => ('entry' in row ? [entryName(row.entry), row.entry.name, row.entry.id] : [row.model.name, row.model.id]));
+  const shown = search.found.filter((row) => filter === 'all' || FILTERS[filter].test('entry' in row ? row.entry : row.model));
+  const entriesShown = shown.flatMap((row) => ('entry' in row ? [row.entry] : []));
+  const modelsShown = shown.flatMap((row) => ('model' in row ? [row.model] : []));
 
-  function toggle(model: Model) {
-    void setStarred(store, id, model, !starredIds.has(model.id)).then((result) => result.ok || toast.failed(result));
+  // The first add stays on the list; a model already added asks the new entry's name.
+  function add(model: Model) {
+    if (added.has(model.id)) setCopying(model);
+    else void addModel(store, id, model).then((result) => result.ok || toast.failed(result));
   }
 
-  // A model the list does not name yet (a new release) is starred by its id alone, knowing nothing of it; a listed id
-  // stars the listed model, and a starred one stays as it is, keeping its 설정.
+  // Saving the name opens the copy's page, since what comes next is changing what differs.
+  function copy(model: Model, label: string) {
+    setCopying(null);
+    void addCopy(store, id, model, label).then((result) => {
+      if (result.ok) navigate({ kind: 'model', connection: id, model: result.data });
+      else if ('unmade' in result) toast.failed(result.unmade, `${MODEL_SETTINGS}을 만들지 못했어요.`);
+      else toast.failed(result);
+    });
+  }
+
+  // A model the list does not name yet (a new release) is added by its id alone, knowing nothing of it; a listed id adds
+  // the listed model, and one added already but no longer listed is copied from what its entry knows.
   function addById(text: string) {
     setAdding(false);
     const modelId = text.trim();
-    if (!modelId || starredIds.has(modelId)) return;
-    toggle(models.find((model) => model.id === modelId) ?? bareModel(modelId));
+    if (modelId) add((catalog?.ok ? catalog.models.find((model) => model.id === modelId) : undefined) ?? entries.find((entry) => entry.id === modelId) ?? bareModel(modelId));
   }
 
-  function row(model: Model) {
-    const on = starredIds.has(model.id);
-    const listed = !listedIds || listedIds.has(model.id);
-    const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
-    const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
-    const settings = choice && (
-      <Button variant="ghost" size="sm" label={`${MODEL_SETTINGS} · ${model.name}`} onClick={() => navigate({ kind: 'model', connection: id, model: model.id })}>
-        {MODEL_SETTINGS}
-      </Button>
+  function entryRow(entry: Starred) {
+    const name = entryName(entry);
+    const listed = !listedIds || listedIds.has(entry.id);
+    const choice = modelSettings(connection, entry) ? modelProfile(store, entry) : null;
+    return (
+      <ListItem
+        key={entryKey(entry)}
+        title={name}
+        code={entry.id}
+        description={choice ? profileLine(choice, defaultProfile) : undefined}
+        tags={!listed ? ['목록에 없음'] : entry.protocol === 'unsupported' ? ['지원 안 됨', ...tags(entry)] : tags(entry)}
+        trailing={
+          <Row kind="actions">
+            {choice && (
+              <Button variant="ghost" size="sm" label={`${MODEL_SETTINGS} · ${name}`} onClick={() => navigate({ kind: 'model', ...refOf(id, entry) })}>
+                {MODEL_SETTINGS}
+              </Button>
+            )}
+            <IconButton icon={X} label={`${name} 빼기`} onClick={() => void removeModel(store, id, entryKey(entry)).then((result) => result.ok || toast.failed(result))} />
+          </Row>
+        }
+      />
     );
+  }
+
+  function modelRow(model: Model) {
+    const count = added.get(model.id) ?? 0;
+    const status = count === 0 ? [] : [count > 1 ? `추가됨 ${count}` : '추가됨'];
     return (
       <ListItem
         key={model.id}
         title={model.name}
         code={model.id}
-        description={choice ? profileLine(choice, defaultProfile) : undefined}
-        tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['지원 안 됨', ...tags(model)] : tags(model)}
-        trailing={
-          <Row kind="actions">
-            {settings}
-            <IconButton icon={Star} label={on ? `${model.name} 즐겨찾기 해제` : `${model.name} 즐겨찾기`} pressed={on} onClick={() => toggle(model)} />
-          </Row>
-        }
+        tags={[...status, ...(model.protocol === 'unsupported' ? ['지원 안 됨'] : []), ...tags(model)]}
+        trailing={<IconButton icon={ACTS.create.icon} label={addOf(model.name)} onClick={() => add(model)} />}
       />
     );
   }
@@ -162,6 +183,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     <>
       {naming && <NameDialog title="연결 이름 바꾸기" value={connection.label} onSave={rename} onClose={() => setNaming(false)} />}
       {keying && resolved && <ConnectionKeyDialog id={id} type={resolved.type} onClose={() => setKeying(false)} />}
+      {copying && <NameDialog title={addOf(copying.name)} value={`${copying.name} ${(added.get(copying.id) ?? 0) + 1}`} hint="이미 추가한 모델이에요. 이름과 모델 설정을 따로 두고 하나 더 추가해요." onSave={(label) => copy(copying, label)} onClose={() => setCopying(null)} />}
       {adding && <NameDialog title={BY_ID} field="모델 ID" value="" hint="목록에 없는 새 모델도 제공자가 쓰는 ID로 추가할 수 있어요." onSave={addById} onClose={() => setAdding(false)} />}
     </>
   );
@@ -184,7 +206,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
             )
           }
         >
-          <Text variant="note">{[listed, starred.length ? `즐겨찾기 ${starred.length}개` : ''].filter(Boolean).join(' · ')}</Text>
+          <Text variant="note">{[listed, entries.length ? `추가한 모델 ${entries.length}개` : ''].filter(Boolean).join(' · ')}</Text>
           <Row kind="toolbar">
             {search.field}
             <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
@@ -196,8 +218,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           )}
           {shown.length > 0 ? (
             <Stack gap="group">
-              {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)} box>{(index) => row(starredShown[index]!)}</List>}
-              {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)} box>{(index) => row(restShown[index]!)}</List>}
+              {entriesShown.length > 0 && <List label="추가한 모델" keys={entriesShown.map(entryKey)} box>{(index) => entryRow(entriesShown[index]!)}</List>}
+              {modelsShown.length > 0 && <List label="모델" keys={modelsShown.map((model) => model.id)} box>{(index) => modelRow(modelsShown[index]!)}</List>}
             </Stack>
           ) : (
             catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '조건에 맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>

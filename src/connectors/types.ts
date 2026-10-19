@@ -13,7 +13,7 @@ export class ConnectorError extends Error {
 export type Endpoint = { baseUrl: string; protocol: Protocol };
 
 // A built-in connection type fixes the endpoint, so baseUrl and protocol are set only on a generic connection.
-// Starred models are kept as catalog snapshots, so pickers and requests need no catalog fetch first.
+// Added models are kept as catalog snapshots, so pickers and requests need no catalog fetch first.
 // accounts holds exactly one account and turns is null, unless the type is a pool; a pool always has turns.
 // retries: how many times a try that failed for a moment is sent again (runtime/connections retriesOf), absent to follow
 // the account's shared count; 0 sends each call once. A model's 설정 묶음 can override it in turn.
@@ -62,8 +62,15 @@ export type Model = {
   vendor?: string;
 };
 
-// profile: the 설정 묶음 it uses; without one, the default 묶음.
-export type Starred = Model & { profile?: string };
+// profile: the 설정 묶음 it uses; without one, the default 묶음. label: the user's name for the entry; absent, the catalog's
+// name shows. entry: only on a further copy of a model already added, `#` and an id of its own.
+export type Starred = Model & { profile?: string; entry?: string; label?: string };
+
+// The one key every ModelRef names an entry by. Not a legacy fallback: a model's first entry needs no id of its own, so
+// every reference stored before copies existed still names it.
+export const entryKey = (model: Pick<Starred, 'id' | 'entry'>) => model.entry ?? model.id;
+export const entryName = (model: Pick<Starred, 'name' | 'label'>) => model.label ?? model.name;
+export const entryOf = (connection: Pick<Connection, 'starred'>, key: string) => connection.starred.find((model) => entryKey(model) === key);
 
 // cache: the prompt up to and including this message is a cache point. Only a request whose model settings turn
 // caching on sends it, and a codec never puts the field itself on the wire.

@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
-import { fitsRole, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
+import { fitsRole, refOf, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
+import { entryName, entryOf } from '../../connectors/types';
 import { embedRoute } from '../../connectors/registry';
 import type { Stored } from '../../model/kinds';
 import { ChipButton, Empty, Menu, MenuHeading, MenuItem, PickCard, SettingRow } from '../ui';
@@ -8,7 +9,7 @@ import { MODEL_ROLES, MODEL_SETTINGS, NOT_STARRED, noStarred } from './words';
 // 임베딩 모델 offers only what its connection embeds: the type says so, not the model (design §4).
 export function starredModels(connections: readonly Stored<'connection'>[], role: Role) {
   return connections.flatMap((connection) =>
-    connection.value.starred.filter((model) => fitsRole(model, role) && (role !== 'embed' || embedRoute(connection.value, model) !== null)).map((model) => ({ ref: { connection: connection.id, model: model.id }, name: model.name, source: connection.value.label })),
+    connection.value.starred.filter((model) => fitsRole(model, role) && (role !== 'embed' || embedRoute(connection.value, model) !== null)).map((model) => ({ ref: refOf(connection.id, model), name: entryName(model), model, source: connection.value.label })),
   );
 }
 
@@ -24,11 +25,11 @@ export function byConnection(choices: readonly Choice[], item: (choice: Choice) 
 
 export function findStarred(ref: ModelRef, connections: readonly Stored<'connection'>[]) {
   const connection = connections.find(({ id }) => id === ref.connection);
-  const model = connection?.value.starred.find(({ id }) => id === ref.model);
-  return connection && model ? { name: model.name, source: connection.value.label } : undefined;
+  const model = connection && entryOf(connection.value, ref.model);
+  return connection && model ? { name: entryName(model), source: connection.value.label } : undefined;
 }
 
-// A starred model reads as its name and connection; one no longer starred reads as missing, never as another model.
+// An added model reads as its name and connection; one no longer added reads as missing, never as another model.
 function modelName(ref: ModelRef, connections: readonly Stored<'connection'>[]): string {
   const choice = findStarred(ref, connections);
   return choice ? `${choice.name} · ${choice.source}` : NOT_STARRED;

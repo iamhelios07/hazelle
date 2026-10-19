@@ -197,7 +197,7 @@ const SHAPES = {
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   // A batch's marker holds no key: no server object holds its call.
-  stream: (value) => shape({ calibration, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) })(value) && (shape({ key: isRecord })(value) || shape({ batch: str })(value)),
+  stream: (value) => shape({ calibration, call: shape({ ...all(str, 'connection', 'source', 'model', 'modelName'), entry: (entry) => entry === undefined || str(entry) }), at: num, result: str, for: shape({ kind: str }) })(value) && (shape({ key: isRecord })(value) || shape({ batch: str })(value)),
   vectors: shape({ model: str, items: isRecord }),
   cacheprint: shape({ ...all(str, 'call', 'connection', 'model'), account: orNull(str), messages: listOf(shape({ role: str, hash: str, tokens: num, from: isRecord })) }),
   memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), chapters: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, records: listOf(shape({ id: str, at: num })) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
@@ -217,7 +217,7 @@ const SHAPES = {
     protocol: orNull(str),
     accounts: listOf(shape({ id: str, secret: str })),
     turns: orNull(shape({ day: num, groups: listOf(shape({ id: str, name: str, accounts: listOf(str) })), anchor: shape({ group: str, cycle: num }) })),
-    starred: listOf(shape({ id: str, name: str })),
+    starred: listOf(shape({ id: str, name: str, entry: (entry) => entry === undefined || str(entry), label: (label) => label === undefined || str(label) })),
     retries: (value) => value === undefined || num(value),
   }),
   settings: shape({ models: isRecord }),

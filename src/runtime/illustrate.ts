@@ -1,5 +1,5 @@
 import { ChangeSignal } from '../change-signal';
-import type { ModelRef } from '../connectors/assignment';
+import { refOf, sameModelRef, type ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
 import { imageSize } from '../engine/import/card';
@@ -70,7 +70,7 @@ export async function attachIllustration(
   }
 }
 
-// The starred models that draw: their output holds an image and their connection's type fills draws. The first is the
+// The added models that draw: their output holds an image and their connection's type fills draws. The first is the
 // image model of a chat whose switches name none.
 export const drawingModels = (connections: readonly Stored<'connection'>[]): ImageRoute[] =>
   connections.flatMap((connection) => {
@@ -78,7 +78,7 @@ export const drawingModels = (connections: readonly Stored<'connection'>[]): Ima
     return draws ? connection.value.starred.filter(({ output }) => output?.includes('image')).map((model) => ({ connection, model, draws })) : [];
   });
 
-// no-image-model: no starred model draws. image-model-gone: the one the switches name no longer does.
+// no-image-model: no added model draws. image-model-gone: the one the switches name no longer does.
 // invalid: the scene writer answered, but not with a scene the format reads. undrawn: the image call failed or was refused.
 // file-refused: the server refused the picture (too large, blocked, or past the account's picture cap).
 // gone: the message or its version was deleted. empty: the version holds no text to draw from.
@@ -124,7 +124,7 @@ export const sendsIllustrateNote = (prompt: IllustratePrompt) => prompt.blocks.s
 function imageRoute(store: Deps['store'], ref: ModelRef | undefined): ImageRoute | { kind: 'no-image-model' } | { kind: 'image-model-gone' } {
   const routes = drawingModels(store.list('connection'));
   if (!ref) return routes[0] ?? { kind: 'no-image-model' };
-  return routes.find(({ connection, model }) => connection.id === ref.connection && model.id === ref.model) ?? { kind: 'image-model-gone' };
+  return routes.find(({ connection, model }) => sameModelRef(refOf(connection.id, model), ref)) ?? { kind: 'image-model-gone' };
 }
 
 // Several messages draw at once, each going on when its chat is left. A failure is kept for the session and never
@@ -271,7 +271,7 @@ export class Illustrator {
     if (!saved.ok) return saved.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unsaved', failure: saved };
     const file = saved.data[0];
     if (!file) return { kind: 'file-refused' };
-    const illustration: Illustration = { message, version, scene, receipt, model: { connection: route.connection.id, model: route.model.id }, sent: without(request, 'model'), file, type: drawn.type, size: drawn.bytes.byteLength, at: Date.now() };
+    const illustration: Illustration = { message, version, scene, receipt, model: refOf(route.connection.id, route.model), sent: without(request, 'model'), file, type: drawn.type, size: drawn.bytes.byteLength, at: Date.now() };
     const created = await store.batch([
       { type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: chat, value: illustration },
       ...(receipt && log ? [receiptRow(receipt, illustration.at, chatPlace(store, chat))] : []),

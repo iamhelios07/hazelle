@@ -104,7 +104,7 @@ function describeRoute(failure: RouteFailure | { kind: 'profile-missing'; own: b
     case 'no-model':
       return `${model}이 지정되지 않았어요. ${where} 모델을 선택해 주세요.`;
     case 'model-gone':
-      return `${model}이 즐겨찾기에 없어요. ${where} 다시 선택해 주세요.`;
+      return `${model}이 추가한 모델에 없어요. ${where} 다시 선택해 주세요.`;
     case 'image-only':
       return `선택한 ${model}은 이미지만 만들 수 있어요. ${where} 다른 모델을 선택해 주세요.`;
     case 'profile-missing':
@@ -246,7 +246,7 @@ export function describeTurnFailure(failure: TurnFailure): string {
     case 'no-model':
       return `${MODEL_ROLES.main}이 지정되지 않았어요. 모델 버튼에서 모델을 선택해 주세요.`;
     case 'model-gone':
-      return '선택한 모델이 즐겨찾기에 없어요. 모델 버튼에서 다시 선택해 주세요.';
+      return '선택한 모델이 추가한 모델에 없어요. 모델 버튼에서 다시 선택해 주세요.';
     case 'image-only':
       return '선택한 모델은 이미지만 만들 수 있어요. 모델 버튼에서 다른 모델을 선택해 주세요.';
     case 'prompt-missing':
@@ -361,7 +361,7 @@ export function describeIllustrateFailure(failure: IllustrateFailure): string {
     case 'no-image-model':
       return `연결된 이미지 모델이 없어요. ${inSettings('connections')}에서 NovelAI를 연결해 주세요.`;
     case 'image-model-gone':
-      return '선택한 이미지 모델이 즐겨찾기에 없어요. 채팅의 삽화 메뉴에서 다시 선택해 주세요.';
+      return '선택한 이미지 모델이 추가한 모델에 없어요. 채팅의 삽화 메뉴에서 다시 선택해 주세요.';
     case 'undrawn':
       return describeReplyError(failure.error);
     case 'not-a-picture':

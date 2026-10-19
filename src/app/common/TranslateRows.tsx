@@ -1,3 +1,4 @@
+import { entryName } from '../../connectors/types';
 import type { ReactNode } from 'react';
 import type { TranslateSwitches } from '../../model/chat';
 import type { TranslateSetup } from '../../runtime/characters';
@@ -62,7 +63,7 @@ export function TranslateRows({ translate, translation, card, note, opens, onCha
             label="번역 프롬프트"
             control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
           />
-          <TaskModelRow label="번역 모델" noun="번역" choice={prompt} model={translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)} onEdit={onEditPrompt} />
+          <TaskModelRow label="번역 모델" noun="번역" choice={prompt} model={translation.ok ? entryName(translation.route.model) : describeTranslateFailure(translation.failure)} onEdit={onEditPrompt} />
         </SettingGroup>
       </Disclosure>
     </>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { refOf } from '../../connectors/assignment';
 import { tokenGroups, type From, type TokenSource } from '../../engine/pipeline';
 import type { ForecastPart } from '../../runtime/cache';
 import type { Rehearsal } from '../../runtime/scripts';
@@ -186,7 +187,7 @@ type NextCacheProps = { next: NonNullable<CacheNotes['next']>; editor: (from: Fr
 function NextCache({ next: { forecast, cost: price, route }, editor, onEdit }: NextCacheProps) {
   const store = useStore();
   const { against, written, tail, removed } = forecast;
-  const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', connection: route.connection.id, model: route.model.id }) } : undefined;
+  const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', ...refOf(route.connection.id, route.model) }) } : undefined;
   return (
     <Stack gap="group">
       {against?.broken && <Callout tone="warn" action={off}>{`${BROKEN}: ${why(against.broken, profileName(store, route))} ${reads(against)}`}</Callout>}

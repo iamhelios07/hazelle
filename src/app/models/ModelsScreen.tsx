@@ -1,4 +1,5 @@
-import { rolesOf, type ModelRef, type Role } from '../../connectors/assignment';
+import { refOf, rolesOf, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
+import { entryKey, entryName } from '../../connectors/types';
 import { imageOnly, setDefaultModel } from '../../runtime/assignment';
 import { addDefaultProfile, modelProfile, profileUsers, setDefaultProfile } from '../../runtime/profiles';
 import { TASK_NAMES } from '../common/prompt-words';
@@ -13,7 +14,7 @@ import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Beside, Callout, Columns, Empty, List, ListItem, Menu, MenuItem, NavBar, PickCard, Row, Screen, Section } from '../ui';
 
-const STARRED = '즐겨찾기한 모델';
+const STARRED = '추가한 모델';
 
 // The bottom rung of every chat's settings: what a prompt, a character or a chat does not set reads from here.
 const DEFAULTS = SCOPE.default;
@@ -35,11 +36,11 @@ export function ModelsScreen({ back }: { back: Back | null }) {
   const makeDefault = () => void addDefaultProfile(store).then((done) => done.ok || toast.failed(done, `${MODEL_SETTINGS}을 만들지 못했어요.`));
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
   const cardOf = (ref: ModelRef | undefined) => {
-    const found = ref && models.find(({ connection, model }) => connection.id === ref.connection && model.id === ref.model);
+    const found = ref && models.find(({ connection, model }) => sameModelRef(refOf(connection.id, model), ref));
     if (!found) return {};
-    return { values: imageOnly(found.model) ? undefined : profileLine(found.choice, settings.profile), open: () => navigate({ kind: 'model', connection: found.connection.id, model: found.model.id }) };
+    return { values: imageOnly(found.model) ? undefined : profileLine(found.choice, settings.profile), open: () => navigate({ kind: 'model', ...refOf(found.connection.id, found.model) }) };
   };
-  const search = useSearch(models, '즐겨찾기한 모델 검색', ({ connection, model }) => [model.name, model.id, connection.value.label]);
+  const search = useSearch(models, `${STARRED} 검색`, ({ connection, model }) => [entryName(model), model.name, model.id, connection.value.label]);
   const sorted = defaultFirst(profiles, settings.profile);
   const defaultProfile = profiles.find((profile) => profile.id === settings.profile);
   const ownModels = prompts.flatMap((prompt) => (prompt.value.task && prompt.value.model ? [{ prompt, task: prompt.value.task, model: prompt.value.model }] : []));
@@ -103,7 +104,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
             </Menu>
           )}
         </Columns>
-        {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정한 모델이 즐겨찾기에 없어요.`}</Callout>}
+        {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정한 모델이 ${STARRED}에 없어요.`}</Callout>}
       </Section>
       <Beside side={side}>
         <Section title={STARRED}>
@@ -113,15 +114,15 @@ export function ModelsScreen({ back }: { back: Back | null }) {
           ) : models.length > 0 ? (
             <List label={STARRED} box>
               {search.found.map(({ connection, model, choice }) => {
-                const ref = { connection: connection.id, model: model.id };
+                const ref = refOf(connection.id, model);
                 // The row says only what sets a model apart: its roles, and a 모델 설정 other than the default one, by
                 // name, since the side list beside it reads each one's values. A model that only draws takes no 모델 설정
                 // (ModelScreen).
                 const apart = imageOnly(model) ? '이미지 모델' : choice.kind !== 'profile' ? NO_PROFILE : choice.profile.id === settings.profile ? undefined : choice.profile.value.name;
                 return (
                   <ListItem
-                    key={`${connection.id}/${model.id}`}
-                    title={model.name}
+                    key={`${connection.id}/${entryKey(model)}`}
+                    title={entryName(model)}
                     tags={rolesOf(settings.models, ref).map((role) => ROLE_TAGS[role])}
                     description={connection.value.label}
                     aside={apart}

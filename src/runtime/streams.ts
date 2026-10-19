@@ -16,7 +16,7 @@ import type { ObjectStore } from './store';
 // The only writer of `stream` objects, each the marker of a generation call the server is making for a chat
 // (tech-spec §6, Detached replies).
 
-export const callOf = (route: Route): Stream['call'] => ({ connection: route.connection.id, source: route.connection.value.label, model: route.model.id, modelName: route.model.name });
+export const callOf = ({ connection, model }: Route): Stream['call'] => ({ connection: connection.id, source: connection.value.label, model: model.id, modelName: model.name, ...(model.entry !== undefined && { entry: model.entry }) });
 
 // chat: null for a chat not saved yet, whose call a reload does not pick up.
 export type CallTarget = { id: string; chat: string | null; result: string; for: Stream['for'] };

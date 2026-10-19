@@ -277,6 +277,13 @@ describe('recentModels', () => {
       { connection: 'c1', model: 'm2' },
     ]);
   });
+
+  it("names a copy's reply by the copy's key", () => {
+    expect(recentIn(fold([bot('b1', 'a', { model: 'm1', entry: '#low' }), bot('b2', 'b', { model: 'm1' })]))).toEqual([
+      { at: expect.any(Number), ref: { connection: 'c1', model: 'm1' } },
+      { at: expect.any(Number), ref: { connection: 'c1', model: '#low' } },
+    ]);
+  });
 });
 
 describe('previewLine', () => {

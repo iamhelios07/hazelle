@@ -1,4 +1,5 @@
 import { ChangeSignal } from '../change-signal';
+import { refOf } from '../connectors/assignment';
 import { parseRemark, type RemarkInvalid } from '../engine/mascot';
 import type { RanAway } from '../engine/pipeline';
 import { fold, shown, type Message, type Receipt } from '../model/chat';
@@ -115,7 +116,7 @@ export class Commentator {
     const { receipt } = answer;
     const parsed = parseRemark(answer.text, MASCOT);
     if (!parsed.ok) return { kind: 'invalid', receipt, reason: parsed.reason };
-    const remark: Remark = { message, version, mascot: MASCOT, expression: parsed.expression, line: parsed.line, receipt, model: { connection: route.connection.id, model: route.model.id }, at: Date.now() };
+    const remark: Remark = { message, version, mascot: MASCOT, expression: parsed.expression, line: parsed.line, receipt, model: refOf(route.connection.id, route.model), at: Date.now() };
     // One line per version (model/mascot Remark): the new one replaces any written before it.
     const older = store.children('remark', chat).filter(({ value }) => value.version === version);
     const saved = await store.batch([

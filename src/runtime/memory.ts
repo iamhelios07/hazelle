@@ -1,3 +1,4 @@
+import { entryName } from '../connectors/types';
 import { ChangeSignal } from '../change-signal';
 import { chatMemory, memoryOwner, memorySetup, sourcesOf, storedMemory } from './memory-read';
 import { chatSent, type ChatSent } from './memory-view';
@@ -390,7 +391,7 @@ export class Rememberer {
       const planned = await this.plan(chat);
       if (!planned) return;
       if ('kind' in planned) return this.change(chat, { failed: planned });
-      this.change(chat, { running: { model: planned.route.model.name, left: planned.left } });
+      this.change(chat, { running: { model: entryName(planned.route.model), left: planned.left } });
       const outcome = await this.summarize(chat, planned);
       if (planned.job.redo) this.reread.add(readKey(planned.job.sources));
       if (outcome === 'stopped') return;

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { sameModelRef } from '../../connectors/assignment';
+import { refOf, sameModelRef } from '../../connectors/assignment';
+import { entryKey, entryName } from '../../connectors/types';
 import type { IllustrateSwitches, Rung } from '../../model/illustration';
 import type { IllustrateSetup } from '../../runtime/characters';
 import { drawingModels, type ImageRoute, type sceneWriterOf } from '../../runtime/illustrate';
@@ -76,7 +77,7 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
             label="삽화 프롬프트"
             control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
           />
-          <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : sceneWriter.route.model.name} onEdit={onEditPrompt} />
+          <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : entryName(sceneWriter.route.model)} onEdit={onEditPrompt} />
         </SettingGroup>
       </Disclosure>
     </>
@@ -168,13 +169,13 @@ function PictureLadder({ ladder, onChange }: { ladder: Rung[]; onChange: (ladder
   );
 }
 
-// The image model the switches draw with: their own choice, else the first starred model that draws.
+// The image model the switches draw with: their own choice, else the first added model that draws.
 export const imageModelOf = (routes: ImageRoute[], illustrate: IllustrateSetup) => {
   const own = illustrate.model;
-  return own ? routes.find(({ connection, model }) => sameModelRef(own, { connection: connection.id, model: model.id })) : routes[0];
+  return own ? routes.find(({ connection, model }) => sameModelRef(own, refOf(connection.id, model))) : routes[0];
 };
 
-// One no longer starred shows as missing, never as another model.
+// One no longer added shows as missing, never as another model.
 function ImageModelMenu({ routes, illustrate, card, opens, onPick }: Pick<Props, 'illustrate' | 'card' | 'opens'> & { routes: ImageRoute[]; onPick: Props['onChange'] }) {
   const own = illustrate.model;
   const choice = imageModelOf(routes, illustrate);
@@ -182,17 +183,17 @@ function ImageModelMenu({ routes, illustrate, card, opens, onPick }: Pick<Props,
     <Menu
       place={opens === 'up' ? 'above-end' : 'below-end'}
       label="이미지 모델"
-      trigger={(opener) => <ChipButton variant="field" opens={opens} label={choice ? choice.model.name : NOT_STARRED} title="이미지 모델" tone={choice ? 'default' : 'warn'} {...opener} />}
+      trigger={(opener) => <ChipButton variant="field" opens={opens} label={choice ? entryName(choice.model) : NOT_STARRED} title="이미지 모델" tone={choice ? 'default' : 'warn'} {...opener} />}
     >
       <MenuHeading>{appliesTo(card, illustrate.own)}</MenuHeading>
-      <MenuItem label={follows('첫 이미지 모델')} sub={routes[0]!.model.name} checked={!own} onClick={() => onPick({ model: undefined })} />
+      <MenuItem label={follows('첫 이미지 모델')} sub={entryName(routes[0]!.model)} checked={!own} onClick={() => onPick({ model: undefined })} />
       {routes.map(({ connection, model }) => (
         <MenuItem
-          key={`${connection.id}/${model.id}`}
-          label={model.name}
+          key={`${connection.id}/${entryKey(model)}`}
+          label={entryName(model)}
           sub={connection.value.label}
-          checked={!!own && sameModelRef(own, { connection: connection.id, model: model.id })}
-          onClick={() => onPick({ model: { connection: connection.id, model: model.id } })}
+          checked={!!own && sameModelRef(own, refOf(connection.id, model))}
+          onClick={() => onPick({ model: refOf(connection.id, model) })}
         />
       ))}
     </Menu>

@@ -38,7 +38,7 @@ export type Route =
   | { kind: 'plugin-page'; id: string }
   | { kind: 'models' }
   | { kind: 'profile'; id: string }
-  // model: a starred model's id, which may hold any character; the path carries it escaped.
+  // model: an added model's key (connectors/types entryKey), which may hold any character; the path carries it escaped.
   | { kind: 'model'; connection: string; model: string }
   // section opens the page at 운영자가 보낸 알림 or 새 소식, which the toasts saying they came link to.
   | { kind: 'account'; section: AccountSection | null }

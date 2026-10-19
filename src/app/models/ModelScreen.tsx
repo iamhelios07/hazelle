@@ -1,14 +1,16 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
-import type { Starred } from '../../connectors/types';
+import { entryKey, entryName, type Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { modelUsage } from '../../model/usage';
-import { rolesOf } from '../../connectors/assignment';
+import { refOf, rolesOf } from '../../connectors/assignment';
 import { imageOnly } from '../../runtime/assignment';
-import { retriesOf } from '../../runtime/connections';
-import { addProfile, modelProfile, profileUsers, setModelProfile } from '../../runtime/profiles';
+import { renameModel, retriesOf } from '../../runtime/connections';
+import { modelProfile, ownProfile, profileUsers, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
+import { ACTS } from '../common/acts';
+import { NameDialog } from '../common/NameDialog';
 import { LedgerWait, useLedger } from '../common/useLedger';
 import type { SaveStatus } from '../common/saveQueue';
 import { SAVE_STATUS } from '../common/useAutosave';
@@ -28,10 +30,26 @@ type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
 
 export const ModelScreen = (props: Props) => (imageOnly(props.model) ? <ImageModelScreen {...props} /> : <ChatModelScreen {...props} />);
 
+// No guard against a blank name: it brings back the list's name (runtime/connections renameModel).
+function useRename(connection: Stored<'connection'>, model: Starred) {
+  const { store } = useSession();
+  const toast = useToast();
+  const [naming, setNaming] = useState(false);
+  const rename = (label: string) => {
+    setNaming(false);
+    void renameModel(store, connection.id, entryKey(model), label).then((result) => result.ok || toast.failed(result));
+  };
+  return {
+    item: <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming(true)} />,
+    dialog: naming && <NameDialog title="모델 이름 바꾸기" value={entryName(model)} onSave={rename} onClose={() => setNaming(false)} />,
+  };
+}
+
 // A model that only draws takes no 모델 설정 and leaves no reply to count: how it draws is the 삽화 prompt's (design §6.6),
 // and its allowance is its connection's meter.
 function ImageModelScreen({ connection, model, back }: Props) {
   const { store } = useSession();
+  const rename = useRename(connection, model);
   // A binned or missing default opens the list, never the missing page.
   const openPrompt = () => {
     const prompt = illustrationPrompt(store, undefined);
@@ -40,7 +58,7 @@ function ImageModelScreen({ connection, model, back }: Props) {
   return (
     <Screen
       width="form"
-      top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}
+      top={<NavBar title={entryName(model)} subtitle={connection.value.label} {...backBar(back)} menu={{ of: '모델', items: rename.item }} />}
       aside={
         <SettingGroup label="이미지 설정">
           <SettingRow
@@ -69,6 +87,7 @@ function ImageModelScreen({ connection, model, back }: Props) {
           </Button>
         </Row>
       </Section>
+      {rename.dialog}
     </Screen>
   );
 }
@@ -80,27 +99,27 @@ function ChatModelScreen({ connection, model, back }: Props) {
   const settings = useSettings();
   const connections = useConnections();
   const ledger = useLedger();
+  const rename = useRename(connection, model);
+  // Usage counts the provider's model, so every copy's page shows one total.
   const usage = useMemo(() => (ledger.view.kind === 'read' ? modelUsage(ledger.view.calls, { connection: connection.id, model: model.id }) : null), [ledger.view, connection.id, model.id]);
+  const copies = connection.value.starred.filter((entry) => entry.id === model.id).length;
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
   const sorted = defaultFirst(profiles, settings.profile);
-  const ref = { connection: connection.id, model: model.id };
-  const roles = rolesOf(settings.models, ref);
+  const roles = rolesOf(settings.models, refOf(connection.id, model));
 
   async function choose(id: string) {
-    const saved = await setModelProfile(store, connection.id, model.id, id);
+    const saved = await setModelProfile(store, connection.id, entryKey(model), id);
     if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
   }
 
   // The new 설정 shows in place: the page stays this model's, and its rows edit the 설정 just made.
   function own() {
-    const id = crypto.randomUUID();
-    // The model takes the profile only once it exists: a create that fails must leave no model pointing at it.
-    void addProfile(store, { name: `${model.name}용`, settings: current?.value.settings ?? {} }, id).then(async (made) => {
-      if (!made.ok) return toast.failed(made, `${MODEL_SETTINGS}을 만들지 못했어요.`);
-      const saved = await setModelProfile(store, connection.id, model.id, id);
-      if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
+    void ownProfile(store, model, current?.value.settings ?? {}, (profile) => setModelProfile(store, connection.id, entryKey(model), profile)).then((result) => {
+      if (result.ok) return;
+      if ('unmade' in result) toast.failed(result.unmade, `${MODEL_SETTINGS}을 만들지 못했어요.`);
+      else toast.failed(result, '바꾸지 못했어요.');
     });
   }
 
@@ -129,7 +148,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
       width="form"
       top={
         <NavBar
-          title={model.name}
+          title={entryName(model)}
           subtitle={
             <>
               {connection.value.label}{' '}
@@ -146,6 +165,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
             of: '모델',
             items: (
               <>
+                {rename.item}
                 <MenuItem label="연결 열기" onClick={() => navigate({ kind: 'connection', id: connection.id })} />
                 <MenuItem label="사용량 열기" onClick={() => navigate({ kind: 'usage' })} />
               </>
@@ -175,7 +195,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
         />
       </Section>
 
-      <Section title="사용량">
+      <Section title="사용량" note={copies > 1 ? `같은 모델 ${copies}개 합계` : undefined}>
         {ledger.view.kind !== 'read' ? (
           <LedgerWait view={ledger.view} retry={ledger.retry} failed="사용량을 불러오지 못했어요." />
         ) : usage && usage.last !== null ? (
@@ -191,6 +211,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
           <Empty variant="section">이 모델로 받은 응답이 없어요.</Empty>
         )}
       </Section>
+      {rename.dialog}
     </Screen>
   );
 

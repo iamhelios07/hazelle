@@ -10,7 +10,7 @@ import type { Source } from './memory';
 // How the call is held: key, the private key of a call the server makes (runtime/relay stream); batch, the provider's id
 // of a reply submitted to a discount lane's batch (ConnectionType discount), which the page asks about through the relay.
 export type Stream = ({ key: JsonWebKey } | { batch: string }) & {
-  call: Pick<Receipt, 'connection' | 'source' | 'model' | 'modelName'>;
+  call: Pick<Receipt, 'connection' | 'source' | 'model' | 'modelName' | 'entry'>;
   calibration: CallCalibration;
   at: number;
   result: string;

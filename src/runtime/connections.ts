@@ -1,14 +1,15 @@
 import { fitsRole } from '../connectors/assignment';
 import { RETRIES } from '../connectors/registry';
 import type { ModelSettings } from '../connectors/settings';
-import type { Account, Connection, ConnectionType, Model, Starred, Turns } from '../connectors/types';
+import { entryKey, type Account, type Connection, type ConnectionType, type Model, type Starred, type Turns } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Stored } from '../model/kinds';
 import { without } from '../model/fields';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import { firstTurns, groupOf, putBack, removeAccount as withoutAccount, signedIn } from '../model/turns';
 import type { ApiFailure, ApiResult } from './api';
-import { setDefaultModel } from './assignment';
+import { imageOnly, setDefaultModel } from './assignment';
+import { modelProfile, ownProfile, type Owned } from './profiles';
 import type { CatalogFailure } from './catalog';
 import type { MetersFailure } from './meters';
 import type { Session } from './session';
@@ -73,17 +74,46 @@ function freeLabel(label: string, connections: readonly Stored<'connection'>[]):
 
 export const renameConnection = (store: ObjectStore, id: string, label: string) => store.update('connection', id, (current) => ({ ...current, label }));
 
-// The others are kept apart first, so a star the model got meanwhile on another device is not doubled.
-// The first model starred that can talk becomes the 대화 모델: until one is set no chat can send, and with one there is nothing to
-// choose between.
-export async function setStarred(store: ObjectStore, id: string, model: Model, starred: boolean): Promise<ApiResult<Stored<'connection'>>> {
+// A model's first entry takes the model's id as its key, so adding a model removed earlier names it for every reference
+// to it again; a model already added gets a further copy, with a key of its own (Starred entry). The key is chosen on
+// every try, against the entries another device may have added meanwhile.
+// The first model added that can talk becomes the 대화 모델: until one is set no chat can send, and with one there is
+// nothing to choose between.
+export async function addModel(store: ObjectStore, id: string, model: Model, own: Pick<Starred, 'label' | 'profile'> = {}): Promise<ApiResult<string>> {
+  let key = model.id;
   const saved = await store.update('connection', id, (current) => {
-    const others = current.starred.filter((entry) => entry.id !== model.id);
-    return { ...current, starred: starred ? [...others, model] : others };
+    const entry = current.starred.some((each) => entryKey(each) === model.id) ? `#${crypto.randomUUID()}` : undefined;
+    key = entry ?? model.id;
+    return { ...current, starred: [...current.starred, { ...snapshotOf(model), ...own, ...(entry !== undefined && { entry }) }] };
   });
-  if (saved.ok && starred && fitsRole(model, 'main') && !store.get('settings', SETTINGS_ID)?.value.models.main) await setDefaultModel(store, 'main', { connection: id, model: model.id });
-  return saved;
+  if (!saved.ok) return saved;
+  if (fitsRole(model, 'main') && !store.get('settings', SETTINGS_ID)?.value.models.main) await setDefaultModel(store, 'main', { connection: id, model: key });
+  return { ok: true, data: key };
 }
+
+const snapshotOf = (model: Starred): Model => without(without(without(model, 'entry'), 'label'), 'profile');
+
+// A blank name, or the catalog's own, is none, so the entry's name follows the list again.
+function ownLabel(name: string, label: string): Pick<Starred, 'label'> {
+  const trimmed = label.trim();
+  return trimmed && trimmed !== name ? { label: trimmed } : {};
+}
+
+// A further copy starts on a 설정 of its own, a copy of the one the model's first entry uses: copies exist to differ, and
+// on a shared 설정 an edit on one copy's page would change the other. A model that only draws takes no 설정.
+export function addCopy(store: ObjectStore, id: string, model: Model, label: string): Promise<Owned<string>> {
+  const own = ownLabel(model.name, label);
+  const first = store.get('connection', id)?.value.starred.find((each) => each.id === model.id);
+  if (!first || imageOnly(first)) return addModel(store, id, model, own);
+  const choice = modelProfile(store, first);
+  return ownProfile(store, { name: model.name, ...own }, choice.kind === 'profile' ? choice.profile.value.settings : {}, (profile) => addModel(store, id, model, { ...own, profile }));
+}
+
+export const removeModel = (store: ObjectStore, id: string, key: string) =>
+  store.update('connection', id, (current) => ({ ...current, starred: current.starred.filter((model) => entryKey(model) !== key) }));
+
+export const renameModel = (store: ObjectStore, id: string, key: string, label: string) =>
+  store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (entryKey(model) === key ? { ...without(model, 'label'), ...ownLabel(model.name, label) } : model)) }));
 
 // Key order aside, so a snapshot written in another order is not taken for a change.
 const sameValue = (a: unknown, b: unknown) => {
@@ -91,9 +121,10 @@ const sameValue = (a: unknown, b: unknown) => {
   return sorted(a) === sorted(b);
 };
 
-// A loaded model list makes each starred snapshot what the list says of the model now, keeping the user's own fields
-// (profile). A model the list no longer has keeps its snapshot, and one it leaves unpriced, or whose inputs or outputs it
-// leaves unknown, keeps what it had: a models.dev list that did not load reads the same.
+// A loaded model list makes the snapshot of every entry of a listed model what the list says of it now, keeping the
+// entry's own fields (entry, label, profile). A model the list no longer has keeps its snapshot, and one it leaves
+// unpriced, or whose inputs or outputs it leaves unknown, keeps what it had: a models.dev list that did not load reads
+// the same.
 export async function refreshStarred(store: ObjectStore, id: string, models: Model[]): Promise<void> {
   const loaded = new Map(models.map((model) => [model.id, model]));
   const fresh = (model: Starred): Starred => {
@@ -105,6 +136,8 @@ export async function refreshStarred(store: ObjectStore, id: string, models: Mod
       output: listed.output ?? model.output,
       ...(listed.price === undefined && model.price !== undefined && { price: model.price }),
       ...(model.profile !== undefined && { profile: model.profile }),
+      ...(model.entry !== undefined && { entry: model.entry }),
+      ...(model.label !== undefined && { label: model.label }),
     };
   };
   if (store.get('connection', id)?.value.starred.every((model) => sameValue(fresh(model), model)) !== false) return;
