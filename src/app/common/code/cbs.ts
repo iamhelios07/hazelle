@@ -5,7 +5,7 @@ import { nearest } from '../../../engine/edit-distance';
 import type { CodeCompletion, CodeDoc, CodeItem, CodeLanguage, CodeProblem, CodeSpan } from '../../ui';
 import { particleOf, withParticle } from '../particles';
 import { COMMANDS, type Command } from './cbsCommands';
-import { variableDoc, variableItems, type Defaults } from './variables';
+import { variableDoc, variableItems, type Variables } from './variables';
 
 // Text one field puts in before CBS runs: a card's instructions take {{original}} (pipeline.ts), a regex's
 // replacement {{data}} (regex/scripts.ts). Both replace only the exact spelling.
@@ -212,8 +212,10 @@ function openBlock(before: string): string | null {
   return head === undefined ? null : /^#([^\s:]*)/.exec(head.trimStart())![1]! || null;
 }
 
-// variables: the character's 기본 변수, offered and explained by name. placeholder: the field's own, when it has one.
-export function cbsLanguage({ variables = [], placeholder }: { variables?: Defaults; placeholder?: CbsPlaceholder } = {}): CodeLanguage {
+const NO_VARIABLES: Variables = { defaults: [], chat: null };
+
+// variables: offered and explained by name. placeholder: the field's own, when it has one.
+export function cbsLanguage({ variables = NO_VARIABLES, placeholder }: { variables?: Variables; placeholder?: CbsPlaceholder } = {}): CodeLanguage {
   let last: { text: string; reading: Reading } | null = null;
   const reading = (text: string) => (last?.text === text ? last.reading : (last = { text, reading: read(text, placeholder) }).reading);
   const own = placeholder && { name: placeholder, doc: { form: `{{${placeholder}}}`, text: PLACEHOLDERS[placeholder] } };

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { InspectedVariable } from '../../../engine/render';
 import { callTemplate, luaLanguage, syntaxMessage } from './lua';
 import { LUA_API } from './luaApi';
 
 const api = (name: string) => LUA_API.find((entry) => entry.name === name)!;
-const language = luaLanguage(async () => null, [['호감도', '30']]);
+const language = luaLanguage(async () => null, { defaults: [['호감도', '30']], chat: null });
 const labels = (text: string, place: 'code' | 'string' = 'code') => language.complete(text, text.length, place, false)?.items.map((item) => item.label) ?? [];
 
 describe('Lua code editor', () => {
@@ -24,6 +25,14 @@ describe('Lua code editor', () => {
   it('offers variable names inside a variable call’s name string', () => {
     const text = 'setChatVar(id, "관계", 1)\ngetChatVar(id, "관';
     expect(language.complete(`${text}")`, text.length, 'string', false)?.items.map((item) => item.label)).toEqual(['호감도', '관계']);
+  });
+
+  it('looks a state up under the `__` name the chat keeps it by, and offers states by their own names', () => {
+    const state: InspectedVariable = { name: '__hp', nameTruncated: false, last: { writer: { kind: 'script', version: 'v', message: 'm', index: 0, phase: 'after' }, value: '7', truncated: false }, history: [], omitted: 0 };
+    const read = luaLanguage(async () => null, { defaults: [['호감도', '30']], chat: { label: '예시 채팅', values: new Map([['__hp', state]]), partial: true } });
+    expect(read.explain('getState(id, "hp")', 15)?.doc.facts).toEqual([['기본 변수', '없음'], ['채팅', '예시 채팅'], ['지금 값', '7'], ['정한 곳', '1번째 메시지 · 스크립트']]);
+    expect(read.explain('getChatVar(id, "mp")', 17)?.doc.facts?.at(-1)).toEqual(['지금 값', '알 수 없음']);
+    expect(read.complete('getState(id, "")', 14, 'string', false)?.items.map((item) => [item.label, item.detail])).toEqual([['hp', '7']]);
   });
 
   it('marks a typo with its fix and an unsupported call, not a function the code defines', async () => {

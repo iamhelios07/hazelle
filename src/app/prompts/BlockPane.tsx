@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUp, GitBranch, X } from 'lucide-react';
-import type { Ref } from 'react';
+import { useMemo, type Ref } from 'react';
 import { ACTS, addOf, newOf } from '../common/acts';
 import { cbsLanguage } from '../common/code/cbs';
-import { cbsTrial } from '../common/code/Trial';
+import { useTrial } from '../common/code/Trial';
 import { withParticle } from '../common/particles';
 import { SLOT } from '../common/prompt-words';
 import { SHORTCUTS } from '../shortcuts';
@@ -12,8 +12,6 @@ import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, t
 import { CommandMenu } from './CommandMenu';
 import { RECENT_MAX, type Snippet } from './edits';
 
-const CBS = cbsLanguage();
-const TRIAL = cbsTrial(null);
 
 type Props = {
   block: Block;
@@ -47,6 +45,8 @@ type Props = {
 const CACHE_HELP = '이 블록까지 캐시로 저장해 다음 요청에서 요금을 아껴요.';
 
 export function BlockPane({ block, sort, index, count, toggles, authorNote, onChange, onRole, onRange, onCount, onTranslations, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onInsert, onNewToggle, textRef, nameRef }: Props) {
+  const trial = useTrial(null);
+  const cbs = useMemo(() => cbsLanguage({ variables: trial.variables }), [trial.variables]);
   const { title } = blockTitle(block);
   const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 입력' : `자동 입력 · ${SLOT[block.slot].name}`}`;
   const placeholder = block.kind === 'slot' ? SLOT[block.slot].name : firstLine(block.text) || '이름 붙이기';
@@ -113,9 +113,9 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         <MarkupArea
           ref={textRef}
           label="내용"
-          language={CBS}
+          language={cbs}
           expand={SHORTCUTS.bigEdit.keys}
-          aside={TRIAL}
+          aside={trial.cbs}
           value={block.text}
           placeholder={block.mark === 'globalNote' ? `비워 두면 카드에 '대화 뒤 지시문'이 있을 때만 보내요.` : '모델에게 보낼 내용'}
           onChange={(text) => onChange({ ...block, text })}
@@ -140,7 +140,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
       )}
       {block.kind === 'slot' && block.slot === 'authorNote' && authorNote !== null && (
         <Section title="기본 노트" level={3} help="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
-          <MarkupArea label="기본 노트" variant="field" language={CBS} expand={SHORTCUTS.bigEdit.keys} aside={TRIAL} value={authorNote} onChange={onAuthorNote} />
+          <MarkupArea label="기본 노트" variant="field" language={cbs} expand={SHORTCUTS.bigEdit.keys} aside={trial.cbs} value={authorNote} onChange={onAuthorNote} />
         </Section>
       )}
       {'wrapper' in block &&
@@ -161,7 +161,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
               </Button>
             }
           >
-            <MarkupArea label="감싸는 텍스트" variant="field" language={CBS} value={block.wrapper} onChange={(wrapper) => onChange({ ...block, wrapper })} />
+            <MarkupArea label="감싸는 텍스트" variant="field" language={cbs} value={block.wrapper} onChange={(wrapper) => onChange({ ...block, wrapper })} />
           </Section>
         ))}
       <SettingRow

@@ -3,7 +3,7 @@ import { nearest } from '../../../engine/edit-distance';
 import type { CodeCompletion, CodeDoc, CodeItem, CodeLanguage, CodeProblem } from '../../ui';
 import { withParticle } from '../particles';
 import { LUA_API, LUA_EVENTS, LUA_INTERNAL, LUA_UNSUPPORTED, type LuaFunction } from './luaApi';
-import { variableDoc, variableItems, type Defaults } from './variables';
+import { variableDoc, variableItems, type Variables } from './variables';
 
 const KEYWORDS = new Set(['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while']);
 const GLOBALS = ['tonumber', 'tostring', 'pairs', 'ipairs', 'type', 'pcall', 'xpcall', 'error', 'assert', 'print', 'select', 'next', 'setmetatable', 'getmetatable', 'rawget', 'rawset', 'rawequal', 'rawlen', 'collectgarbage'];
@@ -26,7 +26,10 @@ const SNIPPETS: [string, string][] = [
 const ENDS = new Set([...KEYWORDS].filter((keyword) => !SNIPPETS.some(([label]) => label.startsWith(keyword))));
 const API = new Map([...LUA_API, ...LUA_EVENTS].map((entry) => [entry.name, entry]));
 const KNOWN = new Set([...API.keys(), ...LUA_INTERNAL, ...LUA_UNSUPPORTED, ...GLOBALS, ...KEYWORDS, ...Object.keys(LIBRARY), 'require']);
-const VARIABLE_SLOT = /\b(?:getChatVar|setChatVar|setChatVarChanged|getState|setState|setStateChanged)\(\s*\w+\s*,\s*"([^"\n]*)$/;
+// getState and its kin keep a value under its name with `__` before it (prelude.lua).
+const VARIABLE_CALL = /\b(getChatVar|setChatVar|setChatVarChanged|getState|setState|setStateChanged)\(\s*\w+\s*,\s*"([^"\n]*)/;
+const VARIABLE_SLOT = new RegExp(`${VARIABLE_CALL.source}$`);
+const VARIABLE_NAME = new RegExp(`${VARIABLE_CALL.source}"`, 'g');
 
 const argsOf = (form: string) => form.slice(form.indexOf('(') + 1, form.lastIndexOf(')')).split(',').map((arg) => arg.trim()).filter(Boolean);
 
@@ -100,15 +103,17 @@ function lint(text: string): CodeProblem[] {
   return problems;
 }
 
-const writtenNames = (text: string) => [...text.matchAll(/\b(?:getChatVar|setChatVar|setChatVarChanged|getState|setState|setStateChanged)\(\s*\w+\s*,\s*"([^"\n]+)"/g)].map((found) => found[1]!);
+const storedPrefix = (call: string) => (call.includes('State') ? '__' : '');
+const writtenNames = (text: string, prefix: string) => [...text.matchAll(VARIABLE_NAME)].flatMap(([, call, name]) => (name && storedPrefix(call!) === prefix ? [name] : []));
 
-function complete(text: string, at: number, place: 'code' | 'string' | 'comment', explicit: boolean, defaults: Defaults): CodeCompletion | null {
+function complete(text: string, at: number, place: 'code' | 'string' | 'comment', explicit: boolean, variables: Variables): CodeCompletion | null {
   const before = text.slice(0, at);
   const slot = VARIABLE_SLOT.exec(before);
   if (slot && place === 'string') {
-    const from = at - slot[1]!.length;
+    const from = at - slot[2]!.length;
+    const prefix = storedPrefix(slot[1]!);
     // The name being typed is no name the code has yet.
-    return { from, items: variableItems(defaults, writtenNames(text.slice(0, from) + text.slice(at))), validFor: /^[^"\n]*$/ };
+    return { from, items: variableItems(variables, writtenNames(text.slice(0, from) + text.slice(at), prefix), prefix), validFor: /^[^"\n]*$/ };
   }
   if (place !== 'code') return null;
   const member = /\b(string|table|math|json|os)\.(\w*)$/.exec(before);
@@ -136,13 +141,14 @@ function complete(text: string, at: number, place: 'code' | 'string' | 'comment'
   return { from, items, validFor: /^\w*$/ };
 }
 
-function explain(text: string, at: number, defaults: Defaults) {
+function explain(text: string, at: number, variables: Variables) {
   const line = text.lastIndexOf('\n', at - 1) + 1;
   const end = text.indexOf('\n', at);
   const row = text.slice(line, end < 0 ? text.length : end);
-  for (const found of row.matchAll(/\b(?:getChatVar|setChatVar|setChatVarChanged|getState|setState|setStateChanged)\(\s*\w+\s*,\s*"([^"\n]*)"/g)) {
-    const from = line + found.index + found[0].length - found[1]!.length - 1;
-    if (at >= from && at <= from + found[1]!.length + 2) return { from, to: from + found[1]!.length + 2, doc: variableDoc(found[1]!, defaults) };
+  for (const found of row.matchAll(VARIABLE_NAME)) {
+    const [whole, call, name] = found as unknown as [string, string, string];
+    const from = line + found.index + whole.length - name.length - 1;
+    if (at >= from && at <= from + name.length + 2) return { from, to: from + name.length + 2, doc: variableDoc(name, variables, storedPrefix(call) + name) };
   }
   let from = at;
   let to = at;
@@ -152,8 +158,8 @@ function explain(text: string, at: number, defaults: Defaults) {
   return entry && !/[.:]$/.test(text.slice(0, from)) ? { from, to, doc: docOf(entry) } : null;
 }
 
-// check: the Lua VM's syntax check of a draft. defaults: the character's 기본 변수, offered and explained by name.
-export function luaLanguage(check: (code: string) => Promise<SyntaxProblem | null>, defaults: Defaults = []): CodeLanguage {
+// check: the Lua VM's syntax check of a draft. variables: offered and explained by name.
+export function luaLanguage(check: (code: string) => Promise<SyntaxProblem | null>, variables: Variables = { defaults: [], chat: null }): CodeLanguage {
   return {
     syntax: 'lua',
     lint: async (text) => {
@@ -163,7 +169,7 @@ export function luaLanguage(check: (code: string) => Promise<SyntaxProblem | nul
       const [from, to] = syntax.line === null ? [0, 0] : lineRange(text, syntax.line);
       return [{ from, to, severity: 'error', message: syntaxMessage(syntax.message) }, ...problems];
     },
-    complete: (text, at, place, explicit) => complete(text, at, place, explicit, defaults),
-    explain: (text, at) => explain(text, at, defaults),
+    complete: (text, at, place, explicit) => complete(text, at, place, explicit, variables),
+    explain: (text, at) => explain(text, at, variables),
   };
 }

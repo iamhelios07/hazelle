@@ -340,7 +340,7 @@ describe('steps', () => {
     expect(traced(text, { variables: new Map([['a', '30']]) })).toEqual([
       { written: '<user>', depth: 0, result: 'jin' },
       { written: '{{#when::{{getvar::a}}::>=::50}}yes{{:else}}no{{/when}}', head: '{{#when::{{getvar::a}}::>=::50}}', depth: 0, result: 'no', condition: ['30', '>=', '50'], held: false },
-      { written: '{{getvar::a}}', depth: 1, result: '30' },
+      { written: '{{getvar::a}}', depth: 1, result: '30', variable: 'a' },
       { written: '{{nope}}', depth: 0, result: '{{nope}}', kept: 'unknown' },
       { written: '{{bkspc}}', depth: 0, result: '', erased: true },
     ]);

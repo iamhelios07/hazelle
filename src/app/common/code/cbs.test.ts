@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { InspectedVariable } from '../../../engine/render';
 import { cbsLanguage, formTemplate } from './cbs';
 import { COMMANDS } from './cbsCommands';
 
-const language = cbsLanguage({ variables: [['호감도', '30']] });
+const language = cbsLanguage({ variables: { defaults: [['호감도', '30']], chat: null } });
 const spans = (text: string) => (language.syntax as (text: string) => { from: number; to: number; kind: string }[])(text).map(({ from, to, kind }) => [text.slice(from, to), kind]);
 const problems = (text: string, of = language) => (of.lint(text) as { from: number; to: number; message: string; fix?: { insert: string } }[]).map(({ from, to, message, fix }) => [text.slice(from, to), message, fix?.insert]);
 
@@ -65,6 +66,14 @@ describe('cbsLanguage', () => {
     expect(language.explain(text, 12)?.doc).toEqual({ form: '호감도', text: '채팅 변수예요.', facts: [['기본 변수', '30']] });
     expect(language.explain(text, 3)?.doc.form).toBe('{{getvar::이름}}');
     expect(language.explain(text, 20)?.doc.form).toBe('{{#when::조건}}맞을 때 글{{:else}}아닐 때 글{{/when}}');
+  });
+
+  it('explains and offers a variable with the value 시험해 보기 read from a chat, and where it was set', () => {
+    const set: InspectedVariable = { name: '호감도', nameTruncated: false, last: { writer: { kind: 'cbs', version: 'v', message: 'm', index: 2, stage: 'output' }, value: '45', truncated: false }, history: [], omitted: 0 };
+    const read = cbsLanguage({ variables: { defaults: [['호감도', '30']], chat: { label: '예시 채팅', values: new Map([['호감도', set], ['날씨', { ...set, name: '날씨', last: { ...set.last, value: '비' } }]]), partial: false } } });
+    expect(read.explain('{{getvar::호감도}}', 12)?.doc.facts).toEqual([['기본 변수', '30'], ['채팅', '예시 채팅'], ['지금 값', '45'], ['정한 곳', '3번째 메시지 · 출력 CBS']]);
+    expect(read.explain('{{getvar::없음}}', 12)?.doc.facts).toEqual([['기본 변수', '없음'], ['채팅', '예시 채팅'], ['지금 값', '없음']]);
+    expect(read.complete('{{getvar::}}', 10, 'code', false)?.items.map((item) => [item.label, item.detail])).toEqual([['호감도', '45'], ['날씨', '비']]);
   });
 
   it('turns every command form into a snippet whose stops count from 1', () => {

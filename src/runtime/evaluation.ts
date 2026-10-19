@@ -122,7 +122,7 @@ export class Evaluation {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'state', prefix }, signal) as Promise<ToolState | RanAway>;
   }
 
-  variables(lane: Lane<'view'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<VariableInspection> {
+  variables(lane: Lane<'view' | 'trial'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<VariableInspection> {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'variables', prefix }, signal) as Promise<VariableInspection>;
   }
 

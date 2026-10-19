@@ -1,34 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { VARIABLE_LIMITS, type InspectedVariable, type VariableInspection, type VariableWriter } from '../../engine/render';
+import { VARIABLE_LIMITS, type InspectedVariable, type VariableInspection } from '../../engine/render';
 import { shown } from '../../model/chat';
 import { inspectToggles } from '../../runtime/chat-context';
 import { setVariableByHand } from '../../runtime/chat-log';
 import type { Sending } from '../../runtime/turn-context';
+import { writerName } from '../common/code/variables';
 import { shownValue } from '../common/HookDetail';
 import { useSearch } from '../common/useSearch';
 import { UNKNOWN } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Empty, List, ListItem, Row, Section, Stack, Text, TextField } from '../ui';
-
-const SCRIPT_STAGE = { input: '입력', output: '출력', greeting: '첫 메시지', staged: '대기 중인 메시지' } as const;
-
-function writerName(writer: VariableWriter): string {
-  switch (writer.kind) {
-    case 'card':
-      return '캐릭터 기본값';
-    case 'chat':
-      return '채팅에 저장된 값';
-    case 'pending':
-      return '이번 전송';
-    case 'script':
-      return `${writer.index + 1}번째 메시지 · 스크립트`;
-    case 'cbs':
-      return `${writer.index + 1}번째 메시지 · ${SCRIPT_STAGE[writer.stage]} CBS`;
-    case 'hand':
-      return `${writer.index + 1}번째 메시지 · 직접 수정`;
-  }
-}
 
 // version: the last message's shown one, where the edit lands; undefined when the chat has no message. A value 점검
 // shows cut is not edited: its draft would save the cut.

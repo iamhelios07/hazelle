@@ -11,7 +11,7 @@ import { useToast } from '../toast';
 import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeAside, type CodeLanguage } from '../ui';
 import { ACTS, addOf } from './acts';
 import { cbsLanguage } from './code/cbs';
-import { cbsTrial } from './code/Trial';
+import { useTrial } from './code/Trial';
 import type { Defaults } from './code/variables';
 import { NameDialog } from './NameDialog';
 import { SLOT } from './prompt-words';
@@ -75,8 +75,8 @@ type Naming = { folder: LoreFolder | null; name: string };
 // folders: the owner's loreFolders as stored now. variables: a character's 기본 변수, offered in an entry's text.
 export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; folders: LoreFolder[]; variables?: Defaults }) {
   const store = useStore();
-  const language = useMemo(() => cbsLanguage({ variables }), [variables]);
-  const trial = useMemo(() => cbsTrial(owner), [owner.kind, owner.id]);
+  const trial = useTrial(owner, variables);
+  const language = useMemo(() => cbsLanguage({ variables: trial.variables }), [trial.variables]);
   const toast = useToast();
   const entries = useChildren('lore', owner.id);
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
@@ -110,7 +110,7 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
     );
   }
 
-  const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} language={language} trial={trial} startOpen={entry.id === added} />);
+  const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} language={language} trial={trial.cbs} startOpen={entry.id === added} />);
   const [loose, ...grouped] = groups;
   const search = useSearch(entries, '로어북 검색', ({ value }) => [loreName(value.name), ...value.keys]);
   const listed = search.words ? (

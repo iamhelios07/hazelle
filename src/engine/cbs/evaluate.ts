@@ -97,6 +97,8 @@ export type CbsStep = {
   // #when, #if, #ifpure and {#if: whether the condition held, and #when's condition as it evaluated, argument by argument.
   held?: boolean;
   condition?: string[];
+  // {{getvar}}: the name it read, as evaluated, so 시험해 보기 can say where the chat's value came from.
+  variable?: string;
 };
 export type CbsTrace = { steps: CbsStep[]; omitted: number };
 
@@ -196,6 +198,8 @@ export function blockHead(content: string): { name: string; rest: string } | nul
   return match && { name: normalize(match[1]!), rest: match[2]! };
 }
 
+const GETVAR = handlerFor('getvar');
+
 // The inner tags are evaluated first and the tag's name and arguments read from their output, which is how
 // {{spread}} hands a tag its arguments.
 function evaluateTag(tag: Tag, frame: Frame, step: CbsStep | null): string | Erase {
@@ -217,6 +221,7 @@ function evaluateTag(tag: Tag, frame: Frame, step: CbsStep | null): string | Era
   if (args.length < handler.min) return kept('args');
   try {
     const out = handler.run(args, env(frame, frame.prefix + tag.at));
+    if (step && handler === GETVAR) step.variable = args[0]!;
     if (typeof out === 'string' && isErrorText(out)) problems?.push({ kind: 'error-text', text: out });
     return out ?? kept('args');
   } catch (error) {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CbsStep } from '../../../engine/cbs/evaluate';
 import type { ChatScope } from '../../../engine/render';
 import type { Event, ScriptUnit } from '../../../engine/script-api';
@@ -12,6 +12,7 @@ import { runaway } from '../failure';
 import { HookDetail } from '../HookDetail';
 import { LUA_EVENTS } from './luaApi';
 import { SAMPLE, SAMPLE_NOTE } from './sample';
+import { chatVariable, writerName, type ChatVariables, type Defaults, type Variables } from './variables';
 
 const LABEL = '시험해 보기';
 // The lane name the sample runs on, which no chat id takes.
@@ -22,9 +23,23 @@ const WAIT_MS = 400;
 // otherwise.
 type Owner = LoreOwner | null;
 
-export const cbsTrial = (owner: Owner) => (text: string): CodeAside => ({ label: LABEL, body: (reveal) => <CbsTrial text={text} owner={owner} reveal={reveal} /> });
+// One editor's 시험해 보기: the chat it reads, kept while the editor stays mounted, and that chat's variables once a
+// panel has read them, which the editor's code language explains names from.
+type TrialChat = { owner: Owner; chat: string | null; choose: (chat: string | null) => void; read: (chat: ChatVariables | null) => void; variables: Variables };
 type LuaUnit = Extract<ScriptUnit, { kind: 'lua' }>;
-export const luaTrial = (unit: LuaUnit, owner: Owner) => (code: string): CodeAside => ({ label: LABEL, body: () => <LuaTrial unit={{ ...unit, code }} owner={owner} /> });
+
+const NONE: Defaults = [];
+
+// defaults: the character's 기본 변수.
+export function useTrial(owner: Owner, defaults: Defaults = NONE) {
+  const [chat, choose] = useState<string | null>(null);
+  const [read, setRead] = useState<ChatVariables | null>(null);
+  const variables = useMemo(() => ({ defaults, chat: read }), [defaults, read]);
+  const trial = useMemo((): TrialChat => ({ owner, chat, choose, read: setRead, variables }), [owner?.kind, owner?.id, chat, variables]);
+  const cbs = useMemo(() => (text: string): CodeAside => ({ label: LABEL, body: (reveal) => <CbsTrial text={text} trial={trial} reveal={reveal} /> }), [trial]);
+  const lua = (unit: LuaUnit) => (code: string): CodeAside => ({ label: LABEL, body: () => <LuaTrial unit={{ ...unit, code }} trial={trial} /> });
+  return { variables, cbs, lua };
+}
 
 // A CBS text's result as the reader sees it; null: its commands ran away and were stopped.
 export function CbsResult({ result }: { result: string | null }) {
@@ -36,8 +51,10 @@ export function CbsResult({ result }: { result: string | null }) {
   );
 }
 
+const useTrialChats = (owner: Owner) => useChats().filter((summary) => (owner?.kind === 'character' ? summary.chat.character === owner.id : owner?.kind === 'chat' ? summary.id === owner.id : true));
+
 function TrialChats({ owner, chat, onChange }: { owner: Owner; chat: string | null; onChange: (chat: string | null) => void }) {
-  const chats = useChats().filter((summary) => (owner?.kind === 'character' ? summary.chat.character === owner.id : owner?.kind === 'chat' ? summary.id === owner.id : true));
+  const chats = useTrialChats(owner);
   const where = [{ value: 'sample', label: '예시 채팅' }, ...(chats.length ? [{ value: 'mine', label: '내 채팅' }] : [])];
   return (
     <Stack gap="related">
@@ -54,9 +71,12 @@ function TrialChats({ owner, chat, onChange }: { owner: Owner; chat: string | nu
   );
 }
 
-// The chat a draft runs in: the sample, or the chosen chat as it stood when chosen; null while it is read.
-function useTrialScope(chat: string | null): ChatScope | 'failed' | null {
+// The chat a draft runs in: the sample, or the chosen chat as it stood when chosen; null while it is read. Its
+// variables, as 점검's 변수 tab reads them, go to the editor while the panel is open; a failed read leaves it the
+// 기본 변수 alone.
+function useTrialScope({ owner, chat, read: readVariables }: TrialChat): ChatScope | 'failed' | null {
   const session = useSession();
+  const label = useTrialChats(owner).find((summary) => summary.id === chat)?.title ?? '예시 채팅';
   const [read, setRead] = useState<{ chat: string; scope: ChatScope | 'failed' } | null>(null);
   useEffect(() => {
     if (chat === null) return;
@@ -65,15 +85,31 @@ function useTrialScope(chat: string | null): ChatScope | 'failed' | null {
     chatNow(session, chat, stop.signal).then((scope) => done(scope ?? 'failed'), () => done('failed'));
     return () => stop.abort();
   }, [session, chat]);
-  return chat === null ? SAMPLE : read?.chat === chat ? read.scope : null;
+  const scope = chat === null ? SAMPLE : read?.chat === chat ? read.scope : null;
+  useEffect(() => {
+    if (scope === null || scope === 'failed') return;
+    const lane = { asker: 'trial', chat: chat ?? SAMPLE_CHAT, tool: 'variables' } as const;
+    const stop = new AbortController();
+    session.store.evaluation.variables(lane, scope, '', stop.signal).then((inspection) => {
+      if (stop.signal.aborted) return;
+      const kept = inspection.variables.filter((variable) => !variable.nameTruncated);
+      readVariables({ label, values: new Map(kept.map((variable) => [variable.name, variable])), partial: inspection.omitted > 0 || kept.length < inspection.variables.length });
+    }, () => {});
+    return () => {
+      stop.abort();
+      readVariables(null);
+      session.store.evaluation.forget(lane);
+    };
+  }, [session, scope, label]);
+  return scope;
 }
 
 type Reveal = (at: [number, number]) => void;
 
-function CbsTrial({ text, owner, reveal }: { text: string; owner: Owner; reveal: Reveal }) {
+function CbsTrial({ text, trial, reveal }: { text: string; trial: TrialChat; reveal: Reveal }) {
   const { store } = useSession();
-  const [chat, setChat] = useState<string | null>(null);
-  const scope = useTrialScope(chat);
+  const { chat } = trial;
+  const scope = useTrialScope(trial);
   const [read, setRead] = useState<{ scope: ChatScope; text: string; result: TrialRead | null | 'failed' } | null>(null);
   useEffect(() => {
     if (scope === null || scope === 'failed') return;
@@ -92,7 +128,7 @@ function CbsTrial({ text, owner, reveal }: { text: string; owner: Owner; reveal:
   const shown = read?.scope === scope ? read : undefined;
   return (
     <Stack gap="related">
-      <TrialChats owner={owner} chat={chat} onChange={setChat} />
+      <TrialChats owner={trial.owner} chat={chat} onChange={trial.choose} />
       {scope === 'failed' ? (
         <Text variant="note">채팅을 열지 못했어요.</Text>
       ) : shown === undefined ? (
@@ -104,7 +140,7 @@ function CbsTrial({ text, owner, reveal }: { text: string; owner: Owner; reveal:
       ) : (
         <>
           <CbsResult result={shown.result.read} />
-          <CbsSteps text={shown.text} read={shown.result} reveal={reveal} stale={shown.text !== text} />
+          <CbsSteps text={shown.text} read={shown.result} variables={trial.variables} reveal={reveal} stale={shown.text !== text} />
         </>
       )}
     </Stack>
@@ -112,14 +148,14 @@ function CbsTrial({ text, owner, reveal }: { text: string; owner: Owner; reveal:
 }
 
 // Each tag's and block's result in the order they ran, as of the text they were read from.
-function CbsSteps({ text, read: { steps, omitted }, reveal, stale }: { text: string; read: TrialRead; reveal: Reveal; stale: boolean }) {
+function CbsSteps({ text, read: { steps, omitted }, variables, reveal, stale }: { text: string; read: TrialRead; variables: Variables; reveal: Reveal; stale: boolean }) {
   if (steps.length === 0) return null;
   // The editor reads \r\n as one line break.
   const inEditor = (at: number) => at - (text.slice(0, at).split('\r\n').length - 1);
   return (
     <>
       <Text variant="note">{`단계 ${steps.length + omitted}개`}</Text>
-      <StepList label="단계" steps={steps.map((step) => shownStep(text, step))} onPick={(index) => !stale && reveal([inEditor(steps[index]!.at), inEditor(steps[index]!.end)])} />
+      <StepList label="단계" steps={steps.map((step) => shownStep(text, step, variables))} onPick={(index) => !stale && reveal([inEditor(steps[index]!.at), inEditor(steps[index]!.end)])} />
       {omitted > 0 && <Text variant="note">{`단계가 많아서 뒤의 ${omitted}개는 빠졌어요.`}</Text>}
     </>
   );
@@ -127,11 +163,17 @@ function CbsSteps({ text, read: { steps, omitted }, reveal, stale }: { text: str
 
 const KEPT = { unknown: '모르는 명령어라 쓴 그대로 남아요.', unsupported: '헤이젤이 지원하지 않는 명령어라 쓴 그대로 남아요.', args: '인자가 모자라거나 읽을 수 없어서 쓴 그대로 남아요.' } as const;
 
-function shownStep(text: string, { at, end, headEnd, depth, result, kept, erased, held, condition }: CbsStep): StepRow {
+// A {{getvar}} says where the chat's value came from: a draft read after the chat writes no variable.
+function shownStep(text: string, { at, end, headEnd, depth, result, kept, erased, held, condition, variable }: CbsStep, variables: Variables): StepRow {
   const source = text.slice(at, headEnd ?? end);
   // Not a warning for args: a wrapper's {{slot}} stays as written on purpose.
   if (kept) return { source, result, depth, note: KEPT[kept], ...(kept !== 'args' && { tone: 'warn' as const }) };
   if (erased) return { source, result, depth, note: '앞에 쓴 글을 지워요.' };
+  if (variable !== undefined) {
+    const found = chatVariable(variables, variable);
+    if (found === undefined) return { source, result, depth };
+    return { source, result, depth, note: found ? `정한 곳: ${writerName(found.last.writer)}` : '이 채팅에 없는 변수예요.' };
+  }
   if (held === undefined) return { source, result, depth };
   const verdict = held ? '맞아요' : '안 맞아요';
   return { source, result, depth, note: condition ? `조건 ${condition.join(' ')} → ${verdict}` : `조건이 ${verdict}`, tone: 'branch' };
@@ -144,10 +186,10 @@ const EVENT_OPTIONS = LUA_EVENTS.flatMap(({ name, text }) => (isTrialEvent(name)
 
 type Ran = { code: string; event: TrialEvent; trial: Trial | 'failed' };
 
-function LuaTrial({ unit, owner }: { unit: LuaUnit; owner: Owner }) {
+function LuaTrial({ unit, trial }: { unit: LuaUnit; trial: TrialChat }) {
   const { scripts } = useSession();
-  const [chat, setChat] = useState<string | null>(null);
-  const scope = useTrialScope(chat);
+  const { chat } = trial;
+  const scope = useTrialScope(trial);
   const [event, setEvent] = useState<TrialEvent>('onOutput');
   const [ran, setRan] = useState<Ran | 'running' | null>(null);
   const running = useRef<AbortController | null>(null);
@@ -169,7 +211,7 @@ function LuaTrial({ unit, owner }: { unit: LuaUnit; owner: Owner }) {
   };
   return (
     <Stack gap="related">
-      <TrialChats owner={owner} chat={chat} onChange={reset(setChat)} />
+      <TrialChats owner={trial.owner} chat={chat} onChange={reset(trial.choose)} />
       <ChoiceGroup label="실행할 때" layout="menu" options={EVENT_OPTIONS} value={event} onChange={reset(setEvent)} />
       {scope === 'failed' ? (
         <Text variant="note">채팅을 열지 못했어요.</Text>

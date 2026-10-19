@@ -11,7 +11,7 @@ import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeLanguage } from '../ui';
 import { cbsLanguage } from './code/cbs';
 import { luaLanguage } from './code/lua';
-import { luaTrial } from './code/Trial';
+import { useTrial } from './code/Trial';
 import type { Defaults } from './code/variables';
 import { ACTS, addOf } from './acts';
 import { withParticle } from './particles';
@@ -34,8 +34,9 @@ const OFF = '꺼짐';
 export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { owner: PackOwner; pack: Pack; drill: boolean; status?: readonly string[]; variables?: Defaults }) {
   const store = useStore();
   const { scripts } = useSession();
-  const lua = useMemo(() => luaLanguage((code) => scripts.check(code), variables), [scripts, variables]);
-  const replacement = useMemo(() => cbsLanguage({ variables, placeholder: 'data' }), [variables]);
+  const trial = useTrial(owner, variables);
+  const lua = useMemo(() => luaLanguage((code) => scripts.check(code), trial.variables), [scripts, trial.variables]);
+  const replacement = useMemo(() => cbsLanguage({ variables: trial.variables, placeholder: 'data' }), [trial.variables]);
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   // Lua code typed and not applied yet, by script; it goes when the editor does.
@@ -64,7 +65,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
     const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null) };
     if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={search.words !== ''} language={replacement} />;
     const trigger = pack.triggers[place]!;
-    return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} language={lua} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
+    return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} language={lua} trial={trial.lua} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
   };
 
   const search = useSearch(
@@ -249,8 +250,8 @@ function useTried(owner: PackOwner, script: RegexScript, text: string) {
 }
 
 // Its code is stored only on 적용, never as it is typed, since a chat beside it runs what is stored.
-function LuaItem(props: ItemProps & { trigger: Lua; language: CodeLanguage; draft: string | null; onDraft: (code: string) => void; onApplied: (code: string) => void }) {
-  const { owner, place, trigger, language, draft, onDraft, onApplied } = props;
+function LuaItem(props: ItemProps & { trigger: Lua; language: CodeLanguage; trial: ReturnType<typeof useTrial>['lua']; draft: string | null; onDraft: (code: string) => void; onApplied: (code: string) => void }) {
+  const { owner, place, trigger, language, trial, draft, onDraft, onApplied } = props;
   const store = useStore();
   const save = useAutosave<Lua>(`script:${owner.id}:${trigger.id}`, (patch) => editTrigger(store, owner, trigger.id, patch));
   const shown: Lua = { ...trigger, ...save.unsaved };
@@ -267,7 +268,7 @@ function LuaItem(props: ItemProps & { trigger: Lua; language: CodeLanguage; draf
   return (
     <Item {...props} title={name} tag={tag}>
       <TextField label="이름" value={shown.name} onChange={(value) => save.change({ name: value })} />
-      <TextField label="코드" kind="key" lines={20} expand={SHORTCUTS.bigEdit.keys} language={language} aside={luaTrial({ ...trigger, owner }, owner)} value={code} onChange={onDraft} />
+      <TextField label="코드" kind="key" lines={20} expand={SHORTCUTS.bigEdit.keys} language={language} aside={trial({ ...trigger, owner })} value={code} onChange={onDraft} />
       <Row kind="actions">
         <Button variant="primary" size="sm" disabled={!pending} onClick={() => void apply()}>
           적용
