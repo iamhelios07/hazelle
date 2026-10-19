@@ -31,65 +31,8 @@
   transition: transform var(--duration-fast);
 }
 
-[aria-expanded='true'] > .chevron {
+.toggle[aria-expanded='true'] .chevron {
   transform: rotate(90deg);
-}
-
-/* The row variant: a box like SettingGroup's, its head a row of the same inset, the rows opened under it ruled
-   like a group's. The fill under the pointer is the box's whole width, so the head reads as one pressable row. */
-.box {
-  composes: box from '../foundation/surface.module.css';
-  container-type: inline-size;
-  display: flex;
-  flex-direction: column;
-}
-
-.rowHead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  min-height: var(--row-min-height);
-  padding: var(--space-12) var(--space-16);
-  border-radius: var(--radius-lg);
-  text-align: start;
-}
-
-.rowHead[aria-expanded='true'] {
-  border-end-start-radius: 0;
-  border-end-end-radius: 0;
-}
-
-.rowHead:hover {
-  background: var(--color-surface-hover);
-}
-
-.rowLabel {
-  composes: fieldLabel from '../foundation/type.module.css';
-  flex-grow: 1;
-  min-width: 0;
-}
-
-.meta {
-  color: var(--color-text-faint);
-  font-size: var(--text-sm);
-}
-
-.rowHead > .chevron {
-  color: var(--color-text-muted);
-}
-
-/* Given to the head and the rows' holder (Disclosure.tsx), so the line between them is the group's. */
-.ruled {
-  composes: ruled from '../foundation/surface.module.css';
-}
-
-.rows {
-  display: flex;
-  flex-direction: column;
-}
-
-.rows[hidden] {
-  display: none;
 }
 
 .body {
