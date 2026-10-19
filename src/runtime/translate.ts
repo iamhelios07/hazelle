@@ -98,7 +98,8 @@ function translated(call: Stream['call'], answer: Reply, text: string, spans: re
   const receipt = receiptOf(call, answer);
   if (answer.state === 'failed' || !text.trim()) return { ok: false, failure: { kind: 'failed', receipt } };
   const restored = restore(text, spans);
-  if (restored.missing) return { ok: false, failure: { kind: 'protected-lost', count: restored.missing } };
+  // A translation cut at its length lost its tail, the tokens in it too: it is saved as 번역 잘림, as any cut one.
+  if (restored.missing && answer.cut === null) return { ok: false, failure: { kind: 'protected-lost', count: restored.missing } };
   return { ok: true, translation: { text: restored.text.trim(), receipt, at: Date.now() }, language };
 }
 
