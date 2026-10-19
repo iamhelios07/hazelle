@@ -423,7 +423,8 @@ export class Lua {
     set('getDescription', (run) => run.snapshot.character.description);
     set('getCharacterFirstMessage', (run) => run.snapshot.character.firstMessage);
     set('getPersonaName', (run) => run.snapshot.persona.name);
-    set('getPersonaDescription', (run) => run.snapshot.persona.description);
+    // Risu evaluates the persona's CBS here and not the character description's.
+    set('getPersonaDescription', (run) => cbs(run, run.snapshot.persona.description));
     set('getAuthorsNote', (run) => run.snapshot.note);
 
     act('setChat', (run, index: number, value: unknown) => {

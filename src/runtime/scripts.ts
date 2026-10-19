@@ -510,7 +510,9 @@ export class Scripts {
       let text = reply.text;
       let before = reply.before ?? [];
       if (scripts.length) {
-        const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editOutput', value: text, meta: { index: -1 } } }, { ...scope, pending: before }, null);
+        // The reply stands right after the scope, a version made anew or continued at its message's place.
+        const index = scope.messages.length - (scope.greeting === null ? 0 : 1);
+        const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editOutput', value: text, meta: { index } } }, { ...scope, pending: before }, null);
         before = [...before, ...outcome.writes];
         if (typeof outcome.value === 'string') text = outcome.value;
       }

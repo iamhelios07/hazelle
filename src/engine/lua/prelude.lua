@@ -48,8 +48,15 @@ function log(value)
     logMain(json.encode(value))
 end
 
+-- Risu's setBackgroundEmbedding answers at once, so bots call it from functions that are not async and never await
+-- it; here the save waits on the user's answer. Where waiting is impossible the save still goes, answering nil.
+-- Not a promise like simpleLLM: Risu bots read its answer as a boolean.
 function setBackgroundEmbedding(id, data)
-    return setBackgroundEmbeddingMain(id, data):await()
+    local saving = setBackgroundEmbeddingMain(id, data)
+    if coroutine.isyieldable() then
+        return saving:await()
+    end
+    return nil
 end
 
 function LLM(id, prompt, useMultimodal, options)
