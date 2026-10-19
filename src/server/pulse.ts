@@ -81,10 +81,6 @@ async function confirm(db: Db, type: string, model: string): Promise<Named> {
 }
 
 export async function openPulse(db: Db, clock: () => number = Date.now): Promise<Pulse> {
-  const starts = (await db.prepare('SELECT starts FROM pulse_start').first<number>('starts'))!;
-  // Ruling tripwire (user, 2026-10-18): every label before the start is ignored, so anyone who objects to the notice can
-  // switch off before a single count. Delete this check once the date has passed.
-  const counting = (now: number) => now >= starts;
   let week = { from: -1, active: group(), roles: new Map<string, Group>(), models: new Map<string, Group>() };
   const thisWeek = (now: number) => {
     const from = weekOf(now);
@@ -126,13 +122,10 @@ export async function openPulse(db: Db, clock: () => number = Date.now): Promise
   const weeks = new Map<number, Promise<PulseWeek | null>>();
   return {
     seen: async (account) => {
-      const now = clock();
-      if (!counting(now)) return;
-      const { from, active } = thisWeek(now);
+      const { from, active } = thisWeek(clock());
       if (grown(active, account, PULSE_FLOORS.board)) await db.prepare('INSERT INTO pulse_week (week, people) VALUES (?, ?) ON CONFLICT DO UPDATE SET people = max(people, excluded.people)').bind(from, active.stored).run();
     },
     call: async (account, { role, type, model }) => {
-      if (!counting(clock())) return;
       const confirmed = await confirm(db, type, model);
       const { key, name } = confirmed;
       // Read after the await, beside the sets it changes: two calls across a week's start never swap the week back.
@@ -160,7 +153,7 @@ export async function openPulse(db: Db, clock: () => number = Date.now): Promise
     answer: () => {
       const now = clock();
       if (!memo || now - memo.at >= MEMO_MS) {
-        const made = { at: now, answer: (async (): Promise<PulseAnswer> => ({ starts, at: now, board: counting(now) ? await board(db, starts, now) : null }))() };
+        const made = { at: now, answer: (async (): Promise<PulseAnswer> => ({ at: now, board: await board(db, now) }))() };
         made.answer.catch(() => {
           if (memo === made) memo = null;
         });
@@ -251,14 +244,14 @@ async function weekRanking(db: Db, week: number): Promise<{ people: number; rank
   return { people, ranking };
 }
 
-async function board(db: Db, starts: number, now: number): Promise<PulseBoard | null> {
+async function board(db: Db, now: number): Promise<PulseBoard | null> {
   const from = weekOf(now);
   const current = await weekRanking(db, from);
   if (!current) return null;
   const [day, dayBefore, lastWeek, weeks] = await Promise.all([
     chatDay(db, now),
     // Its oldest hour is the oldest forgetPulseHours keeps.
-    hourOf(now) - 2 * DAY_MS < starts ? null : chatDay(db, now - DAY_MS),
+    chatDay(db, now - DAY_MS),
     weekRanking(db, from - WEEK_MS),
     db.prepare('SELECT week FROM pulse_week WHERE week < ? ORDER BY week DESC').bind(from).all<{ week: number }>(),
   ]);

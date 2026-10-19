@@ -14,11 +14,9 @@ export function providerName(type: string): string | null {
 
 // The server counts its week from Monday 00:00 KST, so the page tells every time in KST whatever the viewer's zone.
 const KST = 'Asia/Seoul';
-const startFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, month: 'long', day: 'numeric', weekday: 'short', hour: 'numeric' });
 const hourFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, hour: 'numeric' });
 const clockFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, hour: 'numeric', minute: '2-digit' });
 const dayFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: KST, month: 'long', day: 'numeric' });
-export const startsText = (at: number) => startFormat.format(at);
 export const hourText = (at: number) => hourFormat.format(at);
 export const clockText = (at: number) => clockFormat.format(at);
 export const weekText = (from: number) => `${dayFormat.format(from)} 주`;

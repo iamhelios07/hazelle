@@ -8,7 +8,7 @@ import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
 import { PULSE } from '../common/words';
 import { Bars, Brand, Callout, ChoiceGroup, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tab, Tabs, Text } from '../ui';
-import { clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, startsText, weekText } from './board';
+import { clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, weekText } from './board';
 
 type View = { kind: 'loading' } | { kind: 'failed'; failure: string } | { kind: 'read'; answer: PulseAnswer };
 
@@ -57,8 +57,6 @@ function PulsePage() {
 }
 
 function Answer({ answer }: { answer: PulseAnswer }) {
-  // Ruled (design §6.12): counting starts a day after the notice; this branch goes once that date has passed.
-  if (answer.at < answer.starts) return <Empty variant="section">{startsText(answer.starts)}부터 집계를 시작해요.</Empty>;
   if (!answer.board) return <Empty variant="section">이번 주 집계에 참여한 사람이 {PULSE_FLOORS.board}명이 되면 보여 드려요.</Empty>;
   return <Board board={answer.board} at={answer.at} />;
 }

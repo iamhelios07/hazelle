@@ -69,9 +69,8 @@ export type PulseBoard = {
   weeks: number[];
 };
 
-// starts: when counting starts (labels before it are ignored). board: null before then, or while fewer than
-// PULSE_FLOORS.board people share this week. at: when this answer was made; the server refreshes it every few minutes.
-export type PulseAnswer = { starts: number; at: number; board: PulseBoard | null };
+// board: null while fewer than PULSE_FLOORS.board people share this week. at: when this answer was made; the server refreshes it every few minutes.
+export type PulseAnswer = { at: number; board: PulseBoard | null };
 
 // An earlier week (GET /api/pulse/weeks/:from), every role ranked by that week's people, 대화 too: its replies are kept
 // only 48 hours, so its share is people over the role's people, not the board's replies. before: the week before it.

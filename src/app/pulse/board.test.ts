@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { DIRECT_TYPE } from '../../contracts/pulse';
-import { hourDetail, percent, providerName, rankRows, startsText, weekText } from './board';
+import { hourDetail, percent, providerName, rankRows, weekText } from './board';
 
 it('names a provider by its connection type, 직접 연결 for the generic one, and none for a type this build does not list', () => {
   expect(providerName('openrouter')).toBe('OpenRouter');
@@ -42,8 +42,7 @@ it('marks a move against the earlier places counted by the same rules, and nothi
   expect(rankRows(ranking, null, false, false).some((each) => each.move)).toBe(false);
 });
 
-it('tells the start in KST, a week by its Monday, and an hour by its replies first, then the roles it had', () => {
-  expect(startsText(Date.UTC(2026, 9, 20, 0))).toBe('10월 20일 (화) 오전 9시');
+it('tells a week by its Monday in KST, and an hour by its replies first, then the roles it had', () => {
   expect(weekText(Date.UTC(2026, 9, 11, 15))).toBe('10월 12일 주');
   expect(hourDetail({ chat: 120, aux: 0, image: 10, embedding: 0 })).toBe('응답 120번 · 이미지 10번');
 });

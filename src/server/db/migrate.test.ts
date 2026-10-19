@@ -117,16 +117,12 @@ describe('the migration runner', () => {
     db.close();
   });
 
-  it('starts 헤이젤 나우 a day after the upgrade, and asks for the models.dev list again for its names', () => {
+  it('asks for the models.dev list again for 헤이젤 나우\'s names', () => {
     const db = new DatabaseSync(':memory:');
     const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0012');
     migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
     db.exec(`INSERT INTO models_dev (list, model, price) VALUES ('openai', 'gpt-5', '{}'); UPDATE models_dev_fetch SET fetched_at = 5, tried_at = 5`);
-    const before = Date.now();
-    expect(migrate(db, 'migrations').applied).toEqual(['0012_pulse.sql']);
-    const { starts } = db.prepare('SELECT starts FROM pulse_start').get() as { starts: number };
-    expect(starts - before).toBeGreaterThanOrEqual(86_400_000 - 1000);
-    expect(starts - Date.now()).toBeLessThanOrEqual(86_400_000);
+    expect(migrate(db, 'migrations').applied).toContain('0012_pulse.sql');
     expect(db.prepare('SELECT model, name FROM models_dev').all()).toEqual([{ model: 'gpt-5', name: null }]);
     expect(db.prepare('SELECT fetched_at, tried_at FROM models_dev_fetch').get()).toEqual({ fetched_at: null, tried_at: null });
     db.close();

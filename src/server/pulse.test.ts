@@ -22,7 +22,7 @@ afterAll(() => t.dispose());
 beforeEach(async () => {
   await t.reset();
   answers = [];
-  await t.env.db.batch([t.env.db.prepare('UPDATE service SET signup_cap = 100'), t.env.db.prepare('UPDATE pulse_start SET starts = 0')]);
+  await t.env.db.prepare('UPDATE service SET signup_cap = 100').run();
   await t.restartPulse();
   at(NOON);
 });
@@ -45,18 +45,10 @@ const seen = async (cookies: string[]) => {
 const board = async () => ((await (await t.get('pulse')).json()) as PulseAnswer).board;
 const hourCalls = async () => (await t.env.db.prepare('SELECT role, calls FROM pulse_hours').all()).results;
 
-it('ignores every label before the start, and answers when counting starts', async () => {
-  const starts = NOON + 24 * HOUR;
-  await t.env.db.prepare('UPDATE pulse_start SET starts = ?').bind(starts).run();
-  await t.restartPulse();
-  const cookies = await people(10);
-  await seen(cookies);
-  for (const cookie of cookies) await call(cookie, 'image', 'novelai', 'nai-diffusion-5-full');
+it('answers with no board before anyone is counted, cached publicly for 5 minutes', async () => {
   const answer = await t.get('pulse');
   expect(answer.headers.get('cache-control')).toBe('public, max-age=300');
-  expect(await answer.json()).toEqual({ starts, at: NOON, board: null });
-  expect(await hourCalls()).toEqual([]);
-  expect((await t.env.db.prepare('SELECT COUNT(*) AS n FROM pulse_week').first('n'))).toBe(0);
+  expect(await answer.json()).toEqual({ at: NOON, board: null });
 });
 
 it('shows the board from 10 people this week and a row from 5 people on it, naming only a model a list confirms', async () => {
@@ -180,11 +172,6 @@ it('marks 대화 against the 24 hours before, ranked as the board ranks them, un
   const answer = (await board())!;
   expect(answer.ranking.chat.merged.map((row) => row.key)).toEqual(['b', 'a']);
   expect(answer.before.chat).toEqual({ merged: [{ key: 'a' }, { key: 'b' }], split: [{ key: 'a', type: 'openai' }] });
-
-  await t.env.db.prepare('UPDATE pulse_start SET starts = ?').bind(NOON - 2 * DAY + 1).run();
-  await t.restartPulse();
-  const started = (await board())!;
-  expect([started.ranking.chat.merged.length, started.before.chat]).toEqual([2, null]);
 });
 
 it('marks the other roles against last week by people, unless last week never showed its board', async () => {
