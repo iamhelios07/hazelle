@@ -93,7 +93,7 @@ function useTrialScope({ owner, chat, read: readVariables }: TrialChat): ChatSco
     session.store.evaluation.variables(lane, scope, '', stop.signal).then((inspection) => {
       if (stop.signal.aborted) return;
       const kept = inspection.variables.filter((variable) => !variable.nameTruncated);
-      readVariables({ label, values: new Map(kept.map((variable) => [variable.name, variable])), partial: inspection.omitted > 0 || kept.length < inspection.variables.length });
+      readVariables({ label, values: new Map(kept.map((variable) => [variable.name, variable])), partial: inspection.stopped || inspection.omitted > 0 || kept.length < inspection.variables.length });
     }, () => {});
     return () => {
       stop.abort();

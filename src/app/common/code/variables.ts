@@ -6,7 +6,7 @@ import { UNKNOWN } from '../words';
 // The character's 기본 변수, as name and value.
 export type Defaults = readonly (readonly [string, string])[];
 
-// A chat's variables as 시험해 보기 read them, by name. partial: the chat holds more than were read, so a name missing
+// A chat's variables as 시험해 보기 read them, by name. partial: the read stopped short or the chat holds more than were read, so a name missing
 // here may still be set.
 export type ChatVariables = { label: string; values: ReadonlyMap<string, InspectedVariable>; partial: boolean };
 
