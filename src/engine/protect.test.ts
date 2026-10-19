@@ -10,6 +10,13 @@ describe('protect', () => {
     expect(restore(masked, spans)).toEqual({ text, missing: 0 });
   });
 
+  it('keeps a bot’s bracketed asset tokens out, whatever their brackets, and leaves plain brackets alone', () => {
+    const text = 'He turned [ 🖼 | Indoor | looking away shyly ] and {{img::cat}} fell silent [[asset_name]] <sprite=happy_blush> [not a token] {ok}';
+    const { masked, spans } = protect(text, []);
+    expect(masked).toBe('He turned ⟦1⟧ and ⟦2⟧ fell silent ⟦3⟧ ⟦4⟧ [not a token] {ok}');
+    expect(spans).toEqual(['[ 🖼 | Indoor | looking away shyly ]', '{{img::cat}}', '[[asset_name]]', '<sprite=happy_blush>']);
+  });
+
   it('takes the earliest of overlapping matches, a custom rule’s among them, and drops one inside a span taken', () => {
     const rules = protectRules(['\\[\\[.*?\\]\\]', '<img']);
     if ('kind' in rules) throw new Error(rules.kind);

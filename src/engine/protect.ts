@@ -3,13 +3,16 @@
 
 export type ProtectInvalid = { kind: 'protect-invalid'; pattern: string };
 
-// Always kept: code, comments, styles and scripts, and media tags. Not whole HTML blocks, since a status board must
-// stay translatable (the pinned ones are already left out of the source).
+// Always kept: code, comments, styles and scripts, media tags, and the bracketed asset tokens bots write for their
+// scripts (engine/translate-instructions lists their shapes: a 🖼 or an img/image/asset/sprite word inside [ ] or { }).
+// Not whole HTML blocks, since a status board must stay translatable (the pinned ones are already left out of the
+// source).
 const BUILT_IN: readonly RegExp[] = [
   /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[ \t]*$|(?![\s\S]))/gmu,
   /<!--[\s\S]*?-->/gu,
   /<(style|script)\b[^>]*>[\s\S]*?<\/\1\s*>/giu,
-  /<\/?(?:img|audio|video|source|iframe)\b[^>]*>/giu,
+  /<\/?(?:img|audio|video|source|iframe|sprite)\b[^>]*>/giu,
+  /[[{]{1,2}[^\]}\n]*?(?:🖼|\b(?:img|image|asset|sprite))[^\]}\n]*[\]}]{1,2}/giu,
 ];
 
 export const compileRule = (source: string): RegExp | null => {
