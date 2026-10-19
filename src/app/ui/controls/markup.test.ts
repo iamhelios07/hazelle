@@ -1,28 +1,27 @@
 import { describe, expect, it } from 'vitest';
+import type { CodeSpan } from './codeLanguage';
 import { markup } from './markup';
 
+const spansOf = (text: string, ...tags: [string, CodeSpan['kind']][]) => tags.map(([tag, kind]) => ({ from: text.indexOf(tag), to: text.indexOf(tag) + tag.length, kind }));
+
 describe('markup', () => {
-  it('marks tags, headings and rules, and joins back to the text', () => {
-    const text = '<System Setting>\n# The Work\nYou are {{char}}, {{#when::toggle::sims}}on{{/when}}.\n---\n<Role-play Materials>{{slot}}\n{{open';
-    const pieces = markup(text);
+  it('marks the spans, headings, rules and <angle> tags outside the spans, and joins back to the text', () => {
+    const text = '<System Setting>\n# The Work\nYou are {{char}}.\n---\n<Role-play Materials>{{slot}}\n{{x::<b>}}';
+    const pieces = markup(text, spansOf(text, ['{{char}}', 'tag'], ['{{slot}}', 'slot'], ['{{x::<b>}}', 'argument']));
     expect(pieces.map((piece) => piece.text).join('')).toBe(text);
     expect(pieces.filter((piece) => piece.mark === 'angle').map((piece) => piece.text)).toEqual(['<System Setting>', '<Role-play Materials>']);
-    expect(pieces.filter((piece) => piece.mark === 'cbs').map((piece) => piece.text)).toEqual(['{{char}}', '{{#when::toggle::sims}}', '{{/when}}']);
+    expect(pieces.filter((piece) => piece.mark === 'tag').map((piece) => piece.text)).toEqual(['{{char}}']);
     expect(pieces.find((piece) => piece.mark === 'slot')?.text).toBe('{{slot}}');
     expect(pieces.find((piece) => piece.text.startsWith('# The'))?.line).toBe('heading');
     expect(pieces.find((piece) => piece.text === '---\n')?.line).toBe('rule');
-    expect(pieces.at(-1)).toEqual({ text: '{{open', line: 'body', mark: null });
   });
 
-  it('reads a nested tag as one', () => {
-    expect(markup('{{getvar::{{user}}}} x').map((piece) => piece.text)).toEqual(['{{getvar::{{user}}}}', ' x']);
-  });
-
-  it('reads a long line of unclosed tags in time, the closed one inside still a tag', () => {
-    const open = '{'.repeat(100_000);
-    expect(markup(`${open}}}`)).toEqual([
-      { text: open.slice(3), line: 'body', mark: null },
-      { text: '{{{}}', line: 'body', mark: 'cbs' },
+  it('cuts a span that crosses a line at the line, so each line keeps its own look', () => {
+    const text = '# {{// a\nb}}';
+    expect(markup(text, [{ from: 2, to: text.length, kind: 'comment' }])).toEqual([
+      { text: '# ', line: 'heading', mark: null },
+      { text: '{{// a\n', line: 'heading', mark: 'comment' },
+      { text: 'b}}', line: 'body', mark: 'comment' },
     ]);
   });
 });

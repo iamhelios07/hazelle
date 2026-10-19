@@ -2,6 +2,7 @@ import { TOGGLE_GLOBAL } from '../../engine/cbs/tags';
 import { isWrapped, SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
 import { rekeyed } from '../../model/toggles';
 import type { PromptPatch } from '../../runtime/prompts';
+import type { Command } from '../common/code/cbsCommands';
 import { blockSource } from './blocks';
 import { renameToggle, toggleUses } from './rekey';
 
@@ -94,4 +95,9 @@ export function conditionSnippet(toggle: Toggle, selected: string): Snippet {
     text += words + close;
   }
   return { text, select: select ?? [text.length, text.length] };
+}
+
+export function commandSnippet({ form }: Command): Snippet {
+  const placeholder = /[가-힣]+(?: [가-힣]+)*/.exec(form);
+  return { text: form, select: placeholder ? [placeholder.index, placeholder.index + placeholder[0].length] : [form.length, form.length] };
 }

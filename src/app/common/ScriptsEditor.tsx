@@ -9,7 +9,9 @@ import { useSession, useStore } from '../session';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeLanguage } from '../ui';
+import { cbsLanguage } from './code/cbs';
 import { luaLanguage } from './code/lua';
+import type { Defaults } from './code/variables';
 import { ACTS, addOf } from './acts';
 import { withParticle } from './particles';
 import { choices } from './reading';
@@ -28,10 +30,11 @@ const OFF = '꺼짐';
 // One script open at a time. drill: the open script stands alone in place of the lists, for a narrow panel or page.
 // status: the ids of the character's 상태창 지정 scripts, tagged in its list. variables: the character's 기본 변수, which
 // the code editor offers by name.
-export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { owner: PackOwner; pack: Pack; drill: boolean; status?: readonly string[]; variables?: readonly [string, string][] }) {
+export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { owner: PackOwner; pack: Pack; drill: boolean; status?: readonly string[]; variables?: Defaults }) {
   const store = useStore();
   const { scripts } = useSession();
   const lua = useMemo(() => luaLanguage((code) => scripts.check(code), variables), [scripts, variables]);
+  const replacement = useMemo(() => cbsLanguage({ variables, placeholder: 'data' }), [variables]);
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   // Lua code typed and not applied yet, by script; it goes when the editor does.
@@ -58,7 +61,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
   const item = (list: ScriptList, id: string, page: boolean) => {
     const place = pack[list].findIndex((script) => script.id === id);
     const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null) };
-    if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={search.words !== ''} />;
+    if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={search.words !== ''} language={replacement} />;
     const trigger = pack.triggers[place]!;
     return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} language={lua} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
   };
@@ -188,8 +191,8 @@ function useScriptActions({ owner, pack, onOpen }: ItemProps, list: ScriptList, 
   );
 }
 
-function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; searched: boolean }) {
-  const { owner, place, script, status, searched } = props;
+function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; searched: boolean; language: CodeLanguage }) {
+  const { owner, place, script, status, searched, language } = props;
   const store = useStore();
   const save = useAutosave<RegexScript>(`script:${owner.id}:${script.id}`, (patch) => editRegex(store, owner, script.id, patch));
   const shown: RegexScript = { ...script, ...save.unsaved };
@@ -208,6 +211,8 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
         label="바꿀 내용"
         kind="key"
         lines={6}
+        expand={SHORTCUTS.bigEdit.keys}
+        language={language}
         value={shown.replace}
         onChange={(replace) => save.change({ replace })}
         error={check === 'unsupported' ? '@@emo는 지원하지 않아요.' : undefined}

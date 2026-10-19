@@ -216,3 +216,43 @@
 .operator {
   color: var(--color-text-muted);
 }
+
+.tag {
+  color: var(--color-markup-cbs);
+  font-weight: var(--weight-semibold);
+}
+
+.separator {
+  color: var(--color-text-muted);
+}
+
+.argument {
+  color: var(--color-text-soft);
+}
+
+.slot {
+  border-radius: var(--radius-xs);
+  background: var(--color-markup-slot-bg);
+  color: var(--color-markup-slot);
+}
+
+/* After the code font's rules, which these replace at the same specificity. */
+.loading.prose,
+.prose :global(.cm-editor) :global(.cm-scroller) {
+  font-family: var(--font-sans);
+  font-size: var(--markup-size);
+  line-height: var(--markup-leading);
+}
+
+.heading {
+  color: var(--color-markup-heading);
+  font-weight: var(--weight-semibold);
+}
+
+.rule {
+  color: var(--color-markup-rule);
+}
+
+.angle {
+  color: var(--color-markup-angle);
+}

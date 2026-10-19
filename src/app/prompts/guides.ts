@@ -2,8 +2,8 @@ import { previousMessages } from '../../engine/cbs/history';
 import { unescapeCbs } from '../../engine/cbs/escape';
 import { evaluate, Runaway, type CbsContext } from '../../engine/cbs/evaluate';
 import { blankCard } from '../../engine/import/card';
+import type { GuideId } from '../common/code/cbsCommands';
 
-export type GuideId = 'basics' | 'when' | 'vars' | 'lists' | 'func' | 'random' | 'literal';
 // inMessage: the example runs as a chat message's own text, the only place setvar and addvar write.
 export type Example = { written: string; result: string; inMessage?: true };
 export type Guide = { title: string; steps: readonly { text: string; example?: Example }[] };

@@ -2,6 +2,8 @@ import type { SyntaxProblem } from '../../../engine/lua/run';
 import type { CodeCompletion, CodeDoc, CodeItem, CodeLanguage, CodeProblem } from '../../ui';
 import { withParticle } from '../particles';
 import { LUA_API, LUA_EVENTS, LUA_INTERNAL, LUA_UNSUPPORTED, type LuaFunction } from './luaApi';
+import { nearest } from './nearest';
+import { variableDoc, variableItems, type Defaults } from './variables';
 
 const KEYWORDS = new Set(['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while']);
 const GLOBALS = ['tonumber', 'tostring', 'pairs', 'ipairs', 'type', 'pcall', 'xpcall', 'error', 'assert', 'print', 'select', 'next', 'setmetatable', 'getmetatable', 'rawget', 'rawset', 'rawequal', 'rawlen', 'collectgarbage'];
@@ -53,29 +55,6 @@ export function definedNames(text: string): Set<string> {
   return names;
 }
 
-function distance(a: string, b: string) {
-  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i++) {
-    let corner = row[0]!;
-    row[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const above = row[j]!;
-      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, corner + (a[i - 1] === b[j - 1] ? 0 : 1));
-      corner = above;
-    }
-  }
-  return row[b.length]!;
-}
-
-const closest = (name: string) => {
-  let best: { name: string; score: number } | null = null;
-  for (const known of API.keys()) {
-    const score = distance(name.toLowerCase(), known.toLowerCase());
-    if (score <= 2 && (!best || score < best.score)) best = { name: known, score };
-  }
-  return best?.name ?? null;
-};
-
 // Lua's own wording, in Korean for the shapes a draft most often takes; any other stays as Lua says it.
 export function syntaxMessage(message: string): string {
   const near = (token: string) => (token === '<eof>' ? '코드 끝' : token);
@@ -115,27 +94,21 @@ function lint(text: string): CodeProblem[] {
       continue;
     }
     if (KNOWN.has(name)) continue;
-    const near = closest(name);
+    const near = nearest(name, API.keys(), (known) => known.toLowerCase());
     if (near) problems.push({ from, to: from + name.length, severity: 'warning', message: `${near}의 오타 같아요.`, fix: { label: `${withParticle(near, '으로/로')} 바꾸기`, insert: near } });
   }
   return problems;
 }
 
-function variableNames(text: string, defaults: readonly (readonly [string, string])[]): CodeItem[] {
-  const names = new Map<string, string | null>(defaults.map(([name, value]) => [name, value]));
-  for (const [, name] of text.matchAll(/\b(?:getChatVar|setChatVar|setChatVarChanged|getState|setState|setStateChanged)\(\s*\w+\s*,\s*"([^"\n]+)"/g)) if (!names.has(name!)) names.set(name!, null);
-  return [...names].map(([name, value]) => ({ label: name, kind: 'variable', detail: value ?? undefined, doc: variableDoc(name, value) }));
-}
+const writtenNames = (text: string) => [...text.matchAll(/\b(?:getChatVar|setChatVar|setChatVarChanged|getState|setState|setStateChanged)\(\s*\w+\s*,\s*"([^"\n]+)"/g)].map((found) => found[1]!);
 
-const variableDoc = (name: string, value: string | null): CodeDoc => ({ form: name, text: '채팅 변수예요.', facts: [['기본 변수', value ?? '없음']] });
-
-function complete(text: string, at: number, place: 'code' | 'string' | 'comment', explicit: boolean, defaults: readonly (readonly [string, string])[]): CodeCompletion | null {
+function complete(text: string, at: number, place: 'code' | 'string' | 'comment', explicit: boolean, defaults: Defaults): CodeCompletion | null {
   const before = text.slice(0, at);
   const slot = VARIABLE_SLOT.exec(before);
   if (slot && place === 'string') {
     const from = at - slot[1]!.length;
     // The name being typed is no name the code has yet.
-    return { from, items: variableNames(text.slice(0, from) + text.slice(at), defaults), validFor: /^[^"\n]*$/ };
+    return { from, items: variableItems(defaults, writtenNames(text.slice(0, from) + text.slice(at))), validFor: /^[^"\n]*$/ };
   }
   if (place !== 'code') return null;
   const member = /\b(string|table|math|json|os)\.(\w*)$/.exec(before);
@@ -163,13 +136,13 @@ function complete(text: string, at: number, place: 'code' | 'string' | 'comment'
   return { from, items, validFor: /^\w*$/ };
 }
 
-function explain(text: string, at: number, defaults: readonly (readonly [string, string])[]) {
+function explain(text: string, at: number, defaults: Defaults) {
   const line = text.lastIndexOf('\n', at - 1) + 1;
   const end = text.indexOf('\n', at);
   const row = text.slice(line, end < 0 ? text.length : end);
   for (const found of row.matchAll(/\b(?:getChatVar|setChatVar|setChatVarChanged|getState|setState|setStateChanged)\(\s*\w+\s*,\s*"([^"\n]*)"/g)) {
     const from = line + found.index + found[0].length - found[1]!.length - 1;
-    if (at >= from && at <= from + found[1]!.length + 2) return { from, to: from + found[1]!.length + 2, doc: variableDoc(found[1]!, defaults.find(([name]) => name === found[1])?.[1] ?? null) };
+    if (at >= from && at <= from + found[1]!.length + 2) return { from, to: from + found[1]!.length + 2, doc: variableDoc(found[1]!, defaults) };
   }
   let from = at;
   let to = at;
@@ -180,7 +153,7 @@ function explain(text: string, at: number, defaults: readonly (readonly [string,
 }
 
 // check: the Lua VM's syntax check of a draft. defaults: the character's 기본 변수, offered and explained by name.
-export function luaLanguage(check: (code: string) => Promise<SyntaxProblem | null>, defaults: readonly (readonly [string, string])[] = []): CodeLanguage {
+export function luaLanguage(check: (code: string) => Promise<SyntaxProblem | null>, defaults: Defaults = []): CodeLanguage {
   return {
     syntax: 'lua',
     lint: async (text) => {

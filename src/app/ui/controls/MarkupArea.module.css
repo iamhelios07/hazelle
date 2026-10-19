@@ -24,12 +24,6 @@
   min-width: 0;
 }
 
-/* The big editor's copy takes the dialog's width and height, so a press anywhere below the text lands in it. */
-.big {
-  flex-grow: 1;
-  max-width: none;
-}
-
 /* Every line of type below is shared by the layer and the textarea; keep them one rule. */
 .layer,
 .input {
@@ -125,4 +119,8 @@
 
 .weightNegative {
   color: var(--color-weight-negative);
+}
+
+.comment {
+  color: var(--color-text-faint);
 }

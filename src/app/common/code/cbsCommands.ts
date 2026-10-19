@@ -1,9 +1,11 @@
-import type { PromptSort } from '../../model/prompt';
-import type { Snippet } from './edits';
-import type { GuideId } from './guides';
+import type { PromptSort } from '../../../model/prompt';
+
+// The guides a group points to; their steps are in prompts/guides.ts.
+export type GuideId = 'basics' | 'when' | 'vars' | 'lists' | 'func' | 'random' | 'literal';
 
 // names: the tag's names as src/engine/cbs/tags.ts defines them, the first the one written in form; empty for a block,
-// whose name the evaluator reads (evaluateBlock). commands.test.ts holds the two lists equal, and runs every example.
+// whose name the evaluator reads (BLOCKS in evaluate.ts). cbsCommands.test.ts holds the two lists equal, and prompts/guides.test.ts
+// runs every example.
 // form: what 삽입 types, with its first Korean word as the place to write next.
 // uses: why a prompt of that sort often holds it, for 자주 쓰는 명령어.
 export type Command = {
@@ -272,8 +274,3 @@ export const COMMANDS: readonly CommandGroup[] = [
     ],
   },
 ];
-
-export function commandSnippet({ form }: Command): Snippet {
-  const placeholder = /[가-힣]+(?: [가-힣]+)*/.exec(form);
-  return { text: form, select: placeholder ? [placeholder.index, placeholder.index + placeholder[0].length] : [form.length, form.length] };
-}

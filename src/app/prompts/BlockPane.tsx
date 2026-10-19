@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, GitBranch, X } from 'lucide-react';
 import type { Ref } from 'react';
 import { ACTS, addOf, newOf } from '../common/acts';
+import { cbsLanguage } from '../common/code/cbs';
 import { withParticle } from '../common/particles';
 import { SLOT } from '../common/prompt-words';
 import { SHORTCUTS } from '../shortcuts';
@@ -9,6 +10,8 @@ import { Button, ChoiceGroup, Divider, Empty, Hint, MarkupArea, Menu, MenuHeadin
 import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, type CacheMark } from './blocks';
 import { CommandMenu } from './CommandMenu';
 import { RECENT_MAX, type Snippet } from './edits';
+
+const CBS = cbsLanguage();
 
 type Props = {
   block: Block;
@@ -108,6 +111,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         <MarkupArea
           ref={textRef}
           label="내용"
+          language={CBS}
           expand={SHORTCUTS.bigEdit.keys}
           value={block.text}
           placeholder={block.mark === 'globalNote' ? `비워 두면 카드에 '대화 뒤 지시문'이 있을 때만 보내요.` : '모델에게 보낼 내용'}
@@ -133,7 +137,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
       )}
       {block.kind === 'slot' && block.slot === 'authorNote' && authorNote !== null && (
         <Section title="기본 노트" level={3} help="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
-          <MarkupArea label="기본 노트" variant="field" expand={SHORTCUTS.bigEdit.keys} value={authorNote} onChange={onAuthorNote} />
+          <MarkupArea label="기본 노트" variant="field" language={CBS} expand={SHORTCUTS.bigEdit.keys} value={authorNote} onChange={onAuthorNote} />
         </Section>
       )}
       {'wrapper' in block &&
@@ -154,7 +158,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
               </Button>
             }
           >
-            <MarkupArea label="감싸는 텍스트" variant="field" value={block.wrapper} onChange={(wrapper) => onChange({ ...block, wrapper })} />
+            <MarkupArea label="감싸는 텍스트" variant="field" language={CBS} value={block.wrapper} onChange={(wrapper) => onChange({ ...block, wrapper })} />
           </Section>
         ))}
       <SettingRow
