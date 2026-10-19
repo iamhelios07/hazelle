@@ -3,11 +3,13 @@ import { Fragment, useState } from 'react';
 import type { PromptSort } from '../../model/prompt';
 import { useSearch } from '../common/useSearch';
 import { COMMAND } from '../common/words';
-import { Button, CodeBlock, Dialog, Empty, MarkupArea, Menu, MenuHeading, MenuItem, Row, Stack, Text } from '../ui';
+import { Button, Dialog, Empty, MarkupArea, Menu, MenuHeading, MenuItem, Row, Stack, Text } from '../ui';
 import { cbsLanguage } from '../common/code/cbs';
 import { COMMANDS, type Command, type GuideId } from '../common/code/cbsCommands';
 import { commandSnippet, type Snippet } from './edits';
-import { GUIDES, SAMPLE_NOTE, tryExample, type Example } from './guides';
+import { SAMPLE_NOTE, tryExample } from '../common/code/sample';
+import { CbsResult } from '../common/code/Trial';
+import { GUIDES, type Example } from './guides';
 
 type Props = { sort: PromptSort; onInsert: (snippet: Snippet) => void };
 
@@ -104,8 +106,7 @@ function Tryout({ example, onInsert }: { example: Example; onInsert: (text: stri
   return (
     <Stack gap="related">
       <MarkupArea label="예시" variant="field" language={CBS} value={written} onChange={setWritten} />
-      <Text variant="note">{result === null ? '결과: 출력이 너무 길어서 중단됨' : result ? '결과' : '결과: 빈 텍스트'}</Text>
-      {result && <CodeBlock variant="prose">{result}</CodeBlock>}
+      <CbsResult result={result} />
       <Row kind="actions">
         <Button variant="ghost" size="xs" onClick={() => onInsert(written)}>
           이 예시 삽입

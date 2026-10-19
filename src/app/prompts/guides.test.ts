@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COMMANDS } from '../common/code/cbsCommands';
-import { GUIDES, tryExample } from './guides';
+import { tryExample } from '../common/code/sample';
+import { GUIDES } from './guides';
 
 describe('GUIDES', () => {
   it('gives the result each example shows', () => {

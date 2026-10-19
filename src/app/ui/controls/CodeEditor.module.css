@@ -256,3 +256,44 @@
 .angle {
   color: var(--color-markup-angle);
 }
+
+.split {
+  display: grid;
+  flex-grow: 1;
+  grid-template-columns: minmax(0, 1fr) var(--panel-width);
+  gap: var(--space-16);
+  min-height: 0;
+}
+
+.tabs {
+  display: none;
+}
+
+.code {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.aside {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (max-width: 959px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--space-12);
+  }
+
+  .tabs {
+    display: block;
+  }
+
+  .split:not(.asideShown) .aside,
+  .asideShown .code {
+    display: none;
+  }
+}

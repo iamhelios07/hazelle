@@ -19,6 +19,7 @@ import { greetingOf } from './greetings';
 import { chatPersona } from './personas';
 import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
+import type { ReadModels } from './read-model';
 import type { ObjectStore } from './store';
 import type { Shown } from './talk';
 import type { TranslateInput } from './translate';
@@ -194,6 +195,21 @@ export function promptBudget(store: Reader['store'], chat: Chat): number | null 
 
 // A chat's messages as a request sends them: under 반전 모드, each with its shown version's translation as its text.
 export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) => (chatTranslate(store, chat).reverse ? messages.map(reversed) : messages);
+
+// A chat as its next request would read it, held open while it is read (시험해 보기); null when it is gone or cannot
+// open.
+export async function chatNow(session: { store: ObjectStore; read: ReadModels }, chat: string, signal: AbortSignal): Promise<ChatScope | null> {
+  const result = await session.store.withChats(
+    [chat],
+    async (readable) => {
+      const stored = live(session.store.get('chat', chat));
+      const messages = session.read.chat(chat).snapshot()?.messages;
+      return { ok: true, data: readable.length && stored && messages ? scopeOf(session, chat, stored.value, asSent(session.store, stored.value, messages)) : null };
+    },
+    { signal, summarize: false },
+  );
+  return result.ok ? result.data : null;
+}
 
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
 export const evaluateChat = async (reader: { store: Reader['store'] & Pick<ObjectStore, 'evaluation'> }, id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, signal?: AbortSignal): Promise<Display> =>

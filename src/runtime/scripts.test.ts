@@ -22,7 +22,7 @@ import { projectGreetings } from './greetings';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
-import { evaluateChat } from './chat-context';
+import { chatNow, evaluateChat } from './chat-context';
 import { NOT_REHEARSED, SCRIPT_LOG_LIMITS, triggersOf } from './scripts';
 import type { TurnContext } from './turn-context';
 import { takeTurn } from './turn';
@@ -928,6 +928,30 @@ it('keeps bounded per-chat hook logs with Lua output and writes, notifies reader
     expect(session.scripts.log(chat)).toEqual({ entries: [], omitted: 0 });
   } finally { stop(); lease.release(); }
 }));
+
+describe('a trial of one trigger', () => {
+  it('runs the draft alone for the event on the chat as it stands, saving nothing and calling no model', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `function onOutput(id) setChatVar(id, 'stored', '1') end`);
+      const scope = (await chatNow(session, chat, new AbortController().signal))!;
+      const draft = {
+        kind: 'lua' as const,
+        id: 'trigger-0',
+        name: 'main',
+        owner: { kind: 'character' as const, id: session.store.get('chat', chat)!.value.character! },
+        code: `onOutput = async(function(id)
+          setChatVar(id, 'last', getCharacterLastMessage(id))
+          alertNormal(id, 'hi')
+          LLM(id, { { role = 'user', content = 'hi' } })
+        end)`,
+      };
+      const trial = await session.scripts.trial(chat, scope, draft, { kind: 'output' }, new AbortController().signal);
+      expect(trial.outcome.writes).toEqual([['last', '어서 와.']]);
+      expect(trial).toMatchObject({ said: [{ tone: 'normal', text: 'hi' }], calls: { model: 1, embed: 0, background: 0 } });
+      expect(messages()).toHaveLength(1);
+      expect(session.scripts.log(chat).entries).toEqual([]);
+    }));
+});
 
 describe('a rehearsal of the pre-send scripts', () => {
   it('saves nothing and keeps no page log, handing back what each stage did and the request as it would be', () =>

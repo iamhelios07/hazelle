@@ -74,6 +74,13 @@ it('replays old tail reads and forward variables after a history delta, and matc
   evaluation.close();
 });
 
+it('reads a draft after the chat, with the variables its messages leave', async () => {
+  const evaluation = new Evaluation(none);
+  const chat = { ...scope, variables: [['a', '1']], messages: [message('m', '{{setvar::a::2}}')] } satisfies ChatScope;
+  expect(await evaluation.text({ asker: 'trial', chat: 'c' }, chat, 'a={{getvar::a}}')).toEqual({ read: 'a=2' });
+  evaluation.close();
+});
+
 it('runs a regex sample in the worker, as the engine would on the screen', async () => {
   const evaluation = new Evaluation(none);
   const script = { name: '', find: 'cat', replace: 'dog', stage: 'display' as const, flags: null, off: true as const };

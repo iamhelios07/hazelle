@@ -1,6 +1,6 @@
 import { useId, useMemo, type Ref } from 'react';
 import type { Chord } from '../foundation/keys';
-import { CodeField } from './CodeField';
+import { CodeField, type CodeAside } from './CodeField';
 import type { CodeLanguage } from './codeLanguage';
 import { markup, type Piece } from './markup';
 import styles from './MarkupArea.module.css';
@@ -19,6 +19,8 @@ type Props = {
   language?: CodeLanguage;
   // The keys for its big editor, the code editor in that language, which a button beside the text opens too.
   expand?: readonly Chord[];
+  // A pane beside that editor, given the text as it stands.
+  aside?: (text: string) => CodeAside;
   ref?: Ref<HTMLTextAreaElement>;
 };
 
@@ -88,9 +90,9 @@ function Frame({ value, onChange, placeholder, kind, language, ref, id }: FrameP
   );
 }
 
-export function MarkupArea({ label, value, onChange, placeholder, variant = 'page', kind = 'prompt', language, expand, ref }: Props) {
+export function MarkupArea({ label, value, onChange, placeholder, variant = 'page', kind = 'prompt', language, expand, aside, ref }: Props) {
   const id = useId();
-  const big = useBigEdit(language ? expand : undefined, label, (copy) => language && <CodeField label={label} value={value} onChange={onChange} language={language} prose area={copy.area} caret={copy.caret} />);
+  const big = useBigEdit(language ? expand : undefined, label, (copy) => language && <CodeField label={label} value={value} onChange={onChange} language={language} prose area={copy.area} caret={copy.caret} aside={aside?.(value)} />);
   const frame = <Frame value={value} onChange={onChange} placeholder={placeholder} kind={kind} language={language} id={id} ref={ref} />;
   return (
     <>

@@ -1,10 +1,10 @@
 import { useState, useSyncExternalStore } from 'react';
 import type { HookLog } from '../../engine/lua/run';
 import type { PackOwner } from '../../model/library';
+import { HookDetail } from '../common/HookDetail';
 import { ago } from '../common/time';
 import { useSession } from '../session';
-import { Callout, CodeBlock, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
-import { shownValue } from './InspectVariables';
+import { Empty, List, ListItem, Section, Stack, Text } from '../ui';
 
 export const STAGES: Record<string, string> = { load: '처음 실행', onInput: '입력', editInput: '입력 편집', onStart: '시작', editRequest: '요청 편집', editOutput: '응답 편집', onOutput: '응답', editDisplay: '화면 편집', button: '버튼',
   reply: '응답 저장', replying: '응답 편집', sending: '입력 편집', requesting: '요청 편집', showing: '화면 편집', prompt: '프롬프트', change: '메시지 변경', branch: '분기', menu: '메뉴', action: '메시지 도구', call: '도구 호출',
@@ -61,18 +61,4 @@ function hookTags(entry: HookLog): string[] {
     ...(entry.logs.length ? [`log ${entry.logs.length}줄`] : []),
     ...(entry.missing.length ? [`지원 안 함 ${entry.missing.length}개`] : []),
   ];
-}
-
-function HookDetail({ entry }: { entry: HookLog }) {
-  return (
-    <Stack gap="related">
-      {entry.errors.map((error, index) => (
-        <Callout key={index} tone="warn">{'message' in error ? error.message : `${error.script} 실패`}</Callout>
-      ))}
-      {entry.logs.length > 0 && <CodeBlock>{entry.logs.join('\n')}</CodeBlock>}
-      {entry.writes.length > 0 && <Facts items={entry.writes.map(([name, value]) => ({ label: name, value: shownValue(value, false) }))} />}
-      {entry.missing.length > 0 && <Text variant="note">{`지원하지 않는 기능: ${entry.missing.join(', ')}`}</Text>}
-      {entry.truncated && <Text variant="note">내용이 길어서 일부만 남겼어요.</Text>}
-    </Stack>
-  );
 }

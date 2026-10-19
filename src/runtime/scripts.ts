@@ -203,27 +203,31 @@ export function applied(chat: string, scope: ChatScope, { edits, removed, added,
   return { ...scope, messages, lore: [...held.slice(0, last), ...fresh, ...held.slice(last)] };
 }
 
+// What a run that saves nothing heard (Scripts.rehearse, Scripts.trial). asked: each question, dismissed there and
+// asked when it runs for real; calls: what is refused there and made for real. loreRanAway: a script read the
+// lorebook, whose CBS ran away, and read none of it.
+export type Heard = { said: { tone: 'normal' | 'error'; text: string }[]; asked: Question[]; calls: { model: number; embed: number; background: number }; loreRanAway: boolean };
+
 // The pre-send scripts run ahead on a copy (Scripts.rehearse). stopped: the stage that ended the turn, which then sends
-// nothing. asked: each question, dismissed here and asked when sent; calls: what is refused here and made when sent.
-// scope: the chat as onStart leaves it, its writes and then editRequest's pending. input: the message as editInput left
-// it, null when unchanged. prompt: the request built after onStart, null when it is the forecast's. request: what
-// editRequest answered, null when it left the request as given. changed: the request sent would differ from the
-// forecast's. loreRanAway: a script read the lorebook, whose CBS ran away, and read none of it.
-export type Rehearsal = {
+// nothing. scope: the chat as onStart leaves it, its writes and then editRequest's pending. input: the message as
+// editInput left it, null when unchanged. prompt: the request built after onStart, null when it is the forecast's.
+// request: what editRequest answered, null when it left the request as given. changed: the request sent would differ
+// from the forecast's.
+export type Rehearsal = Heard & {
   trace: HookTrace;
   stopped: StartStage | null;
-  said: { tone: 'normal' | 'error'; text: string }[];
-  asked: Question[];
-  calls: { model: number; embed: number; background: number };
   scope: ChatScope;
   input: string | null;
   prompt: EvaluatedPrompt | null;
   request: ChatMessage[] | null;
   changed: boolean;
-  loreRanAway: boolean;
 };
 
+// One trigger run alone for one event (Scripts.trial), as 시험해 보기 shows it.
+export type Trial = Heard & { outcome: ScriptOutcome };
+
 export const NOT_REHEARSED = 'Error: not called while rehearsing';
+const unheard = (): Heard => ({ said: [], asked: [], calls: { model: 0, embed: 0, background: 0 }, loreRanAway: false });
 
 // A tool's answer in a stage a turn or a display waits on (prompt, the edit stages); one that misses it is cut off and
 // the turn goes on.
@@ -427,23 +431,12 @@ export class Scripts {
     const scripts = triggersOf(packsOf(this.session.store, turn.chat));
     if (scripts.length === 0) return null;
     const trace: HookTrace = { entries: [], omitted: 0 };
-    const said: Rehearsal['said'] = [];
-    const asked: Question[] = [];
-    const calls = { model: 0, embed: 0, background: 0 };
+    const heard = unheard();
     let scope = turn.scope;
     let touched = false;
     let input: string | null = null;
-    let loreRanAway = false;
-    const host = (at: ChatScope): Host => ({
-      ...this.reads(chat, at, () => { loreRanAway = true; }),
-      say: (tone, text) => { if (!signal.aborted) said.push({ tone, text }); },
-      ask: async (question) => { if (!signal.aborted) asked.push(question); return null; },
-      model: async () => { calls.model++; return { success: false, reason: 'failed', result: NOT_REHEARSED }; },
-      embed: async () => { calls.embed++; return { ok: false, reason: 'failed' }; },
-      background: async () => { calls.background++; return false; },
-    });
     const run = async (event: Event, at: ChatScope) => {
-      const outcome = await until(this.bindings.lua().then((runner) => runner.run(chat, scripts, at, event, host(at), 'preview')), signal);
+      const outcome = await until(this.bindings.lua().then((runner) => runner.run(chat, scripts, at, event, this.quiet(chat, at, heard, signal), 'preview')), signal);
       trace.entries.push(...(outcome.trace?.entries ?? []));
       trace.omitted += outcome.trace?.omitted ?? 0;
       const next = applied(chat, at, outcome);
@@ -474,7 +467,7 @@ export class Scripts {
       touched = true;
       scope = { ...scope, pending: end.writes };
     }
-    const rehearsal = () => ({ trace, said, asked, calls, scope, input, loreRanAway, prompt: null, request: null, changed: false });
+    const rehearsal = () => ({ ...heard, trace, scope, input, prompt: null, request: null, changed: false });
     if (end.kind === 'stopped') return { ...rehearsal(), stopped: end.stage };
     const built = touched ? await this.session.store.evaluation.prompt({ asker: 'view', chat }, { scope, seed: turn.reply.id, budget: turn.budget, fit: providerFit(turn.route, turn.settings, calibration.fit.allowance), ...this.cachedPrompt(chat, { scope, memory: memoryFill(this.session.store, chat, turn.chat, scope.messages) }), continuing: false, answerInstruction: answerInstructionOf(this.session.store) }, signal) : prompt;
     const after = 'kind' in built || JSON.stringify(built.messages) !== JSON.stringify(prompt.messages) ? built : null;
@@ -483,6 +476,25 @@ export class Scripts {
     if (edited.outcome.writes.length > 0) scope = { ...scope, pending: [...end.writes, ...edited.outcome.writes] };
     const request = edited.outcome.trace?.entries.some((entry) => entry.changed) ? requestAnswer(edited.outcome, sentOf(built)).map(({ message }) => message) : null;
     return { ...rehearsal(), stopped: null, prompt: after, request, changed: after !== null || request !== null };
+  }
+
+  // chat: the one scope is read from, or 'sample'. Each run has an owner of its own, so it starts on fresh Lua globals.
+  async trial(chat: string, scope: ChatScope, unit: ScriptUnit, event: Event, signal: AbortSignal): Promise<Trial> {
+    const heard = unheard();
+    const outcome = await until(this.bindings.lua().then((runner) => runner.run(`trial:${crypto.randomUUID()}`, [unit], scope, event, this.quiet(chat, scope, heard, signal), 'preview')), signal);
+    return { ...heard, outcome };
+  }
+
+  // A host for a run that saves nothing: each question dismissed, each model, embedding and background call refused.
+  private quiet(chat: string, scope: ChatScope, heard: Heard, signal: AbortSignal): Host {
+    return {
+      ...this.reads(chat, scope, () => { heard.loreRanAway = true; }),
+      say: (tone, text) => { if (!signal.aborted) heard.said.push({ tone, text }); },
+      ask: async (question) => { if (!signal.aborted) heard.asked.push(question); return null; },
+      model: async () => { heard.calls.model++; return { success: false, reason: 'failed', result: NOT_REHEARSED }; },
+      embed: async () => { heard.calls.embed++; return { ok: false, reason: 'failed' }; },
+      background: async () => { heard.calls.background++; return false; },
+    };
   }
 
   // editOutput: the bot's Lua, then each tool's replying in pack order, each handing the next the text it left.

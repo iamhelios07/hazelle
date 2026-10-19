@@ -1,60 +1,8 @@
-import { previousMessages } from '../../engine/cbs/history';
-import { unescapeCbs } from '../../engine/cbs/escape';
-import { evaluate, Runaway, type CbsContext } from '../../engine/cbs/evaluate';
-import { blankCard } from '../../engine/import/card';
 import type { GuideId } from '../common/code/cbsCommands';
 
-// inMessage: the example runs as a chat message's own text, the only place setvar and addvar write.
+// inMessage: the example runs as a chat message's own text (tryExample).
 export type Example = { written: string; result: string; inMessage?: true };
 export type Guide = { title: string; steps: readonly { text: string; example?: Example }[] };
-
-const messages: CbsContext['messages'] = [{ id: 'm1', message: 'm1', seed: 'm1', role: 'user', text: '안녕', time: null }];
-
-// The chat every example runs in, which SAMPLE_NOTE describes to the reader. Its seed and clock are fixed, so an example
-// gives the result written beside it; guides.test.ts runs every one.
-const SAMPLE: CbsContext = {
-  stage: 'prompt',
-  card: blankCard('미라'),
-  persona: { name: '나', description: '' },
-  prompt: null,
-  lore: [],
-  messages,
-  previous: previousMessages(messages),
-  source: { seed: 'sample' },
-  greeting: null,
-  variables: new Map([
-    ['호감도', '30'],
-    ['날씨', '비'],
-    ['가방', '["나침반","지도"]'],
-  ]),
-  toggle: (key) => (key === '존댓말' ? '1' : null),
-  model: null,
-  axModel: null,
-  triggerId: '',
-  screen: null,
-  clock: { now: Date.UTC(2026, 9, 1, 3), timeZone: 'Asia/Seoul' },
-  language: 'Korean',
-  assets: [],
-  inlays: [],
-  unfound: null,
-  problems: null,
-  modules: [],
-  faces: { char: null, user: null },
-  pickSeed: 'sample',
-};
-
-export const SAMPLE_NOTE = '예시 채팅: 캐릭터 미라, 페르소나 나, 채팅 변수 호감도=30 · 날씨=비 · 가방=["나침반","지도"], 토글 존댓말 켬';
-
-// null: the example's commands ran away and were stopped.
-export function tryExample(written: string, inMessage = false): string | null {
-  const context = { ...SAMPLE, variables: new Map(SAMPLE.variables), source: inMessage ? { message: 0 } : SAMPLE.source };
-  try {
-    return unescapeCbs(evaluate(written, context));
-  } catch (error) {
-    if (error instanceof Runaway) return null;
-    throw error;
-  }
-}
 
 export const GUIDES: Record<GuideId, Guide> = {
   basics: {
@@ -144,7 +92,7 @@ export const GUIDES: Record<GuideId, Guide> = {
         text: 'random은 메시지를 보낼 때마다 값 중 하나를 무작위로 선택해요. 이 예시에서는 결과가 하나로 고정되어 보여요.',
         example: { written: '오늘 날씨: {{random::맑음::흐림::비}}', result: '오늘 날씨: 비' },
       },
-      { text: 'pick도 값 중 하나를 무작위로 선택하지만, 같은 채팅에서 메시지 수가 그대로면 다시 보내도 같은 값이 나와요.', example: { written: '{{pick::맑음::흐림::비}}', result: '맑음' } },
+      { text: 'pick도 값 중 하나를 무작위로 선택하지만, 같은 채팅에서 메시지 수가 그대로면 다시 보내도 같은 값이 나와요.', example: { written: '{{pick::맑음::흐림::비}}', result: '흐림' } },
       { text: 'randint는 두 수 사이의 정수를, dice와 roll은 주사위를 굴려 나온 눈의 합을 내놓아요. 2d6은 6면체 주사위 두 개예요.', example: { written: '{{randint::1::100}} / {{roll::2d6}}', result: '67 / 7' } },
       { text: 'hash는 같은 텍스트를 넣으면 항상 똑같은 7자리 숫자를 내놓아요.', example: { written: '{{hash::미라}}', result: '2690090' } },
     ],

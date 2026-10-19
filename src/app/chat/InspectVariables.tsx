@@ -4,6 +4,7 @@ import { shown } from '../../model/chat';
 import { inspectToggles } from '../../runtime/chat-context';
 import { setVariableByHand } from '../../runtime/chat-log';
 import type { Sending } from '../../runtime/turn-context';
+import { shownValue } from '../common/HookDetail';
 import { useSearch } from '../common/useSearch';
 import { UNKNOWN } from '../common/words';
 import { useSession } from '../session';
@@ -58,7 +59,6 @@ function ValueEditor({ chat, version, busy, variable, onDone }: { chat: string; 
   );
 }
 
-export const shownValue = (value: string, truncated: boolean) => (value === '' ? '(빈 값)' : truncated ? `${value}…` : value);
 
 export function Variables({ chat, sending, busy }: { chat: string; sending: Sending | null | undefined; busy: boolean }) {
   const { store, read } = useSession();

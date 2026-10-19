@@ -2,7 +2,7 @@ import { useId, type ChangeEvent, type ReactNode } from 'react';
 import type { Chord } from '../foundation/keys';
 import { Hint, type Help } from '../overlays/Hint';
 import type { CodeLanguage } from './codeLanguage';
-import { CodeField } from './CodeField';
+import { CodeField, type CodeAside } from './CodeField';
 import styles from './TextField.module.css';
 import { useBigEdit } from './useBigEdit';
 
@@ -33,9 +33,11 @@ type Props = {
   expand?: readonly Chord[];
   // The language the text is written in: its big editor is the code editor, in code type for a key field.
   language?: CodeLanguage;
+  // A pane beside that editor, given the text as it stands.
+  aside?: (text: string) => CodeAside;
 };
 
-export function TextField({ label, showLabel = true, kind = 'text', value, onChange, placeholder, hint, help, error, lines, readOnly, action, expand, language }: Props) {
+export function TextField({ label, showLabel = true, kind = 'text', value, onChange, placeholder, hint, help, error, lines, readOnly, action, expand, language, aside }: Props) {
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
@@ -49,7 +51,7 @@ export function TextField({ label, showLabel = true, kind = 'text', value, onCha
     'aria-invalid': error ? true : undefined,
   };
   const big = useBigEdit(expand, label, (copy) =>
-    language ? <CodeField label={label} value={value} onChange={onChange} language={language} prose={kind !== 'key'} area={copy.area} caret={copy.caret} /> : <textarea ref={copy.area} className={`${look} ${styles.big}`} aria-label={label} data-autofocus {...typed} {...shared} />,
+    language ? <CodeField label={label} value={value} onChange={onChange} language={language} prose={kind !== 'key'} area={copy.area} caret={copy.caret} aside={aside?.(value)} /> : <textarea ref={copy.area} className={`${look} ${styles.big}`} aria-label={label} data-autofocus {...typed} {...shared} />,
   );
   const own = { id, 'aria-label': showLabel ? undefined : label, 'aria-describedby': note ? noteId : undefined, ...shared };
   return (

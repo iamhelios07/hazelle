@@ -6,7 +6,7 @@ import type { Memory, Written } from '../model/memory';
 import type { MascotId } from '../model/mascot';
 import type { Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
-import { evaluate, Runaway, type CbsProblem } from './cbs/evaluate';
+import { evaluate, Runaway, type CbsContext, type CbsProblem } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
 import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation, type Silent } from './lorebook/activate';
@@ -52,6 +52,12 @@ function stoppable<T>(build: () => T): T | RanAway {
     throw error;
   }
 }
+
+// A text written after the chat's messages, read with the variables they leave, as a prompt's text is (lay).
+// source: a message's own when the text stands for that message, the only place setvar writes. language: what
+// {{language}} reads, which only a translation's prompt sets.
+export const renderAfter = (scope: ChatScope, text: string, source: CbsContext['source'], language: string | null = null): string | RanAway =>
+  stoppable(() => unescapeCbs(evaluate(text, contexts(scope, 'prompt', language, '', null)(source, new Map(renderChat('prompt', scope).variables)))));
 
 // slot is null for a text block. id: the prompt block's or the lore entry's, absent from a cache print or a receipt
 // stored before it was kept.

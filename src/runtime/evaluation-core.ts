@@ -1,7 +1,7 @@
 import { rewritten, type ProviderFit } from '../engine/prompt-budget';
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { speakersOf, standing, type Standing } from '../engine/memory';
-import { activeLore, assemble, assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, type Assembled, type IllustrationInput, type MascotInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
+import { activeLore, assemble, assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, renderAfter, type Assembled, type IllustrationInput, type MascotInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
 import type { RegexScript } from '../engine/import/types';
 import { trySample } from '../engine/regex/scripts';
 import { inspectVariables, renderChat, type VariableInspection, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
@@ -22,7 +22,8 @@ export type EvaluationJob =
   | { kind: 'read'; memory: { memory: Memory; shown: Source[]; budget: number } | null }
   | { kind: 'lore'; seed: string; limit: number }
   | { kind: 'state'; prefix: string }
-  | { kind: 'variables'; prefix: string };
+  | { kind: 'variables'; prefix: string }
+  | { kind: 'text'; text: string };
 export type LuaResult = LuaText & { version: string };
 export type EvaluationInput =
   | { lane: string; scope: ChatBasis; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
@@ -44,6 +45,7 @@ export type EvaluationResult =
   | EvaluatedPrompt
   | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ReturnType<typeof assembleMascot> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | { sampled: string }
+  | { read: string }
   | null;
 // probe: 문제 진단's check, sent to a worker of its own: whether the tokenizer loads, and what stopped it if not.
 export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true } | { probe: true };
@@ -96,6 +98,11 @@ export class Evaluator {
     if (job.kind === 'variables') {
       started();
       return inspectVariables(scope, job.prefix);
+    }
+    if (job.kind === 'text') {
+      started();
+      const read = renderAfter(scope, job.text, { seed: 'trial' });
+      return typeof read === 'string' ? { read } : read;
     }
     if (job.kind === 'state') {
       started();

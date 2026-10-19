@@ -11,6 +11,7 @@ import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeLanguage } from '../ui';
 import { cbsLanguage } from './code/cbs';
 import { luaLanguage } from './code/lua';
+import { luaTrial } from './code/Trial';
 import type { Defaults } from './code/variables';
 import { ACTS, addOf } from './acts';
 import { withParticle } from './particles';
@@ -266,7 +267,7 @@ function LuaItem(props: ItemProps & { trigger: Lua; language: CodeLanguage; draf
   return (
     <Item {...props} title={name} tag={tag}>
       <TextField label="이름" value={shown.name} onChange={(value) => save.change({ name: value })} />
-      <TextField label="코드" kind="key" lines={20} expand={SHORTCUTS.bigEdit.keys} language={language} value={code} onChange={onDraft} />
+      <TextField label="코드" kind="key" lines={20} expand={SHORTCUTS.bigEdit.keys} language={language} aside={luaTrial({ ...trigger, owner }, owner)} value={code} onChange={onDraft} />
       <Row kind="actions">
         <Button variant="primary" size="sm" disabled={!pending} onClick={() => void apply()}>
           적용

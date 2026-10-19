@@ -61,6 +61,7 @@ const GATES = {
   lore: 'press',
   tool: 'press',
   export: 'press',
+  trial: 'press',
 } as const;
 type Asker = keyof typeof GATES;
 // Who asks, for which chat, saved or not yet. A lane holds one job: a newer one on the same lane stops the one waiting
@@ -123,6 +124,11 @@ export class Evaluation {
 
   variables(lane: Lane<'view'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<VariableInspection> {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'variables', prefix }, signal) as Promise<VariableInspection>;
+  }
+
+  // A draft read after the chat (시험해 보기), on a lane of its own so it never stops 점검's.
+  text(lane: Lane<'trial'>, scope: ChatScope, text: string, signal?: AbortSignal): Promise<{ read: string } | RanAway> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'text', text }, signal) as Promise<{ read: string } | RanAway>;
   }
 
   // A translation's, and a bot's lorebook read, may run beside others of the same chat: each has a lane of its own,
