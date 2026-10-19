@@ -24,7 +24,7 @@ export type EvaluationJob =
   | { kind: 'lore'; seed: string; limit: number }
   | { kind: 'state'; prefix: string }
   | { kind: 'variables'; prefix: string }
-  | { kind: 'text'; text: string };
+  | { kind: 'text'; text: string; language: string | null };
 export type LuaResult = LuaText & { version: string };
 export type TrialRead = CbsTrace & { read: string };
 export type EvaluationInput =
@@ -104,7 +104,7 @@ export class Evaluator {
     if (job.kind === 'text') {
       started();
       const trace: CbsTrace = { steps: [], omitted: 0 };
-      const read = renderAfter(scope, job.text, { seed: 'trial' }, null, trace);
+      const read = renderAfter(scope, job.text, { seed: 'trial' }, job.language, trace);
       return typeof read === 'string' ? { read, ...trace } : read;
     }
     if (job.kind === 'state') {

@@ -346,6 +346,13 @@ describe('steps', () => {
     ]);
   });
 
+  it('gives each step a {{return}} leaves through the returned value', () => {
+    expect(traced('{{#when::1}}{{return::hi}}{{/when}}tail').map(({ written, result }) => [written, result])).toEqual([
+      ['{{#when::1}}{{return::hi}}{{/when}}', 'hi'],
+      ['{{return::hi}}', 'hi'],
+    ]);
+  });
+
   it("places a called function's body where it was defined, one level inside the call", () => {
     const text = '{{#func f}}{{user}}{{/func}}{{call::f}}';
     expect(traced(text).map(({ written, depth }) => [written, depth])).toEqual([

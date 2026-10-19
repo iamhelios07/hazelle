@@ -42,7 +42,8 @@ export function callTemplate({ name, form, waits }: Pick<LuaFunction, 'name' | '
 
 const docOf = ({ form, text, waits }: LuaFunction): CodeDoc => ({ form: `${form}${waits ? ':await()' : ''}`, text: waits ? `${text} async 안에서 :await()로 기다려요.` : text });
 
-const blank = (text: string) => text.replace(/--\[(=*)\[[\s\S]*?\]\1\]|--[^\n]*/g, (match) => match.replace(/[^\n]/g, ' ')).replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|\[(=*)\[[\s\S]*?\]\1\]/g, (match) => match.replace(/[^\n]/g, ' '));
+// Comments and strings in one pass, so whichever starts first wins: `"--"` is a string, `-- "` a comment.
+const blank = (text: string) => text.replace(/--\[(=*)\[[\s\S]*?\]\1\]|--[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|\[(=*)\[[\s\S]*?\]\2\]/g, (match) => match.replace(/[^\n]/g, ' '));
 
 // Names the code itself gives: functions, locals, parameters and assigned globals. A name only ever called is an API
 // name or a typo; offering it would rank the typo over the API.
@@ -130,9 +131,11 @@ function complete(text: string, at: number, place: 'code' | 'string' | 'comment'
   const from = at - (word?.[0].length ?? 0);
   if (/[.:]$/.test(text.slice(0, from))) return null;
   const others = definedNames(text.slice(0, from) + text.slice(at));
+  // After a typed `function `, an event's snippet writes only its name onward.
+  const declared = /\bfunction\s+$/.test(text.slice(0, from));
   const items: CodeItem[] = [
     ...LUA_API.map((entry): CodeItem => ({ label: entry.name, kind: 'function', detail: entry.form.slice(entry.name.length), template: callTemplate(entry), doc: docOf(entry) })),
-    ...LUA_EVENTS.filter((entry) => !others.has(entry.name)).map((entry): CodeItem => ({ label: entry.name, kind: 'keyword', detail: '이벤트', template: `function ${entry.form}\n\t\${0}\nend`, doc: docOf(entry) })),
+    ...LUA_EVENTS.filter((entry) => !others.has(entry.name)).map((entry): CodeItem => ({ label: entry.name, kind: 'keyword', detail: '이벤트', template: `${declared ? '' : 'function '}${entry.form}\n\t\${0}\nend`, doc: docOf(entry) })),
     ...SNIPPETS.map(([label, template]): CodeItem => ({ label, kind: 'keyword', template, boost: 1 })),
     ...GLOBALS.map((name): CodeItem => ({ label: name, kind: 'function', detail: 'Lua', boost: -1 })),
     ...Object.keys(LIBRARY).map((name): CodeItem => ({ label: name, kind: 'namespace', detail: 'Lua', boost: -1 })),
@@ -158,14 +161,16 @@ function explain(text: string, at: number, variables: Variables) {
   return entry && !/[.:]$/.test(text.slice(0, from)) ? { from, to, doc: docOf(entry) } : null;
 }
 
-// check: the Lua VM's syntax check of a draft. variables: offered and explained by name.
-export function luaLanguage(check: (code: string) => Promise<SyntaxProblem | null>, variables: Variables = { defaults: [], chat: null }): CodeLanguage {
+// check: the Lua VM's syntax check of a draft; unchecked when the VM could not be reached. variables: offered and
+// explained by name.
+export function luaLanguage(check: (code: string) => Promise<SyntaxProblem | null | 'unchecked'>, variables: Variables = { defaults: [], chat: null }): CodeLanguage {
   return {
     syntax: 'lua',
     lint: async (text) => {
       const problems = lint(text);
       const syntax = await check(text);
       if (!syntax) return problems;
+      if (syntax === 'unchecked') return [{ from: 0, to: 0, severity: 'warning', message: '문법을 확인하지 못했어요.' }, ...problems];
       const [from, to] = syntax.line === null ? [0, 0] : lineRange(text, syntax.line);
       return [{ from, to, severity: 'error', message: syntaxMessage(syntax.message) }, ...problems];
     },

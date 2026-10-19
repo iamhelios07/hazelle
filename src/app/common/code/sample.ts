@@ -4,6 +4,9 @@ import type { ChatScope } from '../../../engine/render';
 
 // The chat every guide example and 시험해 보기's 예시 채팅 runs in, which SAMPLE_NOTE describes to the reader. Its seed
 // and clock are fixed, so an example gives the result written beside it; guides.test.ts runs every one.
+// What the sample passes for {{language}}; a real chat passes null, as its conversation prompt does.
+export const SAMPLE_LANGUAGE = 'Korean';
+
 export const SAMPLE: ChatScope = {
   card: blankCard('미라'),
   cast: [],
@@ -41,6 +44,6 @@ export const SAMPLE_NOTE = '예시 채팅: 캐릭터 미라, 페르소나 나, �
 // inMessage: the example runs as a chat message's own text, the only place setvar and addvar write. null: its
 // commands ran away and were stopped.
 export function tryExample(written: string, inMessage = false): string | null {
-  const result = renderAfter(SAMPLE, written, inMessage ? { message: 0 } : { seed: 'sample' }, 'Korean');
+  const result = renderAfter(SAMPLE, written, inMessage ? { message: 0 } : { seed: 'sample' }, SAMPLE_LANGUAGE);
   return typeof result === 'string' ? result : null;
 }

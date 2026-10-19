@@ -166,7 +166,14 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
   let out = '';
   for (const node of nodes) {
     const step = typeof node === 'string' ? null : stepFor(node, frame);
-    const piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame, step) : node.kind === 'block' ? evaluateBlock(node, frame, step) : legacy(node, frame, step);
+    let piece: string | Erase;
+    try {
+      piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame, step) : node.kind === 'block' ? evaluateBlock(node, frame, step) : legacy(node, frame, step);
+    } catch (error) {
+      // {{return}} ends the text with its value, which each step it leaves through gave.
+      if (step && error instanceof Return) step.result = error.value.slice(0, MOST_RESULT);
+      throw error;
+    }
     if (step && typeof piece === 'string') step.result = piece.slice(0, MOST_RESULT);
     else if (step) step.erased = true;
     if (typeof node !== 'string') spent.tags++;
@@ -307,7 +314,7 @@ const held = (step: CbsStep | null, holds: boolean) => {
 // Only the branch taken is evaluated. Risu evaluates both and keeps one, so a setvar in the other ran too.
 function when(block: Block, rest: string, frame: Frame, step: CbsStep | null): string {
   const { modes, condition } = whenArgs(rest);
-  if (step) step.condition = condition;
+  if (step) step.condition = condition.map((arg) => arg.slice(0, MOST_RESULT));
   const holds = held(step, condition.length > 0 && fold(condition, frame.run.context));
   if (modes.includes('legacy')) return holds ? evaluateNodes(trimLines(block.body), frame) : '';
   const split = block.body.findIndex(isElse);

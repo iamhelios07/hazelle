@@ -35,8 +35,12 @@ describe('Lua code editor', () => {
     expect(read.complete('getState(id, "")', 14, 'string', false)?.items.map((item) => [item.label, item.detail])).toEqual([['hp', '7']]);
   });
 
+  it('writes an event after a typed `function` without a second one', () => {
+    expect(language.complete('function onSt', 13, 'code', false)?.items.find((item) => item.label === 'onStart')?.template).toBe('onStart(id)\n\t${0}\nend');
+  });
+
   it('marks a typo with its fix and an unsupported call, not a function the code defines', async () => {
-    const problems = await language.lint('local function helper() end\nhelper()\ngetChatVr(id, "a")\nsetName(id, "b")');
+    const problems = await language.lint('local function helper() end\nhelper()\nlocal s = "--"; getChatVr(id, "a")\nsetName(id, "b")');
     expect(problems.map(({ message, fix }) => [message, fix?.insert])).toEqual([
       ['getChatVar의 오타 같아요.', 'getChatVar'],
       ['setName은(는) 헤이젤에 없어서 아무 일도 하지 않아요.', undefined],
@@ -47,5 +51,6 @@ describe('Lua code editor', () => {
     const checked = luaLanguage(async () => ({ line: 2, message: "'end' expected (to close 'function' at line 1) near <eof>" }));
     expect(await checked.lint('function onStart(id)\n  x = 1')).toEqual([{ from: 21, to: 28, severity: 'error', message: '1번째 줄 function의 짝인 end이(가) 없어요.' }]);
     expect(syntaxMessage("unexpected symbol near '+'")).toBe("'+'은(는) 여기 올 수 없어요.");
+    expect(await luaLanguage(async () => 'unchecked').lint('x = 1')).toEqual([{ from: 0, to: 0, severity: 'warning', message: '문법을 확인하지 못했어요.' }]);
   });
 });

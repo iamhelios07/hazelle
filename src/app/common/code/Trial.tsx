@@ -11,7 +11,7 @@ import { Button, Callout, ChoiceGroup, CodeBlock, Facts, Stack, StepList, Text, 
 import { runaway } from '../failure';
 import { HookDetail } from '../HookDetail';
 import { LUA_EVENTS } from './luaApi';
-import { SAMPLE, SAMPLE_NOTE } from './sample';
+import { SAMPLE, SAMPLE_LANGUAGE, SAMPLE_NOTE } from './sample';
 import { chatVariable, writerName, type ChatVariables, type Defaults, type Variables } from './variables';
 
 const LABEL = '시험해 보기';
@@ -117,7 +117,7 @@ function CbsTrial({ text, trial, reveal }: { text: string; trial: TrialChat; rev
     const stop = new AbortController();
     const done = (result: TrialRead | null | 'failed') => !stop.signal.aborted && setRead({ scope, text, result });
     const timer = setTimeout(() => {
-      store.evaluation.text(lane, scope, text, stop.signal).then((answer) => done('kind' in answer ? null : answer), () => done('failed'));
+      store.evaluation.text(lane, scope, text, chat === null ? SAMPLE_LANGUAGE : null, stop.signal).then((answer) => done('kind' in answer ? null : answer), () => done('failed'));
     }, WAIT_MS);
     return () => {
       clearTimeout(timer);

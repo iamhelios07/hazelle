@@ -127,8 +127,8 @@ export class Evaluation {
   }
 
   // A draft read after the chat (시험해 보기), on a lane of its own so it never stops 점검's.
-  text(lane: Lane<'trial'>, scope: ChatScope, text: string, signal?: AbortSignal): Promise<TrialRead | RanAway> {
-    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'text', text }, signal) as Promise<TrialRead | RanAway>;
+  text(lane: Lane<'trial'>, scope: ChatScope, text: string, language: string | null, signal?: AbortSignal): Promise<TrialRead | RanAway> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'text', text, language }, signal) as Promise<TrialRead | RanAway>;
   }
 
   // A translation's, and a bot's lorebook read, may run beside others of the same chat: each has a lane of its own,

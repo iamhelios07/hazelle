@@ -420,9 +420,9 @@ export class Scripts {
   // The pre-send stages of sending, on Lua engines of their own and off the chat's queue, so a real send never waits
   // behind one; nothing is saved or kept in the page log. Each stage hands the next the chat as the send's would. A
   // question is dismissed and no model is called, so a script that branches on either may go another way when sent.
-  // A Lua draft's first syntax error, from the same VM that runs it; null when the worker is gone.
-  check(code: string): Promise<SyntaxProblem | null> {
-    return this.bindings.lua().then((runner) => runner.check(code)).catch(() => null);
+  // A Lua draft's first syntax error, from the same VM that runs it; unchecked when the worker is gone.
+  check(code: string): Promise<SyntaxProblem | null | 'unchecked'> {
+    return this.bindings.lua().then((runner) => runner.check(code)).catch(() => 'unchecked' as const);
   }
 
   // Tools are not rehearsed: their storage writes would be real, so what a tool's sending or requesting does shows only

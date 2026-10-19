@@ -77,7 +77,7 @@ it('replays old tail reads and forward variables after a history delta, and matc
 it('reads a draft after the chat, with the variables its messages leave', async () => {
   const evaluation = new Evaluation(none);
   const chat = { ...scope, variables: [['a', '1']], messages: [message('m', '{{setvar::a::2}}')] } satisfies ChatScope;
-  expect(await evaluation.text({ asker: 'trial', chat: 'c' }, chat, 'a={{getvar::a}}')).toEqual({ read: 'a=2', steps: [{ at: 2, end: 15, depth: 0, result: '2', variable: 'a' }], omitted: 0 });
+  expect(await evaluation.text({ asker: 'trial', chat: 'c' }, chat, 'a={{getvar::a}}', null)).toEqual({ read: 'a=2', steps: [{ at: 2, end: 15, depth: 0, result: '2', variable: 'a' }], omitted: 0 });
   evaluation.close();
 });
 
