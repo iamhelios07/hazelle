@@ -15,9 +15,7 @@ export type Part = Sent | ChatPart | CachePart;
 export type ProviderFit = { allowance: number | null; route: WireRoute; model: Model; settings: ModelSettings };
 
 export function wireTokens(fit: ProviderFit, messages: ChatMessage[], countTokens: (text: string) => number): number {
-  // Measured without PDF로 보내기: the budget counts the same words either way, and building the PDF on every pass
-  // would only be thrown away.
-  const prepared = prepareChat(requestRoute(fit.route), { model: fit.model, settings: { ...fit.settings, pdf: undefined }, messages });
+  const prepared = prepareChat(requestRoute(fit.route), { model: fit.model, settings: fit.settings, messages });
   return prepared.wire.segments.reduce((total, { text }) => total + countTokens(text), 0);
 }
 

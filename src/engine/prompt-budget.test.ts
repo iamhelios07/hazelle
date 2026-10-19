@@ -3,6 +3,8 @@ import { expect, it, vi } from 'vitest';
 import { anthropicMessages } from '../connectors/anthropic-messages';
 import { bareModel } from '../connectors/chat-completions';
 import { gemini } from '../connectors/gemini';
+import { prepareChat } from '../connectors/preparation';
+import { requestRoute } from '../connectors/registry';
 import type { ChatMessage } from '../connectors/types';
 import { cachePoints } from './cache-points';
 import type { Assembled, From } from './pipeline';
@@ -60,4 +62,14 @@ it('caps corrections when changing system joins defeat successive estimates, and
   } finally {
     builds.mockRestore();
   }
+});
+
+it('fits a PDF로 보내기 request by what it sends, role tags and instruction included', () => {
+  const fit: ProviderFit = { ...fitFor('gemini', 2000), settings: { pdf: { keep: 'recent', recent: 20 } } };
+  const messages = Array.from({ length: 400 }, (_, at) => ({ message: { role: at % 2 ? 'assistant' as const : 'user' as const, content: `${at} the tide came in` } }));
+  const result = fitChat([{ range: { from: 0, to: null }, from: chat }], messages, [], countTokens, fit);
+  if ('kind' in result) throw new Error('expected a fitting request');
+  const sent = prepareChat(requestRoute(fit.route), { model: fit.model, settings: fit.settings, messages: cachePoints(result.parts).map(({ message }) => message) });
+  expect(sent.pdf).toBe(true);
+  expect(sent.wire.segments.reduce((total, { text }) => total + countTokens(text), 0)).toBeLessThanOrEqual(2000);
 });

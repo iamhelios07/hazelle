@@ -110,7 +110,6 @@ export async function generate({ credentials, log, connection, model, settings, 
     // A batch answers whole, and both batch formats refuse a request that streams.
     const prepared = prepareChat(route, { model, messages, settings: batches ? { ...settings, streaming: false } : settings });
     request = prepared.request;
-    pdf = prepared.pdf;
     if (call.measure) call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), measurement: await call.measure(prepared) };
     if (call.preflight) {
       const checked = await call.preflight(settings, signal);
@@ -123,6 +122,7 @@ export async function generate({ credentials, log, connection, model, settings, 
       if (calibration.fit.allowance !== null && calibration.measurement.o200k > calibration.fit.allowance) return reply(...failedWith({ kind: 'refused', code: 'context-fit' }));
     }
     built = redacted(request, connection);
+    pdf = prepared.pdf;
     cached = cacheView(route, asked);
   } catch (error) {
     if (error instanceof ConnectorError) return reply(...failedWith({ kind: 'refused', code: error.code }));

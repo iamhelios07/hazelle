@@ -145,8 +145,9 @@ class PdfWriter {
   finish(pages: number[]): Uint8Array {
     this.bodies[0] = [encode('<< /Type /Catalog /Pages 2 0 R >>')];
     this.bodies[1] = [encode(`<< /Type /Pages /Kids [${pages.map((page) => `${page} 0 R`).join(' ')}] /Count ${pages.length} >>`)];
-    const chunks: Uint8Array[] = [encode('%PDF-1.7\n')];
-    let offset = chunks[0]!.length;
+    // The second line's four bytes above 127 mark the file binary, as the PDF header asks.
+    const chunks: Uint8Array[] = [encode('%PDF-1.7\n%'), new Uint8Array([0xe2, 0xe3, 0xcf, 0xd3, 0x0a])];
+    let offset = chunks[0]!.length + chunks[1]!.length;
     const offsets: number[] = [];
     this.bodies.forEach((body, at) => {
       offsets.push(offset);
