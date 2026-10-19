@@ -36,9 +36,9 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
       />
       <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
       <SettingRow
-        label="내 시점으로 그리기"
-        help="내 페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
-        control={<Switch label="내 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
+        label="페르소나 시점으로 그리기"
+        help="페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
+        control={<Switch label="페르소나 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
       />
       <SettingRow
         label="만화로 그리기"
