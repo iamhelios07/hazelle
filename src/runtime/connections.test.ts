@@ -78,15 +78,16 @@ describe('addModel', () => {
       expect(store.get('settings', SETTINGS_ID)?.value.models.main).toEqual({ connection: id, model: 'first' });
     }));
 
-  it("keys a model's first entry by its id and a second one by an entry of its own", () =>
+  it("keys a model's first entry by its id and a copy by the entry it was given, and adds neither twice", () =>
     server.withSession(async ({ store }) => {
       const saved = await store.create('connection', openRouter);
       const id = saved.ok ? saved.data.id : '';
-      const first = await addModel(store, id, testModel);
-      const second = await addModel(store, id, testModel, { label: 'M (low)' });
-      expect(first).toEqual({ ok: true, data: testModel.id });
-      expect(second.ok && second.data).toMatch(/^#/);
-      expect(store.get('connection', id)?.value.starred).toEqual([testModel, { ...testModel, label: 'M (low)', entry: second.ok && second.data }]);
+      const copy = { label: 'M (low)', entry: '#low' };
+      expect(await addModel(store, id, testModel)).toEqual({ ok: true, data: testModel.id });
+      expect(await addModel(store, id, testModel, copy)).toEqual({ ok: true, data: '#low' });
+      await addModel(store, id, testModel);
+      await addModel(store, id, testModel, copy);
+      expect(store.get('connection', id)?.value.starred).toEqual([testModel, { ...testModel, ...copy }]);
     }));
 });
 

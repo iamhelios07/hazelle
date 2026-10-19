@@ -78,7 +78,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
 
   const known = rows.some(({ model }) => tags(model).length > 0);
   const search = useSearch(rows, '모델 검색', ({ model }) => entryTerms(model));
-  const shown = search.found.filter(({ model }) => filter === 'all' || FILTERS[filter].test(model));
+  // With no tags known the filter is hidden, so one picked before cannot keep hiding models.
+  const shown = search.found.filter(({ model }) => filter === 'all' || !known || FILTERS[filter].test(model));
   const entriesShown = shown.flatMap(({ model, added }) => (added ? [model] : []));
   const modelsShown = shown.flatMap(({ model, added }) => (added ? [] : [model]));
 

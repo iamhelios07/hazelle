@@ -75,17 +75,14 @@ function freeLabel(label: string, connections: readonly Stored<'connection'>[]):
 export const renameConnection = (store: ObjectStore, id: string, label: string) => store.update('connection', id, (current) => ({ ...current, label }));
 
 // A model's first entry takes the model's id as its key, so adding a model removed earlier names it for every reference
-// to it again; a model already added gets a further copy, with a key of its own (Starred entry). The key is chosen on
-// every try, against the entries another device may have added meanwhile.
+// to it again; a further copy comes with the key addCopy chose. Every try runs the change again on what the server holds
+// by then, a write whose answer was lost included, so an entry whose key is there already is not added twice.
 // The first model added that can talk becomes the 대화 모델: until one is set no chat can send, and with one there is
 // nothing to choose between.
-export async function addModel(store: ObjectStore, id: string, model: Model, own: Pick<Starred, 'label' | 'profile'> = {}): Promise<ApiResult<string>> {
-  let key = model.id;
-  const saved = await store.update('connection', id, (current) => {
-    const entry = current.starred.some((each) => entryKey(each) === model.id) ? `#${crypto.randomUUID()}` : undefined;
-    key = entry ?? model.id;
-    return { ...current, starred: [...current.starred, { ...snapshotOf(model), ...own, ...(entry !== undefined && { entry }) }] };
-  });
+export async function addModel(store: ObjectStore, id: string, model: Model, own: Pick<Starred, 'label' | 'profile' | 'entry'> = {}): Promise<ApiResult<string>> {
+  const key = own.entry ?? model.id;
+  const saved = await store.update('connection', id, (current) =>
+    current.starred.some((each) => entryKey(each) === key) ? current : { ...current, starred: [...current.starred, { ...snapshotOf(model), ...own }] });
   if (!saved.ok) return saved;
   if (fitsRole(model, 'main') && !store.get('settings', SETTINGS_ID)?.value.models.main) await setDefaultModel(store, 'main', { connection: id, model: key });
   return { ok: true, data: key };
@@ -103,10 +100,11 @@ export async function addCopy(store: ObjectStore, id: string, model: Model, labe
   const own = ownLabel(model.name, label);
   const connection = store.get('connection', id);
   const first = connection && entriesOf(connection.value, model.id)[0];
-  if (!first || imageOnly(first)) return addModel(store, id, model, own);
+  const entry = `#${crypto.randomUUID()}`;
+  if (!first || imageOnly(first)) return addModel(store, id, model, { ...own, entry });
   const choice = modelProfile(store, first);
   const made = await ownProfile(store, { name: model.name, ...own }, choice.kind === 'profile' ? choice.profile.value.settings : {});
-  return made.ok ? addModel(store, id, model, { ...own, profile: made.data }) : made;
+  return made.ok ? addModel(store, id, model, { ...own, profile: made.data, entry }) : made;
 }
 
 // What removeModel took, for putModelBack: the entry whole, so its key, name and 설정 come back with it and every
@@ -117,16 +115,18 @@ export async function removeModel(store: ObjectStore, id: string, key: string): 
   let taken: TakenModel | null = null;
   const saved = await store.update('connection', id, (current) => {
     const index = current.starred.findIndex((model) => entryKey(model) === key);
-    if (index < 0) return null;
+    // Gone on a later try: the first one landed and only its answer was lost, so the entry it took is still the one to
+    // put back.
+    if (index < 0) return taken ? current : null;
     taken = { entry: current.starred[index]!, index };
     return { ...current, starred: current.starred.toSpliced(index, 1) };
   });
   return saved.ok ? { ok: true, data: taken! } : saved;
 }
 
-// A key added again meanwhile is not doubled.
+// A key already there (put back by a try whose answer was lost, or added again meanwhile) is not doubled.
 export const putModelBack = (store: ObjectStore, id: string, { entry, index }: TakenModel) =>
-  store.update('connection', id, (current) => (current.starred.some((model) => entryKey(model) === entryKey(entry)) ? null : { ...current, starred: current.starred.toSpliced(index, 0, entry) }));
+  store.update('connection', id, (current) => (current.starred.some((model) => entryKey(model) === entryKey(entry)) ? current : { ...current, starred: current.starred.toSpliced(index, 0, entry) }));
 
 export const renameModel = (store: ObjectStore, id: string, key: string, label: string) =>
   store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (entryKey(model) === key ? { ...without(model, 'label'), ...ownLabel(model.name, label) } : model)) }));
