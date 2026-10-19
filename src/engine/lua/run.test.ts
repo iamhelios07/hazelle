@@ -173,6 +173,20 @@ describe('Lua runs', () => {
     expect((await run(code, { kind: 'start' }, {}, card)).writes).toEqual([['before', '<style>.a{}</style>'], ['saved', 'false'], ['after', '<style>.a{}</style>']]);
   });
 
+  it('starts a background save from a function that is not async, which answers nil', async () => {
+    const kept: string[] = [];
+    const outcome = await run(`function onStart(id) setChatVar(id, 'saved', tostring(setBackgroundEmbedding(id, '<style>.b{}</style>'))) end`, { kind: 'start' }, { background: async (html) => (kept.push(html), true) });
+    expect(outcome.errors).toEqual([]);
+    expect(outcome.writes).toEqual([['saved', 'nil']]);
+    expect(kept).toEqual(['<style>.b{}</style>']);
+  });
+
+  it("evaluates the persona description's CBS over the run's variables", async () => {
+    const persona = { ...SNAPSHOT, persona: { name: 'Jin', description: '{{user}} at hp {{getvar::hp}}' } };
+    const outcome = await run(`function onStart(id) setChatVar(id, 'hp', 4) setChatVar(id, 'persona', getPersonaDescription(id)) end`, { kind: 'start' }, {}, persona);
+    expect(new Map(outcome.writes).get('persona')).toBe('Jin at hp 4');
+  });
+
   it('chains edit listeners and keeps the value when one returns nothing', async () => {
     const code = `listenEdit('editOutput', function(id, value, meta) return value .. meta.index end)
       listenEdit('editOutput', function(id, value) end)`;

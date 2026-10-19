@@ -88,6 +88,16 @@ describe("a turn with the bot's Lua", () => {
       expect(prompt.parts.at(-1)).toMatchObject({ from: { kind: 'script' } });
     }));
 
+  it("hands editOutput the number the reply takes, the greeting's being -1, again when it is made anew", () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `listenEdit('editOutput', function(id, value, meta) return value .. '#' .. meta.index end)`);
+      stubRelay(inTurn([saying('a'), saying('b')]));
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      expect(shown(messages()[2]!).text).toBe('a#1');
+      expect(await takeTurn(session, chat, { kind: 'regenerate', message: messages()[2]!.id })).toBeNull();
+      expect(shown(messages()[2]!).text).toBe('b#1');
+    }));
+
   it("hands editRequest each chat message's id as its memo, and sends the model none", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(
