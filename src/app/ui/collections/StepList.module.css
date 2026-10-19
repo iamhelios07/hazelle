@@ -1,0 +1,66 @@
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.step {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-8);
+  padding: var(--space-4) var(--space-8);
+  padding-inline-start: calc(var(--space-8) + var(--depth) * var(--space-12));
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  text-align: start;
+  cursor: pointer;
+}
+
+.step:hover {
+  border-color: var(--color-border);
+  background: var(--color-surface-hover);
+}
+
+.source,
+.result {
+  min-width: 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.source {
+  color: var(--color-markup-cbs);
+}
+
+/* A long source pushes the result to a line of its own rather than squeezing it. */
+.result {
+  flex: 1 1 10rem;
+}
+
+.arrow,
+.empty {
+  color: var(--color-text-faint);
+}
+
+.note {
+  flex-basis: 100%;
+  color: var(--color-text-faint);
+}
+
+.branch .note {
+  color: var(--color-code-keyword);
+}
+
+.warn .source {
+  text-decoration: underline wavy var(--color-warn);
+  text-underline-offset: var(--space-2);
+}

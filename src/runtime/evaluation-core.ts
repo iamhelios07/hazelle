@@ -1,4 +1,5 @@
 import { rewritten, type ProviderFit } from '../engine/prompt-budget';
+import type { CbsTrace } from '../engine/cbs/evaluate';
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { speakersOf, standing, type Standing } from '../engine/memory';
 import { activeLore, assemble, assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, renderAfter, type Assembled, type IllustrationInput, type MascotInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
@@ -25,6 +26,7 @@ export type EvaluationJob =
   | { kind: 'variables'; prefix: string }
   | { kind: 'text'; text: string };
 export type LuaResult = LuaText & { version: string };
+export type TrialRead = CbsTrace & { read: string };
 export type EvaluationInput =
   | { lane: string; scope: ChatBasis; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
   | { lane: string; patch: { revision: number; generation: number; items: LuaResult[] } }
@@ -45,7 +47,7 @@ export type EvaluationResult =
   | EvaluatedPrompt
   | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ReturnType<typeof assembleMascot> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | { sampled: string }
-  | { read: string }
+  | TrialRead
   | null;
 // probe: 문제 진단's check, sent to a worker of its own: whether the tokenizer loads, and what stopped it if not.
 export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true } | { probe: true };
@@ -101,8 +103,9 @@ export class Evaluator {
     }
     if (job.kind === 'text') {
       started();
-      const read = renderAfter(scope, job.text, { seed: 'trial' });
-      return typeof read === 'string' ? { read } : read;
+      const trace: CbsTrace = { steps: [], omitted: 0 };
+      const read = renderAfter(scope, job.text, { seed: 'trial' }, null, trace);
+      return typeof read === 'string' ? { read, ...trace } : read;
     }
     if (job.kind === 'state') {
       started();

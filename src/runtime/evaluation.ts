@@ -4,7 +4,7 @@ import type { RegexScript } from '../engine/import/types';
 import type { assembleIllustration, assembleMascot, assembleMemory, assembleTranslation, IllustrationInput, MascotInput, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
 import type { ChatScope, VariableInspection } from '../engine/render';
 import type { ApiFailure } from './api';
-import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState } from './evaluation-core';
+import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState, TrialRead } from './evaluation-core';
 import { noteProblem } from './diagnostics';
 import { changedTail, sameHistory } from './history-delta';
 import { Heartbeat, moduleWorker } from './worker';
@@ -127,8 +127,8 @@ export class Evaluation {
   }
 
   // A draft read after the chat (시험해 보기), on a lane of its own so it never stops 점검's.
-  text(lane: Lane<'trial'>, scope: ChatScope, text: string, signal?: AbortSignal): Promise<{ read: string } | RanAway> {
-    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'text', text }, signal) as Promise<{ read: string } | RanAway>;
+  text(lane: Lane<'trial'>, scope: ChatScope, text: string, signal?: AbortSignal): Promise<TrialRead | RanAway> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'text', text }, signal) as Promise<TrialRead | RanAway>;
   }
 
   // A translation's, and a bot's lorebook read, may run beside others of the same chat: each has a lane of its own,

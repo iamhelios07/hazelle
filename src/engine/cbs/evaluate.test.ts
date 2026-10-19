@@ -3,7 +3,7 @@ import type { HistoryMessage } from '../history';
 import { blankCard } from '../import/card';
 import type { Card } from '../import/types';
 import { unescapeCbs } from './escape';
-import { evaluate, Runaway, type CbsContext, type CbsProblem } from './evaluate';
+import { evaluate, Runaway, type CbsContext, type CbsProblem, type CbsTrace } from './evaluate';
 import { previousMessages } from './history';
 
 const card = (over: Partial<Card> = {}): Card => ({ ...blankCard('Luna'), ...over });
@@ -325,5 +325,33 @@ describe('evaluate', () => {
     const long = '{{displayescapedbracketopen}}{{debc}}{{deabo}}{{displayescapedanglebracketclose}}{{dec}}{{displayescapedsemicolon}}{{displayescapedcurlybracketopen}}{{ddecbc}}';
     expect(unescapeCbs(run(long))).toBe('()<>:;{}}');
     expect(run(long)).toBe(run('{{(}}{{)}}{{<}}{{>}}{{:}}{{;}}{{decbo}}{{bc}}'));
+  });
+});
+
+describe('steps', () => {
+  const traced = (text: string, over: Partial<CbsContext> = {}) => {
+    const trace: CbsTrace = { steps: [], omitted: 0 };
+    evaluate(text, context(over), trace);
+    return trace.steps.map(({ at, end, headEnd, ...step }) => ({ written: text.slice(at, end), ...(headEnd !== undefined && { head: text.slice(at, headEnd) }), ...step }));
+  };
+
+  it('lists each tag and block where it is written, outer first, with what it gave and why it held', () => {
+    const text = '<user>: {{#when::{{getvar::a}}::>=::50}}yes{{:else}}no{{/when}}{{nope}}{{bkspc}}';
+    expect(traced(text, { variables: new Map([['a', '30']]) })).toEqual([
+      { written: '<user>', depth: 0, result: 'jin' },
+      { written: '{{#when::{{getvar::a}}::>=::50}}yes{{:else}}no{{/when}}', head: '{{#when::{{getvar::a}}::>=::50}}', depth: 0, result: 'no', condition: ['30', '>=', '50'], held: false },
+      { written: '{{getvar::a}}', depth: 1, result: '30' },
+      { written: '{{nope}}', depth: 0, result: '{{nope}}', kept: 'unknown' },
+      { written: '{{bkspc}}', depth: 0, result: '', erased: true },
+    ]);
+  });
+
+  it("places a called function's body where it was defined, one level inside the call", () => {
+    const text = '{{#func f}}{{user}}{{/func}}{{call::f}}';
+    expect(traced(text).map(({ written, depth }) => [written, depth])).toEqual([
+      ['{{#func f}}{{user}}{{/func}}', 0],
+      ['{{call::f}}', 0],
+      ['{{user}}', 1],
+    ]);
   });
 });

@@ -6,7 +6,7 @@ import type { Stage } from '../render';
 import { escapeCbs } from './escape';
 import type { PreviousMessages } from './history';
 import { parse, type Block, type Legacy, type Node, type Tag } from './parse';
-import { bool, handlerFor, isErrorText, items, normalize, readToggle, readVar, Return, truthy, type Env, type Erase } from './tags';
+import { bool, handlerFor, isErrorText, isUnsupportedTag, items, normalize, readToggle, readVar, Return, truthy, type Env, type Erase } from './tags';
 
 // unknown-tag: a tag or block no handler takes, as written back, unless its name is prose. error-text: Risu's error text a tag gave ({{iserror}}).
 export type CbsProblem = { kind: 'unknown-tag' | 'error-text'; text: string };
@@ -80,23 +80,74 @@ export class Runaway extends Error {
   }
 }
 
-// Temp variables and functions live as long as it, and spent counts against its limits.
-type Run = { context: CbsContext; seed: string; temp: Map<string, string>; functions: Map<string, Node[]>; spent: { tags: number; chars: number } };
-// prefix sets the tags of an inserted text, a call or an #each item apart from those of the text around it,
-// so each rolls its own.
-type Frame = { run: Run; prefix: string; writes: boolean; depth: number; args: string[] | null; slots: Map<string, string> };
+// One tag or block of the text, as it evaluated (시험해 보기's 단계), in the order they start. at and end place it in
+// the text as written, and a block's head ends at headEnd; depth counts the tags and blocks it sits in. One evaluated
+// again (an #each item, a {{call}}) has a step each time; the tags of an inserted text have none. result: still
+// escaped, as evaluate's own.
+export type CbsStep = {
+  at: number;
+  end: number;
+  headEnd?: number;
+  depth: number;
+  result: string;
+  // Why it stayed as written: no tag or block of that name, one Hazelle does not run, or arguments it cannot read.
+  kept?: 'unknown' | 'unsupported' | 'args';
+  // {{bkspc}} and {{erase}}, which change the text before them and give none.
+  erased?: true;
+  // #when, #if, #ifpure and {#if: whether the condition held, and #when's condition as it evaluated, argument by argument.
+  held?: boolean;
+  condition?: string[];
+};
+export type CbsTrace = { steps: CbsStep[]; omitted: number };
 
-// Escaped punctuation stays escaped: the caller runs unescapeCbs once, at the very end. Throws Runaway.
-export function evaluate(text: string, context: CbsContext): string {
+// The steps a trace keeps, and how much of each result: they cross to the page.
+const MOST_STEPS = 500;
+const MOST_RESULT = 1000;
+
+// Temp variables and functions live as long as it, and spent counts against its limits.
+type Run = { context: CbsContext; seed: string; temp: Map<string, string>; functions: Map<string, { body: Node[]; traced: boolean }>; spent: { tags: number; chars: number }; trace: CbsTrace | null };
+// prefix sets the tags of an inserted text, a call or an #each item apart from those of the text around it,
+// so each rolls its own. traced: its nodes stand in the text the trace places them in; level: their step depth.
+type Frame = { run: Run; prefix: string; writes: boolean; depth: number; args: string[] | null; slots: Map<string, string>; traced: boolean; level: number };
+
+// Escaped punctuation stays escaped: the caller runs unescapeCbs once, at the very end. Throws Runaway. trace, when
+// given, gets the steps.
+export function evaluate(text: string, context: CbsContext, trace: CbsTrace | null = null): string {
   const { source } = context;
   const message = 'message' in source;
   const seed = message ? context.messages[source.message]!.seed : source.seed;
-  const run: Run = { context, seed, temp: new Map(), functions: new Map(), spent: { tags: 0, chars: 0 } };
-  return enter(parse(prestep(text)), { run, prefix: '', writes: message, depth: 0, args: null, slots: new Map() });
+  const run: Run = { context, seed, temp: new Map(), functions: new Map(), spent: { tags: 0, chars: 0 }, trace };
+  const out = enter(parse(prestep(text)), { run, prefix: '', writes: message, depth: 0, args: null, slots: new Map(), traced: trace !== null, level: 0 });
+  if (trace) {
+    const written = unstep(text);
+    for (const step of trace.steps) Object.assign(step, { at: written(step.at), end: written(step.end) }, step.headEnd !== undefined && { headEnd: written(step.headEnd) });
+  }
+  return out;
 }
 
 // Risu reads <user>, <char> and <bot>, in any case, as those tags.
-const prestep = (text: string) => text.replace(/<(user|char|bot)>/gi, (_, name: string) => `{{${name.toLowerCase()}}}`);
+const STEPPED = /<(user|char|bot)>/gi;
+const prestep = (text: string) => text.replace(STEPPED, (_, name: string) => `{{${name.toLowerCase()}}}`);
+// A place in prestep's text back in the text as written: each rewrite before it is two characters longer there.
+function unstep(text: string): (at: number) => number {
+  const ends = [...text.matchAll(STEPPED)].map((match, index) => match.index + match[0].length + 2 * (index + 1));
+  return (at) => at - 2 * ends.filter((end) => end <= at).length;
+}
+
+// A step for node, filled in as it evaluates; null when nothing traces it or the trace is full.
+function stepFor(node: Tag | Block | Legacy, frame: Frame): CbsStep | null {
+  const { trace } = frame.run;
+  if (!trace || !frame.traced) return null;
+  if (trace.steps.length >= MOST_STEPS) {
+    trace.omitted += 1;
+    return null;
+  }
+  const step: CbsStep = node.kind === 'block' ? { at: node.at, end: node.close.end, headEnd: node.head.end, depth: frame.level, result: '' } : { at: node.at, end: node.end, depth: frame.level, result: '' };
+  trace.steps.push(step);
+  return step;
+}
+// The frame a node's own parts and body evaluate in: one level deeper in the trace.
+const inside = (frame: Frame): Frame => (frame.traced ? { ...frame, level: frame.level + 1 } : frame);
 
 function enter(nodes: Node[], frame: Frame): string {
   if (frame.depth > DEPTH) return TOO_DEEP;
@@ -112,7 +163,10 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
   const { spent } = frame.run;
   let out = '';
   for (const node of nodes) {
-    const piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame) : node.kind === 'block' ? evaluateBlock(node, frame) : legacy(node, frame);
+    const step = typeof node === 'string' ? null : stepFor(node, frame);
+    const piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame, step) : node.kind === 'block' ? evaluateBlock(node, frame, step) : legacy(node, frame, step);
+    if (step && typeof piece === 'string') step.result = piece.slice(0, MOST_RESULT);
+    else if (step) step.erased = true;
     if (typeof node !== 'string') spent.tags++;
     if (typeof piece === 'string') spent.chars += piece.length;
     if (spent.tags > MOST_TAGS || spent.chars > MOST_CHARS) throw new Runaway();
@@ -144,25 +198,30 @@ export function blockHead(content: string): { name: string; rest: string } | nul
 
 // The inner tags are evaluated first and the tag's name and arguments read from their output, which is how
 // {{spread}} hands a tag its arguments.
-function evaluateTag(tag: Tag, frame: Frame): string | Erase {
-  const content = evaluateNodes(tag.parts, frame);
+function evaluateTag(tag: Tag, frame: Frame, step: CbsStep | null): string | Erase {
+  const content = evaluateNodes(tag.parts, inside(frame));
   if (content.startsWith('//')) return frame.run.context.stage === 'display' ? asWritten(content) : '';
   const [name, ...args] = content.startsWith('? ') ? ['calc', content.slice(2)] : content.trim() === ':' ? [':'] : splitArgs(content);
   const handler = handlerFor(name!);
   const { problems } = frame.run.context;
-  if (!handler) {
-    if (!isProse(name!)) problems?.push({ kind: 'unknown-tag', text: asWritten(content) });
+  const kept = (why: CbsStep['kept']) => {
+    if (step) step.kept = why;
     return asWritten(content);
+  };
+  if (!handler) {
+    if (isProse(name!)) return asWritten(content);
+    problems?.push({ kind: 'unknown-tag', text: asWritten(content) });
+    return kept(isUnsupportedTag(name!) ? 'unsupported' : 'unknown');
   }
   // Not a problem: a wrapper's {{slot}} takes no argument so that it stays as written (pipeline verbatim).
-  if (args.length < handler.min) return asWritten(content);
+  if (args.length < handler.min) return kept('args');
   try {
     const out = handler.run(args, env(frame, frame.prefix + tag.at));
     if (typeof out === 'string' && isErrorText(out)) problems?.push({ kind: 'error-text', text: out });
-    return out ?? asWritten(content);
+    return out ?? kept('args');
   } catch (error) {
     // An argument out of range: a timestamp, a digit count, a code point, a repeat count.
-    if (error instanceof RangeError) return asWritten(content);
+    if (error instanceof RangeError) return kept('args');
     throw error;
   }
 }
@@ -170,17 +229,18 @@ function evaluateTag(tag: Tag, frame: Frame): string | Erase {
 function env(frame: Frame, place: string): Env {
   const { run } = frame;
   let rolls: (() => number) | null = null;
-  const nested = (args: string[] | null, writes: boolean): Frame => ({ run, prefix: `${place}>`, writes, depth: frame.depth + 1, args, slots: new Map() });
+  // traced: a function's body has places in the text it was defined in; an inserted text has none.
+  const nested = (args: string[] | null, writes: boolean, traced: boolean): Frame => ({ run, prefix: `${place}>`, writes, depth: frame.depth + 1, args, slots: new Map(), traced, level: frame.level + 1 });
   return {
     context: run.context,
     writes: frame.writes,
     temp: run.temp,
     random: () => (rolls ??= seeded(`${run.seed}:${place}`))(),
     // An inserted text is not a chat message, so it writes no variables.
-    insert: (text) => enter(parse(prestep(text)), nested(null, false)),
+    insert: (text) => enter(parse(prestep(text)), nested(null, false, false)),
     call: (name, args) => {
-      const body = run.functions.get(name);
-      return body ? enter(body, nested([name, ...args], frame.writes)) : null;
+      const defined = run.functions.get(name);
+      return defined ? enter(defined.body, nested([name, ...args], frame.writes, defined.traced)) : null;
     },
     arg: (index) => frame.args?.[index] ?? null,
     slot: (name) => frame.slots.get(name) ?? null,
@@ -197,10 +257,10 @@ const RAW = new Map<string, (raw: string, rest: string) => string>([
 export const isRawBlock = (name: string) => RAW.has(name);
 
 // null: the block stays as written, as one no handler takes does, without counting as unknown.
-const BLOCKS = new Map<string, (block: Block, rest: string, frame: Frame) => string | null>([
+const BLOCKS = new Map<string, (block: Block, rest: string, frame: Frame, step: CbsStep | null) => string | null>([
   ['when', when],
-  ['if', (block, rest, frame) => (truthy(rest.trim()) ? evaluateNodes(trimLines(block.body), frame) : '')],
-  ['ifpure', (block, rest, frame) => (truthy(rest.trim()) ? evaluateNodes(block.body, frame) : '')],
+  ['if', (block, rest, frame, step) => (held(step, truthy(rest.trim())) ? evaluateNodes(trimLines(block.body), frame) : '')],
+  ['ifpure', (block, rest, frame, step) => (held(step, truthy(rest.trim())) ? evaluateNodes(block.body, frame) : '')],
   ['each', each],
   ['code', (block, _rest, frame) => unbackslash(evaluateNodes(block.body, frame).replace(/[\n\r\t]/g, ''))],
   [
@@ -209,7 +269,7 @@ const BLOCKS = new Map<string, (block: Block, rest: string, frame: Frame) => str
       // Names after the function's are not read: a body reads its arguments as {{arg::1}} on.
       const name = rest.trim().split(/\s+/)[0];
       if (!name) return null;
-      frame.run.functions.set(name, blankEnds(block.body));
+      frame.run.functions.set(name, { body: blankEnds(block.body), traced: frame.traced });
       return '';
     },
   ],
@@ -218,20 +278,32 @@ const BLOCKS = new Map<string, (block: Block, rest: string, frame: Frame) => str
 export const isBlockName = (name: string) => RAW.has(name) || BLOCKS.has(name);
 export const blockNames = () => [...RAW.keys(), ...BLOCKS.keys()];
 
-function evaluateBlock(block: Block, frame: Frame): string {
+function evaluateBlock(block: Block, outer: Frame, step: CbsStep | null): string {
+  const frame = inside(outer);
   const head = evaluateNodes(block.head.parts, frame);
   const { name, rest } = blockHead(head)!;
   const raw = RAW.get(name);
   if (raw) return raw(block.raw, rest);
   const run = BLOCKS.get(name);
-  if (!run && !isProse(name)) frame.run.context.problems?.push({ kind: 'unknown-tag', text: asWritten(head) });
-  return run?.(block, rest, frame) ?? asWritten(head) + evaluateNodes(block.body, frame) + asWritten(evaluateNodes(block.close.parts, frame));
+  if (!run && !isProse(name)) {
+    frame.run.context.problems?.push({ kind: 'unknown-tag', text: asWritten(head) });
+    if (step) step.kept = 'unknown';
+  }
+  const out = run?.(block, rest, frame, step);
+  if (out == null && run && step) step.kept = 'args';
+  return out ?? asWritten(head) + evaluateNodes(block.body, frame) + asWritten(evaluateNodes(block.close.parts, frame));
 }
 
+const held = (step: CbsStep | null, holds: boolean) => {
+  if (step) step.held = holds;
+  return holds;
+};
+
 // Only the branch taken is evaluated. Risu evaluates both and keeps one, so a setvar in the other ran too.
-function when(block: Block, rest: string, frame: Frame): string {
+function when(block: Block, rest: string, frame: Frame, step: CbsStep | null): string {
   const { modes, condition } = whenArgs(rest);
-  const holds = condition.length > 0 && fold(condition, frame.run.context);
+  if (step) step.condition = condition;
+  const holds = held(step, condition.length > 0 && fold(condition, frame.run.context));
   if (modes.includes('legacy')) return holds ? evaluateNodes(trimLines(block.body), frame) : '';
   const split = block.body.findIndex(isElse);
   const branch = holds ? (split === -1 ? block.body : block.body.slice(0, split)) : split === -1 ? [] : block.body.slice(split + 1);
@@ -240,7 +312,8 @@ function when(block: Block, rest: string, frame: Frame): string {
 
 // The condition is the first line, read as Risu does: the word after `if`, false when it is '', '0' or '-1', so '2' and
 // 'true' hold, unlike #if. Only a body that holds is evaluated, as in #when. Anything else stays as written.
-function legacy(node: Legacy, frame: Frame): string {
+function legacy(node: Legacy, outer: Frame, step: CbsStep | null): string {
+  const frame = inside(outer);
   const split = node.parts.findIndex((part) => typeof part === 'string' && part.includes('\n'));
   const asLegacy = () => `{#${evaluateNodes(node.parts, frame)}#}`;
   if (split === -1) return asLegacy();
@@ -248,7 +321,7 @@ function legacy(node: Legacy, frame: Frame): string {
   const newline = line.indexOf('\n');
   const statement = evaluateNodes([...node.parts.slice(0, split), line.slice(0, newline)], frame).split(' ', 2);
   if (statement[0] !== 'if') return asLegacy();
-  if (['', '0', '-1'].includes(statement[1]!)) return '';
+  if (!held(step, !['', '0', '-1'].includes(statement[1]!))) return '';
   const body = [line.slice(newline + 1), ...node.parts.slice(split + 1)];
   return evaluateNodes(
     trimEnds(

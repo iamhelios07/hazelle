@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CbsStep } from '../../../engine/cbs/evaluate';
 import type { ChatScope } from '../../../engine/render';
 import type { Event, ScriptUnit } from '../../../engine/script-api';
 import type { LoreOwner } from '../../../model/library';
 import { chatNow } from '../../../runtime/chat-context';
+import type { TrialRead } from '../../../runtime/evaluation-core';
 import type { Trial } from '../../../runtime/scripts';
 import { useChats, useSession } from '../../session';
-import { Button, Callout, ChoiceGroup, CodeBlock, Facts, Stack, Text, type CodeAside } from '../../ui';
+import { Button, Callout, ChoiceGroup, CodeBlock, Facts, Stack, StepList, Text, type CodeAside, type StepRow } from '../../ui';
 import { runaway } from '../failure';
 import { HookDetail } from '../HookDetail';
 import { LUA_EVENTS } from './luaApi';
@@ -20,9 +22,9 @@ const WAIT_MS = 400;
 // otherwise.
 type Owner = LoreOwner | null;
 
-export const cbsTrial = (owner: Owner) => (text: string): CodeAside => ({ label: LABEL, body: <CbsTrial text={text} owner={owner} /> });
+export const cbsTrial = (owner: Owner) => (text: string): CodeAside => ({ label: LABEL, body: (reveal) => <CbsTrial text={text} owner={owner} reveal={reveal} /> });
 type LuaUnit = Extract<ScriptUnit, { kind: 'lua' }>;
-export const luaTrial = (unit: LuaUnit, owner: Owner) => (code: string): CodeAside => ({ label: LABEL, body: <LuaTrial unit={{ ...unit, code }} owner={owner} /> });
+export const luaTrial = (unit: LuaUnit, owner: Owner) => (code: string): CodeAside => ({ label: LABEL, body: () => <LuaTrial unit={{ ...unit, code }} owner={owner} /> });
 
 // A CBS text's result as the reader sees it; null: its commands ran away and were stopped.
 export function CbsResult({ result }: { result: string | null }) {
@@ -66,18 +68,20 @@ function useTrialScope(chat: string | null): ChatScope | 'failed' | null {
   return chat === null ? SAMPLE : read?.chat === chat ? read.scope : null;
 }
 
-function CbsTrial({ text, owner }: { text: string; owner: Owner }) {
+type Reveal = (at: [number, number]) => void;
+
+function CbsTrial({ text, owner, reveal }: { text: string; owner: Owner; reveal: Reveal }) {
   const { store } = useSession();
   const [chat, setChat] = useState<string | null>(null);
   const scope = useTrialScope(chat);
-  const [read, setRead] = useState<{ scope: ChatScope; result: string | null | 'failed' } | null>(null);
+  const [read, setRead] = useState<{ scope: ChatScope; text: string; result: TrialRead | null | 'failed' } | null>(null);
   useEffect(() => {
     if (scope === null || scope === 'failed') return;
     const lane = { asker: 'trial', chat: chat ?? SAMPLE_CHAT } as const;
     const stop = new AbortController();
-    const done = (result: string | null | 'failed') => !stop.signal.aborted && setRead({ scope, result });
+    const done = (result: TrialRead | null | 'failed') => !stop.signal.aborted && setRead({ scope, text, result });
     const timer = setTimeout(() => {
-      store.evaluation.text(lane, scope, text, stop.signal).then((answer) => done('kind' in answer ? null : answer.read), () => done('failed'));
+      store.evaluation.text(lane, scope, text, stop.signal).then((answer) => done('kind' in answer ? null : answer), () => done('failed'));
     }, WAIT_MS);
     return () => {
       clearTimeout(timer);
@@ -85,7 +89,7 @@ function CbsTrial({ text, owner }: { text: string; owner: Owner }) {
     };
   }, [store, chat, scope, text]);
   useEffect(() => () => store.evaluation.forget({ asker: 'trial', chat: chat ?? SAMPLE_CHAT }), [store, chat]);
-  const shown = read?.scope === scope ? read.result : undefined;
+  const shown = read?.scope === scope ? read : undefined;
   return (
     <Stack gap="related">
       <TrialChats owner={owner} chat={chat} onChange={setChat} />
@@ -93,13 +97,43 @@ function CbsTrial({ text, owner }: { text: string; owner: Owner }) {
         <Text variant="note">채팅을 열지 못했어요.</Text>
       ) : shown === undefined ? (
         <Text variant="note">계산하는 중…</Text>
-      ) : shown === 'failed' ? (
+      ) : shown.result === 'failed' ? (
         <Text variant="note">결과를 만들지 못했어요.</Text>
+      ) : shown.result === null ? (
+        <CbsResult result={null} />
       ) : (
-        <CbsResult result={shown} />
+        <>
+          <CbsResult result={shown.result.read} />
+          <CbsSteps text={shown.text} read={shown.result} reveal={reveal} stale={shown.text !== text} />
+        </>
       )}
     </Stack>
   );
+}
+
+// Each tag's and block's result in the order they ran, as of the text they were read from.
+function CbsSteps({ text, read: { steps, omitted }, reveal, stale }: { text: string; read: TrialRead; reveal: Reveal; stale: boolean }) {
+  if (steps.length === 0) return null;
+  // The editor reads \r\n as one line break.
+  const inEditor = (at: number) => at - (text.slice(0, at).split('\r\n').length - 1);
+  return (
+    <>
+      <Text variant="note">{`단계 ${steps.length + omitted}개`}</Text>
+      <StepList label="단계" steps={steps.map((step) => shownStep(text, step))} onPick={(index) => !stale && reveal([inEditor(steps[index]!.at), inEditor(steps[index]!.end)])} />
+      {omitted > 0 && <Text variant="note">{`단계가 많아서 뒤의 ${omitted}개는 빠졌어요.`}</Text>}
+    </>
+  );
+}
+
+const KEPT = { unknown: '모르는 명령어라 쓴 그대로 남아요.', unsupported: '헤이젤이 지원하지 않는 명령어라 쓴 그대로 남아요.', args: '인자를 읽을 수 없어서 쓴 그대로 남아요.' } as const;
+
+function shownStep(text: string, { at, end, headEnd, depth, result, kept, erased, held, condition }: CbsStep): StepRow {
+  const source = text.slice(at, headEnd ?? end);
+  if (kept) return { source, result, depth, note: KEPT[kept], tone: 'warn' };
+  if (erased) return { source, result, depth, note: '앞에 쓴 글을 지워요.' };
+  if (held === undefined) return { source, result, depth };
+  const verdict = held ? '맞아요' : '안 맞아요';
+  return { source, result, depth, note: condition ? `조건 ${condition.join(' ')} → ${verdict}` : `조건이 ${verdict}`, tone: 'branch' };
 }
 
 const EVENTS = { onInput: { kind: 'input' }, onStart: { kind: 'start' }, onOutput: { kind: 'output' } } as const satisfies Record<string, Event>;
