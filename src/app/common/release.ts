@@ -8,6 +8,17 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.2.26',
+    date: '2026-10-19',
+    lines: [
+      '캐릭터 순서를 직접 정할 수 있어요. 둘러보기에서 순서 바꾸기를 누르고 카드를 끌어 옮겨요.',
+      '캐릭터 정렬은 최근 대화와 직접 두 가지예요. 이름순은 없어졌어요.',
+      'Gemini 설정 묶음에서 PDF로 보내기를 켤 수 있어요. 지난 대화를 PDF 한 장으로 묶어 보내 입력 토큰을 줄여요.',
+      '토글 그룹을 열고 닫은 상태를 기기에 기억해요.',
+      '봇 메시지의 배경 그림이 늦게 뜨면 보이지 않던 문제를 고쳤어요.',
+    ],
+  },
+  {
     version: 'v0.2.25',
     date: '2026-10-19',
     lines: [
