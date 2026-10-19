@@ -1,9 +1,9 @@
-import type { Cache, Change, ModelSettings, NumberSetting, ServiceTier, Verbosity } from '../../connectors/settings';
+import type { Cache, Change, ModelSettings, NumberSetting, PdfKeep, ServiceTier, Verbosity } from '../../connectors/settings';
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import type { ProfileChoice } from '../../runtime/profiles';
 import { count } from './typedNumber';
-import { DISCOUNT, MODEL_SETTINGS, RETRY_COUNT, SCOPE, UNKNOWN } from './words';
+import { DISCOUNT, MODEL_SETTINGS, PDF_SEND, RETRY_COUNT, SCOPE, UNKNOWN } from './words';
 
 export const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일', embedding: '임베딩' };
 
@@ -35,8 +35,9 @@ export const VERBOSITY_LABEL = '응답 상세도';
 export const VERBOSITY_WORDS: Record<Verbosity, string> = { low: '간단히', medium: '보통', high: '자세히' };
 export const SERVICE_TIER_LABEL = '처리 등급';
 export const SERVICE_TIER_WORDS: Record<ServiceTier, string> = { auto: '자동', standard_only: '표준' };
+export const PDF_KEEP_WORDS: Record<PdfKeep, string> = { recent: '최근 대화 빼고', system: '시스템 프롬프트 빼고', none: '전부' };
 
-const NAMED: Record<Exclude<Change['setting'], Field>, string> = { stop: '멈춤 문구', reasoning: '추론', cache: '캐시', verbosity: VERBOSITY_LABEL, serviceTier: SERVICE_TIER_LABEL, discount: DISCOUNT };
+const NAMED: Record<Exclude<Change['setting'], Field>, string> = { stop: '멈춤 문구', reasoning: '추론', cache: '캐시', verbosity: VERBOSITY_LABEL, serviceTier: SERVICE_TIER_LABEL, discount: DISCOUNT, pdf: PDF_SEND };
 const isField = (setting: Change['setting']): setting is Field => setting in NUMBER;
 const settingLabel = (setting: Change['setting']) => (isField(setting) ? NUMBER[setting].label : NAMED[setting]);
 
@@ -47,7 +48,7 @@ export const NO_PROFILE = `${MODEL_SETTINGS} 없음`;
 
 // What a 모델 설정 sets, in the order the editor shows them.
 export function valuesLine(settings: ModelSettings): string {
-  const { reasoning, stop, systemAsUser, streaming, cache, verbosity, serviceTier, discount, retries } = settings;
+  const { reasoning, stop, systemAsUser, streaming, cache, verbosity, serviceTier, discount, pdf, retries } = settings;
   const number = (field: Field) => {
     const value = settings[field];
     return value === undefined ? [] : [`${NUMBER[field].label} ${count(value)}`];
@@ -55,7 +56,7 @@ export function valuesLine(settings: ModelSettings): string {
   const thinking = !reasoning
     ? []
     : [`추론 ${reasoning.kind === 'off' ? '끔' : reasoning.kind === 'budget' ? `예산 ${count(reasoning.tokens)}` : reasoning.kind === 'adaptive' ? (reasoning.level === null ? '적응형' : `적응형 · ${levelName(reasoning.level)}`) : levelName(reasoning.level)}`];
-  const words = [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...(discount ? [DISCOUNT] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(verbosity ? [`${VERBOSITY_LABEL} ${VERBOSITY_WORDS[verbosity]}`] : []), ...(serviceTier ? [`${SERVICE_TIER_LABEL} ${SERVICE_TIER_WORDS[serviceTier]}`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : []), ...(retries === undefined ? [] : [`${RETRY_COUNT} ${retries}번`])];
+  const words = [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...(discount ? [DISCOUNT] : []), ...(pdf ? [`${PDF_SEND} ${PDF_KEEP_WORDS[pdf.keep]}${pdf.keep === 'recent' ? ` ${pdf.recent}%` : ''}`] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(verbosity ? [`${VERBOSITY_LABEL} ${VERBOSITY_WORDS[verbosity]}`] : []), ...(serviceTier ? [`${SERVICE_TIER_LABEL} ${SERVICE_TIER_WORDS[serviceTier]}`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : []), ...(retries === undefined ? [] : [`${RETRY_COUNT} ${retries}번`])];
   return words.length ? words.join(' · ') : NO_VALUES;
 }
 

@@ -7,7 +7,7 @@ import { useChatMemory, useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
 import { cost, finish, seconds, speed, tokens } from '../common/receipt';
-import { DISCOUNT, UNKNOWN } from '../common/words';
+import { DISCOUNT, PDF_SEND, UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
 import type { InfoTab, Side } from './panels';
 import type { OpenChat } from './useChat';
@@ -26,6 +26,8 @@ const outcomeFacts = (receipt: Receipt) => [
   { label: '첫 토큰까지', value: seconds(receipt.firstTextMs) },
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
   ...(receipt.discount ? [{ label: DISCOUNT, value: '받음' }] : []),
+  // The whole request's words by o200k, close to Gemini's own count: what 입력 would read had it gone as text.
+  ...(receipt.pdf ? [{ label: PDF_SEND, value: receipt.calibration?.measurement.kind === 'measured' ? `원문 약 ${tokens(receipt.calibration.measurement.o200k)}` : '보냄' }] : []),
   ...(receipt.tries ? [{ label: '보낸 횟수', value: `${receipt.tries}번` }] : []),
 ];
 const callFacts = (receipt: Receipt) => [

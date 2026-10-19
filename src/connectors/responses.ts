@@ -53,6 +53,7 @@ export const responses: Codec = {
     stop: false,
     verbosity: true,
     serviceTier: false,
+    pdf: false,
   },
 
   // prompt_cache_key is the format's own field, but a server that speaks it is not bound to read it.

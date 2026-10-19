@@ -26,11 +26,17 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   serviceTier?: ServiceTier;
   // 할인 받기 (design §6.7): the connection type's discount lane (ConnectionType discount), where it has one.
   discount?: true;
+  // PDF로 보내기: the Gemini codec packs the earlier conversation into one PDF (connectors/gemini-pdf).
+  pdf?: Pdf;
   // 실패하면 다시 보내기 for the models using this 묶음, over their connection's (runtime/connections retriesOf). Never
   // sent: no request builder reads it.
   retries?: number;
 };
 export type Cache = '5m' | '1h';
+// keep: what stays out of the PDF: the leading system prompt (system), that and the latest recent percent of the
+// messages after it (recent), or nothing (none).
+export type PdfKeep = 'recent' | 'system' | 'none';
+export type Pdf = { keep: PdfKeep; recent: number };
 export const VERBOSITY = ['low', 'medium', 'high'] as const;
 export type Verbosity = (typeof VERBOSITY)[number];
 // Anthropic's service_tier: auto may use the account's Priority Tier capacity; standard_only never does.
@@ -56,6 +62,7 @@ export type Carries = {
   cache: Accepts;
   // The connection type's discount lane, false where it has none.
   discount: Accepts;
+  pdf: boolean;
 };
 
 // null is unknown: the screen says so ("받는지 알 수 없어요") and still lets it be set and sent. Only a
@@ -74,10 +81,11 @@ export type SettingsSchema = {
   verbosity: Accepts;
   serviceTier: Accepts;
   discount: Accepts;
+  pdf: Accepts;
 };
 
 // left-out: the model does not take it, or not the level named. capped: brought within the model's bounds, to that value.
-export type Change = { setting: Setting | 'context' | 'cache' | 'discount'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
+export type Change = { setting: Setting | 'context' | 'cache' | 'discount' | 'pdf'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
 export type Fitted = { settings: ModelSettings; changes: Change[] };
 
 // Catalogs list 'none' among the effort levels of a model whose reasoning can be turned off; here that
@@ -136,6 +144,8 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
     verbosity: carries.verbosity ? takes('verbosity') : false,
     serviceTier: carries.serviceTier ? takes('serviceTier') : false,
     discount: carries.discount,
+    // models.dev lists a PDF reader's input as file; a catalog silent on input leaves it unknown.
+    pdf: carries.pdf ? (model.input === null ? null : model.input.includes('file')) : false,
   };
 }
 
@@ -167,6 +177,7 @@ export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   if (settings.verbosity && schema.verbosity === false) leave('verbosity');
   if (settings.serviceTier && schema.serviceTier === false) leave('serviceTier');
   if (settings.discount && schema.discount === false) leave('discount');
+  if (settings.pdf && schema.pdf === false) leave('pdf');
   const { reasoning } = settings;
   if (reasoning?.kind === 'budget' && schema.reasoning.budget.accepted !== false) {
     const tokens = within(reasoning.tokens, schema.reasoning.budget);

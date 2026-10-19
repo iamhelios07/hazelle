@@ -46,6 +46,7 @@ export type Reply = Omit<Outcome, 'error'> & {
   request: Pick<HttpRequest, 'url' | 'body'> | null;
   response: string | null;
   cache: CacheView | null;
+  pdf?: true;
 };
 
 export type GenerateInput = {
@@ -75,6 +76,7 @@ export async function generate({ credentials, log, connection, model, settings, 
   // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
   let built: Reply['request'] = null;
   let cached: CacheView | null = null;
+  let pdf: true | undefined;
   let account: Account | null = null;
   let tries: number | null = null;
   let protocol = "";
@@ -91,6 +93,7 @@ export async function generate({ credentials, log, connection, model, settings, 
     request: built,
     response: answered?.() ?? null,
     cache: cached,
+    ...(pdf && { pdf }),
   });
 
   // Refusals the connector can see coming are made here, before anything is sent.
@@ -107,6 +110,7 @@ export async function generate({ credentials, log, connection, model, settings, 
     // A batch answers whole, and both batch formats refuse a request that streams.
     const prepared = prepareChat(route, { model, messages, settings: batches ? { ...settings, streaming: false } : settings });
     request = prepared.request;
+    if (prepared.pdf) pdf = true;
     if (call.measure) call.calibration = { ...(call.calibration ?? unavailableCalibration('preparation')), measurement: await call.measure(prepared) };
     if (call.preflight) {
       const checked = await call.preflight(settings, signal);
@@ -360,6 +364,7 @@ export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
     totalMs: answer.totalMs,
     cache: answer.cache?.cache ?? null,
     ...(answer.discount && { discount: answer.discount }),
+    ...(answer.pdf && { pdf: answer.pdf }),
   };
 }
 

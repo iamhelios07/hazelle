@@ -26,6 +26,20 @@ describe('Gemini', () => {
     expect(old!.reasoning).toBe(false);
   });
 
+  it('sends the earlier conversation as one PDF part at low resolution, the system prompt and recent turns as text', () => {
+    const body = JSON.parse(chatRequest(google, {
+      model: flash!,
+      messages: [{ role: 'system', content: '규칙' }, { role: 'user', content: '안녕' }, { role: 'assistant', content: '어서 와.' }, { role: 'user', content: '뭐 해?' }],
+      settings: { pdf: { keep: 'recent', recent: 30 } },
+    }).body!);
+    expect(body).toEqual({
+      systemInstruction: { parts: [{ text: '규칙' }] },
+      contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'application/pdf', data: expect.any(String) }, mediaResolution: { level: 'MEDIA_RESOLUTION_LOW' } }, { text: expect.stringContaining('U+2029') }, { text: '뭐 해?' }] }],
+      generationConfig: { thinkingConfig: { includeThoughts: true } },
+    });
+    expect(atob(body.contents[0].parts[0].inlineData.data).startsWith('%PDF-1.7')).toBe(true);
+  });
+
   it('sends system apart, one turn per run of a role, and thinking with its thoughts', () => {
     const request = withCredential(google, chatRequest(google, {
       model: flash!,

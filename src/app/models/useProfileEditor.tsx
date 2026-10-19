@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
-import { fit, SERVICE_TIERS, VERBOSITY, WHOLE, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
+import { fit, SERVICE_TIERS, VERBOSITY, WHOLE, type Change, type ModelSettings, type PdfKeep, type Reasoning, type SettingsSchema } from '../../connectors/settings';
 import type { Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { profileUsers, renameProfile, setProfileSettings, withSettings, type ProfileUser } from '../../runtime/profiles';
@@ -8,16 +8,22 @@ import { choices } from '../common/reading';
 import { RetriesRow } from '../common/RetriesRow';
 import { typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { detailLabel, DISCOUNT, UNSET } from '../common/words';
+import { detailLabel, DISCOUNT, PDF_SEND, UNSET } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import { ChoiceGroup, Disclosure, NumberInput, PhraseField, Section, SettingGroup, SettingRow, Switch } from '../ui';
-import { CACHE, changeLine, followsRetries, DETAIL, LEVELS, levelName, MAIN, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from '../common/settingWords';
-import { count, readOptional, readTyped } from '../common/typedNumber';
+import { CACHE, changeLine, followsRetries, DETAIL, LEVELS, levelName, MAIN, NUMBER, PDF_KEEP_WORDS, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from '../common/settingWords';
+import { count, readCount, readOptional, readTyped } from '../common/typedNumber';
 
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
 // undefined: left empty, which unsets it. null: not a number the field takes.
 const readNumber = (text: string, field: Field | 'budget') => readOptional(text, whole(field));
 const BUDGET_START = 8000;
+const RECENT_START = 20;
+// 100 would leave nothing to pack.
+const readRecent = (text: string) => {
+  const share = readCount(text);
+  return share !== null && share <= 99 ? share : null;
+};
 
 type Choice = 'unset' | 'off' | 'adaptive' | 'budget' | `level:${string}`;
 const choiceOf = (reasoning: Reasoning | undefined): Choice => (!reasoning ? 'unset' : reasoning.kind === 'level' ? `level:${reasoning.level}` : reasoning.kind);
@@ -40,7 +46,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
   const connections = useConnections();
   const { id } = stored;
 
-  const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget' | 'name', string>>>({});
+  const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget' | 'recent' | 'name', string>>>({});
   const { status, unsaved, change, save, flush, remove: removing } = useAutosave<Saved>(`profile:${id}`, async (patch) => {
     const { name: renamed, settings: values } = split(patch);
     if (renamed !== undefined) {
@@ -210,6 +216,45 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
     />
   );
 
+  // Shown only where a model on this 설정 may take it, or while it is set, so a stored one is never hidden.
+  function pdfRow(): ReactNode {
+    const pdf = shown.pdf;
+    if (!pdf && !callable.some((user) => user.schema.pdf !== false)) return null;
+    const draft = typedText(drafts.recent, readRecent, pdf?.keep === 'recent' ? pdf.recent : undefined, (recent) => (recent === undefined ? '' : String(recent)));
+    const recent = pdf?.keep === 'recent' ? readRecent(draft) : undefined;
+    const pick = (keep: PdfKeep | 'off') => {
+      setDrafts((drafted) => ({ ...drafted, recent: undefined }));
+      set({ pdf: keep === 'off' ? undefined : { keep, recent: pdf?.recent ?? RECENT_START } });
+    };
+    const typeRecent = (next: string) => {
+      setDrafts((drafted) => ({ ...drafted, recent: next }));
+      const typed = readRecent(next);
+      change(typed === null || !pdf ? { pdf: undefined } : { pdf: { ...pdf, recent: typed } }, typed !== null);
+    };
+    return (
+      <SettingRow
+        key="pdf"
+        label={PDF_SEND}
+        help="지난 대화를 PDF 파일로 바꿔 보내서 입력 토큰을 줄여요. 빼고 고른 부분은 PDF에 넣지 않고 그대로 보내요. 모델이 대화를 문서로 읽어서 답이 조금 달라질 수 있어요. pdf-pod 플러그인에서 가져온 아이디어예요"
+        changed={pdf !== undefined}
+        error={recent === null ? '1부터 99 사이의 값을 입력해 주세요.' : undefined}
+        note={noteFor('pdf')}
+        control={
+          <>
+            <ChoiceGroup<PdfKeep | 'off'>
+              layout="fit"
+              label={PDF_SEND}
+              options={[{ value: 'off', label: '끔' }, ...choices(PDF_KEEP_WORDS)]}
+              value={pdf?.keep ?? 'off'}
+              onChange={pick}
+            />
+            {pdf?.keep === 'recent' && <NumberInput label="원문으로 보낼 최근 대화" unit="%" value={draft} invalid={recent === null} onChange={typeRecent} />}
+          </>
+        }
+      />
+    );
+  }
+
   const stopRow = (
     <SettingRow
       key="stop"
@@ -262,6 +307,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
           {reasoningRow()}
           {cacheRow}
           {discountRow}
+          {pdfRow()}
         </SettingGroup>
       </Section>
       <Disclosure label={detailLabel(detailSet)}>

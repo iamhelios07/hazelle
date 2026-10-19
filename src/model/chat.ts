@@ -82,6 +82,8 @@ export type Receipt = {
   // The discount lane that served the call (design §6.7 할인 받기), as the provider reported it, and so priced; absent
   // when none did. tier: the same call at a slower service tier; batch: the whole reply submitted and waited for.
   discount?: 'tier' | 'batch';
+  // PDF로 보내기 sent the earlier conversation as a PDF; absent when it did not, or the request was not this page's.
+  pdf?: true;
   // 이어 쓰기: the receipt of the reply this one continued, as it read then, so every call and its cost stays
   // visible after the continued version replaces the cut one. It nests when a continuation is continued again.
   continues?: Receipt;

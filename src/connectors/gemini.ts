@@ -1,7 +1,8 @@
 import { failedTerminal } from './errors';
 import type { Reasoning } from './settings';
 import { bareModel, embedUsage } from './chat-completions';
-import type { ChatMessage, Codec, EmbedPurpose, Model, Phase, StreamFacts, Terminal } from './types';
+import type { ChatMessage, Codec, EmbedPurpose, InputPicture, Model, Phase, StreamFacts, Terminal } from './types';
+import { pdfMessage, planPdf } from './gemini-pdf';
 import { count, isRecord, list, vector } from './values';
 
 // The Gemini API (generateContent), checked against ai.google.dev/api on 2026-10-04.
@@ -26,9 +27,13 @@ function thinkingConfig(reasoning: Reasoning | undefined, model: Model) {
   }
 }
 
-type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+type Part = { text: string } | { inlineData: { mimeType: string; data: string }; mediaResolution?: { level: 'MEDIA_RESOLUTION_LOW' } };
 
-const parts = ({ content, pictures = [] }: ChatMessage): Part[] => [...pictures.map(({ type, data }) => ({ inlineData: { mimeType: type, data } })), { text: content }];
+// Only PDF로 보내기 sends a PDF. Its page's picture is what bills, and its text layer reads the same at the lowest
+// resolution; set on the part, so the pictures beside it keep theirs.
+const media = ({ type, data }: InputPicture): Part => ({ inlineData: { mimeType: type, data }, ...(type === 'application/pdf' && { mediaResolution: { level: 'MEDIA_RESOLUTION_LOW' } }) });
+
+const parts = ({ content, pictures = [] }: ChatMessage): Part[] => [...pictures.map(media), { text: content }];
 
 function contents(messages: ChatMessage[]) {
   const turns: { role: 'user' | 'model'; parts: Part[] }[] = [];
@@ -126,12 +131,15 @@ export const gemini: Codec = {
     stop: true,
     verbosity: false,
     serviceTier: false,
+    pdf: true,
   },
 
   // Gemini caches on its own (implicit caching) or by a separately created cachedContent; it has no cache points.
   cache: null,
 
-  chat(endpoint, { model, messages, settings }, fields) {
+  chat(endpoint, { model, messages: asked, settings }, fields) {
+    const plan = settings.pdf ? planPdf(asked, settings.pdf) : null;
+    const messages = plan ? [...plan.lead, pdfMessage(plan), ...plan.tail] : asked;
     const system = messages.filter((message) => message.role === 'system');
     const config = {
       ...(settings.maxOutput === undefined ? {} : { maxOutputTokens: settings.maxOutput }),

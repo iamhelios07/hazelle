@@ -208,6 +208,16 @@ describe('cache points', () => {
   });
 });
 
+describe('PDF로 보내기', () => {
+  it('is offered on Gemini where the catalog lists file input or says nothing, and left out elsewhere', () => {
+    const google = connection('google');
+    expect(modelSettings(google, { ...bare, input: ['text', 'file'] })!.pdf).toBe(true);
+    expect(modelSettings(google, bare)!.pdf).toBeNull();
+    expect(fit(modelSettings(google, { ...bare, input: ['text'] })!, { pdf: { keep: 'system', recent: 20 } }).changes).toEqual([{ setting: 'pdf', change: 'left-out' }]);
+    expect(modelSettings(generic, bare)!.pdf).toBe(false);
+  });
+});
+
 describe('할인 받기', () => {
   it('asks OpenAI for flex only when switched on, and is not offered where the type has no lane', () => {
     expect(body(connection('openai'), bare, { discount: true, maxOutput: 100 })).toMatchObject({ service_tier: 'flex' });

@@ -1,13 +1,14 @@
+import { planPdf } from './gemini-pdf';
 import { chatRequest, sending, type Route } from './registry';
 import type { ChatRequest, HttpRequest } from './types';
 import { isRecord, list } from './values';
 
 export type WireText = { segments: { role: string; text: string }[]; messages: number; pictures: number };
-export type PreparedChat = { request: HttpRequest; wire: WireText; identity: string };
+export type PreparedChat = { request: HttpRequest; wire: WireText; identity: string; pdf: boolean };
 
 export function prepareChat(route: Route, asked: ChatRequest): PreparedChat {
   const request = chatRequest(route, asked);
-  const settings = sending(route, asked).settings;
+  const { settings, messages: sent } = sending(route, asked);
   const body = JSON.parse(request.body!) as Record<string, unknown>;
   const wire: WireText = { segments: [], messages: 0, pictures: 0 };
   const content = (value: unknown, role: string) => {
@@ -27,6 +28,10 @@ export function prepareChat(route: Route, asked: ChatRequest): PreparedChat {
       if (isRecord(body.systemInstruction)) { wire.messages++; content(body.systemInstruction.parts, 'system'); }
       break;
   }
+  // The PDF counts as a picture, which keeps the call out of calibration; the model still reads every word in it, so
+  // the budget counts them.
+  const pdf = settings.pdf ? planPdf(sent, settings.pdf) : null;
+  if (pdf) wire.segments.push({ role: 'user', text: pdf.transcript });
   const messages = route.endpoint.protocol === 'responses' ? body.input : route.endpoint.protocol === 'gemini' ? body.contents : body.messages;
   for (const message of list(messages)) {
     if (!isRecord(message)) continue;
@@ -36,7 +41,7 @@ export function prepareChat(route: Route, asked: ChatRequest): PreparedChat {
   // Text and cache routing keys vary per prompt. Everything else describes the actual request regime.
   const variable = new Set(['messages', 'system', 'systemInstruction', 'contents', 'input', 'prompt_cache_key', 'stream']);
   const regime = Object.fromEntries(Object.entries(body).filter(([key]) => !variable.has(key)).sort(([a], [b]) => a.localeCompare(b)));
-  return { request, wire, identity: JSON.stringify([route.endpoint.baseUrl, route.endpoint.protocol, asked.model.id, settings.systemAsUser === true, settings.cache ?? null, regime]) };
+  return { request, wire, pdf: pdf !== null, identity: JSON.stringify([route.endpoint.baseUrl, route.endpoint.protocol, asked.model.id, settings.systemAsUser === true, settings.cache ?? null, regime]) };
 }
 
 export type ContextRefusal = { actual: number | null; maximum: number | null };

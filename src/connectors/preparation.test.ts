@@ -27,6 +27,14 @@ it('measures the exact built text segments after joining, cache splits, role rem
   }
 });
 
+it('counts the words a PDF carries, and the PDF as a picture', () => {
+  const sent = prepareChat(route('gemini'), { model: { ...model, input: ['text', 'file'] }, messages: [{ role: 'user', content: '앞' }, { role: 'user', content: '뒤' }], settings: { pdf: { keep: 'recent', recent: 50 } } });
+  expect(sent.pdf).toBe(true);
+  expect(sent.wire.pictures).toBe(1);
+  expect(sent.wire.segments.map(({ text }) => text)).toContain('[user]\n앞');
+  expect(sent.wire.segments.map(({ text }) => text)).toContain('뒤');
+});
+
 it('keys the actual route and configuration, not the prompt, display name or cache fingerprint', () => {
   const prepared = (over: Partial<Parameters<typeof prepareChat>[1]>) => prepareChat(route('responses'), { model, messages, settings: { cache: '5m' }, ...over });
   const first = prepared({});
