@@ -27,7 +27,7 @@ export type CallTarget = { id: string; chat: string | null; result: string; for:
 export async function newCall({ store, tokens }: Pick<Session, 'store' | 'tokens'>, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<GenerateInput['call']> {
   const key = await streamKey();
   const at = Date.now();
-  const requestClass = purpose.kind === 'reply' ? 'conversation' : purpose.kind === 'input' ? 'translation' : purpose.kind;
+  const requestClass = purpose.kind === 'reply' ? 'conversation' : purpose.kind === 'input' || purpose.kind === 'note' ? 'translation' : purpose.kind;
   const call: GenerateInput['call'] = { id, key: key.private, public: key.public, logged: { chat, purpose: purpose.kind, call: callOf(route) }, ...calibrate({ store, tokens }, route, requestClass, chat) };
   call.started = chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), calibration: call.calibration!, at, result, for: purpose }, { id, parent: chat });
   return call;

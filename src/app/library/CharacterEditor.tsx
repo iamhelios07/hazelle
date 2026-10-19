@@ -1,7 +1,7 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Square, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Sparkles, Square, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
@@ -37,9 +37,10 @@ import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, Hint, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
+import { useNoteDraft } from './useNoteDraft';
 
 type Percent = 'peek' | 'widest';
 const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), cardWrites: setCardWrites, keepThoughts: setKeepThoughts };
@@ -107,6 +108,11 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const { display } = useDisplay();
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
+  const noteText = noteSave.unsaved.note ?? character.translatorNote ?? '';
+  // The draft lands after the user may have typed more; it goes under the note as it is then.
+  const noteNow = useRef(noteText);
+  noteNow.current = noteText;
+  const noteDraft = useNoteDraft(id, noteSave.flush, (lines) => noteSave.change({ note: noteNow.current.trim() ? `${noteNow.current.trimEnd()}\n\n${lines}` : lines }));
   const [typedName, setTypedName] = useState<string>();
   const [changingFace, setChangingFace] = useState(false);
   const [typedPercents, setTypedPercents] = useState<Partial<Record<Percent, string>>>({});
@@ -320,10 +326,18 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           label={TRANSLATOR_NOTE}
           lines={6}
           expand={SHORTCUTS.bigEdit.keys}
-          value={noteSave.unsaved.note ?? character.translatorNote ?? ''}
+          value={noteText}
           onChange={(note) => noteSave.change({ note })}
           placeholder={NOTE_PLACEHOLDER}
           help={{ text: '이 캐릭터를 번역할 때만 들어가요.', open: { label: opens(inFeature('translate')), onClick: () => navigate({ kind: 'feature', feature: 'translate' }) } }}
+          action={
+            <>
+              <Button variant="ghost" size="sm" icon={Sparkles} busy={noteDraft.running} onClick={noteDraft.start}>
+                {noteDraft.running ? '쓰는 중…' : '초안 만들기'}
+              </Button>
+              <Hint label="초안 만들기">카드를 읽고 이름 표기, 말투, 호칭을 정리해 노트 아래에 적어요. 고쳐 쓸 수 있어요.</Hint>
+            </>
+          }
         />
       </Section>
     ),

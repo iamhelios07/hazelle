@@ -21,6 +21,7 @@ export const PULSE_ROLE: Record<CallPurpose, PulseRole> = {
   reply: 'chat',
   translation: 'aux',
   input: 'aux',
+  note: 'aux',
   memory: 'aux',
   script: 'aux',
   illustration: 'aux',
