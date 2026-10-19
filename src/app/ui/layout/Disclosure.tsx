@@ -21,6 +21,7 @@ export function Disclosure({ label, menu, open: held, onOpen, children }: Props)
           </span>
           {label}
         </button>
+        <span className={styles.line} aria-hidden />
         {menu}
       </div>
       <div id={id} className={styles.body} hidden={!open}>
