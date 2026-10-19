@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
+import { readPortraitFile, writePortraitFile } from '../../engine/likeness';
 import { likenessId, PORTRAITS_MOST, type Portrait, type PortraitSource } from '../../model/likeness';
-import { addPortrait, editPortrait, removeLikeness, removePortrait, restoreLikeness } from '../../runtime/likeness';
+import { addPortrait, editPortrait, importPortraits, removeLikeness, removePortrait, restoreLikeness } from '../../runtime/likeness';
 import { useLikenessRuns, useLikenesses, useSaves, useStore, useStored } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, Empty, IconButton, MarkupArea, MenuItem, MoreMenu, PhraseField, Section, Stack, TextField } from '../ui';
+import { Button, Callout, Empty, FileButton, IconButton, MarkupArea, MenuItem, MoreMenu, PhraseField, Row, Section, Stack, TextField } from '../ui';
 import { ACTS, addOf } from './acts';
+import { download, fileNamed } from './download';
 import { describeLikenessFailure } from './failure';
 import { filled, typedText } from './typed';
 import { useAutosave } from './useAutosave';
@@ -48,6 +50,23 @@ export function PortraitsEditor({ owner }: { owner: string }) {
     toast.undoable('삽화 프로필을 삭제했어요.', () => restoreLikeness(store, removed.data));
   }
 
+  async function exportFile() {
+    await settle();
+    const name = store.get('character', owner)?.value.card.name ?? store.get('module', owner)?.value.name ?? store.get('persona', owner)?.value.name ?? '';
+    const flushed = store.get('likeness', likenessId(owner))?.value.portraits ?? [];
+    download(fileNamed(`${name} 삽화 프로필`, '삽화 프로필', 'json'), new Blob([writePortraitFile(flushed)], { type: 'application/json' }));
+  }
+
+  async function importFile(file: File) {
+    const read = readPortraitFile(await file.text());
+    if (!read.ok) return toast.error(read.reason === 'portrait' ? `${read.index + 1}번째 인물의 형식이 맞지 않아요.` : '삽화 프로필 파일이 아니에요.');
+    await settle();
+    const imported = await importPortraits(store, owner, read.portraits);
+    if (!imported.ok) return 'count' in imported ? toast.error(`인물이 ${PORTRAITS_MOST}명을 넘어요.`, { detail: `가져오면 ${imported.count}명이 돼요.` }) : toast.failed(imported, '가져오지 못했어요.');
+    const { before, replaced } = imported.data;
+    toast.undoable(`인물 ${read.portraits.length}명을 가져왔어요.`, () => (before ? restoreLikeness(store, before) : removeLikeness(store, owner)), replaced ? `이름이 같은 ${replaced}명은 바꿨어요.` : undefined);
+  }
+
   async function remove(index: number, name: string) {
     await settle();
     const removed = await removePortrait(store, owner, { index, name });
@@ -80,13 +99,23 @@ export function PortraitsEditor({ owner }: { owner: string }) {
       {portraits.map((portrait, index) => (
         <PortraitFields key={index} owner={owner} index={index} portrait={portrait} onRemove={building ? undefined : () => void remove(index, portrait.name)} />
       ))}
-      {/* Not before the first build: a pack holding a likeness gets none built by the next 삽화. */}
-      {stored && !building && portraits.length < PORTRAITS_MOST && (
-        <div>
-          <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add()}>
-            {addOf('인물')}
-          </Button>
-        </div>
+      {!building && (
+        <Row kind="actions">
+          {/* Not before the first build: a pack holding a likeness gets none built by the next 삽화. */}
+          {stored && portraits.length < PORTRAITS_MOST && (
+            <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add()}>
+              {addOf('인물')}
+            </Button>
+          )}
+          <FileButton accept=".json,application/json" size="sm" icon={ACTS.import.icon} onFiles={([file]) => void importFile(file!)}>
+            {ACTS.import.label}
+          </FileButton>
+          {portraits.length > 0 && (
+            <Button variant="secondary" size="sm" icon={ACTS.export.icon} onClick={() => void exportFile()}>
+              {ACTS.export.label}
+            </Button>
+          )}
+        </Row>
       )}
     </Stack>
   );

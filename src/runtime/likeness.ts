@@ -1,7 +1,7 @@
 import { ChangeSignal } from '../change-signal';
 import { seesPictures, type InputPicture, type Model } from '../connectors/types';
 import { artistTags, picturePrompt } from '../engine/import/picture-prompt';
-import { artistOf, likenessRequest, parseLikeness, rebuiltPortraits, sample, SAMPLE_MOST, SHOWN_MOST, sourcesOf, type LikenessInvalid } from '../engine/likeness';
+import { artistOf, importedPortraits, likenessRequest, parseLikeness, rebuiltPortraits, sample, SAMPLE_MOST, SHOWN_MOST, sourcesOf, type LikenessInvalid } from '../engine/likeness';
 import type { Chat, Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live, type Asset } from '../model/library';
@@ -49,15 +49,14 @@ type Held = { name: string; type: string; avatar: boolean; bytes: Uint8Array<Arr
 // files: pictures still to read; held: one already in the owner's value, a persona's thumb.
 type Material = { name: string; user: boolean; texts: { label: string; text: string }[]; lore: { name: string; keys: string[]; content: string }[]; files: Picture[]; held: Held[] };
 
-// Replaces what is there but the user's portraits (rebuiltPortraits): 다시 만들기, or another device's build met in a
-// conflict.
-async function writeLikeness(store: ObjectStore, owner: string, value: Likeness): Promise<ApiResult<Stored<'likeness'>>> {
+// value: the pack's first likeness; change: what is written over one there, or over another device's met in a conflict.
+async function writeLikeness(store: ObjectStore, owner: string, value: Likeness, change: (current: Likeness) => Likeness): Promise<ApiResult<Stored<'likeness'>>> {
   const id = likenessId(owner);
   if (!store.get('likeness', id)) {
     const created = await store.create('likeness', value, { id, parent: owner });
     if (created.ok || created.error !== 'conflict' || !store.get('likeness', id)) return created;
   }
-  return store.update('likeness', id, (current) => ({ ...value, portraits: rebuiltPortraits(current.portraits, value.portraits, PORTRAITS_MOST) }));
+  return store.update('likeness', id, change);
 }
 
 // A portrait by its place and the name it had when shown, so an edit never lands on another one moved there ('gone').
@@ -86,6 +85,18 @@ export async function removePortrait(store: ObjectStore, owner: string, at: Port
     current.portraits[at.index]?.name === at.name ? { ...current, portraits: current.portraits.toSpliced(at.index, 1) } : null,
   );
   return removed.ok ? { ok: true, data: before } : removed;
+}
+
+type PortraitsImported = { before: Stored<'likeness'> | null; replaced: number };
+
+// Merged by name (importedPortraits), and refused whole past PORTRAITS_MOST before anything is written. A pack without
+// profiles gets them, so the next 삽화 builds none. before: for 되돌리기, restoreLikeness, or removeLikeness when null.
+export async function importPortraits(store: ObjectStore, owner: string, portraits: readonly Portrait[]): Promise<ApiResult<PortraitsImported> | { ok: false; error: 'too-many'; count: number }> {
+  const before = store.get('likeness', likenessId(owner));
+  const merged = importedPortraits(before?.value.portraits ?? [], portraits);
+  if (merged.portraits.length > PORTRAITS_MOST) return { ok: false, error: 'too-many', count: merged.portraits.length };
+  const written = await writeLikeness(store, owner, { portraits: merged.portraits, at: Date.now(), receipt: null }, (current) => ({ ...current, portraits: importedPortraits(current.portraits, portraits).portraits }));
+  return written.ok ? { ok: true, data: { before, replaced: merged.replaced } } : written;
 }
 
 export const removeLikeness = (store: ObjectStore, owner: string) => store.take('likeness', likenessId(owner));
@@ -201,7 +212,8 @@ export class Likenesses {
     if (!material) return { kind: 'gone' };
     const { texts, lore } = material;
     const save = async (value: Likeness) => {
-      const saved = await writeLikeness(store, owner, value);
+      // Over what is there, the user's portraits stay: 다시 만들기, or another device's build met in a conflict.
+      const saved = await writeLikeness(store, owner, value, (current) => ({ ...value, portraits: rebuiltPortraits(current.portraits, value.portraits, PORTRAITS_MOST) }));
       if (saved.ok && value.receipt) await keepRow(store, value.receipt, value.at, { chat: null, character: store.get('character', owner) ? owner : null });
       return saved.ok ? null : { kind: 'unsaved' as const, failure: saved };
     };
