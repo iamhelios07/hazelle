@@ -235,7 +235,11 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
       <SettingRow
         key="pdf"
         label={PDF_SEND}
-        help="지난 대화를 PDF 파일로 바꿔 보내서 입력 토큰을 줄여요. 빼고 고른 부분은 PDF에 넣지 않고 그대로 보내요. 모델이 대화를 문서로 읽어서 답이 조금 달라질 수 있어요. pdf-pod 플러그인에서 가져온 아이디어예요"
+        help={{
+          text: '지난 대화를 PDF 파일로 바꿔 보내서 입력 토큰을 줄여요. 빼고 고른 부분은 PDF에 넣지 않고 그대로 보내요. 모델이 대화를 문서로 읽어서 답이 조금 달라질 수 있어요. pdf-pod 플러그인에서 가져온 아이디어예요.',
+          // Credit with its link, as promised to pdf-pod's author when the port was allowed.
+          open: { label: 'pdf-pod 보기', onClick: () => window.open('https://arca.live/b/characterai/186333157', '_blank', 'noopener') },
+        }}
         changed={pdf !== undefined}
         error={recent === null ? '1부터 99 사이의 값을 입력해 주세요.' : undefined}
         note={noteFor('pdf')}
