@@ -1,5 +1,5 @@
 import { ChatToolPanel } from './ChatToolPanel';
-import { useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import type { ChatItem, ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { navigate } from '../shell/router';
@@ -15,7 +15,6 @@ import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog, speakers } from './ChatLog';
-import { ChatLore } from './ChatLore';
 import { ChatMemory } from './ChatMemory';
 import { ChatMemoryRecord } from './ChatMemoryRecord';
 import { ChatSearch } from './ChatSearch';
@@ -25,6 +24,9 @@ import { useEditBeside } from './editBeside';
 import { promptEditor, toggleEditor, type Panel, type Side } from './panels';
 import { useAutopilot } from './useAutopilot';
 import { useChat } from './useChat';
+
+// The lorebook panel brings the lorebook editor and the CBS language with it, so a chat loads them only when it opens.
+const ChatLore = lazy(() => import('./ChatLore').then(({ ChatLore }) => ({ default: ChatLore })));
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
 export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Panel) => void; onClose: () => void };
@@ -102,7 +104,11 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
           ) : panel?.kind === 'autopilot' ? (
             <ChatAutopilot autopilot={autopilot} busy={busy} onClose={actions.closePanel} />
           ) : panel?.kind === 'lore' ? (
-            id && <ChatLore id={id} onClose={actions.closePanel} />
+            id && (
+              <Suspense fallback={null}>
+                <ChatLore id={id} onClose={actions.closePanel} />
+              </Suspense>
+            )
           ) : panel?.kind === 'tool' ? (
             id && <ChatToolPanel key={panel.module} chat={id} module={panel.module} onClose={actions.closePanel} />
           ) : panel ? (
