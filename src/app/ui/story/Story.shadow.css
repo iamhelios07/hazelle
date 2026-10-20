@@ -96,15 +96,22 @@
     max-width: 100%;
   }
 
-  /* A bot's CSS that sizes pictures wins, as it does in its own boxes (design.md §6.4). data-wide: Story.tsx marks a
-     picture wider than tall. */
-  [data-picture] > img {
-    display: block;
+  /* A bot's CSS that sizes pictures wins, as it does in its own boxes (design.md §6.4). The line, not the picture, is
+     capped and shrunk to fit: a percent on the picture would resolve against a line its own size, and a full-width line
+     opens for a pointer beside the picture and sets the cover (below) off its corner. After the
+     margin reset above, which matches as strongly. data-wide: Story.tsx marks a picture wider than tall. */
+  [data-picture] {
+    width: fit-content;
     max-width: var(--story-picture-widest);
+    margin-inline: auto;
   }
 
-  [data-picture][data-wide] > img {
+  [data-picture][data-wide] {
     max-width: var(--story-picture-wide);
+  }
+
+  [data-picture] > img {
+    display: block;
   }
 
   :host > [data-original] {

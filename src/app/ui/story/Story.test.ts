@@ -39,7 +39,7 @@ it("lets any rule of the bot's beat the story's own looks", () => {
   }
   const unlayered = shadowCss.slice(0, open) + shadowCss.slice(close + 1);
   expect(shadowCss.slice(open, close)).toContain('mark[risu-mark]');
-  expect(unlayered).not.toMatch(/\bem\b|mark\[|margin|\[data-picture\] > img/);
+  expect(unlayered).not.toMatch(/\bem\b|mark\[|margin|max-width/);
 });
 
 const rule = (selectorText: string, declarations: Record<string, string>, important: string[] = []) => {

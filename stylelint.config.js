@@ -40,7 +40,7 @@ export default {
         ignoreValues: {
           '': KEYWORDS,
           // A share of the parent, the whole screen or the content's own size is layout, not a size from the design.
-          '/^(min-|max-)?(width|height)$/': [...KEYWORDS, '/%$/', '100dvh', 'max-content'],
+          '/^(min-|max-)?(width|height)$/': [...KEYWORDS, '/%$/', '100dvh', 'max-content', 'fit-content'],
         },
       },
     ],
