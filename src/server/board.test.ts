@@ -128,6 +128,22 @@ it('keeps comments flat with one level of 답글: a 답글 to a 답글 joins the
   expect(post.commentCount).toBe(3);
 });
 
+it("lets only the author edit a post or comment, the operator included among the others", async () => {
+  const admin = await operator();
+  const author = await member('author');
+  const other = await member('other');
+  const id = await posted(author);
+  const said = await commented(author, id, '처음 말');
+  const edit = { title: '고친 제목', text: '고친 본문', category: 'bug' };
+  for (const who of [other, admin]) {
+    expect((await t.put(`board/posts/${id}`, edit, who.cookie)).status).toBe(404);
+    expect((await t.put(`board/comments/${said}`, { text: '남이 고침' }, who.cookie)).status).toBe(404);
+  }
+  expect((await t.put(`board/posts/${id}`, edit, author.cookie)).status).toBe(204);
+  expect((await t.put(`board/comments/${said}`, { text: '고친 말' }, author.cookie)).status).toBe(204);
+  expect(await read(other, id)).toMatchObject({ ...edit, editedAt: expect.any(Number), comments: [{ text: '고친 말', editedAt: expect.any(Number) }] });
+});
+
 it('refuses comments on a locked post, and logs the lock', async () => {
   const admin = await operator();
   const author = await member('author');
