@@ -1,8 +1,6 @@
 import { ImageIcon } from 'lucide-react';
-import { useState } from 'react';
 import { IllustrateRows } from '../common/IllustrateRows';
 import { PerCharacter } from '../common/TaskPrompt';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { ILLUSTRATE_NOTE, ILLUSTRATE_NOTE_UNSENT, scopeTag } from '../common/words';
 import { useSession } from '../session';
 import { Divider, Menu, Section, Stack, Text, TextField, ToolButton } from '../ui';
@@ -12,6 +10,7 @@ import { sendsIllustrateNote, type sceneWriterOf } from '../../runtime/illustrat
 import { illustrationPrompt } from '../../runtime/prompts';
 import type { ChatSettingsActions } from './useChatSettings';
 import type { IllustrationActions } from './useChatIllustrations';
+import { useChatNote } from './useChatNote';
 
 type Props = {
   id: string | null;
@@ -47,22 +46,11 @@ export function ChatIllustrate({ id, illustrate, note, sceneWriter, card, onChan
   );
 }
 
-// Mounted only while the menu is open, so it starts from what is saved. A blank note is stored as none.
 function NoteEditor({ id, note, prompt, onSave }: { id: string | null; note: string | undefined; prompt: string | undefined; onSave: Props['onSaveNote'] }) {
   const { store } = useSession();
   const chosen = illustrationPrompt(store, prompt);
-  const autosave = useAutosave<{ note: string | null }>(`illustrate-note:${id}`, (patch) => onSave(patch.note ?? null));
-  const [text, setText] = useState(('note' in autosave.unsaved ? autosave.unsaved.note : note) ?? '');
+  const { text, status, change } = useChatNote('illustrate-note', id, note, onSave, null, '');
   const unsent = text.trim() !== '' && chosen.kind === 'prompt' && !sendsIllustrateNote(chosen.prompt.value);
-
-  function change(value: string) {
-    setText(value);
-    const stored = value.trim() ? value : null;
-    if (!id) return void onSave(stored);
-    autosave.change({ note: stored });
-  }
-
-  const status = !id ? (text ? '첫 메시지를 보내면 저장돼요' : '') : text || autosave.status === 'failed' ? SAVE_STATUS[autosave.status ?? 'saved'] : '';
   return (
     <TextField
       label={ILLUSTRATE_NOTE}

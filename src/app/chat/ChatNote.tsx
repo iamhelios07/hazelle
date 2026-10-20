@@ -1,15 +1,14 @@
 import { PenLine } from 'lucide-react';
-import { useState } from 'react';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { follows } from '../common/words';
 import { Button, Menu, Row, Stack, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { PromptChoice } from '../../runtime/prompts';
 import type { ChatSettingsActions } from './useChatSettings';
+import { useChatNote } from './useChatNote';
 
 type Props = { id: string | null; note: string | undefined; prompt: PromptChoice; onSave: ChatSettingsActions['setNote'] };
 
-// '' is the chat's own choice of no note; following the prompt's default again is a separate choice, never an
-// emptied box.
+// '' is the chat's own choice of no note, what an emptied box stores; following the prompt's default again (null, which
+// runtime/chat-context.ts and runtime/lua/snapshot.ts read apart from '') is a separate choice.
 export function ChatNote(props: Props) {
   const { note } = props;
   return (
@@ -34,29 +33,10 @@ export function ChatNote(props: Props) {
   );
 }
 
-// Mounted only while the box is open, so it starts from what is saved.
 function NoteEditor({ id, note, prompt, onSave }: Props) {
   const close = useMenuClose();
   const fallback = prompt.kind === 'prompt' ? prompt.prompt.value.authorNote : null;
-  // An unsaved chat holds the note itself until its first send, so only a saved one goes through autosave.
-  const autosave = useAutosave<{ note: string | null }>(`note:${id}`, (patch) => onSave(patch.note as string | null));
-  // A save still on its way from the box opened before is newer than what is stored.
-  const [text, setText] = useState(('note' in autosave.unsaved ? autosave.unsaved.note : note) ?? fallback ?? '');
-
-  function change(value: string) {
-    setText(value);
-    if (!id) return void onSave(value);
-    autosave.change({ note: value });
-  }
-
-  function follow() {
-    setText(fallback ?? '');
-    if (!id) return void onSave(null);
-    void autosave.save({ note: null });
-  }
-
-  const own = 'note' in autosave.unsaved ? autosave.unsaved.note !== null : note !== undefined;
-  const status = !id ? (own ? '첫 메시지를 보내면 저장돼요' : '') : own || autosave.status === 'failed' ? SAVE_STATUS[autosave.status ?? 'saved'] : '';
+  const { text, own, status, change, follow } = useChatNote('note', id, note, onSave, '', fallback ?? '');
   const state = own
     ? text
       ? '이 채팅 전용 노트'
