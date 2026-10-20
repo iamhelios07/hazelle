@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { faceStyle, FONTS, type FontId } from '../foundation/fonts';
 import { usePanelsBeside } from '../foundation/media';
@@ -42,6 +42,8 @@ type Props = {
   children: ReactNode;
   above: ReactNode;
   footer: ReactNode;
+  // The composer with its cards, which the toasts stand above.
+  dockRef: Ref<HTMLDivElement>;
   panel?: ReactNode;
   // A second panel kept open right of panel, drawn only where both stand beside the page: covering it, each would
   // close the other.
@@ -62,7 +64,7 @@ type Props = {
   onScroll: () => void;
 };
 
-export function ChatFrame({ back, title, actions, children, above, footer, panel, beside, peek, reading, hideHeader, stage, side, portrait, pictures, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, dockRef, panel, beside, peek, reading, hideHeader, stage, side, portrait, pictures, compact, scrollRef, onScroll }: Props) {
   const scope = readingScope(reading);
   const pairs = usePanelsBeside();
   const [shown, setShown] = useState(true);
@@ -176,7 +178,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
         {peek}
         <div ref={footerRef} className={`${styles.footer} ${compact ? styles.compact : ''}`}>
           <div className={styles.above}>{above}</div>
-          <div className={styles.dock}>{footer}</div>
+          <div ref={dockRef} className={styles.dock}>{footer}</div>
         </div>
       </main>
       {panel}

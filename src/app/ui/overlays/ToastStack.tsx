@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type Key, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type Key, type PointerEvent, type ReactNode, type RefObject } from 'react';
 import styles from './ToastStack.module.css';
 
 type Props = {
@@ -9,10 +9,14 @@ type Props = {
   // since the time it stops outlives the stack.
   held: boolean;
   onHold: (held: boolean) => void;
+  // Where the stack stands at the bottom, it stands above this, so it hides none of its buttons: the chat's composer
+  // with the cards over it, such as a bot's question.
+  floor: HTMLElement | null;
 };
 
-export function ToastStack({ items, held: open, onHold: hold }: Props) {
+export function ToastStack({ items, held: open, onHold: hold, floor }: Props) {
   const holding = useHold(open, hold);
+  useFloor(holding.ref, floor, items.length > 0);
   const [heights, setHeights] = useState<ReadonlyMap<Key, number>>(() => new Map());
   // One lasting ref per notice: a new one each render would detach and measure again, and render again, forever. It
   // stays after a detach too, which StrictMode runs on every mount; the refs of notices gone are dropped here.
@@ -63,6 +67,28 @@ export function ToastStack({ items, held: open, onHold: hold }: Props) {
       ))}
     </div>
   );
+}
+
+// Written past React, so the stack follows the composer frame by frame as it folds or a card comes and goes.
+function useFloor(stack: RefObject<HTMLDivElement | null>, floor: HTMLElement | null, shown: boolean) {
+  useLayoutEffect(() => {
+    const element = stack.current;
+    if (!element || !floor) return;
+    // Suspense hides the chat, composer and all, while the next screen loads: then the stack stands at the bottom.
+    const measure = () => {
+      const { top, height } = floor.getBoundingClientRect();
+      element.style.setProperty('--rise', `${height ? window.innerHeight - top : 0}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(floor);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      element.style.removeProperty('--rise');
+    };
+  }, [stack, floor, shown]);
 }
 
 export function useHold(held: boolean, hold: (held: boolean) => void) {

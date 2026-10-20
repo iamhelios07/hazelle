@@ -5,6 +5,7 @@ import type { CharacterShelf } from '../../model/library';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useShortcut } from '../shortcuts';
+import { useToastFloor } from '../toast';
 import { useDisplay } from '../display';
 import { useAssetUrl } from '../session';
 import { ChatFrame, Pill, SidePeeks, usePanelsBeside } from '../ui';
@@ -81,6 +82,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
         actions={<ChatHeaderActions chat={chat} />}
         above={scroll.pill && <Pill label={scroll.pill} live={busy} onClick={actions.follow} />}
         footer={<ChatComposer chat={chat} folded={folded} />}
+        dockRef={useToastFloor()}
         panel={
           panel?.kind === 'toggles' ? (
             <ChatToggles card={chat.card} toggles={chat.toggles} toggleOwner={chat.toggleOwner} onFlip={actions.flip} onWrite={actions.writeToggle} onReset={actions.resetToggles} onEdit={(section) => actions.side(toggleEditor(section))} onClose={actions.closePanel} />

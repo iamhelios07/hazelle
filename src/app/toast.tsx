@@ -32,6 +32,7 @@ function lifeOf(tone: Notice['tone'], text: string, action: boolean): number {
 }
 
 const ToastContext = createContext<Toasts | null>(null);
+const FloorContext = createContext<((floor: HTMLElement | null) => void) | null>(null);
 
 export type Standing = { message: string; detail: string };
 
@@ -40,6 +41,7 @@ export type Standing = { message: string; detail: string };
 export function ToastProvider({ standing, children }: { standing: Standing | null; children: ReactNode }) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [held, setHeld] = useState(false);
+  const [floor, setFloor] = useState<HTMLElement | null>(null);
   const heldSince = useRef(0);
   const toasts = useMemo<Toasts>(() => {
     let next = 0;
@@ -98,7 +100,7 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
 
   return (
     <ToastContext.Provider value={toasts}>
-      {children}
+      <FloorContext.Provider value={setFloor}>{children}</FloorContext.Provider>
       <ToastStack
         items={[
           ...(standing ? [{ key: 'standing', toast: <Toast message={standing.message} detail={standing.detail} tone="plain" life={0} paused={held} /> }] : []),
@@ -110,9 +112,17 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
         ]}
         held={held}
         onHold={hold}
+        floor={floor}
       />
     </ToastContext.Provider>
   );
+}
+
+// The ref for what the toasts stand above while it is on screen: the chat's composer.
+export function useToastFloor(): (floor: HTMLElement | null) => void {
+  const setFloor = useContext(FloorContext);
+  if (!setFloor) throw new Error('useToastFloor outside ToastProvider');
+  return setFloor;
 }
 
 export function useToast(): Toasts {
