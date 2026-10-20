@@ -58,7 +58,7 @@ export function SettingRow({ label, folder = false, sentence, changed = false, h
           {help && <Hint label={label}>{help}</Hint>}
           {action}
         </span>
-        {sub && <span className={styles.sub}>{sub}</span>}
+        {sub && <span className={styles.facts}>{sub}</span>}
         {preview?.map((line, at) => (
           <span key={at} className={styles.preview}>
             {line}

@@ -14,7 +14,7 @@ export function Outcome({ label, items }: { label: string; items: Item[] }) {
           </span>
           <span className={styles.text}>
             <span className={styles.title}>{item.title}</span>
-            {item.note && <span className={styles.note}>{item.note}</span>}
+            {item.note && <span className={styles.detail}>{item.note}</span>}
           </span>
         </li>
       ))}

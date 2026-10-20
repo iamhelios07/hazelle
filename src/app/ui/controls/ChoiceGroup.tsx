@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react';
+import { Item } from '../collections/Item';
 import { Menu, MenuItem } from '../overlays/Menu';
 import { ChipButton } from './ChipButton';
 import styles from './ChoiceGroup.module.css';
@@ -32,24 +33,29 @@ export function ChoiceGroup<T extends string>({ label, showLabel = false, option
   }
   const group = (
     <div className={styles[layout]} role="group" aria-label={showLabel ? undefined : label} aria-labelledby={showLabel ? id : undefined}>
-      {options.map((option) => (
-        <button key={option.value} type="button" className={styles.choice} aria-pressed={option.value === value} onClick={() => onChange(option.value)}>
-          {layout === 'list' ? (
-            <>
-              <span className={styles.dot} aria-hidden />
-              <span className={styles.text}>
-                <span>{option.label}</span>
-                {option.sub && <span className={styles.sub}>{option.sub}</span>}
-              </span>
-            </>
-          ) : (
-            <>
-              {option.mark}
-              {option.label}
-            </>
-          )}
-        </button>
-      ))}
+      {options.map((option) =>
+        // A chip is the filter pill Tab draws, so a pick of chips reads as a Tabs filter does.
+        layout === 'chips' ? (
+          <Item key={option.value} density="chip" scheme="tab" leading={option.mark} title={option.label} pressed={option.value === value} onClick={() => onChange(option.value)} />
+        ) : (
+          <button key={option.value} type="button" className={layout === 'list' ? `${styles.choice} ${styles.option}` : styles.choice} aria-pressed={option.value === value} onClick={() => onChange(option.value)}>
+            {layout === 'list' ? (
+              <>
+                <span className={styles.dot} aria-hidden />
+                <span className={styles.text}>
+                  <span>{option.label}</span>
+                  {option.sub && <span className={styles.sub}>{option.sub}</span>}
+                </span>
+              </>
+            ) : (
+              <>
+                {option.mark}
+                {option.label}
+              </>
+            )}
+          </button>
+        ),
+      )}
     </div>
   );
   if (!showLabel) return group;

@@ -66,12 +66,14 @@
   max-width: var(--screen-split-max-width);
 }
 
-.split .content {
+.frame {
   container-type: inline-size;
 }
 
 .columns,
-.aside {
+.aside,
+.main {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-24);
@@ -91,7 +93,12 @@
     grid-row: 1;
   }
 
-  .columns > .body {
+  .sticky {
+    position: sticky;
+    top: var(--space-32);
+  }
+
+  .main {
     grid-column: 1;
     grid-row: 1;
   }

@@ -23,11 +23,10 @@
 }
 
 .bar {
+  composes: track from '../foundation/surface.module.css';
   display: flex;
-  height: var(--space-8);
+  height: var(--bar-height-thick);
   overflow: hidden;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-raised);
 }
 
 .legend {

@@ -35,9 +35,7 @@
   font-weight: var(--weight-semibold);
 }
 
-.dropping,
-.dropping:hover {
-  outline: var(--border-thick) solid var(--color-accent);
-  background: var(--color-accent-bg);
+.dropping {
+  composes: dropping from '../foundation/surface.module.css';
   color: var(--color-text);
 }

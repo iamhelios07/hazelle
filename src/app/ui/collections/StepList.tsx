@@ -17,7 +17,7 @@ export function StepList({ label, steps, onPick }: { label: string; steps: StepR
               →
             </span>
             <code className={result ? styles.result : `${styles.result} ${styles.empty}`}>{result || '(없음)'}</code>
-            {note && <span className={styles.note}>{note}</span>}
+            {note && <span className={styles.sub}>{note}</span>}
           </button>
         </li>
       ))}

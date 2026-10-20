@@ -11,7 +11,7 @@
   align-items: center;
   gap: var(--space-4) var(--space-16);
   min-height: var(--row-min-height);
-  padding: var(--space-12) var(--space-16);
+  padding: var(--space-12) max(var(--space-8), var(--box-inset));
 }
 
 .row.wide {
@@ -90,7 +90,7 @@
   vertical-align: middle;
 }
 
-.sub {
+.facts {
   composes: note from '../foundation/type.module.css';
 }
 

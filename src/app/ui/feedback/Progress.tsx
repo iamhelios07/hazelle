@@ -90,7 +90,7 @@ function Hero({ steps, title, note }: { steps: ProgressStep[]; title?: string; n
       <ol className={styles.stages}>
         {steps.map((step, index) => <Stage key={step.label} step={step} state={stateOf(steps, index)} />)}
       </ol>
-      {note && <p className={styles.note}>{note}</p>}
+      {note && <p className={styles.detail}>{note}</p>}
     </div>
   );
 }

@@ -11,16 +11,15 @@
 }
 
 .track {
+  composes: track from '../foundation/surface.module.css';
   position: relative;
-  height: var(--gauge-height);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-raised);
+  height: var(--bar-height-thick);
 }
 
 .fill {
+  composes: fill from '../foundation/surface.module.css';
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-xs);
   background: var(--color-accent);
   transform: scaleX(var(--share));
   transform-origin: left;
@@ -41,12 +40,11 @@
 }
 
 .figures {
+  composes: detail from '../foundation/type.module.css';
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-4) var(--space-8);
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
 }
 
 .status {
@@ -63,10 +61,6 @@
 
 .warn {
   color: var(--color-warn);
-}
-
-.note {
-  color: var(--color-text-muted);
 }
 
 .amount {

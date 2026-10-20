@@ -1,12 +1,25 @@
+/* A class named note anywhere in the kit is this sm line; an xs line is detail (or sub). */
 .note {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
 }
 
+.detail {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
 .error {
   composes: note;
   color: var(--color-warn);
+}
+
+.title {
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 
 .fieldLabel {

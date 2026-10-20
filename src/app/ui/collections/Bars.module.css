@@ -36,10 +36,9 @@
 }
 
 .axis {
+  composes: detail from '../foundation/type.module.css';
   display: flex;
   justify-content: space-between;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
 }
 
 .readout {

@@ -10,8 +10,10 @@
   background: var(--color-scrim);
 }
 
-/* A pane, though it renders inside a page's tree: the page's scale (Screen.module.css) does not reach it. */
+/* A pane, though it renders inside a page's tree: the page's scale (Screen.module.css) does not reach it. --box-inset
+   takes a length, not initial: an invalid value would void the max() that reads it (Item.module.css). */
 .dialog {
+  --box-inset: 0px;
   --section-title: initial;
   --section-gap: initial;
   --box-line: initial;

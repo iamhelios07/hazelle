@@ -4,6 +4,7 @@ import { bothDrops, cardDrag, useCardDrop, useCardPlace } from './cardDrag';
 import { CardOrderScope, useOrderHandle } from './cardOrder';
 import { FolderMark } from './FolderMark';
 import { Viewport } from './Viewport';
+import { Avatar } from '../foundation/Avatar';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
 import { useVeil } from '../foundation/veil';
@@ -113,7 +114,7 @@ export function FaceCard({ image, video = false, name, note, selected, current =
           {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="xs" />}</span>}
         </span>
         <span className={styles.name}>{name}</span>
-        <span className={faint ? `${styles.note} ${styles.faint}` : styles.note}>{note}</span>
+        <span className={faint ? `${styles.detail} ${styles.faint}` : styles.detail}>{note}</span>
         {/* After the name, so the card is named by its name first; drawn over the picture's corner. */}
         {tag && <span className={styles.tag}><Tag tone="accent">{tag}</Tag></span>}
       </button>
@@ -155,7 +156,7 @@ export function FolderCard({ name, note, faces, onClick, menu, onDropCard, drag,
           </span>
         </span>
         <span className={styles.name}>{name}</span>
-        <span className={styles.note}>{note}</span>
+        <span className={styles.detail}>{note}</span>
       </button>
       {handle && <OrderHandle handle={handle} />}
       {menu && (
@@ -182,13 +183,10 @@ export function Preview({ image, video = false, name }: { image: string | null; 
   return <span className={styles.preview}>{video ? <video className={styles.whole} src={image} aria-label={name} controls autoPlay muted loop playsInline /> : <img className={styles.whole} src={image} alt={name} />}</span>;
 }
 
-const TINTS = [styles.tint1, styles.tint2, styles.tint3, styles.tint4, styles.tint5];
-const tint = (name: string) => TINTS[[...name].reduce((hash, char) => (hash * 31 + char.codePointAt(0)!) >>> 0, 0) % TINTS.length];
-
 // still: the picture does not drag itself, so the card it sits in drags instead (cardDrag).
 function Face({ image, video = false, name, still = false }: { image: string | null; video?: boolean; name: string; still?: boolean }) {
   const veil = useVeil();
-  if (!image || veil) return <span className={`${styles.letter} ${tint(name)}`} aria-hidden="true">{[...name][0]}</span>;
+  if (!image || veil) return <Avatar face={name} size="fill" />;
   return video ? <video className={styles.image} src={image} aria-hidden="true" muted playsInline preload="metadata" draggable={still ? false : undefined} /> : <img className={styles.image} src={image} alt="" draggable={still ? false : undefined} />;
 }
 

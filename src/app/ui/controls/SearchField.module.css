@@ -1,12 +1,10 @@
 .field {
+  composes: frame from '../foundation/surface.module.css';
   display: flex;
   align-items: center;
   gap: var(--space-8);
   height: var(--control-md);
   padding: 0 var(--space-12);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
   color: var(--color-text-faint);
 }
 
@@ -14,7 +12,6 @@
   height: var(--control-compact);
   padding: 0 var(--space-8);
   border-color: transparent;
-  border-radius: var(--radius-md);
   font-size: var(--text-sm);
 }
 

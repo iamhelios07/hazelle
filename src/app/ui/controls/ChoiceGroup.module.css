@@ -19,16 +19,6 @@
     color var(--duration-fast);
 }
 
-.chips .choice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-8);
-  min-height: var(--control-chip);
-  padding: 0 var(--space-12);
-  border-radius: var(--radius-full);
-  font-size: var(--text-sm);
-}
-
 .buttons .choice {
   min-height: var(--control-md);
   border-radius: var(--radius-md);
@@ -82,13 +72,8 @@
   text-align: start;
 }
 
-.list .choice:hover {
-  background: var(--color-surface-hover);
-}
-
-.list .choice[aria-pressed='true'] {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+.option {
+  composes: item pressable from '../collections/Item.module.css';
 }
 
 .dot {
@@ -111,7 +96,7 @@
 }
 
 .sub {
-  font-size: var(--text-xs);
+  composes: detail from '../foundation/type.module.css';
   color: var(--color-text-faint);
 }
 
@@ -122,8 +107,7 @@
 }
 
 .label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  composes: detail from '../foundation/type.module.css';
 }
 
 .field {

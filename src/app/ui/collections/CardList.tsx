@@ -28,6 +28,10 @@ type Props = {
   aside?: string;
   // Beside the card's button, such as the one that unfolds its children.
   control?: ReactNode;
+  // Under the card's button, such as a gauge; a press on it opens nothing.
+  detail?: ReactNode;
+  // The item open under or beside the cards (ListDetail).
+  current?: boolean;
   onClick: () => void;
   // Things folded under this one, such as its copies: rows inside the card, not cards of their own.
   children?: ReactNode;
@@ -39,7 +43,7 @@ type Props = {
   onDropCard?: (key: string) => void;
 };
 
-export function CardItem({ folder = false, title, badge, tags = [], aside, control, onClick, children, selected, drag, onDropCard }: Props) {
+export function CardItem({ folder = false, title, badge, tags = [], aside, control, detail, current, onClick, children, selected, drag, onDropCard }: Props) {
   const folded = useContext(Folded);
   const drop = useCardDrop(onDropCard);
   const slot = useMenuSlot();
@@ -55,13 +59,14 @@ export function CardItem({ folder = false, title, badge, tags = [], aside, contr
   return (
     <li className={[folded ? undefined : styles.card, folder && styles.folder, drop.over && styles.dropping].filter(Boolean).join(' ') || undefined} {...(drag === undefined ? {} : cardDrag(drag))} {...drop.props}>
       <div className={styles.head} onContextMenu={slot.onContextMenu}>
-        <Item density="regular" scheme="list" leading={folder && <FolderMark size="md" />} title={title} meta={meta} preview={aside} pressed={selected} onClick={onClick} />
+        <Item density="regular" scheme="list" leading={folder && <FolderMark size="md" />} title={title} meta={meta} preview={aside} current={current} pressed={selected} onClick={onClick} />
         {control && (
           <span className={styles.control}>
             <MenuSlot value={slot.held}>{control}</MenuSlot>
           </span>
         )}
       </div>
+      {detail && <div className={styles.detail}>{detail}</div>}
       {children && (
         <Folded value>
           <ul className={styles.folded}>{children}</ul>

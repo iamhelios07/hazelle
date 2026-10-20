@@ -5,11 +5,10 @@
 }
 
 .row {
+  composes: detail from '../foundation/type.module.css';
   display: grid;
   grid-template-columns: 1fr auto;
   row-gap: var(--space-4);
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
 }
 
 .label {
@@ -22,16 +21,13 @@
 }
 
 .track {
+  composes: track from '../foundation/surface.module.css';
   grid-column: 1 / -1;
-  height: var(--bar-height);
   overflow: hidden;
-  border-radius: var(--radius-xs);
-  background: var(--color-border);
 }
 
 .fill {
-  height: 100%;
-  border-radius: var(--radius-xs);
+  composes: fill from '../foundation/surface.module.css';
   background: var(--color-accent);
   transform: scaleX(var(--progress));
   transform-origin: left;
@@ -43,9 +39,8 @@
 }
 
 .flow {
+  composes: fill from '../foundation/surface.module.css';
   width: 30%;
-  height: 100%;
-  border-radius: var(--radius-xs);
   background: var(--color-accent);
 }
 
@@ -102,8 +97,7 @@
 }
 
 .title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
+  composes: fieldLabel from '../foundation/type.module.css';
 }
 
 .stages {
@@ -162,9 +156,7 @@
   color: var(--color-text-faint);
 }
 
-.note {
+.detail {
+  composes: detail from '../foundation/type.module.css';
   margin: 0;
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-  color: var(--color-text-muted);
 }
