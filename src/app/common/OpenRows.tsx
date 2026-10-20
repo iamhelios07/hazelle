@@ -4,30 +4,38 @@ import { useToast } from '../toast';
 import { Button, ListItem, Row, Stack, Tag, Text } from '../ui';
 import { withParticle } from './particles';
 
-// A list whose rows open in place, one at a time, such as a lorebook's entries or a pack's scripts.
-export function useOpenRows() {
+// A list whose rows open in place: a pack's scripts one at a time, a lorebook's entries several at once (they are read
+// and copied side by side; a ruling, not a limit of the piece).
+export function useOpenRows(several = false) {
   const toast = useToast();
-  const [open, setOpen] = useState<string | null>(null);
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const setOpen = (id: string, on: boolean) =>
+    setOpened((now) => {
+      const next = new Set(several ? now : []);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   // The row opens as added, before the store holds it.
   async function add(noun: string, task: (id: string) => Promise<ApiResult<unknown>>) {
     const id = crypto.randomUUID();
-    setOpen(id);
+    setOpen(id, true);
     const saved = await task(id);
     if (!saved.ok) toast.failed(saved, `${withParticle(noun, '을/를')} 추가하지 못했어요.`);
   }
 
   // removing: through the row's save queue, so a save still waiting never writes after the delete; null when a change
   // waiting in it could not be stored, so the delete did not run.
-  async function remove<R>({ noun, name }: { noun: string; name: string }, removing: Promise<ApiResult<R> | null>, restore: (removed: R) => Promise<ApiResult<unknown>>) {
+  async function remove<R>({ id, noun, name }: { id: string; noun: string; name: string }, removing: Promise<ApiResult<R> | null>, restore: (removed: R) => Promise<ApiResult<unknown>>) {
     const done = await removing;
     if (!done) return;
     if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
-    setOpen(null);
+    setOpen(id, false);
     toast.undoable(`'${name}' ${withParticle(noun, '을/를')} 삭제했어요.`, () => restore(done.data));
   }
 
-  return { open, setOpen, add, remove };
+  return { isOpen: (id: string) => opened.has(id), setOpen, add, remove };
 }
 
 export type OpenRows = ReturnType<typeof useOpenRows>;

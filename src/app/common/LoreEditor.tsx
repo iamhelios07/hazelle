@@ -74,7 +74,7 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
   const toast = useToast();
   const entries = useChildren('lore', owner.id);
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
-  const openRows = useOpenRows();
+  const openRows = useOpenRows(true);
   const [naming, setNaming] = useState<Naming | null>(null);
   const add = (folder: string | null) => openRows.add(ENTRY, (id) => addLore(store, owner.id, folder, id));
 
@@ -164,9 +164,9 @@ function EntryRow({ stored, folders, language, trial, rows }: RowProps) {
   const save = useAutosave<Lore>(`lore:${stored.id}`, (patch) => editLore(store, stored.id, patch));
   const shown: Lore = { ...stored.value, ...save.unsaved };
   const name = loreName(shown.name);
-  const remove = () => void rows.remove({ noun: ENTRY, name }, save.remove(() => removeLore(store, stored.id)), (removed) => restoreLore(store, removed));
+  const remove = () => void rows.remove({ id: stored.id, noun: ENTRY, name }, save.remove(() => removeLore(store, stored.id)), (removed) => restoreLore(store, removed));
   return (
-    <OpenRow title={name} tag={when(shown)} open={rows.open === stored.id} onOpen={(on) => rows.setOpen(on ? stored.id : null)}>
+    <OpenRow title={name} tag={when(shown)} open={rows.isOpen(stored.id)} onOpen={(on) => rows.setOpen(stored.id, on)}>
       <EntryFields shown={shown} folders={folders} language={language} trial={trial} change={save.change} />
       <RowFoot noun={ENTRY} words={save.words} onRemove={remove} />
     </OpenRow>

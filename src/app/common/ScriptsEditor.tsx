@@ -38,7 +38,6 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
   const lua = useMemo(() => luaLanguage((code) => scripts.check(code), trial.variables), [scripts, trial.variables]);
   const replacement = useMemo(() => cbsLanguage({ variables: trial.variables, placeholder: 'data' }), [trial.variables]);
   const rows = useOpenRows();
-  const { open, setOpen } = rows;
   // Lua code typed and not applied yet, by script; it goes when the editor does.
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(() => new Map());
   const add = (list: ScriptList) => rows.add(SCRIPTS[list], (id) => (list === 'regex' ? addRegex : addLua)(store, owner, id));
@@ -55,7 +54,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
 
   const item = (list: ScriptList, id: string, page: boolean) => {
     const place = pack[list].findIndex((script) => script.id === id);
-    const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null), drop: rows.remove };
+    const shared = { owner, pack, place, page, open: page || rows.isOpen(id), onOpen: (on: boolean) => rows.setOpen(id, on), drop: rows.remove };
     if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={search.words !== ''} language={replacement} />;
     const trigger = pack.triggers[place]!;
     return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} language={lua} trial={trial.lua} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
@@ -163,7 +162,7 @@ function useScriptActions({ owner, pack, drop }: ItemProps, list: ScriptList, sc
       <SettingGroup label="켬">
         <SettingRow label="켬" control={<Switch label="켬" checked={!script.off} onChange={(on) => void setScriptOff(store, owner, list, script.id, !on).then(failed)} />} />
       </SettingGroup>
-      <RowFoot noun={SCRIPTS[list]} words={words} onRemove={() => void drop({ noun: SCRIPTS[list], name }, remove(() => removeScript(store, owner, list, script.id)), (removed) => restoreScript(store, owner, removed))}>
+      <RowFoot noun={SCRIPTS[list]} words={words} onRemove={() => void drop({ id: script.id, noun: SCRIPTS[list], name }, remove(() => removeScript(store, owner, list, script.id)), (removed) => restoreScript(store, owner, removed))}>
         {move(-1, ChevronUp, '위로')}
         {move(1, ChevronDown, '아래로')}
       </RowFoot>
