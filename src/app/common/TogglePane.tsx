@@ -37,6 +37,7 @@ type Field = 'label' | 'key' | 'default' | 'line';
 type Editing = { at: number; field: Field } | { add: Labeled };
 
 const FIELD: Record<Labeled, string> = { divider: '이름', caption: '내용', group: '이름' };
+const LINE_ONLY = '비워 두면 선만 보여요.';
 
 const subOf = (line: Toggle | UnreadLine) =>
   isToggle(line) ? `${line.key} · ${LINE_WORDS[line.kind]}${line.kind === 'text' && line.lines ? ' · 여러 줄' : ''}` : line.text;
@@ -124,7 +125,7 @@ export function TogglePane({ owner, lines, uses, onAdd, onEdit, onMove, onRekey,
           title="기본값 바꾸기"
           field="기본값"
           value={line.default}
-          blank
+          blank="비워 두면 빈 값으로 시작해요."
           onClose={close}
           onSave={(value) => {
             close();
@@ -139,7 +140,7 @@ export function TogglePane({ owner, lines, uses, onAdd, onEdit, onMove, onRekey,
         title={line.kind === 'caption' ? '내용 바꾸기' : ACTS.rename.label}
         field={isToggle(line) ? '이름' : FIELD[line.kind]}
         value={line.label}
-        blank={line.kind === 'divider'}
+        blank={line.kind === 'divider' ? LINE_ONLY : undefined}
         onClose={close}
         onSave={(label) => {
           close();
@@ -180,8 +181,7 @@ export function TogglePane({ owner, lines, uses, onAdd, onEdit, onMove, onRekey,
           title={`${LINE_WORDS[editing.add]} 추가`}
           field={FIELD[editing.add]}
           value=""
-          hint={editing.add === 'divider' ? '비워 두면 선만 보여요.' : undefined}
-          blank={editing.add === 'divider'}
+          blank={editing.add === 'divider' ? LINE_ONLY : undefined}
           onClose={close}
           onSave={(label) => {
             close();
