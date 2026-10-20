@@ -14,18 +14,20 @@ type Props<T extends string> = {
   showLabel?: boolean;
   options: { value: T; label: string; sub?: string; mark?: ReactNode }[];
   value: T | null;
+  // fit and menu: the chip's words while value is none of the options.
+  empty?: string;
   onChange: (value: T) => void;
   // cards: a few choices that each need their meaning, a card each with its mark, label and sub.
   layout?: 'chips' | 'buttons' | 'segmented' | 'list' | 'menu' | 'fit' | 'cards';
 };
 
-export function ChoiceGroup<T extends string>({ label, showLabel = false, options, value, onChange, layout = 'chips' }: Props<T>) {
+export function ChoiceGroup<T extends string>({ label, showLabel = false, options, value, empty, onChange, layout = 'chips' }: Props<T>) {
   const id = useId();
   const strip = layout === 'fit' && options.length <= STRIP.options && options.map((option) => option.label).join('').length <= STRIP.letters;
   if (strip) return <ChoiceGroup label={label} showLabel={showLabel} options={options} value={value} onChange={onChange} layout="segmented" />;
   if (layout === 'fit' || layout === 'menu') {
     return (
-      <Menu label={label} place="below-end" trigger={(opener) => <ChipButton variant={layout === 'menu' ? 'value' : 'field'} label={options.find((option) => option.value === value)?.label ?? value ?? ''} title={label} {...opener} />}>
+      <Menu label={label} place="below-end" trigger={(opener) => <ChipButton variant={layout === 'menu' ? 'value' : 'field'} label={options.find((option) => option.value === value)?.label ?? empty ?? value ?? ''} title={label} {...opener} />}>
         {options.map((option) => (
           <MenuItem key={option.value} label={option.label} sub={option.sub} checked={option.value === value} onClick={() => onChange(option.value)} />
         ))}

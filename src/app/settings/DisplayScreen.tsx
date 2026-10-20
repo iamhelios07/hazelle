@@ -5,16 +5,16 @@ import { EMPTY_SETTINGS, type SavedLook } from '../../model/settings';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePercent';
-import { HidePicturesRow, ReadingRows } from '../common/ReadingRows';
-import { choices, describeLook, SIDE, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
+import { HidePicturesRow, presetChoices, ReadingRows } from '../common/ReadingRows';
+import { choices, describeLook, SIDE, lookOf, moveLook, presetOf, type Preset } from '../common/reading';
 import { useTypedNumber } from '../common/typed';
 import { PAGES } from '../common/words';
 import { useDisplay } from '../display';
-import { useSettings, useStore } from '../session';
+import { useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { ACCENT, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
+import { ACCENT, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow, type Theme } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
   { name: '캐릭터', mine: false, html: storyHtml(`*창밖으로 늦은 오후의 햇살이 기울어 든다.* 그녀는 찻잔을 내려놓고 고개를 들었다. "오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아." '또 잠든 건 아니겠지.'`, true) },
@@ -23,16 +23,18 @@ const SAMPLE: PreviewRow[] = [
 
 const SWATCH_SAMPLE = '그녀는 찻잔을 내려놓고 고개를 들었다.';
 
+const MODES: Record<Theme, string> = { light: '밝은 모드일 때', dark: '어두운 모드일 때' };
+
 const colorChoices = <T extends string>(pick: 'bg' | 'ink' | 'accent' | 'dialogue', labels: Record<T, string>) =>
   choices(labels).map((option) => ({ ...option, mark: <ColorDot pick={pick} value={option.value} /> }));
 
 export function DisplayScreen({ back }: { back: Back | null }) {
-  const { reading, display, presets, changeDisplay, pick } = useDisplay();
+  const { reading, display, presets, own, changeDisplay, pick, followSystem, assign } = useDisplay();
   const store = useStore();
   const toast = useToast();
-  const own = savedPresets(useSettings().looks);
-  const current = presetOf([...presets, ...own.presets], reading, display);
-  const [naming, setNaming] = useState<{ preset: OwnPreset | null } | null>(null);
+  const all = [...presets, ...own.presets];
+  const current = presetOf(all, reading, display);
+  const [naming, setNaming] = useState<{ preset: Preset | null } | null>(null);
 
   async function change(looks: (looks: SavedLook[]) => SavedLook[], failure: string) {
     const done = await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, looks: looks(settings.looks ?? []) }));
@@ -48,7 +50,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
     void change((looks) => [...looks, look], '저장하지 못했어요.');
   }
 
-  async function remove({ id, name, look }: OwnPreset) {
+  async function remove({ id, name, look }: Preset) {
     let at = 0;
     const removed = await change((looks) => {
       at = looks.findIndex((saved) => saved.id === id);
@@ -60,7 +62,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
   const move = (from: number, to: number) => void change((looks) => moveLook(looks, own.presets[from]!.id, own.presets[to]!.id), '옮기지 못했어요.');
 
   const swatch = (preset: Preset) => ({ name: preset.name, note: describeLook(preset.look), ...preset.look, pressed: preset === current, onPick: () => pick(preset) });
-  const menu = (preset: OwnPreset, index: number) => (
+  const menu = (preset: Preset, index: number) => (
     <>
       <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming({ preset })} />
       {preset !== current && <MenuItem icon={Save} label="지금 설정으로 덮어쓰기" onClick={() => void change((looks) => looks.map((look) => (look.id === preset.id ? { ...look, look: lookOf(reading, display) } : look)), '저장하지 못했어요.')} />}
@@ -96,6 +98,26 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             <Swatches label="내 프리셋" sample={SWATCH_SAMPLE} items={own.presets.map((preset, index) => ({ ...swatch(preset), menu: menu(preset, index) }))} onMove={move} />
           </Section>
         )}
+        <SettingGroup label="시스템 따라 바꾸기">
+          <SettingRow
+            label="시스템 따라 바꾸기"
+            help="기기가 밝은 모드인지 어두운 모드인지에 맞춰 프리셋을 바꿔요. 켜 둔 동안 고른 프리셋은 지금 모드의 프리셋이 되고, 직접 바꾼 값은 모드가 바뀌면 프리셋대로 돌아가요."
+            control={<Switch label="시스템 따라 바꾸기" checked={display.follow !== null} onChange={followSystem} />}
+          />
+          {display.follow &&
+            (Object.keys(MODES) as Theme[]).map((mode) => {
+              const id = display.follow![mode];
+              const found = all.some((preset) => preset.id === id);
+              return (
+                <SettingRow
+                  key={mode}
+                  label={MODES[mode]}
+                  error={found ? undefined : '이 프리셋을 찾을 수 없어요. 다른 프리셋을 선택해 주세요.'}
+                  control={<ChoiceGroup layout="fit" label={MODES[mode]} options={presetChoices(all)} value={found ? id : null} empty="없는 프리셋" onChange={(picked) => assign(mode, all.find((preset) => preset.id === picked)!)} />}
+                />
+              );
+            })}
+        </SettingGroup>
       </Section>
       {naming && (
         <NameDialog

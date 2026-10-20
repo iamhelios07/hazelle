@@ -1,7 +1,12 @@
 import { moved } from '../../model/fields';
 import { PICTURE_PERCENT } from '../../model/library';
 import type { SavedLook } from '../../model/settings';
-import { ACCENT, BG, DIALOGUE, FONTS, INK, QUOTE_SHAPE, THEME, type QuoteShape, type Reading, type Scheme, type StageSide } from '../ui';
+import { ACCENT, applyScheme, BG, DIALOGUE, FONTS, INK, isDarkScheme, QUOTE_SHAPE, readingDefault, THEME, type QuoteShape, type Reading, type Scheme, type StageSide, type Theme } from '../ui';
+import { readPersisted } from './usePersisted';
+
+// Per device, never in the synced settings, since a phone and a desktop screen differ (user, 2026-09-29).
+export const READING = 'risu-alpha:reading';
+export const DISPLAY = 'risu-alpha:display';
 
 export const SIZE = { min: 14, max: 21 };
 
@@ -40,11 +45,15 @@ export function parseReading(stored: string, fallback: Reading): Reading {
 // The default draws every picture as before the cap (user, 2026-10-17).
 // quotes (대사 모양), pictureSide and portrait: reading habits, so no preset sets them.
 // portrait: the character's picture on the stage, only in a chat without 삽화: the stage is theirs (user, 2026-10-16).
-export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; enterSends: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; portrait: boolean; stepButtons: boolean; scrubber: boolean; userStops: boolean };
+// follow (시스템 따라 바꾸기): a preset id for each system mode and the mode last applied, so a reload keeps what was
+// changed by hand since and only the next switch puts the preset back (user, 2026-10-20).
+export type Display = Scheme & { follow: Follow | null; quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; enterSends: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; portrait: boolean; stepButtons: boolean; scrubber: boolean; userStops: boolean };
+
+export type Follow = Record<Theme, string> & { applied: Theme };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, enterSends: true, hidePictures: false, pictureWidest: 100, wideFill: true, pictureSide: 'right', portrait: false, stepButtons: false, scrubber: true, userStops: false };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, follow: null, quotes: 'color', hideHeader: false, foldComposer: true, enterSends: true, hidePictures: false, pictureWidest: 100, wideFill: true, pictureSide: 'right', portrait: false, stepButtons: false, scrubber: true, userStops: false };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -54,6 +63,7 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     ink: known(INK, read.ink, fallback.ink),
     accent: known(ACCENT, read.accent, fallback.accent),
     dialogue: known(DIALOGUE, read.dialogue, fallback.dialogue),
+    follow: read.follow === undefined ? fallback.follow : parseFollow(read.follow),
     quotes: known(QUOTE_SHAPE, read.quotes, fallback.quotes),
     hideHeader: flag(read.hideHeader, fallback.hideHeader),
     foldComposer: flag(read.foldComposer, fallback.foldComposer),
@@ -69,24 +79,46 @@ export function parseDisplay(stored: string, fallback: Display): Display {
   };
 }
 
+// An id no preset has any more is kept: it is shown as missing where it is picked, and applies nothing.
+function parseFollow(value: unknown): Follow | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { light, dark, applied } = value as Partial<Record<keyof Follow, unknown>>;
+  const mode = named(THEME, applied);
+  return typeof light === 'string' && typeof dark === 'string' && mode ? { light, dark, applied: mode } : null;
+}
+
+export const parseStoredDisplay = (stored: string) => parseDisplay(stored, DISPLAY_DEFAULT);
+
+export const systemMode = (dark: boolean): Theme => (dark ? 'dark' : 'light');
+
+// Before the first render, so a light theme or a picked color never paints the default first. Here, not in display.tsx,
+// which reads the session the first screen does not load. An own preset's look arrives with the account, so a mode
+// that switched while the app was closed paints the last look until then.
+export function applyStoredScheme() {
+  const { follow, ...display } = readPersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT);
+  const mode = systemMode(isDarkScheme());
+  const due = follow && follow.applied !== mode ? presets(readingDefault()).find(({ id }) => id === follow[mode]) : undefined;
+  applyScheme(due?.look ?? display);
+}
+
 // A preset sets the look only, never 응답이 올 때 or the reading chrome. No preset id is stored: the current preset is
 // the one whose every value matches.
 export type Look = Pick<Reading, 'font' | 'size' | 'leading' | 'width'> & Scheme;
-export type Preset = { name: string; look: Look };
-export type OwnPreset = Preset & { id: string };
+// id: what a 시스템 따라 바꾸기 slot holds; a built-in's is fixed here, an own one's is its saved id.
+export type Preset = { id: string; name: string; look: Look };
 
 // 기본 takes initial's values, so --prose-size in tokens.css stays the one default size. It stays first: 기본값으로
 // 되돌리기 picks the first.
 export function presets(initial: Reading): Preset[] {
   const { font, size, leading, width } = initial;
   return [
-    { name: '기본', look: { theme: 'dark', ...PLAIN, font, size, leading, width } },
-    { name: '밝은 서재', look: { theme: 'light', ...PLAIN, font: 'serif', size, leading, width } },
-    { name: '고딕 간결', look: { theme: 'dark', ...PLAIN, font: 'sans', size: 15, leading: 'narrow', width: 'narrow' } },
-    { name: '넓게 읽기', look: { theme: 'dark', ...PLAIN, font: 'serif', size: 18, leading: 'wide', width: 'wide' } },
-    { name: '밤바다', look: { theme: 'dark', ...PLAIN, bg: 'blue', accent: 'blue', dialogue: 'sky', font, size, leading, width } },
-    { name: '숲', look: { theme: 'dark', ...PLAIN, bg: 'green', accent: 'green', dialogue: 'lime', font, size, leading, width } },
-    { name: '세피아', look: { theme: 'light', ...PLAIN, bg: 'brown', font: 'serif', size, leading: 'wide', width } },
+    { id: 'default', name: '기본', look: { theme: 'dark', ...PLAIN, font, size, leading, width } },
+    { id: 'study', name: '밝은 서재', look: { theme: 'light', ...PLAIN, font: 'serif', size, leading, width } },
+    { id: 'gothic', name: '고딕 간결', look: { theme: 'dark', ...PLAIN, font: 'sans', size: 15, leading: 'narrow', width: 'narrow' } },
+    { id: 'wide', name: '넓게 읽기', look: { theme: 'dark', ...PLAIN, font: 'serif', size: 18, leading: 'wide', width: 'wide' } },
+    { id: 'sea', name: '밤바다', look: { theme: 'dark', ...PLAIN, bg: 'blue', accent: 'blue', dialogue: 'sky', font, size, leading, width } },
+    { id: 'forest', name: '숲', look: { theme: 'dark', ...PLAIN, bg: 'green', accent: 'green', dialogue: 'lime', font, size, leading, width } },
+    { id: 'sepia', name: '세피아', look: { theme: 'light', ...PLAIN, bg: 'brown', font: 'serif', size, leading: 'wide', width } },
   ];
 }
 
@@ -107,7 +139,7 @@ export function describeLook({ theme, bg, ink, accent, dialogue, font, size, lea
 
 // Written by this app, but another version may know a value this one does not: such a preset is counted as unread,
 // never shown with a value it did not save.
-export function savedPresets(looks: SavedLook[] = []): { presets: OwnPreset[]; unread: number } {
+export function savedPresets(looks: SavedLook[] = []): { presets: Preset[]; unread: number } {
   const presets = looks.flatMap(({ id, name, look }) => {
     const read = parseLook(look);
     return read && typeof id === 'string' ? [{ id, name, look: read }] : [];

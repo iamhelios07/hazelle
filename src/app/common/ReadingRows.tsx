@@ -1,6 +1,19 @@
 import { useDisplay } from '../display';
 import { ChoiceGroup, FontPicker, SettingRow, Stepper, Switch } from '../ui';
-import { choices, REPLY, SIZE, SPACING } from './reading';
+import { choices, presetOf, REPLY, SIZE, SPACING, type Preset } from './reading';
+
+export const presetChoices = (presets: Preset[]) => presets.map(({ id, name }) => ({ value: id, label: name }));
+
+export function PresetRow() {
+  const { reading, display, presets, own, pick } = useDisplay();
+  const all = [...presets, ...own.presets];
+  return (
+    <SettingRow
+      label="프리셋"
+      control={<ChoiceGroup layout="fit" label="프리셋" options={presetChoices(all)} value={presetOf(all, reading, display)?.id ?? null} empty="직접 설정" onChange={(id) => pick(all.find((preset) => preset.id === id)!)} />}
+    />
+  );
+}
 
 export function ReadingRows() {
   const { reading, changeReading } = useDisplay();

@@ -8,6 +8,7 @@ export const MEDIA = {
   narrow: '(max-width: 959px)',
   split: '(min-width: 1200px)',
   panelCovers: '(max-width: 1279px)',
+  darkScheme: '(prefers-color-scheme: dark)',
   // A phone's width. phone is its complement: change the two together.
   roomy: '(min-width: 600px)',
   phone: '(max-width: 599px)',
@@ -57,6 +58,9 @@ export const usePanelCovers = watch(MEDIA.panelCovers);
 export const usePanelsBeside = () => !usePanelCovers();
 
 export const useHover = watch(MEDIA.hover);
+
+export const useDarkScheme = watch(MEDIA.darkScheme);
+export const isDarkScheme = () => mediaQuery(MEDIA.darkScheme).read();
 
 // A string, so an unchanged size is the same snapshot.
 const subscribeResize = (listener: () => void) => {

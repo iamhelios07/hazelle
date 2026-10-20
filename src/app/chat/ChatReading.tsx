@@ -1,4 +1,4 @@
-import { HidePicturesRow, ReadingRows, ReplyRow } from '../common/ReadingRows';
+import { HidePicturesRow, PresetRow, ReadingRows, ReplyRow } from '../common/ReadingRows';
 import { RESET } from '../common/words';
 import { useDisplay } from '../display';
 import { Button, Dialog, Row, Stack } from '../ui';
@@ -8,6 +8,7 @@ export function ReadingDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog title="읽기 설정" onClose={onClose}>
       <Stack gap="related">
+        <PresetRow />
         <HidePicturesRow />
         <ReadingRows />
         <ReplyRow />

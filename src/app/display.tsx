@@ -1,25 +1,21 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
-import { DISPLAY_DEFAULT, parseDisplay, parseReading, presets, type Display, type Preset } from './common/reading';
-import { readPersisted, usePersisted } from './common/usePersisted';
-import { applyScheme, QuoteShapeContext, readingDefault, VeilContext, type Reading } from './ui';
-
-// Per device, never in the synced settings, since a phone and a desktop screen differ (user, 2026-09-29).
-const READING = 'risu-alpha:reading';
-const DISPLAY = 'risu-alpha:display';
-
-const parseStoredDisplay = (stored: string) => parseDisplay(stored, DISPLAY_DEFAULT);
-
-// Before the first render, so a light theme or a picked color never paints the default first.
-export const applyStoredScheme = () => applyScheme(readPersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT));
+import { DISPLAY, DISPLAY_DEFAULT, parseReading, parseStoredDisplay, presetOf, presets, READING, savedPresets, systemMode, type Display, type Follow, type Preset } from './common/reading';
+import { usePersisted } from './common/usePersisted';
+import { useSettings } from './session';
+import { applyScheme, QuoteShapeContext, readingDefault, useDarkScheme, VeilContext, type Reading, type Theme } from './ui';
 
 type DisplayControl = {
   reading: Reading;
   display: Display;
   presets: Preset[];
+  own: { presets: Preset[]; unread: number };
   changeReading: (change: Partial<Reading>) => void;
   changeDisplay: (change: Partial<Display>) => void;
+  // While following the system, a pick becomes the current mode's preset.
   pick: (preset: Preset) => void;
   reset: () => void;
+  followSystem: (on: boolean) => void;
+  assign: (mode: Theme, preset: Preset) => void;
 };
 
 const DisplayContext = createContext<DisplayControl | null>(null);
@@ -31,21 +27,44 @@ export function DisplayProvider({ children }: { children: ReactNode }) {
   const [list] = useState(() => presets(initial));
   const [reading, setReading] = usePersisted(READING, (stored) => parseReading(stored, initial), initial);
   const [display, setDisplay] = usePersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT);
-  const { theme, bg, ink, accent, dialogue } = display;
+  const { looks } = useSettings();
+  const own = useMemo(() => savedPresets(looks), [looks]);
+  const mode = systemMode(useDarkScheme());
+  const { theme, bg, ink, accent, dialogue, follow } = display;
   useLayoutEffect(() => applyScheme({ theme, bg, ink, accent, dialogue }), [theme, bg, ink, accent, dialogue]);
   const veil = useMemo(() => (display.hidePictures ? { revealed: new Set<string>() } : null), [display.hidePictures]);
-  const pick = ({ look: { theme, bg, ink, accent, dialogue, ...look } }: Preset) => {
+  const find = (id: string) => [...list, ...own.presets].find((preset) => preset.id === id);
+  const wear = ({ look: { theme, bg, ink, accent, dialogue, ...look } }: Preset, follow: Follow | null) => {
     setReading({ ...reading, ...look });
-    setDisplay({ ...display, theme, bg, ink, accent, dialogue });
+    setDisplay({ ...display, theme, bg, ink, accent, dialogue, follow });
   };
+  const due = follow && follow.applied !== mode ? find(follow[mode]) : undefined;
+  useLayoutEffect(() => {
+    if (due && follow) wear(due, { ...follow, applied: mode });
+  }, [due]);
+  const pick = (preset: Preset) => wear(preset, follow && { ...follow, [mode]: preset.id, applied: mode });
+  function followSystem(on: boolean) {
+    if (!on) return setDisplay({ ...display, follow: null });
+    const current = presetOf([...list, ...own.presets], reading, display);
+    const slot = (theme: Theme) => (current?.look.theme === theme ? current : list.find(({ look }) => look.theme === theme)!).id;
+    const next = { light: slot('light'), dark: slot('dark'), applied: mode };
+    wear(find(next[mode])!, next);
+  }
   const control: DisplayControl = {
     reading,
     display,
     presets: list,
+    own,
     changeReading: (change) => setReading({ ...reading, ...change }),
     changeDisplay: (change) => setDisplay({ ...display, ...change }),
     pick,
     reset: () => pick(list[0]!),
+    followSystem,
+    assign: (slot, preset) => {
+      if (!follow) return;
+      if (slot === mode) pick(preset);
+      else setDisplay({ ...display, follow: { ...follow, [slot]: preset.id } });
+    },
   };
   return (
     <DisplayContext value={control}>
