@@ -38,6 +38,8 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
   const lua = useMemo(() => luaLanguage((code) => scripts.check(code), trial.variables), [scripts, trial.variables]);
   const replacement = useMemo(() => cbsLanguage({ variables: trial.variables, placeholder: 'data' }), [trial.variables]);
   const rows = useOpenRows();
+  // One at a time, so the open script is the only one.
+  const open = rows.opened.values().next().value ?? null;
   // Lua code typed and not applied yet, by script; it goes when the editor does.
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(() => new Map());
   const add = (list: ScriptList) => rows.add(SCRIPTS[list], (id) => (list === 'regex' ? addRegex : addLua)(store, owner, id));
@@ -70,7 +72,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
     return (
       <Stack gap="related">
         <Row kind="toolbar">
-          <Button variant="ghost" size="sm" icon={ChevronLeft} onClick={() => setOpen(null)}>
+          <Button variant="ghost" size="sm" icon={ChevronLeft} onClick={() => rows.setOpen(open, false)}>
             {`${SCRIPTS.part} 목록`}
           </Button>
         </Row>

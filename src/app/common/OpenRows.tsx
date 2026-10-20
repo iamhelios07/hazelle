@@ -35,7 +35,7 @@ export function useOpenRows(several = false) {
     toast.undoable(`'${name}' ${withParticle(noun, '을/를')} 삭제했어요.`, () => restore(done.data));
   }
 
-  return { isOpen: (id: string) => opened.has(id), setOpen, add, remove };
+  return { opened, isOpen: (id: string) => opened.has(id), setOpen, add, remove };
 }
 
 export type OpenRows = ReturnType<typeof useOpenRows>;
