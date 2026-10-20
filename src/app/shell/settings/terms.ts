@@ -11,7 +11,6 @@ export const TERMS: Record<SettingsPage, string[]> = {
   models: [DEFAULT_MODELS, MODEL_ROLES.main, MODEL_ROLES.aux, MODEL_ROLES.embed, '추가한 모델', MODEL_SETTINGS, '프롬프트에서 정한 모델'],
   connections: ['새 연결', '모델', '계정 추가', '사용량과 한도', RETRY_COUNT, '사용 내역'],
   chat: [FEATURES_TITLE, RETRY_COUNT, LORE_BUDGET_LABEL, ANSWER_INSTRUCTION_LABEL],
-  translator: [TRANSLATOR_NOTE],
   labs: LABS.map(({ name }) => name),
   prompts: ['기본 프롬프트', 'Risu 프리셋 가져오기', '새 프롬프트'],
   personas: ['새 페르소나', '삽화 프로필'],

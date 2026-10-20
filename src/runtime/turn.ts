@@ -16,7 +16,7 @@ import { keepRow } from './usage';
 import type { Ask, TalkFailure } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
 import { endCall } from './streams';
-import { resumeTranslation, translate, type TranslateFailure, type TranslateInput, type TranslationTarget } from './translate';
+import { resumeTranslation, toolTranslatorOf, translate, translateWith, type TranslateFailure, type TranslateInput, type TranslationTarget } from './translate';
 import { findRecords } from './retrieval';
 import { preread, type PrereadFailure } from './preread';
 
@@ -38,17 +38,28 @@ export type TurnFailure = (
   | { kind: 'preread'; failure: PrereadFailure }
 ) & { kept?: true };
 
-// 설정 › 번역기 translates as a new 캐릭터 없이 chat would: the shared switches' prompt, that chat's 보조 모델 and the
-// 전역 번역가의 노트. Nothing is saved, so no marker is written.
-export const TRANSLATOR_CHAT: Chat = { title: null, character: null, models: {} };
+// A new 캐릭터 없이 chat: what the 공용 layer resolves to when no chat or card of its own sets anything.
+export const SHARED_CHAT: Chat = { title: null, character: null, models: {} };
 
-// A text of no story, as a new chat would translate it (TRANSLATOR_CHAT, or a character's for its card's texts), but
-// with no persona and no card: a card's text would go along as context of its own translation, every time.
-// The call ends however it went, stopped too: the abort only stops reading, and no reload picks this call up.
-export function translateText(session: Pick<Session, 'store' | 'credentials' | 'log' | 'tokens'>, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
+type Loose = Pick<Session, 'store' | 'credentials' | 'log' | 'tokens'>;
+
+// A character's text, as a new chat of its would translate it (its card's texts).
+export const translateText = (session: Loose, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) =>
+  translateLoose(session, chat, text, language, (input, target) => translate(session, input, target, signal, onText));
+
+export function translateOnTool(session: Loose, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
+  const tool = toolTranslatorOf(session.store);
+  if (!tool.ok) return Promise.resolve(tool);
+  return translateLoose(session, SHARED_CHAT, text, language, (input, target) => translateWith(session, tool.with, input, target, signal, onText));
+}
+
+// A text of no story, with no persona and no card: a card's text would go along as context of its own translation,
+// every time. Nothing is saved, so no marker is written. The call ends however it went, stopped too: the abort only
+// stops reading, and no reload picks this call up.
+function translateLoose(session: Loose, chat: Chat, text: string, language: string, run: (input: TranslateInput, target: TranslationTarget) => ReturnType<typeof translate>) {
   const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language, lane: null };
   const target: TranslationTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
-  return translate(session, input, target, signal, onText).then(async (made) => {
+  return run(input, target).then(async (made) => {
     if (made.ok) await keepRow(session.store, made.translation.receipt!, made.translation.at, { chat: null, character: chat.character });
     return made;
   }).finally(() => endCall(session.store, target.id));

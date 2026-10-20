@@ -4,7 +4,6 @@ import { NOTE_PLACEHOLDER, TRANSLATOR_NOTE } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { TextField } from '../ui';
 
-// 설정 › 채팅's 번역 page and 번역기 edit the one 전역 note, through one autosave queue.
 export function GlobalNoteField({ error }: { error?: string }) {
   const store = useStore();
   const settings = useSettings();

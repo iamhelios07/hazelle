@@ -58,6 +58,9 @@ export type Settings = {
   memory?: Partial<MemorySettings>;
   modules?: string[];
   translatorNote?: string;
+  // 번역기's own 번역가의 노트, sent in its translations only (runtime/translate toolTranslatorOf). It began empty, the
+  // 전역 note staying with the chats' translations (user, 2026-10-20).
+  toolNote?: string;
   importNotice?: true;
   ledger?: 'filled' | { after: string };
   looks?: SavedLook[];

@@ -1,15 +1,18 @@
 import type { Tokens } from './token-calibration';
 import { ChangeSignal } from '../change-signal';
 import type { RanAway } from '../engine/pipeline';
+import { toolPrompt } from '../engine/translate';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import { restore, type ProtectInvalid } from '../engine/protect';
 import type { Chat, Receipt, Translation, Version } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
+import { without } from '../model/fields';
 import type { TranslatePrompt } from '../model/prompt';
 import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
-import { taskModel, type Route, type RouteFailure } from './assignment';
+import { sharedModel, taskModel, type Route, type RouteFailure } from './assignment';
 import { setTextTranslation, translatorNotes } from './characters';
 import { chatTranslate } from './features';
 import { appendTranslation, savedElsewhere, type Written } from './chat-log';
@@ -48,21 +51,28 @@ export type TranslationTarget = Omit<CallTarget, 'for'> & { for: Extract<Stream[
 
 type Deps = { store: ObjectStore; credentials: Credentials; log: RequestLog; tokens: Tokens };
 
+// What a translation goes out with: a chat's (translatorOf, translatorNotes) or 번역기's (toolTranslatorOf).
+export type TranslateWith = { prompt: TranslatePrompt; route: Route; notes: string };
+
+export function translate(deps: Deps, input: TranslateInput, target: TranslationTarget, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
+  const translator = translatorOf(deps.store, input.chat);
+  if (!translator.ok) return Promise.resolve(translator);
+  return translateWith(deps, { ...translator, notes: translatorNotes(deps.store, input.chat.character) }, input, target, signal, onText);
+}
+
 // A translation cut at its length keeps what it wrote, and its receipt says it was cut, unless the cut took a protected
 // span (protected-lost).
-export async function translate(
+export async function translateWith(
   { store, credentials, log, tokens }: Deps,
-  { chat, scope, take, translations, request, language, lane }: TranslateInput,
+  { prompt, route, notes }: TranslateWith,
+  { scope, take, translations, request, language, lane }: TranslateInput,
   target: TranslationTarget,
   signal: AbortSignal,
   onText: (text: string) => void,
 ): Promise<Translated> {
-  const translator = translatorOf(store, chat);
-  if (!translator.ok) return translator;
-  const { prompt, route } = translator;
   const profile = modelProfile(store, route.model);
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
-  const assembled = await evaluatingTask(store.evaluation.translation(lane, { scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal));
+  const assembled = await evaluatingTask(store.evaluation.translation(lane, { scope, take, prompt, translations, notes, request, language, seed: crypto.randomUUID() }, signal));
   if ('kind' in assembled) return { ok: false, failure: assembled };
   const { spans } = assembled;
   const text = gather((live) => onText(restore(live, spans).text));
@@ -109,6 +119,19 @@ export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt
   const route = taskModel(store, chat, prompt.prompt.value.model);
   return 'kind' in route ? { ok: false, failure: route } : { ok: true, prompt: prompt.prompt.value, route };
 }
+
+// 번역기 (user, 2026-10-20): a tool apart from every chat, for any text, so it takes neither the chat translation's
+// prompt nor its 전역 번역가의 노트: a plain prompt of its own, 설정 › 모델's 보조 모델 and its own note.
+export function toolTranslatorOf(store: ObjectStore): { ok: true; with: TranslateWith } | { ok: false; failure: RouteFailure } {
+  const route = sharedModel(store, 'aux');
+  if ('kind' in route) return { ok: false, failure: route };
+  return { ok: true, with: { prompt: TOOL_PROMPT, route, notes: store.get('settings', SETTINGS_ID)?.value.toolNote ?? '' } };
+}
+
+const TOOL_PROMPT = toolPrompt();
+
+export const setToolNote = (store: ObjectStore, text: string) =>
+  store.upsert('settings', (current = EMPTY_SETTINGS) => (text.trim() ? { ...current, toolNote: text } : without(current, 'toolNote')));
 
 // A prompt made before the 번역가의 노트 slot existed, the stored 기본 번역 among them, sends no note until the user adds
 // the block.

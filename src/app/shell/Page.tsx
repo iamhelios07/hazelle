@@ -16,6 +16,7 @@ import { Button, Callout, Empty, Intro, ListDetail, NavBar, Progress, Screen, us
 import { backBar, navigate } from './router';
 import { backTo, HOME, listOf, up, type Back, type Below, type Route } from './routes';
 import { SettingsList, settingsEntry } from './settings/SettingsNav';
+import { ToolsList, toolsEntry } from './tools/ToolsNav';
 
 
 const ToolPageScreen = lazy(() => import('../modules/ToolPageScreen').then(({ ToolPageScreen }) => ({ default: ToolPageScreen })));
@@ -51,7 +52,7 @@ const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageSc
 const NoticesScreen = lazy(() => import('../settings/NoticesSection').then(({ NoticesScreen }) => ({ default: NoticesScreen })));
 const SentScreen = lazy(() => import('../settings/SentSection').then(({ SentScreen }) => ({ default: SentScreen })));
 const LabsScreen = lazy(() => import('../settings/LabsScreen').then(({ LabsScreen }) => ({ default: LabsScreen })));
-const TranslatorScreen = lazy(() => import('../settings/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
+const TranslatorScreen = lazy(() => import('../tools/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
 const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
 
 const side = (at: SideAt) => <ScreenLoad><ChatSide {...at} /></ScreenLoad>;
@@ -67,7 +68,7 @@ const VARIANTS = { connections: 'stack', 'add-connection': 'list' } as const;
 
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
-export function Page({ route, closeSettings, onPaired }: { route: Route; closeSettings: () => void; onPaired: (paired: boolean) => void }) {
+export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer: () => void; onPaired: (paired: boolean) => void }) {
   const wide = useWide();
   const split = useSplit();
   const back = (at: Below) => backTo(up(at), wide);
@@ -87,7 +88,7 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
       case 'chat':
         return <ChatPage at={at} wide={wide} onPaired={onPaired} />;
       case 'settings':
-        return wide ? <Replace to={settingsEntry(true)} /> : <SettingsList onClose={closeSettings} />;
+        return wide ? <Replace to={settingsEntry(true)} /> : <SettingsList onClose={closeLayer} />;
       case 'connections':
         return <ConnectionsScreen back={sideBack(at)} />;
       case 'add-connection':
@@ -141,15 +142,17 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
         return <DisplayScreen back={sideBack(at)} />;
       case 'controls':
         return <ControlsScreen back={sideBack(at)} />;
+      case 'tools':
+        return wide ? <Replace to={toolsEntry(true)} /> : <ToolsList onClose={closeLayer} />;
       case 'translator':
         return <TranslatorScreen back={sideBack(at)} />;
       case 'labs':
         return <LabsScreen back={sideBack(at)} />;
       // Its path can be typed by anyone; the server refuses every call but the operator's.
       case 'admin':
-        return <AdminPage closeSettings={closeSettings}><AdminScreen back={sideBack(at)} /></AdminPage>;
+        return <AdminPage closeSettings={closeLayer}><AdminScreen back={sideBack(at)} /></AdminPage>;
       case 'admin-list':
-        return <AdminPage closeSettings={closeSettings}><AdminListScreen list={at.list} back={back(at)} /></AdminPage>;
+        return <AdminPage closeSettings={closeLayer}><AdminListScreen list={at.list} back={back(at)} /></AdminPage>;
       case 'share':
         return <ShareArrival id={at.id} />;
     }

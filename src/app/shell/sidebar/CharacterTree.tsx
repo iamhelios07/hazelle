@@ -13,7 +13,7 @@ import { useNewCharacter } from '../../library/useCharacterActions';
 import { useCharacterSort, useSortedLibrary } from '../../common/characterOrder';
 import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, Viewport } from '../../ui';
 import { navigate } from '../router';
-import { SettingsButton } from './SettingsButton';
+import { LayerButtons } from './LayerButtons';
 
 type Props = {
   typing: (shelf: Shelf<ChatSummary>) => boolean;
@@ -80,7 +80,7 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
           {search.field}
         </>
       }
-      corner={<SettingsButton />}
+      corner={<LayerButtons />}
     >
       {empty && <Welcome />}
       {!empty && search.none && <Empty variant="side">{search.none}</Empty>}

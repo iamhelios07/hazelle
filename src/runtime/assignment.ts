@@ -37,6 +37,12 @@ export function embedModel(store: Pick<ObjectStore, 'get'>): Route | RouteFailur
   return 'kind' in route || embedRoute(route.connection.value, route.model) ? route : { kind: 'model-gone' };
 }
 
+// 설정 › 모델's own pick for a role, which no chat or prompt changes: what 번역기 calls with.
+export function sharedModel(store: Pick<ObjectStore, 'get'>, role: Role): Route | RouteFailure {
+  const ref = resolveRole(role, [store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
+  return ref ? writes(routeOf(store, ref)) : { kind: 'no-model' };
+}
+
 export function taskModel(store: Pick<ObjectStore, 'get'>, chat: Chat, own: ModelRef | undefined): Route | RouteFailure {
   return own ? writes(routeOf(store, own)) : chatModel(store, chat, 'aux');
 }

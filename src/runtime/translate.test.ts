@@ -6,8 +6,8 @@ import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { setTranslate, setTranslatorNote } from './characters';
 import { SETTINGS_ID } from '../model/settings';
 import { setDefaultModel, setTaskModel } from './assignment';
-import { translate, translatorOf, type Translating } from './translate';
-import { takeTurn, translateText, TRANSLATOR_CHAT } from './turn';
+import { setToolNote, translate, translatorOf, type Translating } from './translate';
+import { SHARED_CHAT, takeTurn, translateOnTool, translateText } from './turn';
 import { translationInput } from './chat-context';
 
 const server = testServer();
@@ -205,19 +205,27 @@ describe('Translator', () => {
       expect(model()).toBe('tr');
     }));
 
-  it('translates a text of no chat into the language it is given, with the 전역 note and no persona', () =>
+  it('translates on 번역기 with 설정 › 모델’s 보조 모델, its own prompt and its own note, never the 전역 one', () =>
     server.withSession(async (session) => {
       await answerable(session);
+      const [connection] = session.store.list('connection');
+      await session.store.update('connection', connection!.id, (current) => ({ ...current, starred: [...current.starred, { ...current.starred[0]!, id: 'aux', name: 'aux' }] }));
+      await setDefaultModel(session.store, 'aux', { connection: connection!.id, model: 'aux' });
       await setTranslatorNote(session.store, null, 'Master -> 주인님');
-      const log = stubRelay(inTurn([saying('はい、ご主人様。')]));
+      await setToolNote(session.store, 'Q3 -> 3분기');
+      const log = stubRelay(inTurn([saying('3分期の報告です。')]));
       const fetched = vi.spyOn(globalThis, 'fetch');
-      const made = await translateText(session, TRANSLATOR_CHAT, 'Yes, Master.', 'Japanese', new AbortController().signal, () => {});
-      expect(made).toMatchObject({ ok: true, translation: { text: 'はい、ご主人様。' } });
-      const sent: { role: string; content: string }[] = JSON.parse(log[0]!.sent.body!).messages;
+      const made = await translateOnTool(session, 'The Q3 report.', 'Japanese', new AbortController().signal, () => {});
+      expect(made).toMatchObject({ ok: true, translation: { text: '3分期の報告です。' } });
+      const body = JSON.parse(log[0]!.sent.body!);
+      expect(body.model).toBe('aux');
+      const sent: { role: string; content: string }[] = body.messages;
       expect(sent.map(({ role }) => role)).toEqual(['system', 'system', 'user']);
-      expect(sent[0]!.content).toContain('- Rewrite the source text into Japanese.');
-      expect(sent[1]!.content).toContain('Master -> 주인님');
-      expect(sent[2]!.content).toBe('Yes, Master.');
+      expect(sent[0]!.content).toContain('into Japanese.');
+      expect(sent[0]!.content).not.toContain('roleplay');
+      expect(sent[1]!.content).toContain('Q3 -> 3분기');
+      expect(sent.some(({ content }) => content.includes('Master -> 주인님'))).toBe(false);
+      expect(sent[2]!.content).toBe('The Q3 report.');
       expect(fetched.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => String(url))).toEqual([expect.stringMatching(/^\/api\/streams\//)]);
     }));
 
@@ -240,11 +248,11 @@ describe('Translator', () => {
       await answerable(session);
       const log = stubRelay(inTurn([saying('⟦1⟧ 안녕.'), saying('안녕.')]));
       const live: string[] = [];
-      const made = await translateText(session, TRANSLATOR_CHAT, '<img src="a.png"> Hi.', 'Korean', new AbortController().signal, (text) => live.push(text));
+      const made = await translateText(session, SHARED_CHAT, '<img src="a.png"> Hi.', 'Korean', new AbortController().signal, (text) => live.push(text));
       expect(made).toMatchObject({ ok: true, translation: { text: '<img src="a.png"> 안녕.' } });
       expect(live.at(-1)).toBe('<img src="a.png"> 안녕.');
       expect(JSON.parse(log[0]!.sent.body!).messages.at(-1)).toEqual({ role: 'user', content: '⟦1⟧ Hi.' });
-      expect(await translateText(session, TRANSLATOR_CHAT, '<img src="a.png"> Hi.', 'Korean', new AbortController().signal, () => {})).toEqual({ ok: false, failure: { kind: 'protected-lost', count: 1 } });
+      expect(await translateText(session, SHARED_CHAT, '<img src="a.png"> Hi.', 'Korean', new AbortController().signal, () => {})).toEqual({ ok: false, failure: { kind: 'protected-lost', count: 1 } });
     }));
 
   it('keeps the protected spans on the call’s marker, for a page that picks the call up after a reload', () =>

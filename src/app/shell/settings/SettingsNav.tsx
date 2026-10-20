@@ -1,4 +1,4 @@
-import { FileText, FlaskConical, Hand, Languages, Layers, Lock, MessageSquare, Package, Plug, Puzzle, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
+import { FileText, FlaskConical, Hand, Layers, Lock, MessageSquare, Package, Plug, Puzzle, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useSearch } from '../../common/useSearch';
 import { PAGES, SETTINGS } from '../../common/words';
@@ -27,7 +27,6 @@ const GROUPS: Group[] = [
     title: '롤플레이',
     places: [
       { page: 'chat', label: PAGES.chat, icon: MessageSquare, route: { kind: 'chat-settings' } },
-      { page: 'translator', label: PAGES.translator, icon: Languages, route: { kind: 'translator' } },
       { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts', place: null } },
       { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas', place: null } },
       { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules', place: null } },
@@ -67,7 +66,6 @@ function useHolds(): Record<SettingsPage, string | undefined> {
     plugins: `${plugins.length}개`,
     display: presetOf(presets, reading, display)?.name,
     controls: undefined,
-    translator: undefined,
     labs: undefined,
     account: username,
     admin: undefined,

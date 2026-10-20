@@ -9,7 +9,7 @@ import { describePrereadFailure } from '../common/failure';
 import { sceneWriterOf } from '../../runtime/illustrate';
 import { prereadPrompt, setDefaultPrompt } from '../../runtime/prompts';
 import { sendsNotes, translatorOf } from '../../runtime/translate';
-import { TRANSLATOR_CHAT } from '../../runtime/turn';
+import { SHARED_CHAT } from '../../runtime/turn';
 import { IllustrateRows } from '../common/IllustrateRows';
 import { Missing } from '../common/Missing';
 import { TaskModelRow, TaskPromptMenu, type PromptDoor } from '../common/TaskPrompt';
@@ -50,7 +50,7 @@ function TranslateDefaults() {
   // translatorOf reads these too.
   usePrompts();
   useConnections();
-  const translation = translatorOf(store, TRANSLATOR_CHAT);
+  const translation = translatorOf(store, SHARED_CHAT);
   const unsent = noteLines(settings.translatorNote) > 0 && translation.ok && !sendsNotes(translation.prompt);
   return (
     <>
@@ -78,7 +78,7 @@ function IllustrateDefaults() {
   return (
     <IllustrateRows
       illustrate={illustrateSwitches(store, null)}
-      sceneWriter={sceneWriterOf(store, TRANSLATOR_CHAT)}
+      sceneWriter={sceneWriterOf(store, SHARED_CHAT)}
       card={null}
       opens="down"
       onChange={(change) => void setIllustrate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
@@ -150,13 +150,13 @@ function PrereadDefaults() {
   usePrompts();
   useConnections();
   const choice = prereadPrompt(store);
-  const writer = briefWriterOf(store, TRANSLATOR_CHAT);
+  const writer = briefWriterOf(store, SHARED_CHAT);
   const setup = prereadSetup(store);
   const set = [setup.recent !== PREREAD_STARTS.recent, setup.batch !== PREREAD_STARTS.batch, setup.thinkLess !== PREREAD_STARTS.thinkLess].filter(Boolean).length;
   const save = (change: Parameters<typeof setPreread>[1]) => void setPreread(store, change).then((saved) => saved.ok || toast.failed(saved));
   return (
     <>
-      {briefsWithChatModel(store, TRANSLATOR_CHAT) && (
+      {briefsWithChatModel(store, SHARED_CHAT) && (
         <Callout tone="warn" action={{ label: `${PRE_READ} 모델 선택`, onClick: () => editPrompt(choice.kind === 'prompt' ? { id: choice.prompt.id, pane: 'model' } : null) }}>
           {`${PRE_READ} 모델이 ${MODEL_ROLES.main}과 같아요. 이러면 비용이 오히려 늘 수 있어요.`}
         </Callout>

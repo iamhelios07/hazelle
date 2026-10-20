@@ -1,15 +1,16 @@
-import { LayoutGrid, MessageSquarePlus, PackageOpen, Settings, UserRoundPlus } from 'lucide-react';
+import { LayoutGrid, MessageSquarePlus, PackageOpen, Settings, UserRoundPlus, Wrench } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { ACTS, importOf, newOf } from '../../common/acts';
 import { useImport } from '../../common/importing';
 import { ShelfFace, shelfName } from '../../library/shelf';
 import { useNewCharacter } from '../../library/useCharacterActions';
-import { NO_CHARACTER, SETTINGS } from '../../common/words';
+import { NO_CHARACTER, SETTINGS, TOOLS } from '../../common/words';
 import { FaceButton, IconButton, Menu, MenuItem, Rail, Viewport } from '../../ui';
 import { navigate } from '../router';
 import { HOME } from '../routes';
 import { settingsEntry } from '../settings/SettingsNav';
+import { toolsEntry } from '../tools/ToolsNav';
 
 type Props = {
   shelves: Shelf<ChatSummary>[];
@@ -36,6 +37,7 @@ export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: P
             <MenuItem icon={PackageOpen} label="Risu에서 이사" onClick={move} />
             <MenuItem icon={MessageSquarePlus} label={`${NO_CHARACTER} 새 채팅`} onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Menu>
+          <IconButton icon={Wrench} label={TOOLS} framed onClick={() => navigate(toolsEntry(true))} />
           <IconButton icon={Settings} label={SETTINGS} framed onClick={() => navigate(settingsEntry(true))} />
         </>
       }

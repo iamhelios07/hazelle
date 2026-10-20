@@ -1,23 +1,21 @@
 import { entryName } from '../../connectors/types';
 import { ArrowRight, ChevronDown, ChevronUp, Eraser, Languages, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { translateSwitches } from '../../runtime/characters';
-import { translationPrompt } from '../../runtime/prompts';
-import { sendsNotes, translatorOf, type TranslatorFailure } from '../../runtime/translate';
-import { translateText, TRANSLATOR_CHAT } from '../../runtime/turn';
+import { setToolNote, toolTranslatorOf, type TranslatorFailure } from '../../runtime/translate';
+import { translateOnTool } from '../../runtime/turn';
 import { ACTS } from '../common/acts';
 import { describeTranslateFailure } from '../common/failure';
 import { LanguageMenu } from '../common/IntoLanguage';
 import { count } from '../common/typedNumber';
 import { useCopy } from '../common/useCopy';
+import { useAutosave } from '../common/useAutosave';
 import { usePersisted } from '../common/usePersisted';
-import { NOTE_UNSENT, noteLines, PAGES, STOP, taskModelHelp, TRANSLATOR_NOTE } from '../common/words';
-import { useConnections, usePrompts, useSession, useSettings } from '../session';
+import { inSettings, MODEL_ROLES, NOTE_PLACEHOLDER, noteLines, opens, STOP, TOOL_PAGES, TRANSLATOR_NOTE } from '../common/words';
+import { useConnections, useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
-import { Button, Callout, ChipButton, formatKeys, Icon, Menu, MenuHeading, MenuItem, NavBar, pressed, Screen, TranslateDesk } from '../ui';
-import { GlobalNoteField } from './GlobalNoteField';
+import { Button, Callout, ChipButton, formatKeys, Icon, Menu, MenuHeading, MenuItem, NavBar, pressed, Screen, TextField, TranslateDesk } from '../ui';
 
 const LANGUAGE = 'risu-alpha:translator-language';
 
@@ -35,8 +33,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
   const session = useSession();
   const { store } = session;
   const settings = useSettings();
-  // translatorOf reads these too.
-  usePrompts();
+  // toolTranslatorOf reads these too.
   useConnections();
   const copy = useCopy();
   const [language, setLanguage] = usePersisted(LANGUAGE, (stored) => stored, 'Korean', (name) => name);
@@ -46,13 +43,10 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
-  const prompt = translationPrompt(store, translateSwitches(store, null).prompt);
-  const translator = translatorOf(store, TRANSLATOR_CHAT);
-  const model = taskModelHelp('번역', prompt.kind === 'prompt');
+  const translator = toolTranslatorOf(store);
   const running = run.kind === 'running';
   const ready = translator.ok && source.trim() !== '' && !running;
-  const lines = noteLines(settings.translatorNote);
-  const unsent = lines > 0 && translator.ok && !sendsNotes(translator.prompt);
+  const lines = noteLines(settings.toolNote);
 
   async function start() {
     if (!ready) return;
@@ -60,7 +54,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
     abort.current = controller;
     let last = '';
     setRun({ kind: 'running', text: '' });
-    const made = await translateText(session, TRANSLATOR_CHAT, source, language, controller.signal, (text) => {
+    const made = await translateOnTool(session, source, language, controller.signal, (text) => {
       last = text;
       setRun({ kind: 'running', text });
     });
@@ -81,24 +75,24 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
     run.kind === 'running' ? '번역 중…' : run.kind === 'done' ? [characters(run.text), run.cut && '길이 한도로 잘림'].filter(Boolean).join(' · ') : run.kind === 'stopped' ? `${characters(run.text)} · 번역 중단됨` : '';
 
   return (
-    <Screen width="page" fill top={<NavBar title={PAGES.translator} {...backBar(back)} />}>
+    <Screen width="page" fill top={<NavBar title={TOOL_PAGES.translator} {...backBar(back)} />}>
       <TranslateDesk
         tools={
           <>
             <Menu
-              label="번역 모델"
+              label={MODEL_ROLES.aux}
               trigger={(opener) => (
                 <ChipButton
-                  label={translator.ok ? entryName(translator.route.model) : '번역 모델 없음'}
-                  title="번역 모델"
+                  label={translator.ok ? entryName(translator.with.route.model) : `${MODEL_ROLES.aux} 없음`}
+                  title={MODEL_ROLES.aux}
                   tone={translator.ok ? 'default' : 'warn'}
                   leading={<Icon icon={Languages} size="xs" />}
                   {...opener}
                 />
               )}
             >
-              <MenuHeading>{translator.ok ? model.text : describeTranslateFailure(translator.failure)}</MenuHeading>
-              <MenuItem label={model.door} onClick={() => navigate(prompt.kind === 'prompt' ? { kind: 'prompt', id: prompt.prompt.id, pane: 'model' } : { kind: 'prompts', place: null })} />
+              <MenuHeading>{translator.ok ? `${inSettings('models')}의 ${MODEL_ROLES.aux}로 번역해요.` : describeTranslateFailure(translator.failure)}</MenuHeading>
+              <MenuItem label={opens(inSettings('models'))} onClick={() => navigate({ kind: 'models' })} />
               <MenuHeading>여기서 번역한 내용은 저장되지 않아요.</MenuHeading>
             </Menu>
             <Icon icon={ArrowRight} size="xs" />
@@ -110,7 +104,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
             {lines > 0 ? `${TRANSLATOR_NOTE} · ${lines}줄` : TRANSLATOR_NOTE}
           </Button>
         }
-        below={noteOpen && <GlobalNoteField error={unsent ? NOTE_UNSENT : undefined} />}
+        below={noteOpen && <ToolNoteField />}
         source={{
           label: '원문',
           value: source,
@@ -164,5 +158,21 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
         }}
       />
     </Screen>
+  );
+}
+
+function ToolNoteField() {
+  const { store } = useSession();
+  const settings = useSettings();
+  const save = useAutosave<{ note: string }>('tool-note', ({ note = '' }) => setToolNote(store, note));
+  return (
+    <TextField
+      label={TRANSLATOR_NOTE}
+      lines={6}
+      value={save.unsaved.note ?? settings.toolNote ?? ''}
+      onChange={(note) => save.change({ note })}
+      placeholder={NOTE_PLACEHOLDER}
+      help="번역기에서 번역할 때만 써요. 채팅 번역에는 쓰지 않아요."
+    />
   );
 }

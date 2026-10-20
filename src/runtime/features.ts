@@ -66,7 +66,7 @@ export function setFeatureAt(store: ObjectStore, owner: FeatureOwner, feature: F
   return store.update('chat', owner.id, set);
 }
 
-// A chat's switches with 번역's 기능 off: none runs. A reader with no chat (번역기, a card's translation) reads
+// A chat's switches with 번역's 기능 off: none runs. A reader with no chat (a card's translation) reads
 // translateSwitches.
 export function chatTranslate(store: Reader, chat: Place): TranslateSetup {
   const switches = translateSwitches(store, chat.character);
