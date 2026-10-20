@@ -11,19 +11,16 @@ type Props = {
   title: string;
   note?: string;
   label: string;
-  // An act the notice goes with, such as resolving a report, may leave the text optional: blank sends no notice.
-  optional?: boolean;
   placeholder?: string;
   confirm: { label: string; icon: LucideIcon };
   about?: ReactNode;
-  also?: ReactNode;
   send: (text: string) => Promise<ApiResult<undefined>>;
   onSent: () => void;
   onClose: () => void;
 };
 
-// The one place the operator writes a notice: alone, with a report's resolving, or with a suspension.
-export function NoticeDialog({ title, note, label, optional = false, placeholder, confirm, about, also, send, onSent, onClose }: Props) {
+// The one place the operator writes a notice: alone, with a link's block, or with a suspension.
+export function NoticeDialog({ title, note, label, placeholder, confirm, about, send, onSent, onClose }: Props) {
   const [text, setText] = useState('');
   const { busy, failure, run } = useAttempt();
   const length = text.trim().length;
@@ -41,12 +38,9 @@ export function NoticeDialog({ title, note, label, optional = false, placeholder
       note={note}
       onClose={onClose}
       actions={
-        <>
-          {also}
-          <Button icon={confirm.icon} busy={busy} disabled={over || (!optional && length === 0)} onClick={() => void submit()}>
-            {confirm.label}
-          </Button>
-        </>
+        <Button icon={confirm.icon} busy={busy} disabled={over || length === 0} onClick={() => void submit()}>
+          {confirm.label}
+        </Button>
       }
     >
       {about}

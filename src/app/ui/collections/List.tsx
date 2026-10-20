@@ -58,9 +58,11 @@ type ItemProps = {
   selected?: boolean;
   current?: boolean;
   expanded?: boolean;
+  // muted: a row standing in for a thing gone, such as a deleted post kept over its comments.
+  tone?: 'plain' | 'muted';
 };
 
-export function ListItem({ leading, folder = false, title, badge, code, description, tags = [], note, trailing, onClick, control, detail, children, selected, current, expanded }: ItemProps) {
+export function ListItem({ leading, folder = false, title, badge, code, description, tags = [], note, trailing, onClick, control, detail, children, selected, current, expanded, tone }: ItemProps) {
   const windowed = useContext(Windowed);
   const places = useContext(Places);
   const slot = useMenuSlot();
@@ -102,6 +104,7 @@ export function ListItem({ leading, folder = false, title, badge, code, descript
       pressed={selected}
       current={current && 'page'}
       expanded={expanded}
+      tone={tone}
       onClick={onClick}
     />
   );

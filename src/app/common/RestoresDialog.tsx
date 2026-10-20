@@ -2,7 +2,6 @@ import { History, Play, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { BEFORE_ARMED, SELF_RESTORES_PER_DAY, type RestoreAction, type RestoreError, type RestorePhase } from '../../contracts/admin';
 import type { ServerError } from '../../contracts/http';
-import type { Report } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
 import { beginRestore, continueRestore, readPoints, readRestores, type Restore, type RestorePoint, type RestoreRun } from '../../runtime/restores';
 import { ago, moment } from './time';
@@ -11,9 +10,10 @@ import { useLoaded } from './useLoaded';
 import { useToast } from '../toast';
 import { ConfirmDialog, Dialog, Empty, List, ListItem, MenuItem, MoreMenu, Section, Stack, Text } from '../ui';
 
-// The account the operator acts on, with the report a new restore or an undo answers (null when opened from the
-// account, which only continues one). The signed-in account's own restores have none of it.
-export type Operated = { accountId: string; username: string; report: Report | null };
+// The account the operator acts on, with the operator-only post a new restore or an undo answers (null when opened
+// from the account, which only continues one); the API still calls it report. The signed-in account's own restores
+// have none of it.
+export type Operated = { accountId: string; username: string; report: { id: number; text: string } | null };
 
 type Words = { tag: string; says: string };
 const UNCHANGED = '계정 데이터는 바뀌지 않았어요.';
@@ -42,7 +42,7 @@ const ERRORS: Record<RestoreError, string> & Partial<Record<string, string>> = {
 };
 export const restoreError = (code: string) => ERRORS[code] ?? code;
 const REFUSED: Partial<Record<ServerError, string>> = {
-  'bad-report': '그 계정에서 보낸 알림 중 아직 확인 처리하지 않은 알림으로만 복원할 수 있어요.',
+  'bad-report': '그 계정이 운영자에게만 보낸 글로만 복원할 수 있어요.',
   'too-many-restores': `복원은 하루에 최대 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`,
   'bad-time': '10분 전부터 6일 전 사이의 시점으로만 복원할 수 있어요.',
   'cannot-undo': '가장 최근에 한 복원만, 끝난 뒤 7일 안에 한 번 되돌릴 수 있어요.',

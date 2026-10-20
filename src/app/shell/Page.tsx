@@ -50,7 +50,12 @@ const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ Dis
 const ControlsScreen = lazy(() => import('../settings/ControlsScreen').then(({ ControlsScreen }) => ({ default: ControlsScreen })));
 const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageScreen }) => ({ default: UsageScreen })));
 const NoticesScreen = lazy(() => import('../settings/NoticesSection').then(({ NoticesScreen }) => ({ default: NoticesScreen })));
-const SentScreen = lazy(() => import('../settings/SentSection').then(({ SentScreen }) => ({ default: SentScreen })));
+const BoardScreen = lazy(() => import('../board/BoardScreen').then(({ BoardScreen }) => ({ default: BoardScreen })));
+const PostScreen = lazy(() => import('../board/PostScreen').then(({ PostScreen }) => ({ default: PostScreen })));
+const WriteScreen = lazy(() => import('../board/WriteScreen').then(({ WriteScreen }) => ({ default: WriteScreen })));
+const EditScreen = lazy(() => import('../board/WriteScreen').then(({ EditScreen }) => ({ default: EditScreen })));
+const ActivityScreen = lazy(() => import('../board/ActivityScreen').then(({ ActivityScreen }) => ({ default: ActivityScreen })));
+const MineScreen = lazy(() => import('../board/MineScreen').then(({ MineScreen }) => ({ default: MineScreen })));
 const LabsScreen = lazy(() => import('../settings/LabsScreen').then(({ LabsScreen }) => ({ default: LabsScreen })));
 const TranslatorScreen = lazy(() => import('../tools/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
 const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
@@ -132,8 +137,6 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
         return <UsageScreen back={back(at)} />;
       case 'notices':
         return <NoticesScreen back={back(at)} />;
-      case 'sent':
-        return <SentScreen back={back(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
       case 'feature':
@@ -146,6 +149,18 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
         return wide ? <Replace to={toolsEntry(true)} /> : <ToolsList onClose={closeLayer} />;
       case 'translator':
         return <TranslatorScreen back={sideBack(at)} />;
+      case 'board':
+        return <BoardScreen key={String(at.operator)} operator={at.operator} back={sideBack(at)} />;
+      case 'post':
+        return <PostScreen key={at.id} id={at.id} back={back(at)} />;
+      case 'board-write':
+        return <WriteScreen key={String(at.operator)} editing={null} operator={at.operator} back={back(at)} />;
+      case 'board-edit':
+        return <EditScreen key={at.id} id={at.id} back={back(at)} />;
+      case 'board-activity':
+        return <ActivityScreen back={back(at)} />;
+      case 'board-mine':
+        return <MineScreen back={back(at)} />;
       case 'labs':
         return <LabsScreen back={sideBack(at)} />;
       // Its path can be typed by anyone; the server refuses every call but the operator's.

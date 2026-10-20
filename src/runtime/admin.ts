@@ -43,8 +43,9 @@ export type AdminAccount = {
 };
 // The accounts read at readAt; the sums leave out the unread ones.
 type Totals = { bytes: number; disk: number; unread: number; readAt: number };
-// A report is an account's message, or a report on a share (share set) sent by anyone holding its link: accountId and
-// username then name a signed-in reporter, else null. shared: the share's state now, null once it went with its sharer.
+// A report is a 신고 on a share (share set), sent by anyone holding its link, or on a board post or comment (postId set,
+// commentId too for a comment): accountId and username name a signed-in reporter, else null. shared: the share's state
+// now, null once it went with its sharer. postTitle, commentText: what was reported, as it reads now; null once gone.
 export type SharedState = { held: boolean; reviewed: boolean; cut: boolean; removed: boolean; ownerId: string | null; ownerName: string | null };
 export type Report = {
   id: number;
@@ -58,6 +59,10 @@ export type Report = {
   link: string | null;
   diagnostics: string | null;
   shared: SharedState | null;
+  postId: number | null;
+  commentId: number | null;
+  postTitle: string | null;
+  commentText: string | null;
 };
 export type LogRow = { id: number; at: number; action: string; target: string; detail: unknown };
 export const readService = () => api<Service>('GET', 'admin/service');
@@ -103,8 +108,7 @@ export const removeAccount = (account: string) => api<undefined>('DELETE', `admi
 
 // open: only the reports not resolved.
 export const readReports = (after: string | null, ask: { open?: boolean; limit?: number } = {}) => page<'reports', Report>('admin/reports', 'reports', after, ask);
-// reply: a notice to the report's sender, sent with resolving it; blank sends none.
-export const resolveReport = (id: number, reply = '') => api<undefined>('POST', `admin/reports/${id}/resolve`, { reply });
+export const resolveReport = (id: number) => api<undefined>('POST', `admin/reports/${id}/resolve`);
 export const readLog = (after: string | null, ask: { limit?: number } = {}) => page<'log', LogRow>('admin/log', 'log', after, ask);
 
 export const setFileBlocked = (file: string, blocked: boolean) => api<undefined>('PUT', `admin/files/${file}/blocked`, { blocked });

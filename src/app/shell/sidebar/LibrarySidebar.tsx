@@ -7,7 +7,7 @@ import { useSortedLibrary } from '../../common/characterOrder';
 import { useCharacter, useChatSummary, useWritingChats } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
-import { enterShelf, shelfOf } from '../routes';
+import { enterShelf, onBoard, shelfOf } from '../routes';
 import { CharacterTree } from './CharacterTree';
 import { ShelfChats } from './ShelfChats';
 import { SidebarRail } from './SidebarRail';
@@ -66,7 +66,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   );
   return (
     <>
-      <SidebarRail shelves={railShelves} current={current} home={route.kind === 'home' || route.kind === 'gallery'} typing={typing} onEnter={enter} fold={chats ? { open: !collapsed, onToggle: () => onCollapse(!collapsed) } : undefined} />
+      <SidebarRail shelves={railShelves} current={current} home={route.kind === 'home' || route.kind === 'gallery'} board={onBoard(route)} typing={typing} onEnter={enter} fold={chats ? { open: !collapsed, onToggle: () => onCollapse(!collapsed) } : undefined} />
       {!collapsed && chats}
     </>
   );

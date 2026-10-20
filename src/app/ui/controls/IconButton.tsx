@@ -20,18 +20,20 @@ type Props = {
   disabled?: boolean;
   // Something behind it needs a look, such as a failure inside the menu it opens; the words are inside.
   dot?: boolean;
+  // How many wait behind it, such as unread alerts; shown from 1, and read out with the label.
+  count?: number;
   // The rail's buttons: a border round it to stand alone among pictures, and the rail's larger size.
   framed?: boolean;
 };
 
 // label is required: an icon-only button has no other accessible name.
-export function IconButton({ icon, label, title = label, onClick, pressed, current, popup, expanded, ref, size = 'md', disabled = false, dot = false, framed = false }: Props) {
+export function IconButton({ icon, label, title = label, onClick, pressed, current, popup, expanded, ref, size = 'md', disabled = false, dot = false, count = 0, framed = false }: Props) {
   return (
     <button
       ref={ref}
       type="button"
       className={[styles.button, size !== 'md' && styles[size], framed && styles.framed].filter(Boolean).join(' ')}
-      aria-label={label}
+      aria-label={count > 0 ? `${label}, ${count}개` : label}
       title={title}
       aria-pressed={pressed}
       aria-current={current ? 'page' : undefined}
@@ -48,6 +50,11 @@ export function IconButton({ icon, label, title = label, onClick, pressed, curre
         <Icon icon={icon} size={framed ? 'lg' : size} />
       )}
       {dot && <span className={styles.dot} aria-hidden />}
+      {count > 0 && (
+        <span className={styles.count} aria-hidden>
+          {count}
+        </span>
+      )}
     </button>
   );
 }

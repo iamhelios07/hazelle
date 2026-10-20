@@ -60,7 +60,12 @@ const EXAMPLES = {
   ],
   usage: [{ kind: 'usage' }],
   notices: [{ kind: 'notices' }],
-  sent: [{ kind: 'sent' }],
+  board: [{ kind: 'board', operator: false }, { kind: 'board', operator: true }],
+  post: [{ kind: 'post', id: 1 }, { kind: 'post', id: 4821 }],
+  'board-write': [{ kind: 'board-write', operator: false }, { kind: 'board-write', operator: true }],
+  'board-edit': [{ kind: 'board-edit', id: 12 }],
+  'board-activity': [{ kind: 'board-activity' }],
+  'board-mine': [{ kind: 'board-mine' }],
   admin: [{ kind: 'admin' }],
   'admin-list': [{ kind: 'admin-list', list: 'accounts' }, { kind: 'admin-list', list: 'reports' }, { kind: 'admin-list', list: 'log' }],
   'chat-settings': [{ kind: 'chat-settings' }],
@@ -91,7 +96,7 @@ describe('routes', () => {
     expect(parseRoute(`/modules/${CHAT}/page`)).toEqual({ kind: 'plugin-page', id: CHAT });
   });
 
-  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/modules/abc', `/modules/${CHAT}/x`, '/plugins/abc', `/plugins/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x', '/settings/chat/nope', '/settings/chat/memory/x'])(
+  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/modules/abc', `/modules/${CHAT}/x`, '/plugins/abc', `/plugins/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x', '/settings/chat/nope', '/settings/chat/memory/x', '/account/sent', '/board/0', '/board/01', '/board/abc', '/board/12/x', '/board/write/x'])(
     '%s is home',
     (at) => {
       expect(parseRoute(at)).toEqual(HOME);
@@ -134,4 +139,10 @@ it('opens a feature under 설정 › 채팅, which stays lit and is the way back
   expect(href(route)).toBe('/settings/chat/memory');
   expect(up(route)).toEqual({ kind: 'chat-settings' });
   expect(settingsPage(route)).toBe('chat');
+});
+
+it('opens the compose with 운영자에게만 preset from ?to=operator, and goes back from an edit to its post and from a post to the list', () => {
+  expect(parseRoute('/board/write?to=operator')).toEqual({ kind: 'board-write', operator: true });
+  expect(up({ kind: 'board-edit', id: 7 })).toEqual({ kind: 'post', id: 7 });
+  expect(up({ kind: 'post', id: 7 })).toEqual({ kind: 'board', operator: false });
 });

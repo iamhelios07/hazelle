@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { messageRow } from './SentSection';
+import { messageRow } from './NoticesSection';
 
 test('a message row leads with its first line and previews the rest', () => {
   expect(messageRow('헤이젤 나우를 열었어요!\n\n- 공개 페이지예요.\n- 기본으로 켜져 있어요.')).toEqual({ title: '헤이젤 나우를 열었어요!', description: '- 공개 페이지예요.\n- 기본으로 켜져 있어요.' });

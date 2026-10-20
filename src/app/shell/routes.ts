@@ -44,13 +44,19 @@ export type Route =
   | { kind: 'account'; section: AccountSection | null }
   | { kind: 'usage' }
   | { kind: 'notices' }
-  | { kind: 'sent' }
   | { kind: 'chat-settings' }
   | { kind: 'feature'; feature: Feature }
   | { kind: 'display' }
   | { kind: 'controls' }
   | { kind: 'tools' }
   | { kind: 'translator' }
+  // 게시판 (design §6.13). operator: the operator-only posts, listed or preset in the compose.
+  | { kind: 'board'; operator: boolean }
+  | { kind: 'post'; id: number }
+  | { kind: 'board-write'; operator: boolean }
+  | { kind: 'board-edit'; id: number }
+  | { kind: 'board-activity' }
+  | { kind: 'board-mine' }
   | { kind: 'labs' }
   | { kind: 'admin' }
   | { kind: 'admin-list'; list: AdminList }
@@ -73,6 +79,8 @@ type Kind<K extends Route['kind']> = Extract<Route, { kind: K }>;
 export type Below = Exclude<Route, Kind<'home' | 'settings' | 'tools' | 'share'>>;
 
 const ID = /^[0-9a-f-]{36}$/;
+const POST_ID = /^[1-9][0-9]{0,14}$/;
+const TO_OPERATOR = 'to=operator';
 const NONE = 'none';
 // Before the connection type ids, so a type can never take over 직접 연결's path.
 const DIRECT = 'direct';
@@ -150,7 +158,6 @@ export function parseRoute(at: string): Route {
   }
   if (top === 'account' && id === 'usage' && sub === undefined) return { kind: 'usage' };
   if (top === 'account' && id === 'notices' && sub === undefined) return { kind: 'notices' };
-  if (top === 'account' && id === 'sent' && sub === undefined) return { kind: 'sent' };
   if (top === 'settings' && id === 'chat') {
     if (sub === undefined) return { kind: 'chat-settings' };
     const feature = FEATURES.find((candidate) => candidate === sub);
@@ -162,6 +169,16 @@ export function parseRoute(at: string): Route {
   if (top === 'tools' && sub === undefined) {
     if (id === undefined) return { kind: 'tools' };
     if (id === 'translator') return { kind: 'translator' };
+  }
+  if (top === 'board') {
+    const operator = params.get('to') === 'operator';
+    if (id === undefined) return { kind: 'board', operator };
+    if (id === 'write' && sub === undefined) return { kind: 'board-write', operator };
+    if (id === 'activity' && sub === undefined) return { kind: 'board-activity' };
+    if (id === 'mine' && sub === undefined) return { kind: 'board-mine' };
+    if (!POST_ID.test(id)) return HOME;
+    if (sub === undefined) return { kind: 'post', id: Number(id) };
+    return sub === 'edit' ? { kind: 'board-edit', id: Number(id) } : HOME;
   }
   if (top === 'settings' && id === 'admin') {
     if (sub === undefined) return { kind: 'admin' };
@@ -234,8 +251,6 @@ export function href(route: Route): string {
       return '/account/usage';
     case 'notices':
       return '/account/notices';
-    case 'sent':
-      return '/account/sent';
     case 'chat-settings':
       return '/settings/chat';
     case 'feature':
@@ -248,6 +263,18 @@ export function href(route: Route): string {
       return '/tools';
     case 'translator':
       return '/tools/translator';
+    case 'board':
+      return route.operator ? `/board?${TO_OPERATOR}` : '/board';
+    case 'post':
+      return `/board/${route.id}`;
+    case 'board-write':
+      return route.operator ? `/board/write?${TO_OPERATOR}` : '/board/write';
+    case 'board-edit':
+      return `/board/${route.id}/edit`;
+    case 'board-activity':
+      return '/board/activity';
+    case 'board-mine':
+      return '/board/mine';
     case 'labs':
       return '/settings/labs';
     case 'admin':
@@ -310,7 +337,6 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return 'admin';
     case 'usage':
     case 'notices':
-    case 'sent':
       return 'account';
     case 'chat-settings':
     case 'feature':
@@ -321,6 +347,10 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return listOf(route) ? 'connections' : null;
   }
 }
+
+const BOARD_KINDS: readonly Route['kind'][] = ['board', 'post', 'board-write', 'board-edit', 'board-activity', 'board-mine'];
+// The rail's 게시판 stays lit on every page of the board.
+export const onBoard = (route: Route) => BOARD_KINDS.includes(route.kind);
 
 export type ToolsPage = 'translator';
 
@@ -394,8 +424,16 @@ export function up(route: Below, chatShelf?: string | null): Route {
       return { kind: 'tools' };
     case 'usage':
     case 'notices':
-    case 'sent':
       return { kind: 'account', section: null };
+    case 'board':
+      return HOME;
+    case 'post':
+    case 'board-write':
+    case 'board-activity':
+    case 'board-mine':
+      return { kind: 'board', operator: false };
+    case 'board-edit':
+      return { kind: 'post', id: route.id };
     case 'admin-list':
       return { kind: 'admin' };
     case 'feature':

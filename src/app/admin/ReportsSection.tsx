@@ -1,38 +1,45 @@
-import { Check, History } from 'lucide-react';
+import { Check, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { readReports, resolveReport, type Report } from '../../runtime/admin';
+import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';
+import { useAttempt } from '../common/useAttempt';
 import { NOTICES } from '../common/words';
-import { RestoresDialog } from '../common/RestoresDialog';
 import { navigate } from '../shell/router';
-import { Button, Dialog, ListItem, Panel, Stack, Text, TextField } from '../ui';
-import { NoticeDialog } from './NoticeDialog';
+import { Button, Callout, Dialog, ListItem, Panel, Section, Stack, Text } from '../ui';
 import { ShareReportDialog } from './ShareReportDialog';
 import { shareTags } from './shareTags';
 import { HEAD_ROWS, PagedList, SeeAll, usePages } from '../common/useLoaded';
 
-type AccountReport = Report & { accountId: string; username: string };
+type BoardReport = Report & { postId: number };
 
-// A restore starts only from a report the account sent, so it is asked from the report. A share report is its own
-// dialog (ShareReportDialog). head: only the reports not resolved, the few 운영 shows, asked again after each act so
-// the next waiting one comes up. onActed: the account a restore acted on, when one did.
-export function ReportsSection({ head, onActed }: { head: boolean; onActed?: (account?: string) => void }) {
+const reporter = (report: Report) => report.username ?? '익명';
+const what = (report: Report) => (report.share !== null ? '링크' : report.commentId !== null ? '댓글' : '글');
+
+// A share report is its own dialog (ShareReportDialog), a post or comment report this one. head: only the reports not
+// resolved, the few 운영 shows, asked again after each act so the next waiting one comes up.
+export function ReportsSection({ head, onActed }: { head: boolean; onActed?: () => void }) {
   const pages = usePages((after) => readReports(after, head ? { open: true, limit: HEAD_ROWS } : {}));
   const [open, setOpen] = useState<Report | null>(null);
-  const [restoring, setRestoring] = useState<AccountReport | null>(null);
+  const acted = (resolvedAt: number) => {
+    if (head || !open) pages.reload();
+    else pages.update((shown) => shown.map((row) => (row.id === open.id ? { ...row, resolvedAt } : row)));
+    setOpen(null);
+    onActed?.();
+  };
   return (
     <Panel
       title={NOTICES.received}
-      help={head ? '확인하지 않은 알림만 여기에 보여요.' : undefined}
+      help={head ? '확인하지 않은 신고만 여기에 보여요.' : undefined}
       // Not hidden when the head is whole: it holds only the open reports, and the resolved ones are behind this door.
       action={head ? <SeeAll onClick={() => navigate({ kind: 'admin-list', list: 'reports' })} /> : undefined}
     >
-      <PagedList pages={pages} head={head} label={NOTICES.received} empty={head ? '확인할 알림이 없어요.' : `${NOTICES.received}이 없어요.`}>
+      <PagedList pages={pages} head={head} label={NOTICES.received} empty={head ? '확인할 신고가 없어요.' : `${NOTICES.received}이 없어요.`}>
         {(report) => (
           <ListItem
             key={report.id}
-            title={report.share === null ? report.username! : `링크 신고 · ${report.username ?? '익명'}`}
-            tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.diagnostics === null ? [] : ['진단 정보']), ...(report.shared ? shareTags(report.shared) : [])]}
+            title={`${what(report)} 신고 · ${reporter(report)}`}
+            tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.shared ? shareTags(report.shared) : [])]}
             note={ago(report.createdAt)}
             description={report.text}
             onClick={() => setOpen(report)}
@@ -50,66 +57,53 @@ export function ReportsSection({ head, onActed }: { head: boolean; onActed?: (ac
           }}
         />
       )}
-      {open && open.share === null && (
-        <ReportDialog
-          report={open as AccountReport}
-          onClose={() => setOpen(null)}
-          onRestore={() => {
-            setOpen(null);
-            setRestoring(open as AccountReport);
-          }}
-          onResolved={(resolvedAt) => {
-            if (head) pages.reload();
-            else pages.update((shown) => shown.map((row) => (row.id === open.id ? { ...row, resolvedAt } : row)));
-            setOpen(null);
-            onActed?.();
-          }}
-        />
-      )}
-      {restoring && (
-        <RestoresDialog
-          key={restoring.accountId}
-          operated={{ accountId: restoring.accountId, username: restoring.username, report: restoring }}
-          onClose={() => setRestoring(null)}
-          onActed={() => onActed?.(restoring.accountId)}
-        />
-      )}
+      {open?.postId != null && <BoardReportDialog report={open as BoardReport} onClose={() => setOpen(null)} onResolved={acted} />}
     </Panel>
   );
 }
 
-function ReportDialog({ report, onClose, onRestore, onResolved }: { report: AccountReport; onClose: () => void; onRestore: () => void; onResolved: (at: number) => void }) {
-  const title = `${report.username}의 알림`;
-  const text = (
-    <Stack gap="related">
-      <Text variant="prose">{report.text}</Text>
-      {report.diagnostics !== null && <TextField label="진단 정보" lines={8} value={report.diagnostics} onChange={() => {}} readOnly />}
-    </Stack>
-  );
-  if (report.resolvedAt !== null) {
-    return (
-      <Dialog title={title} note={ago(report.createdAt)} onClose={onClose}>
-        {text}
-      </Dialog>
-    );
-  }
+// What was reported, as it reads now; what to do about it is done on the post itself.
+function BoardReportDialog({ report, onClose, onResolved }: { report: BoardReport; onClose: () => void; onResolved: (at: number) => void }) {
+  const { busy, failure, run } = useAttempt();
+  const resolve = () =>
+    run(async () => {
+      const resolved = await resolveReport(report.id);
+      if (!resolved.ok) return describeFailure(resolved);
+      onResolved(Date.now());
+      return null;
+    });
+  const reported = report.commentId === null ? report.postTitle : report.commentText;
   return (
-    <NoticeDialog
-      title={title}
+    <Dialog
+      title={`${reporter(report)}의 ${what(report)} 신고`}
       note={ago(report.createdAt)}
-      label="답변"
-      optional
-      placeholder="비워 두면 답변을 보내지 않고 확인 처리만 해요."
-      confirm={{ label: '확인 처리', icon: Check }}
-      about={text}
-      also={
-        <Button variant="secondary" icon={History} onClick={onRestore}>
-          이 알림으로 복원
-        </Button>
-      }
-      send={(reply) => resolveReport(report.id, reply)}
-      onSent={() => onResolved(Date.now())}
       onClose={onClose}
-    />
+      actions={
+        <>
+          <Button variant="secondary" icon={ExternalLink} onClick={() => navigate({ kind: 'post', id: report.postId })}>
+            글 열기
+          </Button>
+          {report.resolvedAt === null && (
+            <Button icon={Check} busy={busy} onClick={() => void resolve()}>
+              확인 처리
+            </Button>
+          )}
+        </>
+      }
+    >
+      <Stack gap="group">
+        <Section level={3} title="신고 이유">
+          <Text variant="prose">{report.text}</Text>
+        </Section>
+        <Section level={3} title={`신고한 ${what(report)}`}>
+          {reported === null ? <Text variant="note">삭제됐어요.</Text> : <Text variant="prose">{reported}</Text>}
+        </Section>
+        {failure && (
+          <Callout tone="warn" alert>
+            {failure}
+          </Callout>
+        )}
+      </Stack>
+    </Dialog>
   );
 }

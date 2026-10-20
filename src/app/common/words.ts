@@ -6,6 +6,7 @@ import type { PrereadParts } from '../../model/settings';
 import { KEEP_DAYS } from '../../model/library';
 import { FIRST_PROFILE_NAME } from '../../runtime/profiles';
 import { PULSE_PAGE } from '../../contracts/pulse';
+import type { Category, Status } from '../../contracts/board';
 import { withParticle } from './particles';
 
 // Sentences stay in their screen and are built from these; the phrases these replaced are refused by lint
@@ -102,7 +103,27 @@ export const MODEL_SETTINGS = '모델 설정';
 
 // What passes between a person and the operator, always said with its direction. from: what the operator sent, on the
 // person's page. received: what people sent, on the operator's page. send: the operator sending one.
-export const NOTICES = { from: '운영자가 보낸 알림', sent: '내가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
+export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
+
+// 게시판 (design §6.13): its rail entry and pages, a post's category and status, and the marks its rows carry. left: an
+// author whose account is gone.
+export const BOARD = {
+  title: '게시판',
+  categories: { bug: '버그', idea: '제안', question: '질문', talk: '이야기' } satisfies Record<Category, string>,
+  statuses: { open: '열림', seen: '확인함', working: '진행 중', done: '완료', declined: '안 함' } satisfies Record<Status, string>,
+  write: '글쓰기',
+  mine: '내 글',
+  activity: '게시판 알림',
+  operatorOnly: '운영자에게만',
+  toOperator: '운영자에게만 보내기',
+  nickname: '닉네임',
+  left: '탈퇴한 사용자',
+  hidden: '가려짐',
+  deleted: '삭제됨',
+  vote: '추천',
+  comment: '댓글',
+  reply: '답글',
+};
 
 export const TOOLS = '도구';
 export const TOOL_PAGES = { translator: '번역기' };
