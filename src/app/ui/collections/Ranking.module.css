@@ -104,6 +104,7 @@
 .value {
   grid-column: 4;
   justify-self: end;
+  white-space: nowrap;
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
