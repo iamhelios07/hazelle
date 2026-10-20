@@ -56,11 +56,10 @@ const EXAMPLES = {
   account: [
     { kind: 'account', section: null },
     { kind: 'account', section: 'notices' },
-    { kind: 'account', section: 'news' },
   ],
   usage: [{ kind: 'usage' }],
   notices: [{ kind: 'notices' }],
-  board: [{ kind: 'board', operator: false }, { kind: 'board', operator: true }],
+  board: [{ kind: 'board', operator: false }, { kind: 'board', operator: true }, { kind: 'board', operator: false, category: 'news' }, { kind: 'board', operator: true, category: 'bug' }],
   post: [{ kind: 'post', id: 1 }, { kind: 'post', id: 4821 }],
   'board-write': [{ kind: 'board-write', operator: false }, { kind: 'board-write', operator: true }],
   'board-edit': [{ kind: 'board-edit', id: 12 }],
@@ -145,4 +144,8 @@ it('opens the compose with 운영자에게만 preset from ?to=operator, and goes
   expect(parseRoute('/board/write?to=operator')).toEqual({ kind: 'board-write', operator: true });
   expect(up({ kind: 'board-edit', id: 7 })).toEqual({ kind: 'post', id: 7 });
   expect(up({ kind: 'post', id: 7 })).toEqual({ kind: 'board', operator: false });
+});
+
+it('lands the old 새 소식 address of 계정 on the board\'s 소식', () => {
+  expect(parseRoute('/account?section=news')).toEqual({ kind: 'board', operator: false, category: 'news' });
 });

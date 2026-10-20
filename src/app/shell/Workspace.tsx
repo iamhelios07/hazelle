@@ -7,7 +7,8 @@ import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
-import { BUILT_VERSION, NEWS, newsToSay, tourToShow, type News, type Tour } from '../common/release';
+import { readPosts } from '../../runtime/board';
+import { BUILT_VERSION, openedNewRelease, TOURS, tourToShow, type Tour } from '../common/release';
 import { TourDialog } from '../common/Tour';
 import { count } from '../common/typedNumber';
 import { usePersisted } from '../common/usePersisted';
@@ -85,25 +86,31 @@ function Stale() {
 }
 
 // The release this device last opened, and the tour it saw (closing it in any way is seeing it); the ref: StrictMode
-// runs a mount's effect twice. A tour to show stands in for the news toast of the same open.
+// runs a mount's effect twice. A tour to show stands in for the toast of the same open, which says the release only
+// when the board holds its 소식 (server/news), and opens that post.
 function News() {
   const toast = useToast();
   const [lastOpened, setLastOpened] = usePersisted('risu-alpha:opened-version', String, '', String);
   const [tourSeen, setTourSeen] = usePersisted('risu-alpha:tour-seen', String, '', String);
-  const [tour, setTour] = useState<(News & { tour: Tour }) | null>(null);
+  const [tour, setTour] = useState<Tour | null>(null);
   const said = useRef(false);
   useEffect(() => {
     if (BUILT_VERSION === null || said.current) return;
     said.current = true;
-    const showing = tourToShow(BUILT_VERSION, tourSeen, NEWS);
+    const showing = tourToShow(BUILT_VERSION, tourSeen, TOURS);
     if (showing) setTour(showing);
-    else if (newsToSay(BUILT_VERSION, lastOpened, NEWS)) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'account', section: 'news' }) } });
+    else if (openedNewRelease(BUILT_VERSION, lastOpened)) {
+      void readPosts(null, { sort: 'new', category: 'news', limit: 1 }).then((read) => {
+        const news = read.ok ? read.data.rows[0] : undefined;
+        if (news?.version === BUILT_VERSION) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'post', id: news.id }) } });
+      });
+    }
     if (lastOpened !== BUILT_VERSION) setLastOpened(BUILT_VERSION);
   }, []);
   if (!tour) return null;
   return (
     <TourDialog
-      news={tour}
+      tour={tour}
       onClose={() => {
         setTourSeen(tour.version);
         setTour(null);

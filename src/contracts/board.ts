@@ -26,9 +26,11 @@ export const COMMENTS_PER_DAY = 60;
 // 임시조치 (정보통신망법 제44조의2): a reported post is held hidden at most this long.
 export const HOLD_DAYS_MAX = 30;
 
-export const CATEGORIES = ['bug', 'idea', 'question', 'talk'] as const;
+// news: 소식, the operator's public release notes (design §6.15), kept out of the feed that names no category.
+export const CATEGORIES = ['bug', 'idea', 'question', 'talk', 'news'] as const;
 export type Category = (typeof CATEGORIES)[number];
-// The operator moves a post along; 'done' may name the version that shipped it.
+// The operator moves a post along; 'done' may name the version that shipped it. A 소식 post takes none, its version
+// being the release it tells of.
 export const STATUSES = ['open', 'seen', 'working', 'done', 'declined'] as const;
 export type Status = (typeof STATUSES)[number];
 // operator: the author and the operator alone read it; the only kind a suspended account reads or writes.

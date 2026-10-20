@@ -18,6 +18,8 @@ import {
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { linkify } from '../common/linkify';
+import { tourOf } from '../common/release';
+import { TOUR, TourDialog } from '../common/Tour';
 import { AuthorLine, authorName, PostMarks, statusIcon } from '../common/postRow';
 import { withParticle } from '../common/particles';
 import { RestoresDialog } from '../common/RestoresDialog';
@@ -41,6 +43,7 @@ type Asking =
   | { kind: 'delete-post' }
   | { kind: 'report-post' }
   | { kind: 'status' }
+  | { kind: 'tour' }
   | { kind: 'hide-post' }
   | { kind: 'restore'; account: { id: string; username: string } }
   | { kind: 'delete-comment'; comment: Comment }
@@ -114,7 +117,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
     ...(admin
       ? [
           <MenuHeading key="operate">운영</MenuHeading>,
-          <MenuItem key="status" icon={TagIcon} label="상태 바꾸기" onClick={() => setAsking({ kind: 'status' })} />,
+          ...(post.category === 'news' ? [] : [<MenuItem key="status" icon={TagIcon} label="상태 바꾸기" onClick={() => setAsking({ kind: 'status' })} />]),
           post.hidden ? (
             <MenuItem key="show" icon={Eye} label="보이기" onClick={() => act(() => setPostHidden(post.id, null), '보이게 하지 못했어요.')} />
           ) : (
@@ -135,6 +138,8 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
   ];
 
   const voteLabel = `${BOARD.vote} ${count(vote.votes)}`;
+  // A 소식 post replays its release's tour.
+  const tour = post.category === 'news' ? tourOf(post.version) : null;
   return (
     <Screen width="form" top={<NavBar title={post.title} {...backBar(back)} menu={items.length ? { of: '글', items } : undefined} />}>
       <Stack gap="group">
@@ -149,6 +154,11 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
         {live && post.visibility === 'public' && (
           <Row kind="actions">
             <VoteButton label={vote.voted ? `${voteLabel}, 추천함` : voteLabel} word={BOARD.vote} count={count(vote.votes)} pressed={vote.voted} onClick={vote.onFlip} />
+            {tour && (
+              <Button variant="secondary" onClick={() => setAsking({ kind: 'tour' })}>
+                {TOUR.see}
+              </Button>
+            )}
           </Row>
         )}
       </Stack>
@@ -181,6 +191,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
       {asking?.kind === 'hide-post' && <HideDialog what="글" send={(hidden) => setPostHidden(post.id, hidden)} onDone={done} onClose={close} />}
       {asking?.kind === 'hide-comment' && <HideDialog what="댓글" send={(hidden) => setCommentHidden(asking.comment.id, hidden)} onDone={done} onClose={close} />}
       {asking?.kind === 'status' && <StatusDialog post={post} onDone={done} onClose={close} />}
+      {asking?.kind === 'tour' && tour && <TourDialog tour={tour} onClose={close} />}
       {asking?.kind === 'restore' && (
         <RestoresDialog
           operated={{ accountId: asking.account.id, username: asking.account.username, post: { id: post.id, text: post.text ?? post.title } }}

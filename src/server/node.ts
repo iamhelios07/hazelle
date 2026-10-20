@@ -27,6 +27,7 @@ import { reconcile } from './reconcile';
 import { streamRegistry } from './stream-registry';
 import { streamStore } from './db/streams-db';
 import app from './worker';
+import { publishNews, RELEASE_NEWS } from './news';
 import { VERSION_HEADER } from '../contracts/http';
 
 // Configuration is the environment (docs/research/docker-port-plan.md §11).
@@ -98,6 +99,7 @@ try {
 
 const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
+publishNews(raw, version, RELEASE_NEWS, Date.now());
 const db = serviceDb(raw);
 const limits = {
   relay: relayBudget(

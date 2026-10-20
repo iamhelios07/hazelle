@@ -17,15 +17,16 @@ const ALL = 'all';
 const SORTS: { value: Sort; label: string }[] = [{ value: 'new', label: '최신' }, { value: 'top', label: BOARD.vote }];
 
 // operator: the operator-only posts, the only ones a suspended account reads (design §6.13).
-export function BoardScreen({ operator, back }: { operator: boolean; back: Back | null }) {
+// category: the tab open, held in the address so back and a reload return to it.
+export function BoardScreen({ operator, category, back }: { operator: boolean; category: Category | null; back: Back | null }) {
   const { unreadBoard, suspended } = useStanding();
   const split = useSplit();
   const { gate, dialog } = useNicknameGate();
-  const [category, setCategory] = useState<Category | typeof ALL>(ALL);
   const [sort, setSort] = useState<Sort>('new');
   const [status, setStatus] = useState<Status | null>(null);
   const onlyOperator = operator || suspended;
-  const ask = { sort, category: category === ALL ? undefined : category, status: status ?? undefined, visibility: onlyOperator ? ('operator' as const) : undefined };
+  const news = category === 'news';
+  const ask = { sort, category: category ?? undefined, status: news ? undefined : (status ?? undefined), visibility: onlyOperator ? ('operator' as const) : undefined };
   const write = () => gate(() => navigate({ kind: 'board-write', operator: onlyOperator }));
   return (
     <Screen
@@ -54,23 +55,30 @@ export function BoardScreen({ operator, back }: { operator: boolean; back: Back 
       }
     >
       <Row kind="spread">
-        <Tabs label="분류" items={[{ value: ALL, label: '전체' }, ...CATEGORIES.map((value) => ({ value, label: BOARD.categories[value] }))]} value={category} onChange={setCategory} />
+        <Tabs
+          label="분류"
+          items={[{ value: ALL, label: '전체' }, ...CATEGORIES.filter((value) => !onlyOperator || value !== 'news').map((value) => ({ value, label: BOARD.categories[value] }))]}
+          value={category ?? ALL}
+          onChange={(tab) => navigate({ kind: 'board', operator, ...(tab === ALL ? {} : { category: tab }) }, { replace: true })}
+        />
         <Row kind="toolbar">
           <ChoiceGroup label="정렬" options={SORTS} value={sort} onChange={setSort} layout="segmented" />
-          <Menu
-            label="상태 필터"
-            place="below-end"
-            trigger={(opener) => (
-              <Button variant="ghost" size="sm" icon={ListFilter} {...opener}>
-                {status === null ? '상태' : BOARD.statuses[status]}
-              </Button>
-            )}
-          >
-            <MenuItem label="모든 상태" checked={status === null} onClick={() => setStatus(null)} />
-            {STATUSES.map((each) => (
-              <MenuItem key={each} label={BOARD.statuses[each]} checked={status === each} onClick={() => setStatus(each)} />
-            ))}
-          </Menu>
+          {!news && (
+            <Menu
+              label="상태 필터"
+              place="below-end"
+              trigger={(opener) => (
+                <Button variant="ghost" size="sm" icon={ListFilter} {...opener}>
+                  {status === null ? '상태' : BOARD.statuses[status]}
+                </Button>
+              )}
+            >
+              <MenuItem label="모든 상태" checked={status === null} onClick={() => setStatus(null)} />
+              {STATUSES.map((each) => (
+                <MenuItem key={each} label={BOARD.statuses[each]} checked={status === each} onClick={() => setStatus(each)} />
+              ))}
+            </Menu>
+          )}
         </Row>
       </Row>
       <PostList key={JSON.stringify(ask)} ask={ask} label={BOARD.title} empty="아직 글이 없어요." votes={!onlyOperator} />

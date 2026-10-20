@@ -150,7 +150,7 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
       case 'translator':
         return <TranslatorScreen back={sideBack(at)} />;
       case 'board':
-        return <BoardScreen key={String(at.operator)} operator={at.operator} back={sideBack(at)} />;
+        return <BoardScreen key={String(at.operator)} operator={at.operator} category={at.category ?? null} back={sideBack(at)} />;
       case 'post':
         return <PostScreen key={at.id} id={at.id} back={back(at)} />;
       case 'board-write':

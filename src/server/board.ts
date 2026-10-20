@@ -130,6 +130,7 @@ board.get('/posts', async (c) => {
   const bind = (value: SqlValue) => `?${values.push(value)}`;
   const where = [readable(account), mine ? 'p.account_id = ?1' : `p.visibility = ${bind(visibility)}`];
   if (category !== undefined) where.push(`p.category = ${bind(category)}`);
+  else if (!mine) where.push("p.category != 'news'");
   if (status !== undefined) where.push(`p.status = ${bind(status)}`);
   let next = 'TRUE';
   if (cursor) {
@@ -169,11 +170,13 @@ board.get('/posts/:id', async (c) => {
   return c.json({ post });
 });
 
-function readEdit(body: Record<string, unknown> | null) {
+// 소식 is the operator's alone.
+function readEdit(body: Record<string, unknown> | null, account: Account) {
   const title = typeof body?.title === 'string' ? body.title.trim() : '';
   const text = body?.text;
   const category = body?.category;
   if (!title || title.length > MAX_TITLE_LENGTH || typeof text !== 'string' || text.length > MAX_POST_LENGTH || !oneOf(CATEGORIES, category)) return null;
+  if (category === 'news' && !account.admin) return null;
   return { title, text, category };
 }
 
@@ -181,11 +184,11 @@ function readEdit(body: Record<string, unknown> | null) {
 board.post('/posts', async (c) => {
   const account = c.get('account');
   const body = await readObject(c);
-  const edit = readEdit(body);
+  const edit = readEdit(body, account);
   const visibility = body?.visibility;
   const diagnostics = body?.diagnostics;
   const diagnosed = diagnostics === null || (visibility === 'operator' && typeof diagnostics === 'string' && diagnostics.length <= MAX_DIAGNOSTICS_LENGTH);
-  if (!edit || !oneOf(['public', 'operator'], visibility) || !diagnosed) return fail(c, 400, 'bad-input');
+  if (!edit || !oneOf(['public', 'operator'], visibility) || !diagnosed || (edit.category === 'news' && visibility !== 'public')) return fail(c, 400, 'bad-input');
   if (account.suspended && visibility !== 'operator') return fail(c, 403, 'suspended');
   if (!account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
   // Never before its account was created, even if the wall clock went back: a restore's anchor reads that bound (lifecycle.ts).
@@ -204,10 +207,13 @@ board.post('/posts', async (c) => {
 board.put('/posts/:id', async (c) => {
   const account = c.get('account');
   const id = idOf(c);
-  const edit = readEdit(await readObject(c));
+  const edit = readEdit(await readObject(c), account);
   if (id === null || !edit) return fail(c, 400, 'bad-input');
   const edited = await c.env.db
-    .prepare(`UPDATE posts AS p SET title = ?3, text = ?4, category = ?5, edited_at = ?6 WHERE p.id = ?2 AND p.account_id = ?1 AND p.deleted = 0 AND ${readable(account)} RETURNING id`)
+    .prepare(
+      `UPDATE posts AS p SET title = ?3, text = ?4, category = ?5, edited_at = ?6
+       WHERE p.id = ?2 AND p.account_id = ?1 AND p.deleted = 0 AND (?5 != 'news' OR p.visibility = 'public') AND ${readable(account)} RETURNING id`,
+    )
     .bind(account.id, id, edit.title, edit.text, edit.category, Date.now())
     .first();
   return edited ? c.body(null, 204) : fail(c, 404, 'not-found');
@@ -389,8 +395,8 @@ board.put('/posts/:id/status', operator, async (c) => {
   const values = [id, Date.now(), status, version === null ? null : version.trim()];
   return act(
     c,
-    db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'post-status', id, json_object('status', ?3, 'version', ?4) FROM posts WHERE id = ?1`).bind(...values),
-    db.prepare('UPDATE posts SET status = ?3, version = ?4, status_at = ?2 WHERE id = ?1 RETURNING id').bind(...values),
+    db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'post-status', id, json_object('status', ?3, 'version', ?4) FROM posts WHERE id = ?1 AND category != 'news'`).bind(...values),
+    db.prepare("UPDATE posts SET status = ?3, version = ?4, status_at = ?2 WHERE id = ?1 AND category != 'news' RETURNING id").bind(...values),
   );
 });
 

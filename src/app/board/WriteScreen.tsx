@@ -10,7 +10,7 @@ import { CATEGORY_LOOK } from '../common/postRow';
 import { readPersisted } from '../common/usePersisted';
 import { useLoaded } from '../common/useLoaded';
 import { BOARD } from '../common/words';
-import { useSession, useStanding } from '../session';
+import { useAccount, useSession, useStanding } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, Checkbox, ChoiceGroup, NavBar, Row, Screen, Stack, Tag, Text, TextField } from '../ui';
@@ -68,6 +68,7 @@ export function EditScreen({ id, back }: { id: number; back: Back }) {
 export function WriteScreen({ editing, operator, back }: { editing: Post | null; operator: boolean; back: Back }) {
   const { suspended } = useStanding();
   const { username } = useSession();
+  const { admin } = useAccount();
   const { gate, dialog } = useNicknameGate();
   const key = draftKey(username);
   const [restored] = useState(() => (editing ? null : readPersisted(key, parseDraft, null)));
@@ -83,7 +84,9 @@ export function WriteScreen({ editing, operator, back }: { editing: Post | null;
   const { busy, failure, run } = useAttempt();
   const titled = counted(title, MAX_TITLE_LENGTH);
   const body = counted(text, MAX_POST_LENGTH);
-  const operatorOnly = toOperator || suspended;
+  // 소식 is public, whatever the reach was before it was picked.
+  const news = category === 'news';
+  const operatorOnly = (toOperator || suspended) && !news;
   const blank = title.trim() === '' && (text.trim() === '' || text === BUG_TEMPLATE);
   const ready = titled.length > 0 && !titled.over && body.length > 0 && text !== BUG_TEMPLATE && !body.over && category !== null;
 
@@ -146,10 +149,11 @@ export function WriteScreen({ editing, operator, back }: { editing: Post | null;
           </Button>
         </Row>
       )}
-      <ChoiceGroup label="분류" showLabel options={CATEGORY_CARDS} value={category} onChange={pick} layout="cards" />
+      <ChoiceGroup label="분류" showLabel options={admin ? CATEGORY_CARDS : CATEGORY_CARDS.filter(({ value }) => value !== 'news')} value={category} onChange={pick} layout="cards" />
       <TextField label="제목" value={title} onChange={setTitle} placeholder="한 줄로 요약해 주세요" hint={titled.hint} error={titled.error} />
       <TextField label="내용" lines={12} value={text} onChange={setText} hint={body.hint} error={body.error} />
       {!editing &&
+        !news &&
         (suspended ? (
           <Text variant="note">정지된 계정은 운영자에게만 보낼 수 있어요.</Text>
         ) : (

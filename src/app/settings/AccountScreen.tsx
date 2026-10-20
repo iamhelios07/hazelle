@@ -13,7 +13,6 @@ import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, Setting
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
 import { LeaveSection } from './LeaveSection';
-import { NewsSection } from './NewsSection';
 import { NoticesSection } from './NoticesSection';
 import { SharedLinksSection } from './SharedLinksSection';
 
@@ -120,20 +119,27 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
               />
             </SettingGroup>
           </Panel>
-          <Panel title="앱 정보">
-            <SettingGroup label="앱 정보">
-              <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
-              <SettingRow
-                label={PULSE.sharing}
-                help="켜 두면 쓰는 모델과 제공자, 응답 수가 집계에 더해져요. 누가 썼는지와 대화 내용은 남지 않아요."
-                control={<Switch label={PULSE.sharing} checked={sharing} onChange={(on) => void share(on)} />}
-              />
-              <Diagnostics />
-            </SettingGroup>
-            <LegalNotice />
-          </Panel>
         </Stack>
-        <NewsSection seek={section === 'news'} />
+        <Panel title="앱 정보">
+          <SettingGroup label="앱 정보">
+            <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
+            <SettingRow
+              label="새 소식"
+              control={
+                <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board', operator: false, category: 'news' })}>
+                  보기
+                </Button>
+              }
+            />
+            <SettingRow
+              label={PULSE.sharing}
+              help="켜 두면 쓰는 모델과 제공자, 응답 수가 집계에 더해져요. 누가 썼는지와 대화 내용은 남지 않아요."
+              control={<Switch label={PULSE.sharing} checked={sharing} onChange={(on) => void share(on)} />}
+            />
+            <Diagnostics />
+          </SettingGroup>
+          <LegalNotice />
+        </Panel>
       </Columns>
       <LeaveSection />
     </Screen>

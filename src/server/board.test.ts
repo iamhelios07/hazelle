@@ -56,6 +56,19 @@ it('gives the operator no nickname: it writes as 운영자 without one', async (
   expect((await read(reader, id)).author).toEqual({ name: '운영자', operator: true, mine: false, left: false });
 });
 
+it('keeps 소식 to the operator, public and without a status, and out of the feed that names no category', async () => {
+  const admin = await operator();
+  const reader = await member('reader');
+  expect((await write(reader, { category: 'news' })).status).toBe(400);
+  expect((await write(admin, { category: 'news', visibility: 'operator' })).status).toBe(400);
+  const news = await posted(admin, { title: '소식', category: 'news' });
+  const talk = await posted(reader, { title: '이야기', category: 'talk' });
+  expect((await t.put(`board/posts/${talk}`, { title: '이야기', text: '본문', category: 'news' }, reader.cookie)).status).toBe(400);
+  expect((await t.put(`board/posts/${news}/status`, { status: 'done', version: null }, admin.cookie)).status).toBe(404);
+  expect(await titles(reader)).toEqual(['이야기']);
+  expect(await titles(reader, 'sort=new&category=news')).toEqual(['소식']);
+});
+
 it('lists a public post to every account and an operator-only one to its author and the operator alone', async () => {
   const admin = await operator();
   const author = await member('author');

@@ -1,10 +1,11 @@
 import { CONNECTION_TYPES } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
+import { CATEGORIES, type Category } from '../../contracts/board';
 import { SHARE_ID } from '../../contracts/shares';
 import { FEATURES, type Feature } from '../../model/features';
 import type { Shelf } from '../../model/library';
 
-const ACCOUNT_SECTIONS = ['notices', 'news'] as const;
+const ACCOUNT_SECTIONS = ['notices'] as const;
 export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
 const PROMPT_PANES = ['toggles', 'model', 'picture'] as const;
 export type PromptPane = (typeof PROMPT_PANES)[number];
@@ -40,7 +41,7 @@ export type Route =
   | { kind: 'profile'; id: string }
   // model: an added model's key (connectors/types entryKey), which may hold any character; the path carries it escaped.
   | { kind: 'model'; connection: string; model: string }
-  // section opens the page at 운영자가 보낸 알림 or 새 소식, which the toasts saying they came link to.
+  // section opens the page at 운영자가 보낸 알림, which the toast saying one came links to.
   | { kind: 'account'; section: AccountSection | null }
   | { kind: 'usage' }
   | { kind: 'notices' }
@@ -51,7 +52,8 @@ export type Route =
   | { kind: 'tools' }
   | { kind: 'translator' }
   // 게시판 (design §6.13). operator: the operator-only posts, listed or preset in the compose.
-  | { kind: 'board'; operator: boolean }
+  // category: the tab open, none for 전체.
+  | { kind: 'board'; operator: boolean; category?: Category }
   | { kind: 'post'; id: number }
   | { kind: 'board-write'; operator: boolean }
   | { kind: 'board-edit'; id: number }
@@ -154,6 +156,8 @@ export function parseRoute(at: string): Route {
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
+    // 새 소식 was a section of 계정 before it became the board's 소식.
+    if (top === 'account' && params.get('section') === 'news') return { kind: 'board', operator: false, category: 'news' };
     if (top === 'account') return { kind: 'account', section: ACCOUNT_SECTIONS.find((section) => section === params.get('section')) ?? null };
   }
   if (top === 'account' && id === 'usage' && sub === undefined) return { kind: 'usage' };
@@ -172,7 +176,8 @@ export function parseRoute(at: string): Route {
   }
   if (top === 'board') {
     const operator = params.get('to') === 'operator';
-    if (id === undefined) return { kind: 'board', operator };
+    const category = CATEGORIES.find((each) => each === params.get('category'));
+    if (id === undefined) return category ? { kind: 'board', operator, category } : { kind: 'board', operator };
     if (id === 'write' && sub === undefined) return { kind: 'board-write', operator };
     if (id === 'activity' && sub === undefined) return { kind: 'board-activity' };
     if (id === 'mine' && sub === undefined) return { kind: 'board-mine' };
@@ -264,7 +269,7 @@ export function href(route: Route): string {
     case 'translator':
       return '/tools/translator';
     case 'board':
-      return route.operator ? `/board?${TO_OPERATOR}` : '/board';
+      return `/board${route.operator || route.category ? `?${[route.operator && TO_OPERATOR, route.category && `category=${route.category}`].filter(Boolean).join('&')}` : ''}`;
     case 'post':
       return `/board/${route.id}`;
     case 'board-write':
