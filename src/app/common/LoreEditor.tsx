@@ -8,16 +8,17 @@ import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, remove
 import { useChildren, useStore, useStored } from '../session';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeAside, type CodeLanguage } from '../ui';
+import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, TextField, type CodeAside, type CodeLanguage } from '../ui';
 import { ACTS, addOf } from './acts';
 import { cbsLanguage } from './code/cbs';
 import { useTrial } from './code/Trial';
 import type { Defaults } from './code/variables';
 import { NameDialog } from './NameDialog';
+import { OpenRow, RowFoot, useOpenRows, type OpenRows } from './OpenRows';
 import { SLOT } from './prompt-words';
 import { typedText, useTypedNumber } from './typed';
 import { count, readOptional } from './typedNumber';
-import { SAVE_STATUS, useAutosave } from './useAutosave';
+import { useAutosave } from './useAutosave';
 import { useSearch } from './useSearch';
 import { LORE_BUDGET_LABEL, loreName } from './words';
 
@@ -29,6 +30,7 @@ const POSITIONS: { value: NonNullable<Position> | 'lorebook'; label: string }[] 
 ];
 const NUMBER_ERROR = '숫자를 입력해 주세요.';
 const NO_FOLDER = '폴더 없음';
+const ENTRY = '항목';
 const KEYS_SHOWN = 3;
 
 const readNumber = (draft: string) => readOptional(draft, false);
@@ -72,16 +74,9 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
   const toast = useToast();
   const entries = useChildren('lore', owner.id);
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
-  const [added, setAdded] = useState<string | null>(null);
+  const openRows = useOpenRows();
   const [naming, setNaming] = useState<Naming | null>(null);
-
-  // The entry's row mounts as the store takes it, so it is named as added before then.
-  async function add(folder: string | null) {
-    const id = crypto.randomUUID();
-    setAdded(id);
-    const saved = await addLore(store, owner.id, folder, id);
-    if (!saved.ok) toast.failed(saved, '항목을 추가하지 못했어요.');
-  }
+  const add = (folder: string | null) => openRows.add(ENTRY, (id) => addLore(store, owner.id, folder, id));
 
   function saveFolder({ folder, name }: Naming) {
     setNaming(null);
@@ -100,18 +95,10 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
     );
   }
 
-  const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} language={language} trial={trial.cbs} startOpen={entry.id === added} />);
+  const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} language={language} trial={trial.cbs} rows={openRows} />);
   const [loose, ...grouped] = groups;
   const search = useSearch(entries, '로어북 검색', ({ value }) => [loreName(value.name), ...value.keys]);
-  const listed = search.words ? (
-    search.none === null ? (
-      <List box label="찾은 로어북 항목">
-        {rows(search.found)}
-      </List>
-    ) : (
-      <Empty variant="section">{search.none}</Empty>
-    )
-  ) : entries.length === 0 && folders.length === 0 ? (
+  const listed = entries.length === 0 && folders.length === 0 ? (
     <Empty variant="section">항목이 없어요.</Empty>
   ) : (
     <List box label="로어북 항목">
@@ -143,7 +130,11 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
       <Stack gap="related">
         {owner.kind === 'character' && <LoreBudgetRow id={owner.id} />}
         {search.field}
-        {listed}
+        {search.shown(listed, (found) => (
+          <List box label="찾은 로어북 항목">
+            {rows(found)}
+          </List>
+        ))}
         <Row kind="actions">
           <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add(null)}>
             {addOf('항목')}
@@ -158,36 +149,27 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
   );
 }
 
+// Folds in place, unlike the library's folders, which are places: the kit's folder flag would draw a › and lose its
+// mark to the fold's chevron.
 function FolderItem({ name, count, menu, children }: { name: string; count: number; menu: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return <ListItem title={name} aside={`${count}개`} expanded={open} onClick={() => setOpen(!open)} control={<MoreMenu of={`'${name}'`}>{menu}</MoreMenu>} detail={open && <Stack gap="related">{children}</Stack>} />;
 }
 
-type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; language: CodeLanguage; trial: (text: string) => CodeAside; startOpen: boolean };
+type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; language: CodeLanguage; trial: (text: string) => CodeAside; rows: OpenRows };
 
 // Its edits wait in its own save queue, so the line shows them before they are stored.
-function EntryRow({ stored, folders, language, trial, startOpen }: RowProps) {
+function EntryRow({ stored, folders, language, trial, rows }: RowProps) {
   const store = useStore();
-  const toast = useToast();
   const save = useAutosave<Lore>(`lore:${stored.id}`, (patch) => editLore(store, stored.id, patch));
   const shown: Lore = { ...stored.value, ...save.unsaved };
-  const [open, setOpen] = useState(startOpen);
-
-  async function remove() {
-    const done = await save.remove(() => removeLore(store, stored.id));
-    if (!done) return;
-    if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
-    toast.undoable(`'${loreName(shown.name)}' 항목을 삭제했어요.`, () => restoreLore(store, done.data));
-  }
-
+  const name = loreName(shown.name);
+  const remove = () => void rows.remove({ noun: ENTRY, name }, save.remove(() => removeLore(store, stored.id)), (removed) => restoreLore(store, removed));
   return (
-    <ListItem
-      title={loreName(shown.name)}
-      trailing={<Tag>{when(shown)}</Tag>}
-      expanded={open}
-      onClick={() => setOpen(!open)}
-      detail={open && <EntryFields shown={shown} folders={folders} language={language} trial={trial} change={save.change} status={save.status} remove={() => void remove()} />}
-    />
+    <OpenRow title={name} tag={when(shown)} open={rows.open === stored.id} onOpen={(on) => rows.setOpen(on ? stored.id : null)}>
+      <EntryFields shown={shown} folders={folders} language={language} trial={trial} change={save.change} />
+      <RowFoot noun={ENTRY} words={save.words} onRemove={remove} />
+    </OpenRow>
   );
 }
 
@@ -197,11 +179,9 @@ type FieldsProps = {
   language: CodeLanguage;
   trial: (text: string) => CodeAside;
   change: (patch: Partial<Lore>, valid?: boolean) => void;
-  status: keyof typeof SAVE_STATUS | null;
-  remove: () => void;
 };
 
-function EntryFields({ shown, folders, language, trial, change, status, remove }: FieldsProps) {
+function EntryFields({ shown, folders, language, trial, change }: FieldsProps) {
   const [typed, setTyped] = useState<{ order?: string; priority?: string }>({});
   const order = typedText(typed.order, (draft) => readNumber(draft) ?? null, shown.insertionOrder, String);
   const priority = typedText(typed.priority, readNumber, shown.priority ?? undefined, (value) => (value === undefined ? '' : String(value)));
@@ -226,7 +206,7 @@ function EntryFields({ shown, folders, language, trial, change, status, remove }
   );
 
   return (
-    <Stack gap="group">
+    <>
       <TextField label="이름" value={shown.name} onChange={(name) => change({ name })} />
       <SettingGroup label="키워드">
         <SettingRow label="키워드" help="최근 대화에 이 중 하나라도 나오면 내용이 프롬프트에 들어가요." wide control={<PhraseField label="키워드" phrases={shown.keys} onChange={(keys) => change({ keys })} />} />
@@ -273,12 +253,6 @@ function EntryFields({ shown, folders, language, trial, change, status, remove }
           />
         )}
       </SettingGroup>
-      <Row kind="spread">
-        <Text variant="note">{status ? SAVE_STATUS[status] : ''}</Text>
-        <Button variant="danger" size="sm" onClick={remove}>
-          이 항목 삭제
-        </Button>
-      </Row>
-    </Stack>
+    </>
   );
 }

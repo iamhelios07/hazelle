@@ -8,15 +8,15 @@ import type { PackOwner } from '../../model/library';
 import { useSession, useStore } from '../session';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField, type CodeLanguage } from '../ui';
+import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, Row, Section, SettingGroup, SettingRow, Stack, Switch, Text, TextField, type CodeLanguage } from '../ui';
 import { cbsLanguage } from './code/cbs';
 import { luaLanguage } from './code/lua';
 import { useTrial } from './code/Trial';
 import type { Defaults } from './code/variables';
 import { ACTS, addOf } from './acts';
-import { withParticle } from './particles';
 import { choices } from './reading';
-import { SAVE_STATUS, useAutosave } from './useAutosave';
+import { OpenRow, RowFoot, useOpenRows, type OpenRows } from './OpenRows';
+import { useAutosave } from './useAutosave';
 import { useSearch } from './useSearch';
 import { COMMAND, scriptName, SCRIPTS, STAGES } from './words';
 
@@ -28,7 +28,7 @@ const CHECKS: Record<ScriptCheck, string> = { empty: '패턴 없음', invalid: '
 const ON: Record<string, string> = { start: '채팅 시작', input: STAGES.input, output: STAGES.output, manual: '버튼' };
 const OFF = '꺼짐';
 
-// One script open at a time. drill: the open script stands alone in place of the lists, for a narrow panel or page.
+// drill: the open script stands alone in place of the lists, for a narrow panel or page.
 // status: the ids of the character's 상태창 지정 scripts, tagged in its list. variables: the character's 기본 변수, which
 // the code editor offers by name.
 export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { owner: PackOwner; pack: Pack; drill: boolean; status?: readonly string[]; variables?: Defaults }) {
@@ -37,18 +37,11 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
   const trial = useTrial(owner, variables);
   const lua = useMemo(() => luaLanguage((code) => scripts.check(code), trial.variables), [scripts, trial.variables]);
   const replacement = useMemo(() => cbsLanguage({ variables: trial.variables, placeholder: 'data' }), [trial.variables]);
-  const toast = useToast();
-  const [open, setOpen] = useState<string | null>(null);
+  const rows = useOpenRows();
+  const { open, setOpen } = rows;
   // Lua code typed and not applied yet, by script; it goes when the editor does.
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(() => new Map());
-
-  // The script opens as added, before the store holds it.
-  async function add(list: ScriptList) {
-    const id = crypto.randomUUID();
-    setOpen(id);
-    const saved = await (list === 'regex' ? addRegex : addLua)(store, owner, id);
-    if (!saved.ok) toast.failed(saved, '추가하지 못했어요.');
-  }
+  const add = (list: ScriptList) => rows.add(SCRIPTS[list], (id) => (list === 'regex' ? addRegex : addLua)(store, owner, id));
 
   const draft = (id: string, code: string) => setDrafts((current) => new Map(current).set(id, code));
   // Code typed while 적용 was on its way stays a draft.
@@ -62,7 +55,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
 
   const item = (list: ScriptList, id: string, page: boolean) => {
     const place = pack[list].findIndex((script) => script.id === id);
-    const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null) };
+    const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null), drop: rows.remove };
     if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={search.words !== ''} language={replacement} />;
     const trigger = pack.triggers[place]!;
     return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} language={lua} trial={trial.lua} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
@@ -128,20 +121,16 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
   return (
     <>
       {search.field}
-      {!search.words ? (
-        lists
-      ) : search.none === null ? (
+      {search.shown(lists, (found) => (
         <List box label={`찾은 ${SCRIPTS.part}`}>
-          {search.found.map(({ list, id }) => item(list, id, false))}
+          {found.map(({ list, id }) => item(list, id, false))}
         </List>
-      ) : (
-        <Empty variant="section">{search.none}</Empty>
-      )}
+      ))}
     </>
   );
 }
 
-type ItemProps = { owner: PackOwner; pack: Pack; place: number; page: boolean; open: boolean; onOpen: (open: boolean) => void };
+type ItemProps = { owner: PackOwner; pack: Pack; place: number; page: boolean; open: boolean; onOpen: (open: boolean) => void; drop: OpenRows['remove'] };
 
 function Item({ page, open, onOpen, title, tag, aside, children }: Pick<ItemProps, 'page' | 'open' | 'onOpen'> & { title: string; tag: string | null; aside?: string; children: ReactNode }) {
   if (page)
@@ -150,45 +139,34 @@ function Item({ page, open, onOpen, title, tag, aside, children }: Pick<ItemProp
         {children}
       </Section>
     );
-  return <ListItem title={title} aside={aside} trailing={tag && <Tag>{tag}</Tag>} expanded={open} onClick={() => onOpen(!open)} detail={open && <Stack gap="group">{children}</Stack>} />;
+  return (
+    <OpenRow title={title} aside={aside} tag={tag} open={open} onOpen={onOpen}>
+      {children}
+    </OpenRow>
+  );
 }
 
 type Removal = Promise<ApiResult<RemovedScript>>;
 
-// What every script has once open: its switch, its order, its save state and its delete. remove: through the script's
-// save queue, so a save still waiting never writes after the delete.
-function useScriptActions({ owner, pack, onOpen }: ItemProps, list: ScriptList, script: { id: string; off?: true }, name: string, remove: (task: () => Removal) => Promise<Awaited<Removal> | null>) {
+// What every script has once open: its switch, its order, its save state and its delete. remove: the script's save
+// queue's.
+function useScriptActions({ owner, pack, drop }: ItemProps, list: ScriptList, script: { id: string; off?: true }, name: string, remove: (task: () => Removal) => Promise<Awaited<Removal> | null>) {
   const store = useStore();
   const toast = useToast();
   const failed = (saved: ApiResult<unknown>) => saved.ok || toast.failed(saved, '저장하지 못했어요.');
-
-  async function drop() {
-    const done = await remove(() => removeScript(store, owner, list, script.id));
-    if (!done) return;
-    if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
-    onOpen(false);
-    toast.undoable(`'${name}' ${withParticle(SCRIPTS[list], '을/를')} 삭제했어요.`, () => restoreScript(store, owner, done.data));
-  }
-
   const move = (by: -1 | 1, icon: LucideIcon, label: string) => {
     const past = neighbour(pack, list, script.id, by);
     return <IconButton icon={icon} size="sm" label={label} disabled={past === null} onClick={() => void moveScript(store, owner, list, script.id, by, past!).then(failed)} />;
   };
-  return (status: keyof typeof SAVE_STATUS | null) => (
+  return (words: string | undefined) => (
     <>
       <SettingGroup label="켬">
         <SettingRow label="켬" control={<Switch label="켬" checked={!script.off} onChange={(on) => void setScriptOff(store, owner, list, script.id, !on).then(failed)} />} />
       </SettingGroup>
-      <Row kind="spread">
-        <Row kind="toolbar">
-          {move(-1, ChevronUp, '위로')}
-          {move(1, ChevronDown, '아래로')}
-          <Text variant="note">{status ? SAVE_STATUS[status] : ''}</Text>
-        </Row>
-        <Button variant="danger" size="sm" onClick={() => void drop()}>
-          {`이 ${SCRIPTS[list]} 삭제`}
-        </Button>
-      </Row>
+      <RowFoot noun={SCRIPTS[list]} words={words} onRemove={() => void drop({ noun: SCRIPTS[list], name }, remove(() => removeScript(store, owner, list, script.id)), (removed) => restoreScript(store, owner, removed))}>
+        {move(-1, ChevronUp, '위로')}
+        {move(1, ChevronDown, '아래로')}
+      </RowFoot>
     </>
   );
 }
@@ -228,7 +206,7 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
           <TextField label="결과" kind="key" lines={3} readOnly help={`${COMMAND}는 채팅에서 실제 값으로 바뀌어요.`} value={sample && (tried ?? '')} onChange={() => {}} error={sample && tried === null ? '결과를 만들지 못했어요.' : undefined} />
         </Stack>
       </Disclosure>
-      {actions(save.status)}
+      {actions(save.words)}
     </Item>
   );
 }
@@ -274,7 +252,7 @@ function LuaItem(props: ItemProps & { trigger: Lua; language: CodeLanguage; tria
           적용
         </Button>
       </Row>
-      {actions(save.status)}
+      {actions(save.words)}
     </Item>
   );
 }
@@ -287,7 +265,7 @@ function BlocksItem(props: ItemProps & { trigger: Blocks }) {
   return (
     <Item {...props} title={name} tag={trigger.off ? OFF : null} aside={ON[trigger.on] ?? trigger.on}>
       <Text variant="note">{`조건 ${trigger.conditions.length}개 · 효과 ${trigger.effects.length}개`}</Text>
-      {actions(null)}
+      {actions(undefined)}
     </Item>
   );
 }
