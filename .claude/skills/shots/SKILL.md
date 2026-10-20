@@ -56,6 +56,7 @@ Facts that cost reruns before:
 - A character's editor: the rail's character button, then the same name in the `캐릭터 목록` panel, then wait for the `개요` navigation. Client navigation fires no load event, so `waitForURL` hangs. At phone width, `goto` the editor's URL and press the name in `캐릭터 목록` again.
 - A failing action gives up after 5 s. A wait that is longer on purpose, such as a reply or an import, needs its own `{ timeout }`. When a run fails, read `test-results/*/error-context.md`: it lists the real accessible names.
 - 점검 is offered only on a saved chat: on a new chat ⋯ holds no 점검 and Ctrl+U does nothing. Send once first (`fakeProvider()` + a connection to `FAKE_ADDRESS`), answer what the bot's onStart asks (an `alertInput` card's `답하기`; the model-permission card reads `이 봇이 모델을 추가로 호출하려고 해요`, its `닫기` refuses), and wait until `생성 중` is gone from the chat list: while a reply is in flight, 점검 shows `응답이 끝나면 다시 계산해요.`. Then open it from `채팅 메뉴` › `점검`.
+- Plugins in the `shots` account ask for network consent (`이 플러그인이 대화 내용을 앱 밖으로 보낼 수 있어요`, one card per plugin) the first time a chat runs them, and a bot's question card waits behind them: press `안 함` on each until the question shows.
 - The rail's `설정` is a button, not visible text: wait for `getByRole('button', { name: '설정' })`. The bot picker is `pickBot` from `e2e/helpers`, not a `봇 가져오기` button.
 - A failed run can leave the fake provider holding port 4419 (`EADDRINUSE`): find the holder with `ss -ltnp | grep :4419` and kill it before rerunning.
 
