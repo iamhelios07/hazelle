@@ -1,0 +1,77 @@
+.sketch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-8);
+  min-height: var(--sketch-height);
+  padding: var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-bg);
+  overflow: hidden;
+}
+
+.badge {
+  position: absolute;
+  top: var(--space-12);
+  right: var(--space-12);
+  min-width: var(--icon-md);
+  height: var(--icon-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  line-height: var(--icon-md);
+  text-align: center;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.indent {
+  margin-left: var(--space-32);
+}
+
+.accent {
+  outline: var(--border-medium) solid var(--color-accent-border);
+}
+
+.line {
+  composes: track from '../foundation/surface.module.css';
+  height: var(--bar-height-thick);
+  flex: 0 0 auto;
+}
+
+.short {
+  width: 18%;
+}
+
+.medium {
+  width: 36%;
+}
+
+.long {
+  width: 56%;
+}
+
+.mark {
+  composes: detail from '../foundation/type.module.css';
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.lit {
+  color: var(--color-accent);
+}

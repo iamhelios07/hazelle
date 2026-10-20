@@ -7,7 +7,8 @@ import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
-import { BUILT_VERSION, NEWS, newsToSay } from '../common/release';
+import { BUILT_VERSION, NEWS, newsToSay, tourToShow, type News, type Tour } from '../common/release';
+import { TourDialog } from '../common/Tour';
 import { count } from '../common/typedNumber';
 import { usePersisted } from '../common/usePersisted';
 import { DisplayProvider } from '../display';
@@ -83,18 +84,32 @@ function Stale() {
   return null;
 }
 
-// The release this device last opened; the ref: StrictMode runs a mount's effect twice.
+// The release this device last opened, and the tour it saw (closing it in any way is seeing it); the ref: StrictMode
+// runs a mount's effect twice. A tour to show stands in for the news toast of the same open.
 function News() {
   const toast = useToast();
   const [lastOpened, setLastOpened] = usePersisted('risu-alpha:opened-version', String, '', String);
+  const [tourSeen, setTourSeen] = usePersisted('risu-alpha:tour-seen', String, '', String);
+  const [tour, setTour] = useState<(News & { tour: Tour }) | null>(null);
   const said = useRef(false);
   useEffect(() => {
     if (BUILT_VERSION === null || said.current) return;
     said.current = true;
-    if (newsToSay(BUILT_VERSION, lastOpened, NEWS)) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'account', section: 'news' }) } });
+    const showing = tourToShow(BUILT_VERSION, tourSeen, NEWS);
+    if (showing) setTour(showing);
+    else if (newsToSay(BUILT_VERSION, lastOpened, NEWS)) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'account', section: 'news' }) } });
     if (lastOpened !== BUILT_VERSION) setLastOpened(BUILT_VERSION);
   }, []);
-  return null;
+  if (!tour) return null;
+  return (
+    <TourDialog
+      news={tour}
+      onClose={() => {
+        setTourSeen(tour.version);
+        setTour(null);
+      }}
+    />
+  );
 }
 
 // Everything behind an open vault is one session, opened before the first screen and closed when this unmounts,

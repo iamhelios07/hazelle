@@ -8,4 +8,5 @@ export { Gauge } from './Gauge';
 export { Intro } from './Intro';
 export { Outcome } from './Outcome';
 export { Progress, type ProgressStep } from './Progress';
+export { Sketch } from './Sketch';
 export { Steps } from './Steps';
