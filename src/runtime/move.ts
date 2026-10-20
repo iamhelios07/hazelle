@@ -1,5 +1,5 @@
 import { SIGNATURE } from '../engine/assets';
-import { inlayType, readInlays, type Inlays } from '../engine/import/backup';
+import { backupInlays, inlayType, readInlays, type Inlays } from '../engine/import/backup';
 import { fileSource } from '../engine/import/source';
 import { counted } from '../engine/import/convert';
 import { inlayIds } from '../engine/import/risu-character';
@@ -251,16 +251,23 @@ export async function fillPictures(store: ObjectStore, files: Files, { kind, par
   return added.ok ? saved : added;
 }
 
-// The files dropped for a move apart: Risu backups, and the inlay export, the first one dropped (engine/import readInlays).
+// The files dropped for a move apart: the backups, and the inlays from Risu web's inlay export, the first one dropped
+// (engine/import readInlays), or else from a PocketRisu backup, which holds its own (backupInlays). Risu web keeps
+// inlays in the browser, so they are the export's or none, never both.
 export async function sortRisuFiles(dropped: File[]): Promise<{ backups: File[]; inlays: Inlays | null }> {
   const backups: File[] = [];
-  let inlays: Inlays | null = null;
+  let exported: Inlays | null = null;
+  let held: Inlays | null = null;
   for (const file of dropped) {
-    const read: Inlays | null = inlays ? null : await readInlays(fileSource(file));
-    if (read) inlays = read;
-    else backups.push(file);
+    const source = fileSource(file);
+    const read: Inlays | null = exported ? null : await readInlays(source);
+    if (read) exported = read;
+    else {
+      backups.push(file);
+      held ??= await backupInlays(source);
+    }
   }
-  return { backups, inlays };
+  return { backups, inlays: exported ?? held };
 }
 
 // chats: those gone through, of total; pictures: inlays added; missed: inlays named but not added (the export lacked

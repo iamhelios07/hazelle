@@ -26,9 +26,11 @@ import {
 type Span = { source: FileSource; offset: number; length: number };
 type Cold = (key: string) => Promise<unknown>;
 
-// The two forms a backup's database is written in (spec §2): until Risu 2026-10-14, 00 'RISUSAVE' 00 08 then gzip over
-// msgpackr; since then, 'RISUSAVE' 00 then blocks of JSON.
+// The three forms a backup's database is written in (spec §2): until Risu 2026-10-14, 00 'RISUSAVE' 00 08 then gzip
+// over msgpackr; since then, 'RISUSAVE' 00 then blocks of JSON; and 00 'RISUSAVE' 00 07 then msgpackr unzipped, which
+// Risu reads and PocketRisu writes.
 const LEGACY_HEADER = [0, ...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0, 8];
+const PLAIN_HEADER = [...LEGACY_HEADER.slice(0, -1), 7];
 const BLOCK_HEADER = [...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0];
 // Block types: 1 root (every key but the three below), 2 a character, 4 the presets, 5 the modules. 0, 9–12 (config,
 // plugins, loadouts, plugin storage, kv) are not read; 6 (a file on the Risu device) is never in a backup.
@@ -116,20 +118,42 @@ export async function readInlays(source: FileSource): Promise<Inlays | null> {
   const nameLength = u32(await ahead.read(0, 4), 0);
   if (4 + nameLength > source.size || utf8.decode(await ahead.read(4, nameLength)) !== INLAY_SKIPPED) return null;
   const files = await index(ahead, source);
-  return {
-    bytes: [...files.values()].reduce((sum, span) => sum + span.length, 0),
-    assets: (ids) => ids.map((id) => {
-      const span = files.get(`${INLAY}${id}`);
-      return { name: id, read: span ? () => span.source.read(span.offset, span.length) : () => Promise.resolve(null) };
-    }),
-  };
+  return inlaysOf(new Map([...files].flatMap(([name, span]) => (name.startsWith(INLAY) && name !== INLAY_SKIPPED ? [[name.slice(INLAY.length), span]] : []))));
 }
+
+// The inlays a PocketRisu backup holds beside its database, as inlay/<id>.<ext>; Risu keeps them in the browser, so its
+// backup holds none. null: none, or a file that does not read, which reading it as a backup then reports.
+export async function backupInlays(source: FileSource): Promise<Inlays | null> {
+  let files: Map<string, Span>;
+  try {
+    files = await index(readAhead(source), source);
+  } catch {
+    return null;
+  }
+  const held = new Map<string, Span>();
+  for (const [name, span] of files) {
+    if (!name.startsWith(HELD_INLAY)) continue;
+    const file = name.slice(HELD_INLAY.length);
+    const dot = file.lastIndexOf('.');
+    held.set(dot === -1 ? file : file.slice(0, dot), span);
+  }
+  return held.size > 0 ? inlaysOf(held) : null;
+}
+
+const inlaysOf = (spans: Map<string, Span>): Inlays => ({
+  bytes: [...spans.values()].reduce((sum, span) => sum + span.length, 0),
+  assets: (ids) => ids.map((id) => {
+    const span = spans.get(id);
+    return { name: id, read: span ? () => span.source.read(span.offset, span.length) : () => Promise.resolve(null) };
+  }),
+});
 
 // bytes: the file's entries together. assets: an entry per id, which reads null for one the file lacks.
 export type Inlays = { bytes: number; assets(ids: string[]): Imported['assets'] };
 
 const INLAY = 'inlay_';
 const INLAY_SKIPPED = `${INLAY}skipped.json`;
+const HELD_INLAY = 'inlay/';
 
 // A picture's type, or SIGNATURE for a Gemini thought signature's item; only an inlay is stored as either.
 export function inlayType(bytes: Uint8Array): string | null {
@@ -149,6 +173,7 @@ const startsWith = (bytes: Uint8Array, header: number[]) => header.every((byte, 
 
 function decode(bytes: Uint8Array): unknown {
   if (startsWith(bytes, LEGACY_HEADER)) return readMsgpack(gunzip(bytes.subarray(LEGACY_HEADER.length), expansionLimit(bytes.length)));
+  if (startsWith(bytes, PLAIN_HEADER)) return readMsgpack(bytes.subarray(PLAIN_HEADER.length));
   if (startsWith(bytes, BLOCK_HEADER)) return readBlocks(bytes.subarray(BLOCK_HEADER.length));
   throw new Error('not a Risu database');
 }
@@ -179,7 +204,9 @@ function readBlocks(bytes: Uint8Array): unknown {
   return { ...db, characters };
 }
 
-const isPicture = (name: string) => name !== 'database.risudat' && name !== 'encryption.risudat' && !name.startsWith('coldstorage_');
+// A picture entry is a basename (fromDatabase's entry), so a name with a folder is not one: PocketRisu's inlay/,
+// inlay_sidecar/, inlay_meta/ and coldstorage/.
+const isPicture = (name: string) => name !== 'database.risudat' && name !== 'encryption.risudat' && !name.startsWith('coldstorage_') && !name.includes('/');
 
 async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBackup> {
   const reader = (span: Span): Read => () => span.source.read(span.offset, span.length);
@@ -192,7 +219,8 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
   const waiting: (() => void)[] = [];
   // Character and chat payloads share the same limit, including chats inside a cold character.
   const cold: Cold = async (key) => {
-    const span = files.get(`coldstorage_${key}.json`);
+    // Risu writes coldstorage_, PocketRisu coldstorage/; Risu's own import takes both.
+    const span = files.get(`coldstorage_${key}.json`) ?? files.get(`coldstorage/${key}.json`);
     if (!span) return null;
     if (reading === COLD_READS) await new Promise<void>((resolve) => waiting.push(resolve));
     else reading++;

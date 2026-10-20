@@ -23,8 +23,14 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
       }
     >
       <Stack gap="section">
-        <Text>Risu 로컬 백업(.bin) 파일에서 캐릭터와 채팅, 페르소나, 프롬프트, 모듈을 가져와요.</Text>
-        <Slot title="백업 파일" note="Risu의 '로컬 백업 저장'으로 받은 파일이에요. risuai.xyz에서 쓰면 '부분 백업'으로 받아 주세요." file={text} onFile={setText} />
+        <Text>Risu나 PocketRisu의 로컬 백업(.bin) 파일에서 캐릭터와 채팅, 페르소나, 프롬프트, 모듈을 가져와요.</Text>
+        <Slot
+          title="백업 파일"
+          note="Risu의 '로컬 백업 저장'이나 PocketRisu의 '로컬 백업 다운로드'로 받은 파일이에요. risuai.xyz에서 쓰면 '부분 백업'으로 받아 주세요."
+          help="PocketRisu는 설정 › 시스템 › 백업에서 받아요. 이 파일 하나에 메시지 속 이미지까지 들어 있어요. '원본 리스용 백업 내보내기'로 받은 파일에는 메시지 속 이미지가 없어요."
+          file={text}
+          onFile={setText}
+        />
         <Slot
           title="이미지가 든 전체 백업"
           note="risuai.xyz에서 쓸 때만 넣어요. 고급 설정에서 'Skip Saving Assets on Web Sync'를 끄고 받아야 이미지가 들어 있어요."
@@ -34,7 +40,7 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
         <Disclosure label="메시지 속 이미지도 옮기기">
           <Slot
             title="메시지 속 이미지"
-            note="Risu 웹에서 F12를 눌러 콘솔에 코드를 붙여 넣으면 risu-inlays.bin 파일을 받아요. 이미 옮긴 채팅에 이미지를 채울 때는 이 파일만 넣으면 돼요."
+            note="Risu 웹에서 F12를 눌러 콘솔에 코드를 붙여 넣으면 risu-inlays.bin 파일을 받아요. 이미 옮긴 채팅에 이미지를 채울 때는 이 파일만 넣으면 돼요. PocketRisu 백업에는 이미 들어 있어요."
             help="콘솔에서 붙여 넣기가 막히면 allow pasting을 먼저 입력해 주세요. 북마크로 쓰려면 새 북마크의 URL에 주소를 넣고 Risu 웹 화면에서 누르면 돼요."
             file={inlays}
             onFile={setInlays}

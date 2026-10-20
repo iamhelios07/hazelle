@@ -1,6 +1,6 @@
 import { gzipSync, strToU8 } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
-import { readBackup } from './backup';
+import { backupInlays, readBackup } from './backup';
 import { moduleSource } from './hazelle';
 import type { RisuBackup } from './types';
 
@@ -155,16 +155,16 @@ const db = {
   promptTemplate: [{ type: 'plain', type2: 'main', role: 'system', text: 'live' }],
 };
 
-const backupFile = (data = database(db)) =>
-  bin([
-    ['mira.png', PNG],
-    ['map.png', PNG],
-    ['ann.png', PNG],
-    ['bell.png', PNG],
-    [`coldstorage_${CHAT_KEY}.json`, json({ message: [{ role: 'user', data: 'old', time: 10 }], scriptstate: { $x: { a: 1 } }, localLore: [{ key: 'places', comment: 'Places', mode: 'folder' }, { key: 'k', comment: 'Key', content: '<char>\n@@end', activationPercent: 40, folder: 'places' }], hypaV3Data: { summaries: [{}] } })],
-    [`coldstorage_${CHARACTER_KEY}.json`, json({ character: { chaId: 'sleeper', name: 'Sleeper', firstMessage: 'zzz', chats: [{ name: 'Nap', message: [{ role: 'user', data: 'wake', time: 5 }] }] } })],
-    ['database.risudat', data],
-  ]);
+const backupEntries = (data: Uint8Array): [string, Uint8Array][] => [
+  ['mira.png', PNG],
+  ['map.png', PNG],
+  ['ann.png', PNG],
+  ['bell.png', PNG],
+  [`coldstorage_${CHAT_KEY}.json`, json({ message: [{ role: 'user', data: 'old', time: 10 }], scriptstate: { $x: { a: 1 } }, localLore: [{ key: 'places', comment: 'Places', mode: 'folder' }, { key: 'k', comment: 'Key', content: '<char>\n@@end', activationPercent: 40, folder: 'places' }], hypaV3Data: { summaries: [{}] } })],
+  [`coldstorage_${CHARACTER_KEY}.json`, json({ character: { chaId: 'sleeper', name: 'Sleeper', firstMessage: 'zzz', chats: [{ name: 'Nap', message: [{ role: 'user', data: 'wake', time: 5 }] }] } })],
+  ['database.risudat', data],
+];
+const backupFile = (data = database(db)) => bin(backupEntries(data));
 
 async function read(): Promise<RisuBackup> {
   const result = await readBackup([backupFile()]);
@@ -319,6 +319,23 @@ describe('readBackup', () => {
     // The character carries lazy readers, which never compare equal; the data they wrap does.
     const plain = async (backup: RisuBackup) => JSON.parse(JSON.stringify(await backup.character(1)));
     expect(await plain(blocked.backup)).toEqual(await plain(legacy.backup));
+  });
+
+  it("reads a PocketRisu backup: its unzipped database, its cold entries in a folder, and the inlays it holds, which are not counted as the backup's pictures", async () => {
+    const plain = new Uint8Array([0, ...strToU8('RISUSAVE'), 0, 7, ...pack(db)]);
+    const file = bin([
+      ...backupEntries(plain).map(([name, data]): [string, Uint8Array] => [name.replace('coldstorage_', 'coldstorage/'), data]),
+      ['inlay/pic.png', PNG],
+      ['inlay_sidecar/pic', json({ type: 'image' })],
+      ['inlay_meta/pic', json({})],
+    ]);
+    const pocket = await readBackup([file]);
+    if (!pocket.ok) throw new Error(pocket.failure.kind);
+    expect(pocket.backup.catalog).toEqual((await read()).catalog);
+    const inlays = (await backupInlays(file))!;
+    expect(inlays.bytes).toBe(PNG.length);
+    expect(await Promise.all(inlays.assets(['pic', 'gone']).map(({ read }) => read()))).toEqual([PNG, null]);
+    expect(await backupInlays(backupFile())).toBeNull();
   });
 
   it('brings characters out of cold storage, in Risu order, as cards with lazy pictures', async () => {
