@@ -93,6 +93,8 @@ it('merges one model across lists by its name and ranks 대화 by the last 24 ho
       { key: '', model: null, share: 5 / 19, people: 5, replies: 10 },
     ],
     split: [{ key: '', model: null, type: 'openrouter', share: 5 / 19, people: 5, replies: 10 }],
+    // GLM's split rows have 3 and 2 people, so its 14 replies are 순위 밖 there.
+    rest: { merged: { share: 0, replies: 0 }, split: { share: 14 / 19, replies: 10 } },
   });
 });
 

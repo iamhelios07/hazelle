@@ -1,5 +1,5 @@
 import { CONNECTION_TYPES } from '../../connectors/registry';
-import { DIRECT_TYPE, PULSE_ROLES, type PulseOrder, type PulsePlace, type PulseRanking, type PulseRole } from '../../contracts/pulse';
+import { DIRECT_TYPE, PULSE_FLOORS, PULSE_ROLES, type PulseOrder, type PulsePlace, type PulseRanking, type PulseRole } from '../../contracts/pulse';
 import { count } from '../common/typedNumber';
 import type { Ranked } from '../ui';
 import { DIRECT_CONNECTION, ROLE_TAGS } from '../common/words';
@@ -54,6 +54,9 @@ function moveOf(rank: number, was: number | undefined): Ranked['move'] {
   return undefined;
 }
 
+const REST = '순위 밖 모델';
+const REST_HELP = `최근 24시간 동안 응답받은 사람이 ${PULSE_FLOORS.row}명이 안 되는 모델을 모았어요. 누가 쓴 모델인지 드러나지 않게 이름은 남기지 않아요.`;
+
 const OTHERS_HELP = `이름을 확인할 수 없는 모델은 ${OTHERS}로 묶어 보여 줘요. 제공자의 models.dev 목록에 없는 모델과 ${DIRECT_CONNECTION}로 쓴 모델이에요. 개인 모델 이름이 드러나지 않게 하려고요.`;
 
 // before: null where the earlier period was not counted whole, which marks no row at all. earlier: a past week's
@@ -61,8 +64,9 @@ const OTHERS_HELP = `이름을 확인할 수 없는 모델은 ${OTHERS}로 묶�
 export function rankRows(ranking: PulseRanking, before: PulseOrder | null, split: boolean, earlier: boolean): Ranked[] {
   const rows = placeRows(ranking, split);
   const was = before && new Map(placeRows(before, split).flatMap(({ row, rank }) => (rank === null ? [] : [[rowId(row), rank] as const])));
-  const largest = Math.max(0, ...rows.map(({ row }) => row.share));
-  return rows.map(({ row, provider, rank }) => {
+  const rest = ranking.rest?.[split ? 'split' : 'merged'];
+  const largest = Math.max(0, ...rows.map(({ row }) => row.share), rest?.share ?? 0);
+  const ranked = rows.map(({ row, provider, rank }): Ranked => {
     const move = was && rank !== null ? moveOf(rank, was.get(rowId(row))) : undefined;
     return {
       key: rowId(row),
@@ -75,4 +79,6 @@ export function rankRows(ranking: PulseRanking, before: PulseOrder | null, split
       ...(rank === null && { help: OTHERS_HELP }),
     };
   });
+  if (!rest?.share) return ranked;
+  return [...ranked, { key: REST, rank: null, name: REST, detail: rest.replies ? `응답 ${count(rest.replies)}번` : `응답 ${PULSE_FLOORS.round}번 미만`, value: percent(rest.share), share: rest.share / largest, help: REST_HELP }];
 }

@@ -47,7 +47,10 @@ export const PULSE_FLOORS = { row: 5, board: 10, round: 10 } as const;
 // that week's distinct people on the row. replies: the board's 대화 only, replies received in the last 24 hours, rounded.
 export type PulseRow = { key: string; model: string | null; type?: string; share: number; people: number; replies?: number };
 
-export type PulseRanking = { merged: PulseRow[]; split: PulseRow[] };
+// rest: the board's 대화 only, the replies of rows below the floor in each view, so the shares there add up to the
+// whole. It names no model and counts no people: neither is ever written for those rows.
+export type PulseRest = { share: number; replies: number };
+export type PulseRanking = { merged: PulseRow[]; split: PulseRow[]; rest?: { merged: PulseRest; split: PulseRest } };
 export type PulseRankings = Record<PulseRole, PulseRanking>;
 
 // Who stood where a period earlier, for the rank change marks: the same rows in the same order, nothing else.

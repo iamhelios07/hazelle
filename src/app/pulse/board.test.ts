@@ -28,6 +28,16 @@ it('ranks the split view without the rows it cannot name, and puts 기타 last w
   expect(percent(0)).toBe('0%');
 });
 
+it('closes the 대화 list with the rows below the floor, its bar against the largest, and leaves it out when there are none', () => {
+  const row = { key: 'a', model: 'A', share: 0.25, people: 6, replies: 40 };
+  const rest = { merged: { share: 0.75, replies: 130 }, split: { share: 0, replies: 0 } };
+  expect(rankRows({ merged: [row], split: [], rest }, null, false, false)).toMatchObject([
+    { name: 'A', value: '25%', share: 1 / 3 },
+    { rank: null, name: '순위 밖 모델', detail: '응답 130번', value: '75%', share: 1 },
+  ]);
+  expect(rankRows({ merged: [], split: [], rest }, null, true, false)).toEqual([]);
+});
+
 it('marks a move against the earlier places counted by the same rules, and nothing where the earlier period was not whole', () => {
   const row = (key: string, type?: string) => ({ key, model: key || null, ...(type && { type }), share: 0.1, people: 10 });
   const ranking = { merged: [row('a'), row('b'), row('c'), row('d'), row('')], split: [row('a', 'openrouter'), row('b', 'openrouter')] };

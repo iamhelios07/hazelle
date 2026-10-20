@@ -10,6 +10,7 @@ import {
   type PulsePlace,
   type PulseRanking,
   type PulseRankings,
+  type PulseRest,
   type PulseRole,
   type PulseRow,
   type PulseWeek,
@@ -220,13 +221,15 @@ async function chatDay(db: Db, now: number): Promise<{ hours: { at: number; call
     else summed.set(id, { ...row });
   }
   // A 대화 row also shows its week's people, so it waits for its week row (at PULSE_FLOORS.row people) as well.
-  const ranking = ranked(
-    [...summed].flatMap(([id, { key, type, name, replies: count }]) => {
-      const people = peopleOf.get(id);
-      return people === undefined ? [] : [{ count, row: { key, model: name, ...typed(type), share: count / chatCalls, people, replies: rounded(count) } }];
-    }),
-  );
-  return { hours, ranking };
+  const shown = [...summed].flatMap(([id, { key, type, name, replies: count }]) => {
+    const people = peopleOf.get(id);
+    return people === undefined ? [] : [{ count, row: { key, model: name, ...typed(type), share: count / chatCalls, people, replies: rounded(count) } }];
+  });
+  const rest = (split: boolean): PulseRest => {
+    const count = chatCalls - shown.reduce((sum, each) => ((each.row.type !== undefined) === split ? sum + each.count : sum), 0);
+    return { share: chatCalls ? count / chatCalls : 0, replies: rounded(count) };
+  };
+  return { hours, ranking: { ...ranked(shown), rest: { merged: rest(false), split: rest(true) } } };
 }
 
 // null for a week that never passed PULSE_FLOORS.board, whose lists were never shown.
