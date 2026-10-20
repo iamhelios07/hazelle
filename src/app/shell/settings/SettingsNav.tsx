@@ -11,23 +11,31 @@ import type { Route, SettingsPage } from '../routes';
 import { subpages, TERMS } from './terms';
 
 type Place = { page: SettingsPage; label: string; icon: LucideIcon; route: Route };
+type Group = { title: string; places: Place[] };
 
-// Only built pages are listed. The groups go unlabeled: what the model does on top, the app and the account at the
+// Only built pages are listed. A group's title never repeats a label inside it. The app and the account sit at the
 // bottom, which the sidebar sets apart in its footer and the phone list as its last group.
-const GROUPS: Place[][] = [
-  [
-    { page: 'models', label: PAGES.models, icon: Layers, route: { kind: 'models' } },
-    { page: 'connections', label: PAGES.connections, icon: Plug, route: { kind: 'connections' } },
-  ],
-  [
-    { page: 'chat', label: PAGES.chat, icon: MessageSquare, route: { kind: 'chat-settings' } },
-    { page: 'translator', label: PAGES.translator, icon: Languages, route: { kind: 'translator' } },
-    { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts', place: null } },
-    { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas', place: null } },
-    { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules', place: null } },
-    { page: 'plugins', label: PAGES.plugins, icon: Puzzle, route: { kind: 'plugins' } },
-  ],
+const GROUPS: Group[] = [
+  {
+    title: 'AI 엔진',
+    places: [
+      { page: 'models', label: PAGES.models, icon: Layers, route: { kind: 'models' } },
+      { page: 'connections', label: PAGES.connections, icon: Plug, route: { kind: 'connections' } },
+    ],
+  },
+  {
+    title: '롤플레이',
+    places: [
+      { page: 'chat', label: PAGES.chat, icon: MessageSquare, route: { kind: 'chat-settings' } },
+      { page: 'translator', label: PAGES.translator, icon: Languages, route: { kind: 'translator' } },
+      { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts', place: null } },
+      { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas', place: null } },
+      { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules', place: null } },
+      { page: 'plugins', label: PAGES.plugins, icon: Puzzle, route: { kind: 'plugins' } },
+    ],
+  },
 ];
+const APP_TITLE = '앱';
 const APP: Place[] = [
   { page: 'display', label: PAGES.display, icon: SunMoon, route: { kind: 'display' } },
   { page: 'controls', label: PAGES.controls, icon: Hand, route: { kind: 'controls' } },
@@ -87,15 +95,15 @@ function useSettingsSearch(places: Place[]) {
 }
 
 // Where the library's 설정 lands: the first page where the sidebar lists them all, the list on phones.
-export const settingsEntry = (wide: boolean): Route => (wide ? GROUPS[0]![0]!.route : { kind: 'settings' });
+export const settingsEntry = (wide: boolean): Route => (wide ? GROUPS[0]!.places[0]!.route : { kind: 'settings' });
 
 export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 'list'; onClose: () => void }) {
   const app = useApp();
   const holds = useHolds();
-  const search = useSettingsSearch([...GROUPS.flat(), ...app]);
+  const search = useSettingsSearch([...GROUPS.flatMap(({ places }) => places), ...app]);
   const row = (place: Place) => <NavRow key={place.page} icon={place.icon} label={place.label} meta={holds[place.page]} current={place.page === current} onClick={() => navigate(place.route)} />;
   return (
-    <LayerSidebar title={SETTINGS} onClose={onClose} search={search.field} footer={search.words ? null : <NavGroup>{app.map(row)}</NavGroup>}>
+    <LayerSidebar title={SETTINGS} onClose={onClose} search={search.field} footer={search.words ? null : <NavGroup title={APP_TITLE}>{app.map(row)}</NavGroup>}>
       {search.words ? (
         search.none ? (
           <Empty variant="side">{search.none}</Empty>
@@ -103,7 +111,11 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
           search.found.map((hit) => <NavRow key={`${hit.where}/${hit.term}`} icon={hit.place.icon} label={hit.term} meta={hit.where} onClick={() => search.open(hit)} />)
         )
       ) : (
-        GROUPS.map((group) => <NavGroup key={group[0]!.page}>{group.map(row)}</NavGroup>)
+        GROUPS.map(({ title, places }) => (
+          <NavGroup key={title} title={title}>
+            {places.map(row)}
+          </NavGroup>
+        ))
       )}
     </LayerSidebar>
   );
@@ -112,8 +124,8 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
 export function SettingsList({ onClose }: { onClose: () => void }) {
   const holds = useHolds();
   const app = useApp();
-  const groups = [...GROUPS, app];
-  const search = useSettingsSearch(groups.flat());
+  const groups = [...GROUPS, { title: APP_TITLE, places: app }];
+  const search = useSettingsSearch(groups.flatMap(({ places }) => places));
   return (
     <Screen top={<NavBar title={SETTINGS} close backLabel={`${SETTINGS} 닫기`} onBack={onClose} />}>
       {search.field}
@@ -128,10 +140,10 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
           </List>
         )
       ) : (
-        groups.map((group) => (
-          <NavGroup key={group[0]!.page}>
-            <List places label={group.map((place) => place.label).join(', ')}>
-              {group.map((place) => (
+        groups.map(({ title, places }) => (
+          <NavGroup key={title} title={title}>
+            <List places label={title}>
+              {places.map((place) => (
                 <ListItem key={place.page} title={place.label} aside={holds[place.page]} onClick={() => navigate(place.route)} />
               ))}
             </List>
