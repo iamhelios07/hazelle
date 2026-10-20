@@ -40,7 +40,6 @@ export function parseReading(stored: string, fallback: Reading): Reading {
 // The default draws every picture as before the cap (user, 2026-10-17).
 // quotes (대사 모양), pictureSide and portrait: reading habits, so no preset sets them.
 // portrait: the character's picture on the stage, only in a chat without 삽화: the stage is theirs (user, 2026-10-16).
-// enterSends: kept per device, since a phone's typing habit is not the desk's.
 export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; enterSends: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; portrait: boolean };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
