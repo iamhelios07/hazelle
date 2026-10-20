@@ -12,7 +12,8 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   timeout: 60_000,
-  use: { baseURL: `http://localhost:${PORT}` },
+  // A wrong locator fails in 10 s instead of running out the test's 60 s; a longer wait carries its own timeout.
+  use: { baseURL: `http://localhost:${PORT}`, actionTimeout: 10_000, navigationTimeout: 15_000 },
   webServer: [
     {
       command: 'npm run -s server',
