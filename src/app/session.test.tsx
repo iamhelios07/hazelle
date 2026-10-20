@@ -14,7 +14,7 @@ import { randomBytes } from '../vault/aead';
 import { SessionProvider, useChatDisplay } from './session';
 import { probeRoot } from './ui/probe';
 
-const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, unreadBoard: 0, localProviders: [] });
+const facts = new AccountFacts({ suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, unreadBoard: 0 });
 
 it('C: composer and panel re-renders skip display, while streaming recomputes without replacing unchanged rows', async () => {
   let rev = 0;
@@ -43,7 +43,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
     return null;
   }
   const root = probeRoot();
-  const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ admin: false, localProviders: [], facts, onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
+  const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ admin: false, localProviders: [], facts, guest: null, onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
   const displayed = vi.spyOn(display, 'evaluateChat');
   try {
     await act(() => render('', false));

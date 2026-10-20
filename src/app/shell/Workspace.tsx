@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { hearServedVersion } from '../../runtime/api';
 import type { AccountFacts } from '../../runtime/account';
 import { Drafts } from '../../runtime/drafts';
-import { openSession, type Session } from '../../runtime/session';
+import { openGuestSession, openSession, type Session } from '../../runtime/session';
 import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
@@ -144,9 +144,11 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
     let opened: Session | null = null;
     setFailure(null);
     setProgress(NOT_PULLED);
-    void openSession(accountId, vaultKey, username, abandon.signal, (progress) => {
+    const progress = (progress: PullProgress) => {
       if (!abandon.signal.aborted) setProgress(progress);
-    }, undefined, { drafts }).then((result) => {
+    };
+    const opening = account.guest ? openGuestSession(abandon.signal, progress, { drafts }) : openSession(accountId, vaultKey, username, abandon.signal, progress, undefined, { drafts });
+    void opening.then((result) => {
       if (abandon.signal.aborted) return;
       if (!result.ok) return setFailure(describeFailure(result));
       opened = result.data;
@@ -188,7 +190,8 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
           <Unread facts={account.facts} kind="unreadNotices" />
           <Unread facts={account.facts} kind="unreadBoard" />
           <Stale />
-          <News />
+          {/* A release's 소식 and its tour's door are on the 게시판, which a guest cannot open yet (design §6.14 batch 4). */}
+          {!account.guest && <News />}
           <BotNotes />
           <ImportProvider>
             <Layout />

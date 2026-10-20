@@ -1,7 +1,6 @@
 import { ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 import { ACTS, exportOf } from '../common/acts';
-import { useAttempt } from '../common/useAttempt';
 import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Link, Screen, Steps, Text } from '../ui';
 import { download } from '../common/download';
 import { PRIVACY, TERMS } from '../common/legal';
@@ -11,15 +10,17 @@ const FILENAME = 'hazelle-recovery.txt';
 type Props = {
   username: string;
   recoveryKey: string;
+  // Back from a failed start: the same key, downloaded and saved already.
+  saved: boolean;
+  failure: string | null;
   onBack: () => void;
-  // The account and its vault are created only here, after the download, so neither exists without a saved recovery key.
-  onStart: () => Promise<string | null>;
+  // The account is created only here, after the download, so none exists without a saved recovery key.
+  onStart: () => void;
 };
 
-export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Props) {
-  const [downloaded, setDownloaded] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const { busy, failure, run } = useAttempt();
+export function RecoveryKeyScreen({ username, recoveryKey, saved: savedBefore, failure, onBack, onStart }: Props) {
+  const [downloaded, setDownloaded] = useState(savedBefore);
+  const [saved, setSaved] = useState(savedBefore);
 
   function save() {
     const created = new Date().toISOString().slice(0, 10);
@@ -43,7 +44,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
       top={<IconButton icon={ChevronLeft} label="이전" onClick={onBack} />}
       actions={
         <>
-          <Button disabled={!downloaded || !saved} busy={busy} onClick={() => void run(onStart)}>
+          <Button disabled={!downloaded || !saved} onClick={onStart}>
             시작하기
           </Button>
           <Text variant="note" align="center">

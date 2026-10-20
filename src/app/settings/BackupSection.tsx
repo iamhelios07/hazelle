@@ -7,7 +7,7 @@ import { downloadOutput } from '../common/download';
 import { RestoresDialog } from '../common/RestoresDialog';
 import { STOP } from '../common/words';
 import { useToast } from '../toast';
-import { useSaves, useSession } from '../session';
+import { useAccount, useSaves, useSession } from '../session';
 import { Button, Dialog, FileButton, Panel, Progress, SettingGroup, SettingRow, type ProgressStep } from '../ui';
 import { RisuExportRow } from './RisuExportRow';
 
@@ -37,6 +37,7 @@ const stages = (direction: Direction, steps: Steps): ProgressStep[] => [
 
 export function BackupSection() {
   const { username, store, files } = useSession();
+  const { guest } = useAccount();
   const saves = useSaves();
   const toast = useToast();
   const [active, setActive] = useState<{ direction: Direction; steps: Steps } | null>(null);
@@ -127,6 +128,8 @@ export function BackupSection() {
             </FileButton>
           }
         />
+        {/* The server's history, which a guest has none of (design §6.14). */}
+        {!guest && (
         <SettingRow
           label="이전 시점으로 복원"
           help={`10분 전부터 6일 전 사이의 기록으로 돌아가요. 하루에 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`}
@@ -136,6 +139,7 @@ export function BackupSection() {
             </Button>
           }
         />
+        )}
       </SettingGroup>
       {restoring && <RestoresDialog operated={null} onClose={() => setRestoring(false)} />}
       {active && (

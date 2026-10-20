@@ -218,13 +218,13 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   return { ok: true, data: session };
 }
 
-export async function openGuestSession(signal: AbortSignal, progress?: (progress: PullProgress) => void): Promise<ApiResult<Session>> {
+export async function openGuestSession(signal: AbortSignal, progress?: (progress: PullProgress) => void, bindings: Parameters<typeof openSession>[6] = {}): Promise<ApiResult<Session>> {
   const { accountId, vaultKey } = await guestAccount();
   if (signal.aborted) return { ok: false, error: 'stopped' };
   holdAccount(null);
   let session: Session | undefined;
   const transport = directTransport(accountId, () => session !== undefined && sharesPulse(session.store.get('settings', SETTINGS_ID)?.value));
-  const opened = await openSession(accountId, vaultKey, '손님', signal, progress, { backend: guestBackend(accountId), transport });
+  const opened = await openSession(accountId, vaultKey, '손님', signal, progress, { backend: guestBackend(accountId), transport }, bindings);
   if (opened.ok) session = opened.data;
   return opened;
 }

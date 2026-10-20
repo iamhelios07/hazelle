@@ -1,6 +1,7 @@
+import { ChevronLeft } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useAttempt } from '../common/useAttempt';
-import { Brand, Button, Callout, Intro, Screen, Stack, Steps, TextField } from '../ui';
+import { Brand, Button, Callout, IconButton, Intro, Screen, Stack, Steps, TextField } from '../ui';
 
 const MIN_LENGTH = 8;
 
@@ -8,13 +9,14 @@ type Props = {
   // reset: after the recovery key opened the vault, a new password is required.
   mode: 'signup' | 'reset';
   username: string;
-  // signup: for someone who already has an account.
+  // signup: back to the guest it started from, and the way for someone who already has an account.
+  onBack?: () => void;
   onSignIn?: () => void;
   onDone: (username: string, password: string) => Promise<string | null>;
 };
 
 // The server never sees the password, so its rules are checked here and nowhere else.
-export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDone }: Props) {
+export function PasswordScreen({ mode, username: initialUsername, onBack, onSignIn, onDone }: Props) {
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
@@ -30,7 +32,7 @@ export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDo
 
   return (
     <Screen
-      top={<Brand />}
+      top={onBack ? <IconButton icon={ChevronLeft} label="이전" onClick={onBack} /> : <Brand />}
       onSubmit={submit}
       actions={
         <>

@@ -17,6 +17,8 @@ export const MEDIA = {
   // A touch screen keeps :hover on whatever was tapped last.
   hover: '(hover: hover)',
   reducedMotion: '(prefers-reduced-motion: reduce)',
+  // Opened from the home screen rather than a browser tab.
+  installed: '(display-mode: standalone)',
 } as const;
 
 type Query = { subscribe: (listener: () => void) => () => void; read: () => boolean };
@@ -70,3 +72,4 @@ const subscribeResize = (listener: () => void) => {
 export const useViewport = () => useSyncExternalStore(subscribeResize, () => `${innerWidth}x${innerHeight}`);
 
 export const hasFinePointer = () => mediaQuery(MEDIA.finePointer).read();
+export const isInstalled = () => mediaQuery(MEDIA.installed).read();

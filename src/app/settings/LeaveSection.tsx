@@ -4,7 +4,7 @@ import { credentialFor, deleteAccount } from '../../runtime/account';
 import { describeFailure, wrongSecret } from '../common/failure';
 import { useCredential } from '../common/useCredential';
 import { useAttempt } from '../common/useAttempt';
-import { useAccount, useSession } from '../session';
+import { useSignedIn, useSession } from '../session';
 import { Button, ConfirmDialog, Panel, SettingGroup, SettingRow, Stack, TextField } from '../ui';
 
 export function LeaveSection() {
@@ -29,7 +29,7 @@ export function LeaveSection() {
 
 function LeaveDialog({ onClose }: { onClose: () => void }) {
   const { username } = useSession();
-  const { onLogout } = useAccount();
+  const { onLogout } = useSignedIn();
   const { busy, failure, run, setFailure } = useAttempt();
   const credential = useCredential(setFailure);
   const { method, secret } = credential;

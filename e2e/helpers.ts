@@ -191,25 +191,40 @@ export const MODULE = {
 
 const E2E_PASSWORD = 'e2e-password';
 
-// true when it signed up.
-export async function enter(page: Page): Promise<boolean> {
-  await page.goto('/');
-  const signup = page.getByLabel('비밀번호 확인', { exact: true });
-  const signin = page.getByRole('button', { name: '로그인', exact: true });
-  await expect(signup.or(signin)).toBeVisible();
-  await page.getByLabel('아이디', { exact: true }).fill('e2e');
-  await page.getByLabel('비밀번호', { exact: true }).fill(E2E_PASSWORD);
-  // flow.spec.ts owns the first signup in the full suite; a spec run alone signs up on its own fresh server.
-  if (await signin.isVisible()) {
-    await signin.click();
-    await expect(signin).toBeHidden();
-    return false;
-  }
-  await signup.fill(E2E_PASSWORD);
+// A fresh browser opens as a guest (design F1); its home card holds both doors, and 계정 만들기 turns that guest into
+// the account. The card says the cap is full instead while signup is closed.
+export async function signUpAsGuest(page: Page, username: string, password: string) {
+  await page.getByRole('button', { name: '계정 만들기', exact: true }).click();
+  await page.getByLabel('아이디', { exact: true }).fill(username);
+  await page.getByLabel('비밀번호', { exact: true }).fill(password);
+  await page.getByLabel('비밀번호 확인', { exact: true }).fill(password);
   await page.getByRole('button', { name: '다음', exact: true }).click();
   await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
   await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
+}
+
+export async function signInFromGuest(page: Page, username: string, password: string) {
+  await page.getByRole('button', { name: '계정이 있으면 로그인', exact: true }).click();
+  await page.getByLabel('아이디', { exact: true }).fill(username);
+  await page.getByLabel('비밀번호', { exact: true }).fill(password);
+  const signin = page.getByRole('button', { name: '로그인', exact: true });
+  await signin.click();
+  await expect(signin).toBeHidden();
+}
+
+// true when it signed up.
+export async function enter(page: Page): Promise<boolean> {
+  await page.goto('/');
+  const signup = page.getByRole('button', { name: '계정 만들기', exact: true });
+  const full = page.getByText('지금은 정원이 차서 계정을 만들 수 없어요', { exact: true });
+  await expect(signup.or(full)).toBeVisible();
+  // flow.spec.ts owns the first signup in the full suite; a spec run alone signs up on its own fresh server.
+  if (await full.isVisible()) {
+    await signInFromGuest(page, 'e2e', E2E_PASSWORD);
+    return false;
+  }
+  await signUpAsGuest(page, 'e2e', E2E_PASSWORD);
   await expect(page.getByRole('heading', { name: '비어 있어요', exact: true })).toBeVisible();
   return true;
 }

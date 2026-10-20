@@ -66,6 +66,8 @@ export const TOOL_FIELD_CHANGED = '플러그인이 바뀌어서 다시 설정해
 export const SETTINGS = '설정';
 
 export const DIRECT_CONNECTION = '직접 연결';
+// A connection type a browser cannot call itself (connectors' browser: false), at its row and in its failure.
+export const NEEDS_ACCOUNT = '계정이 필요해요';
 
 // 헤이젤 나우 (design §6.12): the public page, and the account's switch that counts this account in it.
 export const PULSE = { ...PULSE_PAGE, sharing: `${PULSE_PAGE.title} 집계 참여` };

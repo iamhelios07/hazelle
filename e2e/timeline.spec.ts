@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page, type Route } from '@playw
 import { build, type Rollup } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { GENERATION_STEPS } from '../src/runtime/testing/cache';
-import { CARD, pickBot, settingsPage } from './helpers';
+import { CARD, pickBot, settingsPage, signUpAsGuest } from './helpers';
 
 // A restore here must land between two given requests of a tab, so every /api answer comes from FakeServer, which
 // answers as the objects routes do (server/objects.ts) and switches its timeline when told. Tabs are pages of one
@@ -148,13 +148,7 @@ async function served(context: BrowserContext): Promise<FakeServer> {
 
 async function signUp(page: Page) {
   await page.goto('/');
-  await page.getByLabel('아이디', { exact: true }).fill('e2e');
-  await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
-  await page.getByLabel('비밀번호 확인', { exact: true }).fill(PASSWORD);
-  await page.getByRole('button', { name: '다음', exact: true }).click();
-  await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
-  await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
-  await page.getByRole('button', { name: '시작하기', exact: true }).click();
+  await signUpAsGuest(page, 'e2e', PASSWORD);
   await expect(empty(page)).toBeVisible();
 }
 
@@ -283,7 +277,7 @@ test('an edit made offline across a restore is dropped and counted when the tab 
   await signUp(page);
   await page.keyboard.press('Control+,');
   await settingsPage(page, '페르소나');
-  await page.getByRole('button', { name: /^e2e/ }).click();
+  await page.getByRole('button', { name: /^손님/ }).click();
   const alias = page.getByLabel('별명', { exact: true });
   await expect(alias).toHaveValue('');
 

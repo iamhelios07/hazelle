@@ -17,6 +17,16 @@ export async function forgetVault(account: string, cache = deviceCache(account))
   await Promise.all([lockVault(), cache.forget().catch(() => {})]);
 }
 
+// Whether any account was opened in this browser and not logged out of: its cache stays until 로그아웃 forgets it.
+export async function cachedAccounts(): Promise<boolean> {
+  const tx = (await database()).transaction('generations');
+  const counted = tx.objectStore('generations').count();
+  return new Promise((resolve, reject) => {
+    counted.onsuccess = () => resolve(counted.result > 0);
+    counted.onerror = () => reject(counted.error);
+  });
+}
+
 class BrowserCache implements DeviceCache {
   forgotten = false;
   constructor(private readonly account: string) {}

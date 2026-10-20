@@ -1,0 +1,60 @@
+.card {
+  composes: box from '../foundation/surface.module.css';
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-16) var(--space-16) var(--space-16) var(--space-24);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+}
+
+.words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding-top: var(--space-8);
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.note {
+  composes: note from '../foundation/type.module.css';
+}
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+
+.point {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+}
+
+/* One line high, so the icon stands level with the first line of a point that wraps. */
+.icon {
+  display: flex;
+  align-items: center;
+  height: calc(var(--text-md) * var(--leading-relaxed));
+  color: var(--color-text-muted);
+}
+
+.foot {
+  composes: note from '../foundation/type.module.css';
+}

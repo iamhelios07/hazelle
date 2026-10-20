@@ -1,6 +1,8 @@
 import { MessageSquarePlus, PackageOpen, Plug, UserRoundPlus } from 'lucide-react';
 import { ACTS, importOf, newOf } from '../common/acts';
-import { useChats, useConnections } from '../session';
+import { GuestNotice } from '../common/GuestNotice';
+import { usePersisted } from '../common/usePersisted';
+import { useAccount, useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
 import { useImport } from '../common/importing';
@@ -13,6 +15,7 @@ export function Welcome() {
   const create = useNewCharacter();
   return (
     <Stack gap="section">
+      <GuestCard />
       <Intro title={chats.length ? '어디서 이어 갈까요?' : '비어 있어요'} />
       <Stack>
         {connections.length > 0 && (
@@ -29,6 +32,15 @@ export function Welcome() {
       </Stack>
     </Stack>
   );
+}
+
+// A guest's limits stand on the empty home, phone list included, until closed on this device; 설정 › 계정 keeps the
+// same card for good.
+function GuestCard() {
+  const { guest } = useAccount();
+  const [closed, setClosed] = usePersisted('risu-alpha:guest-card-closed', (stored) => stored === '1', false, (value) => (value ? '1' : ''));
+  if (!guest || closed) return null;
+  return <GuestNotice guest={guest} onClose={() => setClosed(true)} />;
 }
 
 export function HomeScreen() {

@@ -4,9 +4,9 @@ import type { ConnectionType } from '../../connectors/types';
 import { providerConnection } from '../../runtime/connections';
 import { newOf } from '../common/acts';
 import { noResults } from '../common/search';
-import { DIRECT_CONNECTION } from '../common/words';
+import { DIRECT_CONNECTION, NEEDS_ACCOUNT } from '../common/words';
 import { useAttempt } from '../common/useAttempt';
-import { useConnections, useSession } from '../session';
+import { useAccount, useConnections, useSession } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, Empty, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
@@ -20,6 +20,7 @@ const GROUPS: Record<ConnectionType['group'], string> = {
 
 export function ConnectionAddScreen({ back }: { back: Back }) {
   const session = useSession();
+  const { guest } = useAccount();
   const connections = useConnections();
   const route = useRoute();
   const [query, setQuery] = useState('');
@@ -64,7 +65,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
                     key={type.id}
                     title={type.label}
                     description={type.description}
-                    tags={[type.signIn ? `${type.signIn.site} 로그인` : (type.keyForm?.label ?? 'API 키'), ...(count ? [`연결 ${count}개`] : [])]}
+                    tags={[type.signIn ? `${type.signIn.site} 로그인` : (type.keyForm?.label ?? 'API 키'), ...(count ? [`연결 ${count}개`] : []), ...(guest && !type.browser ? [NEEDS_ACCOUNT] : [])]}
                     current={route.kind === 'connect' && route.type === type}
                     onClick={() => navigate({ kind: 'connect', type })}
                   />

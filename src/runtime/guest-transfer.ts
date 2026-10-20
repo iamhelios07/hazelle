@@ -38,8 +38,9 @@ export async function guestWithContent(): Promise<ApiResult<Guest | null>> {
   if (!guest) return { ok: true, data: null };
   const held = await inventory(guestBackend(guest.accountId));
   if (!held.ok) return held;
-  // First-open defaults count too: they can have been edited, and asking once loses nothing silently.
-  if (held.data.rows.some(({ body }) => body !== null)) return { ok: true, data: guest };
+  // The first open's defaults alone are not asked about, or every sign-in from a browser that once showed the guest home
+  // would ask; nothing is lost by it, since the guest store stays as it is until 올리기 or 버리기.
+  if (held.data.rows.some(({ id, body }) => body !== null && !SEEDED.has(id))) return { ok: true, data: guest };
   const files = await guestBackend(guest.accountId).heldFiles(null);
   return files.ok ? { ok: true, data: files.data.ids.length ? guest : null } : files;
 }

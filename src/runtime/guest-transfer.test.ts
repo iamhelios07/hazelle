@@ -14,12 +14,12 @@ import { randomBytes } from '../vault/aead';
 import { lockVault, recallGuest, recallVault, rememberVault } from '../vault/device';
 import { createVault, openVault, passwordCredential, recoveryCredential } from '../vault/keys';
 import { objectKey, openObject } from '../vault/objects';
-import { ACCOUNT_CAPABILITIES, logIn, prepareGuestSignup, signUp, signUpGuest, uploadGuest } from './account';
+import { logIn, prepareGuestSignup, signUp, signUpGuest, uploadGuest } from './account';
 import { holdAccount } from './api';
 import { feedQuery, serverBackend } from './backend';
 import { deviceCache } from './device-cache';
 import { Files } from './files';
-import { guestAccount, guestBackend, guestPersistence } from './guest-store';
+import { guestAccount, guestBackend } from './guest-store';
 import { discardGuest, guestWithContent, transferGuest } from './guest-transfer';
 import { openSession } from './session';
 import { ObjectStore } from './store';
@@ -88,6 +88,14 @@ async function contents() {
   await held.store.upsert('settings', () => ({ models: {}, persona: FIRST_ID }));
   return { ...held, character, chat, message, image, ref };
 }
+
+it('does not ask about a guest that holds only the first open’s defaults', async () => {
+  const { accountId, vaultKey, backend } = await guest();
+  const opened = await openSession(accountId, vaultKey, '손님', new AbortController().signal, undefined, { backend });
+  if (!opened.ok) throw new Error(opened.error);
+  opened.data.close();
+  expect(await guestWithContent()).toEqual({ ok: true, data: null });
+});
 
 it('keeps account-bound seals and content-sealed pictures unchanged, clears the device cache, and opens a fresh account session', async () => {
   const source = await contents();
@@ -317,18 +325,12 @@ it('writes a version-3 guest backup and loads it into a fresh guest without any 
   expect(fetched).not.toHaveBeenCalled();
 });
 
-it('asks for persistence only at guest creation and reports granted, refused or unknown without assuming safety', async () => {
+it('asks for persistence only at guest creation', async () => {
   const persist = vi.fn(async () => true);
-  const persisted = vi.fn(async () => true);
-  vi.stubGlobal('navigator', { storage: { persist, persisted } });
+  vi.stubGlobal('navigator', { storage: { persist } });
   const made = await guestAccount();
   expect(await guestAccount()).toEqual(made);
   expect(persist).toHaveBeenCalledTimes(1);
-  expect(await guestPersistence()).toBe(true);
-  persisted.mockResolvedValue(false);
-  expect(await guestPersistence()).toBe(false);
-  vi.stubGlobal('navigator', {});
-  expect(await guestPersistence()).toBeNull();
 });
 
 it('refuses cancellation before signup and picture limits before an upload, retaining the guest', async () => {
@@ -351,17 +353,11 @@ it('refuses cancellation before signup and picture limits before an upload, reta
   expect(await source.files.read(source.ref)).toEqual({ ok: true, data: source.image });
 });
 
-it('validates client ids, refuses a taken id and keeps account-only capabilities unavailable to guests', async () => {
+it('validates client ids and refuses a taken id', async () => {
   const body = signupBody();
   expect((await app.post('signup', { ...body, accountId: 'not-an-id' })).status).toBe(400);
   expect((await app.post('signup', body)).status).toBe(201);
   await app.env.db.prepare('UPDATE service SET signup_cap = 2').run();
   expect((await app.post('signup', { ...body, username: 'another' })).status).toBe(409);
   expect(await app.env.db.prepare('SELECT COUNT(*) AS count FROM accounts').first('count')).toBe(1);
-  expect(ACCOUNT_CAPABILITIES.fileBackup.guest).toBe(true);
-  expect(ACCOUNT_CAPABILITIES.boardReading.guest).toBe(true);
-  for (const [name, capability] of Object.entries(ACCOUNT_CAPABILITIES)) {
-    expect(capability.account).toBe(true);
-    if (name !== 'fileBackup' && name !== 'boardReading') expect(capability.guest).toBe(false);
-  }
 });

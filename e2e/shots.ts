@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { CARD, pickBot } from './helpers';
+import { CARD, pickBot, signInFromGuest, signUpAsGuest } from './helpers';
 
 // The screenshot account on the local dev server (playwright.shots.config.ts), kept across runs so a screenshot
 // script signs in instead of signing up. On a .data/ with no account the first run makes it, with the test card; as the
@@ -27,19 +27,12 @@ export async function snap(page: Page, name: string) {
 
 export async function enterShots(page: Page) {
   await page.goto('/');
-  const signup = page.getByLabel('비밀번호 확인', { exact: true });
-  const signin = page.getByRole('button', { name: '로그인', exact: true });
-  await expect(signup.or(signin)).toBeVisible();
-  // The landing is the signup form only while signup is open, which with the default cap of one is until the first
-  // account exists.
-  await page.getByLabel('아이디', { exact: true }).fill(SHOTS.username);
-  await page.getByLabel('비밀번호', { exact: true }).fill(SHOTS.password);
-  if (await signin.isVisible()) return signin.click();
-  await signup.fill(SHOTS.password);
-  await page.getByRole('button', { name: '다음', exact: true }).click();
-  await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
-  await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
-  await page.getByRole('button', { name: '시작하기', exact: true }).click();
+  const signup = page.getByRole('button', { name: '계정 만들기', exact: true });
+  const full = page.getByText('지금은 정원이 차서 계정을 만들 수 없어요', { exact: true });
+  await expect(signup.or(full)).toBeVisible();
+  // 계정 만들기 is open only while signup is, which with the default cap of one is until the first account exists.
+  if (await full.isVisible()) return signInFromGuest(page, SHOTS.username, SHOTS.password);
+  await signUpAsGuest(page, SHOTS.username, SHOTS.password);
   const chooser = page.waitForEvent('filechooser');
   await pickBot(page);
   await page.getByRole('button', { name: '확인했어요', exact: true }).click();

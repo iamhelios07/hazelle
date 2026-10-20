@@ -1,47 +1,81 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AccountFacts, changePassword, credentialFor, loadSession, logIn, logOut, signUp, type SessionFacts, type SignedIn } from '../../runtime/account';
+import { AccountFacts, changePassword, credentialFor, guestFacts, loadSession, logIn, logOut, prepareGuestSignup, signUpGuest, uploadGuest, type GuestSignup, type SessionFacts, type SignedIn } from '../../runtime/account';
 import { holdAccount } from '../../runtime/api';
-import { forgetVault } from '../../runtime/device-cache';
+import { cachedAccounts, forgetVault } from '../../runtime/device-cache';
+import { guestAccount } from '../../runtime/guest-store';
+import { discardGuest, guestWithContent, type GuestTransferStep } from '../../runtime/guest-transfer';
 import { lockVault, recallVault, rememberVault } from '../../vault/device';
-import { canonicalUsername, createVault, openVault, passwordCredential, wrapWithPassword, type Credential, type VaultKey } from '../../vault/keys';
+import { canonicalUsername, openVault, passwordCredential, wrapWithPassword, type Credential, type VaultKey } from '../../vault/keys';
 import { clearDownloads } from '../common/download';
 import { describeFailure, wrongSecret } from '../common/failure';
 import type { Account } from '../session';
 import { Brand, Progress, Screen } from '../ui';
+import { GuestDataScreen } from './GuestDataScreen';
+import { MovingScreen, type Moved } from './MovingScreen';
 import { PasswordScreen } from './PasswordScreen';
 import { RecoveryKeyScreen } from './RecoveryKeyScreen';
 import { SignInScreen } from './SignInScreen';
 import { UnreachableScreen } from './UnreachableScreen';
 
-// Kept in memory until the recovery key is saved. Going back keeps the vault key and the recovery
-// key, so a file already downloaded stays valid.
-type Draft = { session: { accountId: string; username: string } } & Awaited<ReturnType<typeof createVault>>;
-
 type State =
   | { kind: 'loading' }
   | { kind: 'unreachable'; message: string }
-  | { kind: 'signup'; step: 'password'; draft: Draft | null }
-  | { kind: 'signup'; step: 'recovery'; draft: Draft }
-  | { kind: 'login'; signupOpen: boolean; notice: string | null }
+  | { kind: 'guest'; accountId: string; vaultKey: VaultKey; signupOpen: boolean; facts: AccountFacts }
+  // draft: kept until the upload lands, so going back, or a failed upload, keeps the same recovery key.
+  | { kind: 'signup'; step: 'password'; draft: GuestSignup | null }
+  | { kind: 'signup'; step: 'recovery'; draft: GuestSignup; failure: string | null }
+  | { kind: 'moving'; moved: Moved }
+  | { kind: 'guest-data'; session: SessionFacts; vaultKey: VaultKey; failure: string | null }
+  | { kind: 'login'; notice: string | null; username: string }
   | { kind: 'locked'; signedIn: SignedIn; notice: string | null }
   | { kind: 'recovered'; session: SessionFacts; vaultKey: VaultKey; current: Credential }
   | { kind: 'unlocked'; session: SessionFacts; vaultKey: VaultKey; facts: AccountFacts };
 
+// landing: a session and its key in hand, which still waits on what this browser holds of a guest (land).
+type Loaded = State | { kind: 'landing'; session: SessionFacts; vaultKey: VaultKey };
+
 export type Unlocked = Account & { accountId: string; username: string; vaultKey: VaultKey };
 
 const ELSEWHERE = '다른 탭에서 다른 계정으로 로그인해서 로그아웃됐어요.';
+const GUEST_NAME = '손님';
 
-// Signed out, the page opens on signup while there is room, unless it came from leaving an account.
-async function loadState(notice: string | null = null, prefer: 'signup' | 'login' = 'signup'): Promise<State> {
+// Who this browser opens as with no session: the username of the account it last opened, so a lapsed session asks for
+// its login instead of showing an empty guest home that reads as lost data, or '' once 손님으로 쓰기 was picked. Never
+// set (a browser from before 손님 모드), an account's device cache stands for the first. Storage may be refused, which
+// only loses the hint.
+const ENTRY = 'risu-alpha:entry';
+async function entry(): Promise<string | null> {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(ENTRY);
+  } catch {
+    // A hint only.
+  }
+  if (stored !== null) return stored === '' ? null : stored;
+  return (await cachedAccounts().catch(() => false)) ? '' : null;
+}
+function enterAs(username: string) {
+  try {
+    localStorage.setItem(ENTRY, username);
+  } catch {
+    // A hint only.
+  }
+}
+
+// Signed out, the page opens as this browser's guest (design F1), unless it came from leaving an account or this
+// browser has opened one before; guest: the person picked 손님으로 쓰기.
+async function loadState(notice: string | null = null, prefer: 'auto' | 'guest' | 'login' = 'auto'): Promise<Loaded> {
   void clearDownloads();
   const result = await loadSession();
   if (!result.ok) return { kind: 'unreachable', message: describeFailure(result) };
   const boot = result.data;
   if (boot.session === null) {
-    return boot.signupOpen && prefer === 'signup' && notice === null ? { kind: 'signup', step: 'password', draft: null } : { kind: 'login', signupOpen: boot.signupOpen, notice };
+    const known = prefer === 'auto' ? await entry() : null;
+    if (prefer === 'login' || notice !== null || known !== null) return { kind: 'login', notice, username: known ?? '' };
+    return { kind: 'guest', ...(await guestAccount()), signupOpen: boot.signupOpen, facts: guestFacts() };
   }
   const vaultKey = await recallVault(boot.session.accountId);
-  if (vaultKey) return { kind: 'unlocked', session: boot.session, vaultKey, facts: new AccountFacts(boot.session) };
+  if (vaultKey) return { kind: 'landing', session: boot.session, vaultKey };
   return { kind: 'locked', signedIn: boot, notice };
 }
 
@@ -52,27 +86,46 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
   // The page holds the account it is signed in as, locked or not, and goes on holding it while it asks who it is now
   // (loading, unreachable): a request still leaving for that account stays refused. Once the server says the cookie
   // names another account, the page asks again and shows that one, which closes what was open. Unlocked, what answers
-  // say of the account goes to its facts.
+  // say of the account goes to its facts. A guest holds none: the server has no account of it.
   function show(next: State) {
     const facts = next.kind === 'unlocked' ? next.facts : null;
     if (next.kind === 'locked' || next.kind === 'recovered' || next.kind === 'unlocked') {
       const session = next.kind === 'locked' ? next.signedIn.session : next.session;
       holdAccount(session.accountId, (heard) => (heard.kind === 'elsewhere' ? reload(ELSEWHERE) : facts?.heard(heard)));
-    } else if (next.kind !== 'loading' && next.kind !== 'unreachable') holdAccount(null);
+    } else if (next.kind !== 'loading' && next.kind !== 'unreachable' && next.kind !== 'moving') holdAccount(null);
     setState(next);
   }
 
-  function reload(notice: string | null = null, prefer: 'signup' | 'login' = 'signup') {
+  function settle(next: Loaded) {
+    if (next.kind === 'landing') void land(next.session, next.vaultKey);
+    else show(next);
+  }
+
+  function reload(notice: string | null = null, prefer: 'auto' | 'guest' | 'login' = 'auto') {
     show({ kind: 'loading' });
-    void loadState(notice, prefer).then(show);
+    void loadState(notice, prefer).then(settle);
   }
 
   useEffect(() => {
-    void loadState().then(show);
+    void loadState().then(settle);
   }, []);
 
-  async function unlocked(session: SessionFacts, vaultKey: VaultKey) {
+  const moving = (title: string) => (step: GuestTransferStep) =>
+    setState((now) => (now.kind === 'moving' ? { kind: 'moving', moved: { title, steps: { ...now.moved.steps, [step.kind]: step } } } : now));
+
+  // Every way into an account ends here, so what a guest made in this browser is never passed by: a guest whose upload
+  // into this same account was cut off finishes it, and another guest's content waits for 올리기 or 버리기.
+  async function land(session: SessionFacts, vaultKey: VaultKey) {
+    const held = await guestWithContent();
+    const guest = held.ok ? held.data : null;
+    if (guest?.accountId === session.accountId) {
+      const title = '계정에 올리는 중';
+      show({ kind: 'moving', moved: { title, steps: {} } });
+      const uploaded = await uploadGuest(session.accountId, vaultKey, { progress: moving(title) });
+      if (!uploaded.ok) return show({ kind: 'unreachable', message: describeFailure(uploaded) });
+    } else if (guest) return show({ kind: 'guest-data', session, vaultKey, failure: null });
     await rememberVault(session.accountId, vaultKey);
+    enterAs(session.username);
     show({ kind: 'unlocked', session, vaultKey, facts: new AccountFacts(session) });
   }
 
@@ -81,7 +134,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
     const vaultKey = await openVault(signedIn.session.accountId, signedIn.vault, credential);
     if (!vaultKey) return wrongSecret(credential.method, false);
     if (credential.method === 'recovery') show({ kind: 'recovered', session: signedIn.session, vaultKey, current: credential });
-    else await unlocked(signedIn.session, vaultKey);
+    else await land(signedIn.session, vaultKey);
     return null;
   }
 
@@ -102,36 +155,75 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
       );
     case 'unreachable':
       return <UnreachableScreen message={state.message} onRetry={() => reload()} />;
+    case 'moving':
+      return <MovingScreen moved={state.moved} />;
+    case 'guest':
+      return children({
+        accountId: state.accountId,
+        username: GUEST_NAME,
+        vaultKey: state.vaultKey,
+        admin: false,
+        localProviders: [],
+        facts: state.facts,
+        guest: {
+          signupOpen: state.signupOpen,
+          onSignup: () => show({ kind: 'signup', step: 'password', draft: null }),
+          onSignIn: () => show({ kind: 'login', notice: null, username: '' }),
+        },
+      });
     case 'signup': {
-      const { draft, step } = state;
-      if (step === 'recovery') {
+      if (state.step === 'recovery') {
+        const { draft } = state;
+        const title = '계정 만드는 중';
         return (
           <RecoveryKeyScreen
-            username={draft.session.username}
+            username={draft.username}
             recoveryKey={draft.recoveryKey}
+            saved={state.failure !== null}
+            failure={state.failure}
             onBack={() => show({ kind: 'signup', step: 'password', draft })}
             onStart={async () => {
-              const result = await signUp({ ...draft.session, ...draft.signup });
-              if (!result.ok) return describeFailure(result);
-              await unlocked(result.data, draft.vaultKey);
-              return null;
+              show({ kind: 'moving', moved: { title, steps: {} } });
+              const result = await signUpGuest(draft, { progress: moving(title) });
+              if (!result.ok) return show({ kind: 'signup', step: 'recovery', draft, failure: describeFailure(result) });
+              await land(result.data, draft.vaultKey);
             }}
           />
         );
       }
+      const { draft } = state;
       return (
         <PasswordScreen
           mode="signup"
-          username={draft?.session.username ?? ''}
-          onSignIn={() => show({ kind: 'login', signupOpen: true, notice: null })}
+          username={draft?.username ?? ''}
+          onBack={() => reload(null, 'guest')}
+          onSignIn={() => show({ kind: 'login', notice: null, username: '' })}
           onDone={async (typed, password) => {
             const username = canonicalUsername(typed);
-            const credential = await passwordCredential(username, password);
-            const accountId = draft?.session.accountId ?? crypto.randomUUID();
-            const vault = draft
-              ? { ...draft, signup: { ...draft.signup, ...(await wrapWithPassword(accountId, draft.vaultKey, credential)) } }
-              : await createVault(accountId, credential);
-            show({ kind: 'signup', step: 'recovery', draft: { ...vault, session: { accountId, username } } });
+            const prepared = await prepareGuestSignup(username, await passwordCredential(username, password));
+            show({ kind: 'signup', step: 'recovery', draft: prepared, failure: null });
+            return null;
+          }}
+        />
+      );
+    }
+    case 'guest-data': {
+      const { session, vaultKey } = state;
+      const title = '계정에 올리는 중';
+      return (
+        <GuestDataScreen
+          username={session.username}
+          failure={state.failure}
+          onUpload={async () => {
+            show({ kind: 'moving', moved: { title, steps: {} } });
+            const uploaded = await uploadGuest(session.accountId, vaultKey, { progress: moving(title) });
+            if (!uploaded.ok) return show({ kind: 'guest-data', session, vaultKey, failure: describeFailure(uploaded) });
+            await land(session, vaultKey);
+          }}
+          onDiscard={async () => {
+            const discarded = await discardGuest();
+            if (!discarded.ok) return describeFailure(discarded);
+            await land(session, vaultKey);
             return null;
           }}
         />
@@ -141,8 +233,12 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
       return (
         <SignInScreen
           account={null}
+          username={state.username}
           notice={state.notice}
-          signup={state.signupOpen ? () => show({ kind: 'signup', step: 'password', draft: null }) : 'full'}
+          onGuest={() => {
+            enterAs('');
+            reload(null, 'guest');
+          }}
           onSubmit={async (typed, method, secret) => {
             const username = canonicalUsername(typed);
             const credential = await credentialFor(username, method, secret);
@@ -177,7 +273,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
             const next = await wrapWithPassword(session.accountId, vaultKey, await passwordCredential(username, password));
             const result = await changePassword(current, next);
             if (!result.ok) return describeFailure(result);
-            await unlocked(session, vaultKey);
+            await land(session, vaultKey);
             return null;
           }}
         />
@@ -191,6 +287,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
         localProviders: state.session.localProviders,
         facts: state.facts,
         vaultKey: state.vaultKey,
+        guest: null,
         onLock: () => void lockVault().then(() => reload()),
         onLogout: () => logout(state.session.accountId),
       });

@@ -17,7 +17,7 @@ it('deletes the account only with its password proof, after which the session is
 });
 
 it('holds a restore under way from the session or a 503, until the store answers with its bytes', async () => {
-  const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'restoring', storage: { bytes: null, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, unreadBoard: 0, localProviders: [] });
+  const facts = new AccountFacts({ suspended: false, state: 'restoring', storage: { bytes: null, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, unreadBoard: 0 });
   expect(facts.snapshot().restoring).toBe(true);
   facts.heard({ kind: 'bytes', bytes: 10 });
   expect(facts.snapshot()).toMatchObject({ restoring: false, storage: { bytes: 10 } });
@@ -29,7 +29,7 @@ it('holds a restore under way from the session or a 503, until the store answers
 });
 
 it('learns a suspension and a full account from refusals, and holds full until the account shrinks', () => {
-  const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 100, bytesCap: 100, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, unreadBoard: 0, localProviders: [] });
+  const facts = new AccountFacts({ suspended: false, state: 'active', storage: { bytes: 100, bytesCap: 100, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, unreadBoard: 0 });
   facts.heard({ kind: 'storage-full' });
   facts.heard({ kind: 'bytes', bytes: 120 });
   expect(facts.snapshot()).toMatchObject({ suspended: false, full: true, storage: { bytes: 120 } });

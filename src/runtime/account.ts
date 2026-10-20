@@ -32,7 +32,7 @@ export class AccountFacts {
   private now: Standing;
   private readonly changes = new ChangeSignal();
 
-  constructor({ suspended, state, storage, unreadNotices, unreadBoard }: SessionFacts) {
+  constructor({ suspended, state, storage, unreadNotices, unreadBoard }: Pick<SessionFacts, 'suspended' | 'state' | 'storage' | 'unreadNotices' | 'unreadBoard'>) {
     this.now = { suspended, full: false, restoring: state === 'restoring', storage, unreadNotices, unreadBoard };
   }
 
@@ -66,6 +66,9 @@ export class AccountFacts {
     this.changes.notify();
   }
 }
+
+// A guest's: the server holds nothing of it, so it has no caps, no notices and no word from the server to wait for.
+export const guestFacts = () => new AccountFacts({ suspended: false, state: 'active', storage: { bytes: null, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, unreadBoard: 0 });
 
 export const loadSession = () => api<Boot>('GET', 'session');
 export const signUp = (signup: Signup, signal?: AbortSignal) => api<SessionFacts>('POST', 'signup', signup, signal);
@@ -125,20 +128,6 @@ export async function resumeGuestSignup(signedIn: SignedIn, vaultKey: VaultKey, 
 
 const sameVault = (one: VaultKey, two: VaultKey) => one.length === two.length && one.every((byte, index) => byte === two[index]);
 
-// Account access is independent of runtime/features' chat → character → prompt → settings inheritance.
-export const ACCOUNT_CAPABILITIES = {
-  fileBackup: { guest: true, account: true },
-  boardReading: { guest: true, account: true },
-  serverBackup: { guest: false, account: true },
-  restorePoint: { guest: false, account: true },
-  shareLink: { guest: false, account: true },
-  otherDevices: { guest: false, account: true },
-  detachedReply: { guest: false, account: true },
-  boardWriting: { guest: false, account: true },
-  operatorPost: { guest: false, account: true },
-  lock: { guest: false, account: true },
-  logout: { guest: false, account: true },
-} as const;
 export const logOut = () => api<undefined>('POST', 'logout');
 export const logOutOthers = () => api<{ ended: number }>('POST', 'logout/others');
 export const changePassword = (current: Proof, next: { passwordProof: string; passwordWrap: string }) =>

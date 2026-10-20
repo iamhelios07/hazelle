@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
 import { featherless } from '../src/connectors/featherless';
 import { pageCsp } from '../src/server/static';
-import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, pickBot, SCRIPTED, settingsPage } from './helpers';
+import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, pickBot, SCRIPTED, settingsPage, signUpAsGuest } from './helpers';
 
 const PASSWORD = 'e2e-password';
 const NICKNAME = 'rich-steve';
@@ -25,14 +25,9 @@ test('a new account imports a card, chats through the fake provider and finds th
     const response = await page.goto('/');
     const policy = response?.headers()['content-security-policy'] ?? '';
     expect(policy).toBe(pageCsp(/'nonce-([^']+)'/.exec(policy)?.[1] ?? ''));
-    await page.getByLabel('아이디', { exact: true }).fill('e2e');
-    await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
-    await page.getByLabel('비밀번호 확인', { exact: true }).fill(PASSWORD);
-    await page.getByRole('button', { name: '다음', exact: true }).click();
-    await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
-    await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
-    await page.getByRole('button', { name: '시작하기', exact: true }).click();
+    await signUpAsGuest(page, 'e2e', PASSWORD);
     await expect(page.getByRole('heading', { name: '비어 있어요', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: '손님으로 쓰는 중', exact: true })).toHaveCount(0);
   });
 
   await test.step('connect the fake provider and make its model the default', async () => {
@@ -69,10 +64,10 @@ test('a new account imports a card, chats through the fake provider and finds th
 
   await test.step('give the default persona a 별명, which lists show and no request carries', async () => {
     await settingsPage(page, '페르소나');
-    await page.getByRole('button', { name: /^e2e/ }).click();
+    await page.getByRole('button', { name: /^손님/ }).click();
     await page.getByLabel('별명', { exact: true }).fill(NICKNAME);
     await page.getByRole('button', { name: '뒤로', exact: true }).click();
-    await expect(page.getByRole('button', { name: new RegExp(`^e2e ${NICKNAME}`) })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(`^손님 ${NICKNAME}`) })).toBeVisible();
     await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   });
 

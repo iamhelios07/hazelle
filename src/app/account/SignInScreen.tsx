@@ -10,16 +10,18 @@ import { Brand, Button, Callout, FileButton, IconButton, Intro, Screen, Stack, T
 type Props = {
   // The account whose vault is locked on this device, or null when signed out.
   account: string | null;
+  // Signed out: the username this browser last opened, or empty.
+  username?: string;
   notice?: string | null;
-  // Signed out: the way to make an account, or full while the operator's cap of accounts is reached.
-  signup?: (() => void) | 'full';
+  // Signed out: the way back to this browser's guest, where 계정 만들기 is.
+  onGuest?: () => void;
   onSubmit: (username: string, method: Method, secret: string) => Promise<string | null>;
   onLogout?: () => void;
 };
 
 // Signing in and unlocking are the same act: the password (or the recovery key) opens the vault.
-export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Props) {
-  const [username, setUsername] = useState('');
+export function SignInScreen({ account, username: known = '', notice, onGuest, onSubmit, onLogout }: Props) {
+  const [username, setUsername] = useState(known);
   const { busy, failure, run, setFailure } = useAttempt();
   const credential = useCredential(setFailure);
   const { method, secret, recovery } = credential;
@@ -47,9 +49,9 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
           <Button variant="ghost" onClick={credential.switchMethod}>
             {`${credential.alternate}로 ${verb}`}
           </Button>
-          {typeof signup === 'function' && (
-            <Button variant="ghost" onClick={signup}>
-              계정 만들기
+          {onGuest && (
+            <Button variant="ghost" onClick={onGuest}>
+              손님으로 쓰기
             </Button>
           )}
         </>
@@ -61,7 +63,6 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
           : account && `이 기기에서 ${account} 계정이 잠겼어요.`}
       </Intro>
       {notice && <Text variant="note">{notice}</Text>}
-      {signup === 'full' && <Text variant="note">가입 정원이 다 차서 지금은 새 계정을 만들 수 없어요.</Text>}
       <Stack>
         {!account && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         {recovery && (

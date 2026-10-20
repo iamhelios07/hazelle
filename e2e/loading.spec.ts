@@ -13,6 +13,8 @@ test('session loading and retry stay visible without downloading the workspace',
     await route.fulfill({ status: attempt === 1 ? 500 : 200, json: attempt === 1 ? { error: 'server-error' } : { session: null, signupOpen: false } });
   });
 
+  // A browser that opened an account before, whose session lapsed: it asks for that login rather than opening a guest.
+  await page.addInitScript(() => localStorage.setItem('risu-alpha:entry', 'e2e'));
   await page.goto('/');
   const progress = page.getByRole('progressbar', { name: '계정 확인', exact: true });
   await expect(progress).toBeVisible();
@@ -23,6 +25,7 @@ test('session loading and retry stay visible without downloading the workspace',
   await expect.poll(() => attempts).toBe(2);
   respond();
   await expect(page.getByRole('button', { name: '로그인', exact: true })).toBeVisible();
+  await expect(page.getByLabel('아이디', { exact: true })).toHaveValue('e2e');
   await expect(progress).toHaveCount(0);
   expect(scripts.some((url) => /\/(Workspace|AdminScreen|ChatScreen|PromptScreen)-/.test(url))).toBe(false);
   expect(errors).toEqual([]);

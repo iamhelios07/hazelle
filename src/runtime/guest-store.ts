@@ -43,11 +43,6 @@ export async function guestAccount(): Promise<{ accountId: string; vaultKey: Vau
   return { accountId, vaultKey };
 }
 
-// null means this browser cannot report persistence, not that it granted it.
-export async function guestPersistence(): Promise<boolean | null> {
-  return await navigator.storage?.persisted?.().catch(() => null) ?? null;
-}
-
 export async function clearGuestStore(account: string, expected?: { timeline: string; rev: number; files: string[] }): Promise<ApiResult<null>> {
   return transact(['guest-heads', 'guest-objects', 'guest-files'], 'readwrite', async (tx) => {
     const head = await headOf(tx, account);

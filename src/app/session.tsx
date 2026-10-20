@@ -24,7 +24,13 @@ import type { Translating } from '../runtime/translate';
 import { Saves } from './common/saveQueue';
 
 // admin, localProviders: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
-export type Account = { admin: boolean; localProviders: readonly string[]; facts: AccountFacts; onLock: () => void; onLogout: () => Promise<string | null> };
+// guest: a browser-only account the server never heard of (design §6.14), which has no lock and no logout but two doors
+// out of its session; signupOpen: whether the operator's cap leaves room for 계정 만들기.
+export type GuestDoors = { signupOpen: boolean; onSignup: () => void; onSignIn: () => void };
+export type Account = { admin: boolean; localProviders: readonly string[]; facts: AccountFacts } & (
+  | { guest: null; onLock: () => void; onLogout: () => Promise<string | null> }
+  | { guest: GuestDoors }
+);
 
 // A save in flight and one queued behind it are two round trips, which from Korea can take seconds each; a store write
 // waiting out a dropped connection never ends on its own.
@@ -37,14 +43,12 @@ export function SessionProvider({ session, account, children }: { session: Sessi
   const saves = useMemo(() => new Saves(window, session.store.unsentWrites), [session]);
   useEffect(() => () => saves.close(), [saves]);
   // Leaving closes the session, which drops what has not been written, so it waits for the saves first.
-  const leaving = useMemo<Account>(
-    () => ({
-      ...account,
-      onLock: () => void saves.settled(LEAVING_WAIT).then(account.onLock),
-      onLogout: () => saves.settled(LEAVING_WAIT).then(account.onLogout),
-    }),
-    [account, saves],
-  );
+  const leaving = useMemo<Account>(() => {
+    const after = (go: () => void) => () => void saves.settled(LEAVING_WAIT).then(go);
+    if (account.guest) return { ...account, guest: { ...account.guest, onSignup: after(account.guest.onSignup), onSignIn: after(account.guest.onSignIn) } };
+    const { onLogout } = account;
+    return { ...account, onLock: after(account.onLock), onLogout: () => saves.settled(LEAVING_WAIT).then(onLogout) };
+  }, [account, saves]);
   return <SessionContext value={{ session, account: leaving, saves }}>{children}</SessionContext>;
 }
 
@@ -56,6 +60,12 @@ function useOpen() {
 
 export const useSession = (): Session => useOpen().session;
 export const useAccount = (): Account => useOpen().account;
+// For what only an account has, such as 탈퇴: a guest's screens never render it.
+export function useSignedIn(): Extract<Account, { guest: null }> {
+  const account = useAccount();
+  if (account.guest) throw new Error('account-only part rendered for a guest');
+  return account;
+}
 export const useSaves = (): Saves => useOpen().saves;
 export const useStore = (): ObjectStore => useSession().store;
 export const useFiles = (): Files => useSession().files;

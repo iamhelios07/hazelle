@@ -2,7 +2,8 @@ import { logOutOthers } from '../../runtime/account';
 import { setPulseSharing, sharesPulse } from '../../runtime/pulse';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
-import { useAccount, useSession, useSettings, useStanding, useStore } from '../session';
+import { GuestNotice } from '../common/GuestNotice';
+import { useAccount, useSession, useSettings, useSignedIn, useStanding, useStore, type GuestDoors } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { AccountSection, Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -23,20 +24,48 @@ function Used({ label, bytes, cap }: { label: string; bytes: number | null; cap:
 }
 
 export function AccountScreen({ section, back }: { section: AccountSection | null; back: Back | null }) {
+  const { guest } = useAccount();
+  return guest ? <GuestAccountScreen guest={guest} back={back} /> : <SignedInScreen section={section} back={back} />;
+}
+
+// What a guest has: the browser's own copy, its file backup and the app's facts; what needs the server waits for 계정 만들기.
+function GuestAccountScreen({ guest, back }: { guest: GuestDoors; back: Back | null }) {
+  return (
+    <Screen width="page" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
+      <GuestNotice guest={guest} />
+      <Columns min="panel">
+        <Stack gap="section">
+          <Panel title="저장 공간" help="이 브라우저에만 저장돼요.">
+            <UsageRow />
+          </Panel>
+          <BackupSection />
+        </Stack>
+        <AppInfo />
+      </Columns>
+    </Screen>
+  );
+}
+
+const UsageRow = () => (
+  <SettingRow
+    label={PAGES.usage}
+    control={
+      <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'usage' })}>
+        보기
+      </Button>
+    }
+  />
+);
+
+function SignedInScreen({ section, back }: { section: AccountSection | null; back: Back | null }) {
   const { username } = useSession();
-  const { onLock, onLogout } = useAccount();
+  const { onLock, onLogout } = useSignedIn();
   const { suspended, storage } = useStanding();
   const toast = useToast();
-  const store = useStore();
-  const sharing = sharesPulse(useSettings());
   async function logOutElsewhere() {
     const ended = await logOutOthers();
     if (!ended.ok) return toast.failed(ended, '다른 기기에서 로그아웃하지 못했어요.');
     toast.show(ended.data.ended ? `다른 기기 ${count(ended.data.ended)}곳에서 로그아웃했어요.` : '로그인한 다른 기기가 없어요.');
-  }
-  async function share(on: boolean) {
-    const done = await setPulseSharing(store, on);
-    if (!done.ok) toast.failed(done, '바꾸지 못했어요.');
   }
   return (
     <Screen width="page" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
@@ -82,14 +111,7 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
           <Panel title="저장 공간" help={`${BIN}에서 영구 삭제하면 공간이 생겨요.`}>
             <Used label="텍스트" bytes={storage.bytes} cap={storage.bytesCap} />
             <Used label="이미지" bytes={storage.fileBytes} cap={storage.fileBytesCap} />
-            <SettingRow
-              label={PAGES.usage}
-              control={
-                <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'usage' })}>
-                  보기
-                </Button>
-              }
-            />
+            <UsageRow />
           </Panel>
           <SharedLinksSection />
         </Stack>
@@ -120,28 +142,45 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
             </SettingGroup>
           </Panel>
         </Stack>
-        <Panel title="앱 정보">
-          <SettingGroup label="앱 정보">
-            <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
-            <SettingRow
-              label="새 소식"
-              control={
-                <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board', operator: false, category: 'news' })}>
-                  보기
-                </Button>
-              }
-            />
-            <SettingRow
-              label={PULSE.sharing}
-              help="켜 두면 쓰는 모델과 제공자, 응답 수가 집계에 더해져요. 누가 썼는지와 대화 내용은 남지 않아요."
-              control={<Switch label={PULSE.sharing} checked={sharing} onChange={(on) => void share(on)} />}
-            />
-            <Diagnostics />
-          </SettingGroup>
-          <LegalNotice />
-        </Panel>
+        <AppInfo />
       </Columns>
       <LeaveSection />
     </Screen>
+  );
+}
+
+// 새 소식 lives on the 게시판, which a guest cannot open yet (design §6.14 batch 4).
+function AppInfo() {
+  const { guest } = useAccount();
+  const toast = useToast();
+  const store = useStore();
+  const sharing = sharesPulse(useSettings());
+  async function share(on: boolean) {
+    const done = await setPulseSharing(store, on);
+    if (!done.ok) toast.failed(done, '바꾸지 못했어요.');
+  }
+  return (
+    <Panel title="앱 정보">
+      <SettingGroup label="앱 정보">
+        <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
+        {!guest && (
+          <SettingRow
+            label="새 소식"
+            control={
+              <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board', operator: false, category: 'news' })}>
+                보기
+              </Button>
+            }
+          />
+        )}
+        <SettingRow
+          label={PULSE.sharing}
+          help="켜 두면 쓰는 모델과 제공자, 응답 수가 집계에 더해져요. 누가 썼는지와 대화 내용은 남지 않아요."
+          control={<Switch label={PULSE.sharing} checked={sharing} onChange={(on) => void share(on)} />}
+        />
+        <Diagnostics />
+      </SettingGroup>
+      <LegalNotice />
+    </Panel>
   );
 }
