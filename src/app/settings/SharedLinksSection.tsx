@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { live } from '../../model/library';
 import { cutShare, readShares } from '../../runtime/share-link';
-import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';
 import { count } from '../common/typedNumber';
@@ -9,7 +8,7 @@ import { useLoaded } from '../common/useLoaded';
 import { SHARE, UNKNOWN } from '../common/words';
 import { useShares, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, Empty, List, ListItem, Panel } from '../ui';
+import { Button, Empty, List, ListItem, Panel } from '../ui';
 
 // A link no character here names, its character purged, is listed by what the server knows.
 export function SharedLinksSection() {
@@ -35,7 +34,8 @@ export function SharedLinksSection() {
   const links = loaded.data?.shares;
   return (
     <Panel title={SHARE.list}>
-      {loaded.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: loaded.reload }}>{loaded.failure}</Callout>}
+      {loaded.loading}
+      {loaded.failure}
       {links && links.length === 0 && <Empty variant="section">{SHARE.list}가 없어요.</Empty>}
       {links && links.length > 0 && (
         <List label={SHARE.list} box>

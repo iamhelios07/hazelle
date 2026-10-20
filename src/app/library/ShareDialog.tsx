@@ -30,7 +30,8 @@ export function ShareDialog({ character, name, onClose }: { character: string; n
   if (!loaded.data) {
     return (
       <Dialog title={SHARE.act} note={name} onClose={onClose}>
-        {loaded.failure ? <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: loaded.reload }}>{loaded.failure}</Callout> : <Text variant="note">불러오는 중…</Text>}
+        {loaded.loading}
+        {loaded.failure}
       </Dialog>
     );
   }

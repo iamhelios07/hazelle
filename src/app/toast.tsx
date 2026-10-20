@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import type { ApiFailure } from '../runtime/api';
 import { noteProblem } from '../runtime/diagnostics';
 import { describeFailure } from './common/failure';
+import { UNDO } from './common/words';
 import { SHORTCUTS, typing, useShortcut } from './shortcuts';
 import { Toast, ToastStack, type ToastAction } from './ui';
 
@@ -15,7 +16,7 @@ export type Toasts = {
   error: (message: string, extra?: Extra) => void;
   // A full account is left to its standing notice (shell/Workspace), which says it once, and a write a restore dropped
   // to the toast that counts them (shell/Workspace); a prefixed failure, a whole task such as a backup, is still said.
-  failed: (failure: ApiFailure, prefix?: string) => void;
+  failed: (failure: ApiFailure, prefix?: string, words?: Parameters<typeof describeFailure>[1]) => void;
   // Deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog; Ctrl+Z does it too.
   // Answers what takes the toast away. A restore's result is returned, not chained: the toast says its failure itself.
   undoable: (message: string, undo: () => void | Promise<{ ok: true } | ApiFailure>, detail?: string) => () => void;
@@ -58,15 +59,15 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       setNotices((all) => all.some(repeats) ? all : [{ key, message, detail, tone, action: pressed, said: from && { from, keep }, close, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
       return close;
     };
-    const failed: Toasts['failed'] = (failure, prefix) => {
-      if (failure.error !== 'storage-full' && (failure.error !== 'timeline-changed' || prefix)) add(prefix ?? describeFailure(failure), 'error', prefix ? { detail: describeFailure(failure) } : {});
+    const failed: Toasts['failed'] = (failure, prefix, words) => {
+      if (failure.error !== 'storage-full' && (failure.error !== 'timeline-changed' || prefix)) add(prefix ?? describeFailure(failure, words), 'error', prefix ? { detail: describeFailure(failure, words) } : {});
     };
     const settle = (undo: Parameters<Toasts['undoable']>[1]) => () => void undo()?.then((result) => result.ok || failed(result, '되돌리지 못했어요.'));
     return {
       show: (message, extra) => void add(message, 'plain', extra),
       error: (message, extra) => void add(message, 'error', extra),
       failed,
-      undoable: (message, undo, detail) => add(message, 'plain', { detail, action: { label: '되돌리기', onClick: settle(undo) } }, true),
+      undoable: (message, undo, detail) => add(message, 'plain', { detail, action: { label: UNDO, onClick: settle(undo) } }, true),
       said: (from, text, tone) => void add(text, tone, { from }),
     };
   }, []);

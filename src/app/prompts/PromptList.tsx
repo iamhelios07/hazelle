@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FolderInput } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
@@ -208,9 +208,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
         <>
           {filing && (
             <FolderPath kind="prompt" path={at.path} onGo={onGo} onName={naming.name} dropInto={moving.dropInto}>
-              <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
-                {moving.picked ? '완료' : '선택해서 옮기기'}
-              </Button>
+              {moving.button}
             </FolderPath>
           )}
           {folderRows.length + top.length > 0 ? (

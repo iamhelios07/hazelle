@@ -1,26 +1,36 @@
 import { useEffect, useState } from 'react';
 import type { ApiResult } from '../../runtime/api';
 import type { Page } from '../../runtime/pages';
-import { Button, Callout } from '../ui';
+import { Button, Callout, Text } from '../ui';
 import { ACTS } from './acts';
 import { describeFailure } from './failure';
+import { LOADING } from './words';
 
-// A failed reload keeps what was shown.
-export function useLoaded<T>(load: (signal: AbortSignal) => Promise<ApiResult<T>>) {
+// A failed reload keeps what was shown. A change in deps asks again as reload does.
+export function useLoaded<T>(load: (signal: AbortSignal) => Promise<ApiResult<T>>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const abort = new AbortController();
+    setFailure(null);
     void load(abort.signal).then((answer) => {
       if (abort.signal.aborted) return;
       setFailure(answer.ok ? null : describeFailure(answer));
       if (answer.ok) setData(answer.data);
     });
     return () => abort.abort();
-  }, [attempt]);
-  return { data, failure, reload: () => setAttempt((count) => count + 1) };
+  }, [attempt, ...deps]);
+  const reload = () => setAttempt((count) => count + 1);
+  return {
+    data,
+    loading: data === null && failure === null && LOADING_NOTE,
+    failure: failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: reload }}>{failure}</Callout>,
+    reload,
+  };
 }
+
+const LOADING_NOTE = <Text variant="note">{LOADING}</Text>;
 
 // How many rows a list shows on a page that leads elsewhere to it whole (운영, 설정 › 계정): the newest, or what waits.
 export const HEAD_ROWS = 5;
@@ -33,6 +43,7 @@ export function usePages<T>(load: (after: string | null) => Promise<ApiResult<Pa
 
   async function fetch(after: string | null, live = () => true) {
     setBusy(true);
+    setFailure(null);
     const answer = await load(after);
     if (!live()) return;
     setBusy(false);
@@ -57,6 +68,7 @@ export function usePages<T>(load: (after: string | null) => Promise<ApiResult<Pa
     busy,
     // Every row is in hand: a head that is whole needs no door to the rest.
     whole: rows !== null && next === null,
+    loading: rows === null && failure === null && LOADING_NOTE,
     failure: failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: retry }}>{failure}</Callout>,
     more: next !== null && (
       <Button variant="ghost" size="sm" busy={busy} onClick={() => void fetch(next)}>

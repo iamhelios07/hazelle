@@ -35,6 +35,7 @@ export function NoticesSection({ head, seek }: { head: boolean; seek: boolean })
       action={head && !pages.whole ? <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'notices' })}>모두 보기</Button> : undefined}
       seek={seek}
     >
+      {pages.loading}
       {pages.failure}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.from}이 없어요.</Empty>}
       {rows && rows.length > 0 && (

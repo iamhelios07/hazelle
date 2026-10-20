@@ -1,4 +1,3 @@
-import { FolderInput } from 'lucide-react';
 import { addPersona } from '../../runtime/personas';
 import { ACTS, importOf, newOf } from '../common/acts';
 import { useMoving, useNaming } from '../common/folders/FolderParts';
@@ -44,9 +43,7 @@ export function PersonaList({ place, back }: { place: string | null; back: Back 
     <Screen width="page" top={<NavBar title={PAGES.personas} actions={actions} {...backBar(back)} />}>
       <Row kind="toolbar">
         {places.search.field}
-        <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
-          {moving.picked ? '완료' : '선택해서 옮기기'}
-        </Button>
+        {moving.button}
       </Row>
       <PersonaGrid
         places={places}

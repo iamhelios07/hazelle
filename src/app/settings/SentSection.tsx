@@ -55,6 +55,7 @@ export function SentSection({ head }: { head: boolean }) {
         <ReportButton onSent={pages.reload} />
       </>}
     >
+      {pages.loading}
       {pages.failure}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.sent}이 없어요.</Empty>}
       {rows && rows.length > 0 && (

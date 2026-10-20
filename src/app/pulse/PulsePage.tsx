@@ -1,20 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PULSE_FLOORS, PULSE_ROLES, type PulseAnswer, type PulseBoard, type PulseOrder, type PulseRanking, type PulseRole } from '../../contracts/pulse';
 import { readPulse, readPulseWeek } from '../../runtime/pulse';
-import { ACTS } from '../common/acts';
-import { describeFailure } from '../common/failure';
 import { LegalNotice } from '../common/LegalNotice';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
 import { PULSE } from '../common/words';
-import { Bars, Brand, Callout, ChoiceGroup, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tab, Tabs, Text } from '../ui';
+import { Bars, Brand, ChoiceGroup, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tab, Tabs } from '../ui';
 import { clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, weekText } from './board';
-
-type View = { kind: 'loading' } | { kind: 'failed'; failure: string } | { kind: 'read'; answer: PulseAnswer };
 
 const SPLIT = '제공자별로 보기';
 const CURRENT = 'current';
-const LOADING = <Text variant="note">불러오는 중…</Text>;
 
 // Says what PulseBefore compares (contracts/pulse.ts); change both together.
 const RANKING_HELP = {
@@ -28,28 +23,13 @@ export function pulsePage(path: string) {
 }
 
 function PulsePage() {
-  const [view, setView] = useState<View>({ kind: 'loading' });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void readPulse(abort.signal).then((read) => {
-      if (!abort.signal.aborted) setView(read.ok ? { kind: 'read', answer: read.data } : { kind: 'failed', failure: describeFailure(read) });
-    });
-    return () => abort.abort();
-  }, [attempt]);
-
-  const retry = () => {
-    setView({ kind: 'loading' });
-    setAttempt((held) => held + 1);
-  };
-
+  const pulse = useLoaded(readPulse);
   return (
     <Screen width="form" top={<Brand />}>
       <Intro title={PULSE.title} />
-      {view.kind === 'loading' && LOADING}
-      {view.kind === 'failed' && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: retry }}>{view.failure}</Callout>}
-      {view.kind === 'read' && <Answer answer={view.answer} />}
+      {pulse.loading}
+      {pulse.failure}
+      {pulse.data && <Answer answer={pulse.data} />}
       <Divider label="" />
       <LegalNotice />
     </Screen>
@@ -112,8 +92,14 @@ function Board({ board, at }: { board: PulseBoard; at: number }) {
 
 function EarlierWeek({ from, role, split }: { from: number; role: PulseRole; split: boolean }) {
   const week = useLoaded((signal) => readPulseWeek(from, signal));
-  if (week.failure) return <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: week.reload }}>{week.failure}</Callout>;
-  if (!week.data) return LOADING;
+  if (!week.data) {
+    return (
+      <>
+        {week.loading}
+        {week.failure}
+      </>
+    );
+  }
   return <Standing role={role} split={split} ranking={week.data.ranking[role]} before={week.data.before[role]} earlier />;
 }
 

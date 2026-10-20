@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpToLine, FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpToLine, FolderInput, FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { FOLDER_DEPTH, pathName, pathOf, withInside, type Filed, type FolderContents, type FolderIndex, type FolderTree } from '../../../model/folders';
 import { Button, Divider, FolderCard, IconButton, Menu, MenuItem, MoreMenu, PathBar, Row, SelectionBar, useWide } from '../../ui';
@@ -162,7 +162,12 @@ export function useMoving<T>(kind: Filed, index: FolderIndex<T>, folderOf: (id: 
       }}
     />
   );
-  return { picked, pick: () => setPicked(picked ? null : new Set()), toggle, dropInto, bar };
+  const button = !off && (
+    <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
+      {picked ? '완료' : '선택해서 옮기기'}
+    </Button>
+  );
+  return { picked, toggle, dropInto, bar, button };
 }
 
 type MoveProps<T> = {

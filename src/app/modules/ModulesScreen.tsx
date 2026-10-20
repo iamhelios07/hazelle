@@ -1,4 +1,4 @@
-import { Check, FolderInput } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useMemo } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { ModulePlace } from '../../runtime/modules';
@@ -144,9 +144,7 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
       {search.field && <Row kind="toolbar">{search.field}</Row>}
       {modules.length + index.folders.length > 0 && (
         <FolderPath kind="module" path={at.path} onGo={go} onName={naming.name} dropInto={moving.dropInto}>
-          <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
-            {moving.picked ? '완료' : '선택해서 옮기기'}
-          </Button>
+          {moving.button}
         </FolderPath>
       )}
       {search.none !== null ? (

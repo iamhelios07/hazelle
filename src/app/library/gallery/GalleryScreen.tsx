@@ -1,4 +1,4 @@
-import { ArrowUpDown, FolderInput } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Stored } from '../../../model/kinds';
@@ -104,11 +104,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
             {arranging ? '완료' : '순서 바꾸기'}
           </Button>
         )}
-        {!binned && !arranging && (
-          <Button variant="secondary" size="sm" icon={FolderInput} onClick={moving.pick}>
-            {picked ? '완료' : '선택해서 옮기기'}
-          </Button>
-        )}
+        {moving.button}
       </Row>
       <FolderPath kind="character" path={at.path} onGo={go} onName={naming.name} dropInto={dropInto} trail={binned ? { key: BIN_PLACE, name: BIN, onClick: () => go(BIN_PLACE) } : undefined}>
         {!binned && inBin > 0 && (

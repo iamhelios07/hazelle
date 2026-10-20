@@ -5,13 +5,12 @@ import type { ServerError } from '../../contracts/http';
 import type { Report } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
 import { beginRestore, continueRestore, readPoints, readRestores, type Restore, type RestorePoint, type RestoreRun } from '../../runtime/restores';
-import { ACTS } from './acts';
 import { describeFailure } from './failure';
 import { ago, moment } from './time';
 import { useAttempt } from './useAttempt';
 import { useLoaded } from './useLoaded';
 import { useToast } from '../toast';
-import { Callout, ConfirmDialog, Dialog, Empty, List, ListItem, MenuItem, MoreMenu, Section, Stack, Text } from '../ui';
+import { ConfirmDialog, Dialog, Empty, List, ListItem, MenuItem, MoreMenu, Section, Stack, Text } from '../ui';
 
 // The account the operator acts on, with the report a new restore or an undo answers (null when opened from the
 // account, which only continues one). The signed-in account's own restores have none of it.
@@ -158,7 +157,8 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
         {operated?.report && <Text variant="prose">{operated.report.text}</Text>}
         {begins && (
           <Section level={3} title="복원할 기록" help="텍스트와 캐릭터, 채팅, 설정을 그때의 기록으로 되돌려요. 10분 전부터 6일 전까지의 기록이 남아 있어요.">
-            {points.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: points.reload }}>{points.failure}</Callout>}
+            {points.loading}
+            {points.failure}
             {points.data && points.data.length === 0 && <Empty variant="section">복원할 수 있는 기록이 없어요.</Empty>}
             {points.data && points.data.length > 0 && (
               <List label="복원할 기록">
@@ -176,7 +176,8 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
           </Section>
         )}
         <Section level={3} title="복원 기록" help={begins ? undefined : '복원은 그 계정이 보낸 알림에서 시작할 수 있어요.'}>
-          {restores.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: restores.reload }}>{restores.failure}</Callout>}
+          {restores.loading}
+          {restores.failure}
           {restores.data && restores.data.length === 0 && <Empty variant="section">아직 복원한 기록이 없어요.</Empty>}
           {restores.data && restores.data.length > 0 && (
             <List label="복원 기록">

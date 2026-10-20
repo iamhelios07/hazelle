@@ -200,7 +200,8 @@ export const CHAT_LORE = '채팅 로어북';
 export const defaultMark = (isDefault: boolean, name: string) => (isDefault && name.trim() !== FIRST_PROFILE_NAME ? '기본' : undefined);
 
 // The fold that keeps a page's rarely changed settings out of sight, saying how many of them are set.
-export const detailLabel = (set: number) => (set ? `세부 설정 · ${set}개 정함` : '세부 설정');
+export const DETAIL = '세부 설정';
+export const detailLabel = (set: number) => (set ? `${DETAIL} · ${set}개 정함` : DETAIL);
 
 // A value nobody reported, said as such rather than as a made-up figure.
 export const UNKNOWN = '알 수 없음';
@@ -209,6 +210,9 @@ export const resetTo = (value: string) => `${value}으로 되돌리기`;
 export const RESET = resetTo('기본값');
 export const UNDO = '되돌리기';
 export const STOP = '멈추기';
+export const LOADING = '불러오는 중…';
+export const EMPTY_FOLDER = '비어 있는 폴더예요.';
+export const SET_DEFAULT = '기본으로 정하기';
 
 // A share link: the character ⋯ item and its dialog, 설정 › 계정's list, the link's own page and the operator's inbox.
 // held: paused by a report or the operator; removed: blocked by the operator.

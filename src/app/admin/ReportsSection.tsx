@@ -27,6 +27,7 @@ export function ReportsSection({ head, onActed }: { head: boolean; onActed?: (ac
       help={head ? '확인하지 않은 알림만 여기에 보여요.' : undefined}
       action={head ? <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'admin-list', list: 'reports' })}>모두 보기</Button> : undefined}
     >
+      {pages.loading}
       {pages.failure}
       {rows && rows.length === 0 && <Empty variant="section">{head ? '확인할 알림이 없어요.' : `${NOTICES.received}이 없어요.`}</Empty>}
       {rows && rows.length > 0 && (

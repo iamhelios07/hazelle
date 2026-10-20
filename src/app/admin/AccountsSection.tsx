@@ -78,6 +78,7 @@ export function AccountsSection({ loaded, total, onActed, children }: { loaded: 
       }
       help={head ? `정지됐거나 복원·탈퇴 중인 계정만 여기에 보여요. ${COLUMNS_HELP}` : COLUMNS_HELP}
     >
+      {loaded.loading}
       {loaded.failure}
       {rows && rows.length > 0 && (
         <Table

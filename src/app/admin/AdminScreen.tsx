@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { BackupWarning } from '../../contracts/admin';
 import { readService } from '../../runtime/admin';
-import { ACTS } from '../common/acts';
 import { PAGES } from '../common/words';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -42,12 +41,13 @@ export function AdminScreen({ back }: { back: Back | null }) {
   return (
     <Screen width="page" top={<NavBar title={PAGES.admin} {...backBar(back)} />}>
       {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
-      {service.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: service.reload }}>{service.failure}</Callout>}
+      {service.failure}
       <Beside side={<LogSection key={acts} head />}>
         {moderating && <ReportsSection head onActed={(account) => (account ? actedOnAccount() : acted())} />}
         <AccountsSection loaded={accounts} total={service.data?.accounts ?? null} onActed={acted}>
           {shared && <UsageRow />}
         </AccountsSection>
+        {service.loading}
         {service.data && <ServiceSection service={service.data} onSaved={acted} />}
         {moderating && <ToolsSection onActed={acted} />}
       </Beside>
