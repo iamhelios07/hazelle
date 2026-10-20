@@ -6,6 +6,7 @@ import { personaFaces, personaTexts, type PersonaFace } from './alias';
 import { placeIn, useFolderIndex, whereIs } from './folders/filing';
 import { FolderPath, FolderTile, type Drop, type Naming } from './folders/FolderParts';
 import { useSearch, type SearchOptions } from './useSearch';
+import { EMPTY_FOLDER } from './words';
 
 const folderOf = ({ persona }: PersonaFace) => persona.value.folder ?? null;
 
@@ -38,7 +39,7 @@ export function PersonaGrid({ places: { index, search }, place, onGo, onOpen, cu
     <>
       {(manage || index.folders.length > 0) && <FolderPath kind="persona" path={at.path} onGo={onGo} onName={manage?.onName} dropInto={manage?.dropInto} />}
       {search.none && <Empty>{search.none}</Empty>}
-      {!search.words && keys.length === 0 && at.here && <Empty>비어 있는 폴더예요.</Empty>}
+      {!search.words && keys.length === 0 && at.here && <Empty>{EMPTY_FOLDER}</Empty>}
       <CardGrid label="페르소나" variant="face" current={current} keys={keys}>
         {(position) => {
           if (position < at.folders.length) {

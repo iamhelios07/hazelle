@@ -3,7 +3,7 @@ import { calls, shown, type Receipt } from '../../model/chat';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
-import { Breakdown, Callout, Empty, Facts, Section, SidePanel, Stack, Switcher, Tab, Tabs, Text } from '../ui';
+import { Breakdown, Callout, Empty, Facts, Section, SidePanel, Stack, Switcher, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
 import { money } from '../common/money';
 import { cost, finish, seconds, speed, tokens } from '../common/receipt';
@@ -105,11 +105,7 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
     const entry = chat ? log.entry(chat, receipt.id) : null;
     body = (
       <>
-        <Tabs label="응답 정보">
-          {TABS.filter((each) => each.value !== 'memory' || onRecord).map((each) => (
-            <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => onTab(each.value)} />
-          ))}
-        </Tabs>
+        <Tabs label="응답 정보" items={TABS.filter((each) => each.value !== 'memory' || onRecord)} value={tab} onChange={onTab} />
         {earlier.length > 0 && tab !== 'reply' && <Text variant="note">마지막으로 이어 쓴 요청의 정보예요.</Text>}
         {tab === 'reply' && (
           <>

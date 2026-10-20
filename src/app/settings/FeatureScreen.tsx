@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { entryName } from '../../connectors/types';
 import type { Feature } from '../../model/features';
 import type { PrereadParts } from '../../model/settings';
-import { illustrateSwitches, setIllustrate, setTranslate, translateSwitches } from '../../runtime/characters';
+import { illustrateSwitches, setIllustrate, setTranslate, setTranslatorNote, translateSwitches } from '../../runtime/characters';
 import { availableFeatures } from '../../runtime/features';
 import { briefsWithChatModel, briefWriterOf, PREREAD_STARTS, prereadSetup, setPreread } from '../../runtime/preread';
 import { describePrereadFailure } from '../common/failure';
@@ -15,6 +15,7 @@ import { IllustrateRows } from '../common/IllustrateRows';
 import { Missing } from '../common/Missing';
 import { TaskModelRow, TaskPromptMenu, type PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
+import { TranslatorNoteField } from '../common/TranslatorNoteField';
 import { useTypedNumber } from '../common/typed';
 import { readTyped } from '../common/typedNumber';
 import { FEATURE_NAMES, MODEL_ROLES, MODEL_SETTINGS, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
@@ -24,7 +25,7 @@ import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Callout, NavBar, NumberInput, Screen, SettingGroup, SettingRow, Switch } from '../ui';
 import { FEATURE_HELP, FeatureSwitch } from './FeatureDefaults';
-import { GlobalNoteField } from './GlobalNoteField';
+
 import { MemoryDefaults } from './MemoryDefaults';
 
 const editPrompt = (door: PromptDoor) => navigate(door ? { kind: 'prompt', ...door } : { kind: 'prompts', place: null });
@@ -63,7 +64,13 @@ function TranslateDefaults() {
         onChange={(change) => void setTranslate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
         onEditPrompt={editPrompt}
       />
-      <GlobalNoteField error={unsent ? NOTE_UNSENT : undefined} />
+      <TranslatorNoteField
+        saveKey="translator-note"
+        stored={settings.translatorNote}
+        write={(note) => setTranslatorNote(store, null, note)}
+        help="모든 캐릭터의 번역에 적용돼요."
+        error={unsent ? NOTE_UNSENT : undefined}
+      />
     </>
   );
 }

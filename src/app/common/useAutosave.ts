@@ -3,7 +3,7 @@ import { useSaves } from '../session';
 import { useToast } from '../toast';
 import type { SaveStatus, Write } from './saveQueue';
 
-export const SAVE_STATUS: Record<SaveStatus, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
+const SAVE_STATUS: Record<SaveStatus, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
 
 export const saveWords = (status: SaveStatus | null) => (status ? SAVE_STATUS[status] : undefined);
 

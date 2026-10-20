@@ -11,7 +11,7 @@ import { useSearch } from '../common/useSearch';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { defaultMark, EMPTY_FOLDER, MODEL_ROLES, PAGES, PRE_READ, promptName } from '../common/words';
-import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
+import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, Hint, PickCard, Row, Section, Tabs } from '../ui';
 import { taskModelWords } from './ModelPane';
 import { useImport } from '../common/importing';
 import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
@@ -164,11 +164,12 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
         {search.field}
         {!search.words && (
           <>
-            <Tabs label="프롬프트 종류">
-              {sorts.map(({ sort, label }) => (
-                <Tab key={sort} label={label} count={prompts.filter((prompt) => ofSort(prompt, sort)).length} current={sort === shown} onClick={() => setShown(sort)} />
-              ))}
-            </Tabs>
+            <Tabs
+              label="프롬프트 종류"
+              items={sorts.map(({ sort, label }) => ({ value: sort, label, count: prompts.filter((prompt) => ofSort(prompt, sort)).length }))}
+              value={shown}
+              onChange={setShown}
+            />
             {current.hint && <Hint label={`${current.label} 프롬프트`}>{current.hint}</Hint>}
             {shown === 'conversation' && (
               <ChoiceGroup
@@ -186,24 +187,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
           </>
         )}
       </Row>
-      {search.words ? (
-        search.none === null ? (
-          <CardList label="검색 결과">
-            {search.found.toSorted(byPromptName).map((prompt) => (
-              <CardItem
-                key={prompt.id}
-                title={promptName(prompt.value.name)}
-                badge={badge(prompt)}
-                tags={[...(prompt.value.task ? [TASK_NAMES[prompt.value.task]] : []), ...tags(prompt.id)]}
-                aside={[whereIs(index, folderOf(prompt)), usage(prompt)].filter(Boolean).join(' · ') || undefined}
-                onClick={() => onPick(prompt.id)}
-              />
-            ))}
-          </CardList>
-        ) : (
-          <Empty>{search.none}</Empty>
-        )
-      ) : (
+      {search.shown(
         <>
           {filing && (
             <FolderPath kind="prompt" path={at.path} onGo={onGo} onName={naming.name} dropInto={moving.dropInto}>
@@ -222,7 +206,22 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
               {current.none}
             </Empty>
           )}
-        </>
+        </>,
+        (found) => (
+          <CardList label="검색 결과">
+            {found.toSorted(byPromptName).map((prompt) => (
+              <CardItem
+                key={prompt.id}
+                title={promptName(prompt.value.name)}
+                badge={badge(prompt)}
+                tags={[...(prompt.value.task ? [TASK_NAMES[prompt.value.task]] : []), ...tags(prompt.id)]}
+                aside={[whereIs(index, folderOf(prompt)), usage(prompt)].filter(Boolean).join(' · ') || undefined}
+                onClick={() => onPick(prompt.id)}
+              />
+            ))}
+          </CardList>
+        ),
+        'body',
       )}
       {moving.bar}
       {naming.dialog}

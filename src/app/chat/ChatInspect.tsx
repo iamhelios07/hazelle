@@ -3,7 +3,7 @@ import type { From } from '../../engine/pipeline';
 import type { Sending } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { useSession } from '../session';
-import { Empty, SidePanel, Tab, Tabs, Text } from '../ui';
+import { Empty, SidePanel, Tabs, Text } from '../ui';
 import { Log } from './InspectLog';
 import { Modules } from './InspectModules';
 import { NextRequest } from './InspectRequest';
@@ -28,13 +28,7 @@ export function ChatInspect({ chat, character, tab, notes, busy, prompt, onTab, 
   const { store } = useSession();
   const conversation = prompt.kind === 'prompt' ? { id: prompt.prompt.id, blocks: prompt.prompt.value.blocks } : null;
   const editor = (from: From) => editorOf(from, conversation, character, (lore) => store.get('lore', lore)?.parent ?? null);
-  const tabs = (
-    <Tabs label="점검">
-      {TABS.map((each) => (
-        <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => onTab(each.value)} />
-      ))}
-    </Tabs>
-  );
+  const tabs = <Tabs label="점검" items={TABS} value={tab} onChange={onTab} />;
   const ready = (view: (sending: Sending) => ReactNode) =>
     busy ? <Empty variant="section">응답이 끝나면 다시 계산해요.</Empty>
     : notes.sending === null ? <Empty variant="section">지금은 요청을 보낼 수 없어서 계산하지 못했어요.</Empty>

@@ -8,7 +8,7 @@ import { useAutosave } from '../common/useAutosave';
 import { useSearch } from '../common/useSearch';
 import { PAGES, RESET, scopeTag } from '../common/words';
 import { useSettings, useStore } from '../session';
-import { Button, Empty, IconButton, Row, Section, SettingRow, SidePanel, Switch, Tab, Tabs, TextField } from '../ui';
+import { Button, Empty, IconButton, Row, Section, SettingRow, SidePanel, Switch, Tabs, TextField } from '../ui';
 import { shownRows, toggleSaveKey, type ToggleRow, type ToggleSection } from './toggles';
 import type { OpenChat } from './useChat';
 
@@ -88,10 +88,15 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
           {search.field && (
             <Row kind="toolbar">
               {search.field}
-              <Tabs label="보기">
-                <Tab label="전체" count={all.length} current={filter === 'all'} onClick={() => show('all')} />
-                <Tab label="변경" count={toggles.changed} current={filter === 'changed'} onClick={() => show('changed')} />
-              </Tabs>
+              <Tabs
+                label="보기"
+                items={[
+                  { value: 'all', label: '전체', count: all.length },
+                  { value: 'changed', label: '변경', count: toggles.changed },
+                ]}
+                value={filter}
+                onChange={show}
+              />
             </Row>
           )}
           {visible.map((section, index) => (

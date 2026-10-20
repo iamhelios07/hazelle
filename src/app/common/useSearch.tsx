@@ -38,7 +38,9 @@ export function useSearch<T>(items: readonly T[], label: string, texts: (item: T
       />
     ),
     none,
-    // The list's place: the list, or once words are typed, what they found or the sentence that nothing was.
-    shown: (list: ReactNode, results: (found: readonly T[]) => ReactNode) => (!words ? list : none === null ? results(found) : <Empty variant="section">{none}</Empty>),
+    // The list's place: the list, or once words are typed, what they found or the sentence that nothing was, in the
+    // look of the list's own empty state (empty).
+    shown: (list: ReactNode, results: (found: readonly T[]) => ReactNode, empty: 'body' | 'section' = 'section') =>
+      !words ? list : none === null ? results(found) : <Empty variant={empty}>{none}</Empty>,
   };
 }

@@ -12,24 +12,13 @@ type Props = {
   fill?: boolean;
   // A column beside the body once the screen is wide enough for both; above the body when it is not.
   aside?: ReactNode;
+  // The aside stays in view as the body scrolls, such as a preview of what the body changes.
+  stickyAside?: boolean;
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   children: ReactNode;
 };
 
-// Screen's aside and Beside's preview are this one grid; sticky, the column stays in view as the body scrolls.
-export function AsideColumns({ aside, sticky = false, children }: { aside: ReactNode; sticky?: boolean; children: ReactNode }) {
-  // A container query measures an ancestor, never the element it styles: the frame is what the columns measure.
-  return (
-    <div className={styles.frame}>
-      <div className={styles.columns}>
-        <div className={sticky ? `${styles.aside} ${styles.sticky}` : styles.aside}>{aside}</div>
-        <div className={styles.main}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-export function Screen({ top, align = 'start', width = 'narrow', actions, fill = false, aside, onSubmit, children }: Props) {
+export function Screen({ top, align = 'start', width = 'narrow', actions, fill = false, aside, stickyAside = false, onSubmit, children }: Props) {
   const pane = usePane();
   // A page has one main landmark; beside a list, a screen is one section of it.
   const Root = pane ? 'section' : 'main';
@@ -37,7 +26,17 @@ export function Screen({ top, align = 'start', width = 'narrow', actions, fill =
   const body = <div className={styles.body}>{children}</div>;
   const inner = (
     <>
-      {aside ? <AsideColumns aside={aside}>{body}</AsideColumns> : body}
+      {aside ? (
+        // A container query measures an ancestor, never the element it styles: the frame is what the columns measure.
+        <div className={styles.frame}>
+          <div className={styles.columns}>
+            <div className={stickyAside ? `${styles.aside} ${styles.sticky}` : styles.aside}>{aside}</div>
+            <div className={styles.main}>{body}</div>
+          </div>
+        </div>
+      ) : (
+        body
+      )}
       {actions && <div className={styles.actions}>{actions}</div>}
     </>
   );

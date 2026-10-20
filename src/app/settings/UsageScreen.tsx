@@ -8,7 +8,7 @@ import { SeeAll } from '../common/useLoaded';
 import { useChats, useLibrary, useSummaries } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Bars, Empty, Facts, NavBar, Screen, Section, Shares, Tab, Tabs } from '../ui';
+import { Bars, Empty, Facts, NavBar, Screen, Section, Shares, Tabs } from '../ui';
 
 const WINDOWS: [ReportWindow, string][] = [['today', '오늘'], ['week', '이번 주'], ['month', '이번 달'], ['all', '전체']];
 const CHATS_SHOWN = 10;
@@ -41,9 +41,7 @@ export function UsageScreen({ back }: { back: Back | null }) {
 
   return (
     <Screen width="form" top={<NavBar title={PAGES.usage} {...backBar(back)} />}>
-      <Tabs label="기간">
-        {WINDOWS.map(([each, label]) => <Tab key={each} label={label} current={window === each} onClick={() => setWindow(each)} />)}
-      </Tabs>
+      <Tabs label="기간" items={WINDOWS.map(([value, label]) => ({ value, label }))} value={window} onChange={setWindow} />
       <Section title="합계">
         {view.kind !== 'read' ? (
           <LedgerWait view={view} retry={retry} failed="사용량을 불러오지 못했어요." />

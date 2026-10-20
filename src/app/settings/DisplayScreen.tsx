@@ -14,7 +14,7 @@ import { useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { ACCENT, Beside, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
+import { ACCENT, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
   { name: '캐릭터', mine: false, html: storyHtml(`*창밖으로 늦은 오후의 햇살이 기울어 든다.* 그녀는 찻잔을 내려놓고 고개를 들었다. "오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아." '또 잠든 건 아니겠지.'`, true) },
@@ -70,7 +70,16 @@ export function DisplayScreen({ back }: { back: Back | null }) {
     </>
   );
   return (
-    <Screen width="page" top={<NavBar title={PAGES.display} {...backBar(back)} />}>
+    <Screen
+      width="page"
+      top={<NavBar title={PAGES.display} {...backBar(back)} />}
+      aside={
+        <Section title="미리보기">
+          <ReadingPreview label="미리보기" reading={reading} rows={SAMPLE} />
+        </Section>
+      }
+      stickyAside
+    >
       <Section
         title="프리셋"
         action={
@@ -96,55 +105,46 @@ export function DisplayScreen({ back }: { back: Back | null }) {
           onClose={() => setNaming(null)}
         />
       )}
-      <Beside
-        variant="preview"
-        side={
-          <Section title="미리보기">
-            <ReadingPreview label="미리보기" reading={reading} rows={SAMPLE} />
-          </Section>
-        }
-      >
-        <Section title="색">
-          <SettingGroup label="색">
-            <SettingRow label="테마" control={<ChoiceGroup layout="fit" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
-            <SettingRow
-              label="배경"
-              help="봇이 직접 꾸민 부분은 기본 배경에 맞춰져 있어서, 다른 배경에선 어색할 수 있어요."
-              control={<ChoiceGroup label="배경" options={colorChoices('bg', BG)} value={display.bg} onChange={(bg) => changeDisplay({ bg })} />}
-            />
-            <SettingRow label="글자" control={<ChoiceGroup label="글자" options={colorChoices('ink', INK)} value={display.ink} onChange={(ink) => changeDisplay({ ink })} />} />
-            <SettingRow label="대사" control={<ChoiceGroup label="대사" options={colorChoices('dialogue', DIALOGUE)} value={display.dialogue} onChange={(dialogue) => changeDisplay({ dialogue })} />} />
-            <SettingRow label="강조" control={<ChoiceGroup label="강조" options={colorChoices('accent', ACCENT)} value={display.accent} onChange={(accent) => changeDisplay({ accent })} />} />
-          </SettingGroup>
-        </Section>
-        <Section title="이미지">
-          <SettingGroup label="이미지">
-            <HidePicturesRow />
-            <PictureWidestRow />
-            <SettingRow
-              label="가로 이미지는 꽉 채우기"
-              help="가로가 세로보다 긴 이미지는 최대 폭과 상관없이 글 폭을 꽉 채워요."
-              control={<Switch label="가로 이미지는 꽉 채우기" checked={display.wideFill} onChange={(wideFill) => changeDisplay({ wideFill })} />}
-            />
-            <SettingRow
-              label="이미지 위치"
-              help="넓은 화면에서 삽화와 캐릭터 이미지를 채팅 어느 쪽에 둘지 정해요."
-              control={<ChoiceGroup layout="fit" label="이미지 위치" options={choices(SIDE)} value={display.pictureSide} onChange={(pictureSide) => changeDisplay({ pictureSide })} />}
-            />
-            <SettingRow
-              label="캐릭터 이미지 크게 보기"
-              help="넓은 화면에서 채팅 옆에 캐릭터 이미지를 크게 띄워요. 삽화를 쓰는 채팅에선 삽화가 그 자리를 써요."
-              control={<Switch label="캐릭터 이미지 크게 보기" checked={display.portrait} onChange={(portrait) => changeDisplay({ portrait })} />}
-            />
-          </SettingGroup>
-        </Section>
-        <Section title="텍스트">
-          <SettingGroup label="텍스트">
-            <ReadingRows />
-            <SettingRow label="대사 모양" control={<ChoiceGroup layout="fit" label="대사 모양" options={choices(QUOTE_SHAPE)} value={display.quotes} onChange={(quotes) => changeDisplay({ quotes })} />} />
-          </SettingGroup>
-        </Section>
-      </Beside>
+      <Section title="색">
+        <SettingGroup label="색">
+          <SettingRow label="테마" control={<ChoiceGroup layout="fit" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
+          <SettingRow
+            label="배경"
+            help="봇이 직접 꾸민 부분은 기본 배경에 맞춰져 있어서, 다른 배경에선 어색할 수 있어요."
+            control={<ChoiceGroup label="배경" options={colorChoices('bg', BG)} value={display.bg} onChange={(bg) => changeDisplay({ bg })} />}
+          />
+          <SettingRow label="글자" control={<ChoiceGroup label="글자" options={colorChoices('ink', INK)} value={display.ink} onChange={(ink) => changeDisplay({ ink })} />} />
+          <SettingRow label="대사" control={<ChoiceGroup label="대사" options={colorChoices('dialogue', DIALOGUE)} value={display.dialogue} onChange={(dialogue) => changeDisplay({ dialogue })} />} />
+          <SettingRow label="강조" control={<ChoiceGroup label="강조" options={colorChoices('accent', ACCENT)} value={display.accent} onChange={(accent) => changeDisplay({ accent })} />} />
+        </SettingGroup>
+      </Section>
+      <Section title="이미지">
+        <SettingGroup label="이미지">
+          <HidePicturesRow />
+          <PictureWidestRow />
+          <SettingRow
+            label="가로 이미지는 꽉 채우기"
+            help="가로가 세로보다 긴 이미지는 최대 폭과 상관없이 글 폭을 꽉 채워요."
+            control={<Switch label="가로 이미지는 꽉 채우기" checked={display.wideFill} onChange={(wideFill) => changeDisplay({ wideFill })} />}
+          />
+          <SettingRow
+            label="이미지 위치"
+            help="넓은 화면에서 삽화와 캐릭터 이미지를 채팅 어느 쪽에 둘지 정해요."
+            control={<ChoiceGroup layout="fit" label="이미지 위치" options={choices(SIDE)} value={display.pictureSide} onChange={(pictureSide) => changeDisplay({ pictureSide })} />}
+          />
+          <SettingRow
+            label="캐릭터 이미지 크게 보기"
+            help="넓은 화면에서 채팅 옆에 캐릭터 이미지를 크게 띄워요. 삽화를 쓰는 채팅에선 삽화가 그 자리를 써요."
+            control={<Switch label="캐릭터 이미지 크게 보기" checked={display.portrait} onChange={(portrait) => changeDisplay({ portrait })} />}
+          />
+        </SettingGroup>
+      </Section>
+      <Section title="텍스트">
+        <SettingGroup label="텍스트">
+          <ReadingRows />
+          <SettingRow label="대사 모양" control={<ChoiceGroup layout="fit" label="대사 모양" options={choices(QUOTE_SHAPE)} value={display.quotes} onChange={(quotes) => changeDisplay({ quotes })} />} />
+        </SettingGroup>
+      </Section>
     </Screen>
   );
 }

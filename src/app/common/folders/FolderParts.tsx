@@ -1,9 +1,10 @@
 import { ArrowDownToLine, ArrowUpToLine, FolderInput, FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { FOLDER_DEPTH, pathName, pathOf, withInside, type Filed, type FolderContents, type FolderIndex, type FolderTree } from '../../../model/folders';
-import { Button, Divider, FolderCard, IconButton, Menu, MenuItem, MoreMenu, PathBar, Row, SelectionBar, useWide } from '../../ui';
+import { Button, Divider, FolderCard, IconButton, Menu, MenuItem, MoreMenu, PathBar, Row, useWide } from '../../ui';
 import { ACTS, newOf } from '../acts';
 import { NameDialog } from '../NameDialog';
+import { useSelection } from '../useSelection';
 import { withParticle } from '../particles';
 import { filedCount, filedNoun, folderNote } from './filing';
 import { useFolderActions } from './useFolderActions';
@@ -125,8 +126,8 @@ export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dr
 export function useMoving<T>(kind: Filed, index: FolderIndex<T>, folderOf: (id: string) => string | null, { off = false, carry = (id: string) => [id] }: { off?: boolean; carry?: (id: string) => string[] } = {}) {
   const { move } = useFolderActions(kind);
   const wide = useWide();
-  const [picking, setPicked] = useState<ReadonlySet<string> | null>(null);
-  const picked = off ? null : picking;
+  const selection = useSelection();
+  const picked = off ? null : selection.picked;
 
   function moveIds(ids: string[], to: string | null) {
     const moving = ids.filter((id) => folderOf(id) !== to);
@@ -137,67 +138,32 @@ export function useMoving<T>(kind: Filed, index: FolderIndex<T>, folderOf: (id: 
   // A dragged card that is one of the pick moves the whole pick.
   const dropInto: Drop | undefined = wide && !off ? (to) => (id) => {
     moveIds(picked?.has(id) ? [...picked] : [id], to);
-    if (picked?.has(id)) setPicked(null);
+    if (picked?.has(id)) selection.clear();
   } : undefined;
 
-  const toggle = (id: string) => {
-    if (!picked) return;
-    const next = new Set(picked);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setPicked(next);
+  // Only the bar, shown while picking, moves the pick.
+  const moveTo = (to: FolderTree | null) => {
+    moveIds([...picked!], to?.id ?? null);
+    selection.clear();
   };
-
-  const bar = picked && (
-    <MoveBar
-      kind={kind}
-      index={index}
-      count={picked.size}
-      onCancel={() => setPicked(null)}
-      onMove={(to) => {
-        moveIds([...picked], to?.id ?? null);
-        setPicked(null);
-      }}
-    />
+  const bar = !off && selection.bar(
+    { counted: (count) => filedCount(kind, count), ask: `옮길 ${withParticle(filedNoun(kind), '을/를')} 선택해 주세요` },
+    <Menu
+      place="above-end"
+      label="옮길 폴더"
+      trigger={(opener) => (
+        <Button size="sm" disabled={!picked?.size || index.folders.length === 0} {...opener}>
+          폴더로 옮기기
+        </Button>
+      )}
+    >
+      {index.folders.flatMap(withInside).map((folder) => (
+        <MenuItem key={folder.id} label={pathName(pathOf(index.byFolder, folder.id))} onClick={() => moveTo(folder)} />
+      ))}
+      <Divider variant="menu" />
+      <MenuItem label="폴더에서 빼기" onClick={() => moveTo(null)} />
+    </Menu>,
   );
-  const button = !off && (
-    <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
-      {picked ? '완료' : '선택해서 옮기기'}
-    </Button>
-  );
-  return { picked, toggle, dropInto, bar, button };
-}
-
-type MoveProps<T> = {
-  kind: Filed;
-  index: FolderIndex<T>;
-  count: number;
-  onCancel: () => void;
-  onMove: (to: FolderTree | null) => void;
-};
-
-function MoveBar<T>({ kind, index, count, onCancel, onMove }: MoveProps<T>) {
-  return (
-    <SelectionBar>
-      <span>{count ? `${filedCount(kind, count)} 선택됨` : `옮길 ${withParticle(filedNoun(kind), '을/를')} 선택해 주세요`}</span>
-      <Button variant="secondary" size="sm" onClick={onCancel}>
-        취소
-      </Button>
-      <Menu
-        place="above-end"
-        label="옮길 폴더"
-        trigger={(opener) => (
-          <Button size="sm" disabled={count === 0 || index.folders.length === 0} {...opener}>
-            폴더로 옮기기
-          </Button>
-        )}
-      >
-        {index.folders.flatMap(withInside).map((folder) => (
-          <MenuItem key={folder.id} label={pathName(pathOf(index.byFolder, folder.id))} onClick={() => onMove(folder)} />
-        ))}
-        <Divider variant="menu" />
-        <MenuItem label="폴더에서 빼기" onClick={() => onMove(null)} />
-      </Menu>
-    </SelectionBar>
-  );
+  const button = !off && selection.button(FolderInput, '선택해서 옮기기');
+  return { picked, toggle: selection.toggle, dropInto, bar, button };
 }

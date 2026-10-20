@@ -8,7 +8,7 @@ import { FolderPath, FolderTile, useMoving, useNaming, type Ordering } from '../
 import { CHARACTER_SORTS, useCharacterSort, useReorder, useSortedLibrary } from '../../common/characterOrder';
 import { TASK_NAMES } from '../../common/prompt-words';
 import { useSearch } from '../../common/useSearch';
-import { BIN, MODEL_SETTINGS, PAGES } from '../../common/words';
+import { BIN, EMPTY_FOLDER, MODEL_SETTINGS, PAGES } from '../../common/words';
 import { useBin } from '../../session';
 import { backBar, navigate } from '../../shell/router';
 import { BIN_PLACE, type Back } from '../../shell/routes';
@@ -148,7 +148,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
         </Section>
       ))}
       {folderCards.length + shown.length === 0 && listed.length === 0 && (
-        <Empty>{search.none ?? (binned ? '삭제한 항목이 없어요.' : at.here ? '비어 있는 폴더예요.' : '캐릭터가 없어요.')}</Empty>
+        <Empty>{search.none ?? (binned ? '삭제한 항목이 없어요.' : at.here ? EMPTY_FOLDER : '캐릭터가 없어요.')}</Empty>
       )}
       {moving.bar}
       {purging && (

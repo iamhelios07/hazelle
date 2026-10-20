@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Tab, Tabs } from '../collections/Tabs';
+import { Tabs } from '../collections/Tabs';
 import type { CodeEditorProps } from './CodeEditor';
 import type { Caret } from './codeLanguage';
 import styles from './CodeEditor.module.css';
@@ -40,10 +40,15 @@ export function CodeField(props: CodeEditorProps & { area: (element: HTMLTextAre
   return (
     <div className={asideShown ? `${styles.split} ${styles.asideShown}` : styles.split}>
       <div className={styles.tabs}>
-        <Tabs label="보기">
-          <Tab label="코드" current={!asideShown} onClick={() => setAsideShown(false)} />
-          <Tab label={aside.label} current={asideShown} onClick={() => setAsideShown(true)} />
-        </Tabs>
+        <Tabs
+          label="보기"
+          items={[
+            { value: 'code', label: '코드' },
+            { value: 'aside', label: aside.label },
+          ]}
+          value={asideShown ? 'aside' : 'code'}
+          onChange={(value) => setAsideShown(value === 'aside')}
+        />
       </div>
       <div className={styles.code}>{editor}</div>
       <section className={styles.aside} aria-label={aside.label}>

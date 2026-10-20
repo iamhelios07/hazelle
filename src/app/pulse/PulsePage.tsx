@@ -5,7 +5,7 @@ import { LegalNotice } from '../common/LegalNotice';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
 import { PULSE } from '../common/words';
-import { Bars, Brand, ChoiceGroup, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tab, Tabs } from '../ui';
+import { Bars, Brand, ChoiceGroup, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tabs } from '../ui';
 import { clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, weekText } from './board';
 
 const SPLIT = '제공자별로 보기';
@@ -74,11 +74,7 @@ function Board({ board, at }: { board: PulseBoard; at: number }) {
           )
         }
       >
-        <Tabs label="역할">
-          {PULSE_ROLES.map((each) => (
-            <Tab key={each} label={PULSE_ROLE_NAMES[each]} current={role === each} onClick={() => setRole(each)} />
-          ))}
-        </Tabs>
+        <Tabs label="역할" items={PULSE_ROLES.map((value) => ({ value, label: PULSE_ROLE_NAMES[value] }))} value={role} onChange={setRole} />
         <SettingRow label={SPLIT} control={<Switch label={SPLIT} checked={split} onChange={setSplit} />} />
         {current ? (
           <Standing role={role} split={split} ranking={board.ranking[role]} before={board.before[role]} earlier={false} />

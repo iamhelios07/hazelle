@@ -34,7 +34,7 @@ export function ChoiceGroup<T extends string>({ label, showLabel = false, option
   const group = (
     <div className={styles[layout]} role="group" aria-label={showLabel ? undefined : label} aria-labelledby={showLabel ? id : undefined}>
       {options.map((option) =>
-        // A chip is the filter pill Tab draws, so a pick of chips reads as a Tabs filter does.
+        // A chip is the filter pill Tabs draws, so a pick of chips reads as a Tabs filter does.
         layout === 'chips' ? (
           <Item key={option.value} density="chip" scheme="tab" leading={option.mark} title={option.label} pressed={option.value === value} onClick={() => onChange(option.value)} />
         ) : (
