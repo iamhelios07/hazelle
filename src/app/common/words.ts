@@ -211,6 +211,8 @@ export const RESET = resetTo('기본값');
 export const UNDO = '되돌리기';
 export const STOP = '멈추기';
 export const LOADING = '불러오는 중…';
+// A head's door to its list whole, the same words whether it opens a page, a dialog or the rest in place.
+export const SEE_ALL = '모두 보기';
 export const EMPTY_FOLDER = '비어 있는 폴더예요.';
 export const SET_DEFAULT = '기본으로 정하기';
 

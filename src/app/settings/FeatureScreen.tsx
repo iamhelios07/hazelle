@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react';
+import type { ComponentType } from 'react';
 import { entryName } from '../../connectors/types';
 import type { Feature } from '../../model/features';
 import type { PrereadParts } from '../../model/settings';
@@ -10,18 +10,19 @@ import { sceneWriterOf } from '../../runtime/illustrate';
 import { prereadPrompt, setDefaultPrompt } from '../../runtime/prompts';
 import { sendsNotes, translatorOf } from '../../runtime/translate';
 import { SHARED_CHAT } from '../../runtime/turn';
+import { DetailFold } from '../common/DetailFold';
 import { IllustrateRows } from '../common/IllustrateRows';
 import { Missing } from '../common/Missing';
 import { TaskModelRow, TaskPromptMenu, type PromptDoor } from '../common/TaskPrompt';
 import { TranslateRows } from '../common/TranslateRows';
-import { typedText } from '../common/typed';
-import { readOptional } from '../common/typedNumber';
-import { detailLabel, FEATURE_NAMES, MODEL_ROLES, MODEL_SETTINGS, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
+import { useTypedNumber } from '../common/typed';
+import { readTyped } from '../common/typedNumber';
+import { FEATURE_NAMES, MODEL_ROLES, MODEL_SETTINGS, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Callout, Disclosure, NavBar, NumberInput, Screen, SettingGroup, SettingRow, Switch } from '../ui';
+import { Callout, NavBar, NumberInput, Screen, SettingGroup, SettingRow, Switch } from '../ui';
 import { FEATURE_HELP, FeatureSwitch } from './FeatureDefaults';
 import { GlobalNoteField } from './GlobalNoteField';
 import { MemoryDefaults } from './MemoryDefaults';
@@ -117,26 +118,19 @@ function MascotDefaults() {
 const PART_HELP: Partial<Record<keyof PrereadParts, string>> = { system: '형식 규칙이나 지시는 줄이면 잘 안 지켜질 수 있어요.' };
 // null: not a count the field takes.
 const readWhole = (text: string) => {
-  const count = readOptional(text, true);
-  return count !== undefined && count !== null && count >= 0 ? count : null;
+  const typed = readTyped(text, true);
+  return typed.ok && typed.value >= 0 ? typed.value : null;
 };
 
 function CountRow({ label, unit, help, value, start, onChange }: { label: string; unit: string; help: string; value: number; start: number; onChange: (value: number) => void }) {
-  const [typed, setTyped] = useState<string>();
-  const draft = typedText(typed, readWhole, value, String);
-  const invalid = readWhole(draft) === null;
-  const type = (next: string) => {
-    setTyped(next);
-    const count = readWhole(next);
-    if (count !== null) onChange(count);
-  };
+  const count = useTypedNumber(readWhole, value, { error: '0 이상의 정수를 입력해 주세요.', onChange });
   return (
     <SettingRow
       label={label}
       help={help}
       changed={value !== start}
-      error={invalid ? '0 이상의 정수를 입력해 주세요.' : undefined}
-      control={<NumberInput label={label} unit={unit} value={draft} invalid={invalid} onChange={type} />}
+      error={count.error}
+      control={<NumberInput label={label} unit={unit} value={count.text} invalid={count.error !== undefined} onChange={count.change} />}
     />
   );
 }
@@ -175,32 +169,30 @@ function PrereadDefaults() {
           />
         ))}
       </SettingGroup>
-      <Disclosure label={detailLabel(set)}>
-        <SettingGroup label="세부 설정">
-          <CountRow label="원문으로 둘 최근 대화" unit="개" help="마지막으로 보낸 내 메시지는 이 수와 상관없이 그대로 보내요." value={setup.recent} start={PREREAD_STARTS.recent} onChange={(recent) => save({ recent })} />
-          <CountRow label="한 번에 줄일 분량" unit="토큰" help="줄일 내용이 이만큼 쌓이면 그때 줄여요. 그보다 적으면 그냥 보내요." value={setup.batch} start={PREREAD_STARTS.batch} onChange={(batch) => save({ batch })} />
-          <SettingRow
-            label="생각 줄이기"
-            help={`줄이는 모델이 생각을 가장 적게 하게 해서 비용과 기다림을 아껴요. 끄면 그 모델의 ${MODEL_SETTINGS}을 따라요.`}
-            changed={setup.thinkLess !== PREREAD_STARTS.thinkLess}
-            control={<Switch label="생각 줄이기" checked={setup.thinkLess} onChange={(thinkLess) => save({ thinkLess })} />}
-          />
-          <SettingRow
-            label={`${PRE_READ} 프롬프트`}
-            help={`응답마다 ${MODEL_ROLES.aux}을 한 번 더 불러요. PDF를 읽는 Gemini 모델이면 PDF로 보내서 더 아껴요. ${PRE_READ} 프롬프트에서 다른 모델을 고를 수 있어요.`}
-            control={
-              <TaskPromptMenu
-                task="preread"
-                chosen={settings.prereadPrompt}
-                heading="모든 채팅에 적용돼요."
-                opens="down"
-                onPick={(prompt) => void setDefaultPrompt(store, prompt!).then((saved) => saved.ok || toast.failed(saved))}
-                onEdit={editPrompt}
-              />
-            }
-          />
-        </SettingGroup>
-      </Disclosure>
+      <DetailFold set={set}>
+        <CountRow label="원문으로 둘 최근 대화" unit="개" help="마지막으로 보낸 내 메시지는 이 수와 상관없이 그대로 보내요." value={setup.recent} start={PREREAD_STARTS.recent} onChange={(recent) => save({ recent })} />
+        <CountRow label="한 번에 줄일 분량" unit="토큰" help="줄일 내용이 이만큼 쌓이면 그때 줄여요. 그보다 적으면 그냥 보내요." value={setup.batch} start={PREREAD_STARTS.batch} onChange={(batch) => save({ batch })} />
+        <SettingRow
+          label="생각 줄이기"
+          help={`줄이는 모델이 생각을 가장 적게 하게 해서 비용과 기다림을 아껴요. 끄면 그 모델의 ${MODEL_SETTINGS}을 따라요.`}
+          changed={setup.thinkLess !== PREREAD_STARTS.thinkLess}
+          control={<Switch label="생각 줄이기" checked={setup.thinkLess} onChange={(thinkLess) => save({ thinkLess })} />}
+        />
+        <SettingRow
+          label={`${PRE_READ} 프롬프트`}
+          help={`응답마다 ${MODEL_ROLES.aux}을 한 번 더 불러요. PDF를 읽는 Gemini 모델이면 PDF로 보내서 더 아껴요. ${PRE_READ} 프롬프트에서 다른 모델을 고를 수 있어요.`}
+          control={
+            <TaskPromptMenu
+              task="preread"
+              chosen={settings.prereadPrompt}
+              heading="모든 채팅에 적용돼요."
+              opens="down"
+              onPick={(prompt) => void setDefaultPrompt(store, prompt!).then((saved) => saved.ok || toast.failed(saved))}
+              onEdit={editPrompt}
+            />
+          }
+        />
+      </DetailFold>
     </>
   );
 }

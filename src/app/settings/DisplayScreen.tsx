@@ -7,7 +7,7 @@ import { NameDialog } from '../common/NameDialog';
 import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePercent';
 import { HidePicturesRow, ReadingRows } from '../common/ReadingRows';
 import { choices, describeLook, SIDE, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
-import { typedText } from '../common/typed';
+import { useTypedNumber } from '../common/typed';
 import { PAGES } from '../common/words';
 import { useDisplay } from '../display';
 import { useSettings, useStore } from '../session';
@@ -106,7 +106,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
       >
         <Section title="색">
           <SettingGroup label="색">
-            <SettingRow label="테마" control={<ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
+            <SettingRow label="테마" control={<ChoiceGroup layout="fit" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
             <SettingRow
               label="배경"
               help="봇이 직접 꾸민 부분은 기본 배경에 맞춰져 있어서, 다른 배경에선 어색할 수 있어요."
@@ -129,7 +129,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             <SettingRow
               label="이미지 위치"
               help="넓은 화면에서 삽화와 캐릭터 이미지를 채팅 어느 쪽에 둘지 정해요."
-              control={<ChoiceGroup layout="segmented" label="이미지 위치" options={choices(SIDE)} value={display.pictureSide} onChange={(pictureSide) => changeDisplay({ pictureSide })} />}
+              control={<ChoiceGroup layout="fit" label="이미지 위치" options={choices(SIDE)} value={display.pictureSide} onChange={(pictureSide) => changeDisplay({ pictureSide })} />}
             />
             <SettingRow
               label="캐릭터 이미지 크게 보기"
@@ -141,7 +141,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
         <Section title="텍스트">
           <SettingGroup label="텍스트">
             <ReadingRows />
-            <SettingRow label="대사 모양" control={<ChoiceGroup label="대사 모양" options={choices(QUOTE_SHAPE)} value={display.quotes} onChange={(quotes) => changeDisplay({ quotes })} />} />
+            <SettingRow label="대사 모양" control={<ChoiceGroup layout="fit" label="대사 모양" options={choices(QUOTE_SHAPE)} value={display.quotes} onChange={(quotes) => changeDisplay({ quotes })} />} />
           </SettingGroup>
         </Section>
       </Beside>
@@ -154,20 +154,13 @@ const readWidest = (draft: string) => readPicturePercent(draft) ?? null;
 
 function PictureWidestRow() {
   const { display, changeDisplay } = useDisplay();
-  const [typed, setTyped] = useState<string>();
-  const draft = typedText(typed, readWidest, display.pictureWidest, String);
-  const invalid = readWidest(draft) === null;
-  const type = (next: string) => {
-    setTyped(next);
-    const widest = readWidest(next);
-    if (widest !== null) changeDisplay({ pictureWidest: widest });
-  };
+  const widest = useTypedNumber(readWidest, display.pictureWidest, { error: PICTURE_PERCENT_ERROR, onChange: (pictureWidest) => changeDisplay({ pictureWidest }) });
   return (
     <SettingRow
       label="이미지 최대 폭"
       help="글 폭 대비 비율이에요. 더 큰 이미지는 이 폭에 맞춰 줄어들어요. 봇마다 따로 정할 수도 있어요."
-      error={invalid ? PICTURE_PERCENT_ERROR : undefined}
-      control={<NumberInput label="이미지 최대 폭" value={draft} unit="%" invalid={invalid} onChange={type} />}
+      error={widest.error}
+      control={<NumberInput label="이미지 최대 폭" value={widest.text} unit="%" invalid={widest.error !== undefined} onChange={widest.change} />}
     />
   );
 }

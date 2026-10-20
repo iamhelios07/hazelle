@@ -1,5 +1,4 @@
 import { readAccounts, readAdminAccount } from '../../runtime/admin';
-import { describeFailure } from '../common/failure';
 import { HEAD_ROWS, usePages } from '../common/useLoaded';
 import { useToast } from '../toast';
 
@@ -13,7 +12,7 @@ export function useAccounts(head: boolean) {
   async function refresh(id: string) {
     if (!pages.rows?.some(({ accountId }) => accountId === id)) return;
     const answer = await readAdminAccount(id);
-    if (!answer.ok) return toast.error('계정을 다시 읽지 못했어요.', { detail: describeFailure(answer) });
+    if (!answer.ok) return toast.failed(answer, '계정을 다시 읽지 못했어요.');
     const account = answer.data.account;
     pages.update((rows) => rows.flatMap((row) => (row.accountId === id ? (account ? [account] : []) : [row])));
   }

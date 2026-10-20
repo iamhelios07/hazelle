@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useAttempt } from '../common/useAttempt';
-import { Brand, Button, Callout, Intro, Screen, Stack, Steps, Text, TextField } from '../ui';
+import { Brand, Button, Callout, Intro, Screen, Stack, Steps, TextField } from '../ui';
 
 const MIN_LENGTH = 8;
 
@@ -30,16 +30,7 @@ export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDo
 
   return (
     <Screen
-      top={
-        <>
-          <Brand />
-          {signup && (
-            <Text variant="note">
-              1 / 2
-            </Text>
-          )}
-        </>
-      }
+      top={<Brand />}
       onSubmit={submit}
       actions={
         <>

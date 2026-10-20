@@ -1,6 +1,5 @@
 import { logOutOthers } from '../../runtime/account';
 import { setPulseSharing, sharesPulse } from '../../runtime/pulse';
-import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
 import { useAccount, useSession, useSettings, useStanding, useStore } from '../session';
@@ -34,7 +33,7 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
   const sharing = sharesPulse(useSettings());
   async function logOutElsewhere() {
     const ended = await logOutOthers();
-    if (!ended.ok) return toast.error('다른 기기에서 로그아웃하지 못했어요.', { detail: describeFailure(ended) });
+    if (!ended.ok) return toast.failed(ended, '다른 기기에서 로그아웃하지 못했어요.');
     toast.show(ended.data.ended ? `다른 기기 ${count(ended.data.ended)}곳에서 로그아웃했어요.` : '로그인한 다른 기기가 없어요.');
   }
   async function share(on: boolean) {

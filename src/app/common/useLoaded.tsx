@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { ApiResult } from '../../runtime/api';
 import type { Page } from '../../runtime/pages';
-import { Button, Callout, Text } from '../ui';
+import { Button, Callout, Empty, List, Text } from '../ui';
 import { ACTS } from './acts';
 import { describeFailure } from './failure';
-import { LOADING } from './words';
+import { LOADING, SEE_ALL } from './words';
 
 // A failed reload keeps what was shown. A change in deps asks again as reload does.
 export function useLoaded<T>(load: (signal: AbortSignal) => Promise<ApiResult<T>>, deps: unknown[] = []) {
@@ -79,4 +79,30 @@ export function usePages<T>(load: (after: string | null) => Promise<ApiResult<Pa
     reload: () => void fetch(null),
     update: (change: (shown: T[]) => T[]) => setRows((shown) => shown && change(shown)),
   };
+}
+
+export function SeeAll({ onClick }: { onClick: () => void }) {
+  return (
+    <Button variant="secondary" onClick={onClick}>
+      {SEE_ALL}
+    </Button>
+  );
+}
+
+// A paged list's body. head: the few a page shows beside its door to the rest, so it pages no further.
+export function PagedList<T>({ pages, head, label, empty, children }: { pages: ReturnType<typeof usePages<T>>; head: boolean; label: string; empty: string; children: (row: T) => ReactNode }) {
+  const { rows } = pages;
+  return (
+    <>
+      {pages.loading}
+      {pages.failure}
+      {rows && rows.length === 0 && <Empty variant="section">{empty}</Empty>}
+      {rows && rows.length > 0 && (
+        <List label={label} box>
+          {rows.map(children)}
+        </List>
+      )}
+      {!head && pages.more}
+    </>
+  );
 }

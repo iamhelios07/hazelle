@@ -4,16 +4,16 @@ import type { AccountState } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
 import { liftSuspension, removeAccount, sendNotice, suspend, type AdminAccount, type OwnCap } from '../../runtime/admin';
 import { ACTS } from '../common/acts';
-import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
 import { count } from '../common/typedNumber';
+import { SeeAll } from '../common/useLoaded';
 import { NOTICES, UNKNOWN } from '../common/words';
 import { RestoresDialog } from '../common/RestoresDialog';
 import { useSession } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { Button, ConfirmDialog, MenuItem, MoreMenu, Section, Table, Tag, type TableColumn } from '../ui';
+import { Button, ConfirmDialog, Empty, MenuItem, MoreMenu, Section, Table, Tag, type TableColumn } from '../ui';
 import { CapsDialog } from './CapsDialog';
 import { NoticeDialog } from './NoticeDialog';
 import type { useAccounts } from './useAccounts';
@@ -54,7 +54,7 @@ export function AccountsSection({ loaded, total, onActed, children }: { loaded: 
 
   async function act(id: string, done: Promise<ApiResult<undefined>>, failed: string) {
     const answer = await done;
-    if (!answer.ok) return toast.error(failed, { detail: describeFailure(answer) });
+    if (!answer.ok) return toast.failed(answer, failed);
     acted(id);
   }
 
@@ -70,8 +70,9 @@ export function AccountsSection({ loaded, total, onActed, children }: { loaded: 
       title="계정"
       note={total === null ? undefined : `${count(total)}명`}
       action={
+        // Not hidden when the head is whole: it holds only the flagged accounts, and every other one is behind this door.
         head ? (
-          <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'admin-list', list: 'accounts' })}>모두 보기</Button>
+          <SeeAll onClick={() => navigate({ kind: 'admin-list', list: 'accounts' })} />
         ) : (
           <Button variant="ghost" busy={loaded.busy} onClick={loaded.reload}>새로고침</Button>
         )
@@ -80,6 +81,8 @@ export function AccountsSection({ loaded, total, onActed, children }: { loaded: 
     >
       {loaded.loading}
       {loaded.failure}
+      {/* Only the head can be empty: the whole list holds the operator's own account. */}
+      {rows && rows.length === 0 && <Empty variant="section">확인할 계정이 없어요.</Empty>}
       {rows && rows.length > 0 && (
         <Table
           label="계정"

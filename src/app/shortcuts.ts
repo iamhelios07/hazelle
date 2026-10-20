@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { UNDO } from './common/words';
 import { formatKeys, pressed, type Chord } from './ui';
 
 type Shortcut = { label: string; keys: readonly Chord[] };
@@ -30,8 +31,8 @@ export const SHORTCUTS = {
   findNext: { label: '다음 결과', keys: [{ key: 'Enter', shift: false }] },
   findPrevious: { label: '이전 결과', keys: [{ key: 'Enter', shift: true }] },
   closeFind: { label: '검색 닫기', keys: [{ key: 'Escape' }] },
-  undoToast: { label: '알림에서 되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
-  undo: { label: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
+  undoToast: { label: `알림에서 ${UNDO}`, keys: [{ key: 'z', mod: true, shift: false }] },
+  undo: { label: UNDO, keys: [{ key: 'z', mod: true, shift: false }] },
   redo: { label: '다시 하기', keys: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
   // Not Risu's Ctrl+X: in a text field that is cut. Shift held, no other chord here matches it.
   bigEdit: { label: '크게 편집 열기 · 닫기', keys: [{ key: 'x', mod: true, shift: true }] },

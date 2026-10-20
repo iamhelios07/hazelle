@@ -4,10 +4,11 @@ import { count } from '../common/typedNumber';
 import { spent, tally } from '../common/usage';
 import { NO_CHARACTER, PAGES } from '../common/words';
 import { LedgerWait, useLedger } from '../common/useLedger';
+import { SeeAll } from '../common/useLoaded';
 import { useChats, useLibrary, useSummaries } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Bars, Button, Empty, Facts, NavBar, Screen, Section, Shares, Tab, Tabs } from '../ui';
+import { Bars, Empty, Facts, NavBar, Screen, Section, Shares, Tab, Tabs } from '../ui';
 
 const WINDOWS: [ReportWindow, string][] = [['today', '오늘'], ['week', '이번 주'], ['month', '이번 달'], ['all', '전체']];
 const CHATS_SHOWN = 10;
@@ -74,7 +75,7 @@ export function UsageScreen({ back }: { back: Back | null }) {
             <Shares items={shares(report.characters, ({ key }) => characterName(key))} />
           </Section>
           {chats.length > 0 && (
-            <Section title="채팅" action={chats.length > CHATS_SHOWN ? <Button variant="secondary" size="sm" onClick={() => setAllChats((open) => !open)}>{allChats ? '접기' : `모두 보기 (${count(chats.length)})`}</Button> : undefined}>
+            <Section title="채팅" action={!allChats && chats.length > CHATS_SHOWN ? <SeeAll onClick={() => setAllChats(true)} /> : undefined}>
               <Shares items={shares(allChats ? chats : chats.slice(0, CHATS_SHOWN), ({ key }) => chatName(key))} />
             </Section>
           )}

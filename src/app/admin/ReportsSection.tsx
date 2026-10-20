@@ -5,11 +5,11 @@ import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
 import { RestoresDialog } from '../common/RestoresDialog';
 import { navigate } from '../shell/router';
-import { Button, Dialog, Empty, List, ListItem, Panel, Stack, Text, TextField } from '../ui';
+import { Button, Dialog, ListItem, Panel, Stack, Text, TextField } from '../ui';
 import { NoticeDialog } from './NoticeDialog';
 import { ShareReportDialog } from './ShareReportDialog';
 import { shareTags } from './shareTags';
-import { HEAD_ROWS, usePages } from '../common/useLoaded';
+import { HEAD_ROWS, PagedList, SeeAll, usePages } from '../common/useLoaded';
 
 type AccountReport = Report & { accountId: string; username: string };
 
@@ -20,31 +20,25 @@ export function ReportsSection({ head, onActed }: { head: boolean; onActed?: (ac
   const pages = usePages((after) => readReports(after, head ? { open: true, limit: HEAD_ROWS } : {}));
   const [open, setOpen] = useState<Report | null>(null);
   const [restoring, setRestoring] = useState<AccountReport | null>(null);
-  const { rows } = pages;
   return (
     <Panel
       title={NOTICES.received}
       help={head ? '확인하지 않은 알림만 여기에 보여요.' : undefined}
-      action={head ? <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'admin-list', list: 'reports' })}>모두 보기</Button> : undefined}
+      // Not hidden when the head is whole: it holds only the open reports, and the resolved ones are behind this door.
+      action={head ? <SeeAll onClick={() => navigate({ kind: 'admin-list', list: 'reports' })} /> : undefined}
     >
-      {pages.loading}
-      {pages.failure}
-      {rows && rows.length === 0 && <Empty variant="section">{head ? '확인할 알림이 없어요.' : `${NOTICES.received}이 없어요.`}</Empty>}
-      {rows && rows.length > 0 && (
-        <List label={NOTICES.received} box>
-          {rows.map((report) => (
-            <ListItem
-              key={report.id}
-              title={report.share === null ? report.username! : `링크 신고 · ${report.username ?? '익명'}`}
-              tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.diagnostics === null ? [] : ['진단 정보']), ...(report.shared ? shareTags(report.shared) : [])]}
-              aside={ago(report.createdAt)}
-              description={report.text}
-              onClick={() => setOpen(report)}
-            />
-          ))}
-        </List>
-      )}
-      {!head && pages.more}
+      <PagedList pages={pages} head={head} label={NOTICES.received} empty={head ? '확인할 알림이 없어요.' : `${NOTICES.received}이 없어요.`}>
+        {(report) => (
+          <ListItem
+            key={report.id}
+            title={report.share === null ? report.username! : `링크 신고 · ${report.username ?? '익명'}`}
+            tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.diagnostics === null ? [] : ['진단 정보']), ...(report.shared ? shareTags(report.shared) : [])]}
+            aside={ago(report.createdAt)}
+            description={report.text}
+            onClick={() => setOpen(report)}
+          />
+        )}
+      </PagedList>
       {open?.share != null && (
         <ShareReportDialog
           report={open as Report & { share: string; shareVersion: number; link: string }}

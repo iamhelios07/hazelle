@@ -9,6 +9,7 @@ import { describeMetersFailure } from '../common/failure';
 import { creditAmount, usd } from '../common/money';
 import { monthDay } from '../common/time';
 import { count } from '../common/typedNumber';
+import { LOADING } from '../common/words';
 import { useSession } from '../session';
 import { Callout, Empty, Gauge, Link, Panel, Stack, Text } from '../ui';
 
@@ -86,7 +87,7 @@ export function ConnectionMeters({ connection, level }: { connection: Connection
 function Figures({ connection, account }: { connection: Connection; account: Account }) {
   const { result, retry: again } = useMeters(connection, account);
   const retry = { label: ACTS.retry.label, onClick: again };
-  if (!result) return <Text variant="note">불러오는 중…</Text>;
+  if (!result) return <Text variant="note">{LOADING}</Text>;
   const [failure] = result.failures;
   if (!result.meters.length) {
     return failure ? <Callout tone="warn" action={retry}>{describeMetersFailure(failure)}</Callout> : <Empty variant="section">사용량 정보가 없어요.</Empty>;

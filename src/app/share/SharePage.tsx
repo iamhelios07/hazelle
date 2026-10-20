@@ -8,7 +8,7 @@ import { LegalNotice } from '../common/LegalNotice';
 import { SharePreview } from '../common/SharePreview';
 import { useAttempt } from '../common/useAttempt';
 import { ACTS } from '../common/acts';
-import { SHARE } from '../common/words';
+import { LOADING, SHARE } from '../common/words';
 import { Brand, Button, Callout, Dialog, Divider, Intro, Screen, Stack, Text, TextField } from '../ui';
 import { holdPending, pendingFor } from '../common/sharePending';
 
@@ -73,7 +73,7 @@ function SharePage({ id, shareKey }: { id: string; shareKey: string | null }) {
       }
       width="narrow"
     >
-      {view.kind === 'loading' && <Text variant="note">불러오는 중…</Text>}
+      {view.kind === 'loading' && <Text variant="note">{LOADING}</Text>}
       {view.kind === 'failed' && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((held) => held + 1) }}>{view.failure}</Callout>}
       {view.kind === 'held' && <Intro title="멈춘 링크">{SHARE.heldNote}</Intro>}
       {view.kind === 'gone' && <Intro title="없는 링크">{SHARE.goneNote}</Intro>}
