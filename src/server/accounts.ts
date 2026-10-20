@@ -3,11 +3,11 @@ import { Hono, type Context } from 'hono';
 import type { RestoreAction } from '../contracts/admin';
 import { CAP } from './caps';
 import { checkProof, findAccount, hashProof, outsideVisitor, readMethod, readProof } from './credentials';
-import { UNREAD_NOTICES } from './admin';
 import { fail, ID, readObject, type Account, type AppEnv } from './http';
 import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
 import { canWrite, currentAccount, dropSessionCookie, endOtherSessions, endSession, requireOwnSession, requireSession, setSessionCookie, startSession } from './session';
 import { insertVault, readVault, readWrap } from './vaults';
+import { UNREAD_BOARD, UNREAD_NOTICES } from './unread';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
 const ROOM = '(SELECT COUNT(*) FROM accounts) < (SELECT signup_cap FROM service)';
@@ -110,8 +110,8 @@ accounts.get('/session', async (c) => {
 });
 
 // 탈퇴. The proof is asked again, as for a new password, so a stolen session alone cannot delete the account. An
-// account whose deletion was cut off is still admitted, to finish it. The reports it sent and the operator's log rows
-// about it stay. The only operator cannot leave: the installation would have no one to run it.
+// account whose deletion was cut off is still admitted, to finish it. The reports and 게시판 posts it wrote (their author
+// gone) and the operator's log rows about it stay. The only operator cannot leave: the installation would have no one to run it.
 accounts.delete('/account', requireOwnSession, async (c) => {
   const body = await readObject(c);
   const method = readMethod(body?.method);
@@ -156,13 +156,13 @@ async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'usern
     store(c.env, incarnation).usage(incarnation),
     c.env.db.prepare(
       `SELECT ${CAP.bytes} AS bytesCap, file_bytes AS fileBytes, ${CAP.fileBytes} AS fileBytesCap,
-         ${UNREAD_NOTICES} AS unreadNotices
+         ${UNREAD_NOTICES} AS unreadNotices, ${UNREAD_BOARD} AS unreadBoard
        FROM accounts WHERE incarnation = ?`,
     )
       .bind(incarnation)
-      .first<{ bytesCap: number | null; fileBytes: number; fileBytesCap: number | null; unreadNotices: number }>(),
+      .first<{ bytesCap: number | null; fileBytes: number; fileBytesCap: number | null; unreadNotices: number; unreadBoard: number }>(),
   ]);
-  const { unreadNotices, ...storage } = facts!;
+  const { unreadNotices, unreadBoard, ...storage } = facts!;
   return {
     accountId: account.id,
     username: account.username,
@@ -172,6 +172,7 @@ async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'usern
     incarnation,
     storage: { bytes: 'bytes' in usage ? usage.bytes : null, ...storage },
     unreadNotices,
+    unreadBoard,
     localProviders: [...c.env.localProviders],
   };
 }

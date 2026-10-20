@@ -1,0 +1,433 @@
+import { Hono, type Context } from 'hono';
+import { createMiddleware } from 'hono/factory';
+import { MAX_REPORT_LENGTH } from '../contracts/admin';
+import {
+  CATEGORIES,
+  COMMENTS_PER_DAY,
+  HOLD_DAYS_MAX,
+  MAX_COMMENT_LENGTH,
+  MAX_DIAGNOSTICS_LENGTH,
+  MAX_POST_LENGTH,
+  MAX_REASON_LENGTH,
+  MAX_TITLE_LENGTH,
+  nicknameKey,
+  OPERATOR_NAME,
+  POSTS_PER_DAY,
+  SORTS,
+  STATUSES,
+  validNickname,
+  type Activity,
+  type Author,
+  type Comment,
+  type Hidden,
+  type Post,
+  type PostRow,
+} from '../contracts/board';
+import { act, limitOf, MAX_OPEN_REPORTS, positive } from './admin';
+import type { SqlValue } from './db/service-db';
+import { DAY_MS, fail, readObject, type Account, type AppEnv } from './http';
+import { requireSession } from './session';
+import { activity, hidden, OPERATOR, tellUnread } from './unread';
+
+// 게시판 (design §6.13). Every route needs a session (the one gate signed-out reading would change), and every
+// statement binds the asking account as ?1.
+export const board = new Hono<AppEnv>().use(requireSession);
+
+const MAX_VERSION_LENGTH = 40;
+const ROW_ID = /^[1-9]\d{0,15}$/;
+
+const oneOf = <T extends string>(list: readonly T[], value: unknown): value is T => typeof value === 'string' && (list as readonly string[]).includes(value);
+const idOf = (c: Context<AppEnv>) => (ROW_ID.test(c.req.param('id') ?? '') ? Number(c.req.param('id')) : null);
+
+// Over a posts row aliased p: what the asker may read. The operator reads every post; a suspended account only its own
+// operator-only ones; anyone else the public ones not hidden, and its own.
+function readable(account: Account) {
+  if (account.admin) return 'TRUE';
+  if (account.suspended) return "(p.account_id = ?1 AND p.visibility = 'operator')";
+  return `(p.account_id = ?1 OR (p.visibility = 'public' AND NOT ${hidden('p')}))`;
+}
+// Over a comments row aliased c: its text reaches the asker.
+const commentShown = (account: Account) => (account.admin ? 'TRUE' : `(c.account_id = ?1 OR NOT ${hidden('c')})`);
+
+const AUTHOR = (a: string) => `${a}.account_id IS ?1 AS mine, ${a}.account_id = ${OPERATOR} AS byOperator, (SELECT name FROM board_names WHERE account_id = ${a}.account_id) AS name`;
+type AuthorSql = { mine: number; byOperator: number | null; name: string | null };
+const author = (row: AuthorSql): Author => ({ name: row.byOperator ? OPERATOR_NAME : row.name, operator: Boolean(row.byOperator), mine: Boolean(row.mine) });
+
+type HiddenSql = { hiddenReason: string | null; hiddenUntil: number | null; hiddenNow: number };
+const HIDDEN = (a: string) => `${a}.hidden_reason AS hiddenReason, ${a}.hidden_until AS hiddenUntil, ${hidden(a)} AS hiddenNow`;
+// Its author and the operator see why a post or comment is hidden; others see no reason.
+const hiddenOf = (row: HiddenSql, sees: boolean): Hidden | null => (row.hiddenNow && sees ? { reason: row.hiddenReason!, until: row.hiddenUntil } : null);
+
+const POST_COLUMNS = (account: Account) => `p.id, p.title, p.category, p.status, p.version, p.visibility, p.created_at AS createdAt, p.edited_at AS editedAt,
+  p.locked, p.deleted, ${HIDDEN('p')}, ${AUTHOR('p')},
+  (SELECT COUNT(*) FROM post_votes v WHERE v.post_id = p.id) AS votes,
+  EXISTS (SELECT 1 FROM post_votes v WHERE v.post_id = p.id AND v.account_id = ?1) AS voted,
+  (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted = 0 AND ${commentShown(account)}) AS commentCount`;
+type PostSql = Omit<PostRow, 'author' | 'voted' | 'locked' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { voted: number; locked: number; deleted: number };
+const postRow = ({ mine, byOperator, name, hiddenReason, hiddenUntil, hiddenNow, voted, locked, deleted, ...row }: PostSql, account: Account): PostRow => ({
+  ...row,
+  author: author({ mine, byOperator, name }),
+  voted: Boolean(voted),
+  locked: Boolean(locked),
+  hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, account.admin || Boolean(mine)),
+  deleted: Boolean(deleted),
+});
+
+const COMMENT_COLUMNS = `c.id, c.post_id AS postId, c.parent_id AS parentId, c.text, c.created_at AS createdAt, c.edited_at AS editedAt, c.deleted, ${HIDDEN('c')}, ${AUTHOR('c')}`;
+type CommentSql = Omit<Comment, 'author' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { deleted: number };
+function comment({ mine, byOperator, name, hiddenReason, hiddenUntil, hiddenNow, deleted, text, ...row }: CommentSql, account: Account): Comment {
+  const sees = account.admin || Boolean(mine);
+  return { ...row, author: author({ mine, byOperator, name }), text: deleted || (hiddenNow && !sees) ? null : text, hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, sees), deleted: Boolean(deleted) };
+}
+
+const hasNickname = async (c: Context<AppEnv>) => (await c.env.db.prepare('SELECT 1 AS named FROM board_names WHERE account_id = ?').bind(c.get('account').id).first()) !== null;
+
+board.get('/name', async (c) => {
+  const account = c.get('account');
+  if (account.admin) return c.json({ name: OPERATOR_NAME });
+  return c.json({ name: await c.env.db.prepare('SELECT name FROM board_names WHERE account_id = ?').bind(account.id).first<string>('name') });
+});
+
+// The operator writes as OPERATOR_NAME and never holds a nickname, and nobody takes one that reads as it.
+board.put('/name', async (c) => {
+  const account = c.get('account');
+  const name = (await readObject(c))?.name;
+  if (account.admin) return fail(c, 400, 'bad-input');
+  if (typeof name !== 'string' || !validNickname(name)) return fail(c, 400, 'bad-nickname');
+  const key = nicknameKey(name);
+  if (key === nicknameKey(OPERATOR_NAME)) return fail(c, 409, 'nickname-taken');
+  const set = await c.env.db
+    .prepare(
+      `INSERT INTO board_names (account_id, name, name_key, changed_at) SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS (SELECT 1 FROM board_names WHERE name_key = ?3 AND account_id != ?1)
+       ON CONFLICT (account_id) DO UPDATE SET name = excluded.name, name_key = excluded.name_key, changed_at = excluded.changed_at RETURNING account_id`,
+    )
+    .bind(account.id, name, key, Date.now())
+    .first();
+  return set ? c.body(null, 204) : fail(c, 409, 'nickname-taken');
+});
+
+// mine: the asker's own posts of both visibilities, else one visibility, public when not asked. A 'top' page cursors on
+// `${votes}:${id}` (contracts/board PostList), a 'new' one on id.
+board.get('/posts', async (c) => {
+  const account = c.get('account');
+  const sort = c.req.query('sort') ?? 'new';
+  const category = c.req.query('category');
+  const status = c.req.query('status');
+  const visibility = c.req.query('visibility') ?? 'public';
+  const mine = c.req.query('mine') === '1';
+  const after = c.req.query('after');
+  const limit = limitOf(c);
+  const cursor = after === undefined ? null : (sort === 'top' ? /^(\d{1,15}):([1-9]\d{0,15})$/ : /^()([1-9]\d{0,15})$/).exec(after);
+  if (
+    !oneOf(SORTS, sort) || (category !== undefined && !oneOf(CATEGORIES, category)) || (status !== undefined && !oneOf(STATUSES, status)) ||
+    !oneOf(['public', 'operator'], visibility) || limit === null || (after !== undefined && cursor === null)
+  ) {
+    return fail(c, 400, 'bad-input');
+  }
+  const values: SqlValue[] = [account.id];
+  const bind = (value: SqlValue) => `?${values.push(value)}`;
+  const where = [readable(account), mine ? 'p.account_id = ?1' : `p.visibility = ${bind(visibility)}`];
+  if (category !== undefined) where.push(`p.category = ${bind(category)}`);
+  if (status !== undefined) where.push(`p.status = ${bind(status)}`);
+  let next = 'TRUE';
+  if (cursor) {
+    const id = bind(Number(cursor[2]));
+    const votes = sort === 'top' ? bind(Number(cursor[1])) : null;
+    next = votes ? `(votes < ${votes} OR (votes = ${votes} AND id < ${id}))` : `id < ${id}`;
+  }
+  const { results } = await c.env.db
+    .prepare(`SELECT * FROM (SELECT ${POST_COLUMNS(account)} FROM posts p WHERE ${where.join(' AND ')}) WHERE ${next} ORDER BY ${sort === 'top' ? 'votes DESC, ' : ''}id DESC LIMIT ${bind(limit)}`)
+    .bind(...values)
+    .all<PostSql>();
+  const last = results.length === limit ? results.at(-1)! : null;
+  return c.json({ posts: results.map((row) => postRow(row, account)), next: last && (sort === 'top' ? `${last.votes}:${last.id}` : String(last.id)) });
+});
+
+board.get('/posts/:id', async (c) => {
+  const account = c.get('account');
+  const id = idOf(c);
+  if (id === null) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const row = await db
+    .prepare(`SELECT ${POST_COLUMNS(account)}, p.text, p.diagnostics, p.account_id AS accountId, (SELECT username FROM accounts WHERE id = p.account_id) AS username
+      FROM posts p WHERE p.id = ?2 AND ${readable(account)}`)
+    .bind(account.id, id)
+    .first<PostSql & { text: string | null; diagnostics: string | null; accountId: string | null; username: string | null }>();
+  if (!row) return fail(c, 404, 'not-found');
+  const { text, diagnostics, accountId, username, ...shown } = row;
+  const { results } = await db.prepare(`SELECT ${COMMENT_COLUMNS} FROM comments c WHERE c.post_id = ?2 ORDER BY c.id`).bind(account.id, id).all<CommentSql>();
+  const post: Post = {
+    ...postRow(shown, account),
+    text,
+    diagnostics: account.admin ? diagnostics : null,
+    account: account.admin && username !== null ? { id: accountId!, username } : null,
+    comments: results.map((each) => comment(each, account)),
+  };
+  return c.json({ post });
+});
+
+function readEdit(body: Record<string, unknown> | null) {
+  const title = typeof body?.title === 'string' ? body.title.trim() : '';
+  const text = body?.text;
+  const category = body?.category;
+  if (!title || title.length > MAX_TITLE_LENGTH || typeof text !== 'string' || text.length > MAX_POST_LENGTH || !oneOf(CATEGORIES, category)) return null;
+  return { title, text, category };
+}
+
+// A suspended account writes only operator-only posts, since that is how it asks for its own deletion.
+board.post('/posts', async (c) => {
+  const account = c.get('account');
+  const body = await readObject(c);
+  const edit = readEdit(body);
+  const visibility = body?.visibility;
+  const diagnostics = body?.diagnostics;
+  const diagnosed = diagnostics === null || (visibility === 'operator' && typeof diagnostics === 'string' && diagnostics.length <= MAX_DIAGNOSTICS_LENGTH);
+  if (!edit || !oneOf(['public', 'operator'], visibility) || !diagnosed) return fail(c, 400, 'bad-input');
+  if (account.suspended && visibility !== 'operator') return fail(c, 403, 'suspended');
+  if (!account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
+  // Never before its account was created, even if the wall clock went back: a restore's anchor reads that bound (lifecycle.ts).
+  const id = await c.env.db
+    .prepare(
+      `INSERT INTO posts (account_id, title, text, category, visibility, diagnostics, created_at)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, MAX(?7, created_at) FROM accounts
+       WHERE id = ?1 AND (?8 OR (SELECT COUNT(*) FROM posts WHERE account_id = ?1 AND created_at > ?7 - ${DAY_MS}) < ${POSTS_PER_DAY}) RETURNING id`,
+    )
+    .bind(account.id, edit.title, edit.text, edit.category, visibility, diagnostics, Date.now(), account.admin ? 1 : 0)
+    .first<number>('id');
+  return id === null ? fail(c, 429, 'too-many-posts') : c.json({ id });
+});
+
+// The author's alone: the operator hides or deletes another's post, never rewrites it.
+board.put('/posts/:id', async (c) => {
+  const account = c.get('account');
+  const id = idOf(c);
+  const edit = readEdit(await readObject(c));
+  if (id === null || !edit) return fail(c, 400, 'bad-input');
+  const edited = await c.env.db
+    .prepare(`UPDATE posts AS p SET title = ?3, text = ?4, category = ?5, edited_at = ?6 WHERE p.id = ?2 AND p.account_id = ?1 AND p.deleted = 0 AND ${readable(account)} RETURNING id`)
+    .bind(account.id, id, edit.title, edit.text, edit.category, Date.now())
+    .first();
+  return edited ? c.body(null, 204) : fail(c, 404, 'not-found');
+});
+
+// The author's or the operator's. With comments it stays as a placeholder over them; without, it goes with its votes.
+board.delete('/posts/:id', async (c) => {
+  const account = c.get('account');
+  const id = idOf(c);
+  if (id === null) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const own = [id, account.admin ? 1 : 0, account.id];
+  const done = await db.batch([
+    ...(account.admin ? [db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'post-delete', id, json_object('title', title) FROM posts WHERE id = ?1 AND deleted = 0`).bind(id, Date.now())] : []),
+    db.prepare('UPDATE posts AS p SET text = NULL, diagnostics = NULL, deleted = 1 WHERE p.id = ?1 AND p.deleted = 0 AND (?2 OR p.account_id = ?3) AND EXISTS (SELECT 1 FROM comments WHERE post_id = p.id) RETURNING id').bind(...own),
+    db.prepare('DELETE FROM posts AS p WHERE p.id = ?1 AND p.deleted = 0 AND (?2 OR p.account_id = ?3) AND NOT EXISTS (SELECT 1 FROM comments WHERE post_id = p.id) RETURNING id').bind(...own),
+  ]);
+  return done.slice(-2).some(({ results }) => results.length) ? c.body(null, 204) : fail(c, 404, 'not-found');
+});
+
+// An operator-only post is a conversation with the operator, not a thing to recommend.
+board.put('/posts/:id/vote', async (c) => {
+  const account = c.get('account');
+  const id = idOf(c);
+  const voted = (await readObject(c))?.voted;
+  if (id === null || typeof voted !== 'boolean') return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const visibility = await db.prepare(`SELECT p.visibility FROM posts p WHERE p.id = ?2 AND ${readable(account)}`).bind(account.id, id).first<string>('visibility');
+  if (visibility === null) return fail(c, 404, 'not-found');
+  if (visibility === 'operator') return fail(c, 400, 'bad-input');
+  const [, counted] = await db.batch<{ votes: number }>([
+    voted
+      ? db.prepare('INSERT OR IGNORE INTO post_votes (post_id, account_id, created_at) SELECT id, ?1, ?3 FROM posts WHERE id = ?2').bind(account.id, id, Date.now())
+      : db.prepare('DELETE FROM post_votes WHERE account_id = ?1 AND post_id = ?2').bind(account.id, id),
+    db.prepare('SELECT COUNT(*) AS votes FROM post_votes WHERE post_id = ?').bind(id),
+  ]);
+  return c.json({ votes: counted!.results[0]!.votes });
+});
+
+const commentText = (value: unknown) => (typeof value === 'string' && value.trim() && value.length <= MAX_COMMENT_LENGTH ? value : null);
+
+// A 답글 sits under a top-level comment: one to a 답글 joins that 답글's thread. The operator still comments on a locked
+// post, and on an operator-only post that comment is its reply.
+board.post('/posts/:id/comments', async (c) => {
+  const account = c.get('account');
+  const id = idOf(c);
+  const body = await readObject(c);
+  const text = commentText(body?.text);
+  const parentId = body?.parentId;
+  if (id === null || text === null || !(parentId === null || positive(parentId))) return fail(c, 400, 'bad-input');
+  if (!account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
+  const db = c.env.db;
+  const post = await db.prepare(`SELECT p.locked FROM posts p WHERE p.id = ?2 AND p.deleted = 0 AND ${readable(account)}`).bind(account.id, id).first<{ locked: number }>();
+  if (!post) return fail(c, 404, 'not-found');
+  if (post.locked && !account.admin) return fail(c, 409, 'post-locked');
+  const parent = parentId === null ? null : await db.prepare('SELECT COALESCE(parent_id, id) AS top FROM comments WHERE id = ? AND post_id = ?').bind(parentId, id).first<number>('top');
+  if (parentId !== null && parent === null) return fail(c, 400, 'bad-input');
+  const added = await db
+    .prepare(
+      `INSERT INTO comments (post_id, parent_id, account_id, text, created_at) SELECT ?2, ?3, ?1, ?4, ?5
+       WHERE (?6 OR (SELECT COUNT(*) FROM comments WHERE account_id = ?1 AND created_at > ?5 - ${DAY_MS}) < ${COMMENTS_PER_DAY}) RETURNING id`,
+    )
+    .bind(account.id, id, parent, text, Date.now(), account.admin ? 1 : 0)
+    .first<number>('id');
+  if (added === null) return fail(c, 429, 'too-many-comments');
+  const row = await db.prepare(`SELECT ${COMMENT_COLUMNS} FROM comments c WHERE c.id = ?2`).bind(account.id, added).first<CommentSql>();
+  return c.json({ comment: comment(row!, account) });
+});
+
+board.put('/comments/:id', async (c) => {
+  const account = c.get('account');
+  const id = idOf(c);
+  const text = commentText((await readObject(c))?.text);
+  if (id === null || text === null) return fail(c, 400, 'bad-input');
+  const edited = await c.env.db
+    .prepare(`UPDATE comments AS c SET text = ?3, edited_at = ?4 WHERE c.id = ?2 AND c.account_id = ?1 AND c.deleted = 0
+      AND EXISTS (SELECT 1 FROM posts p WHERE p.id = c.post_id AND ${readable(account)}) RETURNING id`)
+    .bind(account.id, id, text, Date.now())
+    .first();
+  return edited ? c.body(null, 204) : fail(c, 404, 'not-found');
+});
+
+// The author's or the operator's. With 답글 it stays as a placeholder over them; a placeholder, of a comment or of its
+// post, goes once nothing is left under it.
+board.delete('/comments/:id', async (c) => {
+  const account = c.get('account');
+  const id = idOf(c);
+  if (id === null) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const post = await db.prepare('SELECT post_id FROM comments WHERE id = ? AND deleted = 0').bind(id).first<number>('post_id');
+  if (post === null) return fail(c, 404, 'not-found');
+  const own = [id, account.admin ? 1 : 0, account.id];
+  const done = await db.batch([
+    ...(account.admin ? [db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'comment-delete', id, json_object('post', post_id) FROM comments WHERE id = ?1 AND deleted = 0`).bind(id, Date.now())] : []),
+    db.prepare('UPDATE comments AS c SET text = NULL, deleted = 1 WHERE c.id = ?1 AND c.deleted = 0 AND (?2 OR c.account_id = ?3) AND EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id) RETURNING id').bind(...own),
+    db.prepare('DELETE FROM comments AS c WHERE c.id = ?1 AND c.deleted = 0 AND (?2 OR c.account_id = ?3) AND NOT EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id) RETURNING id').bind(...own),
+    db.prepare('DELETE FROM comments AS c WHERE c.post_id = ? AND c.deleted = 1 AND NOT EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id)').bind(post),
+    db.prepare('DELETE FROM posts AS p WHERE p.id = ? AND p.deleted = 1 AND NOT EXISTS (SELECT 1 FROM comments WHERE post_id = p.id)').bind(post),
+  ]);
+  return done.slice(-4, -2).some(({ results }) => results.length) ? c.body(null, 204) : fail(c, 404, 'not-found');
+});
+
+// 신고, into the operator's inbox beside share reports (admin.ts): one open report per reporter and target.
+async function report(c: Context<AppEnv>, target: (account: Account) => string) {
+  const account = c.get('account');
+  const id = idOf(c);
+  const text = (await readObject(c))?.text;
+  const trimmed = typeof text === 'string' ? text.trim() : '';
+  if (id === null || !trimmed || trimmed.length > MAX_REPORT_LENGTH) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const reported = await db.prepare(target(account)).bind(account.id, id).first<{ post: number; comment: number | null }>();
+  if (!reported) return fail(c, 404, 'not-found');
+  const open = await db.prepare('SELECT 1 AS open FROM reports WHERE account_id = ? AND post_id = ? AND comment_id IS ? AND resolved_at IS NULL').bind(account.id, reported.post, reported.comment).first();
+  if (open) return c.body(null, 204);
+  const sent = await db
+    .prepare(
+      `INSERT INTO reports (account_id, username, text, created_at, post_id, comment_id) SELECT id, username, ?2, ?3, ?4, ?5 FROM accounts
+       WHERE id = ?1 AND (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND share IS NULL AND resolved_at IS NULL) < ?6 RETURNING id`,
+    )
+    .bind(account.id, trimmed, Date.now(), reported.post, reported.comment, MAX_OPEN_REPORTS)
+    .first();
+  return sent ? c.body(null, 204) : fail(c, 429, 'too-many-reports');
+}
+
+board.post('/posts/:id/reports', (c) => report(c, (account) => `SELECT p.id AS post, NULL AS comment FROM posts p WHERE p.id = ?2 AND p.deleted = 0 AND ${readable(account)}`));
+board.post('/comments/:id/reports', (c) =>
+  report(c, (account) => `SELECT p.id AS post, c.id AS comment FROM comments c JOIN posts p ON p.id = c.post_id WHERE c.id = ?2 AND c.deleted = 0 AND ${readable(account)}`),
+);
+
+// Newest first; the cursor is `${at}:${id}` of the last row shown, since rows of one time are ordered by id.
+board.get('/activity', async (c) => {
+  const account = c.get('account');
+  const after = c.req.query('after');
+  const limit = limitOf(c);
+  const cursor = after === undefined ? null : /^(\d{1,15}):([1-9]\d{0,15})$/.exec(after);
+  if (limit === null || (after !== undefined && cursor === null)) return fail(c, 400, 'bad-input');
+  const { results } = await c.env.db
+    .prepare(
+      `SELECT a.id, a.kind, a.postId, a.title, a.at, a.commentId, a.status, a.byId = ${OPERATOR} AS byOperator, (SELECT name FROM board_names WHERE account_id = a.byId) AS name FROM (${activity('?1')}) a
+       WHERE ?2 IS NULL OR (a.at, a.id) < (?2, ?3) ORDER BY a.at DESC, a.id DESC LIMIT ?4`,
+    )
+    .bind(account.id, cursor ? Number(cursor[1]) : null, cursor ? Number(cursor[2]) : null, limit)
+    .all<Omit<Activity, 'by'> & { byOperator: number | null; name: string | null }>();
+  const last = results.length === limit ? results.at(-1)! : null;
+  return c.json({
+    activity: results.map(({ byOperator, name, ...row }): Activity => ({ ...row, by: author({ mine: 0, byOperator, name }) })),
+    next: last && `${last.at}:${last.id}`,
+  });
+});
+
+// id: the newest activity the page showed; it and everything before it are seen, so one that came since stays unread.
+board.post('/seen', async (c) => {
+  const account = c.get('account');
+  const id = (await readObject(c))?.id;
+  if (!positive(id)) return fail(c, 400, 'bad-input');
+  await c.env.db
+    .prepare(`UPDATE accounts SET board_seen = MAX(board_seen, COALESCE((SELECT at FROM (${activity('?1')}) WHERE id = ?2), 0)) WHERE id = ?1`)
+    .bind(account.id, id)
+    .run();
+  await tellUnread(c);
+  return c.body(null, 204);
+});
+
+// The operator's moves, each in one batch with its admin_log row, written only if its target is there (admin.ts act).
+const operator = createMiddleware<AppEnv>(async (c, next) => (c.get('account').admin ? next() : fail(c, 403, 'not-admin')));
+
+board.put('/posts/:id/status', operator, async (c) => {
+  const id = idOf(c);
+  const body = await readObject(c);
+  const status = body?.status;
+  const version = body?.version;
+  const named = version === null || (status === 'done' && typeof version === 'string' && version.trim() !== '' && version.length <= MAX_VERSION_LENGTH);
+  if (id === null || !oneOf(STATUSES, status) || !named) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const values = [id, Date.now(), status, version === null ? null : version.trim()];
+  return act(
+    c,
+    db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'post-status', id, json_object('status', ?3, 'version', ?4) FROM posts WHERE id = ?1`).bind(...values),
+    db.prepare('UPDATE posts SET status = ?3, version = ?4, status_at = ?2 WHERE id = ?1 RETURNING id').bind(...values),
+  );
+});
+
+// hidden: a reason and a hold of days (임시조치), or days null for hidden until shown; null shows it again.
+function readHidden(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { reason, days } = value as Record<string, unknown>;
+  const why = typeof reason === 'string' ? reason.trim() : '';
+  const held = days === null || (positive(days) && days <= HOLD_DAYS_MAX);
+  return why && why.length <= MAX_REASON_LENGTH && held ? { reason: why, days: days as number | null } : undefined;
+}
+
+const hide = (table: 'posts' | 'comments', kind: 'post' | 'comment') => async (c: Context<AppEnv>) => {
+  const id = idOf(c);
+  const shown = readHidden((await readObject(c))?.hidden);
+  if (id === null || shown === undefined) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const now = Date.now();
+  if (shown === null) {
+    return act(
+      c,
+      db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, '${kind}-show', id FROM ${table} WHERE id = ?1`).bind(id, now),
+      db.prepare(`UPDATE ${table} SET hidden_reason = NULL, hidden_until = NULL WHERE id = ? RETURNING id`).bind(id),
+    );
+  }
+  return act(
+    c,
+    db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, '${kind}-hide', id, json_object('reason', ?3, 'days', ?4) FROM ${table} WHERE id = ?1`).bind(id, now, shown.reason, shown.days),
+    db.prepare(`UPDATE ${table} SET hidden_reason = ?2, hidden_until = ?3 WHERE id = ?1 RETURNING id`).bind(id, shown.reason, shown.days === null ? null : now + shown.days * DAY_MS),
+  );
+};
+
+board.put('/posts/:id/hidden', operator, hide('posts', 'post'));
+board.put('/comments/:id/hidden', operator, hide('comments', 'comment'));
+
+board.put('/posts/:id/locked', operator, async (c) => {
+  const id = idOf(c);
+  const locked = (await readObject(c))?.locked;
+  if (id === null || typeof locked !== 'boolean') return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  return act(
+    c,
+    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, ?3, id FROM posts WHERE id = ?1`).bind(id, Date.now(), locked ? 'post-lock' : 'post-unlock'),
+    db.prepare('UPDATE posts SET locked = ?2 WHERE id = ?1 RETURNING id').bind(id, locked ? 1 : 0),
+  );
+});

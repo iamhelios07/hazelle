@@ -5,10 +5,10 @@ import { FILE_ID } from '../contracts/files';
 import type { FeedQuery, Write } from './account-store';
 import { fail, ID, isRecord, readObject, refused, RETRY_SECONDS, type AppEnv } from './http';
 import { store } from './lifecycle';
-import { tellUnreadNotices } from './admin';
 import { canWrite, requireSession } from './session';
 import { claimFiles } from './files/claims';
 import { tokenBucket } from './limits';
+import { tellUnread } from './unread';
 
 const KIND = /^[a-z][a-z-]{0,31}$/;
 // A timeline is 16 random bytes in hex (migrations/0001_baseline.sql).
@@ -54,7 +54,7 @@ objects.get('/', async (c) => {
   if ('refused' in page || 'unavailable' in page) return refused(c, page);
   if ('stale' in page || 'reset' in page) return fail(c, 409, 'cache-reset');
   c.header(ACCOUNT_USAGE_HEADERS.bytes, String(page.bytes));
-  await tellUnreadNotices(c);
+  await tellUnread(c);
   return c.json({
     limits: BATCH_LIMITS,
     timeline: page.timeline,

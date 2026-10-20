@@ -43,7 +43,7 @@ describe('the migration runner', () => {
     migrate(db, dir(Object.fromEntries(['0001_baseline.sql', '0002_models_dev.sql'].map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')]))));
     db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('a', 'jin', 'h', 1, 'inc', 't');
       INSERT INTO reports (id, account_id, username, text, created_at) VALUES (7, 'a', 'jin', '안 열려요', 2)`);
-    expect(migrate(db, 'migrations').applied).toContain('0003_shares.sql');
+    expect(migrate(db, dir(Object.fromEntries(['0001_baseline.sql', '0002_models_dev.sql', '0003_shares.sql'].map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')])))).applied).toEqual(['0003_shares.sql']);
     expect(db.prepare('SELECT id, account_id, username, text, share FROM reports').all()).toEqual([{ id: 7, account_id: 'a', username: 'jin', text: '안 열려요', share: null }]);
     db.exec(`INSERT INTO shares (id, incarnation, created_at) VALUES ('s', 'inc', 3);
       INSERT INTO share_versions VALUES ('s', 1, 'm', 3);
@@ -109,7 +109,7 @@ describe('the migration runner', () => {
     expect([failures, lock]).toEqual([12, 9999999999999]);
     const vault = db.prepare('SELECT * FROM vaults').get();
     const session = db.prepare('SELECT * FROM sessions').get();
-    expect(migrate(db, 'migrations').applied).toContain('0011_visitor_login_limits.sql');
+    expect(migrate(db, dir(Object.fromEntries(readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0012').map((name) => [name, readFileSync(join('migrations', name), 'utf8')])))).applied).toEqual(['0011_visitor_login_limits.sql']);
     expect(db.prepare('SELECT * FROM accounts').get()).toEqual(account);
     expect(db.prepare('SELECT * FROM vaults').get()).toEqual(vault);
     expect(db.prepare('SELECT * FROM sessions').get()).toEqual(session);
@@ -143,6 +143,32 @@ describe('the migration runner', () => {
     expect(db.prepare('SELECT people FROM pulse_week_models').all()).toEqual([{ people: 6 }]);
     expect(db.prepare('SELECT COUNT(*) AS n FROM pulse_hours').get()).toEqual({ n: 0 });
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name IN ('pulse_hour_replies', 'this_week')").all()).toEqual([]);
+    db.close();
+  });
+
+  it("moves an account's reports to its operator-only posts under their ids and the operator's replies to its comments", () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON');
+    const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0015');
+    migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
+    db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline, notices_seen) VALUES ('op', 'op', 'h', 1, 'iop', 't', 0), ('a', 'jin', 'h', 1, 'ia', 't', 0);
+      UPDATE installation SET operator_account = 'op';
+      INSERT INTO reports (id, account_id, username, text, created_at, resolved_at, diagnostics) VALUES (7, 'a', 'jin', '그림이 안 열려요' || char(10) || '어제부터요', 2, 3, '진단');
+      INSERT INTO reports (id, account_id, username, text, created_at) VALUES (8, 'gone', 'gone', '떠난 사람', 2);
+      INSERT INTO reports (id, text, created_at, share, share_version, link) VALUES (9, '신고', 2, 's', 1, 'https://hazelle.app/s/s#k');
+      INSERT INTO notices (id, incarnation, report_id, text, created_at) VALUES (4, 'ia', 7, '고쳤어요', 3), (5, NULL, NULL, '모두에게', 4), (6, 'ia', 1, '잊힌 질문의 답', 5)`);
+    expect(migrate(db, 'migrations').applied).toEqual(['0015_board.sql']);
+    expect(db.prepare('SELECT id, account_id, title, text, category, status, status_at, visibility, diagnostics FROM posts ORDER BY id').all()).toEqual([
+      { id: 7, account_id: 'a', title: '그림이 안 열려요', text: '그림이 안 열려요\n어제부터요', category: 'question', status: 'seen', status_at: 3, visibility: 'operator', diagnostics: '진단' },
+      { id: 8, account_id: null, title: '떠난 사람', text: '떠난 사람', category: 'question', status: 'open', status_at: null, visibility: 'operator', diagnostics: null },
+    ]);
+    expect(db.prepare('SELECT post_id, parent_id, account_id, text, created_at FROM comments').all()).toEqual([{ post_id: 7, parent_id: null, account_id: 'op', text: '고쳤어요', created_at: 3 }]);
+    expect(db.prepare('SELECT * FROM notices ORDER BY id').all()).toEqual([{ id: 5, incarnation: null, text: '모두에게', created_at: 4 }, { id: 6, incarnation: 'ia', text: '잊힌 질문의 답', created_at: 5 }]);
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'notices'").all()).toEqual([{ name: 'notices_incarnation' }]);
+    expect(db.prepare('SELECT id FROM reports').all()).toEqual([{ id: 9 }]);
+    // The reply it had not read stays unread on the board.
+    expect(db.prepare("SELECT board_seen FROM accounts WHERE id = 'a'").get()).toEqual({ board_seen: 2 });
+    expect(db.prepare("INSERT INTO posts (title, category, visibility, created_at) VALUES ('t', 'bug', 'public', 9) RETURNING id").get()).toEqual({ id: 9 });
     db.close();
   });
 

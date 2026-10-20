@@ -165,14 +165,11 @@ async function seeded() {
   t.clock.now = () => now - HOUR_MS / 2;
   await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 }, { id: B, kind: 'chat', parent: null, body: 'b', baseRev: null });
   t.clock.now = () => Date.now();
-  const report = await reported(user.id, user.cookie);
+  const report = await reported(user.id);
   return { ...user, report, at: now - (3 * HOUR_MS) / 4 };
 }
 
-async function reported(accountId: string, cookie: string) {
-  expect((await t.post('reports', { text: 'restore' }, cookie)).status).toBe(204);
-  return (await t.env.db.prepare('SELECT MAX(id) AS id FROM reports WHERE account_id = ?').bind(accountId).first<number>('id'))!;
-}
+const reported = (accountId: string) => t.askOperator(accountId);
 
 const account = (id: string) => t.env.db.prepare('SELECT incarnation, state, timeline, operation FROM accounts WHERE id = ?').bind(id).first<{ incarnation: string; state: string; timeline: string; operation: number | null }>();
 const operation = (id: number) => t.env.db.prepare('SELECT phase, verified, target, error FROM restores WHERE id = ?').bind(id).first<{ phase: RestorePhase; verified: number; target: string | null; error: string | null }>();
@@ -453,7 +450,7 @@ describe('a restore', () => {
       { id, reportId: seed.report, at: seed.at, undoes: null, targetAt: seed.at - HOUR_MS / 4, phase: 'done', verified: true, error: null, createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [] },
     ]);
 
-    const report = await reported(seed.id, seed.cookie);
+    const report = await reported(seed.id);
     const undone = await t.post(`admin/accounts/${seed.id}/restores`, { report, undoes: id }, operator.cookie);
     expect(await undone.json()).toEqual({ id: expect.any(Number), phase: 'done', verified: true, error: null });
     expect(await contents(seed.cookie)).toEqual(BEFORE);
@@ -476,12 +473,12 @@ describe('a restore', () => {
     expect(await refused(seed.report, { at: Date.now() - 5 * 60_000 })).toBe('bad-time');
     expect(await refused(seed.report, { at: Date.now() - 7 * 24 * HOUR_MS })).toBe('bad-time');
     expect(await refused(seed.report, { undoes: 1 })).toBe('cannot-undo');
-    await t.env.db.prepare('UPDATE reports SET resolved_at = 1 WHERE id = ?').bind(seed.report).run();
+    await t.env.db.prepare("UPDATE posts SET status = 'done' WHERE id = ?").bind(seed.report).run();
     expect(await refused(seed.report, { at: seed.at })).toBe('bad-report');
     expect(await t.env.db.prepare('SELECT COUNT(*) AS n FROM restores').first('n')).toBe(0);
     expect(await account(seed.id)).toMatchObject({ state: 'active', operation: null });
 
-    await t.env.db.prepare('UPDATE reports SET resolved_at = NULL').run();
+    await t.env.db.prepare("UPDATE posts SET status = 'open'").run();
     await begin(other);
     expect(await beginRestore(t.env, other.id, other.report, { at: other.at })).toEqual({ refused: 'account-busy' });
     expect(await logged('restore-begun')).toBe(1);
@@ -505,7 +502,7 @@ describe('a restore', () => {
     const seed = await seeded();
     const id = await begin(seed);
     await runRestore(t.env, id);
-    const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
+    const undo = await begin({ ...seed, report: await reported(seed.id) }, { undoes: id });
     t.restartProcess();
     // 8 days on, the undone restore's own pin has lapsed.
     await expireSnapshots(t.env, t.dir, Date.now() + 8 * 24 * HOUR_MS, new Map());
@@ -519,7 +516,7 @@ describe('a restore', () => {
     await runRestore(t.env, id);
     const { checkpoint } = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(id).first<{ checkpoint: string }>())!;
     rmSync(diskBucket(t.dir).path(snapshotKey(seed.incarnation, checkpoint)));
-    const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
+    const undo = await begin({ ...seed, report: await reported(seed.id) }, { undoes: id });
     expect(await runRestore(t.env, undo)).toEqual({ id: undo, phase: 'checkpointed', verified: false, error: 'store-unavailable' });
     expect(await cancelRestore(t.env, undo)).toMatchObject({ phase: 'cancelled', verified: true });
     expect(await contents(seed.cookie)).toEqual(AT_TARGET);
@@ -589,7 +586,7 @@ describe('a restore', () => {
     expect((await write(rewound, B, 'after again', 2)).status).toBe(200);
     expect((await held()).status).toBe(409);
     expect((await heldFeed()).status).toBe(409);
-    await runRestore(t.env, await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id }));
+    await runRestore(t.env, await begin({ ...seed, report: await reported(seed.id) }, { undoes: id }));
     expect((await held()).status).toBe(409);
     expect((await heldFeed()).status).toBe(409);
     expect((await write(rewound, B, 'late', 3)).status).toBe(409);
@@ -837,7 +834,7 @@ describe('an account id used again', () => {
       replacement = (await account(old.id))!;
       expect(replacement.incarnation).not.toBe(old.incarnation);
       await t.batch([{ id: B, kind: 'chat', parent: null, body: 'replacement', baseRev: null }], cookie);
-      const begun = await beginRestore(t.env, old.id, await reported(old.id, cookie), { at: old.at });
+      const begun = await beginRestore(t.env, old.id, await reported(old.id), { at: old.at });
       current = (begun as { begun: number }).begun;
       await expect(runRestore(pausedAt('fenced').env, current)).rejects.toThrow(Crash);
       await t.stores.getByName(replacement.incarnation).mark(replacement.incarnation, current);

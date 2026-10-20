@@ -1,8 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { forgetOldRecords, readAll } from './admin';
 import { ROW_BYTES } from './caps';
-import { MAX_DIAGNOSTICS_LENGTH } from '../contracts/admin';
-import { beginRestore } from './lifecycle';
 import { sha256Hex, type Services } from './http';
 import { signupBody, testApp } from './testing';
 
@@ -99,7 +97,10 @@ describe('the operator', () => {
   it('pages a newest-first list by limit and next, and narrows reports to the open ones', async () => {
     const admin = await operator();
     const other = await t.signUp('other');
-    for (const text of ['one', 'two', 'three']) await t.post('reports', { text }, other.cookie);
+    const post = await t.askOperator(other.id);
+    for (const text of ['one', 'two', 'three']) {
+      await t.env.db.prepare(`INSERT INTO reports (account_id, username, text, created_at, post_id) VALUES (?, 'other', ?, ?, ?)`).bind(other.id, text, Date.now(), post).run();
+    }
     type Page = { reports: { id: number; text: string }[]; next: string | null };
     const listed = async (query: string) => {
       const page = (await (await t.get(`admin/reports?${query}`, admin.cookie)).json()) as Page;
@@ -196,52 +197,6 @@ describe('the operator', () => {
     ]);
   });
 
-  it('lists the reports accounts send, a suspended one too, and resolves one once', async () => {
-    const admin = await operator();
-    const other = await t.signUp('other');
-    await t.env.db.prepare('UPDATE accounts SET suspended_at = 1 WHERE id = ?').bind(other.id).run();
-    expect((await t.post('reports', { text: '  이 봇이 이상해요  ' }, other.cookie)).status).toBe(204);
-    expect((await t.post('reports', { text: 'x'.repeat(4001) }, other.cookie)).status).toBe(400);
-
-    const { reports } = (await (await t.get('admin/reports', admin.cookie)).json()) as { reports: { id: number }[] };
-    expect(reports).toEqual([{ id: expect.any(Number), accountId: other.id, username: 'other', text: '이 봇이 이상해요', createdAt: expect.any(Number), resolvedAt: null, share: null, shareVersion: null, link: null, diagnostics: null, shared: null }]);
-
-    const { id } = reports[0]!;
-    expect((await t.post(`admin/reports/${id}/resolve`, undefined, admin.cookie)).status).toBe(204);
-    expect((await t.post(`admin/reports/${id}/resolve`, undefined, admin.cookie)).status).toBe(404);
-    expect(await (await t.get('admin/reports', admin.cookie)).json()).toMatchObject({ reports: [{ id, resolvedAt: expect.any(Number) }] });
-    expect(await log(admin.cookie)).toMatchObject([{ action: 'resolve-report', target: String(id), detail: null }]);
-  });
-
-  it('keeps the 문제 진단 a report was sent with, up to its cap', async () => {
-    const admin = await operator();
-    const other = await t.signUp('other');
-    expect((await t.post('reports', { text: '안 열려요', diagnostics: 'x'.repeat(MAX_DIAGNOSTICS_LENGTH + 1) }, other.cookie)).status).toBe(400);
-    expect((await t.post('reports', { text: '안 열려요', diagnostics: '헤이젤 진단 정보' }, other.cookie)).status).toBe(204);
-    expect(await (await t.get('admin/reports', admin.cookie)).json()).toMatchObject({ reports: [{ text: '안 열려요', diagnostics: '헤이젤 진단 정보' }] });
-  });
-
-  it('keeps a report eligible for its account when the wall clock moves backwards after signup', async () => {
-    const other = await t.signUp('other');
-    const created = (await t.env.db.prepare('SELECT created_at FROM accounts WHERE id = ?').bind(other.id).first<number>('created_at'))!;
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(created - 645);
-    try {
-      expect((await t.post('reports', { text: 'restore' }, other.cookie)).status).toBe(204);
-    } finally {
-      clock.mockRestore();
-    }
-    const report = (await t.env.db.prepare('SELECT id, created_at FROM reports WHERE account_id = ?').bind(other.id).first<{ id: number; created_at: number }>())!;
-    const begun = await beginRestore(t.env, other.id, report.id, { at: created - 3_600_000 });
-    expect(begun).toEqual({ begun: expect.any(Number) });
-    expect(report.created_at).toBe(created);
-  });
-
-  it('refuses an account another report while it has twenty unresolved', async () => {
-    const other = await t.signUp('other');
-    const sent = await Promise.all(Array.from({ length: 21 }, () => t.post('reports', { text: 'again' }, other.cookie)));
-    expect(sent.map(({ status }) => status).sort()).toEqual([...Array<number>(20).fill(204), 429]);
-  });
-
   it('blocks a stored file for every account: no read, no upload, and an import is told the server does not hold it', async () => {
     const admin = await operator();
     const other = await t.signUp('other');
@@ -267,7 +222,7 @@ describe('the operator', () => {
   });
 });
 
-it('forgets resolved reports and log rows a year old, and keeps an open report of any age', async () => {
+it('forgets resolved reports, settled operator-only posts and log rows a year old, and keeps an open report and a public post of any age', async () => {
   const year = 365 * 24 * 60 * 60 * 1000;
   const old = Date.now() - year - 60_000;
   const recent = Date.now() - year + 60_000;
@@ -278,8 +233,17 @@ it('forgets resolved reports and log rows a year old, and keeps an open report o
       [3, old, recent],
     ] as const).map(([id, created, resolved]) => t.env.db.prepare(`INSERT INTO reports (id, account_id, username, text, created_at, resolved_at) VALUES (?, 'a', 'a', 'text', ?, ?)`).bind(id, created, resolved)),
     ...[old, recent].map((at) => t.env.db.prepare(`INSERT INTO admin_log (at, action, target) VALUES (?, 'lift', 'a')`).bind(at)),
+    ...([
+      [1, 'operator', 'done', old],
+      [2, 'operator', 'open', old],
+      [3, 'operator', 'seen', recent],
+      [4, 'public', 'done', old],
+    ] as const).map(([id, visibility, status, at]) =>
+      t.env.db.prepare(`INSERT INTO posts (id, title, text, category, visibility, status, status_at, created_at) VALUES (?, 't', 't', 'bug', ?, ?, ?, ?)`).bind(id, visibility, status, at, old),
+    ),
   ]);
   await forgetOldRecords(t.env.db);
   expect((await t.env.db.prepare('SELECT id FROM reports ORDER BY id').all()).results).toEqual([{ id: 1 }, { id: 3 }]);
   expect((await t.env.db.prepare('SELECT at FROM admin_log').all()).results).toEqual([{ at: recent }]);
+  expect((await t.env.db.prepare('SELECT id FROM posts ORDER BY id').all()).results).toEqual([{ id: 2 }, { id: 3 }, { id: 4 }]);
 });
