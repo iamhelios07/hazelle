@@ -8,6 +8,19 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.3.3',
+    date: '2026-10-20',
+    lines: [
+      '설정 옆에 도구 공간이 생겼어요. 번역기는 그곳으로 옮겨 가고, 채팅 번역과 따로 움직여요. 번역기만의 번역가의 노트를 둘 수 있어요.',
+      '채팅에 메시지 단위로 오가는 빠른 스크롤 막대가 생겼어요. 화면 설정 › 스크롤할 때에서 메시지 이동 버튼도 켤 수 있어요. Alt+↑/↓, Home/End로도 움직여요.',
+      '이사하기에서 PocketRisu 백업도 받아요. 메시지 속 이미지까지 옮겨 와요. 장기 기억 플러그인의 기억은 옮겨지지 않아요.',
+      '설정 › 화면 › 입력창에서 Enter로 보내기를 끌 수 있어요. 끄면 Enter는 줄바꿈이 되고 Ctrl+Enter로 보내요.',
+      'Vertex AI 연결로도 장기 기억 임베딩을 만들 수 있어요. 기억 검색 준비 중에는 입력창 옆에서 진행을 보여 줘요.',
+      '헤이젤 나우가 사람 수를 세는 목록을 서버에 저장해요. 서버가 다시 켜져도 이번 주 집계가 이어져요. 처리방침의 헤이젤 나우 항목이 바뀌었고, 이번 주와 최근 48시간 집계는 새로 시작해요. 대화 순위에 순위 밖 모델 줄이 생겼어요.',
+      'Risu 플러그인 호환 오류 여럿을 고쳤어요. 실행 방식과 채팅 id, Lua의 페르소나 CBS가 Risu와 같아졌어요.',
+    ],
+  },
+  {
     version: 'v0.3.2',
     date: '2026-10-19',
     lines: [
