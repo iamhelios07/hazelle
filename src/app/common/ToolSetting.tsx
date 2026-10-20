@@ -6,7 +6,7 @@ import { useSession } from '../session';
 import { ChoiceGroup, NumberInput, SettingRow, Switch, TextField } from '../ui';
 import { typedText } from './typed';
 import { readTyped } from './typedNumber';
-import { SAVE_STATUS, useAutosave } from './useAutosave';
+import { useAutosave } from './useAutosave';
 import { TOOL_FIELD_CHANGED } from './words';
 
 const readNumber = (text: string) => {
@@ -21,8 +21,7 @@ export function ToolSetting({ module, field, value: stored }: SettingProps) {
   const [typed, setTyped] = useState<string>();
   const value = save.unsaved.value ?? stored;
   const changedType = value !== undefined && !fieldValue(field, value);
-  const note = save.status ? SAVE_STATUS[save.status] : undefined;
-  const row = (control: ReactNode, error: string | undefined, wide?: boolean) => <SettingRow label={field.label} wide={wide} error={error} note={error ? undefined : note} control={control} />;
+  const row = (control: ReactNode, error: string | undefined, wide?: boolean) => <SettingRow label={field.label} wide={wide} error={error} note={error ? undefined : save.words} control={control} />;
   if (field.type === 'number') {
     const text = typedText<Settings[string] | undefined>(typed, readNumber, value, (current) => current === undefined ? '' : String(current));
     const invalid = (typed !== undefined || value !== undefined) && readNumber(text) === null;
@@ -35,5 +34,5 @@ export function ToolSetting({ module, field, value: stored }: SettingProps) {
   const error = changedType ? TOOL_FIELD_CHANGED : undefined;
   if (field.type === 'text') return row(<TextField label={field.label} showLabel={false} value={value === undefined ? '' : String(value)} onChange={(value) => save.change({ value })} />, error, true);
   if (field.type === 'switch') return row(<Switch label={field.label} checked={value === true} onChange={(value) => void save.save({ value })} />, error);
-  return row(<ChoiceGroup label={field.label} options={(field.options ?? []).map((option) => ({ value: option, label: option }))} value={typeof value === 'string' ? value : null} onChange={(value) => void save.save({ value })} />, error, true);
+  return row(<ChoiceGroup layout="fit" label={field.label} options={(field.options ?? []).map((option) => ({ value: option, label: option }))} value={typeof value === 'string' ? value : null} onChange={(value) => void save.save({ value })} />, error);
 }

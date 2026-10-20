@@ -15,7 +15,7 @@ import { useTrial } from './code/Trial';
 import type { Defaults } from './code/variables';
 import { NameDialog } from './NameDialog';
 import { SLOT } from './prompt-words';
-import { typedText } from './typed';
+import { typedText, useTypedNumber } from './typed';
 import { count, readOptional } from './typedNumber';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
 import { useSearch } from './useSearch';
@@ -37,29 +37,21 @@ const readBudget = (draft: string) => {
   const typed = readOptional(draft, true);
   return typed === null || (typed !== undefined && typed < 1) ? null : typed;
 };
-const budgetText = (value: number | undefined) => (value === undefined ? '' : String(value));
 
 function LoreBudgetRow({ id }: { id: string }) {
   const store = useStore();
   const stored = useStored('character', id);
   const save = useAutosave<{ tokenBudget: number | null }>(`character-lore-budget:${id}`, ({ tokenBudget = null }) => setCharacterLoreBudget(store, id, tokenBudget));
-  const [typed, setTyped] = useState<string>();
   const own = (save.unsaved.tokenBudget === undefined ? (stored?.value.card.loreSettings.tokenBudget ?? null) : save.unsaved.tokenBudget) ?? undefined;
-  const draft = typedText(typed, readBudget, own, budgetText);
-  const invalid = readBudget(draft) === null;
+  const field = useTypedNumber(readBudget, own, { error: '1 이상의 정수를 입력해 주세요.', onChange: (value) => save.change({ tokenBudget: value ?? null }) });
   const shared = count(loreBudgetOf(store));
-  const type = (next: string) => {
-    setTyped(next);
-    const value = readBudget(next);
-    if (value !== null) save.change({ tokenBudget: value ?? null });
-  };
   return (
     <SettingRow
       label={LORE_BUDGET_LABEL}
       help={`이 캐릭터와 대화할 때만 적용돼요. 비워 두면 설정의 공용 값(${shared} 토큰)을 따라요.`}
       changed={own !== undefined}
-      error={invalid ? '1 이상의 정수를 입력해 주세요.' : undefined}
-      control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={draft} invalid={invalid} placeholder={shared} onChange={type} />}
+      error={field.error}
+      control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={field.text} invalid={field.error !== undefined} placeholder={shared} onChange={field.change} />}
     />
   );
 }
@@ -92,10 +84,8 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
   }
 
   function saveFolder({ folder, name }: Naming) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
     setNaming(null);
-    void (folder ? renameLoreFolder(store, owner, folder.id, trimmed) : addLoreFolder(store, owner, trimmed)).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
+    void (folder ? renameLoreFolder(store, owner, folder.id, name) : addLoreFolder(store, owner, name)).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
   function removeFolder(folder: LoreFolder) {
@@ -267,7 +257,7 @@ function EntryFields({ shown, folders, language, trial, change, status, remove }
         <SettingRow
           label="위치"
           help={`${SLOT.lorebook.name}을 프롬프트의 ${SLOT.lorebook.name} 블록에 넣을지, 아니면 ${SLOT.description.name} 블록의 맨 앞이나 맨 뒤에 넣을지 정해요.`}
-          control={<ChoiceGroup label="위치" options={POSITIONS} value={shown.position ?? 'lorebook'} onChange={(value) => change({ position: value === 'lorebook' ? null : value })} />}
+          control={<ChoiceGroup layout="fit" label="위치" options={POSITIONS} value={shown.position ?? 'lorebook'} onChange={(value) => change({ position: value === 'lorebook' ? null : value })} />}
         />
         {folders.length > 0 && (
           <SettingRow

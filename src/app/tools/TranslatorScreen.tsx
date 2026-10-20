@@ -6,16 +6,16 @@ import { translateOnTool } from '../../runtime/turn';
 import { ACTS } from '../common/acts';
 import { describeTranslateFailure } from '../common/failure';
 import { LanguageMenu } from '../common/IntoLanguage';
+import { TranslatorNoteField } from '../common/TranslatorNoteField';
 import { count } from '../common/typedNumber';
 import { useCopy } from '../common/useCopy';
-import { useAutosave } from '../common/useAutosave';
 import { usePersisted } from '../common/usePersisted';
-import { inSettings, MODEL_ROLES, NOTE_PLACEHOLDER, noteLines, opens, STOP, TOOL_PAGES, TRANSLATOR_NOTE } from '../common/words';
+import { inSettings, MODEL_ROLES, noteLines, opens, STOP, TOOL_PAGES, TRANSLATOR_NOTE } from '../common/words';
 import { useConnections, useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
-import { Button, Callout, ChipButton, formatKeys, Icon, Menu, MenuHeading, MenuItem, NavBar, pressed, Screen, TextField, TranslateDesk } from '../ui';
+import { Button, Callout, ChipButton, formatKeys, Icon, Menu, MenuHeading, MenuItem, NavBar, pressed, Screen, TranslateDesk } from '../ui';
 
 const LANGUAGE = 'risu-alpha:translator-language';
 
@@ -104,7 +104,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
             {lines > 0 ? `${TRANSLATOR_NOTE} · ${lines}줄` : TRANSLATOR_NOTE}
           </Button>
         }
-        below={noteOpen && <ToolNoteField />}
+        below={noteOpen && <TranslatorNoteField saveKey="tool-note" stored={settings.toolNote} write={(note) => setToolNote(store, note)} help="번역기에서 번역할 때만 써요. 채팅 번역에는 쓰지 않아요." />}
         source={{
           label: '원문',
           value: source,
@@ -158,21 +158,5 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
         }}
       />
     </Screen>
-  );
-}
-
-function ToolNoteField() {
-  const { store } = useSession();
-  const settings = useSettings();
-  const save = useAutosave<{ note: string }>('tool-note', ({ note = '' }) => setToolNote(store, note));
-  return (
-    <TextField
-      label={TRANSLATOR_NOTE}
-      lines={6}
-      value={save.unsaved.note ?? settings.toolNote ?? ''}
-      onChange={(note) => save.change({ note })}
-      placeholder={NOTE_PLACEHOLDER}
-      help="번역기에서 번역할 때만 써요. 채팅 번역에는 쓰지 않아요."
-    />
   );
 }

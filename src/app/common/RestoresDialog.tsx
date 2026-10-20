@@ -5,7 +5,6 @@ import type { ServerError } from '../../contracts/http';
 import type { Report } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
 import { beginRestore, continueRestore, readPoints, readRestores, type Restore, type RestorePoint, type RestoreRun } from '../../runtime/restores';
-import { describeFailure } from './failure';
 import { ago, moment } from './time';
 import { useAttempt } from './useAttempt';
 import { useLoaded } from './useLoaded';
@@ -112,7 +111,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
       const answer = await request();
       setAsking(null);
       if (!answer.ok) {
-        toast.error(`${subject}을 복원하지 못했어요.`, { detail: describeFailure(answer, REFUSED) });
+        toast.failed(answer, `${subject}을 복원하지 못했어요.`, REFUSED);
         return null;
       }
       const ended = answer.data;

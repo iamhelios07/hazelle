@@ -5,11 +5,11 @@ import type { TranslateSetup } from '../../runtime/characters';
 import { translationPrompt } from '../../runtime/prompts';
 import type { translatorOf } from '../../runtime/translate';
 import { useSession } from '../session';
-import { Disclosure, SettingGroup, SettingRow, Switch } from '../ui';
+import { SettingGroup, SettingRow, Switch } from '../ui';
+import { DetailFold } from './DetailFold';
 import { describeTranslateFailure } from './failure';
 import { IntoLanguage } from './IntoLanguage';
 import { appliesTo, TaskModelRow, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
-import { detailLabel } from './words';
 
 type Props = {
   translate: TranslateSetup;
@@ -46,26 +46,24 @@ export function TranslateRows({ translate, translation, card, note, opens, onCha
         />
         {children}
       </SettingGroup>
-      <Disclosure label={detailLabel(set)}>
-        <SettingGroup label="세부 설정">
-          <SettingRow
-            label="원문 함께 보기"
-            help="번역한 문단마다 그 아래에 원문을 작게 보여요."
-            control={<Switch label="원문 함께 보기" checked={translate.original} onChange={(original) => onChange({ original })} />}
-          />
-          <SettingRow
-            label="반전 모드"
-            help="모델에게도 화면에 보이는 내용 그대로 보내요."
-            control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => onChange({ reverse })} />}
-          />
-          {note}
-          <SettingRow
-            label="번역 프롬프트"
-            control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
-          />
-          <TaskModelRow label="번역 모델" noun="번역" choice={prompt} model={translation.ok ? entryName(translation.route.model) : describeTranslateFailure(translation.failure)} onEdit={onEditPrompt} />
-        </SettingGroup>
-      </Disclosure>
+      <DetailFold set={set}>
+        <SettingRow
+          label="원문 함께 보기"
+          help="번역한 문단마다 그 아래에 원문을 작게 보여요."
+          control={<Switch label="원문 함께 보기" checked={translate.original} onChange={(original) => onChange({ original })} />}
+        />
+        <SettingRow
+          label="반전 모드"
+          help="모델에게도 화면에 보이는 내용 그대로 보내요."
+          control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => onChange({ reverse })} />}
+        />
+        {note}
+        <SettingRow
+          label="번역 프롬프트"
+          control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
+        />
+        <TaskModelRow label="번역 모델" noun="번역" choice={prompt} model={translation.ok ? entryName(translation.route.model) : describeTranslateFailure(translation.failure)} onEdit={onEditPrompt} />
+      </DetailFold>
     </>
   );
 }

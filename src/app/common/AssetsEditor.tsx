@@ -70,11 +70,9 @@ export function AssetsEditor({ owner }: { owner: string }) {
     else toast.failed(replaced, '바꾸지 못했어요.');
   }
 
-  function rename(name: string) {
-    const trimmed = name.trim();
-    if (!naming || !trimmed) return;
+  function rename(asset: Stored<'asset'>, name: string) {
     setNaming(null);
-    void renameAsset(store, naming.id, trimmed).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
+    void renameAsset(store, asset.id, name).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
   const actionsOf = (asset: Stored<'asset'>): Action[] => [
@@ -139,7 +137,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
       </Stack>
       {dragging && <DropOverlay>여기에 놓으면 에셋으로 추가돼요</DropOverlay>}
       {viewed && <AssetPreview asset={viewed} actions={actionsOf(viewed)} onClose={() => setViewing(null)} />}
-      {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 에셋을 찾아요." onSave={rename} onClose={() => setNaming(null)} />}
+      {naming && <NameDialog title={`${ASSET} ${ACTS.rename.label}`} value={naming.value.name} hint="봇은 이 이름으로 에셋을 찾아요." onSave={(name) => rename(naming, name)} onClose={() => setNaming(null)} />}
     </Section>
   );
 }
