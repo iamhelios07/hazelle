@@ -154,7 +154,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     limits: { relay, calls: tokenBucket(1), botCalls: tokenBucket(1), visitors: visitorLimits(), uploads: uploadBudget() },
     backups: backups(dataDir, 0, alerts(null)),
 
-    pulse: await openPulse(db),
+    pulse: openPulse(db),
   };
   try {
     const operations: Restored['operations'] = [];

@@ -129,6 +129,23 @@ describe('the migration runner', () => {
     db.close();
   });
 
+  it("starts 헤이젤 나우's current week and last hours again on its lists, keeping the past weeks", () => {
+    const db = new DatabaseSync(':memory:');
+    const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0014');
+    migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
+    const week = 7 * 24 * 60 * 60 * 1000;
+    const thisWeek = Date.now() - ((Date.now() - 313200000) % week);
+    db.exec(`INSERT INTO pulse_week VALUES (${thisWeek}, 10), (${thisWeek - week}, 12);
+      INSERT INTO pulse_week_models VALUES (${thisWeek}, 'chat', '', '', NULL, 5), (${thisWeek - week}, 'chat', '', '', NULL, 6);
+      INSERT INTO pulse_hours VALUES (${thisWeek}, 'chat', 3)`);
+    expect(migrate(db, 'migrations').applied).toContain('0014_pulse_lists.sql');
+    expect(db.prepare('SELECT week FROM pulse_week').all()).toEqual([{ week: thisWeek - week }]);
+    expect(db.prepare('SELECT people FROM pulse_week_models').all()).toEqual([{ people: 6 }]);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM pulse_hours').get()).toEqual({ n: 0 });
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE name IN ('pulse_hour_replies', 'this_week')").all()).toEqual([]);
+    db.close();
+  });
+
   it('upgrades a populated database with the files it lacks, each whole or not at all', () => {
     const db = new DatabaseSync(':memory:');
     const first = dir({ '0001_a.sql': 'CREATE TABLE a (x);' });

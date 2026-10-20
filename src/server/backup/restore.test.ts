@@ -234,7 +234,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     limits: { relay, calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget() },
     backups: backups(dir, 3, alerts(null)),
 
-    pulse: await openPulse(db),
+    pulse: openPulse(db),
   };
   const ctx = { waitUntil: () => {}, passThroughOnException: () => {}, props: {} };
   try {

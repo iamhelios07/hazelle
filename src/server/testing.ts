@@ -41,7 +41,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     localProviders: new Set(),
     limits,
     backups: backups(dir, 3, alerts('https://alerts.test/hook'), async () => disk.freePercent),
-    pulse: await openPulse(db, () => clock.now()),
+    pulse: openPulse(db, () => clock.now()),
   };
 
   const pending: Promise<unknown>[] = [];
@@ -97,13 +97,13 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       clock.now = () => Date.now();
       env.stores.close();
       await env.db.batch([
-        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'picture_removals', 'snapshot_removals', 'backup_runs', 'alerts_sent', 'pulse_week', 'pulse_week_roles', 'pulse_week_models', 'pulse_hours', 'pulse_hour_replies'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
+        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'picture_removals', 'snapshot_removals', 'backup_runs', 'alerts_sent', 'pulse_week', 'pulse_week_roles', 'pulse_week_models', 'pulse_hours', 'pulse_seen', 'pulse_used', 'pulse_replies'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
         env.db.prepare('UPDATE installation SET operator_account = NULL'),
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
       for (const sub of ['accounts', 'files', 'snapshots', 'backup']) rmSync(join(dir, sub), { recursive: true, force: true });
       env.stores = registry();
-      env.pulse = await openPulse(env.db, () => clock.now());
+      env.pulse = openPulse(env.db, () => clock.now());
     },
     get: (path: string, cookie?: string, headers?: Record<string, string>) => send('GET', path, undefined, cookie, headers),
     post: (path: string, body?: unknown, cookie?: string, headers?: Record<string, string>) => send('POST', path, body, cookie, headers),
@@ -137,9 +137,9 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       env.stores.close();
       env.stores = registry();
     },
-    // 헤이젤 나우 as a new process opens it: its sets empty.
-    restartPulse: async () => {
-      env.pulse = await openPulse(env.db, () => clock.now());
+    // 헤이젤 나우 as a new process opens it: nothing remembered.
+    restartPulse: () => {
+      env.pulse = openPulse(env.db, () => clock.now());
     },
   };
 }

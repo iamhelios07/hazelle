@@ -48,7 +48,7 @@ export const PULSE_FLOORS = { row: 5, board: 10, round: 10 } as const;
 export type PulseRow = { key: string; model: string | null; type?: string; share: number; people: number; replies?: number };
 
 // rest: the board's 대화 only, the replies of rows below the floor in each view, so the shares there add up to the
-// whole. It names no model and counts no people: neither is ever written for those rows.
+// whole. It names no model and counts no people, so nothing below the floor shows through it.
 export type PulseRest = { share: number; replies: number };
 export type PulseRanking = { merged: PulseRow[]; split: PulseRow[]; rest?: { merged: PulseRest; split: PulseRest } };
 export type PulseRankings = Record<PulseRole, PulseRanking>;
@@ -56,8 +56,8 @@ export type PulseRankings = Record<PulseRole, PulseRanking>;
 // Who stood where a period earlier, for the rank change marks: the same rows in the same order, nothing else.
 export type PulsePlace = Pick<PulseRow, 'key' | 'type'>;
 export type PulseOrder = { merged: PulsePlace[]; split: PulsePlace[] };
-// A role is null where its earlier period was not counted whole (대화: the 24 hours before reach back past the start;
-// the rest: last week did not pass PULSE_FLOORS.board), so no mark compares against a list that was never shown.
+// A role is null where its earlier period was never shown: last week did not pass PULSE_FLOORS.board (대화: only when
+// the 24 hours before reach into last week), so no mark compares against a list that was never shown.
 export type PulseBefore = Record<PulseRole, PulseOrder | null>;
 
 // hours: the last 24 whole hours, oldest first, each hour's calls per role (rounded); at is the hour's start.
