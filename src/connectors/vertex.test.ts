@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogRequest, chatRequest, detect, embedRoute, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
+import { catalogRequest, chatRequest, detect, embedAnswer, embedRequests, embedRoute, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
 import { decodeStream } from './stream';
 import type { Connection } from './types';
 import { vertex } from './vertex';
@@ -52,7 +52,7 @@ describe('Vertex AI', () => {
     expect(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', pair.publicKey, fromBase64url(signature), new TextEncoder().encode(`${header}.${claims}`))).toBe(true);
   });
 
-  it('is found by its key, sends replies to the project the key names, and embeds nothing there', () => {
+  it('is found by its key and sends replies to the project the key names', () => {
     expect(detect(secret)).toMatchObject({ kind: 'key', type: { id: 'vertex' } });
     const route = resolveConnection(connection) as Route;
     expect(route.endpoint).toEqual({ baseUrl: 'https://aiplatform.googleapis.com/v1/projects/test-project/locations/global/publishers/google', protocol: 'gemini' });
@@ -60,8 +60,23 @@ describe('Vertex AI', () => {
     const request = withCredential(route, chatRequest(route, { model, messages: [{ role: 'user', content: '안녕' }], settings: {} }), 'token');
     expect(request.url).toBe('https://aiplatform.googleapis.com/v1/projects/test-project/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse');
     expect(request.headers.authorization).toBe('Bearer token');
-    expect(embedRoute(connection, model)).toBeNull();
     expect(resolveConnection({ ...connection, accounts: [{ id: 'key', secret: '{"type": "service_account"}' }] })).toBeNull();
+  });
+
+  it('embeds one text a request through embedContent, the purpose of Gemini Embedding 2 written before the text', () => {
+    const route = resolveConnection(connection) as Route;
+    const model = parseCatalog(route, { publisherModels: [{ name: 'publishers/google/models/gemini-embedding-2' }] })![0]!;
+    const url = 'https://aiplatform.googleapis.com/v1/projects/test-project/locations/global/publishers/google/models/gemini-embedding-2:embedContent';
+    expect(embedRequests(embedRoute(connection, model)!, model, ['밤', '아침'], 'document').map(({ request, count }) => [request.url, JSON.parse(request.body!), count])).toEqual([
+      [url, { content: { parts: [{ text: 'title: none | text: 밤' }] } }, 1],
+      [url, { content: { parts: [{ text: 'title: none | text: 아침' }] } }, 1],
+    ]);
+    expect(embedAnswer(route, model, { embedding: { values: [0.1, 0.2] }, usageMetadata: { promptTokenCount: 3 } }, 1)).toEqual({
+      vectors: [[0.1, 0.2]],
+      usage: { inputTokens: 3, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 0, reasoningTokens: null },
+      cost: null,
+    });
+    expect(embedAnswer(route, model, { embeddings: [{ values: [0.1, 0.2] }] }, 1)).toBeNull();
   });
 
   it('lists the publisher models outside the project, every entry by its last name segment and nothing more', () => {

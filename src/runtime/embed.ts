@@ -1,9 +1,10 @@
-import { embedAnswer, embedRequest, embedRoute, withCredential } from '../connectors/registry';
-import type { EmbedPurpose, Usage } from '../connectors/types';
+import { embedAnswer, embedRequests, embedRoute, withCredential } from '../connectors/registry';
+import type { Cost, EmbedPurpose, HttpRequest, Usage } from '../connectors/types';
 import type { Receipt } from '../model/chat';
 import type { Route } from './assignment';
 import type { Credentials } from './credential';
 import { receiptError, type ReplyError } from './generate';
+import { pause } from './pause';
 import { callLabel, PULSE_ROLE } from './pulse';
 import { relayJson } from './relay';
 import { redacted, type RequestLog } from './request-log';
@@ -22,15 +23,23 @@ export const countTexts = (store: Pick<ObjectStore, 'evaluation'>) => async (tex
   return counted;
 };
 
-// One embedding call through the relay, counted in the chat's bot cap (bot: the chat). Consent and the model pick are
-// the caller's (Scripts). receipt: null when nothing reached the network, and only then is nothing logged.
+// Parts of a call split for a provider that takes one text a request (Vertex AI) go a second apart, so indexing a
+// chat's memory never spends the account's 240 calls a minute that its replies need.
+const PART_GAP = 1000;
+
+// One embedding call through the relay, in as many requests as the provider needs, with one receipt. A script's call
+// (script) is counted once in its chat's bot cap, by its first request; memory's own calls are not a bot's and are not
+// counted there. Consent and the model pick are the caller's (Scripts). embedded: told each request's text count as its
+// vectors arrive. receipt: null when nothing reached the network, and only then is nothing logged.
 export async function embedTexts(
   deps: { credentials: Credentials; log: RequestLog; count(texts: string[]): Promise<number[]> },
   { connection, model }: Route,
   texts: string[],
   as: EmbedPurpose | null,
-  bot: string,
-  signal?: AbortSignal,
+  chat: string,
+  script: boolean,
+  signal: AbortSignal,
+  embedded?: (count: number) => void,
 ): Promise<{ answer: Embedded; receipt: Receipt | null }> {
   const unsent = (reason: 'too-large' | 'flood' | 'failed') => ({ answer: { ok: false as const, reason }, receipt: null });
   if (texts.length > EMBED_TEXTS) return unsent('too-large');
@@ -38,7 +47,7 @@ export async function embedTexts(
   if ((await deps.count(texts)).some((tokens) => tokens > EMBED_TOKENS)) return unsent('too-large');
   const route = embedRoute(connection.value, model);
   if (!route) return unsent('failed');
-  const request = embedRequest(route, model, texts, as);
+  const parts = embedRequests(route, model, texts, as);
   const { credentials, log } = deps;
   const picked = await credentials.pool.pick(connection.value);
   if (!picked.ok) return unsent('failed');
@@ -46,8 +55,10 @@ export async function embedTexts(
   if (!credential.ok) return unsent('failed');
   const at = Date.now();
   const began = performance.now();
-  const answer = await relayJson(withCredential(route, request, credential.credential), signal, bot, callLabel(PULSE_ROLE.embedding, connection.value, model.id));
-  const receipt = (made: Pick<Receipt, 'state' | 'cut' | 'error' | 'usage' | 'cost'>): Receipt => {
+  const vectors: number[][] = [];
+  const spent: { usage: Usage; cost: Cost | null }[] = [];
+  const sent: HttpRequest[] = [];
+  const receipt = (made: Pick<Receipt, 'state' | 'cut' | 'error'>): Receipt => {
     const kept: Receipt = {
       id: crypto.randomUUID(),
       connection: connection.id,
@@ -61,24 +72,47 @@ export async function embedTexts(
       totalMs: Math.round(performance.now() - began),
       cache: null,
       ...made,
+      ...summed(spent),
     };
     // No response is kept: the vectors of a full batch run to about a million characters, which would push the chat's
-    // replies out of the log's bound.
-    log.record({ chat: bot, purpose: 'embedding', at, picked: false, receipt: kept, request: redacted(request, connection.value), response: null });
+    // replies out of the log's bound. A split call is one entry, its request bodies in one array.
+    const request = sent.length === 1 ? sent[0]! : { url: sent[0]!.url, body: `[${sent.map(({ body }) => body).join(',')}]` };
+    log.record({ chat, purpose: 'embedding', at, picked: false, receipt: kept, request: redacted(request, connection.value), response: null });
     return kept;
   };
-  const failed = (error: Exclude<ReplyError, { kind: 'stopped' }>, usage: Usage | null = null) => {
+  const failed = (error: Exclude<ReplyError, { kind: 'stopped' }>) => {
     credentials.pool.stale(connection.value, picked.account);
-    return { answer: { ok: false as const, reason: 'failed' as const }, receipt: receipt({ state: 'failed', cut: null, error: receiptError(error), usage, cost: null }) };
+    return { answer: { ok: false as const, reason: 'failed' as const }, receipt: receipt({ state: 'failed', cut: null, error: receiptError(error) }) };
   };
-  if (!answer.ok) {
-    const { failure } = answer;
-    // Refused by the server before the provider saw it: the chat's bot calls for this minute are spent.
-    if (failure.kind === 'app' && failure.code === 'too-many-bot-calls') return unsent('flood');
-    if (failure.kind === 'stopped') return { answer: { ok: false, reason: 'failed' }, receipt: receipt({ state: 'cut', cut: 'stopped', error: null, usage: null, cost: null }) };
-    return failed(failure);
+  const stopped = () => ({ answer: { ok: false as const, reason: 'failed' as const }, receipt: receipt({ state: 'cut', cut: 'stopped', error: null }) });
+  for (const [index, { request, count }] of parts.entries()) {
+    if (index && !(await pause(PART_GAP, signal))) return stopped();
+    sent.push(request);
+    const answer = await relayJson(withCredential(route, request, credential.credential), signal, script && !index ? chat : undefined, callLabel(PULSE_ROLE.embedding, connection.value, model.id));
+    if (!answer.ok) {
+      const { failure } = answer;
+      // Refused by the server before the provider saw it: the chat's bot calls for this minute are spent.
+      if (failure.kind === 'app' && failure.code === 'too-many-bot-calls') return unsent('flood');
+      if (failure.kind === 'stopped') return stopped();
+      return failed(failure);
+    }
+    const parsed = embedAnswer(route, model, answer.data, count);
+    if (!parsed) return failed({ kind: 'bad-event', detail: 'not an embedding answer' });
+    vectors.push(...parsed.vectors);
+    spent.push(parsed);
+    embedded?.(count);
   }
-  const parsed = embedAnswer(route, model, answer.data, texts.length);
-  if (!parsed) return failed({ kind: 'bad-event', detail: 'not an embedding answer' });
-  return { answer: { ok: true, model: model.id, vectors: parsed.vectors }, receipt: receipt({ state: 'done', cut: null, error: null, usage: parsed.usage, cost: parsed.cost }) };
+  return { answer: { ok: true, model: model.id, vectors }, receipt: receipt({ state: 'done', cut: null, error: null }) };
+}
+
+// A split call's usage and cost are its parts', unknown where any part's is.
+function summed(spent: { usage: Usage; cost: Cost | null }[]): Pick<Receipt, 'usage' | 'cost'> {
+  const [first] = spent;
+  if (!first) return { usage: null, cost: null };
+  const inputs = spent.flatMap(({ usage }) => (usage.inputTokens === null ? [] : [usage.inputTokens]));
+  const costs = spent.flatMap(({ cost }) => (cost ? [cost] : []));
+  return {
+    usage: { ...first.usage, inputTokens: inputs.length === spent.length ? inputs.reduce((sum, tokens) => sum + tokens, 0) : null },
+    cost: costs.length === spent.length ? { ...costs[0]!, amount: costs.reduce((sum, cost) => sum + cost.amount, 0) } : null,
+  };
 }

@@ -248,9 +248,9 @@ export function memoryWriter(store: Pick<ObjectStore, 'get'>, chat: Chat): Tools
 }
 
 // failed: why a chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
-// chapterFailed: why its last chapter did not; records go on being summarized meanwhile. indexing: how many records are
-// being embedded for retrieval; indexFailed: why the last pass stopped, which the next 다시 시도 or chat open tries again.
-export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure>; chapterFailed: ReadonlyMap<string, MemoryFailure>; indexing: ReadonlyMap<string, number>; indexFailed: ReadonlyMap<string, MemoryFailure> };
+// chapterFailed: why its last chapter did not; records go on being summarized meanwhile. indexing: how many of how many
+// records are embedded for retrieval; indexFailed: why the last pass stopped, which the next 다시 시도 or chat open tries again.
+export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure>; chapterFailed: ReadonlyMap<string, MemoryFailure>; indexing: ReadonlyMap<string, { done: number; total: number }>; indexFailed: ReadonlyMap<string, MemoryFailure> };
 
 type Planned = { job: Job; sent: ChatSent; from: number; to: number; memory: Memory; before: Written | null; chapter: { target: number } | null; left: number } & Tools;
 
@@ -340,7 +340,7 @@ export class Rememberer {
     for (const abort of this.aborts) abort.abort();
   }
 
-  private change(chat: string, change: { running?: { model: string; left: number } | null; failed?: MemoryFailure | null; chapterFailed?: MemoryFailure | null; indexing?: number | null; indexFailed?: MemoryFailure | null }) {
+  private change(chat: string, change: { running?: { model: string; left: number } | null; failed?: MemoryFailure | null; chapterFailed?: MemoryFailure | null; indexing?: { done: number; total: number } | null; indexFailed?: MemoryFailure | null }) {
     const next = { running: new Map(this.state.running), failed: new Map(this.state.failed), chapterFailed: new Map(this.state.chapterFailed), indexing: new Map(this.state.indexing), indexFailed: new Map(this.state.indexFailed) };
     if (change.running === null) next.running.delete(chat);
     else if (change.running) next.running.set(chat, change.running);
@@ -406,11 +406,12 @@ export class Rememberer {
   private async index(chat: string) {
     const missing = unembedded(this.session.store, chat);
     if (!missing || (!missing.records.length && !missing.stale) || this.state.indexFailed.has(chat)) return;
-    this.change(chat, { indexing: missing.records.length });
+    const total = missing.records.length;
+    this.change(chat, { indexing: { done: 0, total } });
     const control = new AbortController();
     this.aborts.add(control);
     try {
-      const done = await indexRecords(this.session, chat, control.signal);
+      const done = await indexRecords(this.session, chat, control.signal, (embedded) => this.change(chat, { indexing: { done: embedded, total } }));
       this.change(chat, { indexing: null, indexFailed: done.ok ? null : { kind: 'embed', reason: done.reason, receipt: done.receipt } });
     } catch (error) {
       const failure = evaluationFailure(error);

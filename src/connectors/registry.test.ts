@@ -17,7 +17,7 @@ import {
   CONNECTION_TYPES,
   detect,
   embedAnswer,
-  embedRequest,
+  embedRequests,
   embedRoute,
   normalizeBaseUrl,
   parseCatalog,
@@ -28,6 +28,8 @@ import {
   type Route,
 } from './registry';
 import { ConnectorError, type Connection, type Model } from './types';
+
+const embedRequest = (...args: Parameters<typeof embedRequests>) => embedRequests(...args)[0]!.request;
 
 const connection = (type: string, extra: Partial<Connection> = {}) =>
   resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra }) as Route;

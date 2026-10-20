@@ -1,6 +1,7 @@
-import { bareModel } from './chat-completions';
+import { bareModel, embedUsage } from './chat-completions';
+import { embedContent } from './gemini';
 import { ConnectorError, type ConnectionType, type Endpoint } from './types';
-import { isRecord } from './values';
+import { count, isRecord, vector } from './values';
 
 // Vertex AI with a service-account key, checked against a live service account on 2026-10-13: the key signs a JWT that
 // buys an hour's access token, a reply is asked of the project's global location in the Gemini API's format (refused
@@ -111,8 +112,23 @@ export const vertex: ConnectionType = {
     });
   },
   usagePage: 'https://console.cloud.google.com/billing',
-  // The gemini codec embeds through batchEmbedContents; Vertex AI embeds through predict.
-  embeds: null,
+  // Vertex AI has no batchEmbedContents: Gemini Embedding 2 answers only :embedContent, one content a request, on the
+  // global endpoint, and its :predict is 404 (the REST reference and two client reports, 2026-10-20; unrun against a
+  // live project). Older embedding models that answer only :predict fail at the provider.
+  embeds: {
+    perRequest: 1,
+    request: (endpoint, model, [text], as, fields) => ({
+      url: `${endpoint.baseUrl}/models/${model.id}:embedContent`,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...embedContent(model, text!, as), ...fields }),
+    }),
+    parse(payload) {
+      if (!isRecord(payload) || !isRecord(payload.embedding) || !vector(payload.embedding.values)) return null;
+      const usage = isRecord(payload.usageMetadata) ? payload.usageMetadata : {};
+      return { vectors: [payload.embedding.values], usage: embedUsage(count(usage.promptTokenCount)), raw: usage };
+    },
+  },
   // Flex PayGo (docs.cloud.google.com/vertex-ai/generative-ai/docs/flex-paygo, 2026-10-14): half of input and output, on
   // the global endpoint only, asked for with both headers; the second alone lets Provisioned Throughput serve it first.
   // The page names no cached-input rate, so cache rates are kept whole, which errs high. Which models take it the model

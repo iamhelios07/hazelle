@@ -359,7 +359,6 @@ export function describeMemoryFailure(failure: MemoryFailure): string {
 
 const EMBED: Partial<Record<Extract<MemoryFailure, { kind: 'embed' }>['reason'], string>> = {
   'too-large': `기록이 ${MODEL_ROLES.embed}의 한도보다 길어요.`,
-  flood: '이 채팅에서 모델을 너무 자주 호출했어요. 잠시 뒤에 다시 시도해 주세요.',
 };
 
 const SCENE_INVALID = { ...INVALID, paragraph: '모델이 메시지에 없는 문단 번호를 선택했어요.' } as const;

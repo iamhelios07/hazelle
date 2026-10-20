@@ -117,8 +117,8 @@ export function parseCatalog({ type, codec }: Route, payload: unknown): Model[] 
 
 export const costUnit = (type: ConnectionType | null): Cost['unit'] => (type && MODELS_DEV_LISTS[type.id]?.credit ? 'credit' : 'usd');
 
-// The type answers whether it serves its format's embeddings; a generic connection serves its codec's.
-export const embedsOf = ({ type, codec }: Route) => (type?.embeds === null ? null : codec.embeds);
+// The type's own embeddings, or none, where it names them; else its codec's, as for a generic connection.
+export const embedsOf = ({ type, codec }: Route) => (type?.embeds !== undefined ? type.embeds : codec.embeds);
 
 // The route a model's embeddings take; null where the connection serves none in the model's format.
 export function embedRoute(connection: Connection, model: Model): Route | null {
@@ -133,8 +133,17 @@ export function embedRoute(connection: Connection, model: Model): Route | null {
   }
 }
 
-export function embedRequest(route: Route, model: Model, texts: string[], as: EmbedPurpose | null): HttpRequest {
-  return embedsOf(route)!.request(route.endpoint, model, texts, as, route.type?.embedPurpose?.(as) ?? {});
+// One request for each perRequest texts, in order; count: the texts its answer holds.
+export function embedRequests(route: Route, model: Model, texts: string[], as: EmbedPurpose | null): { request: HttpRequest; count: number }[] {
+  const embeds = embedsOf(route)!;
+  const size = embeds.perRequest ?? texts.length;
+  const fields = route.type?.embedPurpose?.(as) ?? {};
+  const requests = [];
+  for (let from = 0; from < texts.length; from += size) {
+    const part = texts.slice(from, from + size);
+    requests.push({ request: embeds.request(route.endpoint, model, part, as, fields), count: part.length });
+  }
+  return requests;
 }
 
 // null for a body that is not the format's embedding answer for this many texts.

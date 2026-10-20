@@ -34,26 +34,36 @@ export function unembedded(store: Pick<ObjectStore, 'get' | 'children'>, chat: s
   return { route, records, kept, stale };
 }
 
+const SAVE_EVERY = 60_000;
+
 export type Indexed = { ok: true } | { ok: false; reason: Extract<Embedded, { ok: false }>['reason']; receipt: Receipt | null };
 
 // Embeds the records that have no vector at the current model, EMBED_TEXTS a call, and writes the chat's vectors
 // without those of records gone or remade. Nothing is written while nothing is missing or stale; a call that fails
-// leaves what it had, so the next pass embeds the rest.
-export async function indexRecords(session: Reader, chat: string, signal: AbortSignal): Promise<Indexed> {
+// leaves what it had, so the next pass embeds the rest. A long pass (one text a request, Vertex AI) also writes what it
+// has every SAVE_EVERY, so retrieval finds the records embedded so far and a reload keeps them. progress: records
+// embedded so far.
+export async function indexRecords(session: Reader, chat: string, signal: AbortSignal, progress: (done: number) => void): Promise<Indexed> {
   const { store } = session;
   const missing = unembedded(store, chat);
   if (!missing) return { ok: true };
   const { route, records, kept: items, stale } = missing;
   if (!records.length && !stale) return { ok: true };
+  let done = 0;
+  let saved = Date.now();
   for (let from = 0; from < records.length; from += EMBED_TEXTS) {
     const batch = records.slice(from, from + EMBED_TEXTS);
-    const { answer, receipt } = await embedTexts({ credentials: session.credentials, log: session.log, count: countTexts(store) }, route, batch.map(recordText), 'document', chat, signal);
+    const { answer, receipt } = await embedTexts({ credentials: session.credentials, log: session.log, count: countTexts(store) }, route, batch.map(recordText), 'document', chat, false, signal, (count) => progress((done += count)));
     if (receipt) await keepCall(session, chat, receipt);
     if (!answer.ok) {
       if (Object.keys(items).length) await writeVectors(store, chat, { model: route.model.id, items });
       return { ok: false, reason: answer.reason, receipt };
     }
     batch.forEach((record, index) => (items[record.id] = quantize(answer.vectors[index]!, record.at)));
+    if (from + EMBED_TEXTS < records.length && Date.now() - saved >= SAVE_EVERY) {
+      await writeVectors(store, chat, { model: route.model.id, items });
+      saved = Date.now();
+    }
   }
   await writeVectors(store, chat, { model: route.model.id, items });
   return { ok: true };
@@ -102,7 +112,7 @@ export async function findRecords(session: Reader, chat: string, messages: Histo
   const found = retrievalOf(store, chat, messages);
   if (!found) return [];
   const { route, items, query } = found;
-  const { answer, receipt } = await embedTexts({ credentials: session.credentials, log: session.log, count: countTexts(store) }, route, [query], 'query', chat, AbortSignal.any([signal, AbortSignal.timeout(QUERY_WAIT)]));
+  const { answer, receipt } = await embedTexts({ credentials: session.credentials, log: session.log, count: countTexts(store) }, route, [query], 'query', chat, false, AbortSignal.any([signal, AbortSignal.timeout(QUERY_WAIT)]));
   if (receipt) await keepCall(session, chat, receipt);
   return answer.ok ? nearest(rank(answer.vectors[0]!, items)) : [];
 }

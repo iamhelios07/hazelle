@@ -18,7 +18,7 @@ import { CHAPTER, follows, inFeature, inSettings, MODEL_ROLES, opens, resetTo, S
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { navigate } from '../shell/router';
-import { Button, Callout, ConfirmDialog, Empty, IconButton, List, MenuItem, MoreMenu, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
+import { Button, Callout, ConfirmDialog, Empty, IconButton, List, MenuItem, MoreMenu, Progress, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
 import { MemoryRow, type ChatMemoryRecord } from './ChatMemoryRecord';
 import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
@@ -125,7 +125,7 @@ export function ChatMemory({ record, item, messages, busy, onClose, onTool, onEd
           {`${CHAPTER}를 만들지 못했어요. ${describeMemoryFailure(unchaptered)}`}
         </Callout>
       )}
-      {embedding !== undefined && <Text variant="note">{`검색 준비 중 · 기록 ${embedding}개`}</Text>}
+      {embedding !== undefined && <Progress steps={[{ label: '검색 준비 중', ...embedding }]} />}
       {embedding === undefined && unindexed && (
         <Callout tone="warn" action={retry}>
           {`검색할 기록을 준비하지 못했어요. ${describeMemoryFailure(unindexed)}`}

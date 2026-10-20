@@ -167,7 +167,9 @@ export type EmbedPurpose = 'query' | 'document';
 // are for, which retrieval-tuned models embed differently; a format with no such field drops it, and fields, the
 // connection type's own (ConnectionType embedPurpose), are laid over the body. parse answers null for a body that is not
 // this format's embedding answer, else a vector per text, in order; raw is the usage as sent, which a type's cost reads.
+// perRequest: the most texts one request carries; null for a whole call's in one.
 export type Embeds = {
+  perRequest: number | null;
   request(endpoint: Endpoint, model: Model, texts: string[], as: EmbedPurpose | null, fields: Record<string, unknown>): HttpRequest;
   parse(payload: unknown, count: number): { vectors: number[][]; usage: Usage; raw: Record<string, unknown> } | null;
 };
@@ -236,9 +238,9 @@ type TypeHooks = {
   // the lookup answers 404.
   settle?: { request(secret: string, id: string): HttpRequest; parse(payload: unknown): Cost | null };
   draws?: Draws;
-  // null: the type serves no embeddings, or its codec's embeddings were not verified against it (design §4,
-  // docs research/embeddings-spike.md).
-  embeds?: null;
+  // In place of its codec's (Vertex AI). null: the type serves no embeddings, or its codec's embeddings were not verified
+  // against it (design §4, docs research/embeddings-spike.md).
+  embeds?: Embeds | null;
   // An embedding call's purpose in a field of the provider's own, where its format has none (Voyage's input_type).
   embedPurpose?: (as: EmbedPurpose | null) => Record<string, unknown>;
 };

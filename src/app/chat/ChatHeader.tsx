@@ -43,6 +43,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   useToolFrames();
   const tools = toolMenu(chat.tools, session.tools.items);
   const failed = features.memory && id !== null && remembering.failed.has(id);
+  const indexing = features.memory && id !== null ? remembering.indexing.get(id) : undefined;
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
   const wide = useWide();
   const openCast = useMenuOpener(castMenu);
@@ -78,7 +79,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <Divider variant="menu" />
         <MenuItem icon={Search} label="검색" onClick={actions.openSearch} />
         {item && !chat.displayPending && <MenuItem icon={Bookmark} label={BOOKMARK} onClick={actions.bookmarks} />}
-        {item && features.memory && <MenuItem icon={Brain} label={FEATURE_NAMES.memory} sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        {item && features.memory && <MenuItem icon={Brain} label={FEATURE_NAMES.memory} sub={failed ? '정리 실패' : indexing ? `검색 준비 ${indexing.done}/${indexing.total}` : undefined} onClick={toggleMemory} />}
         {item && <MenuItem icon={ToggleRight} label={FEATURES_TITLE} onClick={openFeatures.onClick} />}
         {item && <MenuItem icon={BookKey} label={CHAT_LORE} onClick={actions.lore} />}
         {item && <MenuItem icon={ScanSearch} label="점검" onClick={() => actions.openInspect('request')} />}

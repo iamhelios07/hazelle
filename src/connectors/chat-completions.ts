@@ -86,6 +86,7 @@ export const embedUsage = (inputTokens: number | null): Usage => ({ inputTokens,
 // OpenAI's /embeddings, which the responses format shares. Voyage states only total_tokens, which for an embedding is all
 // input.
 export const openAiEmbeds: Embeds = {
+  perRequest: null,
   request: (endpoint, model, texts, _as, fields) => ({
     url: `${endpoint.baseUrl}/embeddings`,
     method: 'POST',

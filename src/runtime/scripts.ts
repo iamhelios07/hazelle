@@ -954,7 +954,7 @@ export class Scripts {
       this.interactions.tell(chat, 'no-model:embed', { kind: 'no-model', role: 'embed' }, from);
       return { ok: false, reason: 'no-model' };
     }
-    const { answer, receipt } = await embedTexts({ credentials, log, count: countTexts(store) }, route, texts, as, chat, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
+    const { answer, receipt } = await embedTexts({ credentials, log, count: countTexts(store) }, route, texts, as, chat, true, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
     if (receipt) await keepCall(this.session, chat, receipt);
     if (!answer.ok && answer.reason === 'flood') this.interactions.tell(chat, 'flood', { kind: 'flood' }, from);
     return answer;

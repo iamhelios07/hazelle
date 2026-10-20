@@ -86,6 +86,17 @@ function terminal(event: unknown): Terminal | null {
 
 const TASKS: Record<EmbedPurpose, string> = { query: 'RETRIEVAL_QUERY', document: 'RETRIEVAL_DOCUMENT' };
 
+// Gemini Embedding 2 takes no taskType; its purpose is written before the text, in the formats ai.google.dev/gemini-api/docs/
+// embeddings gives (checked 2026-10-20). The preview id is the same model before its release.
+const PURPOSE_IN_TEXT = new Set(['gemini-embedding-2', 'gemini-embedding-2-preview']);
+const PREFIXES: Record<EmbedPurpose, string> = { query: 'task: search result | query: ', document: 'title: none | text: ' };
+
+// One text's content and purpose, as the Gemini API's batch and Vertex AI's embedContent both take them.
+export function embedContent(model: Model, text: string, as: EmbedPurpose | null) {
+  if (as && PURPOSE_IN_TEXT.has(model.id)) return { content: { parts: [{ text: PREFIXES[as] + text }] } };
+  return { content: { parts: [{ text }] }, ...(as && { embedContentConfig: { taskType: TASKS[as] } }) };
+}
+
 export const gemini: Codec = {
   authHeaders: (secret) => ({ 'x-goog-api-key': secret }),
 
@@ -196,12 +207,13 @@ export const gemini: Codec = {
     };
   },
   embeds: {
+    perRequest: null,
     request: (endpoint, model, texts, as, fields) => ({
       url: `${endpoint.baseUrl}/models/${model.id}:batchEmbedContents`,
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        requests: texts.map((text) => ({ model: `models/${model.id}`, content: { parts: [{ text }] }, ...(as && { embedContentConfig: { taskType: TASKS[as] } }) })),
+        requests: texts.map((text) => ({ model: `models/${model.id}`, ...embedContent(model, text, as) })),
         ...fields,
       }),
     }),

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import recorded from './fixtures/gemini.json';
-import { chatRequest, detect, embedAnswer, embedRequest, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
+import { chatRequest, detect, embedAnswer, embedRequests, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
 import { gemini } from './gemini';
 import { decodeStream } from './stream';
 import type { Phase, StreamFacts } from './types';
+
+const embedRequest = (...args: Parameters<typeof embedRequests>) => embedRequests(...args)[0]!.request;
 
 const google = resolveConnection({ type: 'google', label: 'Google', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] }) as Route;
 const [flash, old] = parseCatalog(google, recorded.models)!;
@@ -100,7 +102,7 @@ describe('Gemini', () => {
     expect((await decode(sse(event))).outcome.discount).toBeUndefined();
   });
 
-  it('embeds in one batch with the purpose as its task type, and reads the vectors in order', () => {
+  it('embeds in one batch with the purpose as its task type, or before the text for Gemini Embedding 2, and reads the vectors in order', () => {
     const embedder = parseCatalog(google, recorded.models)!.at(-1)!;
     const request = embedRequest(google, embedder, ['밤', '아침'], 'query');
     expect(request.url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents');
@@ -109,6 +111,9 @@ describe('Gemini', () => {
       { model: 'models/gemini-embedding-001', content: { parts: [{ text: '아침' }] }, embedContentConfig: { taskType: 'RETRIEVAL_QUERY' } },
     ] });
     expect(JSON.parse(embedRequest(google, embedder, ['밤'], null).body!).requests[0]).not.toHaveProperty('embedContentConfig');
+    const second = { ...embedder, id: 'gemini-embedding-2' };
+    expect(JSON.parse(embedRequest(google, second, ['밤'], 'query').body!).requests[0]).toEqual({ model: 'models/gemini-embedding-2', content: { parts: [{ text: 'task: search result | query: 밤' }] } });
+    expect(JSON.parse(embedRequest(google, second, ['밤'], 'document').body!).requests[0].content.parts[0].text).toBe('title: none | text: 밤');
     expect(embedAnswer(google, embedder, { embeddings: [{ values: [0.1, 0.2] }, { values: [0.3, 0.4] }], usageMetadata: { promptTokenCount: 4 } }, 2)).toEqual({
       vectors: [[0.1, 0.2], [0.3, 0.4]],
       usage: { inputTokens: 4, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 0, reasoningTokens: null },
