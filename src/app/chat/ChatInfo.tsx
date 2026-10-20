@@ -1,10 +1,9 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect } from 'react';
 import { calls, shown, type Receipt } from '../../model/chat';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
-import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
+import { Breakdown, Callout, Empty, Facts, Section, SidePanel, Stack, Switcher, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
 import { money } from '../common/money';
 import { cost, finish, seconds, speed, tokens } from '../common/receipt';
@@ -66,10 +65,12 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
   }, [chat, receipt, translated, costs]);
 
   const stepper = (
-    <>
-      <IconButton icon={ChevronLeft} label="이전 응답 정보" size="sm" disabled={at <= 0} onClick={() => onPick(replies[at - 1]!.id)} />
-      <IconButton icon={ChevronRight} label="다음 응답 정보" size="sm" disabled={at >= replies.length - 1} onClick={() => onPick(replies[at + 1]!.id)} />
-    </>
+    <Switcher
+      count={`${at + 1} / ${replies.length}`}
+      prev={{ label: '이전 응답 정보', disabled: at <= 0, onClick: () => onPick(replies[at - 1]!.id) }}
+      next={{ label: '다음 응답 정보', disabled: at >= replies.length - 1, onClick: () => onPick(replies[at + 1]!.id) }}
+      size="sm"
+    />
   );
 
   let body;

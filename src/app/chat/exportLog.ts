@@ -41,7 +41,7 @@ export function logDraft(messages: Shown[], view: Display, { placed, pictures: d
     const translation = version.translation?.text ?? null;
     const own = { text: original, original: true };
     const other = translation === null ? own : { text: translation, original: false };
-    const said = (text === 'original' ? [own] : text === 'both' ? [...new Set([own, other])] : [seenText(original, translation, null, flipped.has(version.id)) === original ? own : other]).filter((each) => each.text.trim());
+    const said = (text === 'original' ? [own] : text === 'both' ? [...new Set([own, other])] : [seenText(original, version, null, flipped.has(version.id)) === original ? own : other]).filter((each) => each.text.trim());
     const places = byParagraph(drawn.get(version.id) ?? []);
     const story = ({ text, original }: (typeof said)[number], at: number) => {
       if (!places.size || at > 0) return shownHtml(text, decor);

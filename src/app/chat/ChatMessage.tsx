@@ -19,10 +19,11 @@ import { timeOfDay } from '../common/time';
 import { DISCOUNT_STOPPING, DISCOUNT_WAITING, PRE_READ_WAITING, RETRYING } from '../common/words';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPictures, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { useNow } from './ChatCache';
-import { ChatPicture, slotsOf } from './ChatPicture';
+import { ChatPicture } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
+import { picturePlaces } from './picturePlaces';
 import type { ToolActions } from './toolMenu';
 import type { ChatActions } from './useChat';
 import type { Editing, EditPart } from './useMessageEdit';
@@ -70,7 +71,6 @@ type Props = {
   last: boolean;
   busy: boolean;
   editing: Editing | null;
-  pinned: boolean;
   bookmarked: boolean;
   // One of the messages a memory record was made from, marked as StoryMessage's found; the collection seeks the first.
   found: number;
@@ -91,7 +91,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -102,15 +102,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const sentTranslated = translation?.sentIn !== undefined;
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
-  const text = seenText(original, translation?.text ?? null, translatingText, flipped);
+  const text = seenText(original, version, translatingText, flipped);
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live && !message.whole);
-  // By paragraph, the picture paged to there; a place left out follows its newest.
-  const [pages, setPages] = useState<ReadonlyMap<number, string>>(() => new Map());
-  const slots = slotsOf(drawing, pictures, pages);
-  const paragraphs = new Set(slots.flatMap(({ paragraph }) => (paragraph === null ? [] : [paragraph])));
-  const beside = useMarginRoom();
-  const anchors = useRef<(HTMLDivElement | null)[]>([]);
+  const places = picturePlaces(drawing, pictures);
+  const paragraphs = new Set(places.flatMap(({ paragraph }) => (paragraph === null ? [] : [paragraph])));
   // A translation never goes through the display, so it takes its marks here, by the same paragraphs.
   const originalShown = text === original;
   const translatedText = !paragraphs.size ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraphs) : withMarks(text, paragraphs);
@@ -122,27 +118,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const html = useMemo(() => shownHtml(drawnText, decor), [drawnText, decor.bot, decor.url]);
   const story = useRef<HTMLDivElement>(null);
   const running = drawing !== null && runs(drawing);
-  const page = (paragraph: number) => (picture: string | null) =>
-    setPages((current) => {
-      const next = new Map(current);
-      if (picture) next.set(paragraph, picture);
-      else next.delete(paragraph);
-      return next;
-    });
-  const shownPictures = slots.map((slot) => (
-    <ChatPicture key={slot.paragraph ?? 'run'} slot={slot} message={message} onPage={page(slot.paragraph ?? -1)} running={running} url={decor.url} draws={canIllustrate} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />
-  ));
-  const inlays = slots.map((slot, index) => ({
-    mark: slot.paragraph === null ? null : placeMark(slot.paragraph),
-    node: beside ? (
-      <div
-        ref={(element) => {
-          anchors.current[index] = element;
-        }}
-      />
-    ) : (
-      shownPictures[index]
-    ),
+  const illustrations = places.map((place) => ({
+    mark: place.paragraph === null ? null : placeMark(place.paragraph),
+    node: <ChatPicture key={place.paragraph ?? 'run'} place={place} message={message} running={running} url={decor.url} draws={canIllustrate} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />,
   }));
   const failed = receipt?.state === 'failed';
   const empty = original === '';
@@ -168,16 +146,6 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   };
   const selected = useSelectedPart(story, findPart, editing === null && !live && !message.unstored && !opening && !failed && !empty);
 
-  const cancel = (
-    <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
-      취소
-    </Button>
-  );
-  const save = (
-    <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
-      저장
-    </Button>
-  );
   let body = null;
   if (editing !== null && !part) {
     body = (
@@ -192,27 +160,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
               : { firstLabel: '원문', label: '번역', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
         }
         onKeyDown={editKeys}
-        actions={
-          <>
-            {cancel}
-            {replyNext && (
-              <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.saveEdit(message, true)}>
-                저장하고 다시 생성
-              </Button>
-            )}
-            {save}
-          </>
-        }
       />
     );
   } else if (live && empty) {
     const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : message.prereading ? PRE_READ_WAITING : null;
-    body = (
-      <>
-        <Waiting />
-        {waiting ? <Text variant="note">{waiting}</Text> : <Elapsed thinking={Boolean(version.reasoning)} />}
-      </>
-    );
+    body = waiting ? <Waiting note={waiting} /> : <Elapsed thinking={Boolean(version.reasoning)} />;
   } else if (failed) {
     body = (
       <>
@@ -223,7 +175,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           actions={
             <>
               <Button size="sm" disabled={busy} onClick={() => actions.retry(message)}>
-                다시 시도
+                {ACTS.retry.label}
               </Button>
               <Button variant="secondary" size="sm" {...otherModel}>
                 다른 모델로
@@ -238,11 +190,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   } else if (opening && !version.text.trim()) {
     body = <Text variant="note">{`${NO_GREETING} 시작해요.`}</Text>;
   } else if (!empty || hosted.length > 0) {
-    const box = ({ id, html }: Props['hosted'][number]) => (
-      <div key={id} ref={actions.watch(id)}>
-        <Story html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />
-      </div>
-    );
+    const box = ({ id, html }: Props['hosted'][number]) => <Story key={id} html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} ref={actions.watch(id)} />;
     body = (
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
@@ -256,11 +204,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             term={term}
             tone={pending ? 'faded' : 'plain'}
             cursor={live || reveal.revealing || (translatingText !== null && !flipped)}
-            inlays={part ? [...inlays, { mark: PART_MARK, node: <EditBox value={part.value} onChange={actions.changePart} onKeyDown={editKeys} /> }] : inlays}
+            illustrations={illustrations}
+            inlays={part ? [{ mark: PART_MARK, node: <EditBox value={part.value} onChange={actions.changePart} onKeyDown={editKeys} /> }] : undefined}
             ref={story}
           />
         )}
-        {!empty && beside && shownPictures.length > 0 && <MarginPictures anchors={anchors} side={beside}>{shownPictures}</MarginPictures>}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );
@@ -309,25 +257,17 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             !empty
               ? { label: '이어 쓰기', disabled: busy, onClick: () => actions.continue(message) }
               : cut === 'stopped'
-                ? { label: '다시 시도', disabled: busy, onClick: () => actions.retry(message) }
+                ? { label: ACTS.retry.label, disabled: busy, onClick: () => actions.retry(message) }
                 : undefined
           }
         />
       )}
       {!mine && count > 1 && editing === null && (
         <Switcher
-          label={`${message.selected + 1} / ${count}`}
-          prevDisabled={busy}
-          nextDisabled={busy}
-          nextLabel={nextLabel}
-          prevTitle={titled('이전', [back])}
-          nextTitle={titled(nextLabel, [forward])}
-          onPrev={() => actions.swipe(message, -1)}
-          onNext={() => actions.swipe(message, 1)}
-          versions={message.versions.map((each) => firstLine(each.translation?.text ?? each.text) || NO_GREETING)}
-          selected={message.selected}
-          pickDisabled={busy}
-          onPick={(index) => actions.pick(message, index)}
+          count={`${message.selected + 1} / ${count}`}
+          prev={{ label: '이전', title: titled('이전', [back]), disabled: busy, onClick: () => actions.swipe(message, -1) }}
+          next={{ label: nextLabel, title: titled(nextLabel, [forward]), disabled: busy, onClick: () => actions.swipe(message, 1) }}
+          pick={{ versions: message.versions.map((each) => firstLine(each.translation?.text ?? each.text) || NO_GREETING), selected: message.selected, disabled: busy, onPick: (index) => actions.pick(message, index) }}
         />
       )}
     </>
@@ -351,12 +291,22 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       </Menu>
     ) : null;
 
-  const tools = live || message.unstored ? undefined : part ? (
+  // A part edit offers no 저장하고 다시 생성: its ruling (design.md Part edit, 2026-10-16) is 취소 · 저장.
+  const tools = live || message.unstored ? undefined : editing !== null ? (
     <>
-      {cancel}
-      {save}
+      <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
+        취소
+      </Button>
+      {replyNext && !part && (
+        <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.saveEdit(message, true)}>
+          저장하고 다시 생성
+        </Button>
+      )}
+      <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
+        저장
+      </Button>
     </>
-  ) : editing !== null ? undefined : opening ? (
+  ) : opening ? (
     <>
       {translateTool}
       {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
@@ -380,14 +330,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         <MoreMenu of="메시지" size="xs" place="end">
           {translateAgain}
           {canIllustrate && !mine && !empty && (
-            <MenuItem
-              label="삽화"
-              disabled={running}
-              onClick={() => {
-                setPages(new Map());
-                actions.draw(message.id, version.id);
-              }}
-            />
+            <MenuItem label="삽화" disabled={running} onClick={() => actions.draw(message.id, version.id)} />
           )}
           <MenuItem label={BOOKMARK} checked={bookmarked} multiple onClick={() => actions.bookmark(message.id)} />
           <MenuItem label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />
@@ -426,11 +369,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       badges={badges}
       after={after}
       tools={tools}
-      pinned={pinned}
+      id={message.id}
       found={found}
       marked={marked}
       writing={live || reveal.revealing}
-      onTap={() => actions.pin(message)}
     >
       {body}
     </StoryMessage>
@@ -448,7 +390,7 @@ function Elapsed({ thinking }: { thinking: boolean }) {
   const [start] = useState(Date.now);
   const now = useNow(Infinity);
   const seconds = Math.floor((now - start) / 1000);
-  return <Text variant="note">{`${thinking ? '추론 중' : '기다리는 중'} · ${seconds}초`}</Text>;
+  return <Waiting note={`${thinking ? '추론 중' : '기다리는 중'} · ${seconds}초`} />;
 }
 
 function sameRow(previous: Props, next: Props): boolean {

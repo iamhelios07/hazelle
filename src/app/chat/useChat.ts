@@ -24,7 +24,7 @@ import { BIN_KEEPS, LORE_BUDGET_LABEL } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useToolFrames, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, usePanelsBeside, useViewport, type BotButton, type Reading } from '../ui';
+import { useMenuHandle, usePanelsBeside, useTimePin, useViewport, type BotButton, type Reading } from '../ui';
 import { inspectShown, NO_PANELS, opened, type InfoTab, type InspectTab, type Panel, type Panels } from './panels';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
@@ -126,7 +126,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const flipPanel = (next: Panel, same: (current: Panel) => boolean) => setPanels((current) => (current.panel && same(current.panel) ? { ...current, panel: null } : opened(current, next, pairs)));
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string | null>(null);
+  const timePin = useTimePin();
   const [branching, setBranching] = useState(false);
   const { found, search, actions: searchActions } = useChatSearch(messages, texts, translation.translating, translation.flipped, seekTo);
   const { bookmarked, actions: bookmarkActions } = useChatBookmarks(id, chat.bookmarks, messages, busy, searchActions.find);
@@ -174,13 +174,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function follow() {
     toBottom();
-    setPinned(null);
+    timePin.clear();
   }
 
   function asking() {
     beforeTurn();
     setUnshortened(null);
-    setPinned(null);
+    timePin.clear();
   }
 
   // The one way a message goes out, typed or one of 오토파일럿's.
@@ -344,7 +344,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     problem,
     unshortened,
     editing,
-    pinned,
+    timePin: timePin.value,
     branching,
     panel,
     inspect: inspectShown(panels, pairs),
@@ -383,7 +383,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       bookmarks: () => flipPanel({ kind: 'bookmarks' }, ({ kind }) => kind === 'bookmarks'),
       lore: () => flipPanel({ kind: 'lore' }, ({ kind }) => kind === 'lore'),
       autopilot: () => flipPanel({ kind: 'autopilot' }, ({ kind }) => kind === 'autopilot'),
-      pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
       info: (reply: string) => openInfo(reply, panel?.kind === 'info' ? panel.tab : 'reply'),
       pickInfo: setInfoPick,

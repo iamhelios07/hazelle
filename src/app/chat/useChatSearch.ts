@@ -13,7 +13,7 @@ export function useChatSearch(messages: Shown[], texts: string[], translating: T
   const [find] = useState(finder);
   const readAs = (message: Shown, index: number) => {
     const version = shown(message);
-    return seenText(texts[index]!, version.translation?.text ?? null, translating.live.get(version.id) ?? null, flipped.has(version.id));
+    return seenText(texts[index]!, version, translating.live.get(version.id) ?? null, flipped.has(version.id));
   };
   const hitsFor = (term: string) => find(messages.map(readAs), term).map((index) => messages[index]!.id);
   const hits = useMemo(() => (search ? hitsFor(search.term) : []), [search?.term, messages, texts, translating, flipped]);

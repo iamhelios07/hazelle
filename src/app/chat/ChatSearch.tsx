@@ -1,7 +1,7 @@
-import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { IconButton, pressed, SearchField } from '../ui';
+import { IconButton, pressed, SearchField, Switcher } from '../ui';
 import type { useChatSearch } from './useChatSearch';
 
 type Search = ReturnType<typeof useChatSearch>;
@@ -44,9 +44,12 @@ export function ChatSearch({ search, onSearch, onStep, onClose }: Props) {
       onKeyDown={keys}
       after={
         <>
-          {search.term.trim() && <span aria-live="polite">{`${search.place ?? (none ? 0 : '–')} / ${search.hits}`}</span>}
-          <IconButton icon={ChevronUp} size="xs" label={SHORTCUTS.findPrevious.label} title={titled(SHORTCUTS.findPrevious.label, SHORTCUTS.findPrevious.keys)} disabled={none} onClick={() => onStep(-1)} />
-          <IconButton icon={ChevronDown} size="xs" label={SHORTCUTS.findNext.label} title={titled(SHORTCUTS.findNext.label, SHORTCUTS.findNext.keys)} disabled={none} onClick={() => onStep(1)} />
+          <Switcher
+            count={search.term.trim() ? `${search.place ?? (none ? 0 : '–')} / ${search.hits}` : ''}
+            prev={{ label: SHORTCUTS.findPrevious.label, title: titled(SHORTCUTS.findPrevious.label, SHORTCUTS.findPrevious.keys), disabled: none, onClick: () => onStep(-1) }}
+            next={{ label: SHORTCUTS.findNext.label, title: titled(SHORTCUTS.findNext.label, SHORTCUTS.findNext.keys), disabled: none, onClick: () => onStep(1) }}
+            axis="down"
+          />
           <IconButton icon={X} size="xs" label={SHORTCUTS.closeFind.label} title={titled(SHORTCUTS.closeFind.label, SHORTCUTS.closeFind.keys)} onClick={onClose} />
         </>
       }
