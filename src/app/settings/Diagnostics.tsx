@@ -19,7 +19,7 @@ export function Diagnostics() {
     <>
       <SettingRow
         label="문제 진단"
-        help="운영자에게 알리기에서 함께 보내는 정보를 미리 보거나 복사해요. 기기와 브라우저 정보, 이 탭에서 난 최근 오류만 담기고 채팅 내용이나 API 키는 담기지 않아요."
+        help="게시판에서 운영자에게만 보낼 때 함께 보내는 정보를 미리 보거나 복사해요. 기기와 브라우저 정보, 이 탭에서 난 최근 오류만 담기고 채팅 내용이나 API 키는 담기지 않아요."
         control={
           <Button variant="secondary" size="sm" icon={Stethoscope} busy={busy} onClick={run}>
             진단하기

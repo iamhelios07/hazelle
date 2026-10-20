@@ -53,7 +53,7 @@ it('gives the operator no nickname: it writes as 운영자 without one', async (
   expect((await t.put('board/name', { name: '진짜운영자' }, admin.cookie)).status).toBe(400);
   const id = await posted(admin, { title: '공지' });
   const reader = await member('reader');
-  expect((await read(reader, id)).author).toEqual({ name: '운영자', operator: true, mine: false });
+  expect((await read(reader, id)).author).toEqual({ name: '운영자', operator: true, mine: false, left: false });
 });
 
 it('lists a public post to every account and an operator-only one to its author and the operator alone', async () => {
@@ -76,12 +76,18 @@ it('lets a suspended account write and read only operator-only posts', async () 
   const writer = await member('writer');
   const suspended = await member('suspended');
   await posted(writer, { title: '공개' });
+  const before = await posted(suspended, { title: '정지 전에 쓴 글' });
+  await commented(writer, before, '정지 뒤에 달린 댓글');
   await t.env.db.prepare('UPDATE accounts SET suspended_at = 1 WHERE id = ?').bind(suspended.id).run();
 
   expect(await (await write(suspended)).json()).toEqual({ error: 'suspended' });
   expect((await write(suspended, { title: '지워 주세요', visibility: 'operator' })).status).toBe(200);
   expect(await titles(suspended)).toEqual([]);
   expect(await titles(suspended, 'sort=new&mine=1')).toEqual(['지워 주세요']);
+  // What happened on its public posts stays out of its activity and its unread count, and it deletes only what it reads.
+  expect(await (await t.get('board/activity', suspended.cookie)).json()).toEqual({ activity: [], next: null });
+  expect(await (await t.get('session', suspended.cookie)).json()).toMatchObject({ session: { unreadBoard: 0 } });
+  expect((await t.delete(`board/posts/${before}`, undefined, suspended.cookie)).status).toBe(404);
 });
 
 it("sorts 'top' by votes, then newest, and pages it on the server's cursor", async () => {
@@ -166,6 +172,8 @@ it('hides a post from others but not from its author, until a hold runs out', as
   expect((await t.get(`board/posts/${id}`, other.cookie)).status).toBe(404);
   expect((await read(author, id)).hidden).toEqual({ reason: '신고 검토 중', until: expect.any(Number) });
   expect(await log(admin)).toMatchObject([{ action: 'post-hide', target: String(id), detail: { reason: '신고 검토 중', days: 3 } }]);
+  expect(await (await t.get('session', author.cookie)).json()).toMatchObject({ session: { unreadNotices: 1 } });
+  expect(await (await t.get('notices', author.cookie)).json()).toMatchObject({ notices: [{ text: '"가려질 글" 글을 가렸어요. 이유: 신고 검토 중. 3일 뒤에 다시 보여요.' }] });
 
   await t.env.db.prepare('UPDATE posts SET hidden_until = ? WHERE id = ?').bind(Date.now() - 1, id).run();
   expect(await titles(other)).toEqual(['가려질 글']);
@@ -182,6 +190,8 @@ it('hides a comment: its text reaches only its author and the operator', async (
   expect((await read(author, id)).comments[0]).toMatchObject({ text: null, hidden: null });
   expect((await read(other, id)).comments[0]).toMatchObject({ text: '거친 말', hidden: { reason: '욕설', until: null } });
   expect((await read(admin, id)).comments[0]).toMatchObject({ text: '거친 말', hidden: { reason: '욕설', until: null } });
+  expect(await (await t.get('notices', other.cookie)).json()).toMatchObject({ notices: [{ text: '"제목" 글에 쓴 댓글을 가렸어요. 이유: 욕설.' }] });
+  expect(await (await t.get('session', author.cookie)).json()).toMatchObject({ session: { unreadNotices: 0 } });
 });
 
 it('holds each account to its posts a day, counted in the database', async () => {
@@ -226,11 +236,11 @@ it("lists what others did to one's posts and comments, counts it unread, and mar
   await t.put(`board/posts/${id}/status`, { status: 'done', version: 'v0.4.0' }, admin.cookie);
   expect((await t.put(`board/posts/${id}/status`, { status: 'working', version: 'v0.4.0' }, admin.cookie)).status).toBe(400);
 
-  const by = { operator: false, mine: false, name: 'other' };
+  const by = { operator: false, mine: false, left: false, name: 'other' };
   const { activity, next } = (await (await t.get('board/activity', author.cookie)).json()) as { activity: Activity[]; next: string | null };
   expect([activity, next]).toEqual([
     [
-      { id: id * 2 + 1, kind: 'status', postId: id, title: '내 글', by: { name: '운영자', operator: true, mine: false }, at: expect.any(Number), commentId: null, status: 'done' },
+      { id: id * 2 + 1, kind: 'status', postId: id, title: '내 글', by: { name: '운영자', operator: true, mine: false, left: false }, at: expect.any(Number), commentId: null, status: 'done' },
       { id: reply * 2, kind: 'reply', postId: id, title: '내 글', by, at: reply, commentId: reply, status: null },
       { id: top * 2, kind: 'comment', postId: id, title: '내 글', by, at: top, commentId: top, status: null },
     ],
@@ -256,7 +266,7 @@ it('takes 신고 on posts and comments into the inbox, once per reporter and tar
   expect((await t.post(`board/comments/${said}/reports`, { text: '욕이에요' }, reporter.cookie)).status).toBe(204);
 
   const { reports } = (await (await t.get('admin/reports', admin.cookie)).json()) as { reports: { id: number }[] };
-  const row = { accountId: reporter.id, username: 'reporter', createdAt: expect.any(Number), resolvedAt: null, share: null, shareVersion: null, link: null, diagnostics: null, shared: null };
+  const row = { accountId: reporter.id, username: 'reporter', createdAt: expect.any(Number), resolvedAt: null, share: null, shareVersion: null, link: null, shared: null };
   expect(reports).toEqual([
     { ...row, id: expect.any(Number), text: '욕이에요', postId: id, commentId: said, postTitle: '문제의 글', commentText: '문제의 댓글' },
     { ...row, id: expect.any(Number), text: '광고예요', postId: id, commentId: null, postTitle: '문제의 글', commentText: null },

@@ -106,7 +106,7 @@ export const MODEL_SETTINGS = '모델 설정';
 export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
 
 // 게시판 (design §6.13): its rail entry and pages, a post's category and status, and the marks its rows carry. left: an
-// author whose account is gone.
+// author whose account is gone; unnamed: one that has not chosen a nickname (contracts/board Author).
 export const BOARD = {
   title: '게시판',
   categories: { bug: '버그', idea: '제안', question: '질문', talk: '이야기' } satisfies Record<Category, string>,
@@ -118,6 +118,7 @@ export const BOARD = {
   toOperator: '운영자에게만 보내기',
   nickname: '닉네임',
   left: '탈퇴한 사용자',
+  unnamed: '닉네임 없음',
   hidden: '가려짐',
   deleted: '삭제됨',
   vote: '추천',

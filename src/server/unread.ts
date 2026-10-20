@@ -18,11 +18,13 @@ export const UNREAD_NOTICES = `(SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AN
 
 // The board activity of the account named by the SQL a, derived from the rows, never stored: each comment others wrote
 // on its posts or under its comments (a 'reply' when under its comment), and each status the operator set on its posts.
-// A row's id is the comment's id * 2, or the post's id * 2 + 1 for its status, so ids of both kinds never meet.
+// A row's id is the comment's id * 2, or the post's id * 2 + 1 for its status, so ids of both kinds never meet. A
+// suspended account hears only of its operator-only posts, the ones it can still open (board.ts readable).
+const OPENABLE = (a: string) => `(p.visibility = 'operator' OR (SELECT s.suspended_at FROM accounts s WHERE s.id = ${a}) IS NULL)`;
 const COMMENTED = (a: string) => `FROM comments c JOIN posts p ON p.id = c.post_id LEFT JOIN comments parent ON parent.id = c.parent_id
   WHERE (p.account_id = ${a} OR parent.account_id = ${a}) AND c.account_id IS NOT ${a} AND c.deleted = 0 AND NOT ${hidden('c')}
-    AND (p.account_id = ${a} OR ${a} IS ${OPERATOR} OR NOT ${hidden('p')})`;
-const STATUSED = (a: string) => `FROM posts p WHERE p.account_id = ${a} AND p.status_at IS NOT NULL AND ${a} IS NOT ${OPERATOR}`;
+    AND (p.account_id = ${a} OR ${a} IS ${OPERATOR} OR NOT ${hidden('p')}) AND ${OPENABLE(a)}`;
+const STATUSED = (a: string) => `FROM posts p WHERE p.account_id = ${a} AND p.status_at IS NOT NULL AND ${a} IS NOT ${OPERATOR} AND ${OPENABLE(a)}`;
 
 export const activity = (a: string) =>
   `SELECT c.id * 2 AS id, CASE WHEN parent.account_id IS ${a} THEN 'reply' ELSE 'comment' END AS kind, p.id AS postId, p.title, c.account_id AS byId,

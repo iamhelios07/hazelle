@@ -46,12 +46,12 @@ function readable(account: Account) {
   if (account.suspended) return "(p.account_id = ?1 AND p.visibility = 'operator')";
   return `(p.account_id = ?1 OR (p.visibility = 'public' AND NOT ${hidden('p')}))`;
 }
-// Over a comments row aliased c: its text reaches the asker.
 const commentShown = (account: Account) => (account.admin ? 'TRUE' : `(c.account_id = ?1 OR NOT ${hidden('c')})`);
 
-const AUTHOR = (a: string) => `${a}.account_id IS ?1 AS mine, ${a}.account_id = ${OPERATOR} AS byOperator, (SELECT name FROM board_names WHERE account_id = ${a}.account_id) AS name`;
-type AuthorSql = { mine: number; byOperator: number | null; name: string | null };
-const author = (row: AuthorSql): Author => ({ name: row.byOperator ? OPERATOR_NAME : row.name, operator: Boolean(row.byOperator), mine: Boolean(row.mine) });
+const AUTHOR = (a: string) =>
+  `${a}.account_id IS ?1 AS mine, ${a}.account_id = ${OPERATOR} AS byOperator, ${a}.account_id IS NULL AS gone, (SELECT name FROM board_names WHERE account_id = ${a}.account_id) AS name`;
+type AuthorSql = { mine: number; byOperator: number | null; gone: number; name: string | null };
+const author = (row: AuthorSql): Author => ({ name: row.byOperator ? OPERATOR_NAME : row.name, operator: Boolean(row.byOperator), mine: Boolean(row.mine), left: Boolean(row.gone) });
 
 type HiddenSql = { hiddenReason: string | null; hiddenUntil: number | null; hiddenNow: number };
 const HIDDEN = (a: string) => `${a}.hidden_reason AS hiddenReason, ${a}.hidden_until AS hiddenUntil, ${hidden(a)} AS hiddenNow`;
@@ -64,9 +64,9 @@ const POST_COLUMNS = (account: Account) => `p.id, p.title, p.category, p.status,
   EXISTS (SELECT 1 FROM post_votes v WHERE v.post_id = p.id AND v.account_id = ?1) AS voted,
   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted = 0 AND ${commentShown(account)}) AS commentCount`;
 type PostSql = Omit<PostRow, 'author' | 'voted' | 'locked' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { voted: number; locked: number; deleted: number };
-const postRow = ({ mine, byOperator, name, hiddenReason, hiddenUntil, hiddenNow, voted, locked, deleted, ...row }: PostSql, account: Account): PostRow => ({
+const postRow = ({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, voted, locked, deleted, ...row }: PostSql, account: Account): PostRow => ({
   ...row,
-  author: author({ mine, byOperator, name }),
+  author: author({ mine, byOperator, gone, name }),
   voted: Boolean(voted),
   locked: Boolean(locked),
   hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, account.admin || Boolean(mine)),
@@ -75,9 +75,9 @@ const postRow = ({ mine, byOperator, name, hiddenReason, hiddenUntil, hiddenNow,
 
 const COMMENT_COLUMNS = `c.id, c.post_id AS postId, c.parent_id AS parentId, c.text, c.created_at AS createdAt, c.edited_at AS editedAt, c.deleted, ${HIDDEN('c')}, ${AUTHOR('c')}`;
 type CommentSql = Omit<Comment, 'author' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { deleted: number };
-function comment({ mine, byOperator, name, hiddenReason, hiddenUntil, hiddenNow, deleted, text, ...row }: CommentSql, account: Account): Comment {
+function comment({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, deleted, text, ...row }: CommentSql, account: Account): Comment {
   const sees = account.admin || Boolean(mine);
-  return { ...row, author: author({ mine, byOperator, name }), text: deleted || (hiddenNow && !sees) ? null : text, hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, sees), deleted: Boolean(deleted) };
+  return { ...row, author: author({ mine, byOperator, gone, name }), text: deleted || (hiddenNow && !sees) ? null : text, hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, sees), deleted: Boolean(deleted) };
 }
 
 const hasNickname = async (c: Context<AppEnv>) => (await c.env.db.prepare('SELECT 1 AS named FROM board_names WHERE account_id = ?').bind(c.get('account').id).first()) !== null;
@@ -216,11 +216,12 @@ board.delete('/posts/:id', async (c) => {
   const id = idOf(c);
   if (id === null) return fail(c, 400, 'bad-input');
   const db = c.env.db;
-  const own = [id, account.admin ? 1 : 0, account.id];
+  const own = `p.id = ?2 AND p.deleted = 0 AND (?3 OR p.account_id = ?1) AND ${readable(account)}`;
+  const bound = [account.id, id, account.admin ? 1 : 0];
   const done = await db.batch([
     ...(account.admin ? [db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'post-delete', id, json_object('title', title) FROM posts WHERE id = ?1 AND deleted = 0`).bind(id, Date.now())] : []),
-    db.prepare('UPDATE posts AS p SET text = NULL, diagnostics = NULL, deleted = 1 WHERE p.id = ?1 AND p.deleted = 0 AND (?2 OR p.account_id = ?3) AND EXISTS (SELECT 1 FROM comments WHERE post_id = p.id) RETURNING id').bind(...own),
-    db.prepare('DELETE FROM posts AS p WHERE p.id = ?1 AND p.deleted = 0 AND (?2 OR p.account_id = ?3) AND NOT EXISTS (SELECT 1 FROM comments WHERE post_id = p.id) RETURNING id').bind(...own),
+    db.prepare(`UPDATE posts AS p SET text = NULL, diagnostics = NULL, deleted = 1 WHERE ${own} AND EXISTS (SELECT 1 FROM comments WHERE post_id = p.id) RETURNING id`).bind(...bound),
+    db.prepare(`DELETE FROM posts AS p WHERE ${own} AND NOT EXISTS (SELECT 1 FROM comments WHERE post_id = p.id) RETURNING id`).bind(...bound),
   ]);
   return done.slice(-2).some(({ results }) => results.length) ? c.body(null, 204) : fail(c, 404, 'not-found');
 });
@@ -294,7 +295,10 @@ board.delete('/comments/:id', async (c) => {
   const id = idOf(c);
   if (id === null) return fail(c, 400, 'bad-input');
   const db = c.env.db;
-  const post = await db.prepare('SELECT post_id FROM comments WHERE id = ? AND deleted = 0').bind(id).first<number>('post_id');
+  const post = await db
+    .prepare(`SELECT c.post_id FROM comments c JOIN posts p ON p.id = c.post_id WHERE c.id = ?2 AND c.deleted = 0 AND ${readable(account)}`)
+    .bind(account.id, id)
+    .first<number>('post_id');
   if (post === null) return fail(c, 404, 'not-found');
   const own = [id, account.admin ? 1 : 0, account.id];
   const done = await db.batch([
@@ -343,14 +347,14 @@ board.get('/activity', async (c) => {
   if (limit === null || (after !== undefined && cursor === null)) return fail(c, 400, 'bad-input');
   const { results } = await c.env.db
     .prepare(
-      `SELECT a.id, a.kind, a.postId, a.title, a.at, a.commentId, a.status, a.byId = ${OPERATOR} AS byOperator, (SELECT name FROM board_names WHERE account_id = a.byId) AS name FROM (${activity('?1')}) a
+      `SELECT a.id, a.kind, a.postId, a.title, a.at, a.commentId, a.status, a.byId = ${OPERATOR} AS byOperator, a.byId IS NULL AS gone, (SELECT name FROM board_names WHERE account_id = a.byId) AS name FROM (${activity('?1')}) a
        WHERE ?2 IS NULL OR (a.at, a.id) < (?2, ?3) ORDER BY a.at DESC, a.id DESC LIMIT ?4`,
     )
     .bind(account.id, cursor ? Number(cursor[1]) : null, cursor ? Number(cursor[2]) : null, limit)
-    .all<Omit<Activity, 'by'> & { byOperator: number | null; name: string | null }>();
+    .all<Omit<Activity, 'by'> & { byOperator: number | null; gone: number; name: string | null }>();
   const last = results.length === limit ? results.at(-1)! : null;
   return c.json({
-    activity: results.map(({ byOperator, name, ...row }): Activity => ({ ...row, by: author({ mine: 0, byOperator, name }) })),
+    activity: results.map(({ byOperator, gone, name, ...row }): Activity => ({ ...row, by: author({ mine: 0, byOperator, gone, name }) })),
     next: last && `${last.at}:${last.id}`,
   });
 });
@@ -410,9 +414,17 @@ const hide = (table: 'posts' | 'comments', kind: 'post' | 'comment') => async (c
       db.prepare(`UPDATE ${table} SET hidden_reason = NULL, hidden_until = NULL WHERE id = ? RETURNING id`).bind(id),
     );
   }
+  // 임시조치 tells the author (정보통신망법 제44조의2): a notice from the operator naming the post, the reason and the hold's end.
+  const told = `'"' || p.title || '" ${table === 'posts' ? '글을' : '글에 쓴 댓글을'} 가렸어요. 이유: ' || ?3 || '.' || CASE WHEN ?4 IS NULL THEN '' ELSE ' ' || CAST(?4 AS INTEGER) || '일 뒤에 다시 보여요.' END`;
   return act(
     c,
     db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, '${kind}-hide', id, json_object('reason', ?3, 'days', ?4) FROM ${table} WHERE id = ?1`).bind(id, now, shown.reason, shown.days),
+    db
+      .prepare(
+        `INSERT INTO notices (incarnation, text, created_at) SELECT a.incarnation, ${told}, ?2 FROM ${table} t JOIN posts p ON p.id = ${table === 'posts' ? 't.id' : 't.post_id'}
+         JOIN accounts a ON a.id = t.account_id WHERE t.id = ?1 AND t.account_id IS NOT ${OPERATOR}`,
+      )
+      .bind(id, now, shown.reason, shown.days),
     db.prepare(`UPDATE ${table} SET hidden_reason = ?2, hidden_until = ?3 WHERE id = ?1 RETURNING id`).bind(id, shown.reason, shown.days === null ? null : now + shown.days * DAY_MS),
   );
 };

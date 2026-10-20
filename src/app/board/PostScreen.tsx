@@ -51,7 +51,8 @@ const hiddenLine = (what: string, { reason, until }: Hidden) => `운영자가 �
 export function PostScreen({ id, back }: { id: number; back: Back }) {
   const loaded = useLoaded(() => readPost(id), [id]);
   const post = loaded.data?.post;
-  if (!post) return (
+  // A reload that failed shows its failure, not the post as it was: the post may be gone (its last comment deleted).
+  if (!post || loaded.failure) return (
     <Screen width="form" top={<NavBar title={BOARD.title} {...backBar(back)} />}>
       {loaded.loading}
       {loaded.failure}
@@ -166,7 +167,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
         {post.visibility === 'operator' && <Text variant="note">운영자만 읽을 수 있는 글이에요.</Text>}
         {live ? <Text variant="prose">{linkify(post.text!)}</Text> : <Text variant="note">삭제된 글이에요.</Text>}
         {admin && post.diagnostics !== null && <TextField label="진단 정보" lines={8} value={post.diagnostics} onChange={() => {}} readOnly />}
-        {live && (
+        {live && post.visibility === 'public' && (
           <Row kind="actions">
             <Button variant={shown.voted ? 'primary' : 'secondary'} icon={ThumbsUp} label={shown.voted ? `${voteLabel}, 추천함` : voteLabel} onClick={() => gate(() => void flip())}>
               {voteLabel}
@@ -222,7 +223,7 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
   const ids = new Set(post.comments.map((comment) => comment.id));
   const tops = post.comments.filter((comment) => comment.parentId === null || !ids.has(comment.parentId));
   const repliesOf = (id: number) => post.comments.filter((comment) => comment.parentId === id);
-  const open = !post.locked && post.text !== null;
+  const open = (!post.locked || admin) && post.text !== null;
 
   function item(comment: Comment, top: boolean) {
     const { mine } = comment.author;

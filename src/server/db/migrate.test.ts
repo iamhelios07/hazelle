@@ -151,24 +151,32 @@ describe('the migration runner', () => {
     db.exec('PRAGMA foreign_keys = ON');
     const shipped = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0015');
     migrate(db, dir(Object.fromEntries(shipped.map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
-    db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline, notices_seen) VALUES ('op', 'op', 'h', 1, 'iop', 't', 0), ('a', 'jin', 'h', 1, 'ia', 't', 0);
+    db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline, notices_seen) VALUES ('op', 'op', 'h', 1, 'iop', 't', 0), ('a', 'jin', 'h', 1, 'ia', 't', 0), ('b', 'bee', 'h', 1, 'ib', 't', 9);
       UPDATE installation SET operator_account = 'op';
       INSERT INTO reports (id, account_id, username, text, created_at, resolved_at, diagnostics) VALUES (7, 'a', 'jin', '그림이 안 열려요' || char(10) || '어제부터요', 2, 3, '진단');
       INSERT INTO reports (id, account_id, username, text, created_at) VALUES (8, 'gone', 'gone', '떠난 사람', 2);
       INSERT INTO reports (id, text, created_at, share, share_version, link) VALUES (9, '신고', 2, 's', 1, 'https://hazelle.app/s/s#k');
-      INSERT INTO notices (id, incarnation, report_id, text, created_at) VALUES (4, 'ia', 7, '고쳤어요', 3), (5, NULL, NULL, '모두에게', 4), (6, 'ia', 1, '잊힌 질문의 답', 5)`);
-    expect(migrate(db, 'migrations').applied).toEqual(['0015_board.sql']);
+      INSERT INTO reports (id, account_id, username, text, created_at, resolved_at) VALUES (10, 'b', 'bee', '느려요', 2, 6);
+      INSERT INTO notices (id, incarnation, report_id, text, created_at) VALUES (4, 'ia', 7, '고쳤어요', 3), (5, NULL, NULL, '모두에게', 4), (6, 'ia', 1, '잊힌 질문의 답', 5), (9, 'ib', 10, '봤어요', 6)`);
+    expect(migrate(db, 'migrations').applied).toEqual(['0015_board.sql', '0016_notices_seen_clamp.sql']);
     expect(db.prepare('SELECT id, account_id, title, text, category, status, status_at, visibility, diagnostics FROM posts ORDER BY id').all()).toEqual([
       { id: 7, account_id: 'a', title: '그림이 안 열려요', text: '그림이 안 열려요\n어제부터요', category: 'question', status: 'seen', status_at: 3, visibility: 'operator', diagnostics: '진단' },
       { id: 8, account_id: null, title: '떠난 사람', text: '떠난 사람', category: 'question', status: 'open', status_at: null, visibility: 'operator', diagnostics: null },
+      { id: 10, account_id: 'b', title: '느려요', text: '느려요', category: 'question', status: 'seen', status_at: 6, visibility: 'operator', diagnostics: null },
     ]);
-    expect(db.prepare('SELECT post_id, parent_id, account_id, text, created_at FROM comments').all()).toEqual([{ post_id: 7, parent_id: null, account_id: 'op', text: '고쳤어요', created_at: 3 }]);
+    expect(db.prepare('SELECT post_id, parent_id, account_id, text, created_at FROM comments ORDER BY id').all()).toEqual([
+      { post_id: 7, parent_id: null, account_id: 'op', text: '고쳤어요', created_at: 3 },
+      { post_id: 10, parent_id: null, account_id: 'op', text: '봤어요', created_at: 6 },
+    ]);
     expect(db.prepare('SELECT * FROM notices ORDER BY id').all()).toEqual([{ id: 5, incarnation: null, text: '모두에게', created_at: 4 }, { id: 6, incarnation: 'ia', text: '잊힌 질문의 답', created_at: 5 }]);
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'notices'").all()).toEqual([{ name: 'notices_incarnation' }]);
     expect(db.prepare('SELECT id FROM reports').all()).toEqual([{ id: 9 }]);
     // The reply it had not read stays unread on the board.
     expect(db.prepare("SELECT board_seen FROM accounts WHERE id = 'a'").get()).toEqual({ board_seen: 2 });
-    expect(db.prepare("INSERT INTO posts (title, category, visibility, created_at) VALUES ('t', 'bug', 'public', 9) RETURNING id").get()).toEqual({ id: 9 });
+    // b had read its reply, the newest notice: with that notice gone, the next one must still count as unread for b.
+    expect(db.prepare("SELECT notices_seen FROM accounts WHERE id = 'b'").get()).toEqual({ notices_seen: 6 });
+    expect(db.prepare("INSERT INTO notices (text, created_at) VALUES ('새 소식', 7) RETURNING id").get()).toEqual({ id: 7 });
+    expect(db.prepare("INSERT INTO posts (title, category, visibility, created_at) VALUES ('t', 'bug', 'public', 9) RETURNING id").get()).toEqual({ id: 11 });
     db.close();
   });
 

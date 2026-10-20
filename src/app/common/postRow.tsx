@@ -5,9 +5,7 @@ import { ago } from './time';
 import { count } from './typedNumber';
 import { BOARD } from './words';
 
-// A post's row, on the board and on 운영's head of operator-only posts.
-
-export const authorName = (author: Author) => (author.operator ? OPERATOR_NAME : (author.name ?? BOARD.left));
+export const authorName = (author: Author) => (author.operator ? OPERATOR_NAME : author.left ? BOARD.left : (author.name ?? BOARD.unnamed));
 
 export const statusWord = ({ status, version }: Pick<PostRow, 'status' | 'version'>) =>
   status === 'done' && version ? `${BOARD.statuses.done} · ${version}` : BOARD.statuses[status];
