@@ -1,5 +1,5 @@
-import { useState, type Ref } from 'react';
-import { SearchField } from '../ui';
+import { useState, type ReactNode, type Ref } from 'react';
+import { Empty, SearchField } from '../ui';
 import { matches, noResults, SEARCH_FROM } from './search';
 
 // A picker's search: Enter in its field picks the first found once words are typed (with none, the first item may sit
@@ -16,6 +16,7 @@ export function useSearch<T>(items: readonly T[], label: string, texts: (item: T
   const words = query.trim();
   const found = words ? items.filter((item) => matches(words, ...texts(item))) : items;
   const first = found[0];
+  const none = words !== '' && found.length === 0 ? noResults(words) : null;
   return {
     words,
     found,
@@ -36,6 +37,8 @@ export function useSearch<T>(items: readonly T[], label: string, texts: (item: T
         }
       />
     ),
-    none: words !== '' && found.length === 0 ? noResults(words) : null,
+    none,
+    // The list's place: the list, or once words are typed, what they found or the sentence that nothing was.
+    shown: (list: ReactNode, results: (found: readonly T[]) => ReactNode) => (!words ? list : none === null ? results(found) : <Empty variant="section">{none}</Empty>),
   };
 }

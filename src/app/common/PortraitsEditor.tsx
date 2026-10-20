@@ -7,6 +7,7 @@ import { useToast } from '../toast';
 import { Button, Callout, Empty, FileButton, IconButton, MarkupArea, MenuItem, MoreMenu, PhraseField, Row, Section, Stack, TextField } from '../ui';
 import { ACTS, addOf } from './acts';
 import { download, fileNamed } from './download';
+import { EntryList } from './EntryList';
 import { describeLikenessFailure } from './failure';
 import { filled, typedText } from './typed';
 import { useAutosave } from './useAutosave';
@@ -164,25 +165,28 @@ function PortraitFields({ owner, index, portrait, onRemove }: { owner: string; i
         <Section title="외모" level={3}>
           {tags('외모', shown('look'), (look) => save.change({ look }))}
         </Section>
-        {outfits.map((outfit, at) => (
-          <Section
-            key={at}
-            title={at === 0 ? '옷 (기본)' : '옷'}
-            level={3}
-            help={at === 0 ? '이야기가 옷 이름 그대로 입히면 그 옷의 태그로 그리고, 옷을 말하지 않으면 (기본)을 입어요.' : undefined}
-            action={<IconButton icon={ACTS.remove.icon} label={`${outfit.name || '옷'} ${ACTS.remove.label}`} size="sm" onClick={() => save.change({ outfits: outfits.toSpliced(at, 1) })} />}
-          >
-            <Stack gap="related">
-              <TextField label="옷 이름" showLabel={false} placeholder="옷 이름" value={outfit.name} onChange={(next) => save.change({ outfits: outfits.with(at, { ...outfit, name: next }) })} />
-              {tags(`옷 ${outfit.name}`, outfit.tags, (next) => save.change({ outfits: outfits.with(at, { ...outfit, tags: next }) }))}
-            </Stack>
-          </Section>
-        ))}
-        <div>
-          <Button variant="link" onClick={() => save.change({ outfits: [...outfits, { name: '', tags: '' }] })}>
-            {addOf('옷')}
-          </Button>
-        </div>
+        <EntryList
+          entries={outfits}
+          onChange={(next) => save.change({ outfits: next })}
+          name={(at) => outfits[at]!.name || '옷'}
+          blank={{ name: '', tags: '' }}
+          addLabel={addOf('옷')}
+          removed={(at) => `${at + 1}번째 옷을 삭제했어요.`}
+        >
+          {({ value: outfit, index: at, set, remove }) => (
+            <Section
+              title={at === 0 ? '옷 (기본)' : '옷'}
+              level={3}
+              help={at === 0 ? '이야기가 옷 이름 그대로 입히면 그 옷의 태그로 그리고, 옷을 말하지 않으면 (기본)을 입어요.' : undefined}
+              action={remove}
+            >
+              <Stack gap="related">
+                <TextField label="옷 이름" showLabel={false} placeholder="옷 이름" value={outfit.name} onChange={(next) => set({ ...outfit, name: next })} />
+                {tags(`옷 ${outfit.name}`, outfit.tags, (next) => set({ ...outfit, tags: next }))}
+              </Stack>
+            </Section>
+          )}
+        </EntryList>
         <Section title="작가" level={3}>
           {tags('작가', shown('artist'), (artist) => save.change({ artist }))}
         </Section>

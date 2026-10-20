@@ -13,12 +13,14 @@ type Props<T> = {
   addLabel: string;
   // The caller words it, so the particle after the noun is right.
   removed: (index: number) => string;
+  // A row before the entries that holds the add, in place of the button after them, such as a setting's row in a group.
+  head?: (add: { label: string; onClick: () => void }) => ReactNode;
   children: (entry: Entry<T>) => ReactNode;
 };
 
 // A delete takes effect at once and the toast offers 되돌리기, which puts the entry back into the list as it is then, at
 // its old place or last when the list is shorter.
-export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed, children }: Props<T>) {
+export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed, head, children }: Props<T>) {
   const undoable = useOwnUndo();
   const latest = useRef({ entries, onChange });
   latest.current = { entries, onChange };
@@ -27,8 +29,10 @@ export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed
     onChange(entries.filter((_, at) => at !== index));
     undoable(removed(index), () => latest.current.onChange(latest.current.entries.toSpliced(index, 0, gone)));
   }
+  const add = { label: addLabel, onClick: () => onChange([...entries, blank]) };
   return (
     <>
+      {head?.(add)}
       {entries.map((value, index) => (
         <Fragment key={index}>
           {children({
@@ -40,9 +44,11 @@ export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed
           })}
         </Fragment>
       ))}
-      <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => onChange([...entries, blank])}>
-        {addLabel}
-      </Button>
+      {!head && (
+        <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={add.onClick}>
+          {addLabel}
+        </Button>
+      )}
     </>
   );
 }

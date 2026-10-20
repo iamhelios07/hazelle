@@ -7,12 +7,14 @@ import { drawingModels, type ImageRoute, type sceneWriterOf } from '../../runtim
 import { illustrationPrompt } from '../../runtime/prompts';
 import { useConnections, useSession } from '../session';
 import { navigate } from '../shell/router';
-import { Button, ChipButton, Disclosure, IconButton, Menu, MenuHeading, MenuItem, NumberInput, SettingGroup, SettingRow, Switch } from '../ui';
+import { Button, ChipButton, Menu, MenuHeading, MenuItem, NumberInput, SettingGroup, SettingRow, Switch } from '../ui';
 import { ACTS, addOf, newOf } from './acts';
+import { DetailFold } from './DetailFold';
+import { EntryList } from './EntryList';
 import { describeIllustrateFailure } from './failure';
 import { readTyped } from './typedNumber';
 import { appliesTo, TaskModelRow, TaskPromptMenu, type PromptDoor } from './TaskPrompt';
-import { detailLabel, follows, NOT_STARRED } from './words';
+import { follows, NOT_STARRED } from './words';
 
 type Props = {
   illustrate: IllustrateSetup;
@@ -55,31 +57,29 @@ export function IllustrateRows({ illustrate, sceneWriter, card, opens, onChange,
         />
         {children}
       </SettingGroup>
-      <Disclosure label={detailLabel(set)}>
-        <SettingGroup label="세부 설정">
-          <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
-          <SettingRow
-            label="페르소나 시점으로 그리기"
-            help="페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
-            control={<Switch label="페르소나 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
-          />
-          <SettingRow
-            label="만화로 그리기"
-            help="한 장을 여러 컷이 있는 만화 페이지로 그려요. 말풍선 글자는 모델이 그려서 읽을 수 없어요."
-            control={<Switch label="만화로 그리기" checked={illustrate.comic} onChange={(comic) => onChange({ comic })} />}
-          />
-          <SettingRow
-            label="무료가 아니어도 만들기"
-            help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 물어보지 않고 바로 만들어요. 이때는 요금이 나가요."
-            control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
-          />
-          <SettingRow
-            label="삽화 프롬프트"
-            control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
-          />
-          <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : entryName(sceneWriter.route.model)} onEdit={onEditPrompt} />
-        </SettingGroup>
-      </Disclosure>
+      <DetailFold set={set}>
+        <PictureLadder ladder={illustrate.ladder} onChange={(ladder) => onChange({ ladder: ladder.length ? ladder : undefined })} />
+        <SettingRow
+          label="페르소나 시점으로 그리기"
+          help="페르소나의 눈으로 보는 장면을 그려요. 페르소나는 삽화에 나오지 않아요."
+          control={<Switch label="페르소나 시점으로 그리기" checked={illustrate.pov} onChange={(pov) => onChange({ pov })} />}
+        />
+        <SettingRow
+          label="만화로 그리기"
+          help="한 장을 여러 컷이 있는 만화 페이지로 그려요. 말풍선 글자는 모델이 그려서 읽을 수 없어요."
+          control={<Switch label="만화로 그리기" checked={illustrate.comic} onChange={(comic) => onChange({ comic })} />}
+        />
+        <SettingRow
+          label="무료가 아니어도 만들기"
+          help="무료 사용량을 다 썼거나 요금제에 무료 이미지가 없을 때도 물어보지 않고 바로 만들어요. 이때는 요금이 나가요."
+          control={<Switch label="무료가 아니어도 만들기" checked={illustrate.spend} onChange={(spend) => onChange({ spend })} />}
+        />
+        <SettingRow
+          label="삽화 프롬프트"
+          control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} opens={opens} onPick={(prompt) => onChange({ prompt })} onEdit={onEditPrompt} />}
+        />
+        <TaskModelRow label="장면 모델" noun="삽화" choice={prompt} model={'kind' in sceneWriter ? describeIllustrateFailure(sceneWriter) : entryName(sceneWriter.route.model)} onEdit={onEditPrompt} />
+      </DetailFold>
     </>
   );
 }
@@ -89,6 +89,7 @@ const RUNG = 3000;
 
 type Draft = { from: string; count: string };
 type Read = { ok: true; rung: Rung } | { ok: false; error: string };
+type Readable = Extract<Read, { ok: true }>;
 
 // What a rung's fields hold, or why it cannot be saved: a longer length and more pictures than the rung before, or
 // than the one picture every reply gets.
@@ -123,49 +124,51 @@ function PictureLadder({ ladder, onChange }: { ladder: Rung[]; onChange: (ladder
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const shown = drafts ?? ladder.map(draftOf);
   const read = readAll(shown);
-  const type = (at: number, change: Partial<Draft>) => {
-    const next = shown.with(at, { ...shown[at]!, ...change });
+  const change = (next: Draft[]) => {
     setDrafts(next);
     const rungs = readAll(next);
-    if (rungs.every((rung) => rung.ok)) onChange(rungs.map((rung) => (rung as Extract<Read, { ok: true }>).rung));
+    if (rungs.every((rung) => rung.ok)) onChange(rungs.map((rung) => (rung as Readable).rung));
   };
-  const save = (next: Rung[]) => {
-    setDrafts(null);
-    onChange(next);
-  };
-  const last = ladder.at(-1);
+  const last = read.findLast((rung): rung is Readable => rung.ok)?.rung;
   return (
-    <>
-      <SettingRow
-        label="삽화 수"
-        help="응답이 길면 삽화를 더 많이 만들어요. 글자 수는 태그를 빼고 세요."
-        sub={ladder.length ? undefined : '응답마다 1장'}
-        control={
-          <Button variant="ghost" size="sm" icon={ACTS.create.icon} onClick={() => save([...ladder, { from: (last?.from ?? 0) + RUNG, count: (last?.count ?? 1) + 1 }])}>
-            {addOf('단계')}
-          </Button>
-        }
-      />
-      {shown.map((draft, at) => {
+    <EntryList
+      entries={shown}
+      onChange={change}
+      name={(at) => `${at + 1}단계`}
+      blank={draftOf({ from: (last?.from ?? 0) + RUNG, count: (last?.count ?? 1) + 1 })}
+      addLabel={addOf('단계')}
+      removed={(at) => `${at + 1}단계를 삭제했어요.`}
+      head={(add) => (
+        <SettingRow
+          label="삽화 수"
+          help="응답이 길면 삽화를 더 많이 만들어요. 글자 수는 태그를 빼고 세요."
+          sub={ladder.length ? undefined : '응답마다 1장'}
+          control={
+            <Button variant="ghost" size="sm" icon={ACTS.create.icon} onClick={add.onClick}>
+              {add.label}
+            </Button>
+          }
+        />
+      )}
+    >
+      {({ value: draft, index: at, name, set, remove }) => {
         const rung = read[at]!;
-        const name = `${at + 1}단계`;
         return (
           <SettingRow
-            key={at}
             label={name}
             sentence={
               <>
-                <NumberInput label={`${name} 글자 수`} value={draft.from} unit="자" invalid={!rung.ok} onChange={(from) => type(at, { from })} />
+                <NumberInput label={`${name} 글자 수`} value={draft.from} unit="자" invalid={!rung.ok} onChange={(from) => set({ ...draft, from })} />
                 {' 이상이면 '}
-                <NumberInput label={`${name} 장 수`} value={draft.count} unit="장" invalid={!rung.ok} onChange={(count) => type(at, { count })} />
+                <NumberInput label={`${name} 장 수`} value={draft.count} unit="장" invalid={!rung.ok} onChange={(count) => set({ ...draft, count })} />
               </>
             }
             error={rung.ok ? undefined : rung.error}
-            control={<IconButton icon={ACTS.remove.icon} size="xs" label={`${name} ${ACTS.remove.label}`} onClick={() => save(ladder.toSpliced(at, 1))} />}
+            control={remove}
           />
         );
-      })}
-    </>
+      }}
+    </EntryList>
   );
 }
 
