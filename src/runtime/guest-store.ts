@@ -102,6 +102,7 @@ async function feed(tx: IDBTransaction, account: string, query: FeedQuery): Prom
   const fedOnly = until !== null && query.parent === null && excluded.size === UNFED.size && [...UNFED].every((kind) => excluded.has(kind));
   const [index, low, high] = query.parent !== null
     ? ['parent', [account, query.parent, query.since], [account, query.parent, Infinity]]
+    : query.kind !== null ? ['kind', [account, query.kind, query.since], [account, query.kind, until ?? Infinity]]
     : fedOnly ? ['scope', [account, '', query.since], [account, '', until]] : ['rev', [account, query.since], [account, until ?? Infinity]];
   const pageRows = query.metadata ? METADATA_PAGE_ROWS : PAGE_ROWS;
   const changes: SealedChange[] = [];

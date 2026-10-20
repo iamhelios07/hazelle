@@ -148,6 +148,7 @@ export function database(): Promise<IDBDatabase> {
       objects.createIndex('rev', ['account', 'rev']);
       objects.createIndex('parent', ['account', 'parent', 'rev']);
       objects.createIndex('scope', ['account', 'scope', 'rev']);
+      objects.createIndex('kind', ['account', 'kind', 'rev']);
       db.createObjectStore('guest-files');
     };
     // A tab of an older version holding the database open blocks the upgrade: this tab goes on without the cache rather

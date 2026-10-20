@@ -4,6 +4,7 @@ import { CLAIM_SETTLE_MS } from '../contracts/files';
 import type { Connection } from '../connectors/types';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
+import { feedQuery } from './backend';
 import { guestAccount, guestBackend } from './guest-store';
 import { Files } from './files';
 import { openSession } from './session';
@@ -87,6 +88,9 @@ describe('a guest’s browser store', () => {
     expect(seen.length).toBeGreaterThan(1);
     expect(seen[0]!.total).toBe(seen.at(-1)!.objects);
     expect(reader.list('connection')).toHaveLength(before + 600);
+    expect(await writer.batch([{ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: crypto.randomUUID(), value: { type: 'delete', message: 'm', at: 0 } }], undefined, { unheld: true })).toEqual({ ok: true, data: null });
+    const kindOnly = await backend.feed(feedQuery({ since: 0, timeline: null, kind: 'entry' }));
+    expect(kindOnly.ok && kindOnly.data.changes.length && kindOnly.data.changes.every(({ kind }) => kind === 'entry')).toBe(true);
   });
 
   it('keeps pictures in the browser and releases one no object names only after its claim settles', async () => {
