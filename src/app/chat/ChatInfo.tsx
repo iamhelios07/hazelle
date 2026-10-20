@@ -233,15 +233,15 @@ function Fitting({ receipt, title = '토큰 맞추기' }: { receipt: Receipt; ti
         variant="tiles"
         items={[
           fit.denominator === null
-            ? { label: '앱이 센 입력', value: UNKNOWN, tone: 'muted', detail: fit.unavailable ? [UNMEASURED[fit.unavailable]] : undefined }
+            ? { label: '앱이 센 입력', value: UNKNOWN, tone: 'muted', notes: fit.unavailable ? [UNMEASURED[fit.unavailable]] : undefined }
             : { label: '앱이 센 입력', value: `약 ${tokens(fit.denominator)}` },
           fit.ratio === null
-            ? { label: '이번 배율', value: UNKNOWN, tone: 'muted', detail: fit.ineligible ? [UNLEARNED[fit.ineligible]] : undefined }
+            ? { label: '이번 배율', value: UNKNOWN, tone: 'muted', notes: fit.ineligible ? [UNLEARNED[fit.ineligible]] : undefined }
             : { label: '이번 배율', value: `×${fit.ratio.toFixed(2)}` },
-          { label: '맞춘 기준', value: SOURCE[fit.source], tone: fit.source === 'unavailable' ? 'muted' : undefined, detail: learned ? [`기록 ${Math.max(1, Math.round(fit.evidence))}개 반영`] : undefined },
+          { label: '맞춘 기준', value: SOURCE[fit.source], tone: fit.source === 'unavailable' ? 'muted' : undefined, notes: learned ? [`기록 ${Math.max(1, Math.round(fit.evidence))}개 반영`] : undefined },
           ...(fit.bound === null && fit.allowance === null
             ? []
-            : [{ label: '보낼 수 있던 입력', value: fit.allowance === null ? UNKNOWN : `약 ${tokens(fit.allowance)}`, detail: [fit.bound ? BOUND[fit.bound] : '모델 한도를 몰라 줄이지 않음', ...(fit.multiplier === null ? [] : [`배율 ×${fit.multiplier.toFixed(2)} 적용`])] }]),
+            : [{ label: '보낼 수 있던 입력', value: fit.allowance === null ? UNKNOWN : `약 ${tokens(fit.allowance)}`, notes: [fit.bound ? BOUND[fit.bound] : '모델 한도를 몰라 줄이지 않음', ...(fit.multiplier === null ? [] : [`배율 ×${fit.multiplier.toFixed(2)} 적용`])] }]),
           ...(fit.retries.length ? [{ label: '길이 초과로 다시 보냄', value: `${fit.retries.length}번`, tone: 'warn' as const }] : []),
         ]}
       />

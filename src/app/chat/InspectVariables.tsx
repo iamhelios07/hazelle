@@ -78,7 +78,7 @@ export function Variables({ chat, sending, busy }: { chat: string; sending: Send
                     key={variable.name}
                     title={variable.name}
                     description={shownValue(variable.last.value, variable.last.truncated)}
-                    aside={writerName(variable.last.writer)}
+                    note={writerName(variable.last.writer)}
                     expanded={open === variable.name}
                     onClick={() => setOpen(open === variable.name ? null : variable.name)}
                     detail={
@@ -87,7 +87,7 @@ export function Variables({ chat, sending, busy }: { chat: string; sending: Send
                           <ValueEditor chat={chat} version={last && shown(last).id} busy={busy} variable={variable} onDone={() => setOpen(null)} />
                           <List label={`${variable.name} 기록`}>
                             {[...variable.history].reverse().map((write, index) => (
-                              <ListItem key={index} title={shownValue(write.value, write.truncated)} aside={writerName(write.writer)} />
+                              <ListItem key={index} title={shownValue(write.value, write.truncated)} note={writerName(write.writer)} />
                             ))}
                           </List>
                         </Stack>
@@ -105,7 +105,7 @@ export function Variables({ chat, sending, busy }: { chat: string; sending: Send
         <Section title="토글" help="봇이 toggle_이라는 이름으로 읽는 값이에요.">
           <List label="토글">
             {toggles.map(({ declaration, value }) => (
-              <ListItem key={declaration.key} title={declaration.label || declaration.key} code={`toggle_${declaration.key}`} aside={value === null ? UNKNOWN : shownValue(value, false)} />
+              <ListItem key={declaration.key} title={declaration.label || declaration.key} code={`toggle_${declaration.key}`} note={value === null ? UNKNOWN : shownValue(value, false)} />
             ))}
           </List>
         </Section>

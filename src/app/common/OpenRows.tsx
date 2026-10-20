@@ -40,8 +40,8 @@ export function useOpenRows(several = false) {
 
 export type OpenRows = ReturnType<typeof useOpenRows>;
 
-export function OpenRow({ title, aside, tag, open, onOpen, children }: { title: string; aside?: string; tag: string | null; open: boolean; onOpen: (open: boolean) => void; children: ReactNode }) {
-  return <ListItem title={title} aside={aside} trailing={tag && <Tag>{tag}</Tag>} expanded={open} onClick={() => onOpen(!open)} detail={open && <Stack gap="group">{children}</Stack>} />;
+export function OpenRow({ title, note, tag, open, onOpen, children }: { title: string; note?: string; tag: string | null; open: boolean; onOpen: (open: boolean) => void; children: ReactNode }) {
+  return <ListItem title={title} note={note} trailing={tag && <Tag>{tag}</Tag>} expanded={open} onClick={() => onOpen(!open)} detail={open && <Stack gap="group">{children}</Stack>} />;
 }
 
 // An open row's foot: its save state and its delete. children: tools before the save state, such as moves.

@@ -17,9 +17,9 @@ type Props = {
   traverse?: boolean;
 };
 
-// top: the row's top at the scroller's scroll-padding-top, which a header floating over it sets; bottom: the row's end
-// at its scroll-padding-bottom, which a composer floating over it sets.
-export type Seek = { key: string; revision: number; align: 'center' | 'top' | 'bottom' };
+// lands: where the row lands in the view. top: its top at the scroller's scroll-padding-top, which a header floating
+// over it sets; bottom: its end at its scroll-padding-bottom, which a composer floating over it sets.
+export type Seek = { key: string; revision: number; lands: 'center' | 'top' | 'bottom' };
 
 // Sent from the root once a row's new height is in place, before the scroll events of that frame: a follower that waits
 // for its own resize observer would read the old bottom from them.
@@ -56,7 +56,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
   const keys = stable.current;
   const [initial] = useState(() => new Set(keys));
   const opened = useRef(false);
-  const reveal = useMemo<Seek | null>(() => current ? { key: current, revision: 0, align: 'center' } : null, [current]);
+  const reveal = useMemo<Seek | null>(() => current ? { key: current, revision: 0, lands: 'center' } : null, [current]);
   const target = seek ?? reveal;
   const keyboard = useRef<{ key: string; back: boolean } | null>(null);
   const root = useRef<HTMLDivElement & HTMLUListElement>(null);
@@ -181,11 +181,11 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
         const top = offset + sizes.offset(index);
         const bottom = offset + sizes.offset(index + 1);
         if (seek || top < frame.scrollTop || bottom > frame.scrollTop + frameHeight(frame)) {
-          held.current = { key: target.key, end: target.align === 'bottom' };
-          if (target.align === 'top') {
+          held.current = { key: target.key, end: target.lands === 'bottom' };
+          if (target.lands === 'top') {
             room.current = { key: target.key, below: 0 };
             fit.current(true);
-          } else if (target.align === 'bottom') frame.scrollTop = bottom - frameHeight(frame) + (parseFloat(getComputedStyle(frame).scrollPaddingBottom) || 0);
+          } else if (target.lands === 'bottom') frame.scrollTop = bottom - frameHeight(frame) + (parseFloat(getComputedStyle(frame).scrollPaddingBottom) || 0);
           else frame.scrollTop = (top + bottom) / 2 - frameHeight(frame) / 2;
           opened.current = true;
         }

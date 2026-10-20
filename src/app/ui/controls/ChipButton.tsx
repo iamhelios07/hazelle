@@ -10,7 +10,7 @@ type Props = {
   variant?: 'chip' | 'field' | 'ghost' | 'value';
   opens?: 'down' | 'up';
   // warn: the current choice is missing.
-  tone?: 'default' | 'warn';
+  tone?: 'plain' | 'warn';
   phone?: 'full' | 'icon';
   popup: 'menu' | 'dialog';
   expanded: boolean;
@@ -18,7 +18,7 @@ type Props = {
   onClick: () => void;
 };
 
-export function ChipButton({ label, title, leading, variant = 'chip', opens = 'down', tone = 'default', phone = 'full', popup, expanded, ref, onClick }: Props) {
+export function ChipButton({ label, title, leading, variant = 'chip', opens = 'down', tone = 'plain', phone = 'full', popup, expanded, ref, onClick }: Props) {
   const classes = [styles.chip, variant !== 'chip' && styles[variant], tone === 'warn' && styles.warn, phone === 'icon' && styles.phoneIcon].filter(Boolean).join(' ');
   return (
     <button ref={ref} type="button" className={classes} title={title} aria-label={`${title} · ${label}`} aria-haspopup={popup} aria-expanded={expanded} onClick={onClick}>

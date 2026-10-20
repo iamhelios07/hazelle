@@ -3,14 +3,14 @@ import { Icon } from '../foundation/Icon';
 import styles from './ActionCard.module.css';
 
 type Props = {
-  tone?: 'default' | 'accent';
+  tone?: 'plain' | 'accent';
   icon: LucideIcon;
   title: string;
   description: string;
   onClick: () => void;
 };
 
-export function ActionCard({ tone = 'default', icon, title, description, onClick }: Props) {
+export function ActionCard({ tone = 'plain', icon, title, description, onClick }: Props) {
   return (
     <button type="button" className={tone === 'accent' ? `${styles.card} ${styles.accent}` : styles.card} onClick={onClick}>
       <span className={styles.head}>

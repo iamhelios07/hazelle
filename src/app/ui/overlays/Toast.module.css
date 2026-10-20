@@ -105,7 +105,7 @@
   }
 }
 
-.error .action button {
+.warn .action button {
   color: var(--color-on-accent);
 }
 
@@ -142,24 +142,24 @@
   display: block;
 }
 
-.error .from {
+.warn .from {
   padding: var(--space-4) var(--space-8) var(--space-4) var(--space-16);
   background: var(--color-warn);
 }
 
-.error .from button {
+.warn .from button {
   color: var(--color-text);
 }
 
-.error .from + .row {
+.warn .from + .row {
   padding-top: var(--space-12);
 }
 
-.error .row {
+.warn .row {
   align-items: flex-start;
 }
 
-.error .detail {
+.warn .detail {
   color: var(--color-text);
   font-size: var(--text-md);
 }

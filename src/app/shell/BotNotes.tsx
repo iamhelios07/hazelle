@@ -21,7 +21,7 @@ export function BotNotes() {
         case 'said': {
           // Its chat or speaker was deleted while the script ran, and its words go with it.
           if (!live(store.get('chat', note.chat)) || !from) break;
-          toast.said(from, note.text, note.tone === 'error' ? 'error' : 'plain');
+          toast.said(from, note.text, note.tone === 'error' ? 'warn' : 'plain');
           break;
         }
         case 'failed':

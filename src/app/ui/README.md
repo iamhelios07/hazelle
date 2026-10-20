@@ -29,8 +29,23 @@ and only this folder styles elements.**
 
 ## Rules
 
-- Components take variants (`variant`, `size`, `tone`, `kind`, `gap`), never `className` or `style`.
-  A screen that needs a new look extends a component or adds one here.
+- Components take variants, never `className` or `style`; a screen that needs a new look extends a component or adds
+  one here. Each prop word has one meaning across the kit:
+  - `variant`: which of a component's looks. `size`: how large, a step of a short scale; a slot may decide it.
+    `tone`: the colour of what it says: `plain` for neutral, then `muted`, `accent`, `warn` and a component's own
+    (a branch, the user's own, faded).
+  - `kind`: what a group holds (a toolbar, actions, tags; a menu or a dialog). `gap`: the named room between a
+    column's children. `layout`: how a choice's options stand. `density` and `scheme`: a row's height and its place's
+    colours.
+  - `width`: how wide a screen may grow. `align`: where a frame sets its content (start or center). `level`: a
+    heading's level.
+  - `current`: the thing open now (`aria-current`). `pressed`: the one picked among choices (`aria-pressed`).
+    `selected`: one of a pick of several, absent while not picking. `expanded`: a row open in place.
+  - `description`: what a thing holds, under its name. `note`: quiet words by it, by a title, at a row's end (where
+    it is used, when, how much) or under a figure (`notes` for several). `detail`: a node under a row, such as a gauge.
+    `lines`: a text area's height in lines.
+  - `aside`: a column beside the main one, a screen's or a code pane's. `help`: the ⓘ's explanation. `hint`: a
+    field's line under it.
 - Screens (the feature folders beside this one) and the app shell compose these components, imported from `src/app/ui`. They
   import no CSS and pass no `className` or `style`.
 - Only give a palette value a semantic name when its role is visible in an approved mockup.
@@ -58,7 +73,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
   one (`TitleField`, `NameDialog`) unless a blank is a value, which `blank` says in a sentence (a model: its catalog name
   stands in), the placeholder then naming what stands in.
 - **Lists:** a list of places (`List places`) shows a › on each row; a list of the user's own things shows none.
-  Contents go in `description`, where it is used in `aside`; an unused thing says nothing there. Counts read
+  Contents go in `description`, where it is used in `note`; an unused thing says nothing there. Counts read
   `{label} N개`, joined by ` · `. The default is the `badge` 기본.
 - **Search** comes from `common/useSearch`: the field shows from `SEARCH_FROM` (`common/search.ts`) items and stays while words are typed;
   it stands first in the body's toolbar `Row`, sort and filters beside it. Its no-results `Empty` takes the variant
@@ -147,7 +162,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Viewport` (`ROWS_RESIZED`, `Seek`) | `Viewport.module.css` | A keyed, measured window of rows within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focus, row state and jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts, the whole named above the bar when given |
-| collections | `CardList` (`CardItem`) | `CardList.module.css` | The user's own things as cards across the width, one column in a side panel or on a phone: name, badge and tags, where it is used under it, a control beside it, something under it such as a gauge (`detail`), and things folded under it (its copies) as rows inside the card, hung from `FolderRow`'s guide line; marked while it is open (`current`, API 연결's connections); a folder among them (`folder`) takes the folder mark and the cards dragged onto it, on its own fill (no ›, which unfolds a card's copies) |
+| collections | `CardList` (`CardItem`) | `CardList.module.css` | The user's own things as cards across the width, one column in a side panel or on a phone: name, badge and tags, what it holds and where it is used under it (`description`, `note`), a control beside it, something under it such as a gauge (`detail`), and things folded under it (its copies) as rows inside the card, hung from `FolderRow`'s guide line; marked while it is open (`current`, API 연결's connections); a folder among them (`folder`) takes the folder mark and the cards dragged onto it, on its own fill (no ›, which unfolds a card's copies) |
 | collections | `CardGrid` (`FaceCard`, `FolderCard`, `Portrait`, `Preview`, `SelectionBar`) | `CardGrid.module.css` | Characters and pictures as cards, folders among them shaped as folders (a tab over up to four faces, each a quarter); with `onPlace`, a card or folder let go beside another of its own lands there, a line in the gap showing where (`cardDrag.ts`); with `arrange`, a handle moves it the same way by pointer of any kind, the arrows, and scrolling at the edge (`cardOrder.tsx`); a card's picture whole in a dialog (`Preview`) |
 | collections | `PathBar` | `PathBar.module.css` | Where a list stands, from the top down |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs; `tiles` two to a line on a panel's ground, `row` all in one line, two to a line on a phone; `figures` a row of counts whose values lead |
@@ -176,7 +191,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | overlays | `MoreMenu` | — | The ⋯ that opens what is done to a thing as a whole, in a screen's head (`NavBar` `menu`) or a row, named '{of} 메뉴' |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation (`Help`): after a moment's hover while the pointer stays on the ⓘ or its bubble, or pinned by a click or tap; a help that names a place ends in a door to it, which the caller's `onClick` opens |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `MenuHandle`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state, which a handle shares with other buttons; checked items (one of several or `multiple`), disabled items, and a small form opened the same way (kind dialog) with menus inside it |
-| overlays | `Toast` (`ToastAction`) | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys, its time running down as a line) or error (a warn band, why, where to fix it); someone else's words, such as a bot's, under their face and name, four lines until pressed; a × where a pointer hovers, and on a phone only on a notice that stays |
+| overlays | `Toast` (`ToastAction`) | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys, its time running down as a line) or warn (a warn band, why, where to fix it); someone else's words, such as a bot's, under their face and name, four lines until pressed; a × where a pointer hovers, and on a phone only on a notice that stays |
 | overlays | `ToastStack` | `ToastStack.module.css` | Notices, newest in front, bottom right (under the header on a phone); a mouse pointing at it, or the focus in it, opens it and holds their time, a finger slides one sideways to put it away. Above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
 | feedback | `AskCard` (`AskAnswer`) | `AskCard.module.css` | A question that waits beside what the user is doing, such as a bot's above the composer: who asks, the question with an ⓘ explanation, a line to type or a few choices, and a × that puts it away |

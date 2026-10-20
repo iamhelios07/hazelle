@@ -26,12 +26,12 @@ const held = (bytes: number | null, cap: OwnCap) => `${size(bytes)}${cap === 'de
 // 텍스트 and 이미지 are fill columns: an account's own cap is read beside its size. They come before the figures, set
 // right, so a left-set column never starts where a right-set one ends.
 const COLUMNS: TableColumn[] = [
-  { label: '계정', size: 'fill' },
-  { label: '텍스트', size: 'fill' },
-  { label: '이미지', size: 'fill' },
-  { label: '디스크', size: 'figure' },
-  { label: '가입', size: 'figure' },
-  { label: '', size: 'button', keep: true },
+  { label: '계정', track: 'fill' },
+  { label: '텍스트', track: 'fill' },
+  { label: '이미지', track: 'fill' },
+  { label: '디스크', track: 'figure' },
+  { label: '가입', track: 'figure' },
+  { label: '', track: 'button', keep: true },
 ];
 
 const COLUMNS_HELP = '텍스트는 계정에 저장된 데이터의 크기이고, 디스크는 그 데이터가 서버에서 실제로 차지하는 용량이에요.';

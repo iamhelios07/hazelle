@@ -101,9 +101,9 @@ export function useFollow(count: number, streaming: boolean, anchor: string | nu
   }
 
   // Not following, which would take the view back down in the same render.
-  function seekTo(key: string, align: Seek['align']) {
+  function seekTo(key: string, lands: Seek['lands']) {
     stick.current = false;
-    setSeek({ key, revision: Date.now(), align });
+    setSeek({ key, revision: Date.now(), lands });
   }
 
   const pill = !away ? null : streaming ? '생성 중' : unread ? '새 응답' : '맨 아래로';

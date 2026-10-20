@@ -166,7 +166,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
                     key={point.at}
                     title={`${moment(point.takenAt)} 기록`}
                     tags={point.kind === 'checkpoint' ? ['복원 직전'] : undefined}
-                    aside={ago(point.takenAt)}
+                    note={ago(point.takenAt)}
                     onClick={() => setAsking({ kind: 'restore', point })}
                   />
                 ))}
@@ -188,7 +188,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
                     title={restore.at === null ? '복원 전으로 되돌리기' : `${moment(restore.targetAt ?? restore.at)} ${restore.targetAt === null ? '시점' : '기록'}으로 복원`}
                     tags={operated && restore.reportId === null ? [wordsOf(restore).tag, '직접 복원'] : [wordsOf(restore).tag]}
                     description={described(restore)}
-                    aside={ago(restore.updatedAt)}
+                    note={ago(restore.updatedAt)}
                     trailing={
                       (restore.actions.length > 0 || undoable) && (
                         <MoreMenu of="복원">

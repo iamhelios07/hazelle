@@ -100,7 +100,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
         title={promptName(prompt.value.name)}
         badge={badge(prompt)}
         tags={tags(prompt.id)}
-        aside={usage(prompt)}
+        note={usage(prompt)}
         selected={picking ? moving.picked!.has(prompt.id) : undefined}
         drag={moving.dropInto && !nested ? prompt.id : undefined}
         onClick={() => (picking ? moving.toggle(prompt.id) : onPick(prompt.id))}
@@ -122,7 +122,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
       key={folder.id}
       folder
       title={folder.value.name}
-      aside={folderNote('prompt', index.byFolder.get(folder.id)!)}
+      note={folderNote('prompt', index.byFolder.get(folder.id)!)}
       onClick={() => onGo(folder.id)}
       onDropCard={moving.dropInto?.(folder.id)}
       control={<FolderMenu kind="prompt" folder={folder} depth={at.path.length + 1} onName={naming.name} />}
@@ -215,7 +215,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
                 title={promptName(prompt.value.name)}
                 badge={badge(prompt)}
                 tags={[...(prompt.value.task ? [TASK_NAMES[prompt.value.task]] : []), ...tags(prompt.id)]}
-                aside={[whereIs(index, folderOf(prompt)), usage(prompt)].filter(Boolean).join(' · ') || undefined}
+                note={[whereIs(index, folderOf(prompt)), usage(prompt)].filter(Boolean).join(' · ') || undefined}
                 onClick={() => onPick(prompt.id)}
               />
             ))}

@@ -1,5 +1,5 @@
 export type Direction = 'up' | 'down';
-export type Step = { index: number; align: 'top' | 'bottom' } | 'start' | 'end';
+export type Step = { index: number; lands: 'top' | 'bottom' } | 'start' | 'end';
 
 // Within this many px of a row's edge the view is at that edge already.
 const NEAR = 8;
@@ -21,5 +21,5 @@ export function stepFrom(stops: readonly number[], last: number, at: { index: nu
   if (target === undefined) return direction === 'up' ? 'start' : 'end';
   // The last row's end is the story's, which only following reaches: its end leaves the room under it.
   if (direction === 'down' && target === last) return 'end';
-  return { index: target, align: direction === 'up' ? 'top' : 'bottom' };
+  return { index: target, lands: direction === 'up' ? 'top' : 'bottom' };
 }

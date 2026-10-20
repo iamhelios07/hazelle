@@ -24,8 +24,9 @@ type Props = {
   title: string;
   badge?: string;
   tags?: string[];
-  // Where it is used, under the title.
-  aside?: string;
+  // What it holds, then a note such as where it is used, under the title.
+  description?: string;
+  note?: string;
   // Beside the card's button, such as the one that unfolds its children.
   control?: ReactNode;
   // Under the card's button, such as a gauge; a press on it opens nothing.
@@ -43,7 +44,7 @@ type Props = {
   onDropCard?: (key: string) => void;
 };
 
-export function CardItem({ folder = false, title, badge, tags = [], aside, control, detail, current, onClick, children, selected, drag, onDropCard }: Props) {
+export function CardItem({ folder = false, title, badge, tags = [], description, note, control, detail, current, onClick, children, selected, drag, onDropCard }: Props) {
   const folded = useContext(Folded);
   const drop = useCardDrop(onDropCard);
   const slot = useMenuSlot();
@@ -59,7 +60,7 @@ export function CardItem({ folder = false, title, badge, tags = [], aside, contr
   return (
     <li className={[folded ? undefined : styles.card, folder && styles.folder, drop.over && styles.dropping].filter(Boolean).join(' ') || undefined} {...(drag === undefined ? {} : cardDrag(drag))} {...drop.props}>
       <div className={styles.head} onContextMenu={slot.onContextMenu}>
-        <Item density="regular" scheme="list" leading={folder && <FolderMark size="md" />} title={title} meta={meta} preview={aside} current={current} pressed={selected} onClick={onClick} />
+        <Item density="regular" scheme="list" leading={folder && <FolderMark size="md" />} title={title} meta={meta} preview={[description, note].filter(Boolean).join(' · ') || undefined} current={current} pressed={selected} onClick={onClick} />
         {control && (
           <span className={styles.control}>
             <MenuSlot value={slot.held}>{control}</MenuSlot>

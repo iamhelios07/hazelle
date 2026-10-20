@@ -57,7 +57,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
                 title={profile.value.name}
                 badge={defaultMark(profile.id === settings.profile, profile.value.name)}
                 description={valuesLine(profile.value.settings)}
-                aside={used ? `모델 ${used}개` : undefined}
+                note={used ? `모델 ${used}개` : undefined}
                 onClick={() => navigate({ kind: 'profile', id: profile.id })}
               />
             );
@@ -72,7 +72,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
                 key={prompt.id}
                 title={prompt.value.name}
                 tags={[TASK_NAMES[task]]}
-                aside={findStarred(model, connections)?.name ?? NOT_STARRED}
+                note={findStarred(model, connections)?.name ?? NOT_STARRED}
                 onClick={() => navigate({ kind: 'prompt', id: prompt.id, pane: null })}
               />
             ))}
@@ -125,7 +125,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
                     title={entryName(model)}
                     tags={rolesOf(settings.models, ref).map((role) => ROLE_TAGS[role])}
                     description={connection.value.label}
-                    aside={apart}
+                    note={apart}
                     onClick={() => navigate({ kind: 'model', ...ref })}
                   />
                 );

@@ -5,7 +5,7 @@ import type { Translating } from '../../runtime/translate';
 import type { Seek } from '../ui';
 import { finder, seenText } from './search';
 
-export function useChatSearch(messages: Shown[], texts: string[], translating: Translating, flipped: ReadonlySet<string>, seekTo: (key: string, align: Seek['align']) => void) {
+export function useChatSearch(messages: Shown[], texts: string[], translating: Translating, flipped: ReadonlySet<string>, seekTo: (key: string, lands: Seek['lands']) => void) {
   const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
   // The search bar's term and current hit, by message id so rows coming and going keep it. focus asks the field to take
   // the focus again, as Ctrl+F does while the bar is open.

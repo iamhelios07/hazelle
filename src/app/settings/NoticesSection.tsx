@@ -41,7 +41,7 @@ export function NoticesSection({ head, seek }: { head: boolean; seek: boolean })
             key={notice.id}
             {...messageRow(notice.text)}
             tags={notice.reportId === null ? [] : [REPLY]}
-            aside={ago(notice.createdAt)}
+            note={ago(notice.createdAt)}
             onClick={() => setOpen(notice)}
           />
         )}

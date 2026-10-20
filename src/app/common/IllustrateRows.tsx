@@ -186,7 +186,7 @@ function ImageModelMenu({ routes, illustrate, card, opens, onPick }: Pick<Props,
     <Menu
       place={opens === 'up' ? 'above-end' : 'below-end'}
       label="이미지 모델"
-      trigger={(opener) => <ChipButton variant="field" opens={opens} label={choice ? entryName(choice.model) : NOT_STARRED} title="이미지 모델" tone={choice ? 'default' : 'warn'} {...opener} />}
+      trigger={(opener) => <ChipButton variant="field" opens={opens} label={choice ? entryName(choice.model) : NOT_STARRED} title="이미지 모델" tone={choice ? 'plain' : 'warn'} {...opener} />}
     >
       <MenuHeading>{appliesTo(card, illustrate.own)}</MenuHeading>
       <MenuItem label={follows('첫 이미지 모델')} sub={entryName(routes[0]!.model)} checked={!own} onClick={() => onPick({ model: undefined })} />

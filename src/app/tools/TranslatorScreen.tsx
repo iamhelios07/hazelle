@@ -85,7 +85,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
                 <ChipButton
                   label={translator.ok ? entryName(translator.with.route.model) : `${MODEL_ROLES.aux} 없음`}
                   title={MODEL_ROLES.aux}
-                  tone={translator.ok ? 'default' : 'warn'}
+                  tone={translator.ok ? 'plain' : 'warn'}
                   leading={<Icon icon={Languages} size="xs" />}
                   {...opener}
                 />

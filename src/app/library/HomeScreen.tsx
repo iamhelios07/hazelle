@@ -18,7 +18,7 @@ export function Welcome() {
         {connections.length > 0 && (
           <ActionCard tone="accent" icon={MessageSquarePlus} title="새 채팅" description="캐릭터 없이 모델과 바로 대화해요" onClick={() => navigate({ kind: 'new-chat', character: null })} />
         )}
-        <ActionCard tone={connections.length ? 'default' : 'accent'} icon={PackageOpen} title="Risu에서 이사" description="캐릭터와 채팅, 프롬프트를 한 번에 옮겨요" onClick={move} />
+        <ActionCard tone={connections.length ? 'plain' : 'accent'} icon={PackageOpen} title="Risu에서 이사" description="캐릭터와 채팅, 프롬프트를 한 번에 옮겨요" onClick={move} />
         <ActionCard icon={ACTS.import.icon} title={importOf('봇')} description="PNG · charx · JSON 파일을 끌어다 놓거나 눌러서 선택" onClick={pick} />
         <ActionCard icon={UserRoundPlus} title={newOf('캐릭터')} description="이름과 설명부터 직접 입력해요" onClick={create} />
         {connections.length === 0 ? (

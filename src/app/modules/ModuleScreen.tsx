@@ -135,7 +135,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
       <ModelsConsent module={stored} />
       <UsedBy id={id} />
       <List box places label="토글">
-        <ListItem title="토글" aside={`${value.toggles.filter(isToggle).length}개`} onClick={() => navigate({ kind: 'module', id, pane: 'toggles' })} />
+        <ListItem title="토글" note={`${value.toggles.filter(isToggle).length}개`} onClick={() => navigate({ kind: 'module', id, pane: 'toggles' })} />
       </List>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />

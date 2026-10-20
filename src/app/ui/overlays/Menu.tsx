@@ -160,7 +160,7 @@ type ItemProps = {
   tag?: ReactNode;
   checked?: boolean;
   multiple?: boolean;
-  tone?: 'default' | 'muted' | 'warn';
+  tone?: 'plain' | 'muted' | 'warn';
   disabled?: boolean;
   onClick: () => void;
 };

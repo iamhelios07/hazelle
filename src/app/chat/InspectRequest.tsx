@@ -106,7 +106,7 @@ function RehearsalView({ rehearsal, sending, editor, onEdit }: { rehearsal: Rehe
       ) : !changed ? (
         <Text variant="note">스크립트가 요청을 바꾸지 않아요.</Text>
       ) : null}
-      {trace.entries.length > 0 && <HookList label="스크립트 실행 예상" entries={trace.entries.map((entry, index) => ({ entry, key: String(index) }))} aside={(entry) => `${Math.round(entry.duration)}ms`} />}
+      {trace.entries.length > 0 && <HookList label="스크립트 실행 예상" entries={trace.entries.map((entry, index) => ({ entry, key: String(index) }))} note={(entry) => `${Math.round(entry.duration)}ms`} />}
       {trace.omitted > 0 && <Text variant="note">{`앞선 기록 ${trace.omitted}개는 빠졌어요.`}</Text>}
       {prompt !== null && ('kind' in prompt ? <Callout tone="warn">{describeTurnFailure(prompt)}</Callout> : <RequestView prompt={prompt} title="스크립트 실행 후" request={() => previewRequest({ ...sending, prompt })} unbuilt={UNBUILT} editor={editor} onEdit={onEdit} sameAs={sending.prompt.problems} />)}
       {request !== null && (
@@ -155,7 +155,7 @@ function NextTokens({ sending }: { sending: Sending }) {
       <Disclosure label="토큰을 쓰는 곳">
         <List label="토큰을 쓰는 곳">
           {[...groups].sort((a, b) => b.tokens - a.tokens).map((group) => (
-            <ListItem key={JSON.stringify(group.source)} title={sourceName(group.source)} description={counted(group.source, group.count)} aside={tokens(group.tokens)} />
+            <ListItem key={JSON.stringify(group.source)} title={sourceName(group.source)} description={counted(group.source, group.count)} note={tokens(group.tokens)} />
           ))}
         </List>
       </Disclosure>
@@ -219,7 +219,7 @@ function NextCache({ next: { forecast, cost: price, route }, editor, onEdit }: N
               title={row.count > 1 ? `${row.name} ${row.count}개` : row.name}
               badge={row.change ? CHANGES[row.change] : undefined}
               tags={[STATES[row.state], ...(row.point === 'cache' ? ['캐시 지점'] : row.point === 'short' ? ['캐시 지점 · 최소 크기 미만'] : [])]}
-              aside={tokens(row.tokens)}
+              note={tokens(row.tokens)}
               onClick={side ? () => onEdit(side) : undefined}
             />
           );
@@ -229,7 +229,7 @@ function NextCache({ next: { forecast, cost: price, route }, editor, onEdit }: N
         <Section level={3} title="빠지는 메시지">
           <List label="빠지는 메시지">
             {removed.map((part, index) => (
-              <ListItem key={index} title={partName(part.from, part.role)} aside={tokens(part.tokens)} />
+              <ListItem key={index} title={partName(part.from, part.role)} note={tokens(part.tokens)} />
             ))}
           </List>
         </Section>

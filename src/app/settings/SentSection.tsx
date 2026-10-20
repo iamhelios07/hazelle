@@ -55,7 +55,7 @@ export function SentSection({ head }: { head: boolean }) {
       </>}
     >
       <PagedList pages={pages} head={head} label={NOTICES.sent} empty={`${NOTICES.sent}이 없어요.`}>
-        {(report) => <ListItem key={report.id} {...messageRow(report.text)} tags={[status(report)]} aside={ago(report.createdAt)} onClick={() => setOpen(report)} />}
+        {(report) => <ListItem key={report.id} {...messageRow(report.text)} tags={[status(report)]} note={ago(report.createdAt)} onClick={() => setOpen(report)} />}
       </PagedList>
       {open && (
         <Dialog title={NOTICES.sent} note={ago(open.createdAt)} onClose={() => setOpen(null)}>

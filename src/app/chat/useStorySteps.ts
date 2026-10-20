@@ -6,7 +6,7 @@ import { stepFrom, storyStops, type Direction, type Step } from './storySteps';
 
 // Moving through the story by its messages: the step buttons, the scrubber and their shortcuts. Each move returns the
 // place it reached, as the step buttons show it.
-export function useStorySteps(messages: readonly Message[], scrollRef: RefObject<HTMLElement | null>, seekTo: (key: string, align: Seek['align']) => void, follow: () => void) {
+export function useStorySteps(messages: readonly Message[], scrollRef: RefObject<HTMLElement | null>, seekTo: (key: string, lands: Seek['lands']) => void, follow: () => void) {
   const { display } = useDisplay();
   const keys = useMemo(() => messages.map(({ id }) => id), [messages]);
   const stops = useMemo(() => storyStops(messages, display.userStops), [messages, display.userStops]);
@@ -20,8 +20,8 @@ export function useStorySteps(messages: readonly Message[], scrollRef: RefObject
       if (keys.length) seekTo(keys[0]!, 'top');
       return '맨 위';
     }
-    seekTo(keys[target.index]!, target.align);
-    return `#${target.index + 1} ${target.align === 'top' ? '처음' : '끝'}`;
+    seekTo(keys[target.index]!, target.lands);
+    return `#${target.index + 1} ${target.lands === 'top' ? '처음' : '끝'}`;
   }
 
   function step(direction: Direction) {

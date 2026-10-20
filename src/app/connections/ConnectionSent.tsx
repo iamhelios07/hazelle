@@ -9,7 +9,7 @@ const WINDOWS = [['hour', '지난 1시간'], ['today', '오늘'], ['week', '이�
 
 const tile = (label: string, usage: ModelUsage) =>
   usage.calls
-    ? { label, value: `응답 ${count(usage.calls)}회`, detail: [`입력 ${tally(usage.input, usage.calls)}`, `출력 ${tally(usage.output, usage.calls)}`] }
+    ? { label, value: `응답 ${count(usage.calls)}회`, notes: [`입력 ${tally(usage.input, usage.calls)}`, `출력 ${tally(usage.output, usage.calls)}`] }
     : { label, value: '없음', tone: 'muted' as const };
 
 export function ConnectionSent({ connection, level }: { connection: string; level: 2 | 3 }) {

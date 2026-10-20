@@ -133,7 +133,7 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
         ) : (
           <List places label="설정 검색 결과">
             {search.found.map((hit) => (
-              <ListItem key={`${hit.where}/${hit.term}`} title={hit.term} aside={hit.where} onClick={() => search.open(hit)} />
+              <ListItem key={`${hit.where}/${hit.term}`} title={hit.term} note={hit.where} onClick={() => search.open(hit)} />
             ))}
           </List>
         )
@@ -142,7 +142,7 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
           <NavGroup key={title} title={title}>
             <List places label={title}>
               {places.map((place) => (
-                <ListItem key={place.page} title={place.label} aside={holds[place.page]} onClick={() => navigate(place.route)} />
+                <ListItem key={place.page} title={place.label} note={holds[place.page]} onClick={() => navigate(place.route)} />
               ))}
             </List>
           </NavGroup>

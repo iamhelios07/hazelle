@@ -23,11 +23,11 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
   // A pool names who would serve now and what it has left, from meters already read; nothing is fetched for the list.
   function card(connection: Connection) {
     const starred = connection.starred.length ? `추가한 모델 ${connection.starred.length}개` : '추가한 모델 없음';
-    if (!connection.turns) return { aside: [connection.accounts[0]!.name, starred].filter(Boolean).join(' · ') };
+    if (!connection.turns) return { description: [connection.accounts[0]!.name, starred].filter(Boolean).join(' · ') };
     const serving = credentials.pool.peek(connection);
     const held = serving && credentials.pool.held(connection, serving);
     return {
-      aside: [`계정 ${connection.accounts.length}개`, ...(serving && held ? [`지금 ${accountName(serving)}`] : []), starred].join(' · '),
+      description: [`계정 ${connection.accounts.length}개`, ...(serving && held ? [`지금 ${accountName(serving)}`] : []), starred].join(' · '),
       detail: held && <LeftGauge result={held} />,
     };
   }

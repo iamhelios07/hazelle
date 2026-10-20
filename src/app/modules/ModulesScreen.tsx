@@ -66,17 +66,17 @@ export function useModuleUse() {
 }
 
 const COLUMNS: TableColumn[] = [
-  { label: PAGES.modules, size: 'name' },
-  { label: '로어북', size: 'figure' },
-  { label: SCRIPTS.regex, size: 'figure' },
-  { label: SCRIPTS.triggers, size: 'figure' },
-  { label: '토글', size: 'figure' },
-  { label: '스타일', size: 'figure' },
-  { label: '쓰는 곳', size: 'fill', keep: true },
+  { label: PAGES.modules, track: 'name' },
+  { label: '로어북', track: 'figure' },
+  { label: SCRIPTS.regex, track: 'figure' },
+  { label: SCRIPTS.triggers, track: 'figure' },
+  { label: '토글', track: 'figure' },
+  { label: '스타일', track: 'figure' },
+  { label: '쓰는 곳', track: 'fill', keep: true },
 ];
 const FOLDER_COLUMNS: TableColumn[] = [
-  { label: '폴더', size: 'name' },
-  { label: '담긴 것', size: 'fill', keep: true },
+  { label: '폴더', track: 'name' },
+  { label: '담긴 것', track: 'fill', keep: true },
 ];
 
 // A module stands in the first place it is on, in the order packs apply (항상, prompt, character, persona); its 쓰는 곳

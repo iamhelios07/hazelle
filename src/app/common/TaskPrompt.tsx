@@ -56,7 +56,7 @@ export function TaskPromptMenu({ task, chosen, heading, opens, onPick, onEdit }:
     <Menu
       place={opens === 'up' ? 'above-end' : 'below-end'}
       label={`${noun} 프롬프트`}
-      trigger={(opener) => <ChipButton variant="field" opens={opens} label={label} title={`${noun} 프롬프트`} tone={choice.kind === 'missing' ? 'warn' : 'default'} {...opener} />}
+      trigger={(opener) => <ChipButton variant="field" opens={opens} label={label} title={`${noun} 프롬프트`} tone={choice.kind === 'missing' ? 'warn' : 'plain'} {...opener} />}
     >
       <MenuHeading>{heading}</MenuHeading>
       {switches && <MenuItem label={follows(`기본 ${noun} 프롬프트`)} sub={fallback?.value.name ?? missing} checked={chosen === undefined} onClick={() => onPick(undefined)} />}

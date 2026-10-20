@@ -20,11 +20,11 @@ it('ranks the split view without the rows it cannot name, and puts 기타 last w
     ],
   };
   const [first, others] = rankRows(ranking, null, false, false);
-  expect(first).toEqual({ key: 'glm 5.2\0', rank: 1, name: 'GLM 5.2', detail: '응답 2,500번 · 이번 주 1,200명', value: '25%', share: 0.5 });
-  expect(others).toMatchObject({ key: '\0', rank: null, name: '기타', detail: '응답 5,000번 · 이번 주 40명', value: '50%', share: 1 });
+  expect(first).toEqual({ key: 'glm 5.2\0', rank: 1, name: 'GLM 5.2', note: '응답 2,500번 · 이번 주 1,200명', value: '25%', share: 0.5 });
+  expect(others).toMatchObject({ key: '\0', rank: null, name: '기타', note: '응답 5,000번 · 이번 주 40명', value: '50%', share: 1 });
   expect(others?.help).toBeTruthy();
-  expect(rankRows(ranking, null, true, false)).toMatchObject([{ key: `\0${DIRECT_TYPE}`, rank: null, name: '기타', detail: '직접 연결 · 이번 주 7명', value: '1% 미만', share: 1 }]);
-  expect(rankRows(ranking, null, false, true)[0]?.detail).toBe('응답 2,500번 · 1,200명');
+  expect(rankRows(ranking, null, true, false)).toMatchObject([{ key: `\0${DIRECT_TYPE}`, rank: null, name: '기타', note: '직접 연결 · 이번 주 7명', value: '1% 미만', share: 1 }]);
+  expect(rankRows(ranking, null, false, true)[0]?.note).toBe('응답 2,500번 · 1,200명');
   expect(percent(0)).toBe('0%');
 });
 
@@ -33,7 +33,7 @@ it('closes the 대화 list with the rows below the floor, its bar against the la
   const rest = { merged: { share: 0.75, replies: 130 }, split: { share: 0, replies: 0 } };
   expect(rankRows({ merged: [row], split: [], rest }, null, false, false)).toMatchObject([
     { name: 'A', value: '25%', share: 1 / 3 },
-    { rank: null, name: '순위 밖 모델', detail: '응답 130번', value: '75%', share: 1 },
+    { rank: null, name: '순위 밖 모델', note: '응답 130번', value: '75%', share: 1 },
   ]);
   expect(rankRows({ merged: [], split: [], rest }, null, true, false)).toEqual([]);
 });

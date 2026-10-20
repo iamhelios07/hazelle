@@ -112,7 +112,7 @@ function ProblemList({ problems, placed }: { problems: Problem[]; placed: boolea
   return (
     <List label="문제">
       {problems.map((problem, index) => (
-        <ListItem key={index} title={PROBLEM[problem.kind]} code={problem.text} aside={placed ? undefined : problemPlace(problem)} />
+        <ListItem key={index} title={PROBLEM[problem.kind]} code={problem.text} note={placed ? undefined : problemPlace(problem)} />
       ))}
     </List>
   );
@@ -164,7 +164,7 @@ export function RequestView({ prompt, title, level = 3, lead, request, unbuilt, 
                   key={index}
                   title={partName(part.from, message.role)}
                   badge={problems.length ? problemCounts(problems) : undefined}
-                  aside={`${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰`}
+                  note={`${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰`}
                   expanded={open.has(index)}
                   onClick={() => toggle(index)}
                   detail={

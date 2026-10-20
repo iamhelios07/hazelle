@@ -58,7 +58,7 @@ export function LogSection({ head }: { head: boolean }) {
   return (
     <Panel title="기록" action={head && !pages.whole ? <SeeAll onClick={() => navigate({ kind: 'admin-list', list: 'log' })} /> : undefined}>
       <PagedList pages={pages} head={head} label="기록" empty="아직 기록이 없어요.">
-        {(row) => <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={codeOf(row)} description={detailOf(row)} aside={ago(row.at)} />}
+        {(row) => <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={codeOf(row)} description={detailOf(row)} note={ago(row.at)} />}
       </PagedList>
     </Panel>
   );

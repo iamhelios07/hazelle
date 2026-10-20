@@ -133,7 +133,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { 
 
 type ItemProps = { owner: PackOwner; pack: Pack; place: number; page: boolean; open: boolean; onOpen: (open: boolean) => void; drop: OpenRows['remove'] };
 
-function Item({ page, open, onOpen, title, tag, aside, children }: Pick<ItemProps, 'page' | 'open' | 'onOpen'> & { title: string; tag: string | null; aside?: string; children: ReactNode }) {
+function Item({ page, open, onOpen, title, tag, note, children }: Pick<ItemProps, 'page' | 'open' | 'onOpen'> & { title: string; tag: string | null; note?: string; children: ReactNode }) {
   if (page)
     return (
       <Section title={title} seek>
@@ -141,7 +141,7 @@ function Item({ page, open, onOpen, title, tag, aside, children }: Pick<ItemProp
       </Section>
     );
   return (
-    <OpenRow title={title} aside={aside} tag={tag} open={open} onOpen={onOpen}>
+    <OpenRow title={title} note={note} tag={tag} open={open} onOpen={onOpen}>
       {children}
     </OpenRow>
   );
@@ -184,7 +184,7 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
   const tried = useTried(owner, shown, sample);
   const tag = shown.off ? OFF : check ? CHECKS[check] : status ? '상태창' : null;
   return (
-    <Item {...props} title={name} tag={tag} aside={searched ? STAGES[shown.stage] : undefined}>
+    <Item {...props} title={name} tag={tag} note={searched ? STAGES[shown.stage] : undefined}>
       <TextField label="이름" value={shown.name} onChange={(value) => save.change({ name: value })} />
       <ChoiceGroup label="단계" showLabel layout="segmented" options={STAGE_OPTIONS} value={shown.stage} onChange={(stage) => save.change({ stage })} />
       <TextField label="패턴" kind="key" lines={2} value={shown.find} onChange={(find) => save.change({ find })} error={check === 'invalid' ? '패턴 형식이 맞지 않아요.' : undefined} />
@@ -264,7 +264,7 @@ function BlocksItem(props: ItemProps & { trigger: Blocks }) {
   const name = scriptName(trigger.name, 'triggers', place);
   const actions = useScriptActions(props, 'triggers', trigger, name, (task) => task());
   return (
-    <Item {...props} title={name} tag={trigger.off ? OFF : null} aside={ON[trigger.on] ?? trigger.on}>
+    <Item {...props} title={name} tag={trigger.off ? OFF : null} note={ON[trigger.on] ?? trigger.on}>
       <Text variant="note">{`조건 ${trigger.conditions.length}개 · 효과 ${trigger.effects.length}개`}</Text>
       {actions(undefined)}
     </Item>

@@ -6,9 +6,10 @@ import { cardDrag, useCardDrop } from './cardDrag';
 import { FolderMark } from './FolderMark';
 import styles from './Table.module.css';
 
-// name: the row's own column, wider than the rest; figure: a count or a size, set right; button: a row's ⋯.
+// track: the column's kind. name: the row's own column, wider than the rest; figure: a count or a size, set right;
+// button: a row's ⋯.
 // keep: still shown when the table is narrow, where every other column but the first gives way to the row's summary.
-export type TableColumn = { label: string; size: 'name' | 'fill' | 'figure' | 'button'; keep?: boolean };
+export type TableColumn = { label: string; track: 'name' | 'fill' | 'figure' | 'button'; keep?: boolean };
 
 // A null cell is something the row does not have, drawn as a dash. summary: the row's other columns as one line, shown
 // under its first cell when the table is narrow. folder: a folder's row, which opens it. selected: one of
@@ -21,11 +22,11 @@ const TRACKS = { name: 'minmax(0, 2fr)', fill: 'minmax(0, 1fr)', figure: 'var(--
 // Things compared by the same few facts. Each row opens its thing, or holds its own controls (no onClick).
 export function Table({ label, columns, rows }: { label: string; columns: TableColumn[]; rows: TableRow[] }) {
   const tracks = {
-    '--table-wide': columns.map((column) => TRACKS[column.size]).join(' '),
+    '--table-wide': columns.map((column) => TRACKS[column.track]).join(' '),
     '--table-narrow': columns.filter((column, index) => index === 0 || column.keep).map((_, index) => (index === 0 ? 'minmax(0, 1fr)' : 'auto')).join(' '),
   } as CSSProperties;
   const cell = (column: TableColumn, index: number) =>
-    [column.size === 'button' ? styles.control : styles.cell, column.size === 'figure' && styles.figure, index > 0 && !column.keep && styles.drop].filter(Boolean).join(' ');
+    [column.track === 'button' ? styles.control : styles.cell, column.track === 'figure' && styles.figure, index > 0 && !column.keep && styles.drop].filter(Boolean).join(' ');
   return (
     <div className={styles.table} style={tracks}>
       {/* Hidden from the reader: each cell says its own column's name, which a row read as one button would lose. */}

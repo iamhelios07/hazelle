@@ -31,7 +31,7 @@
   gap: var(--space-8);
 }
 
-.aside {
+.note {
   composes: note from '../foundation/type.module.css';
 }
 

@@ -17,7 +17,7 @@ type Props = {
   expanded?: boolean;
   role?: 'menuitem' | 'menuitemradio' | 'menuitemcheckbox';
   checked?: boolean;
-  tone?: 'default' | 'muted' | 'warn';
+  tone?: 'plain' | 'muted' | 'warn';
   disabled?: boolean;
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
@@ -25,10 +25,10 @@ type Props = {
 
 // The fill under the pointer and on the current row follows aria-current and aria-pressed, so it cannot disagree with
 // what a screen reader is told.
-export function Item({ density, scheme, leading, title, meta, preview, trailing, current, pressed, expanded, role, checked, tone = 'default', disabled, onClick }: Props) {
+export function Item({ density, scheme, leading, title, meta, preview, trailing, current, pressed, expanded, role, checked, tone = 'plain', disabled, onClick }: Props) {
   const branch = expanded !== undefined;
   const line = density === 'tall' && meta === undefined && preview === undefined;
-  const classes = [styles.item, styles[density], styles[scheme], line && styles.line, onClick && styles.pressable, branch && styles.branch, tone !== 'default' && styles[tone]].filter(Boolean).join(' ');
+  const classes = [styles.item, styles[density], styles[scheme], line && styles.line, onClick && styles.pressable, branch && styles.branch, tone !== 'plain' && styles[tone]].filter(Boolean).join(' ');
   const clip = density === 'regular';
   const titleClass = [styles.title, density === 'regular' && styles.rowTitle, density === 'tall' && styles.tallTitle, clip && styles.clip].filter(Boolean).join(' ');
   const previewClass = density === 'compact' ? styles.sub : clip ? `${styles.preview} ${styles.clip}` : styles.preview;

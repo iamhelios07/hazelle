@@ -33,7 +33,7 @@ function NewsList({ news }: { news: News[] }) {
         <ListItem
           key={version}
           title={version}
-          aside={day(Date.parse(`${date}T00:00`))}
+          note={day(Date.parse(`${date}T00:00`))}
           detail={
             <Stack gap="related">
               {lines.map((line) => (

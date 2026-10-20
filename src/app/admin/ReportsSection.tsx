@@ -33,7 +33,7 @@ export function ReportsSection({ head, onActed }: { head: boolean; onActed?: (ac
             key={report.id}
             title={report.share === null ? report.username! : `링크 신고 · ${report.username ?? '익명'}`}
             tags={[...(report.resolvedAt === null ? [] : ['확인함']), ...(report.diagnostics === null ? [] : ['진단 정보']), ...(report.shared ? shareTags(report.shared) : [])]}
-            aside={ago(report.createdAt)}
+            note={ago(report.createdAt)}
             description={report.text}
             onClick={() => setOpen(report)}
           />

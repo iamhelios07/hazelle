@@ -80,7 +80,7 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
       {module.lore.length > 0 ? (
         <List label={`${module.name} 로어북`}>
           {module.lore.map((entry) => (
-            <ListItem key={entry.id} title={entry.name} aside={entry.parts.length ? tokens(entryTokens(entry)) : '안 들어감'} />
+            <ListItem key={entry.id} title={entry.name} note={entry.parts.length ? tokens(entryTokens(entry)) : '안 들어감'} />
           ))}
         </List>
       ) : (
@@ -94,7 +94,7 @@ function ModuleDetail({ module }: { module: ModuleContribution }) {
       {module.invalidKeys.length > 0 && (
         <List label="잘못된 정규식 키">
           {module.invalidKeys.map((entry) => (
-            <ListItem key={entry.entry} title={entry.name} description={entry.keys.join(' · ')} aside="맞지 않음" />
+            <ListItem key={entry.entry} title={entry.name} description={entry.keys.join(' · ')} note="맞지 않음" />
           ))}
         </List>
       )}

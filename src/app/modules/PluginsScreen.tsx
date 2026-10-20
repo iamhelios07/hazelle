@@ -9,9 +9,9 @@ import { Button, Empty, NavBar, Row, Screen, Table, Tag, type TableColumn, type 
 import { useModuleUse } from './ModulesScreen';
 
 const COLUMNS: TableColumn[] = [
-  { label: PAGES.plugins, size: 'name' },
-  { label: '버전', size: 'fill' },
-  { label: '쓰는 곳', size: 'fill', keep: true },
+  { label: PAGES.plugins, track: 'name' },
+  { label: '버전', track: 'fill' },
+  { label: '쓰는 곳', track: 'fill', keep: true },
 ];
 
 export function PluginsScreen({ back }: { back: Back | null }) {

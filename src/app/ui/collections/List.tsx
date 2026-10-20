@@ -44,7 +44,8 @@ type ItemProps = {
   code?: string;
   description?: string;
   tags?: string[];
-  aside?: string;
+  // Quiet words at the row's end: where it is used (an unused thing says nothing), when, how much.
+  note?: string;
   trailing?: ReactNode;
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
@@ -58,7 +59,7 @@ type ItemProps = {
   expanded?: boolean;
 };
 
-export function ListItem({ leading, folder = false, title, badge, code, description, tags = [], aside, trailing, onClick, control, detail, children, selected, current, expanded }: ItemProps) {
+export function ListItem({ leading, folder = false, title, badge, code, description, tags = [], note, trailing, onClick, control, detail, children, selected, current, expanded }: ItemProps) {
   const windowed = useContext(Windowed);
   const places = useContext(Places);
   const slot = useMenuSlot();
@@ -90,9 +91,9 @@ export function ListItem({ leading, folder = false, title, badge, code, descript
       meta={meta}
       preview={description}
       trailing={
-        (aside || end) && (
+        (note || end) && (
           <span className={styles.end}>
-            {aside && <span className={styles.aside}>{aside}</span>}
+            {note && <span className={styles.note}>{note}</span>}
             {end}
           </span>
         )

@@ -23,7 +23,7 @@ export function Scripts({ chat }: { chat: string }) {
         <Empty variant="section">실행된 스크립트가 없어요.</Empty>
       ) : (
         <Stack gap="related">
-          <HookList label="실행 기록" entries={entries} aside={(entry) => `${ago(entry.at)} · ${Math.round(entry.duration)}ms`} />
+          <HookList label="실행 기록" entries={entries} note={(entry) => `${ago(entry.at)} · ${Math.round(entry.duration)}ms`} />
           {log.omitted > 0 && <Text variant="note">{`오래된 기록 ${log.omitted}개는 빠졌어요.`}</Text>}
         </Stack>
       )}
@@ -31,7 +31,7 @@ export function Scripts({ chat }: { chat: string }) {
   );
 }
 
-export function HookList({ label, entries, aside }: { label: string; entries: { entry: HookLog; key: string }[]; aside: (entry: HookLog) => string }) {
+export function HookList({ label, entries, note }: { label: string; entries: { entry: HookLog; key: string }[]; note: (entry: HookLog) => string }) {
   const { store } = useSession();
   const [open, setOpen] = useState<string | null>(null);
   const packName = (pack: PackOwner | null) => (pack === null ? null : pack.kind === 'module' ? store.get('module', pack.id)?.value.name : store.get('character', pack.id)?.value.card.name) ?? null;
@@ -43,7 +43,7 @@ export function HookList({ label, entries, aside }: { label: string; entries: { 
           title={`${STAGES[entry.stage] ?? entry.stage} · ${entry.script || packName(entry.pack) || 'Lua'}`}
           badge={entry.errors.length ? '오류' : undefined}
           tags={hookTags(entry)}
-          aside={aside(entry)}
+          note={note(entry)}
           expanded={open === key}
           onClick={() => setOpen(open === key ? null : key)}
           detail={open === key && <HookDetail entry={entry} />}

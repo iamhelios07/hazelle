@@ -10,7 +10,7 @@ type Props = {
   note?: string;
   help?: Help;
   // warn: the value names something missing.
-  tone?: 'default' | 'warn';
+  tone?: 'plain' | 'warn';
   // A menu's opener (from Menu's trigger), or none for a card that opens a place.
   popup?: 'menu';
   expanded?: boolean;
@@ -18,7 +18,7 @@ type Props = {
   onClick: () => void;
 };
 
-export function PickCard({ label, value, note, help, tone = 'default', popup, expanded, ref, onClick }: Props) {
+export function PickCard({ label, value, note, help, tone = 'plain', popup, expanded, ref, onClick }: Props) {
   // The ⓘ is a button of its own, so it stands over the card's corner, not inside the card's button.
   return (
     <div className={help ? `${styles.pick} ${styles.helped}` : styles.pick}>

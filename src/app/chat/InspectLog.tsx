@@ -73,7 +73,7 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
       badge={counted && input > 0 ? `적중 ${Math.round((read / input) * 100)}%` : undefined}
       description={facts.join(' · ')}
       tags={used}
-      aside={ago(entry.at)}
+      note={ago(entry.at)}
       expanded={open}
       onClick={onToggle}
       detail={

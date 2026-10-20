@@ -21,7 +21,7 @@ export function ChatPromptPicker({ prompt, open, onOpen }: { prompt: PromptChoic
       label={label}
       title="이 채팅의 프롬프트"
       leading={<Icon icon={FileText} size="xs" />}
-      tone={prompt.kind === 'missing' ? 'warn' : 'default'}
+      tone={prompt.kind === 'missing' ? 'warn' : 'plain'}
       phone="icon"
       popup="dialog"
       expanded={open}
@@ -67,7 +67,7 @@ export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: Pr
       key={item.id}
       title={promptName(item.value.name)}
       badge={defaultMark(isDefaultPrompt(settings, item), item.value.name)}
-      aside={[!nested && search.words ? whereIs(index, promptFolder(item)) : undefined, promptUseWords(uses.get(item.id) ?? EMPTY_USE)].filter(Boolean).join(' · ')}
+      note={[!nested && search.words ? whereIs(index, promptFolder(item)) : undefined, promptUseWords(uses.get(item.id) ?? EMPTY_USE)].filter(Boolean).join(' · ')}
       selected={item.id === own}
       onClick={() => choose(item.id)}
     >
@@ -94,7 +94,7 @@ export function PromptDialog({ prompt, onChoose, onEdit, onClose }: { prompt: Pr
       <List label="프롬프트">
         {!search.words && !at.here && <ListItem title={follows('기본 프롬프트')} description={fallback.kind === 'prompt' ? fallback.prompt.value.name : '기본 프롬프트 없음'} selected={!prompt.own} onClick={() => choose(null)} />}
         {at.folders.map((folder) => (
-          <ListItem key={folder.id} folder title={folder.value.name} aside={folderNote('prompt', index.byFolder.get(folder.id)!)} onClick={() => setPlace(folder.id)} />
+          <ListItem key={folder.id} folder title={folder.value.name} note={folderNote('prompt', index.byFolder.get(folder.id)!)} onClick={() => setPlace(folder.id)} />
         ))}
         {search.words ? search.found.map((item) => row(item, false)) : at.placed(grouped.top).toSorted(byLastUse(uses, grouped.copies)).map((item) => row(item, true))}
       </List>

@@ -21,7 +21,7 @@ export function BinnedRow({ item, face, description, mark, busy, actions, onPurg
       leading={face}
       title={item.name}
       description={description}
-      aside={busy ?? timeLeft(mark)}
+      note={busy ?? timeLeft(mark)}
       trailing={
         busy === null && (
           <MoreMenu of={item.name}>

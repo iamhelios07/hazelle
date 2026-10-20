@@ -123,7 +123,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
     <Menu
       place="below-end"
       label={`${MODEL_SETTINGS} 선택`}
-      trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={chip} title={MODEL_SETTINGS} {...opener} />}
+      trigger={(opener) => <ChipButton variant="field" tone={current ? 'plain' : 'warn'} label={chip} title={MODEL_SETTINGS} {...opener} />}
     >
       {current && <MenuItem tone="muted" label={`'${current.value.name}' 페이지 열기`} onClick={() => navigate({ kind: 'profile', id: current.id })} />}
       {sorted.map((profile) => (

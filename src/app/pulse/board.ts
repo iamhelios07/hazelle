@@ -72,7 +72,7 @@ export function rankRows(ranking: PulseRanking, before: PulseOrder | null, split
       key: rowId(row),
       rank,
       name: row.model ?? OTHERS,
-      detail: [provider, row.replies === undefined ? null : `응답 ${count(row.replies)}번`, `${earlier ? '' : '이번 주 '}${count(row.people)}명`].filter(Boolean).join(' · '),
+      note: [provider, row.replies === undefined ? null : `응답 ${count(row.replies)}번`, `${earlier ? '' : '이번 주 '}${count(row.people)}명`].filter(Boolean).join(' · '),
       value: percent(row.share),
       share: largest ? row.share / largest : 0,
       ...(move && { move }),
@@ -80,5 +80,5 @@ export function rankRows(ranking: PulseRanking, before: PulseOrder | null, split
     };
   });
   if (!rest?.share) return ranked;
-  return [...ranked, { key: REST, rank: null, name: REST, detail: rest.replies ? `응답 ${count(rest.replies)}번` : `응답 ${PULSE_FLOORS.round}번 미만`, value: percent(rest.share), share: rest.share / largest, help: REST_HELP }];
+  return [...ranked, { key: REST, rank: null, name: REST, note: rest.replies ? `응답 ${count(rest.replies)}번` : `응답 ${PULSE_FLOORS.round}번 미만`, value: percent(rest.share), share: rest.share / largest, help: REST_HELP }];
 }

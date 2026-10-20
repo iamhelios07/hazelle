@@ -59,7 +59,7 @@ export function DisplayScreen({ back }: { back: Back | null }) {
 
   const move = (from: number, to: number) => void change((looks) => moveLook(looks, own.presets[from]!.id, own.presets[to]!.id), '옮기지 못했어요.');
 
-  const swatch = (preset: Preset) => ({ name: preset.name, note: describeLook(preset.look), ...preset.look, current: preset === current, onPick: () => pick(preset) });
+  const swatch = (preset: Preset) => ({ name: preset.name, note: describeLook(preset.look), ...preset.look, pressed: preset === current, onPick: () => pick(preset) });
   const menu = (preset: OwnPreset, index: number) => (
     <>
       <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming({ preset })} />

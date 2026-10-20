@@ -12,7 +12,7 @@ export type ToastAction = { label: string; onClick: () => void; keys?: readonly 
 type Props = {
   message: string;
   detail?: string;
-  tone: 'plain' | 'error';
+  tone: 'plain' | 'warn';
   action?: ToastAction;
   // Someone's long words, once opened, stay: onKeep tells that their time must not take them away.
   from?: { name: string; face: string | null };
@@ -26,7 +26,7 @@ type Props = {
 };
 
 export function Toast({ message, detail, tone, action, from, onKeep, onClose, life, paused }: Props) {
-  const error = tone === 'error';
+  const warn = tone === 'warn';
   const [open, setOpen] = useState(false);
   const close = onClose && (
     <span className={styles.close}>
@@ -35,8 +35,8 @@ export function Toast({ message, detail, tone, action, from, onKeep, onClose, li
   );
   return (
     <div
-      className={[styles.toast, error && styles.error, paused && styles.paused, open && styles.kept].filter(Boolean).join(' ')}
-      role={error ? 'alert' : 'status'}
+      className={[styles.toast, warn && styles.warn, paused && styles.paused, open && styles.kept].filter(Boolean).join(' ')}
+      role={warn ? 'alert' : 'status'}
       style={{ '--life': `${life}ms` } as CSSProperties}
     >
       {from ? (
@@ -46,14 +46,14 @@ export function Toast({ message, detail, tone, action, from, onKeep, onClose, li
           {close}
         </div>
       ) : (
-        error && (
+        warn && (
           <div className={styles.band}>
             <span className={styles.text}>{message}</span>
             {close}
           </div>
         )
       )}
-      {(!error || detail || action || from) && (
+      {(!warn || detail || action || from) && (
         <div className={styles.row}>
           <div className={styles.text}>
             {from ? (
@@ -66,19 +66,19 @@ export function Toast({ message, detail, tone, action, from, onKeep, onClose, li
                 }}
               />
             ) : (
-              !error && <div className={styles.message}>{message}</div>
+              !warn && <div className={styles.message}>{message}</div>
             )}
             {detail && <div className={styles.detail}>{detail}</div>}
           </div>
           {action && (
             <span className={styles.action}>
-              <Button variant={error ? 'primary' : 'ghost'} size="sm" label={action.keys && `${action.label} · ${formatKeys(action.keys)}`} onClick={action.onClick}>
+              <Button variant={warn ? 'primary' : 'ghost'} size="sm" label={action.keys && `${action.label} · ${formatKeys(action.keys)}`} onClick={action.onClick}>
                 {action.label}
                 {action.keys && <Kbd>{formatKeys(action.keys)}</Kbd>}
               </Button>
             </span>
           )}
-          {!from && !error && close}
+          {!from && !warn && close}
         </div>
       )}
       {action && <div className={styles.time} />}

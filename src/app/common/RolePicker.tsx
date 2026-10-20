@@ -81,7 +81,7 @@ export function RoleCard({ role, help, own, follow, connections, onPick, values,
           value={own ? (choice ? choice.name : NOT_STARRED) : (follow ?? '정하지 않음')}
           note={choice ? [choice.source, values].filter(Boolean).join(' · ') : undefined}
           help={help}
-          tone={own && !choice ? 'warn' : 'default'}
+          tone={own && !choice ? 'warn' : 'plain'}
           popup="menu"
           expanded={opener.expanded}
           ref={opener.ref}

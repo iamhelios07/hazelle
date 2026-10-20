@@ -432,7 +432,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
         <NavGroup key={group[0]}>
           <List box places label={group.map((each) => PARTS[each].label).join(', ')}>
             {group.map((each) => (
-              <ListItem key={each} title={PARTS[each].label} aside={holds[each]} onClick={() => onPart(each)} />
+              <ListItem key={each} title={PARTS[each].label} note={holds[each]} onClick={() => onPart(each)} />
             ))}
           </List>
         </NavGroup>

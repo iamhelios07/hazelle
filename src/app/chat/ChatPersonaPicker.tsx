@@ -21,7 +21,7 @@ export function ChatPersonaPicker({ persona, open, onOpen }: { persona: PersonaC
       expanded={open}
       ref={null}
       leading={<Avatar size="sm" tone="you" face={shown?.name ?? UserRound} image={shown?.picture} />}
-      tone={shown ? 'default' : 'warn'}
+      tone={shown ? 'plain' : 'warn'}
       onClick={onOpen}
     />
   );

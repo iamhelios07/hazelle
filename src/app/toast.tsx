@@ -9,7 +9,7 @@ import { Toast, ToastStack, type ToastAction } from './ui';
 type Action = { label: string; onClick: () => void };
 type Extra = { detail?: string; action?: Action };
 type From = { name: string; face: string | null };
-type Notice = { key: number; message: string; detail?: string; tone: 'plain' | 'error'; action?: ToastAction; said?: { from: From; keep: () => void }; close: () => void; undo: boolean; life: number; ends: number };
+type Notice = { key: number; message: string; detail?: string; tone: 'plain' | 'warn'; action?: ToastAction; said?: { from: From; keep: () => void }; close: () => void; undo: boolean; life: number; ends: number };
 
 export type Toasts = {
   show: (message: string, extra?: Extra) => void;
@@ -28,8 +28,8 @@ export type Toasts = {
 const KEPT = 3;
 
 function lifeOf(tone: Notice['tone'], text: string, action: boolean): number {
-  const base = tone === 'error' ? 7000 : action ? 6000 : 4000;
-  return Math.min(base + text.length * 40, tone === 'error' ? 14000 : 10000);
+  const base = tone === 'warn' ? 7000 : action ? 6000 : 4000;
+  return Math.min(base + text.length * 40, tone === 'warn' ? 14000 : 10000);
 }
 
 const ToastContext = createContext<Toasts | null>(null);
@@ -48,7 +48,7 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
     let next = 0;
     const add = (message: string, tone: Notice['tone'], { detail, action, from }: Extra & { from?: From } = {}, undo = false) => {
       const key = ++next;
-      if (tone === 'error') noteProblem(detail ? `${message} ${detail}` : message);
+      if (tone === 'warn') noteProblem(detail ? `${message} ${detail}` : message);
       const life = lifeOf(tone, `${message}${detail ?? ''}`, action !== undefined);
       const close = () => setNotices((all) => all.filter((notice) => notice.key !== key));
       const keep = () => setNotices((all) => all.map((notice) => (notice.key === key ? { ...notice, ends: Infinity } : notice)));
@@ -60,12 +60,12 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       return close;
     };
     const failed: Toasts['failed'] = (failure, prefix, words) => {
-      if (failure.error !== 'storage-full' && (failure.error !== 'timeline-changed' || prefix)) add(prefix ?? describeFailure(failure, words), 'error', prefix ? { detail: describeFailure(failure, words) } : {});
+      if (failure.error !== 'storage-full' && (failure.error !== 'timeline-changed' || prefix)) add(prefix ?? describeFailure(failure, words), 'warn', prefix ? { detail: describeFailure(failure, words) } : {});
     };
     const settle = (undo: Parameters<Toasts['undoable']>[1]) => () => void undo()?.then((result) => result.ok || failed(result, '되돌리지 못했어요.'));
     return {
       show: (message, extra) => void add(message, 'plain', extra),
-      error: (message, extra) => void add(message, 'error', extra),
+      error: (message, extra) => void add(message, 'warn', extra),
       failed,
       undoable: (message, undo, detail) => add(message, 'plain', { detail, action: { label: UNDO, onClick: settle(undo) } }, true),
       said: (from, text, tone) => void add(text, tone, { from }),
