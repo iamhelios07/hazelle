@@ -7,6 +7,7 @@ import type { Back } from '../shell/routes';
 import { Beside, Callout, NavBar, Screen } from '../ui';
 import { AccountsSection } from './AccountsSection';
 import { LogSection } from './LogSection';
+import { OperatorPostsSection } from './OperatorPostsSection';
 import { ReportsSection } from './ReportsSection';
 import { ServiceSection } from './ServiceSection';
 import { useLoaded } from '../common/useLoaded';
@@ -34,16 +35,13 @@ export function AdminScreen({ back }: { back: Back | null }) {
     setActs((count) => count + 1);
     service.reload();
   };
-  const actedOnAccount = () => {
-    accounts.reload();
-    acted();
-  };
   return (
     <Screen width="page" top={<NavBar title={PAGES.admin} {...backBar(back)} />}>
       {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
       {service.failure}
       <Beside side={<LogSection key={acts} head />}>
-        {moderating && <ReportsSection head onActed={(account) => (account ? actedOnAccount() : acted())} />}
+        {moderating && <ReportsSection head onActed={acted} />}
+        <OperatorPostsSection />
         <AccountsSection loaded={accounts} total={service.data?.accounts ?? null} onActed={acted}>
           {shared && <UsageRow />}
         </AccountsSection>

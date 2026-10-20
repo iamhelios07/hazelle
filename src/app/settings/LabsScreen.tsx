@@ -2,13 +2,12 @@ import { EMPTY_SETTINGS, type LabId } from '../../model/settings';
 import { switched } from '../../runtime/modules';
 import { addDefaults } from '../../runtime/prompts';
 import { LABS } from '../common/labs';
-import { PAGES } from '../common/words';
+import { BOARD, PAGES } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Empty, NavBar, Panel, Screen, SettingGroup, SettingRow, Switch } from '../ui';
-import { REPORT } from './ReportDialog';
 
 const RUNNING = '실험 중인 기능';
 
@@ -26,7 +25,7 @@ export function LabsScreen({ back }: { back: Back | null }) {
 
   return (
     <Screen width="page" top={<NavBar title={PAGES.labs} {...backBar(back)} />}>
-      <Panel title={RUNNING} help={`먼저 써 보는 새 기능이에요. 언제든 끌 수 있고, 의견은 ${PAGES.account}의 '${REPORT}'로 보내 주세요.`}>
+      <Panel title={RUNNING} help={`먼저 써 보는 새 기능이에요. 언제든 끌 수 있고, 의견은 ${BOARD.title}에 남겨 주세요.`}>
         {LABS.length === 0 ? (
           <Empty variant="section">지금은 {RUNNING}이 없어요.</Empty>
         ) : (

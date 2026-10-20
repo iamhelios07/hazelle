@@ -8,14 +8,13 @@ import type { AccountSection, Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
 import { BUILT_VERSION } from '../common/release';
-import { BIN, PAGES, PULSE, UNKNOWN } from '../common/words';
+import { BIN, BOARD, PAGES, PULSE, UNKNOWN } from '../common/words';
 import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingGroup, SettingRow, Stack, Switch, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
 import { LeaveSection } from './LeaveSection';
 import { NewsSection } from './NewsSection';
 import { NoticesSection } from './NoticesSection';
-import { SentSection } from './SentSection';
 import { SharedLinksSection } from './SharedLinksSection';
 
 // bytes is null while the server could not read it; a meter only where both it and the cap are known.
@@ -100,7 +99,35 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
       <Columns min="panel">
         <Stack gap="section">
           <NoticesSection head seek={section === 'notices'} />
-          <SentSection head />
+          <Panel title={BOARD.title}>
+            <SettingGroup label={BOARD.title}>
+              <SettingRow
+                label="모든 글"
+                control={
+                  <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board', operator: false })}>
+                    보기
+                  </Button>
+                }
+              />
+              <SettingRow
+                label={BOARD.mine}
+                control={
+                  <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board-mine' })}>
+                    보기
+                  </Button>
+                }
+              />
+              <SettingRow
+                label={BOARD.toOperator}
+                help="운영자만 읽을 수 있는 글로 보내요."
+                control={
+                  <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board-write', operator: true })}>
+                    쓰기
+                  </Button>
+                }
+              />
+            </SettingGroup>
+          </Panel>
           <Panel title="앱 정보">
             <SettingGroup label="앱 정보">
               <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />

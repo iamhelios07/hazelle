@@ -22,17 +22,7 @@
 }
 
 .count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--icon-sm);
-  height: var(--icon-sm);
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-full);
-  background: var(--color-accent-bg);
-  color: var(--color-accent);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
+  composes: count from '../foundation/surface.module.css';
 }
 
 @media (max-width: 959px) {

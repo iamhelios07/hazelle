@@ -6,9 +6,14 @@ import { NOTICES } from '../common/words';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Dialog, ListItem, NavBar, Panel, Screen, Text } from '../ui';
-import { Exchange, messageRow } from './SentSection';
 
-const REPLY = '내 알림에 대한 답변';
+// A message's row: its first line leads and the rest previews, since a title folds the line breaks the dialog keeps.
+export function messageRow(text: string): { title: string; description?: string } {
+  const end = text.indexOf('\n');
+  if (end < 0) return { title: text };
+  const description = text.slice(end + 1).trim();
+  return description ? { title: text.slice(0, end), description } : { title: text.slice(0, end) };
+}
 
 export function NoticesScreen({ back }: { back: Back | null }) {
   return (
@@ -36,19 +41,11 @@ export function NoticesSection({ head, seek }: { head: boolean; seek: boolean })
       seek={seek}
     >
       <PagedList pages={pages} head={head} label={NOTICES.from} empty={`${NOTICES.from}이 없어요.`}>
-        {(notice) => (
-          <ListItem
-            key={notice.id}
-            {...messageRow(notice.text)}
-            tags={notice.reportId === null ? [] : [REPLY]}
-            note={ago(notice.createdAt)}
-            onClick={() => setOpen(notice)}
-          />
-        )}
+        {(notice) => <ListItem key={notice.id} {...messageRow(notice.text)} note={ago(notice.createdAt)} onClick={() => setOpen(notice)} />}
       </PagedList>
       {open && (
-        <Dialog title={NOTICES.from} note={open.reportId === null ? ago(open.createdAt) : `${ago(open.createdAt)} · ${REPLY}`} onClose={() => setOpen(null)}>
-          {open.reportId === null ? <Text variant="prose">{open.text}</Text> : <Exchange sent={open.question} answer={<Text variant="prose">{open.text}</Text>} />}
+        <Dialog title={NOTICES.from} note={ago(open.createdAt)} onClose={() => setOpen(null)}>
+          <Text variant="prose">{open.text}</Text>
         </Dialog>
       )}
     </Panel>

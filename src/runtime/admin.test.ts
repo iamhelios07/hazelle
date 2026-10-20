@@ -33,7 +33,7 @@ it('sends notices with a reply, a reason and to everyone, which the account read
   await sendReport('도와주세요', null);
   const reports = await readReports(null);
   const report = reports.ok ? reports.data.rows[0]!.id : 0;
-  expect(await resolveReport(report, '고쳤어요')).toMatchObject({ ok: true });
+  expect(await resolveReport(report)).toMatchObject({ ok: true });
   expect(await suspend(accountId, '잠시 멈춰요')).toMatchObject({ ok: true });
   expect(await sendNotice(null, '점검해요')).toMatchObject({ ok: true });
 

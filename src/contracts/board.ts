@@ -73,7 +73,13 @@ export type Comment = {
   deleted: boolean;
 };
 // text null: deleted. diagnostics: an operator-only post's 문제 진단, to the operator alone; null otherwise.
-export type Post = PostRow & { text: string | null; diagnostics: string | null; comments: Comment[] };
+export type Post = PostRow & {
+  text: string | null;
+  diagnostics: string | null;
+  // The author's account, to the operator alone (a restore or a deletion starts from an operator-only post); null for others, or once the account left.
+  account: { id: string; username: string } | null;
+  comments: Comment[];
+};
 
 export type Compose = { title: string; text: string; category: Category; visibility: Visibility; diagnostics: string | null };
 

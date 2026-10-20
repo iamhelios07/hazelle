@@ -1,11 +1,12 @@
-import { LayoutGrid, MessageSquarePlus, PackageOpen, Settings, UserRoundPlus, Wrench } from 'lucide-react';
+import { LayoutGrid, MessageSquarePlus, MessagesSquare, PackageOpen, Settings, UserRoundPlus, Wrench } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { ACTS, importOf, newOf } from '../../common/acts';
 import { useImport } from '../../common/importing';
 import { ShelfFace, shelfName } from '../../library/shelf';
 import { useNewCharacter } from '../../library/useCharacterActions';
-import { NO_CHARACTER, SETTINGS, TOOLS } from '../../common/words';
+import { BOARD, NO_CHARACTER, SETTINGS, TOOLS } from '../../common/words';
+import { useStanding } from '../../session';
 import { FaceButton, IconButton, Menu, MenuItem, Rail, Viewport } from '../../ui';
 import { navigate } from '../router';
 import { HOME } from '../routes';
@@ -16,13 +17,15 @@ type Props = {
   shelves: Shelf<ChatSummary>[];
   current: Shelf<ChatSummary> | undefined;
   home: boolean;
+  board: boolean;
   typing: (shelf: Shelf<ChatSummary>) => boolean;
   onEnter: (shelf: Shelf<ChatSummary>) => void;
   fold: { open: boolean; onToggle: () => void } | undefined;
 };
 
 // On wide screens these places live only here; the list page shows them on phones.
-export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: Props) {
+export function SidebarRail({ shelves, current, home, board, typing, onEnter, fold }: Props) {
+  const { unreadBoard } = useStanding();
   const { pick, move } = useImport();
   const create = useNewCharacter();
   return (
@@ -37,6 +40,7 @@ export function SidebarRail({ shelves, current, home, typing, onEnter, fold }: P
             <MenuItem icon={PackageOpen} label="Risu에서 이사" onClick={move} />
             <MenuItem icon={MessageSquarePlus} label={`${NO_CHARACTER} 새 채팅`} onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Menu>
+          <IconButton icon={MessagesSquare} label={BOARD.title} framed current={board} count={unreadBoard} onClick={() => navigate({ kind: 'board', operator: false })} />
           <IconButton icon={Wrench} label={TOOLS} framed onClick={() => navigate(toolsEntry(true))} />
           <IconButton icon={Settings} label={SETTINGS} framed onClick={() => navigate(settingsEntry(true))} />
         </>

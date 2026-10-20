@@ -11,7 +11,7 @@ import { BUILT_VERSION, NEWS, newsToSay } from '../common/release';
 import { count } from '../common/typedNumber';
 import { usePersisted } from '../common/usePersisted';
 import { DisplayProvider } from '../display';
-import { BIN, inSettings, NOTICES } from '../common/words';
+import { BIN, BOARD, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
 import { ToastProvider, useToast, type Standing } from '../toast';
@@ -19,6 +19,7 @@ import { Brand, Progress, Screen, Text } from '../ui';
 import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 import { navigate } from './router';
+import type { Route } from './routes';
 
 const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 연결되면 이어서 읽고 저장해요.' };
 const SUSPENDED: Standing = {
@@ -47,14 +48,22 @@ function Restored({ dropped }: { dropped: number }) {
   return null;
 }
 
-// Said when the account opens with notices the person has not seen, and again when a sync hears more than were last
-// said; marking them seen lowers the mark. The ref also keeps StrictMode's second effect run from saying it twice.
-function Unread({ facts }: { facts: AccountFacts }) {
+type UnreadKind = 'unreadNotices' | 'unreadBoard';
+const UNREAD: Record<UnreadKind, { says: (unread: number) => string; to: Route }> = {
+  unreadNotices: { says: (unread) => `${NOTICES.from}이 ${count(unread)}개 있어요`, to: { kind: 'account', section: 'notices' } },
+  unreadBoard: { says: (unread) => `${BOARD.title} 새 알림 ${count(unread)}개`, to: { kind: 'board-activity' } },
+};
+
+// Said when the account opens with notices or board alerts the person has not seen, and again when a sync hears more
+// than were last said; marking them seen lowers the mark. The ref also keeps StrictMode's second effect run from saying
+// it twice.
+function Unread({ facts, kind }: { facts: AccountFacts; kind: UnreadKind }) {
   const toast = useToast();
-  const unread = useSyncExternalStore(facts.subscribe, () => facts.snapshot().unreadNotices);
+  const unread = useSyncExternalStore(facts.subscribe, () => facts.snapshot()[kind]);
   const said = useRef(0);
   useEffect(() => {
-    if (unread > said.current) toast.show(`${NOTICES.from}이 ${count(unread)}개 있어요`, { action: { label: '보기', onClick: () => navigate({ kind: 'account', section: 'notices' }) } });
+    const { says, to } = UNREAD[kind];
+    if (unread > said.current) toast.show(says(unread), { action: { label: '보기', onClick: () => navigate(to) } });
     said.current = unread;
   }, [unread]);
   return null;
@@ -154,7 +163,8 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
       <DisplayProvider>
         <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
           {rewound !== null && <Restored dropped={rewound} />}
-          <Unread facts={account.facts} />
+          <Unread facts={account.facts} kind="unreadNotices" />
+          <Unread facts={account.facts} kind="unreadBoard" />
           <Stale />
           <News />
           <BotNotes />

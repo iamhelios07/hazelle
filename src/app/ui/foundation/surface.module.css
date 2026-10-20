@@ -76,3 +76,18 @@
   border-radius: var(--radius-full);
   background: var(--color-accent);
 }
+
+/* How many wait behind a button: a tool's, or a place's on the rail. */
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--icon-sm);
+  height: var(--icon-sm);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
