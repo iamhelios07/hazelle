@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { live } from '../../model/library';
 import { cutShare, readShares } from '../../runtime/share-link';
-import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
@@ -22,7 +21,7 @@ export function SharedLinksSection() {
     setCutting(id);
     const done = await cutShare(store, id);
     setCutting(null);
-    if (!done.ok) return toast.error('링크를 끊지 못했어요.', { detail: describeFailure(done) });
+    if (!done.ok) return toast.failed(done, '링크를 끊지 못했어요.');
     toast.show('링크를 끊었어요.');
     loaded.reload();
   }

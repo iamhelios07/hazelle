@@ -4,7 +4,6 @@ import { SELF_RESTORES_PER_DAY } from '../../contracts/admin';
 import { exportBackup, readBackup, restoreBackup, type Backup, type BackupStep } from '../../runtime/backup';
 import { ACTS, importOf } from '../common/acts';
 import { downloadOutput } from '../common/download';
-import { describeFailure } from '../common/failure';
 import { RestoresDialog } from '../common/RestoresDialog';
 import { STOP } from '../common/words';
 import { useToast } from '../toast';
@@ -99,7 +98,7 @@ export function BackupSection() {
       if (loaded.error === 'not-new') return toast.error('백업은 새 계정에만 가져올 수 있어요.');
       if (loaded.error === 'not-backup' || loaded.error === 'backup-storage' || loaded.error === 'backup-crashed') return unread(loaded.error);
       if (loaded.error === 'stopped') return toast.show('가져오기를 멈췄어요.', { detail: '같은 파일로 이어서 가져올 수 있어요.' });
-      toast.error('가져오지 못했어요.', { detail: `${describeFailure(loaded)} 같은 파일로 이어서 가져올 수 있어요.` });
+      toast.failed(loaded, '가져오지 못했어요. 같은 파일로 이어서 가져올 수 있어요.');
     } finally {
       await backup?.close();
       end();

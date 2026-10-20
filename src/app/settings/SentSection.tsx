@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { readSentReports, type SentReport } from '../../runtime/account';
 import { ago } from '../common/time';
-import { HEAD_ROWS, usePages } from '../common/useLoaded';
+import { HEAD_ROWS, PagedList, SeeAll, usePages } from '../common/useLoaded';
 import { NOTICES } from '../common/words';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Dialog, Empty, List, ListItem, NavBar, Panel, Screen, Section, Stack, Text } from '../ui';
+import { Dialog, ListItem, NavBar, Panel, Screen, Section, Stack, Text } from '../ui';
 import { ReportButton } from './ReportDialog';
 
 // What the person sent and what came back. sent null: the report was deleted a year after it was resolved.
@@ -45,27 +45,18 @@ export function SentScreen({ back }: { back: Back | null }) {
 export function SentSection({ head }: { head: boolean }) {
   const pages = usePages((after) => readSentReports(after, head ? { limit: HEAD_ROWS } : {}));
   const [open, setOpen] = useState<SentReport | null>(null);
-  const { rows } = pages;
   return (
     <Panel
       title={NOTICES.sent}
       help="이 알림은 종단 간 암호화되지 않아요."
       action={<>
-        {head && !pages.whole && <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'sent' })}>모두 보기</Button>}
+        {head && !pages.whole && <SeeAll onClick={() => navigate({ kind: 'sent' })} />}
         <ReportButton onSent={pages.reload} />
       </>}
     >
-      {pages.loading}
-      {pages.failure}
-      {rows && rows.length === 0 && <Empty variant="section">{NOTICES.sent}이 없어요.</Empty>}
-      {rows && rows.length > 0 && (
-        <List label={NOTICES.sent} box>
-          {rows.map((report) => (
-            <ListItem key={report.id} {...messageRow(report.text)} tags={[status(report)]} aside={ago(report.createdAt)} onClick={() => setOpen(report)} />
-          ))}
-        </List>
-      )}
-      {!head && pages.more}
+      <PagedList pages={pages} head={head} label={NOTICES.sent} empty={`${NOTICES.sent}이 없어요.`}>
+        {(report) => <ListItem key={report.id} {...messageRow(report.text)} tags={[status(report)]} aside={ago(report.createdAt)} onClick={() => setOpen(report)} />}
+      </PagedList>
       {open && (
         <Dialog title={NOTICES.sent} note={ago(open.createdAt)} onClose={() => setOpen(null)}>
           <Exchange

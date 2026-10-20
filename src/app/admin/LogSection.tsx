@@ -3,10 +3,10 @@ import { sizeText } from '../common/size';
 import { ago } from '../common/time';
 import { NOTICES } from '../common/words';
 import { navigate } from '../shell/router';
-import { Button, Empty, List, ListItem, Panel } from '../ui';
+import { ListItem, Panel } from '../ui';
 import { restoreError } from '../common/RestoresDialog';
 import { moment } from '../common/time';
-import { HEAD_ROWS, usePages } from '../common/useLoaded';
+import { HEAD_ROWS, PagedList, SeeAll, usePages } from '../common/useLoaded';
 
 // The actions server/admin logs. One it does not list shows as the server wrote it.
 const ACTIONS: Record<string, string> = {
@@ -55,20 +55,11 @@ function codeOf({ target, detail }: LogRow): string | undefined {
 // head: the newest few, which 운영 shows.
 export function LogSection({ head }: { head: boolean }) {
   const pages = usePages((after) => readLog(after, head ? { limit: HEAD_ROWS } : {}));
-  const { rows } = pages;
   return (
-    <Panel title="기록" action={head && !pages.whole ? <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'admin-list', list: 'log' })}>모두 보기</Button> : undefined}>
-      {pages.loading}
-      {pages.failure}
-      {rows && rows.length === 0 && <Empty variant="section">아직 기록이 없어요.</Empty>}
-      {rows && rows.length > 0 && (
-        <List label="기록" box>
-          {rows.map((row) => (
-            <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={codeOf(row)} description={detailOf(row)} aside={ago(row.at)} />
-          ))}
-        </List>
-      )}
-      {!head && pages.more}
+    <Panel title="기록" action={head && !pages.whole ? <SeeAll onClick={() => navigate({ kind: 'admin-list', list: 'log' })} /> : undefined}>
+      <PagedList pages={pages} head={head} label="기록" empty="아직 기록이 없어요.">
+        {(row) => <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={codeOf(row)} description={detailOf(row)} aside={ago(row.at)} />}
+      </PagedList>
     </Panel>
   );
 }

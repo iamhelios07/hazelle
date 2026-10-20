@@ -40,14 +40,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
 
   return (
     <Screen
-      top={
-        <>
-          <IconButton icon={ChevronLeft} label="이전" onClick={onBack} />
-          <Text variant="note">
-            2 / 2
-          </Text>
-        </>
-      }
+      top={<IconButton icon={ChevronLeft} label="이전" onClick={onBack} />}
       actions={
         <>
           <Button disabled={!downloaded || !saved} busy={busy} onClick={() => void run(onStart)}>

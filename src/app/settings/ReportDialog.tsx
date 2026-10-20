@@ -16,7 +16,7 @@ export function ReportButton({ onSent }: { onSent: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="secondary" size="sm" icon={Send} onClick={() => setOpen(true)}>
+      <Button variant="secondary" icon={Send} onClick={() => setOpen(true)}>
         {REPORT}
       </Button>
       {open && <ReportDialog onClose={() => setOpen(false)} onSent={onSent} />}

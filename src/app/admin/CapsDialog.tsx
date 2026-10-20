@@ -27,7 +27,7 @@ function CapField({ label, draft, onChange }: { label: string; draft: Draft; onC
   const invalid = capOf(draft) === undefined;
   return (
     <>
-      <ChoiceGroup label={label} showLabel layout="segmented" options={CHOICES} value={draft.choice} onChange={(choice) => onChange({ ...draft, choice })} />
+      <ChoiceGroup label={label} showLabel layout="fit" options={CHOICES} value={draft.choice} onChange={(choice) => onChange({ ...draft, choice })} />
       {draft.choice === 'own' && <NumberInput label={label} unit="MB" value={draft.text} invalid={invalid} onChange={(text) => onChange({ ...draft, text })} />}
       {draft.choice === 'own' && invalid && <Callout tone="warn">{CAP_ERROR}</Callout>}
     </>
