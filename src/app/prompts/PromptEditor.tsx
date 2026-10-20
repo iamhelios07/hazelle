@@ -10,8 +10,8 @@ import { FeatureSwitches } from '../common/FeatureSwitches';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { NO_PERSONA_SLOT, SLOT } from '../common/prompt-words';
 import type { Frame } from '../common/frame';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, PRE_READ, promptName } from '../common/words';
+import { useAutosave } from '../common/useAutosave';
+import { BIN_KEEPS, PRE_READ, promptName, SET_DEFAULT } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import type { PromptPane } from '../shell/routes';
 import { typing, useShortcut } from '../shortcuts';
@@ -51,7 +51,7 @@ import { ProtectRules } from './ProtectRules';
 import { TogglePane } from '../common/TogglePane';
 import { withParticle } from '../common/particles';
 import { lineTitle } from '../common/toggleWords';
-import { EMPTY_USE, usePromptUse } from '../common/usePromptUse';
+import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
 
 const MODEL = 'model' satisfies PromptPane;
 const TOGGLES = 'toggles' satisfies PromptPane;
@@ -234,8 +234,10 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   const copy = async () => {
     if (!(await save.flush())) return;
     const made = crypto.randomUUID();
-    void copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`, made).then((copied) => copied.ok || toast.failed(copied, '사본을 만들지 못했어요.'));
+    const copying = copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`, made);
     onCopied(made);
+    const copied = await copying;
+    if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
     toast.show('사본을 만들었어요.');
   };
   const resetBlocks = async () => {
@@ -247,12 +249,12 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   };
   const makeDefault = async () => {
     const saved = await setDefaultPrompt(store, stored.id);
-    if (!saved.ok) toast.failed(saved, '기본 프롬프트로 지정하지 못했어요.');
+    if (!saved.ok) toast.failed(saved, '기본으로 정하지 못했어요.');
   };
   const erase = async () => {
     const removed = await save.remove(() => removePrompt(store, stored.id));
     if (!removed) return;
-    if (!removed.ok) return removed.error === 'default' ? toast.error(`${words.default}는 삭제할 수 없어요. 다른 프롬프트를 기본으로 정한 뒤 삭제해 주세요.`) : toast.failed(removed, '삭제하지 못했어요.');
+    if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
     onErased();
     toast.undoable(`'${promptName(removed.data.value.name)}' 프롬프트를 삭제했어요.`, () => restorePrompt(store, stored.id), BIN_KEEPS);
   };
@@ -408,7 +410,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
       )
     );
 
-  const status = save.status ? SAVE_STATUS[save.status] : undefined;
+  const status = save.words;
   if (!split && (drilled || shownPane !== null)) {
     const title = open === MODEL ? '모델' : open === PICTURE ? '이미지' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
     if (open === TOGGLES && paneBack) {
@@ -425,15 +427,15 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   }
 
   const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `'${promptName(stored.value.origin.name)}'의 사본` : null;
-  const subtitle = (
+  const facts = [sort === 'conversation' && promptUseWords(uses), origin].filter(Boolean).join(' · ');
+  const subtitle = (isDefault || facts) && (
     <>
-      {isDefault && <Tag tone="accent">{words.default}</Tag>}
-      <span>{[sort === 'conversation' && (uses.chats ? `채팅 ${uses.chats}개가 쓰는 중` : '쓰는 채팅 없음'), origin].filter(Boolean).join(' · ')}</span>
+      {isDefault && <Tag tone="accent">{words.default}</Tag>} {facts}
     </>
   );
   const head: NavBarProps = {
     title: draft.name,
-    rename: { label: '프롬프트 이름', placeholder: promptName(''), onChange: (name) => update(() => ({ name })) },
+    rename: { label: '프롬프트 이름', placeholder: promptName(draft.name), onChange: (name) => update(() => ({ name })) },
     subtitle,
     onBack,
     backLabel,
@@ -444,9 +446,9 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
         <>
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
           {ofSort(stored, 'conversation') && <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />}
-          {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
+          {!isDefault && <MenuItem label={SET_DEFAULT} sub={words.makeDefault} onClick={() => void makeDefault()} />}
           {sort !== 'conversation' && <MenuItem label="기본 블록으로 되돌리기" sub="블록을 앱의 기본으로 바꿔요. 이름과 모델은 그대로예요." onClick={() => void resetBlocks()} />}
-          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void erase()} />
+          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? `${words.default}라서 삭제할 수 없어요` : undefined} tone="warn" disabled={isDefault} onClick={() => void erase()} />
         </>
       ),
     },

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
 import { entriesOf, entryKey, entryName, type Starred } from '../../connectors/types';
@@ -9,11 +9,9 @@ import { imageOnly } from '../../runtime/assignment';
 import { renameModel, retriesOf } from '../../runtime/connections';
 import { modelProfile, ownProfile, profileUsers, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
-import { ACTS } from '../common/acts';
-import { NameDialog } from '../common/NameDialog';
 import { LedgerWait, useLedger } from '../common/useLedger';
 import type { SaveStatus } from '../common/saveQueue';
-import { SAVE_STATUS } from '../common/useAutosave';
+import { mergeStatus, saveWords, useAutosave } from '../common/useAutosave';
 import { defaultMark, MODEL_ROLES, MODEL_SETTINGS } from '../common/words';
 import { spent } from '../common/usage';
 import { ago } from '../common/time';
@@ -30,26 +28,21 @@ type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
 
 export const ModelScreen = (props: Props) => (imageOnly(props.model) ? <ImageModelScreen {...props} /> : <ChatModelScreen {...props} />);
 
-// No guard against a blank name: it brings back the list's name (runtime/connections renameModel).
+// A blank clears the entry's own name, so the list's name shows again (a ruling; runtime/connections renameModel).
 function useRename(connection: Stored<'connection'>, model: Starred) {
   const { store } = useSession();
-  const toast = useToast();
-  const [naming, setNaming] = useState(false);
-  const rename = (label: string) => {
-    setNaming(false);
-    void renameModel(store, connection.id, entryKey(model), label).then((result) => result.ok || toast.failed(result));
-  };
-  return {
-    item: <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming(true)} />,
-    dialog: naming && <NameDialog title="모델 이름 바꾸기" value={entryName(model)} onSave={rename} onClose={() => setNaming(false)} />,
-  };
+  const key = entryKey(model);
+  const naming = useAutosave<{ label: string }>(`model:${connection.id}:${key}`, ({ label }) => renameModel(store, connection.id, key, label!));
+  const title = naming.unsaved.label ?? entryName(model);
+  const rename = { label: '모델 이름', placeholder: model.name, blank: '비워 두면 원래 모델 이름으로 표시돼요.', onChange: (label: string) => naming.change({ label }) };
+  return { title, status: naming.status, rename };
 }
 
 // A model that only draws takes no 모델 설정 and leaves no reply to count: how it draws is the 삽화 prompt's (design §6.6),
 // and its allowance is its connection's meter.
 function ImageModelScreen({ connection, model, back }: Props) {
   const { store } = useSession();
-  const rename = useRename(connection, model);
+  const naming = useRename(connection, model);
   // A binned or missing default opens the list, never the missing page.
   const openPrompt = () => {
     const prompt = illustrationPrompt(store, undefined);
@@ -58,7 +51,7 @@ function ImageModelScreen({ connection, model, back }: Props) {
   return (
     <Screen
       width="form"
-      top={<NavBar title={entryName(model)} subtitle={connection.value.label} {...backBar(back)} menu={{ of: '모델', items: rename.item }} />}
+      top={<NavBar title={naming.title} rename={naming.rename} subtitle={connection.value.label} status={saveWords(naming.status)} {...backBar(back)} />}
       aside={
         <SettingGroup label="이미지 설정">
           <SettingRow
@@ -87,7 +80,6 @@ function ImageModelScreen({ connection, model, back }: Props) {
           </Button>
         </Row>
       </Section>
-      {rename.dialog}
     </Screen>
   );
 }
@@ -99,7 +91,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
   const settings = useSettings();
   const connections = useConnections();
   const ledger = useLedger();
-  const rename = useRename(connection, model);
+  const naming = useRename(connection, model);
   // Usage counts the provider's model, so every copy's page shows one total.
   const usage = useMemo(() => (ledger.view.kind === 'read' ? modelUsage(ledger.view.calls, connection.id, model.id) : null), [ledger.view, connection.id, model.id]);
   const copies = entriesOf(connection.value, model.id).length;
@@ -147,7 +139,8 @@ function ChatModelScreen({ connection, model, back }: Props) {
       width="form"
       top={
         <NavBar
-          title={entryName(model)}
+          title={naming.title}
+          rename={naming.rename}
           subtitle={
             <>
               {connection.value.label}{' '}
@@ -159,12 +152,11 @@ function ChatModelScreen({ connection, model, back }: Props) {
             </>
           }
           {...backBar(back)}
-          status={status ? SAVE_STATUS[status] : undefined}
+          status={saveWords(mergeStatus(naming.status, status))}
           menu={{
             of: '모델',
             items: (
               <>
-                {rename.item}
                 <MenuItem label="연결 열기" onClick={() => navigate({ kind: 'connection', id: connection.id })} />
                 <MenuItem label="사용량 열기" onClick={() => navigate({ kind: 'usage' })} />
               </>
@@ -210,7 +202,6 @@ function ChatModelScreen({ connection, model, back }: Props) {
           <Empty variant="section">이 모델로 받은 응답이 없어요.</Empty>
         )}
       </Section>
-      {rename.dialog}
     </Screen>
   );
 

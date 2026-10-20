@@ -10,7 +10,7 @@ import { TASK_NAMES } from '../common/prompt-words';
 import { useSearch } from '../common/useSearch';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { defaultMark, MODEL_ROLES, PAGES, PRE_READ, promptName } from '../common/words';
+import { defaultMark, EMPTY_FOLDER, MODEL_ROLES, PAGES, PRE_READ, promptName } from '../common/words';
 import { Button, CardItem, CardList, ChoiceGroup, Columns, Empty, Hint, PickCard, Row, Section, Tab, Tabs } from '../ui';
 import { taskModelWords } from './ModelPane';
 import { useImport } from '../common/importing';
@@ -160,31 +160,30 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
   const body = (
     <>
       {defaultCards}
-      <Row kind="spread">
-        <Row kind="toolbar">
-          {search.field}
-          {!search.words && (
-            <>
-              <Tabs label="프롬프트 종류">
-                {sorts.map(({ sort, label }) => (
-                  <Tab key={sort} label={label} count={prompts.filter((prompt) => ofSort(prompt, sort)).length} current={sort === shown} onClick={() => setShown(sort)} />
-                ))}
-              </Tabs>
-              {current.hint && <Hint label={`${current.label} 프롬프트`}>{current.hint}</Hint>}
-            </>
-          )}
-        </Row>
-        {!search.words && shown === 'conversation' && (
-          <ChoiceGroup
-            layout="segmented"
-            label="정렬"
-            options={[
-              { value: 'name', label: '이름' },
-              { value: 'recent', label: '최근 사용' },
-            ]}
-            value={order}
-            onChange={setOrder}
-          />
+      <Row kind="toolbar">
+        {search.field}
+        {!search.words && (
+          <>
+            <Tabs label="프롬프트 종류">
+              {sorts.map(({ sort, label }) => (
+                <Tab key={sort} label={label} count={prompts.filter((prompt) => ofSort(prompt, sort)).length} current={sort === shown} onClick={() => setShown(sort)} />
+              ))}
+            </Tabs>
+            {current.hint && <Hint label={`${current.label} 프롬프트`}>{current.hint}</Hint>}
+            {shown === 'conversation' && (
+              <ChoiceGroup
+                label="정렬"
+                showLabel
+                layout="segmented"
+                options={[
+                  { value: 'name', label: '이름' },
+                  { value: 'recent', label: '최근 사용' },
+                ]}
+                value={order}
+                onChange={setOrder}
+              />
+            )}
+          </>
         )}
       </Row>
       {search.words ? (
@@ -202,7 +201,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
             ))}
           </CardList>
         ) : (
-          <Empty variant="section">{search.none}</Empty>
+          <Empty>{search.none}</Empty>
         )
       ) : (
         <>
@@ -217,9 +216,9 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
               {top.map((prompt) => row(prompt))}
             </CardList>
           ) : at.here && filing ? (
-            <Empty variant="section">비어 있는 폴더예요.</Empty>
+            <Empty>{EMPTY_FOLDER}</Empty>
           ) : (
-            <Empty variant="section" action={adding}>
+            <Empty action={adding}>
               {current.none}
             </Empty>
           )}

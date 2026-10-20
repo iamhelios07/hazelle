@@ -88,16 +88,16 @@ export async function addModel(store: ObjectStore, id: string, model: Model, own
   return { ok: true, data: key };
 }
 
-// A blank name, or the catalog's own, is none, so the entry's name follows the list again.
-function ownLabel(name: string, label: string): Pick<Starred, 'label'> {
+// A blank name is none, so the entry's name follows the list again.
+function ownLabel(label: string): Pick<Starred, 'label'> {
   const trimmed = label.trim();
-  return trimmed && trimmed !== name ? { label: trimmed } : {};
+  return trimmed ? { label: trimmed } : {};
 }
 
 // A further copy starts on a 설정 of its own, a copy of the one the model's first entry uses: copies exist to differ, and
 // on a shared 설정 an edit on one copy's page would change the other. A model that only draws takes no 설정.
 export async function addCopy(store: ObjectStore, id: string, model: Model, label: string): Promise<ApiResult<string>> {
-  const own = ownLabel(model.name, label);
+  const own = ownLabel(label);
   const connection = store.get('connection', id);
   const first = connection && entriesOf(connection.value, model.id)[0];
   const entry = `#${crypto.randomUUID()}`;
@@ -129,7 +129,7 @@ export const putModelBack = (store: ObjectStore, id: string, { entry, index }: T
   store.update('connection', id, (current) => (current.starred.some((model) => entryKey(model) === entryKey(entry)) ? current : { ...current, starred: current.starred.toSpliced(index, 0, entry) }));
 
 export const renameModel = (store: ObjectStore, id: string, key: string, label: string) =>
-  store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (entryKey(model) === key ? { ...without(model, 'label'), ...ownLabel(model.name, label) } : model)) }));
+  store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (entryKey(model) === key ? { ...without(model, 'label'), ...ownLabel(label) } : model)) }));
 
 // Key order aside, so a snapshot written in another order is not taken for a change.
 const sameValue = (a: unknown, b: unknown) => {
