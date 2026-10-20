@@ -5,6 +5,7 @@ export { CodeBlock } from './CodeBlock';
 export { CodeCard } from './CodeCard';
 export { Empty } from './Empty';
 export { Gauge } from './Gauge';
+export { NoticeBar } from './NoticeBar';
 export { NoticeCard } from './NoticeCard';
 export { Intro } from './Intro';
 export { Outcome } from './Outcome';

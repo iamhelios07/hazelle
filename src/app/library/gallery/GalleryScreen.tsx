@@ -31,7 +31,7 @@ const isBinEntry = (entry: Entry): entry is BinEntry => 'section' in entry;
 const go = (place: string | null) => navigate({ kind: 'gallery', place });
 
 // place: a folder's id, BIN_PLACE for 휴지통, or null for the top (shell/routes).
-export function GalleryScreen({ place, back }: { place: string | null; back: Back | null }) {
+export function GalleryScreen({ place, back, lead }: { place: string | null; back: Back | null; lead?: ReactNode }) {
   const [sort, setSort] = useCharacterSort();
   const library = useSortedLibrary(sort);
   const reorder = useReorder(setSort);
@@ -98,6 +98,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
 
   return (
     <Screen width="wide" top={back && <NavBar title="캐릭터" {...backBar(back)} />}>
+      {lead}
       <Row kind="toolbar">
         {search.field}
         {!binned && <ChoiceGroup label="정렬" showLabel layout="fit" options={[...CHARACTER_SORTS]} value={sort} onChange={setSort} />}

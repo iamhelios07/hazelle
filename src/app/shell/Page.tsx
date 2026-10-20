@@ -6,6 +6,7 @@ import { binsChat, isBinned, live } from '../../model/library';
 import type { SideAt } from '../chat/ChatScreen';
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
+import { GuestLine } from '../common/GuestNotice';
 import { Missing, type Absent } from '../common/Missing';
 import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
@@ -205,7 +206,7 @@ function Replace({ to }: { to: Route }) {
 function HomePage() {
   const { read } = useSession();
   const populated = useSyncExternalStore(read.library.subscribe, () => read.library.snapshot().characters.length > 0);
-  return populated ? <GalleryScreen place={null} back={null} /> : <HomeScreen />;
+  return populated ? <GalleryScreen place={null} back={null} lead={<GuestLine />} /> : <HomeScreen />;
 }
 
 function CharacterPage({ at, wide }: { at: At<'shelf' | 'edit'>; wide: boolean }) {

@@ -1,6 +1,6 @@
 import { MessageSquarePlus, PackageOpen, Plug, UserRoundPlus } from 'lucide-react';
 import { ACTS, importOf, newOf } from '../common/acts';
-import { GuestNotice } from '../common/GuestNotice';
+import { GuestLine, GuestNotice } from '../common/GuestNotice';
 import { usePersisted } from '../common/usePersisted';
 import { useAccount, useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
@@ -34,13 +34,13 @@ export function Welcome() {
   );
 }
 
-// A guest's limits stand on the empty home, phone list included, until closed on this device; 설정 › 계정 keeps the
-// same card for good.
+// A guest's limits stand on the empty home, phone list included, until closed on this device, then as GuestLine;
+// 설정 › 계정 keeps the card for good.
 function GuestCard() {
   const { guest } = useAccount();
   const [closed, setClosed] = usePersisted('risu-alpha:guest-card-closed', (stored) => stored === '1', false, (value) => (value ? '1' : ''));
-  if (!guest || closed) return null;
-  return <GuestNotice guest={guest} onClose={() => setClosed(true)} />;
+  if (!guest) return null;
+  return closed ? <GuestLine /> : <GuestNotice guest={guest} onClose={() => setClosed(true)} />;
 }
 
 export function HomeScreen() {

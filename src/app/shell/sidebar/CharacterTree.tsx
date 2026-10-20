@@ -6,6 +6,7 @@ import { characterTexts, type Shelf } from '../../../model/library';
 import { ACTS, importOf, newOf } from '../../common/acts';
 import { useSearch } from '../../common/useSearch';
 import { ago } from '../../common/time';
+import { GuestLine } from '../../common/GuestNotice';
 import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../common/importing';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
@@ -78,6 +79,7 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
             <IconButton icon={MessageSquarePlus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Row>
           {search.field}
+          {!empty && <GuestLine />}
         </>
       }
       corner={<LayerButtons />}

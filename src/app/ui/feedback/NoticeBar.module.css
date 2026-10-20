@@ -1,0 +1,43 @@
+.bar {
+  composes: box from '../foundation/surface.module.css';
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-12);
+  padding: var(--space-12) var(--space-16);
+}
+
+.lead {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+/* One line high, so the icon stands level with the title when the note wraps under it. */
+.icon {
+  display: flex;
+  align-items: center;
+  height: calc(var(--text-md) * var(--leading-relaxed));
+  color: var(--color-text-muted);
+}
+
+.words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-8);
+  min-width: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+
+.title {
+  font-weight: var(--weight-semibold);
+}
+
+.note {
+  composes: note from '../foundation/type.module.css';
+}
