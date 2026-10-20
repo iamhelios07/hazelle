@@ -3,14 +3,16 @@ import type { ApiResult } from './api';
 import type { PreparedChat } from '../connectors/preparation';
 import type { CallCalibration, InputMeasurement, TokenFit } from '../model/token-calibration';
 import { BOT_HEADER, RELAY_HEADER } from '../contracts/http';
-import { HEAD, DATA, END, PING, WAIT, type Retry } from '../contracts/streams';
+import { HEAD, DATA, END, PING, WAIT, retryWait, type Retry } from '../contracts/streams';
 import { providerCode, providerMessage } from '../connectors/errors';
 import { isRecord } from '../connectors/values';
-import type { HttpRequest } from '../connectors/types';
+import type { ConnectionType, HttpRequest } from '../connectors/types';
 import type { PulseLabel } from '../contracts/pulse';
 import { streamOpener } from '../vault/streams';
 import { fetchApi } from './api';
 import { pause } from './pause';
+import { CONNECTION_TYPES } from '../connectors/registry';
+import { pingGuest } from './pulse';
 
 // Whose refusal it was decides what the user is told: the provider's answer, the relay's
 // own refusal (X-Relay: error), the app's (no X-Relay header, such as an expired session), or no
@@ -27,10 +29,84 @@ export type JsonAnswer = { ok: true; data: unknown } | { ok: false; failure: Rel
 
 const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 'stopped' } : { kind: 'offline' });
 
+export type Transport = {
+  detached: boolean;
+  problem(type?: ConnectionType | null): Extract<RelayFailure, { kind: 'app' }> | null;
+  close(): void;
+  raw(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel, type?: ConnectionType | null): Promise<Response | RelayFailure>;
+  stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal, retry?: Retry | null, pulse?: PulseLabel, type?: ConnectionType | null): Promise<Response | RelayFailure>;
+  stop(id: string): void;
+  drop(id: string): void;
+};
+
+export const accountTransport: Transport = { detached: true, problem: () => null, close: () => {}, raw: accountRaw, stream: accountStream, stop: (id) => accountStop(id), drop: (id) => accountDrop(id) };
+
+// Like api's held account, the one open session owns the page's provider transport. Never infer it from cookies.
+let transport = accountTransport;
+export const holdTransport = (held: Transport) => { transport = held; };
+export const detachedReplies = () => transport.detached;
+export const transportProblem = (type: ConnectionType | null | undefined) => transport.problem(type);
+export const relayRaw = (request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel, type?: ConnectionType | null) => transport.raw(request, signal, bot, pulse, type);
+export const stream = (call: StreamCall, request: HttpRequest | null, signal: AbortSignal, retry: Retry | null = null, pulse?: PulseLabel, type?: ConnectionType | null) => transport.stream(call, request, signal, retry, pulse, type);
+export const stopStream = (id: string) => transport.stop(id);
+export const dropStream = (id: string) => transport.drop(id);
+
+export function directTransport(client: string, shares: () => boolean): Transport {
+  const calls = new Map<string, AbortController>();
+  const closing = new AbortController();
+  const problem: Transport['problem'] = (type) => type?.browser === false ? { kind: 'app', code: 'needs-account' } : null;
+  const raw: Transport['raw'] = async (request, signal, _bot, pulse, type) => {
+    // Sign-in runs before a connection exists, so its type is found from the registry's OAuth addresses.
+    if (type === undefined) type = CONNECTION_TYPES.find(({ signIn }) => signIn && [signIn.codeUrl, signIn.tokenUrl, signIn.account.request('').url].includes(request.url));
+    const refused = problem(type);
+    if (refused) return refused;
+    signal = signal ? AbortSignal.any([signal, closing.signal]) : closing.signal;
+    if (signal.aborted) return lost(signal);
+    try {
+      const response = await fetch(request.url, { method: request.method, headers: { ...request.headers, ...(type?.browser && type.browser.headers) }, body: request.body, signal, credentials: 'omit' });
+      if (response.ok && pulse && !closing.signal.aborted && shares()) pingGuest(client, pulse);
+      return response;
+    } catch {
+      // Fetch deliberately does not distinguish CORS, DNS and a lost connection.
+      return lost(signal);
+    }
+  };
+  return {
+    detached: false,
+    problem,
+    close: () => { closing.abort(); calls.clear(); },
+    raw,
+    stream: async (call, request, signal, retry = null, pulse, type) => {
+      if (!request) return { kind: 'app', code: 'needs-account' };
+      const stopping = new AbortController();
+      calls.set(call.id, stopping);
+      const canceled = AbortSignal.any([signal, stopping.signal, closing.signal]);
+      // Keep the controller through body consumption: stop must still abort the provider's SSE.
+      canceled.addEventListener('abort', () => calls.delete(call.id), { once: true });
+      for (let tries = 1; ; tries++) {
+        call.tries = tries;
+        const response = await raw(request, canceled, call.bot, undefined, type);
+        const retryAfter = response instanceof Response ? response.headers.get('retry-after') : null;
+        const again = response instanceof Response ? retry?.statuses.includes(response.status) : response.kind === 'offline';
+        const wait = again && retry && tries <= retry.times ? retryWait(tries, retryAfter, Date.now()) : null;
+        if (wait === null) {
+          if (response instanceof Response && response.ok && pulse && !closing.signal.aborted && shares()) pingGuest(client, pulse);
+          return answered(response);
+        }
+        if (response instanceof Response) await response.body?.cancel();
+        call.retrying?.();
+        if (!(await pause(wait, canceled))) return { kind: 'stopped' };
+      }
+    },
+    stop: (id) => { calls.get(id)?.abort(); calls.delete(id); },
+    drop: (id) => { calls.delete(id); },
+  };
+}
+
 // The provider's answer, whatever its status. bot: the chat whose bot's script makes the call (BOT_HEADER). pulse: a
 // provider call's 헤이젤 나우 label, sent to this app's server beside the request and never in request.headers, which
 // the relay forwards to the provider.
-export async function relayRaw(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<Response | RelayFailure> {
+async function accountRaw(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<Response | RelayFailure> {
   let response: Response;
   try {
     response = await fetchApi('relay', {
@@ -66,19 +142,19 @@ async function answered(response: Response | RelayFailure): Promise<Response | R
   return { kind: 'provider', status: response.status, detail: providerMessage(text), ...(code !== null && { code }), ...(retryAfter !== null && { retryAfter }) };
 }
 
-export async function relay(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<Response | RelayFailure> {
-  return answered(await relayRaw(request, signal, bot, pulse));
+export async function relay(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel, type?: ConnectionType | null): Promise<Response | RelayFailure> {
+  return answered(await relayRaw(request, signal, bot, pulse, type));
 }
 
-export async function relayJson(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel): Promise<JsonAnswer> {
-  return readJson(await relay(request, signal, bot, pulse), signal);
+export async function relayJson(request: HttpRequest, signal?: AbortSignal, bot?: string, pulse?: PulseLabel, type?: ConnectionType | null): Promise<JsonAnswer> {
+  return readJson(await relay(request, signal, bot, pulse, type), signal);
 }
 
 export type BytesAnswer = { ok: true; bytes: Uint8Array<ArrayBuffer>; type: string | null } | { ok: false; failure: RelayFailure };
 
 // A body that is not text, such as a picture, with its content type.
-export async function relayBytes(request: HttpRequest, signal: AbortSignal, pulse: PulseLabel): Promise<BytesAnswer> {
-  const response = await relay(request, signal, undefined, pulse);
+export async function relayBytes(request: HttpRequest, signal: AbortSignal, pulse: PulseLabel, type?: ConnectionType | null): Promise<BytesAnswer> {
+  const response = await relay(request, signal, undefined, pulse, type);
   if (!(response instanceof Response)) return { ok: false, failure: response };
   try {
     return { ok: true, bytes: new Uint8Array(await response.arrayBuffer()), type: response.headers.get('content-type') };
@@ -122,7 +198,7 @@ export type StreamCall = { preflight?: (settings: ModelSettings, signal: AbortSi
 // call's result and drop a call still running.
 // retry: how the server sends again a try that failed before any of it came, absent for none. pulse: the start's label
 // (relayRaw); a read of a call already started carries none, since its start counted it.
-export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal, retry: Retry | null = null, pulse?: PulseLabel): Promise<Response | RelayFailure> {
+async function accountStream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal, retry: Retry | null = null, pulse?: PulseLabel): Promise<Response | RelayFailure> {
   let body: ReadableStream<Uint8Array>;
   if (request) {
     let response: Response;
@@ -151,10 +227,10 @@ export async function stream(call: StreamCall, request: HttpRequest | null, sign
 }
 
 // 멈추기: the call ends and the server keeps what came. A refused stop leaves the call running until it is dropped.
-export const stopStream = (id: string) => void fetchApi(`streams/${id}/stop`, { method: 'POST', headers: { 'content-type': 'application/json' } }).catch(() => {});
+const accountStop = (id: string) => void fetchApi(`streams/${id}/stop`, { method: 'POST', headers: { 'content-type': 'application/json' } }).catch(() => {});
 
 // Once the call's result is saved. A refused drop leaves the server's copy until it expires on its own.
-export const dropStream = (id: string) => void fetchApi(`streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
+const accountDrop = (id: string) => void fetchApi(`streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
 
 // No connection or a server error are this page's and are tried again, ever more slowly; stream-gone: the server
 // holds no such call; no-session: the session is gone. Throws once signal stops the read.

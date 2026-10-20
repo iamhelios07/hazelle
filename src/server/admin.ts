@@ -1,3 +1,4 @@
+import type { PulseSettings } from '../contracts/pulse';
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { type AccountState, type RestoreAction, MAX_NOTICE_LENGTH } from '../contracts/admin';
@@ -296,6 +297,19 @@ admin.post('/restores/:id/:action{resume|finalize|cancel}', async (c) => {
   const id = Number(c.req.param('id'));
   if (!positive(id)) return fail(c, 400, 'bad-input');
   return answerAction(c, id, c.req.param('action') as RestoreAction);
+});
+
+admin.get('/pulse', async (c) => c.json({ guests: (await c.env.db.prepare('SELECT pulse_guests FROM service').first<number>('pulse_guests')) === 1 } satisfies PulseSettings));
+
+admin.put('/pulse', async (c) => {
+  const body = await readObject(c);
+  if (typeof body?.guests !== 'boolean') return fail(c, 400, 'bad-input');
+  await c.env.db.batch([
+    c.env.db.prepare('UPDATE service SET pulse_guests = ?').bind(Number(body.guests)),
+    c.env.db.prepare("INSERT INTO admin_log (at, action, target, detail) VALUES (?, 'set-pulse', 'service', ?)").bind(Date.now(), JSON.stringify({ guests: body.guests })),
+  ]);
+  c.env.pulse.invalidate();
+  return c.body(null, 204);
 });
 
 admin.get('/service', async (c) => {

@@ -4,6 +4,7 @@ import type { ConnectionType, Model } from './types';
 import { count, isRecord, modalities, modelEntries, nameOf } from './values';
 
 export const deepseek: ConnectionType = {
+  browser: {},
   id: 'deepseek',
   label: 'DeepSeek',
   group: 'maker',

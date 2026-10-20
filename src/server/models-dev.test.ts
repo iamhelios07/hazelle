@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { ModelsDevList } from '../connectors/models-dev';
 import modelsDev from './fixtures/models-dev.json';
+import { VISITOR_HEADER } from '../contracts/http';
+import { tokenBucket } from './limits';
 import { testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -33,4 +35,20 @@ it('stores the listed providers models.dev prices and inputs and outputs, pricin
   });
   expect((await t.get('models-dev?provider=poe', cookie)).status).toBe(400);
   expect(await t.env.db.prepare("SELECT name FROM models_dev WHERE list = 'github-copilot' AND model = 'gpt-5.4'").first('name')).toBe('GPT-5.4');
+});
+
+
+it('serves the same cached price list to guests, behind the public per-visitor limiter', async () => {
+  const previous = t.env.limits.visitors.reads;
+  t.env.limits.visitors.reads = tokenBucket(1);
+  try {
+    const first = await t.get('models-dev?provider=groq', undefined, { [VISITOR_HEADER]: 'guest-one' });
+    expect(first.status).toBe(200);
+    expect((await first.json() as ModelsDevList).models).toHaveProperty('priced-only');
+    expect((await t.get('models-dev?provider=groq', undefined, { [VISITOR_HEADER]: 'guest-one' })).status).toBe(429);
+    const cached = await t.get('models-dev?provider=groq', undefined, { [VISITOR_HEADER]: 'guest-two', 'if-none-match': first.headers.get('etag')! });
+    expect(cached.status).toBe(304);
+  } finally {
+    t.env.limits.visitors.reads = previous;
+  }
 });

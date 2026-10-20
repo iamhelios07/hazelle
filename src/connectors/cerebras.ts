@@ -1,6 +1,7 @@
 import type { ConnectionType } from './types';
 
 export const cerebras: ConnectionType = {
+  browser: {},
   id: 'cerebras',
   label: 'Cerebras',
   group: 'gateway',

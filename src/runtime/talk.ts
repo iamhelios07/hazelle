@@ -113,8 +113,8 @@ type Prepare<F> = (signal: AbortSignal, prereading: () => void) => Promise<Ask |
 type Held = { turn: Turn; abort: AbortController; cancel: AbortController; calling: string | null };
 
 // A reply blocks only its own chat: chats, in one tab or several, reply at once (user, 2026-10-04). A reply outlives
-// the screen that asked for it: leaving a chat does not stop it. The server makes the call (runtime/streams), so
-// close() only stops reading it, for a locked vault; the next load picks it up.
+// the screen that asked for it: leaving a chat does not stop it. For an account the server makes the call, so
+// close() only stops reading it; a guest's transport aborts the provider instead and leaves no marker to pick up.
 export class Talk {
   // By chat. calling: the call the turn reads, once it started.
   private readonly turns = new Map<string, Held>();

@@ -43,6 +43,7 @@ function answerOf(operation: Record<string, unknown>): BatchAnswer | null {
 }
 
 export const google: ConnectionType = {
+  browser: {},
   id: 'google',
   label: 'Google',
   group: 'maker',

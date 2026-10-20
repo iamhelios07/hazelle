@@ -202,6 +202,7 @@ export function proofBackoff(clock: () => number = () => performance.now(), maxV
 // of a bot, which may be hundreds), and its reports. Requests, not bytes. signups: attempts an hour, so a script cannot
 // fill signup_cap from one address.
 export const visitorLimits = () => ({
+  pulse: tokenBucket(240),
   reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6), signups: tokenBucket(10, 60 * 60_000),
   logins: tokenBucket(30, 60_000, () => performance.now(), LOGIN_VISITORS), proofs: proofBackoff(),
 });

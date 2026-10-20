@@ -3,6 +3,7 @@ import type { ConnectionType } from './types';
 import { count, isRecord, nameOf } from './values';
 
 export const together: ConnectionType = {
+  browser: {},
   id: 'together',
   label: 'Together AI',
   group: 'gateway',

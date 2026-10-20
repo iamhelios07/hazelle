@@ -19,7 +19,7 @@ export async function settleCost(connection: Connection, replyId: string, signal
   if (!settle) return { ok: false, failure: { kind: 'not-a-cost' } };
   const [account] = connection.accounts;
   for (let attempt = 0; ; attempt++) {
-    const answer = await relayJson(settle.request(account!.secret, replyId), signal);
+    const answer = await relayJson(settle.request(account!.secret, replyId), signal, undefined, undefined, resolveConnection(connection)?.type);
     if (answer.ok) {
       const cost = settle.parse(answer.data);
       return cost ? { ok: true, cost } : { ok: false, failure: { kind: 'not-a-cost' } };

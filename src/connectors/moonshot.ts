@@ -3,6 +3,7 @@ import type { ConnectionType, Modality, Model } from './types';
 import { count, flag, modelEntries } from './values';
 
 export const moonshot: ConnectionType = {
+  browser: {},
   id: 'moonshot',
   label: 'Moonshot AI',
   group: 'maker',

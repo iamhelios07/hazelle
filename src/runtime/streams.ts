@@ -10,7 +10,7 @@ import { streamKey } from '../vault/streams';
 import type { Route } from './assignment';
 import { chatMemory } from './memory-read';
 import type { GenerateInput } from './generate';
-import { dropStream } from './relay';
+import { detachedReplies, dropStream } from './relay';
 import type { ObjectStore } from './store';
 
 // The only writer of `stream` objects, each the marker of a generation call the server is making for a chat
@@ -29,7 +29,7 @@ export async function newCall({ store, tokens }: Pick<Session, 'store' | 'tokens
   const at = Date.now();
   const requestClass = purpose.kind === 'reply' ? 'conversation' : purpose.kind === 'input' || purpose.kind === 'note' ? 'translation' : purpose.kind;
   const call: GenerateInput['call'] = { id, key: key.private, public: key.public, logged: { chat, purpose: purpose.kind, call: callOf(route) }, ...calibrate({ store, tokens }, route, requestClass, chat) };
-  call.started = chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), calibration: call.calibration!, at, result, for: purpose }, { id, parent: chat });
+  call.started = !detachedReplies() || chat === null ? undefined : (batch?: string) => void store.create('stream', { ...(batch === undefined ? { key: key.private } : { batch }), call: callOf(route), calibration: call.calibration!, at, result, for: purpose }, { id, parent: chat });
   return call;
 }
 
@@ -79,7 +79,7 @@ export class Streams {
   }
 
   pickUp() {
-    if (this.closed) return;
+    if (this.closed || !detachedReplies()) return;
     for (const stream of this.store.list('stream')) {
       // A deleted chat's calls stay untaken: they go with its purge, or after its 되돌리기 the next pick-up takes them.
       if (this.reading.has(stream.id) || this.checking.has(stream.id) || !live(this.store.get('chat', stream.parent!))) continue;

@@ -8,7 +8,7 @@ import { SHARE_ID, type ShareCover } from '../contracts/shares';
 
 // frame-src is also the tool pages' navigation boundary: adding any host there opens a way out for them.
 export const CSP =
-  "default-src 'self'; img-src 'self' data: blob:; media-src blob:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'";
+  "default-src 'self'; img-src 'self' data: blob:; media-src blob:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https:; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'";
 // The page's own policy: CSP above, plus inline styles carrying this load's nonce (CodeMirror's stylesheet).
 export const pageCsp = (nonce: string) => `${CSP}; style-src 'self' 'nonce-${nonce}'`;
 // Vite writes this placeholder into the page wherever a nonce goes (vite.config html.cspNonce).

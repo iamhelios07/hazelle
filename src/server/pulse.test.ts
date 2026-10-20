@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-import { PULSE_HEADER } from '../contracts/http';
+import { PULSE_HEADER, VISITOR_HEADER } from '../contracts/http';
 import { pulseHeader, type PulseAnswer, type PulseRole } from '../contracts/pulse';
+import { tokenBucket } from './limits';
 import { forgetPulse } from './pulse';
 import { replyKey, testApp } from './testing';
 
@@ -242,5 +243,61 @@ it('lists the earlier weeks and answers each by its people, against the week bef
   for (const from of ['abc', last + 1, WEEK_FROM, older - WEEK]) {
     const missing = await week(from);
     expect([from, missing.status, await missing.json()]).toEqual([from, 404, { error: 'not-found' }]);
+  }
+});
+
+
+it('counts guest labels in the same rankings and closes their week without creating accounts', async () => {
+  const cookies = await people(5);
+  const ids = Array.from({ length: 5 }, () => crypto.randomUUID());
+  for (const [index, client] of ids.entries()) {
+    await call(cookies[index]!, 'chat', 'direct', 'private');
+    expect((await t.post('pulse/guest', { client, label: 'chat direct private' })).status).toBe(204);
+  }
+  // Signup keeps the guest id: crossing the account door must not add another person.
+  const existing = await t.env.db.prepare('SELECT id FROM accounts LIMIT 1').first<string>('id');
+  await t.post('pulse/guest', { client: existing, label: 'chat direct private' });
+  at(NOON + HOUR);
+  expect((await board())?.week.people).toBe(10);
+  expect((await board())?.ranking.chat.merged).toEqual([{ key: '', model: null, share: 1, people: 10, replies: 10 }]);
+  expect(await t.env.db.prepare('SELECT COUNT(*) AS n FROM accounts').first('n')).toBe(5);
+  await t.restartPulse();
+  expect((await board())?.week.people).toBe(10);
+  await forgetPulse(t.env.db, NOON + WEEK);
+  expect(await t.env.db.prepare('SELECT people FROM pulse_week').first('people')).toBe(10);
+  expect((await t.env.db.prepare("SELECT people FROM pulse_week_models WHERE type = ''").first('people'))).toBe(10);
+  for (const table of ['pulse_guest_seen', 'pulse_guest_used', 'pulse_guest_replies']) expect(await t.env.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n')).toBe(0);
+});
+
+it('lets only the operator persist accounts-only rankings, while guests still count as people and calls', async () => {
+  const cookies = await people(10);
+  for (const cookie of cookies.slice(0, 5)) await call(cookie, 'chat', 'direct', 'private');
+  await seen(cookies);
+  for (let index = 0; index < 5; index++) await t.post('pulse/guest', { client: crypto.randomUUID(), label: 'chat direct private' });
+  at(NOON + HOUR);
+  expect((await board())?.ranking.chat.merged[0]?.people).toBe(10);
+  expect((await t.put('admin/pulse', { guests: false }, cookies[1])).status).toBe(403);
+  expect((await t.put('admin/pulse', { guests: 'false' }, cookies[0])).status).toBe(400);
+  expect((await t.put('admin/pulse', { guests: false }, cookies[0])).status).toBe(204);
+  expect(await (await t.get('admin/pulse', cookies[0])).json()).toEqual({ guests: false });
+  expect((await board())?.week.people).toBe(15);
+  expect((await board())?.ranking.chat.merged).toEqual([{ key: '', model: null, share: 1, people: 5, replies: 10 }]);
+  await t.restartPulse();
+  expect((await board())?.ranking.chat.merged[0]?.people).toBe(5);
+  expect(await t.env.db.prepare("SELECT action FROM admin_log WHERE action = 'set-pulse'").first('action')).toBe('set-pulse');
+});
+
+it('validates guest pings and limits the visitor, not a freely replaced client id', async () => {
+  const previous = t.env.limits.visitors.pulse;
+  t.env.limits.visitors.pulse = tokenBucket(1);
+  try {
+    expect((await t.post('pulse/guest', { client: 'not-a-uuid', label: 'chat direct private' }, undefined, { [VISITOR_HEADER]: 'invalid' })).status).toBe(400);
+    expect((await t.post('pulse/guest', { client: crypto.randomUUID(), label: 'seen' }, undefined, { [VISITOR_HEADER]: 'seen' })).status).toBe(400);
+    const ping = (visitor: string) => t.post('pulse/guest', { client: crypto.randomUUID(), label: 'chat direct private' }, undefined, { [VISITOR_HEADER]: visitor });
+    expect((await ping('one')).status).toBe(204);
+    expect((await ping('one')).status).toBe(429);
+    expect((await ping('two')).status).toBe(204);
+  } finally {
+    t.env.limits.visitors.pulse = previous;
   }
 });

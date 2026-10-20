@@ -7,6 +7,7 @@ import type { ConnectionType, Model } from './types';
 const embedding = (id: string): Model => ({ ...bareModel(id), input: ['text'], output: ['embedding'], contextLength: 32_000 });
 
 export const voyage: ConnectionType = {
+  browser: {},
   id: 'voyage',
   label: 'Voyage AI',
   group: 'maker',

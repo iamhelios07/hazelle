@@ -19,6 +19,7 @@ function reasoningTakes(options: unknown): ReasoningTakes | null {
 }
 
 export const friendli: ConnectionType = {
+  browser: false,
   id: 'friendli',
   label: 'Friendli',
   group: 'gateway',

@@ -16,6 +16,7 @@ import { addPersona } from './personas';
 
 const { PAINTER } = vi.hoisted(() => {
   const PAINTER: ConnectionType = {
+    browser: {},
     id: 'fake-draws',
     label: 'Painter',
     group: 'maker',

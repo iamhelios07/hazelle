@@ -1,7 +1,7 @@
 import type { Resolved } from '../connectors/registry';
 import { ConnectorError, type HttpRequest, type Token } from '../connectors/types';
 import { Pool } from './pool';
-import { relayJson, type RelayFailure } from './relay';
+import { transportProblem, relayJson, type RelayFailure } from './relay';
 
 export type CredentialFailure = RelayFailure | { kind: 'no-token' } | { kind: 'refused'; code: string };
 type CredentialResult = { ok: true; credential: string } | { ok: false; failure: CredentialFailure };
@@ -17,6 +17,8 @@ export class Credentials {
   private readonly closing = new AbortController();
 
   async get({ type }: Resolved, secret: string, signal?: AbortSignal): Promise<CredentialResult> {
+    const problem = transportProblem(type);
+    if (problem) return { ok: false, failure: problem };
     if (!type?.exchange) return { ok: true, credential: secret };
     const key = JSON.stringify([type.id, secret]);
     const kept = this.tokens.get(key);
@@ -28,7 +30,7 @@ export class Credentials {
       if (error instanceof ConnectorError) return { ok: false, failure: { kind: 'refused', code: error.code } };
       throw error;
     }
-    const answer = await relayJson(request, signal ? AbortSignal.any([signal, this.closing.signal]) : this.closing.signal);
+    const answer = await relayJson(request, signal ? AbortSignal.any([signal, this.closing.signal]) : this.closing.signal, undefined, undefined, type);
     if (!answer.ok) return answer;
     // A trade answered after close() is never kept: it would outlive the vault it came from.
     if (this.closing.signal.aborted) return { ok: false, failure: { kind: 'stopped' } };

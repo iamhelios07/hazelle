@@ -6,6 +6,7 @@ import { count, flag, isRecord, modelEntries } from './values';
 // only what a model has, so an absent flag stays unknown. context_length is the model's: the Basic and Premium plans
 // stop at 32K.
 export const featherless: ConnectionType = {
+  browser: {},
   id: 'featherless',
   label: 'Featherless',
   group: 'gateway',

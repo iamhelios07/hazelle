@@ -3,6 +3,7 @@ import type { ConnectionType, Model } from './types';
 import { count, modalities, modelEntries } from './values';
 
 export const chutes: ConnectionType = {
+  browser: {},
   id: 'chutes',
   label: 'Chutes',
   group: 'gateway',

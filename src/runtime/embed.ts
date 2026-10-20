@@ -27,7 +27,7 @@ export const countTexts = (store: Pick<ObjectStore, 'evaluation'>) => async (tex
 // chat's memory never spends the account's 240 calls a minute that its replies need.
 const PART_GAP = 1000;
 
-// One embedding call through the relay, in as many requests as the provider needs, with one receipt. A script's call
+// One embedding call, in as many requests as the provider needs, with one receipt. On the relay, a script's call
 // (script) is counted once in its chat's bot cap, by its first request; memory's own calls are not a bot's and are not
 // counted there. Consent and the model pick are the caller's (Scripts). embedded: told each request's text count as its
 // vectors arrive. receipt: null when nothing reached the network, and only then is nothing logged.
@@ -88,7 +88,7 @@ export async function embedTexts(
   for (const [index, { request, count }] of parts.entries()) {
     if (index && !(await pause(PART_GAP, signal))) return stopped();
     sent.push(request);
-    const answer = await relayJson(withCredential(route, request, credential.credential), signal, script && !index ? chat : undefined, callLabel(PULSE_ROLE.embedding, connection.value, model.id));
+    const answer = await relayJson(withCredential(route, request, credential.credential), signal, script && !index ? chat : undefined, callLabel(PULSE_ROLE.embedding, connection.value, model.id), route.type);
     if (!answer.ok) {
       const { failure } = answer;
       // Refused by the server before the provider saw it: the chat's bot calls for this minute are spent.

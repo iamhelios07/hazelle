@@ -3,7 +3,7 @@ import { MODELS_DEV_LISTS, MODELS_DEV_MODALITIES, type ListedModality, type List
 import type { Db } from './db/service-db';
 import { fail, isRecord, type AppEnv } from './http';
 import type { Upstream } from './relay';
-import { requireSession } from './session';
+import { VISITOR_HEADER } from '../contracts/http';
 
 const SOURCE = 'https://models.dev/api.json';
 const LISTS = new Set(Object.values(MODELS_DEV_LISTS).map((entry) => entry!.list));
@@ -91,7 +91,8 @@ const parsed = <T>(json: string | null): T | null => (json === null ? null : (JS
 
 // Before the first fetch has landed it answers an empty list and starts one; the hourly cron would otherwise leave every
 // cost 알 수 없음 for up to an hour after a deploy.
-export const modelsDev = new Hono<AppEnv>().use(requireSession).get('/', async (c) => {
+export const modelsDev = new Hono<AppEnv>().get('/', async (c) => {
+  if (!c.env.limits.visitors.reads.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success) return fail(c, 429, 'too-many-visits');
   const list = c.req.query('provider');
   if (!list || !LISTS.has(list)) return fail(c, 400, 'bad-input');
   const db = c.env.db;

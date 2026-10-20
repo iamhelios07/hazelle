@@ -17,7 +17,7 @@ import type { PoolFailure } from './pool';
 import { callLabel, PULSE_ROLE } from './pulse';
 import type { ObjectStore } from './store';
 import { pause } from './pause';
-import { relay, relayJson, stream, type RelayFailure, type StreamCall } from './relay';
+import { relay, relayJson, stream, transportProblem, detachedReplies, type RelayFailure, type StreamCall } from './relay';
 import { redacted, type Logged, type RequestLog } from './request-log';
 
 export type ReplyError =
@@ -99,6 +99,8 @@ export async function generate({ credentials, log, connection, model, settings, 
   // Refusals the connector can see coming are made here, before anything is sent.
   const resolved = resolveConnection(connection);
   if (!resolved) return reply(...failedWith({ kind: 'refused', code: 'unknown-connection-type' }));
+  const problem = transportProblem(resolved.type);
+  if (problem) return reply(...failedWith(problem));
   let route: Route;
   let request: HttpRequest;
   let batches: Batches | null;
@@ -107,6 +109,8 @@ export async function generate({ credentials, log, connection, model, settings, 
     route = resolveModel(resolved, model);
     protocol = route.endpoint.protocol;
     batches = batching ? batchLane(route, asked) : null;
+    // A provider batch can keep running and billing after the page closes; a guest has no detached replies.
+    if (batches && !detachedReplies()) return reply(...failedWith({ kind: 'app', code: 'needs-account' }));
     // A batch answers whole, and both batch formats refuse a request that streams.
     const prepared = prepareChat(route, { model, messages, settings: batches ? { ...settings, streaming: false } : settings });
     request = prepared.request;
@@ -152,7 +156,7 @@ export async function generate({ credentials, log, connection, model, settings, 
     const { cancel } = batching!;
     const asking: Asking = { route, model, batches, ask: (each) => withCredential(route, each, credential.credential), pulse, signal, cancel, onText, inline };
     // Not stopped midway: a batch the provider made with no marker naming it would answer, and be billed, unread.
-    const submit = () => relayJson(asking.ask(batches.submit(route.endpoint, model, request, call.id)));
+    const submit = () => relayJson(asking.ask(batches.submit(route.endpoint, model, request, call.id)), undefined, undefined, undefined, route.type);
     let submitted = await submit();
     // Sent again only on the provider's own answer, which says no batch was made; a connection lost on the way may have
     // made one.
@@ -179,7 +183,7 @@ export async function generate({ credentials, log, connection, model, settings, 
     if (error) credentials.pool.stale(connection, serving);
     return reply(outcome, error);
   }
-  const response = await stream(call, withCredential(route, request, credential.credential), signal, retry, pulse);
+  const response = await stream(call, withCredential(route, request, credential.credential), signal, retry, pulse, route.type);
   tries = call.tries ?? null;
   if (!(response instanceof Response)) return failed(response.kind === 'provider' && laneBusy(route, asked, response.status, response.code ?? null) ? { kind: 'refused', code: 'discount-busy' } : response);
   const read = recorded(response);
@@ -244,10 +248,10 @@ async function waitBatch(asking: Asking, batch: string, key: string): Promise<An
       canceled = true;
       // Asked about soon again: a canceled batch ends within moments.
       tries = 0;
-      await relay(ask(batches.cancel(route.endpoint, batch)));
+      await relay(ask(batches.cancel(route.endpoint, batch)), undefined, undefined, undefined, route.type);
     } else if (signal.aborted) return STOPPED;
     else if (!(await pause(CHECKS_MS[Math.min(tries, CHECKS_MS.length - 1)]!, canceled || !cancel ? signal : AbortSignal.any([signal, cancel])))) continue;
-    const checked = await relayJson(ask(batches.check(route.endpoint, batch)), canceled ? undefined : signal);
+    const checked = await relayJson(ask(batches.check(route.endpoint, batch)), canceled ? undefined : signal, undefined, undefined, route.type);
     if (!checked.ok) {
       if (checked.failure.kind === 'stopped' || passing(checked.failure)) continue;
       return failedWith(checked.failure);
@@ -262,7 +266,7 @@ async function waitBatch(asking: Asking, batch: string, key: string): Promise<An
 // Read to its end once the batch ended, a stop meanwhile included: the answer is billed. null: not read this time, for a
 // failure worth waiting through, so the batch is asked about again.
 async function readBatch({ route, model, batches, ask, pulse, signal, onText, inline }: Asking, batch: string, key: string): Promise<Answered | null> {
-  const response = await relay(ask(batches.results(route.endpoint, batch)), undefined, undefined, pulse);
+  const response = await relay(ask(batches.results(route.endpoint, batch)), undefined, undefined, pulse, route.type);
   if (!(response instanceof Response)) return response.kind === 'stopped' || passing(response) ? null : failedWith(response);
   let body: string;
   try {

@@ -139,3 +139,9 @@ it('serves a frame with network consent pictures, fonts and stylesheets from out
   for (const query of ['role=frame', 'role=frame&network=yes', 'role=page']) expect(await policy(query)).toBe(SANDBOX_CSP);
   expect(SANDBOX_CSP).not.toContain('https:');
 });
+
+it('allows guest provider HTTPS fetches in the app while both tool frame policies keep the network closed', async () => {
+  const connects = (response: Response) => /(?:^|;)\s*connect-src ([^;]+)/.exec(response.headers.get('content-security-policy') ?? '')?.[1];
+  expect(connects(await client.request('/', { headers: PAGE }))).toBe("'self' https:");
+  for (const path of ['/sandbox.html', '/sandbox.html?network=1']) expect(connects(await client.request(path, { headers: PAGE }))).toBe("'none'");
+});

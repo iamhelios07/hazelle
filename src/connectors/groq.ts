@@ -3,6 +3,7 @@ import type { ConnectionType } from './types';
 import { count, modelEntries } from './values';
 
 export const groq: ConnectionType = {
+  browser: {},
   id: 'groq',
   label: 'Groq',
   group: 'gateway',

@@ -189,7 +189,7 @@ describe('the migration runner', () => {
       return db;
     };
     const fresh = before();
-    expect(migrate(fresh, 'migrations').applied).toEqual(['0017_news_posts.sql']);
+    expect(migrate(fresh, 'migrations').applied).toContain('0017_news_posts.sql');
     expect(fresh.prepare('SELECT COUNT(*) AS n FROM posts').get()).toEqual({ n: 0 });
     fresh.close();
     const db = before();
@@ -228,4 +228,20 @@ describe('the migration runner', () => {
     expect(() => migrate(db, dir({}))).toThrow(/no .sql files/);
     expect(readFileSync(join(dir(files), '0001_a.sql'), 'utf8')).toBe(files['0001_a.sql']);
   });
+});
+
+
+it('migrates pulse without rewriting signed-in rows and keeps guest lists outside the accounts foreign key', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  migrate(db, dir(Object.fromEntries(readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0018').map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
+  db.exec("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('a', 'jin', 'h', 1, 'inc', 't'); INSERT INTO pulse_seen VALUES (1, 'a')");
+  expect(migrate(db, 'migrations').applied).toContain('0018_guest_pulse.sql');
+  expect(db.prepare('SELECT pulse_guests FROM service').get()).toEqual({ pulse_guests: 1 });
+  db.exec("INSERT INTO pulse_guest_seen VALUES (1, 'a')");
+  expect(db.prepare('SELECT account FROM pulse_people_seen ORDER BY account').all()).toEqual([{ account: 'a' }]);
+  db.exec("DELETE FROM accounts WHERE id = 'a'");
+  expect(db.prepare('SELECT account FROM pulse_people_seen').all()).toEqual([{ account: 'a' }]);
+  for (const table of ['pulse_guest_seen', 'pulse_guest_used', 'pulse_guest_replies']) expect(db.prepare(`PRAGMA foreign_key_list(${table})`).all()).toEqual([]);
+  db.close();
 });

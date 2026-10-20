@@ -4,6 +4,7 @@ import type { ConnectionType, Model } from './types';
 import { count, isRecord, modelEntries } from './values';
 
 export const xai: ConnectionType = {
+  browser: {},
   id: 'xai',
   label: 'xAI',
   group: 'maker',

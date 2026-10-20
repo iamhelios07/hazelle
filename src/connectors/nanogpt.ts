@@ -20,6 +20,7 @@ function subscription(payload: unknown): Meter[] | null {
 }
 
 export const nanogpt: ConnectionType = {
+  browser: {},
   id: 'nanogpt',
   label: 'NanoGPT',
   group: 'gateway',

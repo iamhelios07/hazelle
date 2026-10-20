@@ -95,6 +95,7 @@ function plan(payload: unknown): string | null {
 }
 
 export const copilot: ConnectionType = {
+  browser: false,
   id: 'copilot',
   label: 'Copilot',
   group: 'subscription',

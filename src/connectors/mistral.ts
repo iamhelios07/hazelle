@@ -3,6 +3,7 @@ import type { ConnectionType, Model } from './types';
 import { count, flag, isRecord, modelEntries } from './values';
 
 export const mistral: ConnectionType = {
+  browser: {},
   id: 'mistral',
   label: 'Mistral AI',
   group: 'maker',

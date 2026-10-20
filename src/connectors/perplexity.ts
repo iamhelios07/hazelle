@@ -1,6 +1,7 @@
 import type { ConnectionType } from './types';
 
 export const perplexity: ConnectionType = {
+  browser: {},
   id: 'perplexity',
   label: 'Perplexity',
   group: 'gateway',

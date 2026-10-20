@@ -6,6 +6,7 @@ import { amount, count, isRecord, list, modelEntries } from './values';
 // Its list (GET /v1/openai/models, public) also holds image, audio and embedding models; only entries tagged `chat`
 // are chat models. Tags are curated, so a missing `reasoning` tag means the model does not reason.
 export const deepinfra: ConnectionType = {
+  browser: {},
   id: 'deepinfra',
   label: 'DeepInfra',
   group: 'gateway',

@@ -1,6 +1,7 @@
 import type { ConnectionType } from './types';
 
 export const upstage: ConnectionType = {
+  browser: {},
   id: 'upstage',
   label: 'Upstage',
   group: 'maker',

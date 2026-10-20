@@ -194,6 +194,7 @@ export type KeyParts = {
 };
 
 type TypeHooks = {
+  browser: false | { headers?: Record<string, string> };
   id: string;
   label: string;
   group: 'gateway' | 'maker' | 'subscription';

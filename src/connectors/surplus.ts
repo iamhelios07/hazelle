@@ -2,6 +2,7 @@ import { openRouterModels } from './openrouter';
 import type { ConnectionType } from './types';
 
 export const surplus: ConnectionType = {
+  browser: {},
   id: 'surplus',
   label: 'Surplus Intelligence',
   group: 'gateway',

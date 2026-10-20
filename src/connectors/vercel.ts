@@ -38,6 +38,7 @@ function price(value: unknown, embeds: boolean): Rates | undefined {
 const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
 
 export const vercel: ConnectionType = {
+  browser: {},
   id: 'vercel',
   label: 'Vercel AI Gateway',
   group: 'gateway',

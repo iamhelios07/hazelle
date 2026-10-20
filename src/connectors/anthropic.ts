@@ -46,6 +46,7 @@ function answerOf(result: Record<string, unknown>): BatchAnswer | null {
 }
 
 export const anthropic: ConnectionType = {
+  browser: { headers: { 'anthropic-dangerous-direct-browser-access': 'true' } },
   id: 'anthropic',
   label: 'Anthropic',
   group: 'maker',

@@ -315,7 +315,6 @@ export class Illustrator {
       .map(({ at, value }) => ({ scene: value.scene, ago: history.length - 1 - at }));
   }
 
-  // Straight through the relay: a picture is one answer, not a stream to pick up.
   private async picture({ connection, draws }: ImageRoute, picture: PictureRequest, spend: boolean, signal: AbortSignal): Promise<Picture | IllustrateFailure | Stopped> {
     const { credentials } = this.deps;
     let request: HttpRequest;
@@ -332,16 +331,17 @@ export class Illustrator {
       credentials.pool.stale(connection.value, picked.account);
       return { kind: 'undrawn', error };
     };
-    const credential = await credentials.get(resolveConnection(connection.value)!, picked.account.secret, signal);
+    const resolved = resolveConnection(connection.value)!;
+    const credential = await credentials.get(resolved, picked.account.secret, signal);
     if (!credential.ok) return failed(credential.failure);
     if (!spend) {
       if (!draws.free) return { kind: 'costs', why: 'unknown' };
-      const asked = await relayJson(draws.free.request(credential.credential), signal);
+      const asked = await relayJson(draws.free.request(credential.credential), signal, undefined, undefined, resolved.type);
       if (!asked.ok) return failed(asked.failure);
       const why = draws.free.costs(asked.data, picture);
       if (why) return { kind: 'costs', why };
     }
-    const answer = await relayBytes({ ...request, headers: { ...request.headers, ...draws.authHeaders(credential.credential) } }, signal, callLabel('image', connection.value, picture.model.id));
+    const answer = await relayBytes({ ...request, headers: { ...request.headers, ...draws.authHeaders(credential.credential) } }, signal, callLabel('image', connection.value, picture.model.id), resolved.type);
     if (!answer.ok) return failed(answer.failure);
     return (await draws.parse(answer.bytes, answer.type)) ?? { kind: 'not-a-picture' };
   }

@@ -56,6 +56,7 @@ async function signed(account: ServiceAccount, now: number): Promise<string> {
 }
 
 export const vertex: ConnectionType = {
+  browser: {},
   id: 'vertex',
   label: 'Vertex AI',
   group: 'maker',

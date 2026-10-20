@@ -5,7 +5,7 @@ import type { LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
 import { withInside } from '../model/folders';
 import { SETTINGS_ID } from '../model/settings';
-import { holdPulse, markSeen, type ApiResult } from './api';
+import { holdAccount, holdPulse, markSeen, type ApiResult } from './api';
 import { serverBackend, type Backend } from './backend';
 import { AssetUrls, UnfoundAssets } from './assets';
 import { Catalogs } from './catalog';
@@ -39,8 +39,11 @@ import { Streams } from './streams';
 import { backfillSummaries } from './summary';
 import { receiveReply, resumeSend } from './turn';
 import { saveUpgraded } from './upgrade';
+import { accountTransport, directTransport, holdTransport, type Transport } from './relay';
+import { guestAccount, guestBackend } from './guest-store';
 
 export type Session = {
+  transport: Transport;
   username: string;
   store: ObjectStore;
   files: Files;
@@ -75,7 +78,8 @@ const luaWorker = (): Promise<LuaRunner> => Promise.resolve(new LuaWorker());
 // An open given up while it loads (signal) starts nothing. A cached opening never waits for the network. drafts: what
 // was typed, kept by the caller across the sessions of one open vault (app/shell/Workspace). kept: where the account's
 // data lives; a guest's has no device cache, since its backend is this browser already.
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, kept: { backend: Backend; cache?: DeviceCache } = { backend: serverBackend(), cache: deviceCache(accountId) }, bindings: { lua?: () => Promise<LuaRunner>; tools?: typeof createTools; drafts?: Drafts } = {}): Promise<ApiResult<Session>> {
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, kept: { backend: Backend; cache?: DeviceCache; transport?: Transport } = { backend: serverBackend(), cache: deviceCache(accountId) }, bindings: { lua?: () => Promise<LuaRunner>; tools?: typeof createTools; drafts?: Drafts } = {}): Promise<ApiResult<Session>> {
+  const transport = kept.transport ?? accountTransport;
   const opening = async () => {
     const store = await ObjectStore.open(accountId, vaultKey, kept.backend, kept.cache, signal);
     const pulled = signal.aborted ? { ok: false as const, error: 'stopped' as const } : store.cached ? null : await store.pull({ signal, progress });
@@ -98,7 +102,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     return { ok: false, error: 'stopped' };
   }
   // The opening pull is sent before the switch is read, so the page-load mark rides the next request.
-  const holdSharing = () => holdPulse(sharesPulse(store.get('settings', SETTINGS_ID)?.value));
+  holdTransport(transport);
+  const holdSharing = () => holdPulse(transport.detached && sharesPulse(store.get('settings', SETTINGS_ID)?.value));
   holdSharing();
   markSeen();
   const stopSharing = store.subscribe((changes) => {
@@ -183,6 +188,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
 
   const close = () => {
     closing.abort();
+    transport.close();
     stopSharing();
     holdPulse(false);
     stopSync();
@@ -208,6 +214,17 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, briefs, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { transport, tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, briefs, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
+}
+
+export async function openGuestSession(signal: AbortSignal, progress?: (progress: PullProgress) => void): Promise<ApiResult<Session>> {
+  const { accountId, vaultKey } = await guestAccount();
+  if (signal.aborted) return { ok: false, error: 'stopped' };
+  holdAccount(null);
+  let session: Session | undefined;
+  const transport = directTransport(accountId, () => session !== undefined && sharesPulse(session.store.get('settings', SETTINGS_ID)?.value));
+  const opened = await openSession(accountId, vaultKey, '손님', signal, progress, { backend: guestBackend(accountId), transport });
+  if (opened.ok) session = opened.data;
+  return opened;
 }

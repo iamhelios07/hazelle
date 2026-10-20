@@ -130,6 +130,7 @@ function costs(payload: unknown, picture: PictureRequest): Costs | null {
 }
 
 export const novelai: ConnectionType = {
+  browser: {},
   id: 'novelai',
   label: 'NovelAI',
   group: 'maker',

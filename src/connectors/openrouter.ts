@@ -67,6 +67,7 @@ export function openRouterModels(payload: unknown): Model[] | null {
 }
 
 export const openRouter: ConnectionType = {
+  browser: {},
   id: 'openrouter',
   label: 'OpenRouter',
   group: 'gateway',

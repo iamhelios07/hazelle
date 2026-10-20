@@ -13,7 +13,7 @@ export function loadMeters(connection: Connection, account: Account, signal?: Ab
   if (!requests) return null;
   return Promise.all(
     requests.map(async ({ request, parse, plan }): Promise<{ meters: Meter[]; plan: string | null } | MetersFailure> => {
-      const answer = await relayJson(request(account.secret), signal);
+      const answer = await relayJson(request(account.secret), signal, undefined, undefined, resolveConnection(connection)?.type);
       if (!answer.ok) return answer.failure;
       const meters = parse(answer.data);
       return meters ? { meters, plan: plan?.(answer.data) ?? null } : { kind: 'not-meters' };

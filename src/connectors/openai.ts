@@ -1,6 +1,7 @@
 import type { ConnectionType } from './types';
 
 export const openai: ConnectionType = {
+  browser: {},
   id: 'openai',
   label: 'OpenAI',
   group: 'maker',
