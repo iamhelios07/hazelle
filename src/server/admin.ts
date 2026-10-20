@@ -1,7 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { type AccountState, type RestoreAction, MAX_DIAGNOSTICS_LENGTH, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
-import { UNREAD_NOTICES_HEADER } from '../contracts/http';
+import { type AccountState, type RestoreAction, MAX_NOTICE_LENGTH } from '../contracts/admin';
 import { SHARE_ID } from '../contracts/shares';
 import { blockFiles, fileBlocks } from './files';
 import { forgetCut, serveShareFile } from './shares';
@@ -9,67 +8,33 @@ import type { Db, SqlValue, Statement } from './db/service-db';
 import { fail, ID, readObject, type AppEnv, type Services } from './http';
 import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
 import { requireSession } from './session';
+import { tellUnread, VISIBLE } from './unread';
 
-// Reports are plaintext rows no byte cap counts, so one account's unresolved ones are bounded.
-const MAX_OPEN_REPORTS = 20;
+// Reports are plaintext rows no byte cap counts, so one account's unresolved ones are bounded (board.ts).
+export const MAX_OPEN_REPORTS = 20;
 const PAGE_ROWS = 100;
-// How long a resolved report and a log row are kept, as the privacy page says. An open report stays whatever its age.
+// How long a resolved report, a settled operator-only post and a log row are kept, as the privacy page says. An open
+// report stays whatever its age, and a public post is never forgotten by age.
 const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
 // Also the rows of cut links whose reports were resolved or forgotten since (shares.ts forgetCut).
 export async function forgetOldRecords(db: Db): Promise<void> {
   const before = Date.now() - KEEP_MS;
-  await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before), ...forgetCut(db, 'TRUE')]);
-}
-
-// What any account, a suspended one too, sends the operator, and reads back of what it sent: the reports not on a share,
-// sent by this account, not an earlier one that held its id, each with the operator's reply when one came.
-export const reports = new Hono<AppEnv>().use(requireSession).get('/', async (c) => {
-  const listed = await page(
-    c,
-    `SELECT id, text, created_at AS createdAt, resolved_at AS resolvedAt,
-       (SELECT text FROM notices WHERE notices.report_id = reports.id) AS reply FROM reports`,
-    'share IS NULL AND EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = ?3 AND accounts.id = reports.account_id AND accounts.created_at <= reports.created_at)',
-    c.get('account').incarnation,
-  );
-  return listed ? c.json({ reports: listed.rows, next: listed.next }) : fail(c, 400, 'bad-input');
-}).post('/', async (c) => {
-  const body = await readObject(c);
-  const text = typeof body?.text === 'string' ? body.text.trim() : '';
-  const diagnostics = body?.diagnostics ?? null;
-  if (!text || text.length > MAX_REPORT_LENGTH) return fail(c, 400, 'bad-input');
-  if (diagnostics !== null && (typeof diagnostics !== 'string' || diagnostics.length > MAX_DIAGNOSTICS_LENGTH)) return fail(c, 400, 'bad-input');
-  const { id, username, incarnation } = c.get('account');
-  // Reports must not predate their account: restore and reply eligibility use that bound even if wall time regresses.
-  const sent = await c.env.db.prepare(
-    `INSERT INTO reports (account_id, username, text, created_at, diagnostics)
-     SELECT ?1, ?2, ?3, MAX(?4, created_at), ?7 FROM accounts WHERE id = ?1 AND incarnation = ?6
-     AND (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND share IS NULL AND resolved_at IS NULL) < ?5 RETURNING id`,
-  )
-    .bind(id, username, text, Date.now(), MAX_OPEN_REPORTS, incarnation, diagnostics)
-    .first();
-  return sent ? c.body(null, 204) : fail(c, 429, 'too-many-reports');
-});
-
-// The notices an account reads, over a notices row and an accounts row (both unaliased): its own, and those to every
-// account sent at or after it was created. The list and the session's unread count read the same text.
-export const VISIBLE = '(notices.incarnation = accounts.incarnation OR (notices.incarnation IS NULL AND notices.created_at >= accounts.created_at))';
-// Over an accounts row.
-export const UNREAD_NOTICES = `(SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AND notices.id > accounts.notices_seen)`;
-
-export async function tellUnreadNotices(c: Context<AppEnv>) {
-  const unread = await c.env.db.prepare(`SELECT ${UNREAD_NOTICES} AS unread FROM accounts WHERE incarnation = ?`).bind(c.get('account').incarnation).first<number>('unread');
-  if (unread !== null) c.header(UNREAD_NOTICES_HEADER, String(unread));
+  await db.batch([
+    db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before),
+    db.prepare("DELETE FROM posts WHERE visibility = 'operator' AND status IN ('seen', 'done', 'declined') AND status_at < ?").bind(before),
+    db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before),
+    ...forgetCut(db, 'TRUE'),
+  ]);
 }
 
 // What any account, a suspended one too, reads of what the operator sent. Newest first, paged like the operator's lists.
-// question: what a reply answers, null once that report was forgotten (forgetOldRecords).
 export const notices = new Hono<AppEnv>()
   .use(requireSession)
   .get('/', async (c) => {
     const listed = await page(
       c,
-      'SELECT id, report_id AS reportId, text, created_at AS createdAt, (SELECT text FROM reports WHERE reports.id = notices.report_id) AS question FROM notices',
+      'SELECT id, text, created_at AS createdAt FROM notices',
       `EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = ?3 AND ${VISIBLE})`,
       c.get('account').incarnation,
     );
@@ -80,7 +45,7 @@ export const notices = new Hono<AppEnv>()
     const id = (await readObject(c))?.id;
     if (!positive(id)) return fail(c, 400, 'bad-input');
     await c.env.db.prepare('UPDATE accounts SET notices_seen = MAX(notices_seen, ?) WHERE incarnation = ?').bind(id, c.get('account').incarnation).run();
-    await tellUnreadNotices(c);
+    await tellUnread(c);
     return c.body(null, 204);
   });
 
@@ -100,7 +65,7 @@ function logged(db: Db, action: string, id: string, detail = 'NULL', ...values: 
 const USERNAME = `json_object('username', username)`;
 
 // The last statement is the action, and answers the row it wrote.
-async function act(c: Context<AppEnv>, ...statements: Statement[]) {
+export async function act(c: Context<AppEnv>, ...statements: Statement[]) {
   const done = await c.env.db.batch(statements);
   return done.at(-1)!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
 }
@@ -113,16 +78,11 @@ const noticeText = (value: unknown) => {
 const optionalText = (value: unknown) => (value === undefined || (typeof value === 'string' && !value.trim()) ? null : (noticeText(value) ?? undefined));
 
 // Whom a notice is to: a FROM clause naming one accounts row by ?1, or null for every account.
-type Target = { from: string; key: string | number };
+type Target = { from: string; key: string };
 const toAccount = (id: string): Target => ({ from: 'accounts WHERE accounts.id = ?1', key: id });
-// A report's sender, while the report is open and its account is the one that sent it, not a later one holding its id.
-const toSender = (report: number): Target => ({
-  from: 'reports JOIN accounts ON accounts.id = reports.account_id AND accounts.created_at <= reports.created_at WHERE reports.id = ?1 AND reports.resolved_at IS NULL',
-  key: report,
-});
 
 // The only writer of notices: its log row, then the notice, each written only if its account is there.
-function noticed(db: Db, text: string, to: Target | null, report: number | null = null): Statement[] {
+function noticed(db: Db, text: string, to: Target | null): Statement[] {
   const now = Date.now();
   if (!to) {
     return [
@@ -132,9 +92,9 @@ function noticed(db: Db, text: string, to: Target | null, report: number | null 
   }
   return [
     db
-      .prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'send-notice', accounts.id, json_object('username', accounts.username, 'report', ?3) FROM ${to.from}`)
-      .bind(to.key, now, report),
-    db.prepare(`INSERT INTO notices (incarnation, report_id, text, created_at) SELECT accounts.incarnation, ?3, ?4, ?2 FROM ${to.from} RETURNING id`).bind(to.key, now, report, text),
+      .prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'send-notice', accounts.id, json_object('username', accounts.username) FROM ${to.from}`)
+      .bind(to.key, now),
+    db.prepare(`INSERT INTO notices (incarnation, text, created_at) SELECT accounts.incarnation, ?3, ?2 FROM ${to.from} RETURNING id`).bind(to.key, now, text),
   ];
 }
 
@@ -342,7 +302,8 @@ admin.get('/service', async (c) => {
   const row = await c.env.db.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
        (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COUNT(*) FROM accounts WHERE state != 'leaving') AS people,
-       (SELECT COUNT(*) FROM reports WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM shares WHERE held_at IS NOT NULL AND removed_at IS NULL) AS pending,
+       (SELECT COUNT(*) FROM reports WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM shares WHERE held_at IS NOT NULL AND removed_at IS NULL)
+         + (SELECT COUNT(*) FROM posts WHERE visibility = 'operator' AND status = 'open' AND deleted = 0) AS pending,
        (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes,
        (SELECT COUNT(*) FROM shares WHERE cut_at IS NULL) AS links,
        (SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()) AS databaseBytes
@@ -352,7 +313,7 @@ admin.get('/service', async (c) => {
 });
 
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-const positive = (value: unknown): value is number => count(value) && value > 0;
+export const positive = (value: unknown): value is number => count(value) && value > 0;
 const cap = (value: unknown) => value === null || count(value);
 const ownCap = (value: unknown) => value === 'default' || cap(value);
 
@@ -384,7 +345,7 @@ async function page<T extends { id: number }>(c: Context<AppEnv>, select: string
   return { rows: results, next: results.length === limit ? String(results.at(-1)!.id) : null };
 }
 
-function limitOf(c: Context<AppEnv>) {
+export function limitOf(c: Context<AppEnv>) {
   const limit = c.req.query('limit');
   if (limit === undefined) return PAGE_ROWS;
   return /^[1-9]\d{0,2}$/.test(limit) && Number(limit) <= PAGE_ROWS ? Number(limit) : null;
@@ -397,12 +358,15 @@ const SHARED = `(SELECT json_object('held', s.held_at IS NOT NULL, 'reviewed', s
     'removed', s.removed_at IS NOT NULL, 'ownerId', a.id, 'ownerName', a.username)
   FROM shares s LEFT JOIN accounts a ON a.incarnation = s.incarnation WHERE s.id = reports.share)`;
 
-// open: only the reports not resolved.
+// open: only the reports not resolved. A report on a post or a comment (postId, with commentId for a comment) names its
+// reporter by their 게시판 nickname, null for none, and carries what it reports as it reads now, null once removed.
 admin.get('/reports', async (c) => {
   const listed = await page<{ id: number; share: string | null; shared: string | null }>(
     c,
-    `SELECT id, account_id AS accountId, username, text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link, diagnostics,
-       ${SHARED} AS shared FROM reports`,
+    `SELECT id, account_id AS accountId, CASE WHEN share IS NULL THEN (SELECT name FROM board_names WHERE board_names.account_id = reports.account_id) ELSE username END AS username,
+       text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link, diagnostics, ${SHARED} AS shared,
+       post_id AS postId, comment_id AS commentId, (SELECT title FROM posts WHERE posts.id = reports.post_id) AS postTitle,
+       (SELECT text FROM comments WHERE comments.id = reports.comment_id) AS commentText FROM reports`,
     c.req.query('open') === '1' ? 'resolved_at IS NULL' : 'TRUE',
   );
   if (!listed) return fail(c, 400, 'bad-input');
@@ -415,18 +379,15 @@ admin.get('/reports', async (c) => {
   });
 });
 
-// reply: a notice to the report's sender, which must still hold its account: a reply that cannot arrive resolves nothing.
 admin.post('/reports/:id/resolve', async (c) => {
   const id = Number(c.req.param('id'));
-  const reply = optionalText((await readObject(c))?.reply);
-  if (!Number.isSafeInteger(id) || reply === undefined) return fail(c, 400, 'bad-input');
+  if (!Number.isSafeInteger(id)) return fail(c, 400, 'bad-input');
   const db = c.env.db;
-  const open = reply === null ? 'reports WHERE reports.id = ?1 AND reports.resolved_at IS NULL' : toSender(id).from;
+  const now = Date.now();
   return act(
     c,
-    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, 'resolve-report', reports.id FROM ${open}`).bind(id, Date.now()),
-    ...(reply === null ? [] : noticed(db, reply, toSender(id), id)),
-    db.prepare(`UPDATE reports SET resolved_at = ?2 WHERE id IN (SELECT reports.id FROM ${open}) RETURNING id`).bind(id, Date.now()),
+    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, 'resolve-report', id FROM reports WHERE id = ?1 AND resolved_at IS NULL`).bind(id, now),
+    db.prepare('UPDATE reports SET resolved_at = ?2 WHERE id = ?1 AND resolved_at IS NULL RETURNING id').bind(id, now),
   );
 });
 

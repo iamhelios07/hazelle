@@ -113,8 +113,7 @@ describe('a backup generation', () => {
     t.clock.now = () => Date.now() - 60 * 60_000;
     await t.stores.snapshot(rewinder.incarnation);
     t.clock.now = () => Date.now();
-    expect((await t.post('reports', { text: 'restore' }, rewinder.cookie)).status).toBe(204);
-    const report = (await t.env.db.prepare('SELECT id FROM reports').first<number>('id'))!;
+    const report = await t.askOperator(rewinder.id);
 
     const paused = pausedAtSnapshot();
     const now = Date.now();

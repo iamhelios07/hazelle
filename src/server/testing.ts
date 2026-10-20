@@ -97,7 +97,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       clock.now = () => Date.now();
       env.stores.close();
       await env.db.batch([
-        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'picture_removals', 'snapshot_removals', 'backup_runs', 'alerts_sent', 'pulse_week', 'pulse_week_roles', 'pulse_week_models', 'pulse_hours', 'pulse_seen', 'pulse_used', 'pulse_replies'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
+        ...['share_files', 'share_versions', 'shares', 'file_blocks', 'restores', 'account_files', 'notices', 'post_votes', 'comments', 'posts', 'board_names', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'picture_removals', 'snapshot_removals', 'backup_runs', 'alerts_sent', 'pulse_week', 'pulse_week_roles', 'pulse_week_models', 'pulse_hours', 'pulse_seen', 'pulse_used', 'pulse_replies'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
         env.db.prepare('UPDATE installation SET operator_account = NULL'),
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
@@ -118,6 +118,12 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       const { incarnation, timeline } = (await env.db.prepare('SELECT incarnation, timeline FROM accounts WHERE id = ?').bind(accountId).first<{ incarnation: string; timeline: string }>())!;
       return { id: accountId, body, cookie, incarnation, timeline };
     },
+    // An operator-only 게시판 post by the account, as one asking the operator for a restore writes (server/board).
+    askOperator: async (accountId: string) =>
+      (await env.db
+        .prepare(`INSERT INTO posts (account_id, title, text, category, visibility, created_at) SELECT id, 'restore', 'restore', 'question', 'operator', MAX(?2, created_at) FROM accounts WHERE id = ?1 RETURNING id`)
+        .bind(accountId, Date.now())
+        .first<number>('id'))!,
     reconcile: (now = Date.now()) => reconcile(dir, env.db, env.files, now),
     // The account's row changed in the service, then its store restarted, as every lifecycle change is made
     // (server/lifecycle).

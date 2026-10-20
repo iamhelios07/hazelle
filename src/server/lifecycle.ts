@@ -130,9 +130,10 @@ type Operation = {
 // asks itself), ?3 the time asked for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a
 // refused one read the same text.
 const FREE = "accounts.state = 'active' AND NOT EXISTS (SELECT 1 FROM restores WHERE incarnation = accounts.incarnation AND verified = 0)";
-// A share report names the share's reporter, not an account asking about its own data. Only the account's own route
-// passes no report (accounts.ts); the operator's always names one.
-const REPORTED = '(?2 IS NULL OR EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND share IS NULL AND resolved_at IS NULL AND created_at >= accounts.created_at))';
+// The operator begins one on an operator-only post (board.ts) the account wrote and the operator has not settled. Only
+// the account's own route passes no report (accounts.ts); the operator's always names one.
+const REPORTED = `(?2 IS NULL OR EXISTS (SELECT 1 FROM posts WHERE id = ?2 AND account_id = accounts.id AND visibility = 'operator'
+  AND status NOT IN ('done', 'declined') AND deleted = 0 AND created_at >= accounts.created_at))`;
 // Counted by the checkpoints taken (SELF_RESTORES_PER_DAY): a restore stopped before one cost no disk.
 const WITHIN_LIMIT = `(?2 IS NOT NULL OR (SELECT COUNT(*) FROM restores WHERE incarnation = accounts.incarnation AND report_id IS NULL
    AND checkpoint IS NOT NULL AND created_at > ?5 - ${DAY_MS}) < ${SELF_RESTORES_PER_DAY})`;
