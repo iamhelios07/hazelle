@@ -8,6 +8,7 @@ import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
 import { keysOf, SHORTCUTS, titled, typing, useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
+import { useRemembering } from '../session';
 import { Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
@@ -44,6 +45,8 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
     profile: { onClick: () => navigate(profilePage) },
   };
   const input = useRef<HTMLTextAreaElement>(null);
+  const remembering = useRemembering();
+  const indexing = chat.features.memory && chat.id !== null ? remembering.indexing.get(chat.id) : undefined;
   const sendKeys = keysOf('send', useDisplay().display.enterSends);
   const typed = draft.text.trim() !== '';
   // Moving through the story works where no text is typed: outside a text field, or in this one while it is empty.
@@ -131,6 +134,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         actions={
           <>
             {!busy && chat.sendNotes.leaving ? <SendNote label={`메시지 ${chat.sendNotes.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
+            {indexing && <SendNote label={`기억 검색 준비 ${indexing.done}/${indexing.total}`} title="장기 기억 검색 준비" onClick={() => actions.memory(null)} />}
             {!busy && <ChatCache cache={chat.sendNotes.cache} onOpen={() => chat.actions.openInspect('request')} />}
             <SendButton
               streaming={busy}
