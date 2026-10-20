@@ -159,6 +159,15 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             />
           </SettingGroup>
         </Section>
+        <Section title="입력창">
+          <SettingGroup label="입력창">
+            <SettingRow
+              label="Enter로 보내기"
+              help="끄면 Enter는 줄을 바꾸고, Ctrl+Enter로 보내요."
+              control={<Switch label="Enter로 보내기" checked={display.enterSends} onChange={(enterSends) => changeDisplay({ enterSends })} />}
+            />
+          </SettingGroup>
+        </Section>
       </Beside>
     </Screen>
   );

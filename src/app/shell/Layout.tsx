@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { usePersisted } from '../common/usePersisted';
 import { useDisplay } from '../display';
-import { SHORTCUT_GROUPS, SHORTCUTS, useShortcut } from '../shortcuts';
+import { keysOf, SHORTCUT_GROUPS, SHORTCUTS, useShortcut } from '../shortcuts';
 import { Dialog, Section, Shell, Shortcuts, Stack, Text, useWide } from '../ui';
 import { Page } from './Page';
 import { navigate, useRoute } from './router';
@@ -44,7 +44,7 @@ export function Layout() {
   const page = (
     <>
       <Page route={route} closeSettings={closeSettings} onPaired={setPaired} />
-      {listing && <ShortcutList onClose={() => setListing(false)} />}
+      {listing && <ShortcutList enterSends={display.enterSends} onClose={() => setListing(false)} />}
     </>
   );
 
@@ -54,7 +54,7 @@ export function Layout() {
   return <Shell side={sidebar(false)}>{page}</Shell>;
 }
 
-function ShortcutList({ onClose }: { onClose: () => void }) {
+function ShortcutList({ enterSends, onClose }: { enterSends: boolean; onClose: () => void }) {
   return (
     <Dialog title="단축키" onClose={onClose}>
       <Stack gap="section">
@@ -65,7 +65,7 @@ function ShortcutList({ onClose }: { onClose: () => void }) {
                 {note}
               </Text>
             )}
-            <Shortcuts items={names.map((name) => SHORTCUTS[name])} />
+            <Shortcuts items={names.map((name) => ({ label: SHORTCUTS[name].label, keys: keysOf(name, enterSends) }))} />
           </Section>
         ))}
       </Stack>

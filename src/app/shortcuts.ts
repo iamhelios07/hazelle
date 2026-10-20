@@ -37,6 +37,10 @@ export const SHORTCUTS = {
 
 type Name = keyof typeof SHORTCUTS;
 
+// Enter로 보내기 off (설정 › 화면): Enter only breaks the line, and Ctrl+Enter sends.
+const ENTER_OFF: Partial<Record<Name, readonly Chord[]>> = { send: [{ key: 'Enter', mod: true }], newline: [{ key: 'Enter' }] };
+export const keysOf = (name: Name, enterSends: boolean) => (enterSends ? undefined : ENTER_OFF[name]) ?? SHORTCUTS[name].keys;
+
 // Where each shortcut works, in the order 단축키 lists them.
 export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: readonly Name[] }[] = [
   { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'pictures', 'undoToast'] },

@@ -6,7 +6,8 @@ import { withParticle } from '../common/particles';
 import { ANSWER } from '../common/words';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
-import { SHORTCUTS, titled } from '../shortcuts';
+import { keysOf, SHORTCUTS, titled } from '../shortcuts';
+import { useDisplay } from '../display';
 import { Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
@@ -43,11 +44,12 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
     profile: { onClick: () => navigate(profilePage) },
   };
   const input = useRef<HTMLTextAreaElement>(null);
+  const sendKeys = keysOf('send', useDisplay().display.enterSends);
   const typed = draft.text.trim() !== '';
   const editPrompt = (door: PromptDoor) => actions.side(promptEditor(door));
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (pressed(event, SHORTCUTS.send.keys)) {
+    if (pressed(event, sendKeys)) {
       event.preventDefault();
       void actions.send();
       return;
@@ -123,7 +125,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
             <SendButton
               streaming={busy}
               disabled={!busy && !typed && !answerable}
-              title={busy ? titled(SHORTCUTS.stop.label, SHORTCUTS.stop.keys) : titled(typed ? SHORTCUTS.send.label : ANSWER, SHORTCUTS.send.keys)}
+              title={busy ? titled(SHORTCUTS.stop.label, SHORTCUTS.stop.keys) : titled(typed ? SHORTCUTS.send.label : ANSWER, sendKeys)}
               onClick={() => (busy ? actions.stop() : void actions.send())}
             />
           </>
