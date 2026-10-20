@@ -6,11 +6,12 @@ import type { Stored } from '../../model/kinds';
 import { addAssets, removeAssets, renameAsset, replaceAsset, restoreAssets } from '../../runtime/characters';
 import { useAssetUrl, useChildren, useFiles, useStore, useUnfoundAssets } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, CardGrid, Dialog, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, pickFiles, Preview, Row, Section, SelectionBar, Stack, useFileDrop } from '../ui';
+import { Button, Callout, CardGrid, Dialog, DropOverlay, Empty, FaceCard, FileButton, MenuItem, MoreMenu, pickFiles, Preview, Row, Section, Stack, useFileDrop } from '../ui';
 import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { useCopy } from './useCopy';
 import { useSearch } from './useSearch';
+import { useSelection } from './useSelection';
 import { CHANGE_IMAGE } from './words';
 
 const ASSET = '에셋';
@@ -30,7 +31,8 @@ export function AssetsEditor({ owner }: { owner: string }) {
   const [adding, setAdding] = useState(false);
   const [naming, setNaming] = useState<Stored<'asset'> | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
-  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const selection = useSelection();
+  const { picked } = selection;
   const copy = useCopy();
   // A module is never a key: a chat's names are told under its character, whichever pack's text asked for them. A name
   // the assets answer now, a near one included, is no longer missing.
@@ -82,13 +84,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
     { icon: ACTS.remove.icon, label: ACTS.remove.label, warn: true, run: () => { setViewing(null); void remove([asset.id]); } },
   ];
 
-  function press(id: string) {
-    if (!picked) return setViewing(id);
-    const next = new Set(picked);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setPicked(next);
-  }
+  const press = (id: string) => (picked ? selection.toggle(id) : setViewing(id));
 
   const viewed = viewing === null ? undefined : assets.find(({ id }) => id === viewing);
   return (
@@ -101,11 +97,7 @@ export function AssetsEditor({ owner }: { owner: string }) {
         )}
         <Row kind="toolbar">
           {search.field}
-          {assets.length > 0 && (
-            <Button variant="secondary" size="sm" icon={ACTS.remove.icon} onClick={() => setPicked(picked ? null : new Set())}>
-              {picked ? '완료' : '선택해서 삭제'}
-            </Button>
-          )}
+          {assets.length > 0 && selection.button(ACTS.remove.icon, '선택해서 삭제')}
           <FileButton accept={ACCEPT} multiple size="sm" icon={ACTS.create.icon} busy={adding} onFiles={(dropped) => void add(dropped)}>
             {addOf(ASSET)}
           </FileButton>
@@ -120,20 +112,13 @@ export function AssetsEditor({ owner }: { owner: string }) {
         ) : (
           <Empty variant="section">{search.none ?? `${ASSET}이 없어요.`}</Empty>
         )}
-        {picked && (
-          <SelectionBar>
-            <span>{picked.size ? `${picked.size}개 선택됨` : '삭제할 에셋을 선택해 주세요'}</span>
-            <Button variant="secondary" size="sm" onClick={() => setPicked(new Set(search.found.map(({ id }) => id)))}>
-              모두 선택
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setPicked(null)}>
-              취소
-            </Button>
-            <Button variant="danger" size="sm" disabled={picked.size === 0} onClick={() => { setPicked(null); void remove([...picked]); }}>
+        {picked &&
+          selection.bar(
+            { counted: (count) => `${count}개`, ask: '삭제할 에셋을 선택해 주세요', every: search.found.map(({ id }) => id) },
+            <Button variant="danger" size="sm" disabled={picked.size === 0} onClick={() => { selection.clear(); void remove([...picked]); }}>
               {ACTS.remove.label}
-            </Button>
-          </SelectionBar>
-        )}
+            </Button>,
+          )}
       </Stack>
       {dragging && <DropOverlay>여기에 놓으면 에셋으로 추가돼요</DropOverlay>}
       {viewed && <AssetPreview asset={viewed} actions={actionsOf(viewed)} onClose={() => setViewing(null)} />}
