@@ -37,7 +37,8 @@ export function List(props: { label: string; box?: boolean; places?: boolean; ch
 
 type ItemProps = {
   leading?: ReactNode;
-  // A folder among the things, which opens it: its mark in leading's place and a › at the end.
+  // A folder among the things: its mark in leading's place, and a › at the end where it opens as a place; one that
+  // folds in place (expanded) takes none.
   folder?: boolean;
   title: string;
   badge?: string;
@@ -63,7 +64,7 @@ export function ListItem({ leading, folder = false, title, badge, code, descript
   const windowed = useContext(Windowed);
   const places = useContext(Places);
   const slot = useMenuSlot();
-  const end = trailing ?? ((places || folder) && onClick ? <Icon icon={ChevronRight} /> : undefined);
+  const end = trailing ?? ((places || (folder && expanded === undefined)) && onClick ? <Icon icon={ChevronRight} /> : undefined);
   const meta =
     code || tags.length > 0 ? (
       <>

@@ -1,6 +1,6 @@
 import { ArrowDownToLine, ArrowUpToLine, FolderInput, FolderPlus, FolderTree as SubfolderIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { FOLDER_DEPTH, pathName, pathOf, withInside, type Filed, type FolderContents, type FolderIndex, type FolderTree } from '../../../model/folders';
+import { pathName, pathOf, withInside, type Filed, type FolderContents, type FolderIndex, type FolderTree } from '../../../model/folders';
 import { Button, Divider, FolderCard, IconButton, Menu, MenuItem, MoreMenu, PathBar, Row, useWide } from '../../ui';
 import { ACTS, newOf } from '../acts';
 import { NameDialog } from '../NameDialog';
@@ -24,12 +24,24 @@ export function OrderItems({ order }: { order: Ordering }) {
   );
 }
 
-// A folder being named: a new one (id null), inside parent when it has one, or one being renamed.
-export type Naming = { id: string | null; name: string; parent?: FolderTree };
+// A folder as the naming dialog and its ⋯ see it.
+export type NamedFolder = { id: string; name: string };
+export const named = (folder: FolderTree): NamedFolder => ({ id: folder.id, name: folder.value.name });
 
-// The naming dialog's state and the dialog itself, which saves through the kind's folder actions.
-export function useNaming(kind: Filed) {
-  const { create, rename } = useFolderActions(kind);
+// What writes one owner's folders: the library's (useFolderActions) or an owner's lorebook folders (runtime/lore).
+// deepest: the deepest level a folder stands at, 1 where folders hold no folders. remove: false when it is already gone.
+export type FolderActions = {
+  deepest: number;
+  create: (name: string, parent: string | null) => void;
+  rename: (id: string, name: string) => void;
+  remove: (folder: NamedFolder) => boolean;
+};
+
+// A folder being named: a new one (id null), inside parent when it has one, or one being renamed.
+export type Naming = { id: string | null; name: string; parent?: NamedFolder };
+
+// The naming dialog's state and the dialog itself, which saves through the owner's folder actions.
+export function useNaming({ create, rename }: FolderActions) {
   const [naming, setNaming] = useState<Naming | null>(null);
   const save = ({ id, name, parent }: Naming) => {
     setNaming(null);
@@ -38,7 +50,7 @@ export function useNaming(kind: Filed) {
   };
   const dialog = naming && (
     <NameDialog
-      title={naming.id ? '폴더 이름 바꾸기' : naming.parent ? `'${naming.parent.value.name}' 안에 새 폴더` : '새 폴더'}
+      title={naming.id ? '폴더 이름 바꾸기' : naming.parent ? `'${naming.parent.name}' 안에 새 폴더` : '새 폴더'}
       value={naming.name}
       onSave={(name) => save({ ...naming, name })}
       onClose={() => setNaming(null)}
@@ -61,6 +73,7 @@ type PathProps = {
 
 // Where an explorer stands, from the top down, with 새 폴더 and the current folder's ⋯.
 export function FolderPath({ kind, path, onGo, onName, dropInto, trail, children }: PathProps) {
+  const actions = useFolderActions(kind);
   const here = path.at(-1);
   // Where nothing is made, the top alone is only the title again.
   if (!onName && !here && !trail && !children) return null;
@@ -72,30 +85,28 @@ export function FolderPath({ kind, path, onGo, onName, dropInto, trail, children
   return (
     <Row kind="toolbar">
       <PathBar label="폴더 경로" parts={parts} />
-      {onName && !trail && path.length < FOLDER_DEPTH && (
-        <IconButton icon={FolderPlus} label={here ? `'${here.value.name}' 안에 새 폴더` : '새 폴더'} size="sm" onClick={() => onName({ id: null, name: '', parent: here })} />
+      {onName && !trail && path.length < actions.deepest && (
+        <IconButton icon={FolderPlus} label={here ? `'${here.value.name}' 안에 새 폴더` : '새 폴더'} size="sm" onClick={() => onName({ id: null, name: '', parent: here && named(here) })} />
       )}
-      {onName && !trail && here && <FolderMenu kind={kind} folder={here} depth={path.length} onName={onName} onRemoved={(up) => onGo(up)} />}
+      {onName && !trail && here && <FolderMenu actions={actions} folder={named(here)} depth={path.length} onName={onName} onRemoved={() => onGo(path.at(-2)?.id ?? null)} />}
       {children}
     </Row>
   );
 }
 
-// depth: the folder's level, 1 at the top. onRemoved: where its things went (null: out of every folder).
-export function FolderMenu({ kind, folder, depth, onName, onRemoved, order }: { kind: Filed; folder: FolderTree; depth: number; onName: (naming: Naming) => void; onRemoved?: (up: string | null) => void; order?: Ordering }) {
-  const { remove } = useFolderActions(kind);
+// depth: the folder's level, 1 at the top. onRemoved: after it is removed, its things gone up to its parent.
+export function FolderMenu({ actions, folder, depth, onName, onRemoved, order }: { actions: FolderActions; folder: NamedFolder; depth: number; onName: (naming: Naming) => void; onRemoved?: () => void; order?: Ordering }) {
   return (
-    <MoreMenu of={`${folder.value.name} 폴더`}>
-      <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
-      {depth < FOLDER_DEPTH && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
+    <MoreMenu of={`${folder.name} 폴더`}>
+      <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.name })} />
+      {depth < actions.deepest && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
       {order && <OrderItems order={order} />}
       <MenuItem
         icon={ACTS.remove.icon}
         label="폴더 삭제"
         tone="warn"
         onClick={() => {
-          const removal = remove(folder);
-          if (removal) onRemoved?.(removal.up?.id ?? null);
+          if (actions.remove(folder)) onRemoved?.();
         }}
       />
     </MoreMenu>
@@ -106,6 +117,7 @@ export function FolderMenu({ kind, folder, depth, onName, onRemoved, order }: { 
 // arranging: 순서 바꾸기 is on, so it moves by its handle.
 export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dropInto, order, drag = false, arranging = false }: { kind: Filed; contents: FolderContents<T>; depth: number; faces: { image: string | null; name: string }[]; onOpen: () => void; onName?: (naming: Naming) => void; dropInto?: Drop; order?: Ordering; drag?: boolean; arranging?: boolean }) {
   const { folder } = contents;
+  const actions = useFolderActions(kind);
   return (
     <FolderCard
       name={folder.value.name}
@@ -116,7 +128,7 @@ export function FolderTile<T>({ kind, contents, depth, faces, onOpen, onName, dr
       drag={drag ? folder.id : undefined}
       onPlace={drag || arranging ? order?.onPlace : undefined}
       arrange={arranging && order ? { key: folder.id, label: `${folder.value.name} 폴더 순서 바꾸기` } : undefined}
-      menu={onName && <FolderMenu kind={kind} folder={folder} depth={depth} onName={onName} order={order} />}
+      menu={onName && <FolderMenu actions={actions} folder={named(folder)} depth={depth} onName={onName} order={order} />}
     />
   );
 }

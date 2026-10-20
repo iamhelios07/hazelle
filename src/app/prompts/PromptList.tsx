@@ -17,7 +17,8 @@ import { useImport } from '../common/importing';
 import { EMPTY_USE, promptUseWords, usePromptUse } from '../common/usePromptUse';
 import { byLastUse, byPromptName, groupPrompts, promptFolder as folderOf } from '../common/promptCopies';
 import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
-import { FolderMenu, FolderPath, useMoving, useNaming } from '../common/folders/FolderParts';
+import { FolderMenu, FolderPath, named, useMoving, useNaming } from '../common/folders/FolderParts';
+import { useFolderActions } from '../common/folders/useFolderActions';
 
 const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트', illustrate: '새 삽화 프롬프트', mascot: '새 마스코트 프롬프트', preread: `새 ${PRE_READ} 프롬프트` } satisfies Record<PromptSort, string>;
 const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] = [
@@ -63,7 +64,8 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
   const index = useFolderIndex('prompt', conversations, folderOf);
   const filing = shown === 'conversation';
   const at = placeIn(index, place, false);
-  const naming = useNaming('prompt');
+  const folderActions = useFolderActions('prompt');
+  const naming = useNaming(folderActions);
   // A prompt moves with the copies listed under it.
   const carry = (id: string): string[] => [id, ...(grouped.copies.get(id) ?? []).flatMap((copy) => carry(copy.id))];
   const filedAt = (id: string) => {
@@ -125,7 +127,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
       note={folderNote('prompt', index.byFolder.get(folder.id)!)}
       onClick={() => onGo(folder.id)}
       onDropCard={moving.dropInto?.(folder.id)}
-      control={<FolderMenu kind="prompt" folder={folder} depth={at.path.length + 1} onName={naming.name} />}
+      control={<FolderMenu actions={folderActions} folder={named(folder)} depth={at.path.length + 1} onName={naming.name} />}
     />
   )) : [];
 

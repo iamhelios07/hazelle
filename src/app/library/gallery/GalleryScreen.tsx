@@ -5,6 +5,7 @@ import type { Stored } from '../../../model/kinds';
 import { characterTexts, KEEP_DAYS, type CharacterShelf, type Shelf } from '../../../model/library';
 import { placeIn, whereIs } from '../../common/folders/filing';
 import { FolderPath, FolderTile, useMoving, useNaming, type Ordering } from '../../common/folders/FolderParts';
+import { useFolderActions } from '../../common/folders/useFolderActions';
 import { CHARACTER_SORTS, useCharacterSort, useReorder, useSortedLibrary } from '../../common/characterOrder';
 import { TASK_NAMES } from '../../common/prompt-words';
 import { useSearch } from '../../common/useSearch';
@@ -38,7 +39,8 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
   const bin = useBin();
   const inBin = useInBin();
   const characterActions = useCharacterActions();
-  const naming = useNaming('character');
+  const folderActions = useFolderActions('character');
+  const naming = useNaming(folderActions);
   const [purging, setPurging] = useState<Binned | null>(null);
   const [arranging, setArranging] = useState(false);
 

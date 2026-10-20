@@ -1,6 +1,7 @@
 import { addPersona } from '../../runtime/personas';
 import { ACTS, importOf, newOf } from '../common/acts';
 import { useMoving, useNaming } from '../common/folders/FolderParts';
+import { useFolderActions } from '../common/folders/useFolderActions';
 import { useImport } from '../common/importing';
 import { PersonaGrid, usePersonaPlaces } from '../common/PersonaGrid';
 import { PAGES } from '../common/words';
@@ -18,7 +19,8 @@ export function PersonaList({ place, back }: { place: string | null; back: Back 
   const toast = useToast();
   const settings = useSettings();
   const places = usePersonaPlaces();
-  const naming = useNaming('persona');
+  const folderActions = useFolderActions('persona');
+  const naming = useNaming(folderActions);
   const moving = useMoving('persona', places.index, (id) => places.byId(id)?.value.folder ?? null);
   const { pickPersonas } = useImport();
   const here = place !== null && places.index.byFolder.has(place) ? place : null;

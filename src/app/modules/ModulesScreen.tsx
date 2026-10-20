@@ -9,6 +9,7 @@ import { counted, holdsLine, packParts, type PackParts } from '../common/pack';
 import { useSearch } from '../common/useSearch';
 import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
 import { FolderPath, useMoving, useNaming } from '../common/folders/FolderParts';
+import { useFolderActions } from '../common/folders/useFolderActions';
 import { ALWAYS, EMPTY_FOLDER, moduleName, PAGES, SCRIPTS } from '../common/words';
 import { useChildrenOf, useLibrary, useModulesAndPlugins, usePersonas, usePrompts, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -101,7 +102,8 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
   const search = useSearch(modules, '모듈 검색', ({ value }) => [moduleName(value.name)]);
   const index = useFolderIndex('module', modules, folderOf);
   const at = placeIn(index, place, search.words !== '');
-  const naming = useNaming('module');
+  const folderActions = useFolderActions('module');
+  const naming = useNaming(folderActions);
   const moving = useMoving('module', index, (id) => modules.find((module) => module.id === id)?.value.folder ?? null);
   const shown = at.placed(search.found);
   const parts = useModuleParts(shown);

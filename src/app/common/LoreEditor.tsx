@@ -8,12 +8,12 @@ import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, remove
 import { useChildren, useStore, useStored } from '../session';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, TextField, type CodeAside, type CodeLanguage } from '../ui';
-import { ACTS, addOf } from './acts';
+import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, TextField, type CodeAside, type CodeLanguage } from '../ui';
+import { ACTS, addOf, newOf } from './acts';
 import { cbsLanguage } from './code/cbs';
 import { useTrial } from './code/Trial';
 import type { Defaults } from './code/variables';
-import { NameDialog } from './NameDialog';
+import { FolderMenu, useNaming, type FolderActions, type Naming } from './folders/FolderParts';
 import { OpenRow, RowFoot, useOpenRows, type OpenRows } from './OpenRows';
 import { SLOT } from './prompt-words';
 import { typedText, useTypedNumber } from './typed';
@@ -64,36 +64,36 @@ function when({ enabled, constant, keys }: Lore) {
   return !enabled ? '꺼짐' : constant ? '항상' : named.length ? named.slice(0, KEYS_SHOWN).join(', ') + more : '키워드 없음';
 }
 
-type Naming = { folder: LoreFolder | null; name: string };
+// An owner's lorebook folders, which hold no folders.
+function useLoreFolders(owner: LoreOwner): FolderActions {
+  const store = useStore();
+  const toast = useToast();
+  return {
+    deepest: 1,
+    create: (name) => void addLoreFolder(store, owner, name).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.')),
+    rename: (id, name) => void renameLoreFolder(store, owner, id, name).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.')),
+    remove: (folder) => {
+      const removal = loreFolderRemoval(store, owner, folder.id);
+      if (!removal) return false;
+      void removeLoreFolder(store, owner, removal).then((removed) => removed.ok || toast.failed(removed, '폴더를 삭제하지 못했어요.'));
+      const held = removal.entries.length;
+      toast.undoable(`'${folder.name}' 폴더를 삭제했어요.`, () => restoreLoreFolder(store, owner, removal), held > 0 ? `항목 ${held}개는 폴더 밖으로 꺼냈어요.` : undefined);
+      return true;
+    },
+  };
+}
 
 // folders: the owner's loreFolders as stored now. variables: a character's 기본 변수, offered in an entry's text.
 export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; folders: LoreFolder[]; variables?: Defaults }) {
   const store = useStore();
   const trial = useTrial(owner, variables);
   const language = useMemo(() => cbsLanguage({ variables: trial.variables }), [trial.variables]);
-  const toast = useToast();
   const entries = useChildren('lore', owner.id);
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
   const openRows = useOpenRows(true);
-  const [naming, setNaming] = useState<Naming | null>(null);
+  const folderActions = useLoreFolders(owner);
+  const naming = useNaming(folderActions);
   const add = (folder: string | null) => openRows.add(ENTRY, (id) => addLore(store, owner.id, folder, id));
-
-  function saveFolder({ folder, name }: Naming) {
-    setNaming(null);
-    void (folder ? renameLoreFolder(store, owner, folder.id, name) : addLoreFolder(store, owner, name)).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
-  }
-
-  function removeFolder(folder: LoreFolder) {
-    const removal = loreFolderRemoval(store, owner, folder.id);
-    if (!removal) return;
-    void removeLoreFolder(store, owner, removal).then((removed) => removed.ok || toast.failed(removed, '폴더를 삭제하지 못했어요.'));
-    const held = removal.entries.length;
-    toast.undoable(
-      `'${folder.name}' 폴더를 삭제했어요.`,
-      () => restoreLoreFolder(store, owner, removal),
-      held > 0 ? `항목 ${held}개는 폴더 밖으로 꺼냈어요.` : undefined,
-    );
-  }
 
   const rows = (list: readonly Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} language={language} trial={trial.cbs} rows={openRows} />);
   const [loose, ...grouped] = groups;
@@ -104,17 +104,7 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
     <List box label="로어북 항목">
       {rows(loose!.entries)}
       {grouped.map(({ folder, entries: inside }) => (
-        <FolderItem
-          key={folder!.id}
-          name={folder!.name}
-          count={inside.length}
-          menu={
-            <>
-              <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming({ folder, name: folder!.name })} />
-              <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => removeFolder(folder!)} />
-            </>
-          }
-        >
+        <FolderItem key={folder!.id} folder={folder!} count={inside.length} actions={folderActions} onName={naming.name}>
           {inside.length > 0 && <List label={`${folder!.name} 항목`}>{rows(inside)}</List>}
           <Row kind="actions">
             <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add(folder!.id)}>
@@ -139,21 +129,31 @@ export function LoreEditor({ owner, folders, variables }: { owner: LoreOwner; fo
           <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add(null)}>
             {addOf('항목')}
           </Button>
-          <Button variant="secondary" size="sm" icon={FolderPlus} onClick={() => setNaming({ folder: null, name: '' })}>
-            새 폴더
+          <Button variant="secondary" size="sm" icon={FolderPlus} onClick={() => naming.name({ id: null, name: '' })}>
+            {newOf('폴더')}
           </Button>
         </Row>
       </Stack>
-      {naming && <NameDialog title={naming.folder ? '폴더 이름 바꾸기' : '새 폴더'} value={naming.name} onSave={(name) => saveFolder({ ...naming, name })} onClose={() => setNaming(null)} />}
+      {naming.dialog}
     </Section>
   );
 }
 
-// Folds in place, unlike the library's folders, which are places: the kit's folder flag would draw a › and lose its
-// mark to the fold's chevron.
-function FolderItem({ name, count, menu, children }: { name: string; count: number; menu: ReactNode; children: ReactNode }) {
+// Folds in place, unlike the library's folders, which are places: expanded keeps the kit's folder row from drawing
+// the › a place's row takes.
+function FolderItem({ folder, count, actions, onName, children }: { folder: LoreFolder; count: number; actions: FolderActions; onName: (naming: Naming) => void; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  return <ListItem title={name} note={`${count}개`} expanded={open} onClick={() => setOpen(!open)} control={<MoreMenu of={`'${name}'`}>{menu}</MoreMenu>} detail={open && <Stack gap="related">{children}</Stack>} />;
+  return (
+    <ListItem
+      folder
+      title={folder.name}
+      note={`${count}개`}
+      expanded={open}
+      onClick={() => setOpen(!open)}
+      control={<FolderMenu actions={actions} folder={folder} depth={1} onName={onName} />}
+      detail={open && <Stack gap="related">{children}</Stack>}
+    />
+  );
 }
 
 type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; language: CodeLanguage; trial: (text: string) => CodeAside; rows: OpenRows };
