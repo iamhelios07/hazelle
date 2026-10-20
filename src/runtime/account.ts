@@ -1,8 +1,10 @@
 import { ChangeSignal } from '../change-signal';
 import type { AccountState } from '../contracts/admin';
-import { passwordCredential, recoveryCredential, type Credential, type Method, type VaultRecord } from '../vault/keys';
-import { api, SLOW_ROUTE_WAIT, type Heard } from './api';
+import { createVault, openVault, passwordCredential, recoveryCredential, type Credential, type Method, type VaultKey, type VaultRecord } from '../vault/keys';
+import { api, holdAccount, SLOW_ROUTE_WAIT, type ApiResult, type Heard } from './api';
 import { page } from './pages';
+import { guestSignupRecovery, recallGuest } from '../vault/device';
+import { transferGuest, type GuestTransferOptions } from './guest-transfer';
 
 // Caps are null for none. bytes is null while the account is restored or its store does not answer. fileBytes: the
 // pictures stored for it, which deleting them in the app does not lower (server/files).
@@ -66,8 +68,77 @@ export class AccountFacts {
 }
 
 export const loadSession = () => api<Boot>('GET', 'session');
-export const signUp = (signup: Signup) => api<SessionFacts>('POST', 'signup', signup);
-export const logIn = (username: string, credential: Proof) => api<SignedIn>('POST', 'login', { username, ...proven(credential) });
+export const signUp = (signup: Signup, signal?: AbortSignal) => api<SessionFacts>('POST', 'signup', signup, signal);
+export async function logIn(username: string, credential: Credential, options: GuestTransferOptions = {}): Promise<ApiResult<SignedIn>> {
+  const signedIn = await api<SignedIn>('POST', 'login', { username, ...proven(credential) }, options.signal);
+  if (!signedIn.ok) return signedIn;
+  const guest = await recallGuest();
+  if (guest?.accountId === signedIn.data.session.accountId) {
+    const vaultKey = await openVault(guest.accountId, signedIn.data.vault, credential);
+    if (!vaultKey || !sameVault(guest.vaultKey, vaultKey)) return { ok: false, error: 'unreadable' };
+    const resumed = await resumeGuestSignup(signedIn.data, vaultKey, options);
+    if (!resumed.ok) return resumed;
+  }
+  return signedIn;
+}
+
+export type GuestSignup = Awaited<ReturnType<typeof prepareGuestSignup>>;
+
+// Like createVault, this prepares only: the recovery key must be downloaded before the screen calls signUpGuest.
+export async function prepareGuestSignup(username: string, password: Credential) {
+  const guest = await recallGuest();
+  if (!guest) throw new Error('No guest vault');
+  const vault = await createVault(guest.accountId, password, guest.vaultKey, await guestSignupRecovery(guest.accountId));
+  return { ...vault, username, accountId: guest.accountId, password };
+}
+
+export async function signUpGuest(draft: GuestSignup, options: GuestTransferOptions = {}): Promise<ApiResult<SessionFacts>> {
+  if (options.signal?.aborted) return { ok: false, error: 'stopped' };
+  const signedUp = await signUp({ accountId: draft.accountId, username: draft.username, ...draft.signup }, options.signal);
+  if (!signedUp.ok) {
+    if (signedUp.error !== 'username-taken' && signedUp.error !== 'signup-closed') return signedUp;
+    // Signup may have landed before its answer was lost. Authenticate its existing wraps; never replace them on retry.
+    const signedIn = await logIn(draft.username, draft.password, options);
+    if (!signedIn.ok) return signedIn.error === 'wrong-login' ? signedUp : signedIn;
+    if (signedIn.data.session.accountId !== draft.accountId) return signedUp;
+    const key = await openVault(draft.accountId, signedIn.data.vault, draft.password);
+    return key && sameVault(key, draft.vaultKey) ? { ok: true, data: signedIn.data.session } : { ok: false, error: 'unreadable' };
+  }
+  holdAccount(draft.accountId);
+  const uploaded = await transferGuest(draft.accountId, draft.vaultKey, options);
+  return uploaded.ok ? signedUp : uploaded;
+}
+
+export function uploadGuest(accountId: string, vaultKey: VaultKey, options: GuestTransferOptions = {}): Promise<ApiResult<null>> {
+  holdAccount(accountId);
+  return transferGuest(accountId, vaultKey, options);
+}
+
+// Also usable after loadSession finds a signup whose page closed during upload, before opening an account session.
+export async function resumeGuestSignup(signedIn: SignedIn, vaultKey: VaultKey, options: GuestTransferOptions = {}): Promise<ApiResult<null>> {
+  const guest = await recallGuest();
+  if (!guest || guest.accountId !== signedIn.session.accountId) return { ok: true, data: null };
+  if (!sameVault(guest.vaultKey, vaultKey)) return { ok: false, error: 'unreadable' };
+  holdAccount(signedIn.session.accountId);
+  return transferGuest(signedIn.session.accountId, vaultKey, options);
+}
+
+const sameVault = (one: VaultKey, two: VaultKey) => one.length === two.length && one.every((byte, index) => byte === two[index]);
+
+// Account access is independent of runtime/features' chat → character → prompt → settings inheritance.
+export const ACCOUNT_CAPABILITIES = {
+  fileBackup: { guest: true, account: true },
+  boardReading: { guest: true, account: true },
+  serverBackup: { guest: false, account: true },
+  restorePoint: { guest: false, account: true },
+  shareLink: { guest: false, account: true },
+  otherDevices: { guest: false, account: true },
+  detachedReply: { guest: false, account: true },
+  boardWriting: { guest: false, account: true },
+  operatorPost: { guest: false, account: true },
+  lock: { guest: false, account: true },
+  logout: { guest: false, account: true },
+} as const;
 export const logOut = () => api<undefined>('POST', 'logout');
 export const logOutOthers = () => api<{ ended: number }>('POST', 'logout/others');
 export const changePassword = (current: Proof, next: { passwordProof: string; passwordWrap: string }) =>

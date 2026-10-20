@@ -33,9 +33,7 @@ export async function recoveryCredential(text: string): Promise<Credential | nul
   return recovery && derive('recovery', recovery);
 }
 
-export async function createVault(accountId: string, password: Credential) {
-  const vaultKey = randomBytes(32);
-  const recoveryBytes = randomBytes(32);
+export async function createVault(accountId: string, password: Credential, vaultKey: VaultKey = randomBytes(32), recoveryBytes = randomBytes(32)) {
   const recovery = await derive('recovery', recoveryBytes);
   const signup = {
     ...(await wrapWithPassword(accountId, vaultKey, password)),

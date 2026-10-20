@@ -10,6 +10,7 @@ import type { Connection, HttpRequest, Model } from '../connectors/types';
 import { Lua } from '../engine/lua/run';
 import type { Upstream } from '../server/relay';
 import { sessionCookie, signupBody, testApp } from '../server/testing';
+export { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
 import { api, holdAccount } from './api';

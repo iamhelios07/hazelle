@@ -39,7 +39,31 @@ export async function guestAccount(): Promise<{ accountId: string; vaultKey: Vau
     return { ok: true, data: null };
   });
   await rememberVault(accountId, vaultKey, true);
+  await navigator.storage?.persist?.().catch(() => false);
   return { accountId, vaultKey };
+}
+
+// null means this browser cannot report persistence, not that it granted it.
+export async function guestPersistence(): Promise<boolean | null> {
+  return await navigator.storage?.persisted?.().catch(() => null) ?? null;
+}
+
+export async function clearGuestStore(account: string, expected?: { timeline: string; rev: number; files: string[] }): Promise<ApiResult<null>> {
+  return transact(['guest-heads', 'guest-objects', 'guest-files'], 'readwrite', async (tx) => {
+    const head = await headOf(tx, account);
+    if (expected && (!head || head.timeline !== expected.timeline || head.rev !== expected.rev)) return failure('conflict');
+    const range = IDBKeyRange.bound([account], [account, []]);
+    if (expected) {
+      const keys = await got<IDBValidKey[]>(tx.objectStore('guest-files').getAllKeys(range));
+      if (keys.length !== expected.files.length || keys.some((key, index) => (key as [string, string])[1] !== expected.files[index])) return failure('conflict');
+    }
+    tx.objectStore('guest-objects').delete(range);
+    tx.objectStore('guest-files').delete(range);
+    // Keep an empty head until the vault mark is removed in the other database: a close between the two cleanups
+    // can still resume. The new timeline also fences a guest tab that was open before the transfer.
+    tx.objectStore('guest-heads').put({ rev: 0, timeline: crypto.randomUUID() } satisfies Head, account);
+    return { ok: true, data: null };
+  });
 }
 
 export function guestBackend(account: string): Backend {

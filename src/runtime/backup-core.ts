@@ -27,7 +27,7 @@ const FILES = 'files/';
 const HELD_BYTES = 8 * 1024 * 1024;
 const PICTURE_ROWS = 12;
 
-const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, ILLUSTRATOR_ID, COMMENTATOR_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
+export const SEEDED: ReadonlySet<string> = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, ILLUSTRATOR_ID, COMMENTATOR_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
 
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 
