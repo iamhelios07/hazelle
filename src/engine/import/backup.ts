@@ -141,6 +141,7 @@ export async function backupInlays(source: FileSource): Promise<Inlays | null> {
 }
 
 const inlaysOf = (spans: Map<string, Span>): Inlays => ({
+  count: spans.size,
   bytes: [...spans.values()].reduce((sum, span) => sum + span.length, 0),
   assets: (ids) => ids.map((id) => {
     const span = spans.get(id);
@@ -148,8 +149,8 @@ const inlaysOf = (spans: Map<string, Span>): Inlays => ({
   }),
 });
 
-// bytes: the file's entries together. assets: an entry per id, which reads null for one the file lacks.
-export type Inlays = { bytes: number; assets(ids: string[]): Imported['assets'] };
+// count and bytes: the file's entries together. assets: an entry per id, which reads null for one the file lacks.
+export type Inlays = { count: number; bytes: number; assets(ids: string[]): Imported['assets'] };
 
 const INLAY = 'inlay_';
 const INLAY_SKIPPED = `${INLAY}skipped.json`;

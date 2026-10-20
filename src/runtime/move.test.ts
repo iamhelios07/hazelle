@@ -330,7 +330,7 @@ describe('fillPictures', () => {
   });
 });
 
-const inlayFile = (held: Record<string, Uint8Array<ArrayBuffer>>): Inlays => ({ bytes: 0, assets: (ids) => ids.map((id) => ({ name: id, read: async () => held[id] ?? null })) });
+const inlayFile = (held: Record<string, Uint8Array<ArrayBuffer>>): Inlays => ({ count: Object.keys(held).length, bytes: 0, assets: (ids) => ids.map((id) => ({ name: id, read: async () => held[id] ?? null })) });
 const signature = () => new TextEncoder().encode(JSON.stringify({ type: 'signature', data: 'sig' }));
 
 describe('inlays', () => {

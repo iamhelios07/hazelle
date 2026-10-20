@@ -220,6 +220,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   const { catalog } = backup;
   const count = tickCount(ticks);
   const room = storage.fileBytesCap === null ? null : Math.max(0, storage.fileBytesCap - storage.fileBytes);
+  const pictures = catalog.pictures + (inlays?.count ?? 0);
   const pictureBytes = catalog.pictureBytes + (inlays?.bytes ?? 0);
   const tick = (part: keyof Ticks, next: boolean[]) => setPhase({ ...phase, ticks: { ...ticks, [part]: next } });
   return (
@@ -234,7 +235,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       }
     >
       <Stack gap="section">
-        <Text variant="note">{catalog.pictures > 0 ? `이미지 ${catalog.pictures}개(${sizeText(catalog.pictureBytes)})가 들어 있어요.` : '이미지가 들어 있지 않아요. 이미지를 뺀 백업 파일이라면 전체 백업 파일을 함께 넣어 주세요.'}</Text>
+        <Text variant="note">{pictures > 0 ? `이미지 ${pictures}개(${sizeText(pictureBytes)})가 들어 있어요.` : '이미지가 들어 있지 않아요. 이미지를 뺀 백업 파일이라면 전체 백업 파일을 함께 넣어 주세요.'}</Text>
         {room !== null && pictureBytes > room && <Callout tone="warn">{`남은 이미지 저장 공간은 ${sizeText(room)}예요. 용량을 넘는 이미지는 빼고 가져와요.`}</Callout>}
         <Picks
           title="캐릭터"

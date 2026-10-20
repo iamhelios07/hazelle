@@ -333,7 +333,7 @@ describe('readBackup', () => {
     if (!pocket.ok) throw new Error(pocket.failure.kind);
     expect(pocket.backup.catalog).toEqual((await read()).catalog);
     const inlays = (await backupInlays(file))!;
-    expect(inlays.bytes).toBe(PNG.length);
+    expect([inlays.count, inlays.bytes]).toEqual([1, PNG.length]);
     expect(await Promise.all(inlays.assets(['pic', 'gone']).map(({ read }) => read()))).toEqual([PNG, null]);
     expect(await backupInlays(backupFile())).toBeNull();
   });
