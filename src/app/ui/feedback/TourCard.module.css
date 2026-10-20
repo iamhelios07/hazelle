@@ -1,0 +1,25 @@
+.card {
+  composes: box from '../foundation/surface.module.css';
+  --box-line: var(--color-accent-border);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  background: var(--color-accent-bg);
+}
+
+.words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  composes: title from '../foundation/type.module.css';
+}
+
+.sub {
+  composes: note from '../foundation/type.module.css';
+}

@@ -15,6 +15,12 @@
   gap: var(--space-8);
 }
 
+/* One act standing alone under what it answers, such as a post's 추천. */
+.center {
+  justify-content: center;
+  gap: var(--space-8);
+}
+
 .spread > :first-child {
   flex: 1 1 auto;
   min-width: 0;

@@ -1,4 +1,4 @@
-import { Check, EyeOff, Eye, Flag, History, Lock, LockOpen, PenLine, Tag as TagIcon } from 'lucide-react';
+import { Check, EyeOff, Sparkles, Eye, Flag, History, Lock, LockOpen, PenLine, Tag as TagIcon } from 'lucide-react';
 import { useState } from 'react';
 import { HOLD_DAYS_MAX, MAX_COMMENT_LENGTH, OPERATOR_NAME, STATUSES, type Comment, type Hidden, type Post, type Status } from '../../contracts/board';
 import type { ApiResult } from '../../runtime/api';
@@ -32,7 +32,7 @@ import { useAccount } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadEvent, ThreadItem, VoteButton } from '../ui';
+import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadEvent, ThreadItem, TourCard, VoteButton } from '../ui';
 import { useNicknameGate } from './nickname';
 import { counted, ReasonDialog } from './parts';
 import { useVotes } from './vote';
@@ -149,16 +149,23 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
         <AuthorLine author={post.author} note={edited(post.createdAt, post.editedAt)} size="md" />
         {post.hidden && <Callout tone="warn">{hiddenLine('글', post.hidden)}</Callout>}
         {post.visibility === 'operator' && <Text variant="note">운영자만 읽을 수 있는 글이에요.</Text>}
+        {live && tour && (
+          <TourCard
+            icon={Sparkles}
+            title={tour.title}
+            sub={`${count(tour.pages.length)}장으로 둘러봐요`}
+            action={
+              <Button variant="secondary" size="sm" onClick={() => setAsking({ kind: 'tour' })}>
+                {TOUR.see}
+              </Button>
+            }
+          />
+        )}
         {live ? <Text variant="written">{linkify(post.text!)}</Text> : <Text variant="note">삭제된 글이에요.</Text>}
         {admin && post.diagnostics !== null && <TextField label="진단 정보" lines={8} value={post.diagnostics} onChange={() => {}} readOnly />}
         {live && post.visibility === 'public' && (
-          <Row kind="actions">
+          <Row kind="center">
             <VoteButton label={vote.voted ? `${voteLabel}, 추천함` : voteLabel} word={BOARD.vote} count={count(vote.votes)} pressed={vote.voted} onClick={vote.onFlip} />
-            {tour && (
-              <Button variant="secondary" onClick={() => setAsking({ kind: 'tour' })}>
-                {TOUR.see}
-              </Button>
-            )}
           </Row>
         )}
       </Stack>

@@ -10,3 +10,4 @@ export { Outcome } from './Outcome';
 export { Progress, type ProgressStep } from './Progress';
 export { Sketch } from './Sketch';
 export { Steps } from './Steps';
+export { TourCard } from './TourCard';
