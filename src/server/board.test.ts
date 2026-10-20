@@ -235,6 +235,8 @@ it("lists what others did to one's posts and comments, counts it unread, and mar
   await t.env.db.prepare('UPDATE comments SET created_at = id').run();
   await t.put(`board/posts/${id}/status`, { status: 'done', version: 'v0.4.0' }, admin.cookie);
   expect((await t.put(`board/posts/${id}/status`, { status: 'working', version: 'v0.4.0' }, admin.cookie)).status).toBe(400);
+  const read = (await (await t.get(`board/posts/${id}`, author.cookie)).json()) as { post: Post };
+  expect(read.post).toMatchObject({ status: 'done', version: 'v0.4.0', statusAt: expect.any(Number) });
 
   const by = { operator: false, mine: false, left: false, name: 'other' };
   const { activity, next } = (await (await t.get('board/activity', author.cookie)).json()) as { activity: Activity[]; next: string | null };

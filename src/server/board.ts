@@ -151,16 +151,17 @@ board.get('/posts/:id', async (c) => {
   if (id === null) return fail(c, 400, 'bad-input');
   const db = c.env.db;
   const row = await db
-    .prepare(`SELECT ${POST_COLUMNS(account)}, p.text, p.diagnostics, p.account_id AS accountId, (SELECT username FROM accounts WHERE id = p.account_id) AS username
+    .prepare(`SELECT ${POST_COLUMNS(account)}, p.text, p.diagnostics, p.status_at AS statusAt, p.account_id AS accountId, (SELECT username FROM accounts WHERE id = p.account_id) AS username
       FROM posts p WHERE p.id = ?2 AND ${readable(account)}`)
     .bind(account.id, id)
-    .first<PostSql & { text: string | null; diagnostics: string | null; accountId: string | null; username: string | null }>();
+    .first<PostSql & { text: string | null; diagnostics: string | null; statusAt: number | null; accountId: string | null; username: string | null }>();
   if (!row) return fail(c, 404, 'not-found');
-  const { text, diagnostics, accountId, username, ...shown } = row;
+  const { text, diagnostics, statusAt, accountId, username, ...shown } = row;
   const { results } = await db.prepare(`SELECT ${COMMENT_COLUMNS} FROM comments c WHERE c.post_id = ?2 ORDER BY c.id`).bind(account.id, id).all<CommentSql>();
   const post: Post = {
     ...postRow(shown, account),
     text,
+    statusAt,
     diagnostics: account.admin ? diagnostics : null,
     account: account.admin && username !== null ? { id: accountId!, username } : null,
     comments: results.map((each) => comment(each, account)),

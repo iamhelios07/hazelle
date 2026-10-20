@@ -1,5 +1,5 @@
 import { Globe, Lock } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CATEGORIES, MAX_POST_LENGTH, MAX_TITLE_LENGTH, type Category, type Post } from '../../contracts/board';
 import { editPost, readPost, writePost } from '../../runtime/board';
 import { diagnosticReport } from '../../runtime/diagnostics';
@@ -7,14 +7,38 @@ import { describeFailure } from '../common/failure';
 import { BUILT_VERSION } from '../common/release';
 import { useAttempt } from '../common/useAttempt';
 import { CATEGORY_LOOK } from '../common/postRow';
+import { readPersisted } from '../common/usePersisted';
 import { useLoaded } from '../common/useLoaded';
 import { BOARD } from '../common/words';
-import { useStanding } from '../session';
+import { useSession, useStanding } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, Checkbox, ChoiceGroup, NavBar, Screen, Stack, Tag, Text, TextField } from '../ui';
+import { Button, Callout, Checkbox, ChoiceGroup, NavBar, Row, Screen, Stack, Tag, Text, TextField } from '../ui';
 import { useNicknameGate } from './nickname';
 import { counted } from './parts';
+
+// What a bug report needs, laid into an empty text when 버그 is picked and taken out again, untouched, when it is not.
+const BUG_TEMPLATE = '재현 순서\n1. \n2. \n\n기대한 결과\n\n실제 결과\n';
+
+// A new post's words kept on this device as they are typed, until it is posted or cleared: leaving the page loses
+// nothing. Per account, since a device may hold several.
+type Draft = { title: string; text: string; category: Category | null; toOperator: boolean };
+const draftKey = (username: string) => `risu-alpha:board-draft:${username}`;
+function parseDraft(stored: string): Draft | null {
+  const draft: unknown = JSON.parse(stored);
+  if (typeof draft !== 'object' || draft === null) return null;
+  const { title, text, category, toOperator } = draft as Record<string, unknown>;
+  if (typeof title !== 'string' || typeof text !== 'string' || typeof toOperator !== 'boolean') return null;
+  return { title, text, category: CATEGORIES.find((each) => each === category) ?? null, toOperator };
+}
+function keepDraft(key: string, draft: Draft | null) {
+  try {
+    if (draft) localStorage.setItem(key, JSON.stringify(draft));
+    else localStorage.removeItem(key);
+  } catch {
+    // Kept for this page only.
+  }
+}
 
 const CATEGORY_CARDS = CATEGORIES.map((value) => ({
   value,
@@ -43,19 +67,41 @@ export function EditScreen({ id, back }: { id: number; back: Back }) {
 // operator: 운영자에게만 preset, as 설정 › 계정 and 내 글 open it. A suspended account writes nothing else (design §6.13).
 export function WriteScreen({ editing, operator, back }: { editing: Post | null; operator: boolean; back: Back }) {
   const { suspended } = useStanding();
+  const { username } = useSession();
   const { gate, dialog } = useNicknameGate();
-  const [title, setTitle] = useState(editing?.title ?? '');
-  const [text, setText] = useState(editing?.text ?? '');
+  const key = draftKey(username);
+  const [restored] = useState(() => (editing ? null : readPersisted(key, parseDraft, null)));
   // An error report is what an operator-only post most often is.
-  const [category, setCategory] = useState<Category | null>(editing?.category ?? (operator ? 'bug' : null));
-  const [toOperator, setToOperator] = useState(operator);
+  const start = editing ?? restored ?? { title: '', text: operator ? BUG_TEMPLATE : '', category: operator ? ('bug' as const) : null };
+  const [title, setTitle] = useState(start.title);
+  const [text, setText] = useState(start.text ?? '');
+  const [category, setCategory] = useState<Category | null>(start.category);
+  const [toOperator, setToOperator] = useState(operator || (restored?.toOperator ?? false));
+  const [fromDraft, setFromDraft] = useState(restored !== null);
   // On by default: an error report is rarely answerable without it, and it holds no chat text or key.
   const [withDevice, setWithDevice] = useState(true);
   const { busy, failure, run } = useAttempt();
   const titled = counted(title, MAX_TITLE_LENGTH);
   const body = counted(text, MAX_POST_LENGTH);
   const operatorOnly = toOperator || suspended;
-  const ready = titled.length > 0 && !titled.over && body.length > 0 && !body.over && category !== null;
+  const blank = title.trim() === '' && (text.trim() === '' || text === BUG_TEMPLATE);
+  const ready = titled.length > 0 && !titled.over && body.length > 0 && text !== BUG_TEMPLATE && !body.over && category !== null;
+
+  useEffect(() => {
+    if (!editing) keepDraft(key, blank ? null : { title, text, category, toOperator });
+  }, [editing, key, blank, title, text, category, toOperator]);
+
+  function pick(next: Category) {
+    if (next === 'bug' && text.trim() === '') setText(BUG_TEMPLATE);
+    if (next !== 'bug' && text === BUG_TEMPLATE) setText('');
+    setCategory(next);
+  }
+
+  function clearDraft() {
+    setTitle('');
+    setText(category === 'bug' ? BUG_TEMPLATE : '');
+    setFromDraft(false);
+  }
 
   const send = (picked: Category) =>
     run(async () => {
@@ -69,6 +115,7 @@ export function WriteScreen({ editing, operator, back }: { editing: Post | null;
       const diagnostics = operatorOnly && withDevice ? await diagnosticReport(BUILT_VERSION) : null;
       const written = await writePost({ ...fields, visibility: operatorOnly ? 'operator' : 'public', diagnostics });
       if (!written.ok) return describeFailure(written);
+      keepDraft(key, null);
       navigate({ kind: 'post', id: written.data.id }, { replace: true });
       return null;
     });
@@ -91,9 +138,17 @@ export function WriteScreen({ editing, operator, back }: { editing: Post | null;
         </Button>
       }
     >
-      <ChoiceGroup label="분류" showLabel options={CATEGORY_CARDS} value={category} onChange={setCategory} layout="cards" />
+      {fromDraft && (
+        <Row kind="spread">
+          <Text variant="note">쓰던 글을 불러왔어요.</Text>
+          <Button variant="link" size="xs" onClick={clearDraft}>
+            새로 쓰기
+          </Button>
+        </Row>
+      )}
+      <ChoiceGroup label="분류" showLabel options={CATEGORY_CARDS} value={category} onChange={pick} layout="cards" />
       <TextField label="제목" value={title} onChange={setTitle} placeholder="한 줄로 요약해 주세요" hint={titled.hint} error={titled.error} />
-      <TextField label="내용" lines={12} value={text} onChange={setText} placeholder={category === 'bug' ? '무엇을 했을 때 어떻게 되는지, 순서대로 적어 주세요' : undefined} hint={body.hint} error={body.error} />
+      <TextField label="내용" lines={12} value={text} onChange={setText} hint={body.hint} error={body.error} />
       {!editing &&
         (suspended ? (
           <Text variant="note">정지된 계정은 운영자에게만 보낼 수 있어요.</Text>

@@ -1,4 +1,4 @@
-import { Bug, CircleCheck, CircleDashed, CircleHelp, CircleSlash, Eye, EyeOff, Lightbulb, Lock, MessageSquare, MessagesSquare, ShieldCheck, ThumbsUp, UserX, type LucideIcon } from 'lucide-react';
+import { Bug, CircleCheck, CircleDot, CircleDashed, CircleHelp, CircleSlash, Eye, EyeOff, Lightbulb, Lock, MessageSquare, MessagesSquare, ShieldCheck, ThumbsUp, UserX, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OPERATOR_NAME, type Author, type Category, type PostRow, type Status } from '../../contracts/board';
 import { navigate } from '../shell/router';
@@ -25,6 +25,9 @@ const STATUS_LOOK: Record<Exclude<Status, 'open'>, { tone: 'plain' | 'accent' | 
   done: { tone: 'success', icon: CircleCheck },
   declined: { tone: 'faint', icon: CircleSlash },
 };
+
+// The mark of a status wherever it is named, 열림 too (a post the operator opened again).
+export const statusIcon = (status: Status): LucideIcon => (status === 'open' ? CircleDot : STATUS_LOOK[status].icon);
 
 export const statusWord = ({ status, version }: Pick<PostRow, 'status' | 'version'>) =>
   status === 'done' && version ? `${BOARD.statuses.done} · ${version}` : BOARD.statuses[status];

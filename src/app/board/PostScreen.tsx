@@ -1,6 +1,6 @@
 import { Check, EyeOff, Eye, Flag, History, Lock, LockOpen, PenLine, Tag as TagIcon } from 'lucide-react';
 import { useState } from 'react';
-import { HOLD_DAYS_MAX, MAX_COMMENT_LENGTH, STATUSES, type Comment, type Hidden, type Post, type Status } from '../../contracts/board';
+import { HOLD_DAYS_MAX, MAX_COMMENT_LENGTH, OPERATOR_NAME, STATUSES, type Comment, type Hidden, type Post, type Status } from '../../contracts/board';
 import type { ApiResult } from '../../runtime/api';
 import {
   deleteComment,
@@ -18,7 +18,8 @@ import {
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { linkify } from '../common/linkify';
-import { AuthorLine, authorName, PostMarks } from '../common/postRow';
+import { AuthorLine, authorName, PostMarks, statusIcon } from '../common/postRow';
+import { withParticle } from '../common/particles';
 import { RestoresDialog } from '../common/RestoresDialog';
 import { ago, moment } from '../common/time';
 import { count, readCount } from '../common/typedNumber';
@@ -29,7 +30,7 @@ import { useAccount } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadItem, VoteButton } from '../ui';
+import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadEvent, ThreadItem, VoteButton } from '../ui';
 import { useNicknameGate } from './nickname';
 import { counted, ReasonDialog } from './parts';
 import { useVotes } from './vote';
@@ -147,7 +148,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
         {admin && post.diagnostics !== null && <TextField label="진단 정보" lines={8} value={post.diagnostics} onChange={() => {}} readOnly />}
         {live && post.visibility === 'public' && (
           <Row kind="actions">
-            <VoteButton label={vote.voted ? `${voteLabel}, 추천함` : voteLabel} count={count(vote.votes)} pressed={vote.voted} onClick={vote.onFlip} />
+            <VoteButton label={vote.voted ? `${voteLabel}, 추천함` : voteLabel} word={BOARD.vote} count={count(vote.votes)} pressed={vote.voted} onClick={vote.onFlip} />
           </Row>
         )}
       </Stack>
@@ -306,9 +307,26 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
     );
   }
 
+  // Only the last status change is kept, so it alone stands among the comments, where its time falls.
+  const { statusAt } = post;
+  const change = statusAt !== null && (
+    <ThreadEvent key="status" icon={statusIcon(post.status)} note={ago(statusAt)}>
+      {`${withParticle(OPERATOR_NAME, '이/가')} ${withParticle(BOARD.statuses[post.status], '으로/로')} 바꿨어요`}
+      {post.status === 'done' && post.version && ` · ${post.version}`}
+    </ThreadEvent>
+  );
+  const before = statusAt === null ? tops.length : tops.filter((comment) => comment.createdAt <= statusAt).length;
   return (
     <Section title={`${BOARD.comment} ${count(post.comments.length)}`}>
-      {tops.length ? <Thread label={BOARD.comment}>{tops.map((comment) => item(comment, true))}</Thread> : <Empty variant="section">첫 댓글을 남겨 보세요.</Empty>}
+      {tops.length || change ? (
+        <Thread label={BOARD.comment}>
+          {tops.slice(0, before).map((comment) => item(comment, true))}
+          {change}
+          {tops.slice(before).map((comment) => item(comment, true))}
+        </Thread>
+      ) : (
+        <Empty variant="section">첫 댓글을 남겨 보세요.</Empty>
+      )}
       {post.locked ? (
         <Text variant="note">운영자가 댓글을 닫았어요.</Text>
       ) : (

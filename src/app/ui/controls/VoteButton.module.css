@@ -26,8 +26,8 @@
 
 .icon {
   flex-shrink: 0;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   stroke-width: var(--icon-stroke);
 }
 
@@ -40,19 +40,18 @@
   flex-direction: column;
   gap: var(--space-4);
   width: var(--vote-width);
-  padding: var(--space-8) 0;
+  padding: var(--space-12) 0 var(--space-8);
   border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
 }
 
 .row {
+  composes: title from '../foundation/type.module.css';
   gap: var(--space-8);
-  min-height: var(--control-compact);
-  padding: 0 var(--space-16);
+  min-height: var(--control-md);
+  padding: 0 var(--space-24) 0 var(--space-16);
   border-radius: var(--radius-full);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
 }
 
 .count {

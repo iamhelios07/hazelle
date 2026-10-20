@@ -19,5 +19,5 @@ export { SideTitle } from './SideTitle';
 export { Table, type TableColumn, type TableRow } from './Table';
 export { StepList, type StepRow } from './StepList';
 export { Tabs } from './Tabs';
-export { Thread, ThreadItem } from './Thread';
+export { Thread, ThreadEvent, ThreadItem } from './Thread';
 export { ROWS_RESIZED, rowAt, Viewport, viewLines, type Seek } from './Viewport';
