@@ -39,7 +39,8 @@ export type Sort = (typeof SORTS)[number];
 // name null: the account left (탈퇴한 사용자). mine: written by the asking account.
 export type Author = { name: string | null; operator: boolean; mine: boolean };
 // A post or comment the operator hid: its reason, and when a hold ends (null: hidden until the operator shows it again).
-// Shown to its author and the operator; others see no trace of it.
+// Shown to its author and the operator; others see no trace of a hidden post, and a comment's placeholder (text and
+// hidden both null, deleted false), which the client draws as hidden, not deleted.
 export type Hidden = { reason: string; until: number | null };
 
 export type PostRow = {
