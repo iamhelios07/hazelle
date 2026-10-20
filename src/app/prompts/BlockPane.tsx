@@ -59,7 +59,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         </Text>
         <TitleField ref={nameRef} label="블록 이름" value={block.name ?? ''} placeholder={placeholder} onChange={(name) => onChange({ ...block, name: name || null })} />
         <Row kind="toolbar">
-          {'role' in block && <ChoiceGroup<Role> label="보내는 역할" showLabel layout="segmented" options={ROLES} value={block.role} onChange={(role) => onRole(block, role)} />}
+          {'role' in block && <ChoiceGroup<Role> label="보내는 역할" showLabel layout="fit" options={ROLES} value={block.role} onChange={(role) => onRole(block, role)} />}
           {block.kind === 'text' && block.mark && (
             <>
               <Tag tone="accent">{MARKS[block.mark].label}</Tag>

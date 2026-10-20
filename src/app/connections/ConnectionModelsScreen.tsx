@@ -10,16 +10,18 @@ import { addCopy, addModel, putModelBack, refreshStarred, removeConnection, remo
 import { modelProfile } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
 import { describeCatalogFailure } from '../common/failure';
+import { DetailFold } from '../common/DetailFold';
 import { NameDialog } from '../common/NameDialog';
 import { useSearch } from '../common/useSearch';
 import { RetriesRow } from '../common/RetriesRow';
 import { followsRetries, profileLine } from '../common/settingWords';
-import { detailLabel, MODEL_SETTINGS } from '../common/words';
+import { useAutosave } from '../common/useAutosave';
+import { MODEL_SETTINGS } from '../common/words';
 import { useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Columns, Disclosure, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, SettingGroup, Stack, Text, usePane } from '../ui';
+import { Button, Callout, ChoiceGroup, Columns, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, Stack, Text, usePane } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionKeyDialog } from './ConnectionKeyDialog';
 import { ConnectionMeters } from './ConnectionMeters';
@@ -51,12 +53,14 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<Filter>('all');
-  const [naming, setNaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const [copying, setCopying] = useState<Model | null>(null);
   const [keying, setKeying] = useState(false);
   // Under API 연결's cards the connection is a part of that page, not a page of its own.
   const stacked = usePane() === 'stack';
+  const naming = useAutosave<{ label: string }>(`connection:${id}`, ({ label }) => renameConnection(store, id, label!.trim()));
+  const label = naming.unsaved.label ?? connection.label;
+  const rename = { label: '연결 이름', placeholder: label, onChange: (next: string) => naming.change({ label: next }) };
 
   const key = catalogKey(connection);
   useEffect(() => {
@@ -100,10 +104,9 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
 
   // A model the list does not name yet (a new release) is added by its id alone, knowing nothing of it; a listed id adds
   // the listed model, and one added already but no longer listed is copied from what its entry knows.
-  function addById(text: string) {
+  function addById(modelId: string) {
     setAdding(false);
-    const modelId = text.trim();
-    if (modelId) add((catalog?.ok ? catalog.models.find((model) => model.id === modelId) : undefined) ?? entries.find((entry) => entry.id === modelId) ?? bareModel(modelId));
+    add((catalog?.ok ? catalog.models.find((model) => model.id === modelId) : undefined) ?? entries.find((entry) => entry.id === modelId) ?? bareModel(modelId));
   }
 
   function removeEntry(entry: Starred) {
@@ -152,10 +155,12 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     );
   }
 
-  function remove() {
-    void removeConnection(store, id).then((result) => result.ok || toast.failed(result));
+  async function remove() {
+    const removed = await naming.remove(() => removeConnection(store, id));
+    if (!removed) return;
+    if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
     navigate({ kind: 'connections' });
-    toast.undoable(`'${connection.label}' 연결을 삭제했어요.`, () => restoreConnection(store, stored));
+    toast.undoable(`'${removed.data.value.label}' 연결을 삭제했어요.`, () => restoreConnection(store, removed.data));
   }
 
   const resolved = resolveConnection(connection);
@@ -169,21 +174,14 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     of: '연결',
     items: (
       <>
-        <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setNaming(true)} />
         {!connection.turns && resolved && <MenuItem icon={KeyRound} label="키 바꾸기" onClick={() => setKeying(true)} />}
-        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} />
+        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />
       </>
     ),
-  };
-  // A blank name keeps the old one: a connection with no label could not be told from any other.
-  const rename = (label: string) => {
-    setNaming(false);
-    if (label.trim()) void renameConnection(store, id, label.trim()).then((result) => result.ok || toast.failed(result));
   };
   const level = stacked ? 3 : 2;
   const dialog = (
     <>
-      {naming && <NameDialog title="연결 이름 바꾸기" value={connection.label} onSave={rename} onClose={() => setNaming(false)} />}
       {keying && resolved && <ConnectionKeyDialog id={id} type={resolved.type} onClose={() => setKeying(false)} />}
       {copying && <NameDialog title={addOf(copying.name)} value={`${copying.name} ${entriesOf(connection, copying.id).length + 1}`} hint="이미 추가한 모델이에요. 이름과 모델 설정을 따로 두고 하나 더 추가해요." onSave={(label) => copy(copying, label)} onClose={() => setCopying(null)} />}
       {adding && <NameDialog title={BY_ID} field="모델 ID" value="" hint="목록에 없는 새 모델도 제공자가 쓰는 ID로 추가할 수 있어요." onSave={addById} onClose={() => setAdding(false)} />}
@@ -202,7 +200,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           level={level}
           action={
             resolved?.codec && (
-              <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => setAdding(true)}>
+              <Button variant="secondary" icon={ACTS.create.icon} onClick={() => setAdding(true)}>
                 {BY_ID}
               </Button>
             )
@@ -228,27 +226,25 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           )}
         </Panel>
       </Columns>
-      <Disclosure label={detailLabel(connection.retries === undefined ? 0 : 1)}>
-        <SettingGroup label="세부 설정">
-          <RetriesRow
-            value={connection.retries}
-            follows={followsRetries('shared', shared ?? RETRIES)}
-            onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
-          />
-        </SettingGroup>
-      </Disclosure>
+      <DetailFold set={connection.retries === undefined ? 0 : 1}>
+        <RetriesRow
+          value={connection.retries}
+          follows={followsRetries('shared', shared ?? RETRIES)}
+          onChange={(retries) => void setRetries(store, id, retries).then((result) => result.ok || toast.failed(result))}
+        />
+      </DetailFold>
     </>
   );
 
   return stacked ? (
     <Screen width="page">
-      <ItemSection title={connection.label} note={who} menu={menu}>
+      <ItemSection title={label} note={who} menu={menu}>
         {body}
       </ItemSection>
       {dialog}
     </Screen>
   ) : (
-    <Screen width="page" top={<NavBar title={connection.label} subtitle={who} {...backBar(back)} menu={menu} />}>
+    <Screen width="page" top={<NavBar title={label} rename={rename} subtitle={who} status={naming.words} {...backBar(back)} menu={menu} />}>
       {body}
       {dialog}
     </Screen>

@@ -5,12 +5,13 @@ import { entryName, type Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { profileUsers, renameProfile, setProfileSettings, withSettings, type ProfileUser } from '../../runtime/profiles';
 import { choices } from '../common/reading';
+import { DetailFold } from '../common/DetailFold';
 import { RetriesRow } from '../common/RetriesRow';
 import { typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { detailLabel, DISCOUNT, PDF_SEND, UNSET } from '../common/words';
+import { DISCOUNT, PDF_SEND, UNSET } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
-import { ChoiceGroup, Disclosure, NumberInput, PhraseField, Section, SettingGroup, SettingRow, Switch } from '../ui';
+import { ChoiceGroup, NumberInput, PhraseField, Section, SettingGroup, SettingRow, Switch } from '../ui';
 import { CACHE, changeLine, followsRetries, DETAIL, LEVELS, levelName, MAIN, NUMBER, PDF_KEEP_WORDS, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from '../common/settingWords';
 import { count, readCount, readOptional, readTyped } from '../common/typedNumber';
 
@@ -46,7 +47,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
   const connections = useConnections();
   const { id } = stored;
 
-  const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget' | 'recent' | 'name', string>>>({});
+  const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget' | 'recent', string>>>({});
   const { status, unsaved, change, save, flush, remove: removing } = useAutosave<Saved>(`profile:${id}`, async (patch) => {
     const { name: renamed, settings: values } = split(patch);
     if (renamed !== undefined) {
@@ -56,7 +57,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
     return Object.keys(values).length ? setProfileSettings(store, id, values) : { ok: true };
   });
   const shown = withSettings(stored.value.settings, split(unsaved).settings);
-  const name = typedText(drafts.name, (typed) => typed.trim() || null, unsaved.name ?? stored.value.name, String);
+  const name = unsaved.name ?? stored.value.name;
   const set = (values: ModelSettings) => void save(values);
 
   function type(field: Field | 'budget', draft: string, value: (number: number) => ModelSettings) {
@@ -67,10 +68,7 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
     else change(typed.ok ? value(typed.value) : { [key]: undefined }, typed.ok);
   }
 
-  function rename(next: string) {
-    setDrafts((current) => ({ ...current, name: next }));
-    change({ name: next.trim() }, !!next.trim());
-  }
+  const rename = (next: string) => change({ name: next.trim() });
 
   const users: User[] = profileUsers(connections, settings.profile, id).map((user) => {
     const schema = modelSettings(user.connection.value, user.model);
@@ -314,17 +312,15 @@ export function useProfileEditor(stored: Stored<'profile'>, { model, retries }: 
           {pdfRow()}
         </SettingGroup>
       </Section>
-      <Disclosure label={detailLabel(detailSet)}>
-        <SettingGroup label="세부 설정">
-          {DETAIL.map(numberRow)}
-          {stopRow}
-          {choiceRow('verbosity', VERBOSITY_LABEL, '간단히를 선택하면 같은 내용을 더 짧게 요약해서 써요', VERBOSITY, VERBOSITY_WORDS, shown.verbosity, (verbosity) => ({ verbosity }))}
-          {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동으로 두면 Anthropic 계정에 우선 처리 용량이 남아 있을 때 그 용량부터 먼저 써요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
-          {systemRow}
-          {streamingRow}
-          <RetriesRow value={shown.retries} follows={retries === undefined ? '연결 설정' : followsRetries('connection', retries)} onChange={(value) => change({ retries: value })} />
-        </SettingGroup>
-      </Disclosure>
+      <DetailFold set={detailSet}>
+        {DETAIL.map(numberRow)}
+        {stopRow}
+        {choiceRow('verbosity', VERBOSITY_LABEL, '간단히를 선택하면 같은 내용을 더 짧게 요약해서 써요', VERBOSITY, VERBOSITY_WORDS, shown.verbosity, (verbosity) => ({ verbosity }))}
+        {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동으로 두면 Anthropic 계정에 우선 처리 용량이 남아 있을 때 그 용량부터 먼저 써요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
+        {systemRow}
+        {streamingRow}
+        <RetriesRow value={shown.retries} follows={retries === undefined ? '연결 설정' : followsRetries('connection', retries)} onChange={(value) => change({ retries: value })} />
+      </DetailFold>
     </>
   );
   // Every value unset in one save; answers what was set, for an undo, or null when the save failed.

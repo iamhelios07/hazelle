@@ -1,39 +1,34 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ModelsConsent } from './PluginSection';
 import type { Stored } from '../../model/kinds';
 import { likenessId } from '../../model/likeness';
 import { isToggle } from '../../model/prompt';
-import { exportModule } from '../../runtime/card-file';
 import { editModule, setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { holdsLine } from '../common/pack';
 import { AssetsEditor } from '../common/AssetsEditor';
-import { fileNamed } from '../common/download';
-import { runExport } from '../common/exporting';
 import { LoreEditor } from '../common/LoreEditor';
 import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import { PortraitsEditor } from '../common/PortraitsEditor';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { ALWAYS, BIN_KEEPS, EXPORT, moduleName, PAGES, promptName } from '../common/words';
-import { useChildren, useFiles, useSettings, useStore, useStored } from '../session';
+import { useAutosave } from '../common/useAutosave';
+import { ALWAYS, BIN_KEEPS, moduleName, PAGES, promptName } from '../common/words';
+import { useChildren, useSettings, useStore, useStored } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Avatar, Button, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
+import { Avatar, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
+import { ModuleExport } from './ModuleExport';
 import { useModuleOwners, useModuleParts } from './ModulesScreen';
 
 const ALWAYS_ON = `${ALWAYS} 켜기`;
 const USED_BY = '쓰는 캐릭터';
 const PROMPTS_USING = '쓰는 프롬프트';
 const PERSONAS_USING = '쓰는 페르소나';
-const RISU_FILE = 'Risu 모듈 파일';
-const RISU_FILE_HELP =
-  'RisuAI 설정 › 모듈에서 가져오거나 창에 끌어다 놓으면 열려요. 이미지는 그대로 담기고, 삽화 프로필은 빠져요. Risu에는 끄기 기능이 없어서 꺼 둔 스크립트와 로어북 항목은 빠지고, 로어북의 우선순위와 위치도 빠지며, 쉼표가 들어간 키는 쉼표 기준으로 나뉘어요. 헤이젤로 다시 가져오면 모두 원래대로 돌아와요. Lua 트리거가 있으면 Risu의 저수준 접근을 켠 채로 내보내요.';
 
-// What a module's page and a plugin's share; page is the list it belongs to.
-export function useModuleEditor({ id, value }: Stored<'module'>, page: 'modules' | 'plugins', back: Back) {
+// What a module's page and a plugin's share; page is the list it belongs to. items: the page's own menu items, before 삭제.
+export function useModuleEditor({ id, value }: Stored<'module'>, page: 'modules' | 'plugins', back: Back, items?: ReactNode) {
   const noun = PAGES[page];
   const store = useStore();
   const toast = useToast();
@@ -41,8 +36,10 @@ export function useModuleEditor({ id, value }: Stored<'module'>, page: 'modules'
   const name = autosave.unsaved.name ?? value.name;
   const description = autosave.unsaved.description ?? value.description;
 
-  function remove() {
-    void setModuleDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
+  async function remove() {
+    const removed = await autosave.remove(() => setModuleDeleted(store, id, Date.now()));
+    if (!removed) return;
+    if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
     navigate(page === 'modules' ? { kind: 'modules', place: null } : { kind: 'plugins' });
     toast.undoable(`'${moduleName(name)}' ${noun}을 삭제했어요.`, () => setModuleDeleted(store, id, null), BIN_KEEPS);
   }
@@ -50,10 +47,18 @@ export function useModuleEditor({ id, value }: Stored<'module'>, page: 'modules'
   const top = (
     <NavBar
       title={name}
-      rename={{ label: `${noun} 이름`, placeholder: moduleName(''), onChange: (next) => autosave.change({ name: next }) }}
-      status={autosave.status ? SAVE_STATUS[autosave.status] : undefined}
+      rename={{ label: `${noun} 이름`, placeholder: moduleName(name), onChange: (next) => autosave.change({ name: next }) }}
+      status={autosave.words}
       {...backBar(back)}
-      menu={{ of: noun, items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
+      menu={{
+        of: noun,
+        items: (
+          <>
+            {items}
+            <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />
+          </>
+        ),
+      }}
     />
   );
   const describing = <TextField label="설명" lines={3} value={description} onChange={(next) => autosave.change({ description: next })} />;
@@ -107,26 +112,13 @@ export function UsedBy({ id }: { id: string }) {
 }
 
 export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>; pane: 'toggles' | null; back: Back }) {
-  const store = useStore();
-  const files = useFiles();
-  const toast = useToast();
   const wide = useWide();
-  const [exporting, setExporting] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const { id, value } = stored;
   const holds = holdsLine(useModuleParts([stored])[0]!);
   // A module of scripts alone describes no one, so it offers no 삽화 profiles.
   const describes = useChildren('lore', id).length + useChildren('asset', id).length > 0 || useStored('likeness', likenessId(id)) !== null;
-  const { name, top, describing } = useModuleEditor(stored, 'modules', back);
-
-  function exportFile() {
-    runExport(
-      toast,
-      fileNamed(name, moduleName(''), 'risum'),
-      (output, progress) => exportModule(store, files, id, output, progress),
-      setExporting,
-      () => toast.show(`'${moduleName(name)}' 모듈을 내보냈어요.`),
-    );
-  }
+  const { name, top, describing } = useModuleEditor(stored, 'modules', back, <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />);
 
   if (pane === 'toggles')
     return (
@@ -140,17 +132,6 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
       {describing}
       <Text variant="note">{holds}</Text>
       <AlwaysSwitch id={id} />
-      <SettingGroup label={EXPORT}>
-        <SettingRow
-          label={RISU_FILE}
-          help={RISU_FILE_HELP}
-          control={
-            <Button variant="secondary" size="sm" icon={ACTS.export.icon} busy={exporting !== null} onClick={exportFile}>
-              {exporting ?? EXPORT}
-            </Button>
-          }
-        />
-      </SettingGroup>
       <ModelsConsent module={stored} />
       <UsedBy id={id} />
       <List box places label="토글">
@@ -160,6 +141,7 @@ export function ModuleScreen({ stored, pane, back }: { stored: Stored<'module'>;
       <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />
       <AssetsEditor owner={id} />
       {describes && <PortraitsEditor owner={id} />}
+      {exporting && <ModuleExport id={id} name={name} onClose={() => setExporting(false)} />}
     </Screen>
   );
 }

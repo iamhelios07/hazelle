@@ -4,8 +4,8 @@ import type { Stored } from '../../model/kinds';
 import { addProfile, modelProfile, removeProfile, restoreProfile, setDefaultProfile, setModelProfile, setProfileSettings, type ProfileUser } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
 import { useSearch } from '../common/useSearch';
-import { SAVE_STATUS } from '../common/useAutosave';
-import { BIN_KEEPS, defaultMark, MODEL_SETTINGS, ORIGINAL, resetTo } from '../common/words';
+import { saveWords } from '../common/useAutosave';
+import { BIN_KEEPS, defaultMark, MODEL_SETTINGS, ORIGINAL, resetTo, SET_DEFAULT } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -40,8 +40,11 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   async function copy() {
     if (!(await flush())) return;
     const copied = crypto.randomUUID();
-    void addProfile(store, { name: `${name.trim() || stored.value.name} (사본)`, settings: shown }, copied).then((made) => made.ok || toast.failed(made, '사본을 만들지 못했어요.'));
+    const making = addProfile(store, { name: `${name} (사본)`, settings: shown }, copied);
     navigate({ kind: 'profile', id: copied });
+    const made = await making;
+    if (!made.ok) return toast.failed(made, '사본을 만들지 못했어요.');
+    toast.show('사본을 만들었어요.');
   }
 
   async function clearAll() {
@@ -52,10 +55,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   async function remove() {
     const removed = await removing(() => removeProfile(store, id));
     if (!removed) return;
-    if (!removed.ok) {
-      if (removed.error === 'default') return toast.error(`기본 ${MODEL_SETTINGS}은 삭제할 수 없어요.`, { detail: `다른 ${MODEL_SETTINGS}을 기본으로 지정한 뒤에 삭제해 주세요.` });
-      return toast.failed(removed, '삭제하지 못했어요.');
-    }
+    if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
     navigate({ kind: 'models' });
     const note = users.length ? `이 ${MODEL_SETTINGS}을 쓰던 모델 ${users.length}개는 다른 ${MODEL_SETTINGS}을 선택해야 쓸 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
     toast.undoable(`'${removed.data.value.name}' ${MODEL_SETTINGS}을 삭제했어요.`, () => restoreProfile(store, id), note);
@@ -69,14 +69,14 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       top={
         <NavBar
           title={name}
-          rename={{ label: `${MODEL_SETTINGS} 이름`, placeholder: stored.value.name, onChange: rename }}
+          rename={{ label: `${MODEL_SETTINGS} 이름`, placeholder: name, onChange: rename }}
           subtitle={
             <>
               {MODEL_SETTINGS} {mark && <Tag tone="accent">{mark}</Tag>}
             </>
           }
           {...backBar(back)}
-          status={status ? SAVE_STATUS[status] : undefined}
+          status={saveWords(status)}
           menu={{
             of: MODEL_SETTINGS,
             items: (
@@ -84,13 +84,13 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                 <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
                 {!isDefault && (
                   <MenuItem
-                    label="기본으로 정하기"
+                    label={SET_DEFAULT}
                     sub={`${MODEL_SETTINGS}을 따로 선택하지 않은 모델은 이걸 써요`}
-                    onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}
+                    onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '기본으로 정하지 못했어요.'))}
                   />
                 )}
                 <MenuItem label={resetTo(ORIGINAL)} disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()} />
-                {!isDefault && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />}
+                <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? `기본 ${MODEL_SETTINGS}이라서 삭제할 수 없어요` : undefined} tone="warn" disabled={isDefault} onClick={() => void remove()} />
               </>
             ),
           }}

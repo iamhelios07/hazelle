@@ -9,7 +9,7 @@ import { counted, holdsLine, packParts, type PackParts } from '../common/pack';
 import { useSearch } from '../common/useSearch';
 import { folderNote, placeIn, useFolderIndex, whereIs } from '../common/folders/filing';
 import { FolderPath, useMoving, useNaming } from '../common/folders/FolderParts';
-import { ALWAYS, moduleName, PAGES, SCRIPTS } from '../common/words';
+import { ALWAYS, EMPTY_FOLDER, moduleName, PAGES, SCRIPTS } from '../common/words';
 import { useChildrenOf, useLibrary, useModulesAndPlugins, usePersonas, usePrompts, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -159,7 +159,7 @@ export function ModulesScreen({ place, back }: { place: string | null; back: Bac
           ))}
         </>
       ) : at.here ? (
-        <Empty>비어 있는 폴더예요.</Empty>
+        <Empty>{EMPTY_FOLDER}</Empty>
       ) : (
         <Empty action={importing}>모듈이 없어요.</Empty>
       )}

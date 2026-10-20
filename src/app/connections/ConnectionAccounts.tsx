@@ -11,6 +11,7 @@ import { describeMetersFailure } from '../common/failure';
 import { NameDialog } from '../common/NameDialog';
 import { withParticle } from '../common/particles';
 import { monthDay } from '../common/time';
+import { readTyped } from '../common/typedNumber';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, ChipButton, CodeCard, Link, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, Panel, Row, Section, Stack, Text, useMenuClose } from '../ui';
@@ -113,8 +114,7 @@ export function ConnectionAccounts({ id, connection, signIn, level }: { id: stri
           title={`그룹 ${ACTS.rename.label}`}
           value={renaming.name}
           onSave={(name) => {
-            if (!name.trim()) return;
-            turns((current) => renameGroup(current, renaming.id, name.trim()));
+            turns((current) => renameGroup(current, renaming.id, name));
             setRenaming(null);
           }}
           onClose={() => setRenaming(null)}
@@ -203,11 +203,12 @@ function DayMenu({ day, change }: { day: number; change: (change: (turns: Turns)
 function DayForm({ day, onSave }: { day: number; onSave: (day: number) => void }) {
   const close = useMenuClose();
   const [value, setValue] = useState(String(day));
-  const parsed = Number(value);
-  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= 28;
+  const typed = readTyped(value, true);
+  const parsed = typed.ok && typed.value >= 1 && typed.value <= 28 ? typed.value : null;
+  const valid = parsed !== null;
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!valid) return;
+    if (parsed === null) return;
     onSave(parsed);
     close();
   }
