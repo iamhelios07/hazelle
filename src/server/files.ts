@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { FILE_ID, MAX_FILE_IDS } from '../contracts/files';
+import { CLAIM_SETTLE_MS, FILE_ID, MAX_FILE_BYTES, MAX_FILE_IDS } from '../contracts/files';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import { CAP } from './caps';
 import { RETENTION_MS } from './db/account-db';
@@ -9,11 +9,6 @@ import { takeBackFiles } from './files/claims';
 import { fail, hex, readObject, refused, RETRY_SECONDS, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
 
-// Counts sealed bytes, a few more than the file itself. worker.ts enforces it.
-export const MAX_FILE_BYTES = 25 * 1024 * 1024;
-// An import asks about a file before it writes the objects naming it (runtime/files), so a file asked about or
-// uploaded within this long is never released.
-const CLAIM_SETTLE_MS = 60 * 60 * 1000;
 
 // Each account holds its own copy of a file under its incarnation, so nothing is shared between accounts and removing
 // one account's pictures races no one else. While its account lives, a file goes only through its sweep (below), whose

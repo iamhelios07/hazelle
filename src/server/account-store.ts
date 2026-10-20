@@ -1,4 +1,5 @@
 import type { AccountState } from '../contracts/admin';
+import type { FeedQuery, SealedChange, SealedWrite } from '../contracts/objects';
 import { ROW_BYTES, SHARED_BYTES } from './caps';
 import type { Db } from './db/service-db';
 import { isRecord } from './http';
@@ -9,13 +10,7 @@ export type Unavailable = { unavailable: true };
 // unavailable: the wake's service read failed, timed out or answered something that is neither a row nor no row, or
 // the account's file is missing, corrupt or of a newer schema.
 export type Refused = { refused: 'restoring' | 'leaving' | 'gone' } | Unavailable;
-// once: a create of a row written once and never changed (the client's ledger), which may be sent again after its
-// answer was lost. One already there under its kind and parent is that create landed, and answers with its rev.
-export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null; once?: true };
-export type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
-// count: the first page of a bootstrap asks how many changes the whole bootstrap holds, for a bar.
-export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null; kind: string | null; count: boolean };
-export type FeedPage = { timeline: string; bytes: number; until: number | null; changes: Change[]; cursor: number; more: boolean; total?: number };
+export type FeedPage = { timeline: string; bytes: number; until: number | null; changes: SealedChange[]; cursor: number; more: boolean; total?: number };
 type WrongPhase = { wrongPhase: true };
 
 export type SqlValue = string | number | null;
@@ -149,7 +144,7 @@ export class StoreRules {
         timeline: head.timeline,
         bytes: this.billed(head.bytes, shared),
         until,
-        changes: page.map((row): Change => ({ id: row.id, kind: row.kind, parent: row.parent_id, rev: row.rev, ...(row.omitted ? { omitted: true } : { body: row.deleted ? null : row.body }) })),
+        changes: page.map((row): SealedChange => ({ id: row.id, kind: row.kind, parent: row.parent_id, rev: row.rev, ...(row.omitted ? { omitted: true } : { body: row.deleted ? null : row.body }) })),
         cursor: page.at(-1)?.rev ?? query.since,
         more: rows.length > page.length,
       };
@@ -164,7 +159,7 @@ export class StoreRules {
   // (billed) under the cap the request read with its session: a batch that creates an object must fit under it, one
   // that only changes or deletes objects under it plus FULL_MARGIN, and one that does not grow the account always
   // passes, so a full account can still delete. A null cap is no cap.
-  async batch(incarnation: string, timeline: string, writes: Write[], cap: number | null): Promise<Refused | { stale: true } | { refused: 'bad-input' | 'conflict' | 'storage-full' } | { revs: number[]; bytes: number; timeline: string }> {
+  async batch(incarnation: string, timeline: string, writes: SealedWrite[], cap: number | null): Promise<Refused | { stale: true } | { refused: 'bad-input' | 'conflict' | 'storage-full' } | { revs: number[]; bytes: number; timeline: string }> {
     const life = await this.lifecycle(incarnation);
     if (!active(life)) return refusal(life);
     // Read on the account's queue, which share publication also takes, so no link lands between it and the write.

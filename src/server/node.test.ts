@@ -11,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { buildSync } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VISITOR_HEADER } from '../contracts/http';
-import { MAX_FILE_BYTES } from './files';
+import { MAX_FILE_BYTES } from '../contracts/files';
 import { sha256Hex } from './http';
 import { pageCsp } from './static';
 import { sessionCookie, signupBody } from './testing';

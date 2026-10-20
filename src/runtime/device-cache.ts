@@ -1,5 +1,6 @@
+import type { SealedChange } from '../contracts/objects';
 import { lockVault } from '../vault/device';
-import { adoptable, cacheNewer, cacheScope, GenerationChanged, sameGeneration, type CachedScope, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
+import { adoptable, cacheNewer, cacheScope, GenerationChanged, sameGeneration, type CachedScope, type CacheWrite, type DeviceCache, type Generation } from './object-cache';
 
 const caches = new Map<string, BrowserCache>();
 const STORES = ['generations', 'states', 'objects'];

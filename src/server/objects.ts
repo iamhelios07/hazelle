@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import { FILE_ID } from '../contracts/files';
-import type { FeedQuery, Write } from './account-store';
+import { BATCH_LIMITS, type BatchAnswer, type FeedAnswer, type FeedQuery, type SealedWrite } from '../contracts/objects';
 import { fail, ID, isRecord, readObject, refused, RETRY_SECONDS, type AppEnv } from './http';
 import { store } from './lifecycle';
 import { canWrite, requireSession } from './session';
@@ -13,9 +13,6 @@ import { tellUnread } from './unread';
 const KIND = /^[a-z][a-z-]{0,31}$/;
 // A timeline is 16 random bytes in hex (migrations/0001_baseline.sql).
 const TIMELINE =/^[0-9a-f]{32}$/;
-// bytes: worker.ts enforces it on the whole body, timeline included. The client batches by these, sent with every page.
-// The sizes date from the Cloudflare store (a 2 MB row, a 32 MiB RPC).
-export const BATCH_LIMITS = { items: 200, bytes: 4_000_000, body: 1_500_000 };
 
 // Per account, taken before the body is read: 20 a second, in bursts of up to a minute's. A Risu move (148k objects in
 // ~164 s, 200 a batch) needs ~5 a second, and a page's small writes come in bursts; the rows a batch leaves are billed
@@ -63,7 +60,7 @@ objects.get('/', async (c) => {
     cursor: page.cursor,
     more: page.more,
     ...(page.total === undefined ? {} : { total: page.total }),
-  });
+  } satisfies FeedAnswer);
 });
 
 objects.post('/batch', canWrite, throttle, async (c) => {
@@ -76,7 +73,7 @@ objects.post('/batch', canWrite, throttle, async (c) => {
     return fail(c, 400, 'bad-input');
   }
   if (input.writes.length > BATCH_LIMITS.items) return fail(c, 413, 'too-large');
-  const writes: Write[] = [];
+  const writes: SealedWrite[] = [];
   const ids = new Set<string>();
   for (const item of input.writes) {
     const write = readWrite(item);
@@ -105,7 +102,7 @@ objects.post('/batch', canWrite, throttle, async (c) => {
   c.set('storeMs', Date.now() - asked);
   if ('revs' in done) {
     c.header(ACCOUNT_USAGE_HEADERS.bytes, String(done.bytes));
-    return c.json({ revs: done.revs, timeline: done.timeline });
+    return c.json({ revs: done.revs, timeline: done.timeline } satisfies BatchAnswer);
   }
   if ('stale' in done) return fail(c, 409, 'cache-reset');
   if ('unavailable' in done) return refused(c, done);
@@ -128,7 +125,7 @@ function count(value: string | undefined): number | null {
   return value !== undefined && Number.isSafeInteger(number) && number >= 0 ? number : null;
 }
 
-function readWrite(input: unknown): Write | null {
+function readWrite(input: unknown): SealedWrite | null {
   if (!isRecord(input)) return null;
   const { id, kind, parent, body, baseRev, once } = input;
   if (typeof id !== 'string' || !ID.test(id)) return null;

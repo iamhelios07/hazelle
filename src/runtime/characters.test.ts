@@ -1,4 +1,5 @@
 import { unavailableCalibration } from '../model/token-calibration';
+import { serverBackend } from './backend';
 import { describe, expect, it, vi } from 'vitest';
 import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, textTranslation, type Character, type Lore } from '../model/library';
@@ -16,7 +17,8 @@ import { Files } from './files';
 import { thumbnail } from './picture';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
-import { BATCH_LIMITS, png, testServer } from './testing';
+import { BATCH_LIMITS } from '../contracts/objects';
+import { png, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 
 const server = testServer();
@@ -84,10 +86,10 @@ describe('importCharacter', () => {
     const { store } = await server.account();
     const [blocked, over, kept] = [png(), mp4(), png()];
     const refusals = new Map([[(await sealFile(blocked)).ref.id, 'file-blocked'], [(await sealFile(over)).ref.id, 'files-full']]);
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+    const files = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => {
       const error = args[0] === 'PUT' ? refusals.get(args[1].slice('files/'.length)) : undefined;
       return error ? { ok: false as const, error } : api<T>(...args);
-    }, store);
+    }), store);
     const assets = [
       { name: 'taken', read: async () => blocked },
       { name: 'over', read: async () => over },
@@ -107,7 +109,7 @@ describe('importCharacter', () => {
     vi.mocked(thumbnail).mockRejectedValueOnce(new Error('unreadable picture'));
     const unreadable = await importCharacter(store, files, card, picture(), () => {});
     expect(unreadable).toMatchObject({ ok: true, data: { faceless: true } });
-    const refused = new Files(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'too-large' } : api<T>(...args), store);
+    const refused = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'too-large' } : api<T>(...args)), store);
     expect(await importCharacter(store, refused, card, picture(), () => {})).toMatchObject({ ok: true, data: { faceless: true } });
     expect(store.list('avatar')).toEqual([]);
     expect(store.list('character')).toHaveLength(3);
@@ -157,7 +159,7 @@ describe('setAvatar', () => {
     const imported = await importCharacter(store, files, { card: blankCard('루나'), lore: [], loreFolders: [], assets: [] }, picture(), () => {});
     const id = imported.ok ? imported.data.id : '';
     const before = store.children('avatar', id);
-    const refused = new Files(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'files-full' } : api<T>(...args), store);
+    const refused = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'files-full' } : api<T>(...args)), store);
     expect(await setAvatar(store, refused, id, png())).toEqual({ ok: false, error: 'picture-refused' });
     expect(store.children('avatar', id)).toEqual(before);
   });

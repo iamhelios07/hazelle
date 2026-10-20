@@ -1,9 +1,10 @@
-export type SealedChange = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
+import type { BatchLimits, SealedChange } from '../contracts/objects';
+
 export type CacheState = {
   cursor: number;
   complete: boolean;
   until: number | null;
-  limits: { items: number; bytes: number; body: number } | null;
+  limits: BatchLimits | null;
   heads: [string, number][];
   revisions: [string, number][];
 };

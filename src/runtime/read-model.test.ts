@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { serverBackend } from './backend';
 import type { Card } from '../engine/import/types';
 import * as chatModel from '../model/chat';
 import type { Chat } from '../model/chat';
@@ -50,7 +51,7 @@ async function account() {
   };
   const key = randomBytes(32);
   const open = async () => {
-    const store = await ObjectStore.open('account', key, request);
+    const store = await ObjectStore.open('account', key, serverBackend(request));
     await store.pull();
     return store;
   };
@@ -176,7 +177,7 @@ describe('selective account reads', () => {
     let offline = true;
     const flaky: typeof api = (method, path, body, signal) => offline && path.includes('parent=a')
       ? Promise.resolve({ ok: false, error: 'offline' }) : request(method, path, body, signal);
-    const store = await ObjectStore.open('account', key, flaky);
+    const store = await ObjectStore.open('account', key, serverBackend(flaky));
     await store.pull();
     vi.useFakeTimers({ toFake: ['setTimeout'] });
     try {
@@ -205,7 +206,7 @@ describe('selective account reads', () => {
       started();
       return new Promise((resolve) => signal!.addEventListener('abort', () => resolve({ ok: false, error: 'stopped' }), { once: true }));
     };
-    const store = await ObjectStore.open('account', key, delayed);
+    const store = await ObjectStore.open('account', key, serverBackend(delayed));
     await store.pull();
     const lease = store.retainChat('a');
     await waiting;
@@ -279,7 +280,7 @@ describe('selective account reads', () => {
     const flaky: typeof api = (method, path, body, signal) => offline && path.includes('parent=a')
       ? Promise.resolve({ ok: false, error: 'offline' }) : request(method, path, body, signal);
     vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }));
-    const store = await ObjectStore.open('account', key, flaky);
+    const store = await ObjectStore.open('account', key, serverBackend(flaky));
     await store.pull();
     const take = vi.fn();
     const streams = new Streams(store, new Set(), take);
@@ -306,11 +307,11 @@ describe('selective account reads', () => {
     await seed('a1', 'entry', 'a', message('one'));
     let blocked = false;
     let waiting = false;
-    const store = await ObjectStore.open('account', key, async (method, path, body, signal) => {
+    const store = await ObjectStore.open('account', key, serverBackend(async (method, path, body, signal) => {
       if (!blocked || method !== 'POST') return request(method, path, body, signal);
       waiting = true;
       return new Promise((resolve) => signal!.addEventListener('abort', () => resolve({ ok: false, error: 'stopped' }), { once: true }));
-    });
+    }));
     await store.pull();
     const lease = store.retainChat('a');
     expect(await lease.ready).toBeNull();
@@ -331,11 +332,11 @@ describe('selective account reads', () => {
     await seed('a', 'chat', null, chat);
     await seed('a1', 'entry', 'a', message('one'));
     let waiting = false;
-    const store = await ObjectStore.open('account', key, async (method, path, body, signal) => {
+    const store = await ObjectStore.open('account', key, serverBackend(async (method, path, body, signal) => {
       if (method !== 'POST') return request(method, path, body, signal);
       waiting = true;
       return new Promise((resolve) => signal!.addEventListener('abort', () => resolve(lands ? request(method, path, body) : { ok: false, error: 'stopped' }), { once: true }));
-    });
+    }));
     await store.pull();
     const stop = new AbortController();
     const saving = saveSummaries(store, ['a'], stop.signal);
@@ -374,7 +375,7 @@ describe('selective account reads', () => {
     }
     const store = await open();
     const parts: BlobPart[] = [];
-    const exported = await exportBackup(store, new Files(request, store), {
+    const exported = await exportBackup(store, new Files(serverBackend(request), store), {
       write: async (bytes) => { parts.push(bytes); }, close: async () => {}, abort: async () => { parts.length = 0; },
     });
     if (!exported.ok) throw new Error(exported.error);

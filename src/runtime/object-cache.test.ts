@@ -1,4 +1,5 @@
 import { ToolWrites } from './tools/store';
+import { serverBackend } from './backend';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { SETTINGS_ID } from '../model/settings';
@@ -8,7 +9,7 @@ import { lockVault } from '../vault/device';
 import { objectKey, sealObject } from '../vault/objects';
 import { api } from './api';
 import { forgetVault } from './device-cache';
-import type { SealedChange } from './object-cache';
+import type { SealedChange } from '../contracts/objects';
 import { openSession } from './session';
 import { ObjectStore } from './store';
 import { summaryId } from './summary';
@@ -71,7 +72,7 @@ async function fixture() {
     return Response.json({ timeline, changes, cursor: changes.at(-1)?.rev ?? since, more: false, limits, ...(bootstrap ? { until: rev } : {}) });
   });
   vi.stubGlobal('fetch', fetch);
-  const open = (request: typeof api = api, on = cache) => ObjectStore.open('account', vault, request, on);
+  const open = (request: typeof api = api, on = cache) => ObjectStore.open('account', vault, serverBackend(request), on);
   const flush = async (on = cache) => { await vi.waitFor(() => expect(on.states.get('')?.cursor).toBe(rev)); };
   const snapshot = () => ({ rows: new Map(rows), rev });
   const restore = (to: ReturnType<typeof snapshot>, next: string) => {
@@ -177,13 +178,13 @@ it('reopens a session with sealed cached objects before any network read', async
   f.fetch.mockImplementation(() => new Promise(() => {}));
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('document', { visibilityState: 'visible' });
-  const opened = await openSession('account', f.vault, 'jin', new AbortController().signal, undefined, f.cache);
+  const opened = await openSession('account', f.vault, 'jin', new AbortController().signal, undefined, { backend: serverBackend(), cache: f.cache });
   expect(opened.ok).toBe(true);
   if (!opened.ok) return;
   expect(opened.data.store.get('connection', 'connection')?.value.label).toBe('cached');
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory,illustration,inlay,toolchat,cacheprint,remark,ledger&known=1&timeline=t0', expect.anything());
+  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory,illustration,inlay,toolchat,cacheprint,remark,ledger&timeline=t0', expect.anything());
   opened.data.close();
 });
 
@@ -193,7 +194,7 @@ it('opens the session again on the restored account when its opening pull hears 
   f.fetch.mockImplementationOnce(async () => Response.json({ error: 'cache-reset' }, { status: 409 }));
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('document', { visibilityState: 'hidden' });
-  const opened = await openSession('account', f.vault, 'jin', new AbortController().signal, undefined, f.cache);
+  const opened = await openSession('account', f.vault, 'jin', new AbortController().signal, undefined, { backend: serverBackend(), cache: f.cache });
   expect(opened.ok).toBe(true);
   if (!opened.ok) return;
   expect(ids(opened.data.store)).toEqual(['kept']);
@@ -226,7 +227,7 @@ it('renders a saved bootstrap prefix and resumes its original until bound in the
   f.fetch.mockImplementation(() => new Promise(() => {}));
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('document', { visibilityState: 'visible' });
-  const opened = await openSession('account', f.vault, 'jin', new AbortController().signal, undefined, f.cache);
+  const opened = await openSession('account', f.vault, 'jin', new AbortController().signal, undefined, { backend: serverBackend(), cache: f.cache });
   if (!opened.ok) throw new Error(opened.error);
   expect(opened.data.store.list('connection').map((row) => row.id)).toEqual(['first']);
   expect(f.fetch).not.toHaveBeenCalled();

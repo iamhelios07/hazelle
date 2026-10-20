@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { serverBackend } from './backend';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, type ApiResult } from './api';
@@ -35,10 +36,10 @@ describe('files uploading', () => {
     const { store } = await server.account();
     const puts: (() => void)[] = [];
     let holding = true;
-    const files = new Files(async <T,>(method: string, _path: string, body?: unknown) => {
+    const files = new Files(serverBackend(async <T,>(method: string, _path: string, body?: unknown) => {
       if (method === 'POST') return { ok: true as const, data: { missing: (body as { ids: string[] }).ids, maxBytes: 1 << 30, room: null } as T };
       return new Promise<ApiResult<T>>((done) => (holding ? puts.push(() => done({ ok: true, data: null as T })) : done({ ok: true, data: null as T })));
-    }, store);
+    }), store);
     const release = () => {
       holding = false;
       for (const put of puts) put();
@@ -75,10 +76,10 @@ describe('files on a bad link', () => {
   it('waits out a dropped connection while uploading, then saves', async () => {
     const { store } = await server.account();
     let dropped = 0;
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+    const files = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => {
       if (args[0] === 'PUT' && dropped++ === 0) return { ok: false as const, error: 'offline' };
       return api<T>(...args);
-    }, store);
+    }), store);
     const image = randomBytes(256);
     const saved = await files.save([image]);
     expect(saved).toEqual({ ok: true, data: [(await sealFile(image)).ref] });
@@ -88,10 +89,10 @@ describe('files on a bad link', () => {
   it('waits out a dropped connection while reading a picture, then opens it', async () => {
     const { store } = await server.account();
     let dropped = 0;
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+    const files = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => {
       if (args[0] === 'GET' && dropped++ === 0) return { ok: false as const, error: 'offline' };
       return api<T>(...args);
-    }, store);
+    }), store);
     const image = randomBytes(256);
     const saved = await files.save([image]);
     expect(saved.ok).toBe(true);
@@ -101,7 +102,7 @@ describe('files on a bad link', () => {
 
   it('ends a read that waits on a dead link when its signal aborts', async () => {
     const { store } = await server.account();
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'GET' ? { ok: false as const, error: 'offline' } : api<T>(...args)), store);
+    const files = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'GET' ? { ok: false as const, error: 'offline' } : api<T>(...args))), store);
     const abort = new AbortController();
     setTimeout(() => abort.abort(), 50);
     expect(await files.read({ id: 'a'.repeat(64), key: 'b'.repeat(43) }, { signal: abort.signal })).toEqual({ ok: false, error: 'stopped' });
@@ -110,11 +111,11 @@ describe('files on a bad link', () => {
   it('never sends a body past the size the server names, and leaves it out of the result', async () => {
     const { store } = await server.account();
     const puts: string[] = [];
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+    const files = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => {
       if (args[0] === 'PUT') puts.push(args[1]);
       const result = await api<T>(...args);
       return args[1] === 'files/missing' && result.ok ? { ok: true as const, data: { ...(result.data as object), maxBytes: 100 } as T } : result;
-    }, store);
+    }), store);
     const [small, big] = [randomBytes(32), randomBytes(200)];
     const saved = await files.save([small, big]);
     expect(saved).toEqual({ ok: true, data: [(await sealFile(small)).ref, null] });
@@ -126,11 +127,11 @@ describe('files on a bad link', () => {
     const [first, second] = [randomBytes(32), randomBytes(32)];
     const room = (await sealFile(first)).body.length;
     const puts: string[] = [];
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+    const files = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => {
       if (args[0] === 'PUT') puts.push(args[1]);
       const result = await api<T>(...args);
       return args[1] === 'files/missing' && result.ok ? { ok: true as const, data: { ...(result.data as object), room } as T } : result;
-    }, store);
+    }), store);
     const saved = await files.save([first, second]);
     expect(saved).toEqual({ ok: true, data: [(await sealFile(first)).ref, null] });
     expect(puts).toEqual([`files/${(await sealFile(first)).ref.id}`]);
@@ -257,12 +258,12 @@ describe('the sweep', () => {
       return null;
     });
     const bodies: { unused: string[]; named: string[] }[] = [];
-    const files = new Files(async <T,>(method: string, _path: string, body?: unknown) => {
+    const files = new Files(serverBackend(async <T,>(method: string, _path: string, body?: unknown) => {
       if (method === 'GET') return { ok: true, data: { ids: held, more: false, timeline: pin.data.timeline, rev: 0 } as T };
       const sent = body as typeof bodies[number];
       bodies.push(sent);
       return { ok: true, data: { released: sent.unused.length, taken: sent.named.length } as T };
-    }, store);
+    }), store);
     try {
       expect(await files.release()).toEqual({ ok: true, data: { released: 1000, taken: 500 } });
       expect(bodies).toHaveLength(2);

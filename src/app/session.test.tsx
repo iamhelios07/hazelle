@@ -1,4 +1,5 @@
 import { act } from 'react';
+import { serverBackend } from '../runtime/backend';
 import { expect, it, vi } from 'vitest';
 import type { ChatScope } from '../engine/render';
 import type { Chat } from '../model/chat';
@@ -20,7 +21,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   const request: typeof api = async <T,>(method: string): Promise<ApiResult<T>> => ({ ok: true, data: (method === 'GET'
     ? { timeline: 't', changes: [], cursor: 0, more: false, limits: { items: 100, bytes: 1_000_000, body: 100_000 } }
     : { revs: [++rev], timeline: 't' }) as T });
-  const store = await ObjectStore.open('test', randomBytes(32), request);
+  const store = await ObjectStore.open('test', randomBytes(32), serverBackend(request));
   const lease = store.retainChat('chat');
   await lease.ready;
   const chat: Chat = { title: null, character: null, models: {} };

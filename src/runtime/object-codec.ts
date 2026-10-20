@@ -1,4 +1,4 @@
-import type { SealedChange } from './object-cache';
+import type { SealedChange } from '../contracts/objects';
 import { codecValue, type CodecDown, type CodecJob, type CodecResult, type CodecUp, type OpenItem, type SealItem } from './object-codec-core';
 import { PendingRequests } from './pending-requests';
 import { moduleWorker } from './worker';

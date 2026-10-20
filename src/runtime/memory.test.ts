@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { serverBackend } from './backend';
 import { fold, shown } from '../model/chat';
 import { TokenSnapshot } from './token-calibration';
 import { fingerprint } from '../engine/memory';
@@ -183,7 +184,7 @@ describe('a deletion from memory', () => {
       drop = false;
       return { ok: false as const, error: 'offline' };
     };
-    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const store = await ObjectStore.open(accountId, vaultKey, serverBackend(request));
     const chat = crypto.randomUUID();
     await server.hold(store, chat);
     await startChat(store, chat, { title: null, character: null, models: {} }, null);

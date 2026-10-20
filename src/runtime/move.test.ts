@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { serverBackend } from './backend';
 import type { Inlays } from '../engine/import/backup';
 import { convertPreset } from '../engine/import/preset';
 import type { Card, ImportedModule, RisuBackup, RisuCharacter, RisuPersona, RisuPreset } from '../engine/import/types';
@@ -338,7 +339,7 @@ describe('inlays', () => {
     const { store } = await server.account();
     const [kept, over] = [png(), png()];
     const full = (await sealFile(over)).ref.id;
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'PUT' && args[1] === `files/${full}` ? { ok: false as const, error: 'files-full' } : api<T>(...args)), store);
+    const files = new Files(serverBackend(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'PUT' && args[1] === `files/${full}` ? { ok: false as const, error: 'files-full' } : api<T>(...args))), store);
     const backup = source({ characters: [{ ...luna, chats: [{ ...luna.chats[0]!, inlays: ['a', 'gone', 'over', 's'] }] }] });
     const moved = await moveFromRisu(store, files, backup, backup.catalog, inlayFile({ a: kept, over, s: signature() }), () => {});
     expect(moved).toMatchObject({ ok: true, data: { characters: [{ missed: [{ kind: 'inlay', count: 2 }] }] } });

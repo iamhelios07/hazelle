@@ -1,4 +1,5 @@
 import { FILE_KINDS, KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
+import type { SealedWrite } from '../contracts/objects';
 import type { ApiResult } from './api';
 import { namedFile } from './files';
 import { orderOwned } from './removal';
@@ -18,7 +19,6 @@ export type Resolved = { pending: Pending | null; held: Held | null };
 // not shown before its answer. at: the copy a change applies to, live when sent and what reads show when previewed.
 export type WriteStep = { id: string; resolve: (at: (id: string) => Held | undefined) => ApiResult<Resolved>; derived?: boolean };
 
-type SealedWrite = StoreChange & { baseRev: number | null; body: string | null; once?: true };
 type Prepared = { resolved: Resolved[]; writes: SealedWrite[]; files: string[] };
 
 const encoder = new TextEncoder();

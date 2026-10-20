@@ -5,7 +5,8 @@ import type { LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
 import { withInside } from '../model/folders';
 import { SETTINGS_ID } from '../model/settings';
-import { api, holdPulse, markSeen, type ApiResult } from './api';
+import { holdPulse, markSeen, type ApiResult } from './api';
+import { serverBackend, type Backend } from './backend';
 import { AssetUrls, UnfoundAssets } from './assets';
 import { Catalogs } from './catalog';
 import { seedOrder } from './characters';
@@ -72,10 +73,11 @@ export type Session = {
 const luaWorker = (): Promise<LuaRunner> => Promise.resolve(new LuaWorker());
 
 // An open given up while it loads (signal) starts nothing. A cached opening never waits for the network. drafts: what
-// was typed, kept by the caller across the sessions of one open vault (app/shell/Workspace).
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), bindings: { lua?: () => Promise<LuaRunner>; tools?: typeof createTools; drafts?: Drafts } = {}): Promise<ApiResult<Session>> {
+// was typed, kept by the caller across the sessions of one open vault (app/shell/Workspace). kept: where the account's
+// data lives; a guest's has no device cache, since its backend is this browser already.
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, kept: { backend: Backend; cache?: DeviceCache } = { backend: serverBackend(), cache: deviceCache(accountId) }, bindings: { lua?: () => Promise<LuaRunner>; tools?: typeof createTools; drafts?: Drafts } = {}): Promise<ApiResult<Session>> {
   const opening = async () => {
-    const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
+    const store = await ObjectStore.open(accountId, vaultKey, kept.backend, kept.cache, signal);
     const pulled = signal.aborted ? { ok: false as const, error: 'stopped' as const } : store.cached ? null : await store.pull({ signal, progress });
     if (!pulled) return { ok: true as const, data: store };
     store.close();
@@ -86,7 +88,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   if (!opened.ok && opened.error === 'timeline-changed') opened = await opening();
   if (!opened.ok) return opened;
   const store = opened.data;
-  const files = new Files(api, store);
+  const files = new Files(kept.backend, store);
   const assets = new AssetUrls(store, files);
   // A new account sees its defaults on the first screen; a cached account fills missing defaults after catch-up.
   const defaults = () => Promise.all([addDefaults(store), addFirstPersona(store, username).then(() => recordChatPersonas(store)), addFirstProfile(store), saveUpgraded(store)]);

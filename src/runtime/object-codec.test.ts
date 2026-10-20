@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { serverBackend } from './backend';
 import type { Connection } from '../connectors/types';
 import { randomBytes } from '../vault/aead';
 import { objectKey, openObject } from '../vault/objects';
@@ -131,7 +132,7 @@ describe('object codec store boundaries', () => {
       return job.items.map(({ id }) => ({ ok: true, value: { label: id } }));
     });
     const { request } = feed(Array.from({ length: 150 }, () => 'a'.repeat(100000)));
-    const store = await ObjectStore.open('account', randomBytes(32), request);
+    const store = await ObjectStore.open('account', randomBytes(32), serverBackend(request));
     expect(await store.pull()).toBeNull();
     expect(jobs.map(({ items }) => items.length)).toEqual([41, 41, 41, 27]);
     expect(jobs.every((job) => job.kind === 'open' && job.items.length <= OPEN_ITEMS && job.items.reduce((bytes, row) => bytes + row.body.length, 0) <= OPEN_BYTES)).toBe(true);
@@ -153,7 +154,7 @@ describe('object codec store boundaries', () => {
 
   it('marks malformed objects unreadable in pull but propagates the same error during backup scan', async () => {
     const { request } = feed(['not base64!']);
-    const store = await ObjectStore.open('account', randomBytes(32), request);
+    const store = await ObjectStore.open('account', randomBytes(32), serverBackend(request));
     expect(await store.pull()).toBeNull();
     expect(store.unreadable()).toBe(1);
     const pin = await store.pin();
@@ -165,7 +166,7 @@ describe('object codec store boundaries', () => {
   it('does not turn transport failures into unreadable objects or successful scans', async () => {
     scripted(async () => { throw new Error('crashed'); });
     const { request } = feed(['body']);
-    const store = await ObjectStore.open('account', randomBytes(32), request);
+    const store = await ObjectStore.open('account', randomBytes(32), serverBackend(request));
     expect(await store.pull()).toEqual({ ok: false, error: 'codec-unavailable' });
     expect(store.unreadable()).toBe(0);
     expect(store.list('connection')).toEqual([]);
@@ -184,7 +185,7 @@ describe('object codec store boundaries', () => {
       adopt: vi.fn(async () => generation), forget: vi.fn(async () => {}),
     };
     const { request } = feed([]);
-    const store = await ObjectStore.open('account', randomBytes(32), request, cache);
+    const store = await ObjectStore.open('account', randomBytes(32), serverBackend(request), cache);
     expect(store.cached).toBe(false);
     expect(await store.pull()).toEqual({ ok: false, error: 'codec-unavailable' });
     expect(store.unreadable()).toBe(0);
@@ -201,7 +202,7 @@ describe('object codec store boundaries', () => {
       return job.items.map(({ id }) => id === 'broken' ? { ok: false, name: 'Error', message: 'future error' } : { ok: true, value: 'x'.repeat(120) });
     });
     const { request, writes } = feed([], { items: 200, bytes: 250, body: 1000 });
-    const store = await ObjectStore.open('account', randomBytes(32), request);
+    const store = await ObjectStore.open('account', randomBytes(32), serverBackend(request));
     const value: Connection = { type: 'openrouter', label: 'a', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] };
     const first = await store.create('connection', { ...value, starred: [] }, { id: 'one' });
     expect(first.ok).toBe(true);

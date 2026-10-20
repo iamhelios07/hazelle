@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { serverBackend } from './backend';
 import { randomBytes } from '../vault/aead';
 import type { CodecJob } from './object-codec-core';
 import type { api, ApiResult } from './api';
@@ -59,7 +60,7 @@ it('requests the next page while the current one is still being opened, across t
       ...(bootstrap ? { until: 2 } : {}),
     } as T };
   };
-  const store = await ObjectStore.open('account', randomBytes(32), request);
+  const store = await ObjectStore.open('account', randomBytes(32), serverBackend(request));
   const pulling = store.pull();
   await vi.waitFor(() => expect(asked).toHaveLength(2));
   expect(asked).toEqual(['objects?since=0&exclude=entry,memory,illustration,inlay,toolchat,cacheprint,remark,ledger&bootstrap=1&count=1', 'objects?since=2&exclude=entry,memory,illustration,inlay,toolchat,cacheprint,remark,ledger']);

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ROW_BYTES } from './caps';
-import { BATCH_LIMITS } from './objects';
+import { BATCH_LIMITS } from '../contracts/objects';
 import { sha256Hex } from './http';
 import { testApp } from './testing';
 

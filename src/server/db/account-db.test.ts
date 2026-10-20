@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { serviceReads, type Write } from '../account-store';
+import type { SealedWrite } from '../../contracts/objects';
+import { serviceReads } from '../account-store';
 import { ROW_BYTES } from '../caps';
 import { snapshotKey } from '../files/bucket';
 import { cachedR2Bucket } from '../files/cached-r2-bucket';
@@ -21,7 +22,7 @@ import * as snapshots from './snapshot';
 
 const INC = 'a'.repeat(32);
 const A = '11111111-1111-4111-8111-111111111111';
-const put = (id: string, body: string, baseRev: number | null = null): Write => ({ id, kind: 'chat', parent: null, body, baseRev });
+const put = (id: string, body: string, baseRev: number | null = null): SealedWrite => ({ id, kind: 'chat', parent: null, body, baseRev });
 
 let dir: string;
 let raw: DatabaseSync;
@@ -50,7 +51,7 @@ async function signup(state = 'active', timeline = 't1') {
 }
 const store = () => stores.getByName(INC);
 const baseline = async () => ((await stores.snapshot(INC)) as { taken: string }).taken;
-const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
+const write = (...writes: SealedWrite[]) => store().batch(INC, 't1', writes, null);
 const B = '22222222-2222-4222-8222-222222222222';
 const C = '33333333-3333-4333-8333-333333333333';
 async function baseAndDelta() {

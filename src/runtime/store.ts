@@ -2,11 +2,13 @@ import { ChatFold } from '../model/chat';
 import type { AppendOnly, Kind, Singleton, Stored, Values } from '../model/kinds';
 import { objectKey } from '../vault/objects';
 import type { VaultKey } from '../vault/keys';
-import type { ApiFailure, ApiResult, api as realApi } from './api';
+import type { FeedAnswer, SealedChange } from '../contracts/objects';
+import type { ApiFailure, ApiResult } from './api';
+import { feedQuery, type Backend } from './backend';
 import { ConnectionWait } from './connection-wait';
 import { StoreChanges } from './store-changes';
 import { CodecAborted, CodecUnavailable, ObjectCodec } from './object-codec';
-import { SCOPED, UNFED, WALKED, type CacheState, type DeviceCache, type SealedChange } from './object-cache';
+import { SCOPED, UNFED, WALKED, type CacheState, type DeviceCache } from './object-cache';
 import { ObjectCacheSession } from './object-cache-session';
 import { Evaluation, EvaluationFailed, EvaluationStopped, EvaluationStuck } from './evaluation';
 import { ChatProjections } from './summary';
@@ -16,13 +18,11 @@ import { ObjectWrites, type Limits, type Pending, type Resolved, type Write, typ
 import { PendingWrites, chatOf, type Overlay, type PendingCommit } from './pending-writes';
 import { upgradeValue } from './upgrade';
 
-type Api = typeof realApi;
 export type ObjectRow = { id: string; kind: string; parent: string | null; rev: number };
 // total: what the whole bootstrap holds, once its first page said; an incremental pull has none.
 export type PullProgress = { objects: number; pages: number; waiting: boolean; total?: number };
 type PullOptions = { signal?: AbortSignal; progress?: (progress: PullProgress) => void };
 
-type Page = { timeline: string; until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits; total?: number };
 export type Pin = { timeline: string };
 const MAX_ATTEMPTS = 3;
 type Scope = { fold: ChatFold; opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null; summarize: boolean };
@@ -61,7 +61,7 @@ export class ObjectStore {
   private constructor(
     accountId: string,
     key: CryptoKey,
-    private readonly request: Api,
+    private readonly backend: Backend,
     cache?: DeviceCache,
   ) {
     this.cachedObjects = new ObjectCacheSession(cache, this.closing.signal, () => this.rewind(false));
@@ -104,13 +104,13 @@ export class ObjectStore {
     });
   }
 
-  static async open(accountId: string, vaultKey: VaultKey, request: Api, cache?: DeviceCache, signal?: AbortSignal): Promise<ObjectStore> {
+  static async open(accountId: string, vaultKey: VaultKey, backend: Backend, cache?: DeviceCache, signal?: AbortSignal): Promise<ObjectStore> {
     const key = await objectKey(vaultKey);
-    const store = new ObjectStore(accountId, key, request, cache);
+    const store = new ObjectStore(accountId, key, backend, cache);
     if (await store.load(signal)) return store;
     // A device copy that does not open is not read again this session, and the rows read before it failed go with it.
     store.close();
-    return new ObjectStore(accountId, key, request);
+    return new ObjectStore(accountId, key, backend);
   }
 
   // Answers false for a device copy that could not be read.
@@ -202,8 +202,8 @@ export class ObjectStore {
     this.cachedObjects.adopt(timeline);
   }
 
-  private cacheBounds(known = this.known) {
-    return this.cachedObjects.enabled ? `&known=${known}` : '';
+  private cacheKnown(since: number, known = this.known) {
+    return this.cachedObjects.enabled ? known : since;
   }
 
   readonly subscribe = this.changes.subscribe;
@@ -510,7 +510,7 @@ export class ObjectStore {
     let more = true;
     while (more) {
       if (stop.aborted) return this.halted();
-      const result = await this.request<Page>('GET', `objects?since=${cursor}${options.parent ? `&parent=${encodeURIComponent(options.parent)}` : ''}${options.kind ? `&kind=${options.kind}` : ''}${options.metadata ? '&metadata=1' : ''}&timeline=${encodeURIComponent(pin.timeline)}`, undefined, stop);
+      const result = await this.backend.feed(feedQuery({ since: cursor, timeline: pin.timeline, parent: options.parent ?? null, kind: options.kind ?? null, metadata: options.metadata ?? false }), stop);
       if (stop.aborted) return this.halted();
       if (!result.ok) {
         if (result.error !== 'cache-reset') return result;
@@ -744,7 +744,7 @@ export class ObjectStore {
         const { resolved, writes, files } = prepared.data;
         if (writes.length) {
           if (stop.aborted) return this.halted();
-          const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { timeline, writes, files }, stop);
+          const answer = await this.backend.batch(timeline, writes, files, stop);
           // Only the store ending drops an answer: a caller's stop that arrives after the write landed keeps it held.
           if (this.closing.signal.aborted) return this.halted();
           if (!answer.ok) {
@@ -788,13 +788,14 @@ export class ObjectStore {
     let counted = false;
     // The page after the one being applied, requested as soon as that one answered: the server's time and the codec's
     // overlap. It carries the timeline it was sent under.
-    let next: { sent: string | null; answer: Promise<ApiResult<Page>> } | null = null;
+    let next: { sent: string | null; answer: Promise<ApiResult<FeedAnswer>> } | null = null;
     const page = (since: number, bootstrapped: boolean, known: number) => {
       const sent = this.timeline;
       // Only a bootstrap's first request asks for the count; the prefetched page after it is built before it answers.
       const count = !bootstrapped && !counted;
       counted ||= count;
-      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=${[...UNFED].join(',')}${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, stop), stop);
+      const query = feedQuery({ since, known: this.cacheKnown(since, known), timeline: sent, excluded: [...UNFED], bootstrap: !bootstrapped, until: bootstrapped ? null : this.bootstrap, count });
+      const answer = this.reaching(() => this.backend.feed(query, stop), stop);
       return { sent, answer };
     };
     while (more) {
@@ -864,7 +865,8 @@ export class ObjectStore {
     let more = true;
     while (more) {
       if (signal.aborted) return this.halted();
-      const result = await this.reaching(() => this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}${this.cacheBounds()}&timeline=${encodeURIComponent(this.timeline!)}`, undefined, signal), signal);
+      const query = feedQuery({ since: scope.cursor, known: this.cacheKnown(scope.cursor), parent: chat, timeline: this.timeline! });
+      const result = await this.reaching(() => this.backend.feed(query, signal), signal);
       if (signal.aborted) return this.halted();
       if (!result.ok) {
         if (result.error !== 'cache-reset') return result;

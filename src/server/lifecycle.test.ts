@@ -1,11 +1,11 @@
 import { rmSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BEFORE_ARMED, type RestorePhase } from '../contracts/admin';
-import type { Write } from './account-store';
+import type { SealedWrite } from '../contracts/objects';
 import { expireSnapshots } from './backup/snapshots';
 import { snapshotFor, type Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
-import { MAX_FILE_BYTES } from './files';
+import { MAX_FILE_BYTES } from '../contracts/files';
 import { snapshotKey, type Bucket } from './files/bucket';
 import { diskBucket } from './files/disk-bucket';
 import { sha256Hex, type Services } from './http';
@@ -159,7 +159,7 @@ async function seeded() {
   const user = await t.signUp();
   const { incarnation, timeline } = user;
   // Straight to the store, as the batch route would: these tests are about what happens around it.
-  const write = (...writes: Write[]) => t.stores.getByName(incarnation).batch(incarnation, timeline, writes, null);
+  const write = (...writes: SealedWrite[]) => t.stores.getByName(incarnation).batch(incarnation, timeline, writes, null);
   await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
   await t.stores.snapshot(incarnation);
   t.clock.now = () => now - HOUR_MS / 2;
@@ -369,7 +369,7 @@ describe('a restore', () => {
   it('lists what a restore can land on: each snapshot in the window at its own time, and an older one at the window edge', async () => {
     const user = await t.signUp();
     const now = Date.now();
-    const write = (...writes: Write[]) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, writes, null);
+    const write = (...writes: SealedWrite[]) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, writes, null);
     t.clock.now = () => now - 8 * 24 * HOUR_MS;
     await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
     await t.stores.snapshot(user.incarnation);

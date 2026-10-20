@@ -1,4 +1,5 @@
-import { adoptable, cacheNewer, cacheScope, GenerationChanged, sameGeneration, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from '../object-cache';
+import type { SealedChange } from '../../contracts/objects';
+import { adoptable, cacheNewer, cacheScope, GenerationChanged, sameGeneration, type CacheState, type CacheWrite, type DeviceCache, type Generation } from '../object-cache';
 
 // The browser cache's compares, one synchronous step per operation as one IndexedDB transaction is.
 export class MemoryCache implements DeviceCache {

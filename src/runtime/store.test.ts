@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { serverBackend } from './backend';
 import type { Connection } from '../connectors/types';
 import type { Lore } from '../model/library';
 import { emptyMemory } from '../model/memory';
@@ -9,7 +10,8 @@ import { ObjectStore, type PullProgress } from './store';
 import type { Write } from './object-writes';
 import { ScopeUnavailable, type ChatLease } from './chat-scope';
 import { summaryId, summaryStale } from './summary';
-import { BATCH_LIMITS, testServer } from './testing';
+import { BATCH_LIMITS } from '../contracts/objects';
+import { testServer } from './testing';
 
 const server = testServer();
 
@@ -273,7 +275,7 @@ describe('object store', () => {
       await landing?.();
       return result;
     };
-    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const store = await ObjectStore.open(accountId, vaultKey, serverBackend(request));
     const created = await store.create('connection', connection('a'));
     if (!created.ok) throw new Error(created.error);
     const { id } = created.data;
@@ -292,7 +294,7 @@ describe('object store', () => {
       drop = false;
       return { ok: false as const, error: 'offline' };
     };
-    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const store = await ObjectStore.open(accountId, vaultKey, serverBackend(request));
     const created = await store.create('connection', connection('a'));
     if (!created.ok) throw new Error(created.error);
 
@@ -313,7 +315,7 @@ describe('object store', () => {
     const { accountId, vaultKey, store: other } = await server.account();
     let drop = false;
     const request = async <T,>(...args: Parameters<typeof api>) => (drop && args[1] === 'objects/batch' ? { ok: false as const, error: 'offline' } : api<T>(...args));
-    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const store = await ObjectStore.open(accountId, vaultKey, serverBackend(request));
     await store.pull();
 
     vi.useFakeTimers({ toFake: ['setTimeout'] });
@@ -382,7 +384,7 @@ describe('object store', () => {
       if (args[1] === 'objects/batch') batches.push(args[2] as (typeof batches)[number]);
       return api<T>(...args);
     };
-    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const store = await ObjectStore.open(accountId, vaultKey, serverBackend(request));
     const id = crypto.randomUUID();
     await server.hold(store, id);
     const text = Array.from({ length: 16 }, () => toBase64(randomBytes(65_535))).join('');
@@ -417,7 +419,7 @@ describe('writes shown before their answer', () => {
       }
       return api<T>(...args);
     };
-    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const store = await ObjectStore.open(accountId, vaultKey, serverBackend(request));
     const hold = () => { gate = new Promise((resolve) => { answer = (ok) => { gate = null; resolve(ok); }; }); };
     return { store, open, hold, answer: (ok: boolean) => answer(ok), held: () => held };
   };

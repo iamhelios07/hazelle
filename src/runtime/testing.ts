@@ -1,4 +1,5 @@
 import type { ToolEvent } from '../engine/script-api';
+import { serverBackend } from './backend';
 import type { createTools } from './tools/host';
 import type { Binding } from './script-binding';
 import { toolId, type ToolUnit } from '../model/tool';
@@ -7,7 +8,6 @@ import { RELAY_HEADER } from '../contracts/http';
 import { bareModel } from '../connectors/chat-completions';
 import type { Connection, HttpRequest, Model } from '../connectors/types';
 import { Lua } from '../engine/lua/run';
-export { BATCH_LIMITS } from '../server/objects';
 import type { Upstream } from '../server/relay';
 import { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
@@ -158,12 +158,12 @@ export function testServer() {
       holdAccount(accountId);
       const vaultKey = randomBytes(32);
       const open = async (key: VaultKey = vaultKey) => {
-        const store = await ObjectStore.open(accountId, key, api);
+        const store = await ObjectStore.open(accountId, key, serverBackend(api));
         stores.push(store);
         return store;
       };
       const store = await open();
-      return { accountId, cookie, vaultKey, store, files: new Files(api, store), open };
+      return { accountId, cookie, vaultKey, store, files: new Files(serverBackend(api), store), open };
     },
     // The operator deletes the account on the server, which opens signup again (server/accounts): how a user
     // who lost both the password and the recovery key starts over.

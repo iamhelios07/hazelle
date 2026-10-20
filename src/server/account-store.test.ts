@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { StoreRules, type FeedPage, type FeedQuery, type StoreDb, type StoreReads, type Write } from './account-store';
+import type { FeedQuery, SealedWrite } from '../contracts/objects';
+import { StoreRules, type FeedPage, type StoreDb, type StoreReads } from './account-store';
 import { ROW_BYTES } from './caps';
 import { AccountDb, accountRegistry, type Stores } from './db/account-db';
 import { diskBucket } from './files/disk-bucket';
@@ -65,8 +66,8 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const put = (id: string, input: Partial<Write> = {}): Write => ({ id, kind: 'chat', parent: null, body: 'x', baseRev: null, ...input });
-const write = (input: Write | Write[], cap: number | null = null, timeline = 't1') => store().batch(INC, timeline, Array.isArray(input) ? input : [input], cap);
+const put = (id: string, input: Partial<SealedWrite> = {}): SealedWrite => ({ id, kind: 'chat', parent: null, body: 'x', baseRev: null, ...input });
+const write = (input: SealedWrite | SealedWrite[], cap: number | null = null, timeline = 't1') => store().batch(INC, timeline, Array.isArray(input) ? input : [input], cap);
 const query = (input: Partial<FeedQuery> = {}): FeedQuery => ({ timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, kind: null, count: false, ...input });
 const feed = (input: Partial<FeedQuery> = {}) => store().feed(INC, query(input));
 const revs = async (input: Partial<FeedQuery> = {}) => ((await feed(input)) as { changes: { rev: number }[] }).changes.map(({ rev }) => rev);
