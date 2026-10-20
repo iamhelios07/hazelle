@@ -132,11 +132,6 @@ export function presetOf(list: Preset[], reading: Reading, display: Display): Pr
   return list.find(({ look }) => LOOK_KEYS.every((key) => look[key] === now[key]));
 }
 
-export function describeLook({ theme, bg, ink, accent, dialogue, font, size, leading, width }: Look) {
-  const picks = [bg !== 'base' && `배경 ${BG[bg]}`, ink !== 'base' && `글자 ${INK[ink]}`, dialogue !== 'base' && `대사 ${DIALOGUE[dialogue]}`, accent !== 'base' && `강조 ${ACCENT[accent]}`].filter(Boolean);
-  return [THEME[theme], ...picks, `${FONTS[font].label} ${size}`, `줄 간격 ${SPACING[leading]}`, `읽기 폭 ${SPACING[width]}`].join(' · ');
-}
-
 // Written by this app, but another version may know a value this one does not: such a preset is counted as unread,
 // never shown with a value it did not save.
 export function savedPresets(looks: SavedLook[] = []): { presets: Preset[]; unread: number } {

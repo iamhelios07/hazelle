@@ -9,7 +9,7 @@ import { useDragOrder } from './dragOrder';
 import styles from './Swatches.module.css';
 
 // menu: MenuItems for the look, under a ⋯ by its name.
-export type Swatch = Scheme & { name: string; note: string; font: Reading['font']; size: number; pressed: boolean; onPick: () => void; menu?: ReactNode };
+export type Swatch = Scheme & { name: string; font: Reading['font']; size: number; pressed: boolean; onPick: () => void; menu?: ReactNode };
 
 // Each look as a card drawn in its own scheme and face whatever the app's, the sample in it; the current one pressed.
 // onMove: the cards can be dragged into another order; to is the index a card ends at.
@@ -17,7 +17,7 @@ export function Swatches({ label, sample, items, onMove }: { label: string; samp
   const order = useDragOrder(onMove ?? (() => {}), 'x');
   return (
     <div className={styles.swatches} role="group" aria-label={label} onDragOver={order.allow} onDrop={order.drop}>
-      {items.map(({ name, note, theme, bg, ink, accent, dialogue, font, size, pressed, onPick, menu }, index) => (
+      {items.map(({ name, theme, bg, ink, accent, dialogue, font, size, pressed, onPick, menu }, index) => (
         <div
           key={index}
           className={[styles.card, order.from === index && styles.dragged, order.at === index && styles.before, index === items.length - 1 && order.at === items.length && styles.after].filter(Boolean).join(' ')}
@@ -32,7 +32,6 @@ export function Swatches({ label, sample, items, onMove }: { label: string; samp
                 {name}
                 {pressed && <Icon icon={Check} size="xs" />}
               </span>
-              <span className={styles.detail}>{note}</span>
             </span>
           </button>
           {menu && (

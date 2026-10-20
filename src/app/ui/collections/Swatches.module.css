@@ -70,12 +70,6 @@
   color: var(--color-accent);
 }
 
-.detail {
-  composes: detail from '../foundation/type.module.css';
-  composes: ellipsis from '../foundation/a11y.module.css';
-  color: var(--color-text-faint);
-}
-
 .card:has(> .menu) .meta {
   padding-right: var(--space-32);
 }
