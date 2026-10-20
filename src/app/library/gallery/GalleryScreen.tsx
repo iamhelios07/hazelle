@@ -98,7 +98,7 @@ export function GalleryScreen({ place, back }: { place: string | null; back: Bac
     <Screen width="wide" top={back && <NavBar title="캐릭터" {...backBar(back)} />}>
       <Row kind="toolbar">
         {search.field}
-        {!binned && <ChoiceGroup label="정렬" showLabel layout="segmented" options={[...CHARACTER_SORTS]} value={sort} onChange={setSort} />}
+        {!binned && <ChoiceGroup label="정렬" showLabel layout="fit" options={[...CHARACTER_SORTS]} value={sort} onChange={setSort} />}
         {!binned && !picked && (
           <Button variant="secondary" size="sm" icon={ArrowUpDown} onClick={() => setArranging(!arranging)}>
             {arranging ? '완료' : '순서 바꾸기'}

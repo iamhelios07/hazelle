@@ -79,10 +79,7 @@ export function CharacterActionItems({ shelf, actions, disabled, onRemoved }: { 
         label={ACTS.remove.label}
         tone="warn"
         disabled={disabled}
-        onClick={() => {
-          actions.remove(shelf);
-          onRemoved?.();
-        }}
+        onClick={() => void actions.remove(shelf).then((removed) => removed && onRemoved?.())}
       />
     </>
   );

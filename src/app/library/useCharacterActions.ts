@@ -13,6 +13,7 @@ import { BIN_KEEPS, moduleName, promptName, RISU_CHAT_FILE, risuLeftOut, TOOL } 
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
+import type { Editing } from './editing';
 import { describeStep } from './saving';
 import { withChats } from './shelf';
 
@@ -44,7 +45,8 @@ export function useNewCharacter() {
   };
 }
 
-export function useCharacterActions() {
+// editing: the open editor's queues, when the actions run from it.
+export function useCharacterActions(editing?: Editing) {
   const store = useStore();
   const files = useFiles();
   const toast = useToast();
@@ -54,6 +56,7 @@ export function useCharacterActions() {
 
   async function copy({ id, character }: Shelf) {
     setBusy({ id, label: '사본 만드는 중' });
+    if (editing && !(await editing.flush())) return setBusy(null);
     const copied = await copyCharacter(store, id, `${character.card.name} (사본)`, (step) => setBusy({ id, label: describeStep(step) }));
     setBusy(null);
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
@@ -81,10 +84,17 @@ export function useCharacterActions() {
     );
   }
 
-  function remove(shelf: Shelf) {
+  async function remove(shelf: Shelf): Promise<boolean> {
     const { id, character } = shelf;
-    void setDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
+    const task = () => setDeleted(store, id, Date.now());
+    const removed = editing ? await editing.remove(task) : await task();
+    if (!removed) return false;
+    if (!removed.ok) {
+      toast.failed(removed, '삭제하지 못했어요.');
+      return false;
+    }
     toast.undoable(`'${character.card.name}' ${withChats(shelf)} 삭제했어요.`, () => setDeleted(store, id, null), BIN_KEEPS);
+    return true;
   }
 
   function restore({ kind, id, name }: Binned) {

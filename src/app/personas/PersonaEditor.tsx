@@ -1,5 +1,5 @@
-import { ImageUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import type { ApiFailure } from '../../runtime/api';
 import type { Stored } from '../../model/kinds';
 import type { Persona } from '../../model/persona';
 import { chatsHolding, editPersona, rebindChats, removePersona, restorePersona, setCurrentPersona } from '../../runtime/personas';
@@ -7,17 +7,18 @@ import { thumbnail } from '../../runtime/picture';
 import { useChats, useLibrary, useSettings, useStore } from '../session';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
+import { FaceChange } from '../common/FaceChange';
 import { framePage } from '../common/frame';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { PersonaPickDialog } from '../common/PersonaPickDialog';
 import { PortraitsEditor } from '../common/PortraitsEditor';
-import { filled, typedText } from '../common/typed';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, CHANGE_IMAGE, UNREADABLE_IMAGE } from '../common/words';
+import { useAutosave } from '../common/useAutosave';
+import { useIdentityFields } from '../common/useIdentityFields';
+import { BIN_KEEPS } from '../common/words';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Avatar, FaceRow, Facts, FileButton, MenuItem, TextField } from '../ui';
+import { Avatar, Facts, MenuItem, TextField } from '../ui';
 import { PersonaExport } from './PersonaExport';
 
 // A caller leaves by unmounting it, which saves.
@@ -28,32 +29,26 @@ export function PersonaEditor({ stored, back }: { stored: Stored<'persona'>; bac
   const library = useLibrary();
   const { id } = stored;
   const autosave = useAutosave<Persona>(`persona:${id}`, (patch) => editPersona(store, id, patch));
-  const [typedName, setTypedName] = useState<string>();
   const [exporting, setExporting] = useState(false);
   const [moving, setMoving] = useState(false);
   const chats = useChats();
   const holding = useMemo(() => chatsHolding(store, id).length, [store, id, chats]);
   const held = { ...stored.value, ...autosave.unsaved };
-  const persona = { ...held, name: typedText(typedName, filled, held.name, String) };
+  const identity = useIdentityFields({ name: held.name, alias: held.alias ?? '', nameHelp: '채팅에서 {{user}}가 이 이름으로 바뀌어요.', aliasExample: '부자 스티브', onChange: autosave.change });
+  const persona = { ...held, name: identity.name };
 
-  function change(field: 'name' | 'alias' | 'description', value: string) {
-    if (field === 'name') setTypedName(value);
-    autosave.change({ [field]: value }, field !== 'name' || !!value.trim());
-  }
-
-  async function picture(file: File) {
+  async function picture(file: File): Promise<{ ok: true } | ApiFailure> {
     const made = await thumbnail({ bytes: new Uint8Array(await file.arrayBuffer()), type: file.type }).catch(() => null);
-    if (made === null) return toast.error(UNREADABLE_IMAGE);
+    if (made === null) return { ok: false, error: 'picture-unreadable' };
+    // The queue tells its own failure.
     await autosave.save({ picture: made });
+    return { ok: true };
   }
 
   async function remove() {
     const removed = await autosave.remove(() => removePersona(store, id));
     if (!removed) return;
-    if (!removed.ok) {
-      if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요. 다른 페르소나를 현재 페르소나로 정한 뒤 삭제해 주세요.');
-      return toast.failed(removed, '삭제하지 못했어요.');
-    }
+    if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
     navigate({ kind: 'personas', place: null });
     toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => restorePersona(store, id), BIN_KEEPS);
   }
@@ -71,22 +66,18 @@ export function PersonaEditor({ stored, back }: { stored: Stored<'persona'>; bac
     });
   }
 
+  const current = settings.persona === id;
   const pinnedBy = library.characters.filter(({ character }) => character.persona === id).map(({ character }) => character.card.name);
   const facts = [
-    ...(settings.persona === id ? [{ label: '사용처', value: '현재 페르소나' }] : []),
+    ...(current ? [{ label: '사용처', value: '현재 페르소나' }] : []),
     ...(pinnedBy.length ? [{ label: '고정', value: pinnedBy.join(', ') }] : []),
   ];
   const body = (
     <>
-      <FaceRow face={<Avatar face={persona.name} image={persona.picture} size="lg" tone="you" />}>
-        <FileButton accept="image/*" size="sm" icon={ImageUp} onFiles={([file]) => void picture(file!)}>
-          {CHANGE_IMAGE}
-        </FileButton>
-      </FaceRow>
+      <FaceChange face={<Avatar face={persona.name} image={persona.picture} size="lg" tone="you" />} apply={picture} />
       {facts.length > 0 && <Facts items={facts} />}
-      <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅에서 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 입력해 주세요.'} />
-      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 볼 수 있는 이름이에요." />
-      <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} />
+      {identity.fields}
+      <TextField label="설명" lines={8} value={persona.description} onChange={(description) => autosave.change({ description })} />
       <ModuleSwitches owner={{ kind: 'persona', id }} own={stored.value.modules ?? []} />
       <PortraitsEditor owner={id} />
     </>
@@ -96,13 +87,13 @@ export function PersonaEditor({ stored, back }: { stored: Stored<'persona'>; bac
     items: (
       <>
         <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />
-        {settings.persona !== id && <MenuItem label="현재 페르소나로 정하기" sub="새 채팅을 시작할 때 이 페르소나를 써요" onClick={makeCurrent} />}
+        {!current && <MenuItem label="현재 페르소나로 정하기" sub="새 채팅을 시작할 때 이 페르소나를 써요" onClick={makeCurrent} />}
         {holding > 0 && <MenuItem label="채팅 옮기기" sub={`이 페르소나를 쓰는 채팅 ${holding}개를 다른 페르소나로 옮겨요`} onClick={() => setMoving(true)} />}
-        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />
+        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={current ? '현재 페르소나라서 삭제할 수 없어요' : undefined} tone="warn" disabled={current} onClick={() => void remove()} />
       </>
     ),
   };
   const exportDialog = exporting && <PersonaExport persona={persona} onClose={() => setExporting(false)} />;
   const moveDialog = moving && <PersonaPickDialog title="채팅을 옮길 페르소나" using={id} onChoose={moveChats} onClose={() => setMoving(false)} />;
-  return framePage({ head: { title: aliased(persona.name, persona.alias), backLabel: back.label, onBack: () => navigate(back.to), status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body: <>{body}{exportDialog}{moveDialog}</> });
+  return framePage({ head: { title: aliased(persona.name, persona.alias), backLabel: back.label, onBack: () => navigate(back.to), status: autosave.words, menu }, body: <>{body}{exportDialog}{moveDialog}</> });
 }
