@@ -170,7 +170,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       <Dialog title="채웠어요" note={note} onClose={onClose} actions={close}>
         <Stack gap="section">
           <Text>{`이미지 ${pictures}개를 채웠어요`}</Text>
-          {lines.length > 0 && <Callout tone="warn">못 채운 것: {lines.join(' · ')}</Callout>}
+          {lines.length > 0 && <Outcome label="못 채운 것" items={[{ title: '못 채운 것', note: lines.join(' · ') }]} />}
         </Stack>
       </Dialog>
     );
@@ -295,6 +295,7 @@ function Picks({ title, rows, can, ticks, onChange }: PicksProps) {
 function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
   const chats = moved.characters.reduce((sum, character) => sum + character.chats, 0);
   const missed = [
+    ...moveMissed(backup.unsupported).map((title) => ({ title })),
     ...moved.characters.flatMap((character) => {
       const lines = [...cardMissed(character.unsupported, character.faceless), ...moveMissed(character.missed)];
       return lines.length ? [{ title: character.name, note: lines.join(' · ') }] : [];
@@ -310,7 +311,6 @@ function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
   const notUsed = describeUnused([...totals].map(([kind, count]) => ({ kind, count })));
   return (
     <Stack gap="section">
-      {backup.unsupported.length > 0 && <Callout tone="warn">백업에서 못 가져온 것: {moveMissed(backup.unsupported).join(' · ')}</Callout>}
       <Text>{`캐릭터 ${moved.characters.length}개 · 대화 ${chats}개 · 페르소나 ${moved.personas}개 · 프롬프트 ${moved.prompts}개 · 모듈 ${moved.modules.length}개`}</Text>
       {moved.loreBudget !== null && <Text variant="note">{`Risu에서 정한 ${LORE_BUDGET_LABEL}(${countText(moved.loreBudget)}토큰) 설정도 함께 가져왔어요.`}</Text>}
       {moved.toggles > 0 && <Text variant="note">{`Risu에서 쓰던 토글 값 ${moved.toggles}개도 함께 가져왔어요.`}</Text>}

@@ -24,10 +24,10 @@ import { ImportContext } from '../common/importing';
 import { sizeText } from '../common/size';
 import { useSearch } from '../common/useSearch';
 import { BIN, moduleName, NO_CHARACTER, promptName, RISU_PLUGIN } from '../common/words';
-import { useFiles, useLibrary, useSettings, useStore } from '../session';
+import { useFiles, useLibrary, useSession, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
-import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Hint, Menu, MenuItem, pickFiles, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
+import { Avatar, Button, Callout, ChipButton, ConfirmDialog, Dialog, DropOverlay, Empty, Hint, Menu, MenuItem, Outcome, pickFiles, Progress, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
 import { characterOutcome, chatOutcome, moduleOutcome, personaOutcome, promptOutcome, quoted, toolOutcome, type ImportOutcome } from './importOutcome';
 import { missedLines, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
@@ -48,9 +48,10 @@ type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
 // fill: whether to bring only a card's pictures to the character Risu's move brought under its name. character: which
 // character a file of chats goes to, null for 캐릭터 없이; name is the one the file was with, when it says. cancel, the
-// dialog closed while asking, ends the batch: neither answer, since X is not 새 캐릭터로 가져오기 or 캐릭터 없이. replace:
+// dialog closed while asking, ends the batch: neither answer, since X is not 새 캐릭터로 가져오기 or 캐릭터 없이; picked, the
+// one chosen so far, at first the character of the file's name, else choose's fallback. replace:
 // whether a module takes over from the older versions of its namespace, named olds.
-type Ask = ({ kind: 'fill'; name: string; answer: (fill: boolean) => void } | { kind: 'character'; file: string; name: string | null; fallback: string | null; answer: (character: string | null) => void } | { kind: 'replace'; name: string; olds: string[]; answer: (replace: boolean) => void }) & { cancel: () => void };
+type Ask = ({ kind: 'fill'; name: string; answer: (fill: boolean) => void } | { kind: 'character'; file: string; name: string | null; picked: string | null; answer: (character: string | null) => void } | { kind: 'replace'; name: string; olds: string[]; answer: (replace: boolean) => void }) & { cancel: () => void };
 // Where a file of chats goes: a character's id, null for 캐릭터 없이, undefined where the way in names none.
 type Target = string | null | undefined;
 type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Result[]; ask: Ask | null };
@@ -162,6 +163,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const files = useFiles();
   const toast = useToast();
   const route = useRoute();
+  const { read } = useSession();
   const noticed = useSettings().importNotice === true;
   const [notice, setNotice] = useState<(() => void) | null>(null);
   const readers = useRef(new Set<ImportWorker>());
@@ -280,8 +282,10 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       const progress = (step: ProgressStep) => setState({ busy: { file: file.name, steps: [step] }, results, ask: null });
       const cancel = (reject: (error: Error) => void) => () => reject(new ImportCancelled());
       const ask = (name: string) => new Promise<boolean>((answer, reject) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'fill', name, answer, cancel: cancel(reject) } }));
-      const choose = (name: string | null, fallback: string | null) =>
-        new Promise<string | null>((answer, reject) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, fallback, answer, cancel: cancel(reject) } }));
+      const choose = (name: string | null, fallback: string | null) => {
+        const picked = read.library.snapshot().characters.find(({ character }) => character.card.name === name)?.id ?? fallback;
+        return new Promise<string | null>((answer, reject) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, picked, answer, cancel: cancel(reject) } }));
+      };
       const replace = (name: string, olds: string[]) => new Promise<boolean>((answer, reject) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'replace', name, olds, answer, cancel: cancel(reject) } }));
       try {
         results.push(await save(file, place, target, progress, ask, choose, replace, (undo) => undos.push(undo)));
@@ -314,12 +318,41 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     setState(null);
     navigate(to);
   };
-  const answered = (ask: { answer: (yes: boolean) => void }) => (yes: boolean) => {
+  const answer = <T,>(ask: { answer: (value: T) => void }, value: T) => {
     setState(state && { ...state, ask: null });
-    ask.answer(yes);
+    ask.answer(value);
   };
   const came = state?.results.some((result) => result.kind !== 'failed') ?? false;
   const title = state?.ask ? ASK_TITLES[state.ask.kind] : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
+  const ask = state?.ask ?? null;
+  const yesNo = (asked: { answer: (yes: boolean) => void }, no: string, yes: string) => (
+    <>
+      <Button variant="secondary" onClick={() => answer(asked, false)}>
+        {no}
+      </Button>
+      <Button onClick={() => answer(asked, true)}>{yes}</Button>
+    </>
+  );
+  const opens = state && !state.busy && !ask ? [
+    ...OPENS.flatMap(({ kind, icon, label, route }) => {
+      const ids = idsOf(kind);
+      return ids.length === 1 && ids[0] !== null ? [
+        <Button key={kind} variant={done.length === 1 ? 'secondary' : 'primary'} icon={icon} onClick={() => go(route(ids[0]!))}>
+          {label}
+        </Button>,
+      ] : [];
+    }),
+    ...(done.length === 1 ? [
+      <Button key="chat" icon={MessageSquarePlus} onClick={() => go({ kind: 'new-chat', character: done[0]! })}>
+        채팅 시작
+      </Button>,
+    ] : []),
+  ] : [];
+  const actions =
+    ask?.kind === 'fill' ? yesNo(ask, '새 캐릭터로 가져오기', '이미지만 가져오기')
+    : ask?.kind === 'replace' ? yesNo(ask, '따로 두기', '바꾸기')
+    : ask ? <Button onClick={() => answer(ask, ask.picked)}>넣기</Button>
+    : opens.length > 0 ? <>{opens}</> : undefined;
   return (
     <ImportContext.Provider
       value={{
@@ -359,32 +392,16 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       )}
       {moving && <MoveFlow files={moving.files} aside={moving.aside} onClose={() => setMoving(null)} />}
       {state && (
-        <Dialog title={title} onClose={() => (state.ask ? state.ask.cancel() : state.busy || setState(null))}>
+        <Dialog title={title} onClose={() => (state.ask ? state.ask.cancel() : state.busy || setState(null))} actions={actions}>
           <Stack>
             {state.results.map((result, index) =>
               result.kind === 'failed' ? <Failed key={index} file={result.file} failure={result.failure} /> : result.kind === 'filled' ? <FilledSummary key={index} result={result} /> : <Summary key={index} result={result} />,
             )}
-            {state.ask?.kind === 'fill' ? (
-              <Question title={state.ask.name} help="기존 캐릭터의 대화와 설정은 그대로 두고 이미지만 이 카드에서 가져와요." text="Risu에서 가져온 같은 이름의 캐릭터가 이미 있어요." no="새 캐릭터로 가져오기" yes="이미지만 가져오기" onAnswer={answered(state.ask)} />
-            ) : state.ask?.kind === 'replace' ? (
-              <Question title={state.ask.name} help={`바꾸면 이전 버전이 켜져 있던 곳에 새 버전을 켜고, 이전 버전은 ${BIN}으로 옮겨요.`} text={`이전 버전 ${quoted(state.ask.olds)} 모듈이 있어요.`} no="따로 두기" yes="바꾸기" onAnswer={answered(state.ask)} />
-            ) : state.ask ? <CharacterChoice key={state.ask.file} ask={state.ask} onAnswer={() => setState({ ...state, ask: null })} /> : state.busy && <><Text variant="note">{state.busy.file}</Text><Progress steps={state.busy.steps} /></>}
-            {!state.busy && done.length === 1 && (
-              <Button
-                icon={MessageSquarePlus}
-                onClick={() => go({ kind: 'new-chat', character: done[0]! })}
-              >
-                채팅 시작
-              </Button>
-            )}
-            {!state.busy && OPENS.map(({ kind, icon, label, route }) => {
-              const ids = idsOf(kind);
-              return ids.length === 1 && ids[0] !== null && (
-                <Button key={kind} variant={done.length === 1 ? 'secondary' : 'primary'} icon={icon} onClick={() => go(route(ids[0]!))}>
-                  {label}
-                </Button>
-              );
-            })}
+            {ask?.kind === 'fill' ? (
+              <Question title={ask.name} help="기존 캐릭터의 대화와 설정은 그대로 두고 이미지만 이 카드에서 가져와요." text="Risu에서 가져온 같은 이름의 캐릭터가 이미 있어요." />
+            ) : ask?.kind === 'replace' ? (
+              <Question title={ask.name} help={`바꾸면 이전 버전이 켜져 있던 곳에 새 버전을 켜고, 이전 버전은 ${BIN}으로 옮겨요.`} text={`이전 버전 ${quoted(ask.olds)} 모듈이 있어요.`} />
+            ) : ask ? <CharacterChoice title={ask.name ?? ask.file} picked={ask.picked} onPick={(id) => setState({ ...state, ask: { ...ask, picked: id } })} /> : state.busy && <><Text variant="note">{state.busy.file}</Text><Progress steps={state.busy.steps} /></>}
           </Stack>
         </Dialog>
       )}
@@ -397,59 +414,35 @@ function Summary({ result }: { result: ImportOutcome }) {
     <Section level={3} title={result.title}>
       <Text>{result.holds}</Text>
       {[result.verdict, result.replaced, result.placed, result.paired].map((line, index) => line && (line.failed ? <Callout key={index} tone="warn">{line.text}{line.help && <Hint label={line.help.label}>{line.help.text}</Hint>}</Callout> : <Text key={index}>{line.text}</Text>))}
-      {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
+      {result.missed.length > 0 && <Missed lines={result.missed} />}
       {result.unused && <Text variant="note">{result.unused}</Text>}
     </Section>
   );
 }
 
-function CharacterChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'character' }>; onAnswer: () => void }) {
+function CharacterChoice({ title, picked, onPick }: { title: string; picked: string | null; onPick: (id: string | null) => void }) {
   const { characters } = useLibrary();
-  const [picked, setPicked] = useState(() => characters.find(({ character }) => character.card.name === ask.name)?.id ?? ask.fallback);
   const search = useSearch(characters, '캐릭터 검색', ({ character }) => characterTexts(character));
   const chosen = characters.find(({ id }) => id === picked)?.character;
   const name = chosen ? aliased(chosen.card.name, chosen.alias) : NO_CHARACTER;
   return (
-    <Section level={3} title={ask.name ?? ask.file}>
-      <Stack gap="related">
-        <Menu place="below-start" size="lg" label="캐릭터" trigger={(opener) => <ChipButton variant="field" label={name} title="캐릭터" {...opener} />}>
+    <Section level={3} title={title}>
+      <Menu place="below-start" size="lg" label="캐릭터" trigger={(opener) => <ChipButton variant="field" label={name} title="캐릭터" {...opener} />}>
           {search.field}
           {search.none && <Empty variant="menu">{search.none}</Empty>}
-          {!search.words && <MenuItem label={NO_CHARACTER} checked={picked === null} onClick={() => setPicked(null)} />}
+          {!search.words && <MenuItem label={NO_CHARACTER} checked={picked === null} onClick={() => onPick(null)} />}
           {search.found.map(({ id, character, face }) => (
-            <MenuItem key={id} label={aliased(character.card.name, character.alias)} avatar={<Avatar face={character.card.name} image={face} />} checked={picked === id} onClick={() => setPicked(id)} />
+            <MenuItem key={id} label={aliased(character.card.name, character.alias)} avatar={<Avatar face={character.card.name} image={face} />} checked={picked === id} onClick={() => onPick(id)} />
           ))}
-        </Menu>
-        <Row kind="actions">
-          <Button
-            size="md"
-            onClick={() => {
-              onAnswer();
-              ask.answer(picked);
-            }}
-          >
-            넣기
-          </Button>
-        </Row>
-      </Stack>
+      </Menu>
     </Section>
   );
 }
 
-function Question({ title, help, text, no, yes, onAnswer }: { title: string; help: string; text: string; no: string; yes: string; onAnswer: (yes: boolean) => void }) {
+function Question({ title, help, text }: { title: string; help: string; text: string }) {
   return (
     <Section level={3} title={title} help={help}>
-      <Stack gap="related">
-        <Text>{text}</Text>
-        <Row kind="actions">
-          <Button variant="secondary" size="md" onClick={() => onAnswer(false)}>
-            {no}
-          </Button>
-          <Button size="md" onClick={() => onAnswer(true)}>
-            {yes}
-          </Button>
-        </Row>
-      </Stack>
+      <Text>{text}</Text>
     </Section>
   );
 }
@@ -458,9 +451,15 @@ function FilledSummary({ result }: { result: Filled }) {
   return (
     <Section level={3} title={result.name}>
       <Text>{`이미지 ${result.kept}개를 가져왔어요`}</Text>
-      {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
+      {result.missed.length > 0 && <Missed lines={result.missed} />}
     </Section>
   );
+}
+
+const MISSED = '못 가져온 것';
+
+function Missed({ lines }: { lines: string[] }) {
+  return <Outcome label={MISSED} items={[{ title: MISSED, note: lines.join(' · ') }]} />;
 }
 
 function Failed({ file, failure }: { file: string; failure: string }) {

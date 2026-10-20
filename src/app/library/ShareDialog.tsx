@@ -6,6 +6,7 @@ import { agreeToShare, cutShare, readShares, shareLink, type SharedLink } from '
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { count } from '../common/typedNumber';
+import { useAttempt } from '../common/useAttempt';
 import { useCopy } from '../common/useCopy';
 import { useLoaded } from '../common/useLoaded';
 import { SHARE, TOOL } from '../common/words';
@@ -41,15 +42,14 @@ export function ShareDialog({ character, name, onClose }: { character: string; n
 
 function ConsentDialog({ onAgreed, onClose }: { onAgreed: () => void; onClose: () => void }) {
   const [checked, setChecked] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const agree = async () => {
-    setBusy(true);
-    const done = await agreeToShare();
-    setBusy(false);
-    if (done.ok) onAgreed();
-    else setFailure(describeFailure(done));
-  };
+  const { busy, failure, run } = useAttempt();
+  const agree = () =>
+    run(async () => {
+      const done = await agreeToShare();
+      if (!done.ok) return describeFailure(done);
+      onAgreed();
+      return null;
+    });
   return (
     <Dialog
       title="링크로 공유하기 전에"
@@ -87,44 +87,48 @@ function LinkDialog({ character, name, links, reload, onClose }: { character: st
   const own = useShares().find((share) => share.parent === character) ?? null;
   const link = own && links.find(({ id }) => id === own.value.share);
   const [covered, setCovered] = useState(false);
-  const [busy, setBusy] = useState<'publish' | 'cut' | 'cover' | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const { busy, failure, run } = useAttempt();
+  // Which press is under way, for its spinner; every control waits while one is.
+  const [pressed, setPressed] = useState<'publish' | 'cut' | 'cover'>('publish');
+  const spins = (press: typeof pressed) => busy && pressed === press;
 
-  async function publish() {
-    setBusy('publish');
-    setFailure(null);
-    // A link cut elsewhere still named in this account's vault is let go first; a new one takes its place.
-    if (own && !link) {
-      const cut = await cutShare(store, own.value.share);
-      if (!cut.ok) return finish(describeFailure(cut));
-    }
-    const published = await publishShare(store, files, character, link ? link.covered : covered);
-    if (!published.ok) return finish(describeFailure(published));
-    const tools = published.data.tools ? { detail: `${TOOL} ${published.data.tools}개는 빼고 공유했어요.` } : undefined;
-    toast.show(link ? '새 버전으로 바꿨어요.' : '공유 링크를 만들었어요.', tools);
-    finish(null);
-    reload();
-  }
+  const publish = () => {
+    setPressed('publish');
+    void run(async () => {
+      // A link cut elsewhere still named in this account's vault is let go first; a new one takes its place.
+      if (own && !link) {
+        const cut = await cutShare(store, own.value.share);
+        if (!cut.ok) return describeFailure(cut);
+      }
+      const published = await publishShare(store, files, character, link ? link.covered : covered);
+      if (!published.ok) return describeFailure(published);
+      const tools = published.data.tools ? { detail: `${TOOL} ${published.data.tools}개는 빼고 공유했어요.` } : undefined;
+      toast.show(link ? '새 버전으로 바꿨어요.' : '공유 링크를 만들었어요.', tools);
+      reload();
+      return null;
+    });
+  };
 
-  async function cut() {
-    setBusy('cut');
-    const done = await cutShare(store, link!.id);
-    if (!done.ok) return finish(describeFailure(done));
-    toast.show('공유 링크를 끊었어요.');
-    onClose();
-  }
+  const cut = () => {
+    setPressed('cut');
+    void run(async () => {
+      const done = await cutShare(store, link!.id);
+      if (!done.ok) return describeFailure(done);
+      toast.show('공유 링크를 끊었어요.');
+      onClose();
+      return null;
+    });
+  };
 
-  async function cover(checked: boolean) {
+  function cover(checked: boolean) {
     if (!own || !link) return setCovered(checked);
-    setBusy('cover');
-    const done = await setShareCover(store, own, checked);
-    finish(done.ok ? null : describeFailure(done));
-    if (done.ok) reload();
-  }
-
-  function finish(failed: string | null) {
-    setBusy(null);
-    setFailure(failed);
+    setPressed('cover');
+    void run(async () => {
+      const done = await setShareCover(store, own, checked);
+      if (!done.ok) return describeFailure(done);
+      reload();
+      return null;
+    });
   }
 
   const address = own && link ? shareLink(location.origin, link.id, own.value.key) : null;
@@ -136,10 +140,10 @@ function LinkDialog({ character, name, links, reload, onClose }: { character: st
       actions={
         link ? (
           <>
-            <Button variant="danger" icon={Unlink} busy={busy === 'cut'} disabled={busy !== null} onClick={() => void cut()}>
+            <Button variant="danger" icon={Unlink} busy={spins('cut')} disabled={busy} onClick={cut}>
               {SHARE.cut}
             </Button>
-            <Button variant="secondary" busy={busy === 'publish'} disabled={busy !== null || link.held || link.removed} onClick={() => void publish()}>
+            <Button variant="secondary" busy={spins('publish')} disabled={busy || link.held || link.removed} onClick={publish}>
               {SHARE.update}
             </Button>
           </>
@@ -148,7 +152,7 @@ function LinkDialog({ character, name, links, reload, onClose }: { character: st
             <Button variant="secondary" onClick={onClose}>
               취소
             </Button>
-            <Button icon={Link2} busy={busy === 'publish'} onClick={() => void publish()}>
+            <Button icon={Link2} busy={spins('publish')} onClick={publish}>
               링크 만들기
             </Button>
           </>
@@ -176,7 +180,7 @@ function LinkDialog({ character, name, links, reload, onClose }: { character: st
         <SettingRow
           label={SHARE.cover}
           help={SHARE.coverHelp}
-          control={<Switch label={SHARE.cover} checked={link ? link.covered : covered} disabled={busy !== null || Boolean(link?.removed)} onChange={(checked) => void cover(checked)} />}
+          control={<Switch label={SHARE.cover} checked={link ? link.covered : covered} disabled={busy || Boolean(link?.removed)} onChange={cover} />}
         />
         {failure && <Callout tone="warn" alert>{failure}</Callout>}
       </Stack>

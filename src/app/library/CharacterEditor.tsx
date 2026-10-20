@@ -1,6 +1,6 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, Images, ImageUp, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Sparkles, Square, ToggleRight, UserRound, Variable, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, Images, Languages, MessageSquareQuote, Package, Palette, ScrollText, SlidersHorizontal, Sparkles, Square, ToggleRight, UserRound, Variable, type LucideIcon } from 'lucide-react';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -28,10 +28,13 @@ import { PortraitsEditor } from '../common/PortraitsEditor';
 import type { CharacterPart } from '../common/characterPart';
 import type { Frame } from '../common/frame';
 import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePercent';
-import { filled, typedText } from '../common/typed';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, CHANGE_IMAGE, DEFAULT_VARIABLES, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { FaceChange } from '../common/FaceChange';
+import { useTypedNumber } from '../common/typed';
+import { mergeStatus, saveWords, useAutosave } from '../common/useAutosave';
+import { useIdentityFields } from '../common/useIdentityFields';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, DEFAULT_VARIABLES, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
+import { editing } from './editing';
 import { CharacterActionItems } from './gallery/CharacterCard';
 import { ShareDialog } from './ShareDialog';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore, useStored } from '../session';
@@ -39,16 +42,13 @@ import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { SHORTCUTS } from '../shortcuts';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FieldRow, FileButton, List, ListItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FieldRow, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide, type Help } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 import { useNoteDraft } from './useNoteDraft';
 
-type Percent = 'peek' | 'widest';
 const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), cardWrites: setCardWrites, keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
-const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
-  statuses.find((each) => each === 'failed') ?? statuses.find((each) => each === 'saving') ?? statuses.find((each) => each !== null) ?? null;
 
 const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
   profile: { label: '프로필', icon: IdCard },
@@ -116,22 +116,21 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const ownModules = character.modules ?? [];
-  const actions = useCharacterActions();
-  const { busy, sharing, stopSharing } = actions;
-  const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
+  const textSave = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
+  const { status, unsaved, change } = textSave;
   const { display } = useDisplay();
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
+  const actions = useCharacterActions(editing(textSave, [pictureSave, noteSave]));
+  const { busy, sharing, stopSharing } = actions;
   const noteText = noteSave.unsaved.note ?? character.translatorNote ?? '';
   // The draft lands after the user may have typed more; it goes under the note as it is then.
   const noteNow = useRef(noteText);
   noteNow.current = noteText;
   const noteDraft = useNoteDraft(id, noteSave.flush, (lines) => noteSave.change({ note: noteNow.current.trim() ? `${noteNow.current.trimEnd()}\n\n${lines}` : lines }));
-  const [typedName, setTypedName] = useState<string>();
-  const [changingFace, setChangingFace] = useState(false);
-  const [typedPercents, setTypedPercents] = useState<Partial<Record<Percent, string>>>({});
   const held: CharacterText = { ...character.card, alias: character.alias ?? '', ...unsaved };
-  const text = { ...held, name: typedText(typedName, filled, held.name, String) };
+  const identity = useIdentityFields({ name: held.name, alias: held.alias, aliasExample: '겨울 버전', onChange: change });
+  const text = { ...held, name: identity.name };
   // Most cards leave these two empty. Fixed at mount, so clearing one while typing does not hide it.
   const [legacy] = useState(() => ({ personality: !!held.personality, scenario: !!held.scenario }));
   const translation = useCardTranslation(id, character);
@@ -145,42 +144,22 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const scripted = scriptsOf(packsOf(store, { character: id })).length > 0;
   const keepThoughts = character.keepThoughts === true;
 
-  async function changeFace(file: File) {
-    setChangingFace(true);
-    const changed = await setAvatar(store, files, id, new Uint8Array(await file.arrayBuffer()));
-    setChangingFace(false);
-    if (!changed.ok) toast.failed(changed, '이미지를 바꾸지 못했어요.');
-  }
-
   function flip(field: Switched, on: boolean) {
     void SWITCHES[field](store, id, on).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
-  function changePercent(field: Percent, draft: string) {
-    setTypedPercents((current) => ({ ...current, [field]: draft }));
-    const value = readPicturePercent(draft);
-    pictureSave.change({ [field]: value ?? undefined }, value !== null);
-  }
+  const peek = useTypedNumber(readPicturePercent, pictures.peek, { error: PICTURE_PERCENT_ERROR, onChange: (value) => pictureSave.change({ peek: value }) });
+  const widest = useTypedNumber(readPicturePercent, pictures.widest, { error: PICTURE_PERCENT_ERROR, onChange: (value) => pictureSave.change({ widest: value }) });
 
-  function percentRow(field: Percent, label: string, help: Help, placeholder: string) {
-    const percent = typedText(typedPercents[field], readPicturePercent, pictures[field], (value) => String(value ?? ''));
-    const set = percent.trim() !== '';
-    const invalid = readPicturePercent(percent) === null;
-    return (
-      <SettingRow
-        label={label}
-        help={help}
-        changed={set}
-        error={invalid ? PICTURE_PERCENT_ERROR : undefined}
-        control={<NumberInput label={label} value={percent} unit="%" placeholder={placeholder} invalid={invalid} onChange={(draft) => changePercent(field, draft)} />}
-      />
-    );
-  }
-
-  function change<K extends keyof CharacterText>(field: K, value: CharacterText[K]) {
-    if (field === 'name') setTypedName(value as string);
-    queue({ [field]: value }, field !== 'name' || !!(value as string).trim());
-  }
+  const percentRow = (percent: typeof peek, label: string, help: Help, placeholder: string) => (
+    <SettingRow
+      label={label}
+      help={help}
+      changed={percent.text.trim() !== ''}
+      error={percent.error}
+      control={<NumberInput label={label} value={percent.text} unit="%" placeholder={placeholder} invalid={percent.error !== undefined} onChange={percent.change} />}
+    />
+  );
 
   const readingSwitch = (
     <Row kind="toolbar">
@@ -194,7 +173,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
             {translation.missing.length > 0 ? '번역하기' : '다시 번역'}
           </Button>
         ))}
-      <ChoiceGroup layout="segmented" label="보기" options={READINGS} value={reading} onChange={setReading} />
+      <ChoiceGroup layout="fit" label="보기" options={READINGS} value={reading} onChange={setReading} />
     </Row>
   );
   const untranslated = (source: string) => (translation.running.has(source) ? '번역하는 중…' : '번역하지 않았어요.');
@@ -219,18 +198,6 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const split = layout === 'split';
   const lead = (
     <>
-      {origin && (
-        <Row kind="actions">
-          <Text variant="note">
-            '{origin.name}'에서 만든 사본{original ? '' : ' (원본 삭제됨)'}
-          </Text>
-          {original && (
-            <Button variant="ghost" size="sm" onClick={() => navigate(characterPage(origin.id, wide))}>
-              원본 보기
-            </Button>
-          )}
-        </Row>
-      )}
       {card.tags.length > 0 && (
         <Row kind="tags">
           {card.tags.map((tag) => (
@@ -244,19 +211,14 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   const pages: Record<CharacterPart, ReactNode> = {
     profile: (
       <>
-        <FaceRow face={<Portrait image={face} name={card.name} />}>
-          <FileButton accept="image/*" size="sm" icon={ImageUp} busy={changingFace} onFiles={([file]) => void changeFace(file!)}>
-            {CHANGE_IMAGE}
-          </FileButton>
-        </FaceRow>
+        <FaceChange face={<Portrait image={face} name={card.name} />} apply={async (file) => setAvatar(store, files, id, new Uint8Array(await file.arrayBuffer()))} />
         {split && lead}
         <Section title={PARTS.profile.label}>
-          <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 입력해 주세요.'} />
-          <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 볼 수 있는 이름이에요." />
+          {identity.fields}
           <TextField
             label="부르는 이름"
             value={text.nickname ?? ''}
-            onChange={(value) => change('nickname', value === '' ? null : value)}
+            onChange={(value) => change({ nickname: value === '' ? null : value })}
             help="채팅에서 {{char}} 자리에 캐릭터 이름 대신 들어가요."
           />
         </Section>
@@ -286,10 +248,10 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           </>
         ) : (
           <>
-            <TextField label="설명" lines={20} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.description} onChange={(value) => change('description', value)} />
-            {legacy.personality && <TextField label="성격" lines={4} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.personality} onChange={(value) => change('personality', value)} />}
-            {legacy.scenario && <TextField label="상황" lines={4} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.scenario} onChange={(value) => change('scenario', value)} />}
-            <TextField label="예시 대화" lines={6} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
+            <TextField label="설명" lines={20} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.description} onChange={(value) => change({ description: value })} />
+            {legacy.personality && <TextField label="성격" lines={4} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.personality} onChange={(value) => change({ personality: value })} />}
+            {legacy.scenario && <TextField label="상황" lines={4} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.scenario} onChange={(value) => change({ scenario: value })} />}
+            <TextField label="예시 대화" lines={6} expand={SHORTCUTS.bigEdit.keys} language={cbs} aside={trial.cbs} value={text.exampleDialogue} onChange={(value) => change({ exampleDialogue: value })} />
           </>
         )}
       </Section>
@@ -302,7 +264,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
         ) : (
           <EntryList
             entries={text.greetings}
-            onChange={(greetings) => change('greetings', greetings)}
+            onChange={(greetings) => change({ greetings })}
             name={(index) => `첫인사 ${index + 1}`}
             blank=""
             addLabel="첫인사 추가"
@@ -322,7 +284,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           language={instructions}
           aside={trial.cbs}
           value={text.systemPrompt}
-          onChange={(value) => change('systemPrompt', value)}
+          onChange={(value) => change({ systemPrompt: value })}
           help={{ text: '비워 두면 기본 지시문을 써요. {{original}}을 넣으면 그 자리에 기본 지시문이 들어가요.', open: { label: opens(inSettings('prompts')), onClick: () => navigate({ kind: 'prompts', place: null }) } }}
         />
         <TextField
@@ -332,13 +294,13 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
           language={instructions}
           aside={trial.cbs}
           value={text.postHistoryInstructions}
-          onChange={(value) => change('postHistoryInstructions', value)}
+          onChange={(value) => change({ postHistoryInstructions: value })}
           help="대화 기록 바로 뒤에 붙어요."
         />
         <SettingRow
           label="유틸리티 봇"
           help="프롬프트는 쓰지 않고 이 캐릭터의 지시문과 설명, 로어북, 대화만 보내요. 번역기처럼 역할극이 아닌 봇에 잘 맞아요."
-          control={<Switch label="유틸리티 봇" checked={text.utility} onChange={(on) => change('utility', on)} />}
+          control={<Switch label="유틸리티 봇" checked={text.utility} onChange={(on) => change({ utility: on })} />}
         />
         <TextField
           label={TRANSLATOR_NOTE}
@@ -365,7 +327,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
       <Section title={DEFAULT_VARIABLES} help="새 채팅이 이 값에서 시작해요. 이미 있는 채팅에서도 아직 바뀌지 않은 변수는 이 값을 따라요.">
         <EntryList
           entries={text.variables}
-          onChange={(variables) => change('variables', variables)}
+          onChange={(variables) => change({ variables })}
           name={(index) => `변수 ${index + 1}`}
           blank={['', ''] as [string, string]}
           addLabel="변수 추가"
@@ -406,8 +368,8 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
         {decor && (
           <Disclosure label="이미지 크기">
             <SettingGroup label="이미지 크기">
-              {fold && percentRow('peek', '접힌 높이', '화면 높이 대비 비율이에요.', '40')}
-              {percentRow('widest', '최대 폭', { text: '글 폭 대비 비율이에요. 비워 두면 디스플레이 설정을 따라요.', open: { label: opens(inSettings('display')), onClick: () => navigate({ kind: 'display' }) } }, String(display.pictureWidest))}
+              {fold && percentRow(peek, '접힌 높이', '화면 높이 대비 비율이에요.', '40')}
+              {percentRow(widest, '최대 폭', { text: '글 폭 대비 비율이에요. 비워 두면 디스플레이 설정을 따라요.', open: { label: opens(inSettings('display')), onClick: () => navigate({ kind: 'display' }) } }, String(display.pictureWidest))}
             </SettingGroup>
           </Disclosure>
         )}
@@ -427,16 +389,20 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   };
   // A part with nothing to show is left out: 모듈 lists the account's modules, and there may be none.
   const groups = GROUPS.map((group) => group.filter((each) => each !== 'modules' || modules.length > 0));
-  const saved = merged(status, pictureSave.status, noteSave.status);
-  const subtitle = card.creator ? `제작자 ${card.creator}` : undefined;
+  const subtitle = [card.creator && `제작자 ${card.creator}`, origin && `'${origin.name}'의 사본`].filter(Boolean).join(' · ') || undefined;
   const working = busy?.id === id ? busy.label : null;
   const menu = {
     of: '캐릭터',
-    items: <CharacterActionItems shelf={shelf} actions={actions} disabled={busy !== null} onRemoved={() => navigate(HOME)} />,
+    items: (
+      <>
+        {origin && <MenuItem label="원본 보기" sub={original ? undefined : '원본이 삭제됐어요'} disabled={!original} onClick={() => navigate(characterPage(origin.id, wide))} />}
+        <CharacterActionItems shelf={shelf} actions={actions} disabled={busy !== null} onRemoved={() => navigate(HOME)} />
+      </>
+    ),
   };
   const title = aliased(text.name, text.alias);
   const shareDialog = sharing && <ShareDialog character={id} name={text.name} onClose={stopSharing} />;
-  const state = working ?? (saved ? SAVE_STATUS[saved] : undefined);
+  const state = working ?? saveWords(mergeStatus(status, pictureSave.status, noteSave.status));
   if (split) {
     const open = part ?? 'profile';
     const side = groups.map((group) => (
