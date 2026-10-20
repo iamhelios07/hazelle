@@ -238,7 +238,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
 
   return stacked ? (
     <Screen width="page">
-      <ItemSection title={label} note={who} menu={menu}>
+      <ItemSection title={label} rename={rename} note={who} menu={menu}>
         {body}
       </ItemSection>
       {dialog}

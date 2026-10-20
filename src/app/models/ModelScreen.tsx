@@ -28,13 +28,14 @@ type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
 
 export const ModelScreen = (props: Props) => (imageOnly(props.model) ? <ImageModelScreen {...props} /> : <ChatModelScreen {...props} />);
 
-// The placeholder is the list's name: a name typed the same as it drops the entry's own (runtime/connections renameModel).
+// A blank clears the entry's own name, so the list's name shows again (a ruling; runtime/connections renameModel).
 function useRename(connection: Stored<'connection'>, model: Starred) {
   const { store } = useSession();
   const key = entryKey(model);
   const naming = useAutosave<{ label: string }>(`model:${connection.id}:${key}`, ({ label }) => renameModel(store, connection.id, key, label!));
   const title = naming.unsaved.label ?? entryName(model);
-  return { title, status: naming.status, rename: { label: '모델 이름', placeholder: model.name, onChange: (label: string) => naming.change({ label }) } };
+  const rename = { label: '모델 이름', placeholder: model.name, blank: '비워 두면 원래 모델 이름으로 표시돼요.', onChange: (label: string) => naming.change({ label }) };
+  return { title, status: naming.status, rename };
 }
 
 // A model that only draws takes no 모델 설정 and leaves no reply to count: how it draws is the 삽화 prompt's (design §6.6),

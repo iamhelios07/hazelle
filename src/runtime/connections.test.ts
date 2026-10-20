@@ -4,7 +4,7 @@ import type { Connection } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
-import { addConnection, addCopy, addModel, changeKey, providerConnection, putModelBack, refreshStarred, removeModel, retriesOf, setSharedRetries } from './connections';
+import { addConnection, addCopy, addModel, changeKey, providerConnection, putModelBack, refreshStarred, removeModel, renameModel, retriesOf, setSharedRetries } from './connections';
 import { bareModel } from '../connectors/chat-completions';
 import type { Model } from '../connectors/types';
 import { stubRelay, testModel, testServer, upstream } from './testing';
@@ -101,6 +101,19 @@ describe('addCopy', () => {
       const copy = store.get('connection', id)!.value.starred[1]!;
       expect(copied).toEqual({ ok: true, data: copy.entry });
       expect(store.get('profile', copy.profile!)?.value).toEqual({ name: 'M (low)용', settings: { temperature: 1 } });
+    }));
+});
+
+describe('renameModel', () => {
+  it("keeps a typed name, even the list's own, and a blank clears it so the list's name shows again", () =>
+    server.withSession(async ({ store }) => {
+      const saved = await store.create('connection', { ...openRouter, starred: [testModel] });
+      const id = saved.ok ? saved.data.id : '';
+      const label = () => store.get('connection', id)!.value.starred[0]!.label;
+      await renameModel(store, id, testModel.id, testModel.name);
+      expect(label()).toBe(testModel.name);
+      await renameModel(store, id, testModel.id, '');
+      expect(label()).toBeUndefined();
     }));
 });
 
