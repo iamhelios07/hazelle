@@ -88,6 +88,9 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'codec-unavailable': '데이터를 처리하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.',
   gone: '다른 기기나 탭에서 삭제된 항목이라 바꿀 수 없어요.',
   'too-large': '용량이 너무 커서 저장할 수 없어요.',
+  // A guest's store (runtime/guest-store).
+  'browser-full': `브라우저 저장 공간이 꽉 찼어요. ${BIN}에서 영구 삭제하거나 계정을 만들면 공간이 생겨요.`,
+  'browser-storage': '이 브라우저의 저장소를 열지 못했어요. 새로고침한 뒤 다시 시도해 주세요.',
   offline: '서버에 연결하지 못했어요. 네트워크 상태를 확인해 주세요.',
   'timeline-changed': '계정이 복원돼서 작업을 멈췄어요. 다시 시도해 주세요.',
   'account-restoring': '계정을 복원하고 있어요. 잠시 뒤에 다시 시도해 주세요.',

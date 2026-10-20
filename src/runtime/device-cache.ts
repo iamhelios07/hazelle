@@ -132,13 +132,23 @@ class BrowserCache implements DeviceCache {
 const changed = new WeakSet<IDBTransaction>();
 
 let opened: Promise<IDBDatabase> | undefined;
-function database(): Promise<IDBDatabase> {
+// Also a guest's own store (runtime/guest-store), the account's master rather than a copy of the server's.
+export function database(): Promise<IDBDatabase> {
   opened ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open('risu-alpha-objects', 2);
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore('generations');
-      req.result.createObjectStore('states');
-      req.result.createObjectStore('objects').createIndex('scope', ['account', 'scope']);
+    const req = indexedDB.open('risu-alpha-objects', 3);
+    req.onupgradeneeded = (event) => {
+      const db = req.result;
+      if (event.oldVersion === 0) {
+        db.createObjectStore('generations');
+        db.createObjectStore('states');
+        db.createObjectStore('objects').createIndex('scope', ['account', 'scope']);
+      }
+      db.createObjectStore('guest-heads');
+      const objects = db.createObjectStore('guest-objects');
+      objects.createIndex('rev', ['account', 'rev']);
+      objects.createIndex('parent', ['account', 'parent', 'rev']);
+      objects.createIndex('scope', ['account', 'scope', 'rev']);
+      db.createObjectStore('guest-files');
     };
     // A tab of an older version holding the database open blocks the upgrade: this tab goes on without the cache rather
     // than wait, and this version lets go of it for a newer one.

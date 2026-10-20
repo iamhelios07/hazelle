@@ -10,15 +10,24 @@ const VAULT = 'vault';
 
 const deviceAad = (accountId: string) => `risu-alpha/device/v1/${accountId}`;
 
-type StoredVault = { accountId: string; sealed: string };
+// guest: an account the server never heard of (design §6.14), whose key lives only here. A signed-out page finding a
+// vault without it holds a lapsed session, never a guest.
+type StoredVault = { accountId: string; sealed: string; guest?: true };
 
-export async function rememberVault(accountId: string, vaultKey: VaultKey): Promise<void> {
+export async function rememberVault(accountId: string, vaultKey: VaultKey, guest = false): Promise<void> {
   let key = await read<CryptoKey>(DEVICE_KEY);
   if (!key) {
     key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
     await write(DEVICE_KEY, key);
   }
-  await write(VAULT, { accountId, sealed: await seal(key, vaultKey, deviceAad(accountId)) } satisfies StoredVault);
+  await write(VAULT, { accountId, sealed: await seal(key, vaultKey, deviceAad(accountId)), ...(guest && { guest: true as const }) } satisfies StoredVault);
+}
+
+export async function recallGuest(): Promise<{ accountId: string; vaultKey: VaultKey } | null> {
+  const stored = await read<StoredVault>(VAULT);
+  if (!stored?.guest) return null;
+  const vaultKey = await recallVault(stored.accountId);
+  return vaultKey && { accountId: stored.accountId, vaultKey };
 }
 
 export async function recallVault(accountId: string): Promise<VaultKey | null> {

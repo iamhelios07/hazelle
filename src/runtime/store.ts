@@ -26,9 +26,10 @@ type PullOptions = { signal?: AbortSignal; progress?: (progress: PullProgress) =
 export type Pin = { timeline: string };
 const MAX_ATTEMPTS = 3;
 type Scope = { fold: ChatFold; opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null; summarize: boolean };
-// The server stays the only source of truth: writes go to it first, and a version conflict is resolved by pulling the
-// newer copy and applying the change again on top of it. A store lives on one timeline of the account: when the account
-// moves to another, it ends (rewind) and the session opens a new one, so nothing it holds or does meets the next.
+// The backend (the server, or a guest's browser store) stays the only source of truth: writes go to it first, and a
+// version conflict is resolved by pulling the newer copy and applying the change again on top of it. A store lives on
+// one timeline of the account: when the account moves to another, it ends (rewind) and the session opens a new one, so
+// nothing it holds or does meets the next.
 export class ObjectStore {
   private readonly closing = new AbortController();
   private readonly objects = new ObjectIndex();
