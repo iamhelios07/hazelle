@@ -9,7 +9,7 @@ import type { Back } from '../shell/routes';
 import { ACTS, newOf } from '../common/acts';
 import { useSearch } from '../common/useSearch';
 import { PAGES } from '../common/words';
-import { Button, Callout, Columns, Empty, ItemCard, NavBar, Row, Screen } from '../ui';
+import { Button, Callout, CardItem, CardList, Empty, NavBar, Row, Screen } from '../ui';
 
 // The default model is chosen on 설정's 모델 page, not here.
 export function ConnectionsScreen({ back }: { back: Back | null }) {
@@ -23,11 +23,11 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
   // A pool names who would serve now and what it has left, from meters already read; nothing is fetched for the list.
   function card(connection: Connection) {
     const starred = connection.starred.length ? `추가한 모델 ${connection.starred.length}개` : '추가한 모델 없음';
-    if (!connection.turns) return { description: [connection.accounts[0]!.name, starred].filter(Boolean).join(' · ') };
+    if (!connection.turns) return { aside: [connection.accounts[0]!.name, starred].filter(Boolean).join(' · ') };
     const serving = credentials.pool.peek(connection);
     const held = serving && credentials.pool.held(connection, serving);
     return {
-      description: [`계정 ${connection.accounts.length}개`, ...(serving && held ? [`지금 ${accountName(serving)}`] : []), starred].join(' · '),
+      aside: [`계정 ${connection.accounts.length}개`, ...(serving && held ? [`지금 ${accountName(serving)}`] : []), starred].join(' · '),
       detail: held && <LeftGauge result={held} />,
     };
   }
@@ -42,11 +42,11 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
       {unreadable > 0 && <Callout tone="warn">암호화 키로 열리지 않는 항목 {unreadable}개는 목록에서 뺐어요.</Callout>}
       {search.field && <Row kind="toolbar">{search.field}</Row>}
       {search.none ? (
-        <Empty variant="section">{search.none}</Empty>
+        <Empty>{search.none}</Empty>
       ) : connections.length > 0 ? (
-        <Columns min="wide">
+        <CardList label={PAGES.connections}>
           {search.found.map((connection) => (
-            <ItemCard
+            <CardItem
               key={connection.id}
               title={connection.value.label}
               {...card(connection.value)}
@@ -55,9 +55,9 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
               onClick={() => navigate({ kind: 'connection', id: connection.id })}
             />
           ))}
-        </Columns>
+        </CardList>
       ) : (
-        <Empty variant="section" action={adding}>
+        <Empty action={adding}>
           연결한 제공자가 없어요.
         </Empty>
       )}

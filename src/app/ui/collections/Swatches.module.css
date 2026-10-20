@@ -70,10 +70,10 @@
   color: var(--color-accent);
 }
 
-.note {
+.detail {
+  composes: detail from '../foundation/type.module.css';
   composes: ellipsis from '../foundation/a11y.module.css';
   color: var(--color-text-faint);
-  font-size: var(--text-xs);
 }
 
 .card:has(> .menu) .meta {

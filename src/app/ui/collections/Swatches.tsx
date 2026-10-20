@@ -32,7 +32,7 @@ export function Swatches({ label, sample, items, onMove }: { label: string; samp
                 {name}
                 {current && <Icon icon={Check} size="xs" />}
               </span>
-              <span className={styles.note}>{note}</span>
+              <span className={styles.detail}>{note}</span>
             </span>
           </button>
           {menu && (

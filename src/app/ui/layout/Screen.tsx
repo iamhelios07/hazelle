@@ -16,21 +16,28 @@ type Props = {
   children: ReactNode;
 };
 
+// Screen's aside and Beside's preview are this one grid; sticky, the column stays in view as the body scrolls.
+export function AsideColumns({ aside, sticky = false, children }: { aside: ReactNode; sticky?: boolean; children: ReactNode }) {
+  // A container query measures an ancestor, never the element it styles: the frame is what the columns measure.
+  return (
+    <div className={styles.frame}>
+      <div className={styles.columns}>
+        <div className={sticky ? `${styles.aside} ${styles.sticky}` : styles.aside}>{aside}</div>
+        <div className={styles.main}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export function Screen({ top, align = 'start', width = 'narrow', actions, fill = false, aside, onSubmit, children }: Props) {
   const pane = usePane();
   // A page has one main landmark; beside a list, a screen is one section of it.
   const Root = pane ? 'section' : 'main';
   const content = align === 'center' ? `${styles.content} ${styles.center}` : styles.content;
+  const body = <div className={styles.body}>{children}</div>;
   const inner = (
     <>
-      {aside ? (
-        <div className={styles.columns}>
-          <div className={styles.aside}>{aside}</div>
-          <div className={styles.body}>{children}</div>
-        </div>
-      ) : (
-        <div className={styles.body}>{children}</div>
-      )}
+      {aside ? <AsideColumns aside={aside}>{body}</AsideColumns> : body}
       {actions && <div className={styles.actions}>{actions}</div>}
     </>
   );

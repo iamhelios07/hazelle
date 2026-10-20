@@ -28,7 +28,7 @@ export function Gauge({ label, share, mark, tone = 'plain', status, note, amount
       )}
       <div className={styles.figures}>
         {status && <span className={`${styles.status} ${styles[tone]}`}>{status}</span>}
-        {note && <span className={styles.note}>{note}</span>}
+        {note && <span>{note}</span>}
         <span className={styles.amount}>
           <span className={styles.big}>{amount}</span>
           {of && <span className={styles.of}> {of}</span>}

@@ -36,6 +36,11 @@
   font-size: var(--text-xl);
 }
 
+.fill {
+  width: 100%;
+  height: 100%;
+}
+
 .image {
   width: 100%;
   height: 100%;
@@ -51,3 +56,16 @@
   background: var(--color-you-bg);
   color: var(--color-you-text);
 }
+
+.letter {
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--face) 22%, transparent), transparent 70%),
+    var(--face-bg);
+  color: var(--face);
+}
+
+.tint1 { --face: var(--color-face-1); --face-bg: var(--color-face-1-bg); }
+.tint2 { --face: var(--color-face-2); --face-bg: var(--color-face-2-bg); }
+.tint3 { --face: var(--color-face-3); --face-bg: var(--color-face-3-bg); }
+.tint4 { --face: var(--color-face-4); --face-bg: var(--color-face-4-bg); }
+.tint5 { --face: var(--color-face-5); --face-bg: var(--color-face-5-bg); }

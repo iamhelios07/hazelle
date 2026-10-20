@@ -34,15 +34,10 @@
 }
 
 .track {
-  display: block;
-  height: var(--bar-height);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-raised);
+  composes: track from '../foundation/surface.module.css';
 }
 
 .fill {
-  display: block;
-  height: 100%;
-  border-radius: var(--radius-xs);
+  composes: fill from '../foundation/surface.module.css';
   background: var(--color-text-faint);
 }

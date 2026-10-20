@@ -12,8 +12,7 @@
 }
 
 .label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  composes: detail from '../foundation/type.module.css';
 }
 
 .value {
@@ -74,9 +73,8 @@
 }
 
 .detail {
+  composes: detail from '../foundation/type.module.css';
   margin: 0;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 

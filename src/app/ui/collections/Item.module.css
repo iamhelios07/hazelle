@@ -13,7 +13,7 @@
 .chip {
   display: inline-flex;
   gap: var(--space-8);
-  height: var(--control-tool);
+  min-height: var(--control-chip);
   padding: 0 var(--space-12);
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-full);
@@ -86,15 +86,12 @@
   min-width: 0;
 }
 
-.regular .title {
-  color: var(--color-text);
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
+.rowTitle {
+  composes: title from '../foundation/type.module.css';
 }
 
-.tall .title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
+.tallTitle {
+  composes: fieldLabel from '../foundation/type.module.css';
 }
 
 /* A menu's label still wraps, but its box cuts the first letter's overhang. */
@@ -104,22 +101,22 @@
 }
 
 .meta {
+  composes: detail from '../foundation/type.module.css';
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-8);
   color: var(--color-text-faint);
-  font-size: var(--text-xs);
 }
 
 .preview {
   composes: note from '../foundation/type.module.css';
 }
 
-.compact .preview {
+.sub {
+  composes: detail from '../foundation/type.module.css';
   color: var(--color-text-faint);
-  font-size: var(--text-xs);
 }
 
 .tall .preview {

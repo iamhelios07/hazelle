@@ -10,7 +10,7 @@ import styles from './NavBar.module.css';
 type Back = { backLabel: string; onBack: () => void; close?: boolean } | { backLabel?: never; onBack?: never; close?: never };
 export type NavBarProps = {
   title: string;
-  rename?: { label: string; placeholder: string; onChange: (title: string) => void };
+  rename?: { label: string; placeholder: string; blank?: string; onChange: (title: string) => void };
   subtitle?: ReactNode;
   status?: string;
   actions?: ReactNode;
@@ -31,7 +31,7 @@ export function NavBar({ title, rename, subtitle, status, backLabel, onBack, clo
         </span>
       )}
       <div className={styles.titles}>
-        <h1 className={styles.title}>{rename ? <TitleField label={rename.label} value={title} placeholder={rename.placeholder} onChange={rename.onChange} place={line ? 'line' : 'page'} /> : title}</h1>
+        <h1 className={styles.title}>{rename ? <TitleField label={rename.label} value={title} placeholder={rename.placeholder} blank={rename.blank} onChange={rename.onChange} place={line ? 'line' : 'page'} /> : title}</h1>
         {subtitle && <div className={styles.subtitle}>{subtitle}</div>}
       </div>
       {status !== undefined && (

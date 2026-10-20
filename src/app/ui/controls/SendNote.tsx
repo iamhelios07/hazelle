@@ -7,7 +7,7 @@ import styles from './SendNote.module.css';
 type Props = { label: string; title: string; warning?: { words: string; why: string }; onClick?: () => void };
 
 export function SendNote({ label, title, warning, onClick }: Props) {
-  const className = [styles.note, warning && styles.warn, onClick && styles.press].filter(Boolean).join(' ');
+  const className = [styles.sendNote, warning && styles.warn, onClick && styles.press].filter(Boolean).join(' ');
   const body = (
     <>
       <Icon icon={warning ? TriangleAlert : Timer} size="xs" />

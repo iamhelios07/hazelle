@@ -20,7 +20,7 @@ and only this folder styles elements.**
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
 - `foundation/motion.module.css` holds every keyframe, `foundation/a11y.module.css` the
   screen-reader-only box and the one-line ellipsis, and `type.module.css` and `surface.module.css` the looks several
-  components share (a note, a box of rows, a field). Components take them with `composes` and never redeclare them.
+  components share (a note, a detail line, a row's title, a box of rows, a field, a fraction bar). Components take them with `composes` and never redeclare them.
 - `overlays/layers.ts` is the only document listener for keys and presses. Menus and dialogs join
   its stack with `useLayer`, and Esc or a press outside reaches the newest one only.
 - Each component is a `.tsx` named after its main export, with its own `.module.css`, in one of the
@@ -46,13 +46,17 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
   and footer `md` (`ButtonSlot`); a caller in a slot passes no `size`. Free-standing buttons keep theirs.
 - **A screen's head:** `{noun} 가져오기` (secondary, `ACTS.import`) before `새 {noun}` (secondary, `ACTS.create`);
   nothing primary. What is done to the thing the screen shows (사본 만들기, 기본으로 정하기, 삭제 in `tone="warn"`)
-  goes in `NavBar` `menu`, a ⋯, never at the foot of the body. A row opened in place (a lorebook entry, a script)
+  goes in `NavBar` `menu`, a ⋯, never at the foot of the body. What cannot be done to it now stays there disabled, its
+  words saying why, such as 삭제 on the default. A row opened in place (a lorebook entry, a script)
   keeps `이 {noun} 삭제` (danger) at its own foot, and a row's own ⋯ is `MoreMenu`.
 - **Words:** 새 X makes a thing of its own, X 추가 adds an entry to its owner's list. Files come in with 가져오기 and go out
   with 내보내기; 불러오는 중 means loading only. A failure offers 다시 시도. Reset is 기본값으로 되돌리기 in the
   section's action, a `link`. Stopping is 멈추기.
-- **Rename:** an item named only by its name renames in `NavBar` `rename`; one with more identity (a character, a
-  persona: name and alias) keeps its 이름 field. A row renames from its ⋯ (`ACTS.rename`).
+- **Rename:** an item named only by its name renames in its title, `NavBar` `rename` (`ItemSection` `rename` where it
+  stands under the cards it was picked from), never from a ⋯ and a dialog; one with more identity (a character, a
+  persona: name and alias) keeps its 이름 field. A row renames from its ⋯ (`ACTS.rename`). A blank name keeps the old
+  one (`TitleField`, `NameDialog`) unless a blank is a value, which `blank` says in a sentence (a model: its catalog name
+  stands in), the placeholder then naming what stands in.
 - **Lists:** a list of places (`List places`) shows a › on each row; a list of the user's own things shows none.
   Contents go in `description`, where it is used in `aside`; an unused thing says nothing there. Counts read
   `{label} N개`, joined by ` · `. The default is the `badge` 기본.
@@ -63,9 +67,11 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
   다시 시도. Loading is a note ending in `…`.
 - **Controls:** on/off is a `Switch`; one of several is `ChoiceGroup layout="fit"`, a segmented strip for up to
   four short choices and a menu behind a field `ChipButton` past that (`layout="menu"`, quiet words beside the name,
-  for a prompt's choice toggle); chips are for filters. Explanations go behind ⓘ (`help`), never as visible prose.
+  for a prompt's choice toggle); chips are for filters, and for colour picks, each chip leading with its mark (대사 모양 is `fit`). A shared default
+  that cannot be empty steps with a `Stepper`; an override that can be empty, so the default applies, is an emptyable
+  number field (`NumberInput`), as the retries are. Explanations go behind ⓘ (`help`), never as visible prose.
 - **Focus rings are never cut.** The global ring sits `--focus-ring-reach` outside its element, and a box that scrolls or clips cuts whatever passes its padding. So a field (`surface` `field`, `SearchField`) and a row in a `List box` draw the ring inside, and a scrolling box with no padding of its own keeps that reach as padding, given back with a negative margin (`Dialog`'s body, `Sidebar`'s rail, `AskCard`'s choices). A new scrolling box does the same.
-- **Width:** settings pages are `page`, shaped for what each holds (`Panel`, `Columns`, `PickCard`, `Table`); item editors are `form`; a one-step flow (a key, a sign-in) is `narrow`.
+- **Width:** settings pages are `page` or `form`, by what the page holds (`Panel`, `Columns`, `PickCard`, `Table` want `page`; a column of rows, `form`); item editors are `form`; a one-step flow (a key, a sign-in) is `narrow`.
 
 ## Components
 
@@ -74,8 +80,8 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | — | `tokens.css`, `global.css` | Every raw value; element defaults, a bare button among them, and reduced motion |
 | foundation | — | `motion.module.css` | Every animation: fade, rise, drop, fade away, spin, pulse, blink, waiting dots, sway |
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
-| foundation | — | `type.module.css` | Shared text looks: a note, an error line, a field's label |
-| foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field and its compact size, an accent dot |
+| foundation | — | `type.module.css` | Shared text looks: a note (sm; a class named `note` is this one), a detail line (xs; a class named `detail` or `sub`), a row's title, an error line, a field's label |
+| foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field's frame, a field and its compact size, a fraction bar's track and fill, where a dragged thing would land, an accent dot |
 | foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`, `usePanelsBeside`, `useViewport`, `hasFinePointer`) | — | Every breakpoint and media query |
 | foundation | `theme.ts` (`applyScheme`, `schemeAttributes`, `THEME`, `BG`, `INK`, `ACCENT`) | — | The theme and color picks on the document or an element |
 | foundation | `ColorDot` | `ColorDot.module.css` | A color pick as the current theme draws it |
@@ -84,26 +90,26 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | `quotes.ts` (`QuoteShapeContext`, `QUOTE_SHAPE`) | — | 대사 모양: how a story's outermost dialogue and 속마음 marks stand (색만 · 줄바꿈 · 상자 · 점선 속마음); the user's bubble keeps 색만 |
 | foundation | `mark.ts` (`MARK`) | — | The one drawing of the logo mark, also read by `brand/render.mjs` for the favicon and icons |
 | foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
-| foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |
+| foundation | `Avatar` | `Avatar.module.css` | A face: picture, icon, or a name's first letter, tinted by the name (the user's own in their colour); four sizes, or `fill`, the frame it stands in (`CardGrid`'s pictures) |
 | foundation | `Brand` | `Brand.module.css` | The wordmark |
 | foundation | `Divider` | `Divider.module.css` | Lines between groups: a labeled line, the story's (with an icon and an action where a branch split) or a toggle list's, one plain rule when it has no label; and the menu, tools and rail lines |
 | foundation | `Icon` | `Icon.module.css` | Icon sizes and stroke |
-| foundation | `Kbd` | `Kbd.module.css` | One key cap |
+| foundation | `Kbd` (inside the kit only) | `Kbd.module.css` | One key cap, in a notice's action and the 단축키 list |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph by its role: body, a note (보조 설명: a status, a limit, a caption under a thing) or prose; its alignment |
-| layout | `Beside` | `Beside.module.css` | The body and a narrower column beside it where both fit, such as 운영's 기록 beside its accounts, the column under the body where not; `preview`, a preview of what the body changes (디스플레이's 미리보기), which stays in view as the body scrolls and stands above it where narrow |
+| layout | `Beside` | `Beside.module.css` | The body and a narrower column beside it where both fit, such as 운영's 기록 beside its accounts, the column under the body where not; `preview`, a preview of what the body changes (디스플레이's 미리보기): `Screen`'s aside column, kept in view as the body scrolls |
 | layout | `ChatFrame` (`ChatTitle`, `Reading`, `StageSide`, `readingDefault`, `useMarginRoom`) | `ChatFrame.module.css` | The chat page: a header that hides while the story is read down and a composer dock, both floating over the story; the chat's title, which opens its list of chats; the reading settings as custom properties; a `peek` slot for `SidePeeks`; `panel` beside the story and `beside`, a second panel, only where both fit (`usePanelsBeside`); with `stage`, the story set beside a stage for 삽화 on `side` where it fits (`useMarginRoom`); with `portrait` and no `stage`, that stage holds the character's picture |
 | layout | `Columns` | `Columns.module.css` | As many equal columns as fit, each no narrower than its kind (a pick card, a row-like card, a card of settings); one on a narrow page |
-| layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take; what is folded is made only while open; `menu`, a ⋯ at the end of the line; `open` and `onOpen` when the caller holds whether it is open; `variant="row"`, a box of its own whose head is a full-width row (label, `meta` such as how many are set, chevron) and whose rows open under it ruled like a group's, for a page's 세부 설정 |
+| layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take; what is folded is made only while open; `menu`, a ⋯ at the end of the line; `open` and `onOpen` when the caller holds whether it is open |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
 | layout | `FieldRow` | `FieldRow.module.css` | A name and its value as two fields on one line, the name narrower, an action such as delete at the end; the fields show no label, their placeholders name them |
-| layout | `ItemSection` | `ItemSection.module.css` | A thing picked from the cards above it as a part of their page, not a page of its own (a `ListDetail` stack): a rule, its name a step under the page title's, a line under it, a ⋯ |
+| layout | `ItemSection` | `ItemSection.module.css` | A thing picked from the cards above it as a part of their page, not a page of its own (a `ListDetail` stack): a rule, its name a step under the page title's (with `rename`, the field that renames it, as `NavBar`'s), a line under it, a ⋯ |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it, or the list stacked over the item in one scroll. `usePane` tells a screen which pane holds it (`stack`: a part of the list's page) |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (a chevron, an ×, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
-| layout | `Panel` | — | A group of a settings page: a `Section` heading with its ⓘ and an action or a switch, at level 3 a subtitle on a hairline; it draws no box, so rows of controls take a `SettingGroup`, a list `List`'s box, and what is only read (figures, gauges) stands open |
+| layout | `Panel` | — | A group of a settings page: a `Section` heading with its note, its ⓘ and an action or a switch, at level 3 a subtitle on a hairline; it draws no box, so rows of controls take a `SettingGroup`, a list `List`'s box, and what is only read (figures, gauges) stands open |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
-| layout | `Screen` | `Screen.module.css` | The page frame, as a page or a pane; narrow, form, wide or page (설정's pages, the column beside the settings sidebar). `aside` adds a column beside the body once the screen is wide enough, stacked above it when not. The edges of its boxes (`SettingGroup`, `List`) stand on the line of its title and section titles. A page sets the page scale its parts read (`--section-title`, `--section-gap`, `--box-line`: larger section titles, more room between sections, boxes without a line); a pane, or a `Dialog` opened inside a page, keeps the smaller one |
+| layout | `Screen` (`AsideColumns`, inside the kit only) | `Screen.module.css` | The page frame, as a page or a pane; narrow, form, wide or page (설정's pages, the column beside the settings sidebar). `aside` adds a column beside the body once the screen is wide enough, stacked above it when not (the grid `Beside`'s `preview` shares). The edges of its boxes (`SettingGroup`, `List`) stand on the line of its title and section titles. A page sets the page scale its parts read (`--box-inset`, `--section-title`, `--section-gap`, `--box-line`: rows set in from their box's edge, larger section titles, more room between sections, boxes without a line); a side panel keeps the smaller one, and a `Dialog` opened inside a page sets all four back to it |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional tag (the layer a value comes from), note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow |
@@ -115,9 +121,10 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `Button` (`ButtonSlot`, inside the kit only) | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner; the size a slot decides |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, shaped like a field for a setting, borderless in the composer, or quiet words of at most a narrow chip's width beside a name (value); with a leading icon or face |
-| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, a list with a line under each, a menu from a field chip, or (fit) a strip that becomes that menu past four short options, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does; a chip may lead with a mark |
+| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips (the filter pill `Tab` draws), equal buttons, a segmented strip, a list with a line under each, a menu from a field chip, or (fit) a strip that becomes that menu past four short options, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does; a chip may lead with a mark |
 | controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar; `compact` folds it to one line until focus goes inside |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
+| controls | `FontPicker` | — | The reading font, a menu from a field chip with each face's name drawn in that face, grouped by kind |
 | controls | `FileButton` (`pickFiles`) | — | A `Button` that opens a file picker; `pickFiles` opens one from any press, such as a menu item |
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가; a dot when something behind it needs a look |
 | controls | `Link` | `Link.module.css` | A link to another site |
@@ -133,14 +140,14 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | controls | `Stepper` | `Stepper.module.css` | A whole number stepped one at a time between two bounds, such as the story's text size |
 | controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once, dimmed while it has no effect |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error, and an ⓘ explanation by its label; read-only on a quieter ground; text taken as typed (a key, an address, a script's code) in the mono face; given `expand`, a text area's big editor (`useBigEdit`) from a button by its label, the code editor (`CodeField`) when given `language` |
-| controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
+| controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it; a blank keeps the last name, shown again when the field is left, unless `blank` says what a blank means, which lets it through |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
 | controls | `useBigEdit.tsx` (inside the kit only) | `useBigEdit.module.css` | A text area edited big: a quiet button and the caller's keys open the same control over most of the screen (a `full` `Dialog`), bound to the same value with nothing to save; the keys close it, and the caret goes back to the field; the copy hands its caret back through `BigCopy` |
 | collections | `Viewport` (`ROWS_RESIZED`, `Seek`) | `Viewport.module.css` | A keyed, measured window of rows within its scroll parent or document, a `ul` of `li` rows when named as a list; keeps focus, row state and jumps across remounts, holds what is being read while rows above it are measured, and says when a row's height changed |
 | collections | `Bars` | `Bars.module.css` | One measure over time, a bar per period; the bar pointed at or tapped, else the latest, read out under it |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts, the whole named above the bar when given |
-| collections | `CardList` (`CardItem`) | `CardList.module.css` | The user's own things as cards across the width, one column in a side panel or on a phone: name, badge and tags, where it is used under it, a control beside it, and things folded under it (its copies) as rows inside the card; a folder among them (`folder`) takes the folder mark and the cards dragged onto it, on its own fill (no ›, which unfolds a card's copies) |
+| collections | `CardList` (`CardItem`) | `CardList.module.css` | The user's own things as cards across the width, one column in a side panel or on a phone: name, badge and tags, where it is used under it, a control beside it, something under it such as a gauge (`detail`), and things folded under it (its copies) as rows inside the card, hung from `FolderRow`'s guide line; marked while it is open (`current`, API 연결's connections); a folder among them (`folder`) takes the folder mark and the cards dragged onto it, on its own fill (no ›, which unfolds a card's copies) |
 | collections | `CardGrid` (`FaceCard`, `FolderCard`, `Portrait`, `Preview`, `SelectionBar`) | `CardGrid.module.css` | Characters and pictures as cards, folders among them shaped as folders (a tab over up to four faces, each a quarter); with `onPlace`, a card or folder let go beside another of its own lands there, a line in the gap showing where (`cardDrag.ts`); with `arrange`, a handle moves it the same way by pointer of any kind, the arrows, and scrolling at the edge (`cardOrder.tsx`); a card's picture whole in a dialog (`Preview`) |
 | collections | `PathBar` | `PathBar.module.css` | Where a list stands, from the top down |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs; `tiles` two to a line on a panel's ground, `row` all in one line, two to a line on a phone; `figures` a row of counts whose values lead |
@@ -148,10 +155,9 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `Ranking` (`Ranked`) | `Ranking.module.css` | Things ranked by one measure: a place each, the first three as gold, silver and bronze medals and the first on a gold-edged card, a small mark of its move since an earlier ranking under the place (▲ up, ▼ down, NEW, each in its own color, read aloud in words), a line of facts and a bar of its share of the largest under the name, an optional ⓘ beside the name, the measure at the end; a row without a place (the rest pooled) last, under a dash |
 | collections | `Swatches` | `Swatches.module.css` | Looks to pick from as cards, each drawn in its own scheme and face whatever the app's, the current one pressed and checked, an own one with a ⋯ menu; with `onMove`, dragged into another order (`dragOrder.ts`, shared with `Outline`) |
 | collections | `FolderMark` | `FolderMark.module.css` | The filled folder mark every folder's row leads with, through the rows' `folder` flag |
-| collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
-| collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), each place's colours, and the hover and current fills |
+| collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line, which `List`'s and `CardList`'s folded rows hang from too |
+| collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: leading, title, meta, preview and trailing slots, four densities (chip, the filter pill `Tab` and `ChoiceGroup`'s chips draw; compact, regular, tall), each place's colours, and the hover and current fills, which `Table` and `ChoiceGroup`'s list compose |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
-| collections | `ItemCard` | `ItemCard.module.css` | One of the user's things as a card in a grid, opening it: its name, tags, a line of what it holds and something under it such as a gauge; marked while it is open (API 연결's connections) |
 | collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them, in a box or not, a › on each row of a list of places and on a folder's row (`folder`, with the folder mark), or, given keys, only the rows near the view; a model id; a figure at a row's end; a control beside a row, something under a row's text such as a gauge, and rows set in under it |
 | collections | `NavGroup` | `NavGroup.module.css` | A set of places in the app, spaced apart from the next set, such as 설정's |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |
@@ -160,7 +166,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name, its ⓘ explanation, a line of facts and a preview of the text it holds (a line each, cut to the row's width) beside its control, which goes under them on phones, and its ⋯ menu, which stays at the end of the words' line; a folder's row (`folder`) takes the folder mark before its name; outside a group, a bare row among fields, marked when it differs from its default |
 | collections | `Table` (`TableColumn`) | `Table.module.css` | Things compared by the same few facts, a row each that opens its thing or holds its controls; a dash where a row has nothing; narrow, a row becomes its first cell over a summary line and the columns kept; a folder's row (`folder`) takes the folder mark, a › after its name and the rows dragged onto it |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
-| collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
+| collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list as pills, from `items`, `value` and `onChange`; `Tab` children are the form its callers are leaving |
 | overlays | `layers.ts` (`useLayer`, `useAnchored`, `useFocusTrap`, `TAB_STOPS`) | — | The layer stack for Esc and presses outside; a popover fixed by its anchor on the body, flipped to the anchor's other side where it would run off the screen and closed by a scroll (`Hint`, `MascotRemark`); a dialog's focus trap, which starts on the element marked `data-autofocus`, else the first control |
 | overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; `wide`, a picker at a fixed height, a sheet on a phone; `full`, nearly the whole screen, all of a phone's; the 단축키 list |
@@ -186,6 +192,9 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | story | `Story` (`BotButton`, `READER_RESIZED`, `inlaid`) | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons live or dimmed, and which one was pressed (`BotButton`); math drawn with KaTeX (`math.ts`); the streaming caret; faded while another text will take its place; the message's 삽화 slotted in where its mark stands, or at the end (`inlaid`) |
 | story | `StoryPicture` | `StoryPicture.module.css` | A picture made for a message (삽화) in its story: its frame at the picture's shape while it loads or is made, the 이미지 가리기 stand-in, and a foot of controls; pressed, the picture opens in `PictureView` |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story: its quiet tag by the name (such as 번역, which flips it), the badges tools put on it (two, then +N), a row under it with its markers (cut, stopped, translation, 삽화) and its tools, its height kept while the tools are absent; a ring that fades from a message looked for, such as a memory record's source; under the avatar, the reader's place in a message taller than the view (`readingRail.ts`, which `ChatFrame` runs): a rail stuck below the header that fills as the message passes the composer, with the share read, fading at its end and without the share while the message is still being written |
+| story | `Scrubber` | `Scrubber.module.css` | A track down the story's edge whose thumb stops at each message's start, an even share each; a drag moves the view and names the message in a bubble, and where stops crowd, a finger drawn left steps one at a time; shown while the story moves, pointer only |
+| story | `StepButtons` | `StepButtons.module.css` | Up and down a story by its messages, shown while the reader moves over it, the place reached named beside them for a moment; a held press goes to the story's end |
+| story | `SelectionButton` (`SelectionEnd`) | `SelectionButton.module.css` | A button at the end of a selection in the story, below its last line or above it near the view's foot, which keeps the selection when pressed, such as 수정 |
 | story | `SceneBoard` | `SceneBoard.module.css` | Where each figure of a 삽화's scene stands, on a box of the picture's shape: a chip per figure, its name, dragged by pointer of any kind or moved by the arrows, and a × that takes it out |
 | story | `MascotRemark` | `MascotRemark.module.css` | The mascot's line on a reply (마스코트 대사): a pill of its face and ··· at the start of the message's tools, its dots swaying until first opened (in the accent colour under reduced motion); the card above it, the name and the line beside a 3:5 portrait on a cream-to-gold ground, opened by a pointer resting on the pill, a tap, or a key's focus, its picture loaded only once open |
 | story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text: its script's name and actions among several |

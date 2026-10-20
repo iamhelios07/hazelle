@@ -5,6 +5,7 @@ import { Section } from './Section';
 type Props = {
   title: string;
   level?: 2 | 3;
+  note?: string;
   help?: Help;
   // By the title: a button (sm) or a control that acts on the whole group, such as its Switch.
   action?: ReactNode;
@@ -12,9 +13,9 @@ type Props = {
   children: ReactNode;
 };
 
-export function Panel({ title, level = 2, help, action, seek = false, children }: Props) {
+export function Panel({ title, level = 2, note, help, action, seek = false, children }: Props) {
   return (
-    <Section title={title} level={level} help={help} action={action} seek={seek} group>
+    <Section title={title} level={level} note={note} help={help} action={action} seek={seek} group>
       {children}
     </Section>
   );

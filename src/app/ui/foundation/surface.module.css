@@ -16,11 +16,16 @@
   border-top: var(--border-thin) solid var(--color-divider);
 }
 
-/* On an input or a textarea only: every other element matches :read-only. */
-.field {
+/* A field's edge and ground, on any element: SearchField draws it round an input of its own. */
+.frame {
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+}
+
+/* On an input or a textarea only: every other element matches :read-only. */
+.field {
+  composes: frame;
 }
 
 /* A field fills its line, so its ring lies on its border, inside: outside, the edge of a box that scrolls would cut it. */
@@ -41,6 +46,28 @@
   composes: field;
   height: var(--control-compact);
   padding: 0 var(--space-12);
+}
+
+/* A share of a whole as a bar; the fill's colour is each component's own. */
+.track {
+  display: block;
+  height: var(--bar-height);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-raised);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-xs);
+}
+
+/* Where a dragged card or row would land. Doubled to stay over the fill of what it marks: a folder's ground, a row's
+   hover (Item's, three classes strong). */
+.dropping.dropping,
+.dropping.dropping:hover:not(:disabled) {
+  outline: var(--border-thick) solid var(--color-accent);
+  background: var(--color-accent-bg);
 }
 
 .dot {

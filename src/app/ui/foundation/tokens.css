@@ -380,7 +380,7 @@
   --dot: 6px;
   --bar-height: 4px;
   --rank-place: 32px;
-  --gauge-height: 8px;
+  --bar-height-thick: 8px;
   --chart-height: 120px;
   --chart-bar-max: 40px;
   --screen-narrow: 440px;

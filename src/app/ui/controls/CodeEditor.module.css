@@ -209,7 +209,7 @@
 }
 
 .comment {
-  color: var(--color-text-faint);
+  composes: comment from './MarkupArea.module.css';
   font-style: italic;
 }
 
@@ -218,7 +218,7 @@
 }
 
 .tag {
-  color: var(--color-markup-cbs);
+  composes: cbs from './MarkupArea.module.css';
   font-weight: var(--weight-semibold);
 }
 
@@ -231,9 +231,7 @@
 }
 
 .slot {
-  border-radius: var(--radius-xs);
-  background: var(--color-markup-slot-bg);
-  color: var(--color-markup-slot);
+  composes: slot from './MarkupArea.module.css';
 }
 
 /* After the code font's rules, which these replace at the same specificity. */
@@ -250,11 +248,11 @@
 }
 
 .rule {
-  color: var(--color-markup-rule);
+  composes: rule from './MarkupArea.module.css';
 }
 
 .angle {
-  color: var(--color-markup-angle);
+  composes: angle from './MarkupArea.module.css';
 }
 
 .split {

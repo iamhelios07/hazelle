@@ -31,8 +31,6 @@
   color: var(--color-text);
 }
 
-.note {
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-  color: var(--color-text-muted);
+.detail {
+  composes: detail from '../foundation/type.module.css';
 }

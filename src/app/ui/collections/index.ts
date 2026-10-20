@@ -6,7 +6,6 @@ export { PathBar } from './PathBar';
 export { Ranking, type Ranked } from './Ranking';
 export { Facts } from './Facts';
 export { FolderRow, TreeRow } from './FolderRow';
-export { ItemCard } from './ItemCard';
 export { ItemRow } from './ItemRow';
 export { List, ListItem } from './List';
 export { NavGroup } from './NavGroup';

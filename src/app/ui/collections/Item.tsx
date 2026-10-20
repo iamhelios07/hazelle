@@ -30,16 +30,18 @@ export function Item({ density, scheme, leading, title, meta, preview, trailing,
   const line = density === 'tall' && meta === undefined && preview === undefined;
   const classes = [styles.item, styles[density], styles[scheme], line && styles.line, onClick && styles.pressable, branch && styles.branch, tone !== 'default' && styles[tone]].filter(Boolean).join(' ');
   const clip = density === 'regular';
+  const titleClass = [styles.title, density === 'regular' && styles.rowTitle, density === 'tall' && styles.tallTitle, clip && styles.clip].filter(Boolean).join(' ');
+  const previewClass = density === 'compact' ? styles.sub : clip ? `${styles.preview} ${styles.clip}` : styles.preview;
   // meta and preview are drawn even when empty: an empty time still keeps its gap beside the title.
   const content = (
     <>
       {branch ? <Icon icon={expanded ? ChevronDown : ChevronRight} size="xs" /> : leading}
       <span className={styles.text}>
         <span className={styles.head}>
-          <span className={clip ? `${styles.title} ${styles.clip}` : styles.title}>{title}</span>
+          <span className={titleClass}>{title}</span>
           {meta !== undefined && <span className={styles.meta}>{meta}</span>}
         </span>
-        {preview !== undefined && <span className={clip ? `${styles.preview} ${styles.clip}` : styles.preview}>{preview}</span>}
+        {preview !== undefined && <span className={previewClass}>{preview}</span>}
       </span>
       {trailing}
     </>
