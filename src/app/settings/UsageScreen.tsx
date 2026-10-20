@@ -73,7 +73,7 @@ export function UsageScreen({ back }: { back: Back | null }) {
             <Shares items={shares(report.characters, ({ key }) => characterName(key))} />
           </Section>
           {chats.length > 0 && (
-            <Section title="채팅" action={!allChats && chats.length > CHATS_SHOWN ? <SeeAll onClick={() => setAllChats(true)} /> : undefined}>
+            <Section title="채팅" action={chats.length > CHATS_SHOWN ? <SeeAll total={chats.length} open={allChats} onClick={() => setAllChats((open) => !open)} /> : undefined}>
               <Shares items={shares(allChats ? chats : chats.slice(0, CHATS_SHOWN), ({ key }) => chatName(key))} />
             </Section>
           )}

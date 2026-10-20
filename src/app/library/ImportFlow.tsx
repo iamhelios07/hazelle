@@ -23,7 +23,7 @@ import { describeFailure } from '../common/failure';
 import { ImportContext } from '../common/importing';
 import { sizeText } from '../common/size';
 import { useSearch } from '../common/useSearch';
-import { BIN, moduleName, NO_CHARACTER, promptName, RISU_PLUGIN } from '../common/words';
+import { BIN, MISSED, moduleName, NO_CHARACTER, promptName, RISU_PLUGIN } from '../common/words';
 import { useFiles, useLibrary, useSession, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
@@ -456,10 +456,9 @@ function FilledSummary({ result }: { result: Filled }) {
   );
 }
 
-const MISSED = '못 가져온 것';
 
 function Missed({ lines }: { lines: string[] }) {
-  return <Outcome label={MISSED} items={[{ title: MISSED, note: lines.join(' · ') }]} />;
+  return <Outcome title={MISSED} items={lines.map((title) => ({ title }))} />;
 }
 
 function Failed({ file, failure }: { file: string; failure: string }) {

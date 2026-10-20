@@ -13,7 +13,7 @@ import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { describeUnused } from '../common/unused';
 import { count as countText } from '../common/typedNumber';
-import { LORE_BUDGET_LABEL, moduleName } from '../common/words';
+import { LORE_BUDGET_LABEL, MISSED, moduleName } from '../common/words';
 import { useFiles, useStanding, useStore } from '../session';
 import { Button, Callout, Checkbox, Dialog, Outcome, Progress, Section, Stack, Text, type ProgressStep } from '../ui';
 import { cardMissed, missedLines, moveMissed } from './missed';
@@ -170,7 +170,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       <Dialog title="채웠어요" note={note} onClose={onClose} actions={close}>
         <Stack gap="section">
           <Text>{`이미지 ${pictures}개를 채웠어요`}</Text>
-          {lines.length > 0 && <Outcome label="못 채운 것" items={[{ title: '못 채운 것', note: lines.join(' · ') }]} />}
+          {lines.length > 0 && <Outcome title="못 채운 것" items={lines.map((title) => ({ title }))} />}
         </Stack>
       </Dialog>
     );
@@ -314,11 +314,7 @@ function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
       <Text>{`캐릭터 ${moved.characters.length}개 · 대화 ${chats}개 · 페르소나 ${moved.personas}개 · 프롬프트 ${moved.prompts}개 · 모듈 ${moved.modules.length}개`}</Text>
       {moved.loreBudget !== null && <Text variant="note">{`Risu에서 정한 ${LORE_BUDGET_LABEL}(${countText(moved.loreBudget)}토큰) 설정도 함께 가져왔어요.`}</Text>}
       {moved.toggles > 0 && <Text variant="note">{`Risu에서 쓰던 토글 값 ${moved.toggles}개도 함께 가져왔어요.`}</Text>}
-      {missed.length > 0 && (
-        <Section level={3} title="가져오지 않은 것">
-          <Outcome label="가져오지 않은 것" items={missed} />
-        </Section>
-      )}
+      {missed.length > 0 && <Outcome title={MISSED} items={missed} />}
       {notUsed && <Text variant="note">{notUsed}</Text>}
     </Stack>
   );

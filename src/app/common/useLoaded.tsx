@@ -4,6 +4,7 @@ import type { Page } from '../../runtime/pages';
 import { Button, Callout, Empty, List, Text } from '../ui';
 import { ACTS } from './acts';
 import { describeFailure } from './failure';
+import { count } from './typedNumber';
 import { LOADING, SEE_ALL } from './words';
 
 // A failed reload keeps what was shown. A change in deps asks again as reload does.
@@ -81,10 +82,11 @@ export function usePages<T>(load: (after: string | null) => Promise<ApiResult<Pa
   };
 }
 
-export function SeeAll({ onClick }: { onClick: () => void }) {
+// The door to the rest of a list: a page when total is unknown (the list pages), else the same place, folding back with 접기.
+export function SeeAll({ total, open = false, onClick }: { total?: number; open?: boolean; onClick: () => void }) {
   return (
     <Button variant="secondary" onClick={onClick}>
-      {SEE_ALL}
+      {open ? '접기' : total === undefined ? SEE_ALL : `${SEE_ALL} (${count(total)})`}
     </Button>
   );
 }

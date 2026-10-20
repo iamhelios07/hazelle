@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { day } from '../common/time';
 import { NEWS, type News } from '../common/release';
 import { SeeAll } from '../common/useLoaded';
-import { Dialog, List, ListItem, Panel, Stack, Text } from '../ui';
+import { List, ListItem, Panel, Stack, Text } from '../ui';
 
 const TITLE = '새 소식';
-// The rest opens in a dialog, so the account page does not grow with every release.
 const SHOWN = 3;
 
 export function NewsSection({ seek }: { seek: boolean }) {
@@ -13,15 +12,10 @@ export function NewsSection({ seek }: { seek: boolean }) {
   return (
     <Panel
       title={TITLE}
-      action={NEWS.length > SHOWN ? <SeeAll onClick={() => setAll(true)} /> : undefined}
+      action={NEWS.length > SHOWN ? <SeeAll total={NEWS.length} open={all} onClick={() => setAll((open) => !open)} /> : undefined}
       seek={seek}
     >
-      <NewsList news={NEWS.slice(0, SHOWN)} />
-      {all && (
-        <Dialog title={TITLE} onClose={() => setAll(false)}>
-          <NewsList news={NEWS} />
-        </Dialog>
-      )}
+      <NewsList news={all ? NEWS : NEWS.slice(0, SHOWN)} />
     </Panel>
   );
 }
