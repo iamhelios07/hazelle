@@ -8,6 +8,15 @@ export type News = { version: string; date: string; lines: string[] };
 // Newest first. Only a release a user would notice gets an entry; the deploy skill drafts it from scripts/release-notes.sh.
 export const NEWS: News[] = [
   {
+    version: 'v0.3.4',
+    date: '2026-10-20',
+    lines: [
+      '응답이 다 오다가 마지막에 제공자가 거절해도(SAFETY 등) 받은 본문이 그대로 남아요. 차단됨 표시와 함께 이어 쓰기, 번역, 수정을 쓸 수 있고, 응답 정보에서 거절 이유를 볼 수 있어요.',
+      '연결이 끊겨 실패한 응답도 받은 본문을 보여 줘요.',
+      '이름 바꾸기 창이 빈 이름을 받지 않아요.',
+    ],
+  },
+  {
     version: 'v0.3.3',
     date: '2026-10-20',
     lines: [
