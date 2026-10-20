@@ -92,7 +92,7 @@ function BoardAside({ operator }: { operator: boolean }) {
         title="내 게시판"
         head={
           <>
-            <AuthorLine author={{ name, operator: admin, mine: true, left: false }} note={BOARD.nickname} size="md" />
+            <AuthorLine author={{ name, operator: admin, mine: true, left: false }} note={admin ? undefined : BOARD.nickname} size="md" />
             {/* The operator writes as 운영자, which no one picks or changes. */}
             {!admin && nickname.data && (
               <Button variant="secondary" size="sm" onClick={() => setChanging(true)}>

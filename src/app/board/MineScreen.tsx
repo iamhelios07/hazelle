@@ -35,7 +35,7 @@ export function MineScreen({ back }: { back: Back }) {
       {nickname.failure}
       {nickname.data && (
         <Row kind="spread">
-          <AuthorLine author={{ name: name ?? null, operator: admin, mine: true, left: false }} note={BOARD.nickname} size="md" />
+          <AuthorLine author={{ name: name ?? null, operator: admin, mine: true, left: false }} note={admin ? undefined : BOARD.nickname} size="md" />
           {/* The operator writes as 운영자, which no one picks or changes. */}
           {!admin && (
             <Button variant="secondary" size="sm" onClick={() => setChanging(true)}>
