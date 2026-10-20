@@ -18,7 +18,13 @@ export function readOptional(draft: string, whole: boolean): number | null | und
   return typed.ok ? typed.value : null;
 }
 
-export function readCount(draft: string): number | null {
+// A whole number from least up; null: not one the field takes.
+const readAtLeast = (least: number) => (draft: string): number | null => {
   const typed = readTyped(draft, true);
-  return typed.ok && typed.value >= 1 ? typed.value : null;
-}
+  return typed.ok && typed.value >= least ? typed.value : null;
+};
+
+// How many of a thing: at least one.
+export const readCount = readAtLeast(1);
+// How many where none is a value too.
+export const readWhole = readAtLeast(0);

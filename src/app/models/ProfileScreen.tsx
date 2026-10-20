@@ -5,7 +5,7 @@ import { addProfile, modelProfile, removeProfile, restoreProfile, setDefaultProf
 import { ACTS, addOf } from '../common/acts';
 import { useSearch } from '../common/useSearch';
 import { saveWords } from '../common/useAutosave';
-import { BIN_KEEPS, defaultMark, MODEL_SETTINGS, ORIGINAL, resetTo, SET_DEFAULT } from '../common/words';
+import { BIN_KEEPS, cannotRemove, copyName, defaultMark, MODEL_SETTINGS, ORIGINAL, resetTo, SET_DEFAULT } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -40,7 +40,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   async function copy() {
     if (!(await flush())) return;
     const copied = crypto.randomUUID();
-    const making = addProfile(store, { name: `${name} (사본)`, settings: shown }, copied);
+    const making = addProfile(store, { name: copyName(name), settings: shown }, copied);
     navigate({ kind: 'profile', id: copied });
     const made = await making;
     if (!made.ok) return toast.failed(made, '사본을 만들지 못했어요.');
@@ -90,7 +90,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                   />
                 )}
                 <MenuItem label={resetTo(ORIGINAL)} disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()} />
-                <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? `기본 ${MODEL_SETTINGS}이라서 삭제할 수 없어요` : undefined} tone="warn" disabled={isDefault} onClick={() => void remove()} />
+                <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? cannotRemove(`기본 ${MODEL_SETTINGS}`) : undefined} tone="warn" disabled={isDefault} onClick={() => void remove()} />
               </>
             ),
           }}

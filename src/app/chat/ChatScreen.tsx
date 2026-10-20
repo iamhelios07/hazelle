@@ -22,7 +22,7 @@ import { ChatMemoryRecord } from './ChatMemoryRecord';
 import { ChatSearch } from './ChatSearch';
 import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
-import { useEditBeside } from './editBeside';
+import { useEditBeside } from './characterBeside';
 import { promptEditor, toggleEditor, type Panel, type Side } from './panels';
 import { useAutopilot } from './useAutopilot';
 import { useChat } from './useChat';

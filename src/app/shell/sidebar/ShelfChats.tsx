@@ -1,7 +1,7 @@
 import { ChevronLeft, MessageSquarePlus } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
-import { openCharacter } from '../../chat/editBeside';
+import { openCharacter } from '../../chat/characterBeside';
 import { ACTS } from '../../common/acts';
 import { useSearch } from '../../common/useSearch';
 import { IMPORT_CHATS } from '../../common/words';

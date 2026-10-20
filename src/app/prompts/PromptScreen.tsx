@@ -15,7 +15,7 @@ export function PromptScreen({ stored, pane, back }: { stored: Stored<'prompt'>;
       onPane={(next) => navigate({ kind: 'prompt', id: stored.id, pane: next }, { replace: true })}
       backLabel={back.label}
       onBack={() => navigate(back.to)}
-      onCopied={(id) => navigate({ kind: 'prompt', id, pane: null })}
+      onOpen={(id) => navigate({ kind: 'prompt', id, pane: null })}
       onErased={() => navigate(back.to, { replace: true })}
       frame={framePage}
     />

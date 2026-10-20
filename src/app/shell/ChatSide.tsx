@@ -71,7 +71,7 @@ function PromptSide({ open, inUse, onOpen, onClose }: Props<'prompts'>) {
       paneBack={open.fromToggles && { label: '채팅 토글', onBack: () => onOpen({ kind: 'toggles' }) }}
       backLabel="프롬프트 목록"
       onBack={toList}
-      onCopied={(id) => onOpen({ kind: 'prompts', id, pane: null })}
+      onOpen={(id) => onOpen({ kind: 'prompts', id, pane: null })}
       onErased={toList}
       frame={panel('프롬프트', onClose)}
     />

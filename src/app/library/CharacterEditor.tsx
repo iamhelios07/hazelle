@@ -32,7 +32,7 @@ import { FaceChange } from '../common/FaceChange';
 import { useTypedNumber } from '../common/typed';
 import { mergeStatus, saveWords, useAutosave } from '../common/useAutosave';
 import { useIdentityFields } from '../common/useIdentityFields';
-import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, DEFAULT_VARIABLES, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, CARD_WRITES, CARD_WRITES_HELP, copyOf, DEFAULT_VARIABLES, FEATURES_TITLE, inFeature, inSettings, NOTE_PLACEHOLDER, opens, ORIGINAL_GONE, PAGES, SCRIPTS, SEE_ORIGINAL, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useDisplay } from '../display';
 import { editing } from './editing';
 import { CharacterActionItems } from './gallery/CharacterCard';
@@ -389,13 +389,13 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
   };
   // A part with nothing to show is left out: 모듈 lists the account's modules, and there may be none.
   const groups = GROUPS.map((group) => group.filter((each) => each !== 'modules' || modules.length > 0));
-  const subtitle = [card.creator && `제작자 ${card.creator}`, origin && `'${origin.name}'의 사본`].filter(Boolean).join(' · ') || undefined;
+  const subtitle = [card.creator && `제작자 ${card.creator}`, origin && copyOf(origin.name)].filter(Boolean).join(' · ') || undefined;
   const working = busy?.id === id ? busy.label : null;
   const menu = {
     of: '캐릭터',
     items: (
       <>
-        {origin && <MenuItem label="원본 보기" sub={original ? undefined : '원본이 삭제됐어요'} disabled={!original} onClick={() => navigate(characterPage(origin.id, wide))} />}
+        {origin && <MenuItem label={SEE_ORIGINAL} sub={original ? undefined : ORIGINAL_GONE} disabled={!original} onClick={() => navigate(characterPage(origin.id, wide))} />}
         <CharacterActionItems shelf={shelf} actions={actions} disabled={busy !== null} onRemoved={() => navigate(HOME)} />
       </>
     ),

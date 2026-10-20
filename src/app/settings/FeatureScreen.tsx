@@ -17,7 +17,7 @@ import { TaskModelRow, TaskPromptMenu, type PromptDoor } from '../common/TaskPro
 import { TranslateRows } from '../common/TranslateRows';
 import { TranslatorNoteField } from '../common/TranslatorNoteField';
 import { useTypedNumber } from '../common/typed';
-import { readTyped } from '../common/typedNumber';
+import { readWhole } from '../common/typedNumber';
 import { FEATURE_NAMES, MODEL_ROLES, MODEL_SETTINGS, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -123,11 +123,6 @@ function MascotDefaults() {
 }
 
 const PART_HELP: Partial<Record<keyof PrereadParts, string>> = { system: '형식 규칙이나 지시는 줄이면 잘 안 지켜질 수 있어요.' };
-// null: not a count the field takes.
-const readWhole = (text: string) => {
-  const typed = readTyped(text, true);
-  return typed.ok && typed.value >= 0 ? typed.value : null;
-};
 
 function CountRow({ label, unit, help, value, start, onChange }: { label: string; unit: string; help: string; value: number; start: number; onChange: (value: number) => void }) {
   const count = useTypedNumber(readWhole, value, { error: '0 이상의 정수를 입력해 주세요.', onChange });

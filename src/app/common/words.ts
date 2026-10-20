@@ -6,6 +6,7 @@ import type { PrereadParts } from '../../model/settings';
 import { KEEP_DAYS } from '../../model/library';
 import { FIRST_PROFILE_NAME } from '../../runtime/profiles';
 import { PULSE_PAGE } from '../../contracts/pulse';
+import { withParticle } from './particles';
 
 // Sentences stay in their screen and are built from these; the phrases these replaced are refused by lint
 // (RETIRED_COPY in eslint.config.js).
@@ -134,6 +135,15 @@ export const moduleName = (name: string) => name.trim() || '이름 없는 모듈
 export const promptName = (name: string) => name || '이름 없는 프롬프트';
 export const DELETED_PROMPT = '삭제된 프롬프트';
 export const loreName = (name: string) => name.trim() || '이름 없는 항목';
+export const portraitName = (name: string) => name.trim() || '이름 없는 인물';
+
+// 사본 만들기: the copy's name, and the line under its title that names its original.
+export const copyName = (name: string) => `${name} (사본)`;
+export const copyOf = (name: string) => `'${name}'의 사본`;
+export const SEE_ORIGINAL = '원본 보기';
+export const ORIGINAL_GONE = '원본이 삭제됐어요';
+// A delete that cannot run now stays in the ⋯, disabled, saying why.
+export const cannotRemove = (because: string) => `${withParticle(because, '이라서/라서')} 삭제할 수 없어요`;
 
 export const NOT_STARRED = '추가한 모델에 없음';
 

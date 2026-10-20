@@ -1,5 +1,5 @@
 // A particle pair: the first form after a final consonant, the second after a vowel. 으로/로 also takes 로 after ㄹ.
-type Pair = '이/가' | '을/를' | '은/는' | '과/와' | '으로/로';
+type Pair = '이/가' | '을/를' | '은/는' | '과/와' | '으로/로' | '이라서/라서';
 
 // 0 영, 1 일, 2 이, 3 삼, 4 사, 5 오, 6 육, 7 칠, 8 팔, 9 구. A number ending in 0 past one digit reads 십, 백, 천 or 만,
 // which all end in a final consonant other than ㄹ, as 영 does.

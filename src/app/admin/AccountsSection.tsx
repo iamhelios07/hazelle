@@ -13,7 +13,7 @@ import { RestoresDialog } from '../common/RestoresDialog';
 import { useSession } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { Button, ConfirmDialog, Empty, MenuItem, MoreMenu, Section, Table, Tag, type TableColumn } from '../ui';
+import { Button, ConfirmDialog, Empty, MenuItem, MoreMenu, Panel, Table, Tag, type TableColumn } from '../ui';
 import { CapsDialog } from './CapsDialog';
 import { NoticeDialog } from './NoticeDialog';
 import type { useAccounts } from './useAccounts';
@@ -66,7 +66,7 @@ export function AccountsSection({ loaded, total, onActed, children }: { loaded: 
   }
 
   return (
-    <Section
+    <Panel
       title="계정"
       note={total === null ? undefined : `${count(total)}명`}
       action={
@@ -189,6 +189,6 @@ export function AccountsSection({ loaded, total, onActed, children }: { loaded: 
           onActed={() => acted(restoring.accountId)}
         />
       )}
-    </Section>
+    </Panel>
   );
 }

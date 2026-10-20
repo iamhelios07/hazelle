@@ -11,9 +11,9 @@ import { EntryList } from './EntryList';
 import { describeLikenessFailure } from './failure';
 import { filled, typedText } from './typed';
 import { useAutosave } from './useAutosave';
+import { portraitName } from './words';
 
 const SOURCES: Record<PortraitSource, string> = { metadata: '이미지 정보에서', vision: '이미지를 보고', text: '설명에서', user: '직접 입력' };
-const UNNAMED = '이름 없음';
 
 // By place, so a rename keeps its field; a portrait's place moves only by this screen's add and remove, and 다시
 // 만들기, which flush the edits first.
@@ -72,7 +72,7 @@ export function PortraitsEditor({ owner }: { owner: string }) {
     await settle();
     const removed = await removePortrait(store, owner, { index, name });
     if (!removed.ok) return toast.failed(removed, '삭제하지 못했어요.');
-    toast.undoable(`'${name || UNNAMED}' 프로필을 삭제했어요.`, () => restoreLikeness(store, removed.data));
+    toast.undoable(`'${portraitName(name)}' 프로필을 삭제했어요.`, () => restoreLikeness(store, removed.data));
   }
 
   return (
@@ -139,7 +139,7 @@ function PortraitFields({ owner, index, portrait, onRemove }: { owner: string; i
   const [typed, setTyped] = useState<string>();
   const name = typedText(typed, filled, shown('name'), String);
   const outfits = shown('outfits');
-  const label = portrait.name || UNNAMED;
+  const label = portraitName(portrait.name);
   const tags = (title: string, value: string, change: (tags: string) => void) => (
     <MarkupArea label={`${label} ${title}`} variant="field" kind="tags" value={value} onChange={change} />
   );

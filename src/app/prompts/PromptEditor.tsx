@@ -2,6 +2,7 @@ import { Cpu, ImageIcon, SlidersHorizontal } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { holdsPersona } from '../../engine/pipeline';
 import type { Stored } from '../../model/kinds';
+import { live } from '../../model/library';
 import { isToggle, slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, resetPromptBlocks, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
@@ -11,8 +12,8 @@ import { ModuleSwitches } from '../common/ModuleSwitches';
 import { NO_PERSONA_SLOT, SLOT } from '../common/prompt-words';
 import type { Frame } from '../common/frame';
 import { useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, PRE_READ, promptName, SET_DEFAULT } from '../common/words';
-import { useConnections, useSettings, useStore } from '../session';
+import { BIN_KEEPS, cannotRemove, copyName, copyOf, ORIGINAL_GONE, PRE_READ, promptName, SEE_ORIGINAL, SET_DEFAULT } from '../common/words';
+import { useConnections, useSettings, useStore, useStored } from '../session';
 import type { PromptPane } from '../shell/routes';
 import { typing, useShortcut } from '../shortcuts';
 import { useOwnUndo, useToast } from '../toast';
@@ -83,18 +84,20 @@ type Props = {
   paneBack?: { label: string; onBack: () => void };
   backLabel: string;
   onBack: () => void;
-  onCopied: (id: string) => void;
+  // Opens another prompt: a copy just made, or the original of this copy.
+  onOpen: (id: string) => void;
   onErased: () => void;
   frame: Frame;
 };
 
 // Its state is one prompt's, so a caller keys it by id; unmounting it saves.
-export function PromptEditor({ stored, layout, pane, onPane, block: openAt, paneBack, backLabel, onBack, onCopied, onErased, frame }: Props) {
+export function PromptEditor({ stored, layout, pane, onPane, block: openAt, paneBack, backLabel, onBack, onOpen, onErased, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
   const connections = useConnections();
   const uses = usePromptUse().get(stored.id) ?? EMPTY_USE;
+  const original = live(useStored('prompt', stored.value.origin?.id ?? null));
   const split = layout === 'split';
   const save = useAutosave<PromptPatch>(`prompt:${stored.id}`, (patch) => editPrompt(store, stored.id, patch));
   const sort = sortOf(stored.value);
@@ -234,8 +237,8 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   const copy = async () => {
     if (!(await save.flush())) return;
     const made = crypto.randomUUID();
-    const copying = copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`, made);
-    onCopied(made);
+    const copying = copyPrompt(store, stored.id, copyName(promptName(latest.current.name)), made);
+    onOpen(made);
     const copied = await copying;
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
     toast.show('사본을 만들었어요.');
@@ -426,7 +429,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
     return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status }, body: page, open });
   }
 
-  const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `'${promptName(stored.value.origin.name)}'의 사본` : null;
+  const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? copyOf(promptName(stored.value.origin.name)) : null;
   const facts = [sort === 'conversation' && promptUseWords(uses), origin].filter(Boolean).join(' · ');
   const subtitle = (isDefault || facts) && (
     <>
@@ -444,11 +447,12 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
       of: '프롬프트',
       items: (
         <>
+          {stored.value.origin && <MenuItem label={SEE_ORIGINAL} sub={original ? undefined : ORIGINAL_GONE} disabled={!original} onClick={() => onOpen(stored.value.origin!.id)} />}
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
           {ofSort(stored, 'conversation') && <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />}
           {!isDefault && <MenuItem label={SET_DEFAULT} sub={words.makeDefault} onClick={() => void makeDefault()} />}
           {sort !== 'conversation' && <MenuItem label="기본 블록으로 되돌리기" sub="블록을 앱의 기본으로 바꿔요. 이름과 모델은 그대로예요." onClick={() => void resetBlocks()} />}
-          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? `${words.default}라서 삭제할 수 없어요` : undefined} tone="warn" disabled={isDefault} onClick={() => void erase()} />
+          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? cannotRemove(words.default) : undefined} tone="warn" disabled={isDefault} onClick={() => void erase()} />
         </>
       ),
     },

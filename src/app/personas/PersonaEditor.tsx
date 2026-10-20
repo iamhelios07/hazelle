@@ -14,7 +14,7 @@ import { PersonaPickDialog } from '../common/PersonaPickDialog';
 import { PortraitsEditor } from '../common/PortraitsEditor';
 import { useAutosave } from '../common/useAutosave';
 import { useIdentityFields } from '../common/useIdentityFields';
-import { BIN_KEEPS } from '../common/words';
+import { BIN_KEEPS, cannotRemove } from '../common/words';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -89,7 +89,7 @@ export function PersonaEditor({ stored, back }: { stored: Stored<'persona'>; bac
         <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />
         {!current && <MenuItem label="현재 페르소나로 정하기" sub="새 채팅을 시작할 때 이 페르소나를 써요" onClick={makeCurrent} />}
         {holding > 0 && <MenuItem label="채팅 옮기기" sub={`이 페르소나를 쓰는 채팅 ${holding}개를 다른 페르소나로 옮겨요`} onClick={() => setMoving(true)} />}
-        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={current ? '현재 페르소나라서 삭제할 수 없어요' : undefined} tone="warn" disabled={current} onClick={() => void remove()} />
+        <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={current ? cannotRemove('현재 페르소나') : undefined} tone="warn" disabled={current} onClick={() => void remove()} />
       </>
     ),
   };
