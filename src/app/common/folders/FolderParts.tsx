@@ -31,11 +31,9 @@ export function useNaming(kind: Filed) {
   const { create, rename } = useFolderActions(kind);
   const [naming, setNaming] = useState<Naming | null>(null);
   const save = ({ id, name, parent }: Naming) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
     setNaming(null);
-    if (id === null) create(trimmed, parent?.id ?? null);
-    else rename(id, trimmed);
+    if (id === null) create(name, parent?.id ?? null);
+    else rename(id, name);
   };
   const dialog = naming && (
     <NameDialog

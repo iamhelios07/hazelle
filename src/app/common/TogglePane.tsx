@@ -124,6 +124,7 @@ export function TogglePane({ owner, lines, uses, onAdd, onEdit, onMove, onRekey,
           title="기본값 바꾸기"
           field="기본값"
           value={line.default}
+          blank
           onClose={close}
           onSave={(value) => {
             close();
@@ -138,10 +139,11 @@ export function TogglePane({ owner, lines, uses, onAdd, onEdit, onMove, onRekey,
         title={line.kind === 'caption' ? '내용 바꾸기' : ACTS.rename.label}
         field={isToggle(line) ? '이름' : FIELD[line.kind]}
         value={line.label}
+        blank={line.kind === 'divider'}
         onClose={close}
         onSave={(label) => {
           close();
-          if (label.trim() || line.kind === 'divider') onEdit(line, { ...line, label: label.trim() }, at, 'label');
+          onEdit(line, { ...line, label }, at, 'label');
         }}
       />
     );
@@ -179,11 +181,11 @@ export function TogglePane({ owner, lines, uses, onAdd, onEdit, onMove, onRekey,
           field={FIELD[editing.add]}
           value=""
           hint={editing.add === 'divider' ? '비워 두면 선만 보여요.' : undefined}
+          blank={editing.add === 'divider'}
           onClose={close}
           onSave={(label) => {
             close();
-            if (!label.trim() && editing.add !== 'divider') return;
-            onAdd(editing.add === 'group' ? newGroup(label.trim()) : [{ kind: editing.add, label: label.trim() }]);
+            onAdd(editing.add === 'group' ? newGroup(label) : [{ kind: editing.add, label }]);
           }}
         />
       )}

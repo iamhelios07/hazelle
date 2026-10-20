@@ -69,6 +69,7 @@ export function ChatBookmarks({ item, messages, texts, names, onShow, onUnmark, 
           title={`${BOOKMARK} ${ACTS.rename.label}`}
           value={naming.name ?? ''}
           hint="비워 두면 말한 사람의 이름으로 표시돼요."
+          blank
           onSave={(name) => {
             onRename(naming.message.id, name);
             setNaming(null);
