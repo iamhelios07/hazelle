@@ -8,13 +8,13 @@ import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePerc
 import { HidePicturesRow, presetChoices, ReadingRows } from '../common/ReadingRows';
 import { choices, SIDE, lookOf, moveLook, presetOf, type Preset } from '../common/reading';
 import { useTypedNumber } from '../common/typed';
-import { PAGES } from '../common/words';
+import { DETAIL, detailLabel, PAGES } from '../common/words';
 import { useDisplay } from '../display';
 import { useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { ACCENT, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow, type Theme } from '../ui';
+import { ACCENT, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, Disclosure, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow, type Theme } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
   { name: '캐릭터', mine: false, html: storyHtml(`*창밖으로 늦은 오후의 햇살이 기울어 든다.* 그녀는 찻잔을 내려놓고 고개를 들었다. "오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아." '또 잠든 건 아니겠지.'`, true) },
@@ -24,6 +24,7 @@ const SAMPLE: PreviewRow[] = [
 const SWATCH_SAMPLE = '그녀는 찻잔을 내려놓고 고개를 들었다.';
 
 const MODES: Record<Theme, string> = { light: '밝은 모드일 때', dark: '어두운 모드일 때' };
+const MODE_KEYS = Object.keys(MODES) as Theme[];
 
 const colorChoices = <T extends string>(pick: 'bg' | 'ink' | 'accent' | 'dialogue', labels: Record<T, string>) =>
   choices(labels).map((option) => ({ ...option, mark: <ColorDot pick={pick} value={option.value} /> }));
@@ -35,6 +36,9 @@ export function DisplayScreen({ back }: { back: Back | null }) {
   const all = [...presets, ...own.presets];
   const current = presetOf(all, reading, display);
   const [naming, setNaming] = useState<{ preset: Preset | null } | null>(null);
+  const missing = (mode: Theme) => display.follow !== null && !all.some((preset) => preset.id === display.follow![mode]);
+  // Folded, a slot whose preset is gone would say so to no one.
+  const [detailOpen, setDetailOpen] = useState(() => MODE_KEYS.some(missing));
 
   async function change(looks: (looks: SavedLook[]) => SavedLook[], failure: string) {
     const done = await store.upsert('settings', (settings = EMPTY_SETTINGS) => ({ ...settings, looks: looks(settings.looks ?? []) }));
@@ -98,26 +102,24 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             <Swatches label="내 프리셋" sample={SWATCH_SAMPLE} items={own.presets.map((preset, index) => ({ ...swatch(preset), menu: menu(preset, index) }))} onMove={move} />
           </Section>
         )}
-        <SettingGroup label="시스템 따라 바꾸기">
-          <SettingRow
-            label="시스템 따라 바꾸기"
-            help="기기가 밝은 모드인지 어두운 모드인지에 맞춰 프리셋을 바꿔요. 켜 둔 동안 고른 프리셋은 지금 모드의 프리셋이 되고, 직접 바꾼 값은 모드가 바뀌면 프리셋대로 돌아가요."
-            control={<Switch label="시스템 따라 바꾸기" checked={display.follow !== null} onChange={followSystem} />}
-          />
-          {display.follow &&
-            (Object.keys(MODES) as Theme[]).map((mode) => {
-              const id = display.follow![mode];
-              const found = all.some((preset) => preset.id === id);
-              return (
+        <Disclosure label={detailLabel(display.follow ? 1 : 0)} open={detailOpen} onOpen={setDetailOpen}>
+          <SettingGroup label={DETAIL}>
+            <SettingRow
+              label="시스템 따라 바꾸기"
+              help="기기가 밝은 모드인지 어두운 모드인지에 맞춰 프리셋을 바꿔요. 켜 둔 동안 고른 프리셋은 지금 모드의 프리셋이 되고, 직접 바꾼 값은 모드가 바뀌면 프리셋대로 돌아가요."
+              control={<Switch label="시스템 따라 바꾸기" checked={display.follow !== null} onChange={followSystem} />}
+            />
+            {display.follow &&
+              MODE_KEYS.map((mode) => (
                 <SettingRow
                   key={mode}
                   label={MODES[mode]}
-                  error={found ? undefined : '이 프리셋을 찾을 수 없어요. 다른 프리셋을 선택해 주세요.'}
-                  control={<ChoiceGroup layout="fit" label={MODES[mode]} options={presetChoices(all)} value={found ? id : null} empty="없는 프리셋" onChange={(picked) => assign(mode, all.find((preset) => preset.id === picked)!)} />}
+                  error={missing(mode) ? '이 프리셋을 찾을 수 없어요. 다른 프리셋을 선택해 주세요.' : undefined}
+                  control={<ChoiceGroup layout="fit" label={MODES[mode]} options={presetChoices(all)} value={missing(mode) ? null : display.follow![mode]} empty="없는 프리셋" onChange={(picked) => assign(mode, all.find((preset) => preset.id === picked)!)} />}
                 />
-              );
-            })}
-        </SettingGroup>
+              ))}
+          </SettingGroup>
+        </Disclosure>
       </Section>
       {naming && (
         <NameDialog
