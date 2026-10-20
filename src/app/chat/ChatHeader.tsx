@@ -105,8 +105,8 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
 // The persona and prompt dialogs mount here, not beside their chips: a folded composer hides its tool bar and a hidden
 // header its actions, and a dialog inside them.
 export function ChatDialogs({ chat }: { chat: OpenChat }) {
-  const { dialog, item, reshaping, actions } = chat;
-  if (reshaping) return <SceneDialog reshaping={reshaping} onDraw={actions.draw} onClose={() => actions.reshape(null)} />;
+  const { dialog, item, reshaping, pictureSizes, actions } = chat;
+  if (reshaping) return <SceneDialog reshaping={reshaping} sizes={pictureSizes} onDraw={actions.draw} onClose={() => actions.reshape(null)} />;
   if (dialog === 'persona') return (
     <PersonaDialog
       persona={chat.persona}

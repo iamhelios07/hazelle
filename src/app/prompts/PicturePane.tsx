@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Draws } from '../../connectors/types';
 import { PICTURE_DEFAULTS } from '../../engine/illustrate';
-import type { PictureSettings, PictureTags } from '../../model/prompt';
+import type { PictureSettings, PictureSize, PictureTags } from '../../model/prompt';
 import { drawingModels } from '../../runtime/illustrate';
 import { typedText } from '../common/typed';
 import { readTyped } from '../common/typedNumber';
@@ -11,7 +11,9 @@ import { Button, ChipButton, MarkupArea, Menu, MenuHeading, MenuItem, NumberInpu
 
 type Props = { tags: PictureTags | undefined; picture: PictureSettings | undefined; onTags: (tags: PictureTags | undefined) => void; onPicture: (picture: PictureSettings) => void };
 
-type NumberField = Exclude<keyof PictureSettings, 'sampler'>;
+type NumberField = Exclude<keyof PictureSettings, 'sampler' | 'size'>;
+
+const SIZE_LABELS: Record<PictureSize, string> = { normal: '기본', large: '크게' };
 
 // Bounds only where a source states them; NovelAI answers a value past its own with a refusal the 삽화 slot shows.
 const NUMBERS: Record<NumberField, { label: string; help?: string; whole: boolean; check: (value: number) => boolean; error: string; unset: string }> = {
@@ -87,6 +89,17 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
       </Section>
       <Section title="생성" help={`비워 두면 이미지 모델의 ${ORIGINAL}을 써요.`}>
         <SettingGroup label="생성">
+          <SettingRow
+            label="크기"
+            help="크게는 NovelAI 무료 범위를 넘어서, 만들 때마다 Anlas가 차감돼요."
+            changed={picture.size !== undefined}
+            control={
+              <Menu place="below-end" label="크기" trigger={(opener) => <ChipButton variant="field" opens="down" label={SIZE_LABELS[picture.size ?? 'normal']} title="크기" {...opener} />}>
+                <MenuItem label={SIZE_LABELS.normal} checked={picture.size === undefined} onClick={() => onPicture({ ...picture, size: undefined })} />
+                <MenuItem label={SIZE_LABELS.large} checked={picture.size === 'large'} onClick={() => onPicture({ ...picture, size: 'large' })} />
+              </Menu>
+            }
+          />
           <SettingRow label="샘플러" changed={picture.sampler !== undefined} control={<SamplerMenu draws={draws} chosen={picture.sampler} onPick={(sampler) => onPicture({ ...picture, sampler })} />} />
           {numberRow('steps')}
           {numberRow('scale')}

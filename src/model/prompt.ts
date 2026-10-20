@@ -128,8 +128,10 @@ export type MemoryPrompt = {
 export type PictureTags = { artist: string; quality: string; negative: string };
 
 // How each picture is drawn, a field absent for the image model's own (connectors PictureRequest), seed absent for a
-// new one each picture.
-export type PictureSettings = { steps?: number; scale?: number; rescale?: number; sampler?: string; seed?: number };
+// new one each picture. size: the pixel tier of engine/illustrate SIZES, absent for normal, the only tier inside
+// NovelAI Opus's free band.
+export type PictureSize = 'normal' | 'large';
+export type PictureSettings = { steps?: number; scale?: number; rescale?: number; sampler?: string; seed?: number; size?: PictureSize };
 
 // model: the one place the scene writer is chosen; without one, the chat's 보조 모델, then its 대화 모델. The picture's
 // model is the chat's 삽화 switches' (runtime/characters illustrateSwitches). tags: absent reads as the app's

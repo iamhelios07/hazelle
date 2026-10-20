@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import type { PictureUrl } from '../../engine/assets';
-import { parseScene, sceneText, sentText, SIZES, type SceneInvalid } from '../../engine/illustrate';
+import { parseScene, sceneText, sentText, type PictureSizes, type SceneInvalid } from '../../engine/illustrate';
 import { shown } from '../../model/chat';
 import { paragraphsOf, type Scene } from '../../model/illustration';
 import type { Shown } from '../../runtime/talk';
@@ -25,16 +25,17 @@ type Props = {
   url: PictureUrl;
   // 삽화's 기능: off, a picture stays and is drawn again no more.
   draws: boolean;
+  sizes: PictureSizes;
   onDraw: IllustrationActions['draw'];
   onDismiss: IllustrationActions['dismissIllustration'];
   onReshape: IllustrationActions['reshape'];
   onDrop: IllustrationActions['dropPicture'];
 };
 
-export function ChatPicture({ place, message, running, url, draws, onDraw, onDismiss, onReshape, onDrop }: Props) {
+export function ChatPicture({ place, message, running, url, draws, sizes, onDraw, onDismiss, onReshape, onDrop }: Props) {
   const [paged, setPaged] = useState<Paged>(null);
   if (place.kind === 'drawing') {
-    const { width, height } = SIZES[place.scene.shape];
+    const { width, height } = sizes[place.scene.shape];
     return <StoryPicture src={undefined} label={LABEL} width={width} height={height} status="그리는 중" />;
   }
   if (place.kind === 'failed') {
@@ -103,7 +104,7 @@ const UNREAD: Record<SceneInvalid, (paragraphs: number) => string> = {
 // 어떻게 바꿀까요?: the scene as the writer answers it, read back through parseScene before anything is drawn. typed: the
 // text as the user left it, null while it follows the scene; a typed text that does not read keeps the last scene that
 // did on the board.
-export function SceneDialog({ reshaping, onDraw, onClose }: { reshaping: Reshaping; onDraw: IllustrationActions['draw']; onClose: () => void }) {
+export function SceneDialog({ reshaping, sizes, onDraw, onClose }: { reshaping: Reshaping; sizes: PictureSizes; onDraw: IllustrationActions['draw']; onClose: () => void }) {
   const [scene, setScene] = useState(reshaping.scene);
   const [typed, setTyped] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
@@ -125,7 +126,7 @@ export function SceneDialog({ reshaping, onDraw, onClose }: { reshaping: Reshapi
     onDraw(reshaping.message, reshaping.version, read.scene);
     onClose();
   }
-  const { width, height } = SIZES[scene.shape];
+  const { width, height } = sizes[scene.shape];
   return (
     <Dialog
       title="장면 바꾸기"

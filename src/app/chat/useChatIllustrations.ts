@@ -4,7 +4,9 @@ import type { Drawn, IllustrateSwitches, Scene } from '../../model/illustration'
 import type { Stored } from '../../model/kinds';
 import { setIllustrate, setOwnIllustrate } from '../../runtime/characters';
 import { chatIllustrate } from '../../runtime/features';
+import { pictureSizes } from '../../engine/illustrate';
 import { removeIllustration, restoreIllustration, sceneWriterOf, type IllustrateFailure } from '../../runtime/illustrate';
+import { illustrationPrompt } from '../../runtime/prompts';
 import { describeIllustrateFailure } from '../common/failure';
 import { useChildren, useIllustrating, useSession } from '../session';
 import { useToast } from '../toast';
@@ -37,6 +39,9 @@ export function useChatIllustrations(chatId: string, id: string | null, chat: Ch
   const toast = useToast();
   const illustrate = chatIllustrate(store, chat);
   const sceneWriter = sceneWriterOf(store, chat);
+  const prompt = illustrationPrompt(store, illustrate.prompt);
+  // The frame a picture being drawn or placed takes: the 삽화 prompt's size tier; without a prompt nothing is drawn.
+  const sizes = pictureSizes(prompt.kind === 'prompt' ? prompt.prompt.value : {});
   const illustrations = useChildren('illustration', id);
   const pictures = useMemo(() => picturesByVersion(illustrations, messages), [illustrations, messages]);
   const illustrating = useIllustrating();
@@ -74,7 +79,7 @@ export function useChatIllustrations(chatId: string, id: string | null, chat: Ch
   }
 
   return {
-    illustrate, sceneWriter, pictures, illustrating, stage, reshaping,
+    illustrate, sceneWriter, pictures, pictureSizes: sizes, illustrating, stage, reshaping,
     actions: {
       setIllustrate: setIllustrateSwitches,
       setOwnIllustrate: setOwnIllustrateSwitches,

@@ -71,6 +71,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           translating={translating}
           canTranslate={chat.features.translate}
           canIllustrate={chat.features.illustrate}
+          pictureSizes={chat.pictureSizes}
           awaited={awaited(version)}
           flipped={flipped.has(version)}
           showOriginal={chat.translate.original}

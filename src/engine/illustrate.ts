@@ -3,7 +3,7 @@ import { isRecord } from '../connectors/values';
 import type { Figure, Scene, Shape } from '../model/illustration';
 import type { Outfit, Portrait } from '../model/likeness';
 import { nameKey, namesOf } from './likeness';
-import type { IllustratePrompt, PictureTags } from '../model/prompt';
+import type { IllustratePrompt, PictureSize, PictureTags } from '../model/prompt';
 import { answerJson } from './answer-json';
 
 // The scene format below, the parser and the request builder are one contract: a field the prompt asks for is read
@@ -199,12 +199,23 @@ export function parseScenes(text: string, paragraphs: number, count: number): { 
   return scenes.length ? { ok: true, scenes } : { ok: false, reason: 'unreadable' };
 }
 
-// Inside NovelAI Opus's free band: one picture of at most 1024×1024 pixels.
+// NovelAI's Normal and Large presets. normal stays inside Opus's free band (one picture of at most 1024×1024 pixels);
+// every large picture costs Anlas, which the connector's free check reports from the pixel count.
 export const SIZES = {
-  portrait: { width: 832, height: 1216 },
-  landscape: { width: 1216, height: 832 },
-  square: { width: 1024, height: 1024 },
-} as const satisfies Record<Shape, { width: number; height: number }>;
+  normal: {
+    portrait: { width: 832, height: 1216 },
+    landscape: { width: 1216, height: 832 },
+    square: { width: 1024, height: 1024 },
+  },
+  large: {
+    portrait: { width: 1024, height: 1536 },
+    landscape: { width: 1536, height: 1024 },
+    square: { width: 1472, height: 1472 },
+  },
+} as const satisfies Record<PictureSize, PictureSizes>;
+export type PictureSizes = Record<Shape, { width: number; height: number }>;
+
+export const pictureSizes = (prompt: Pick<IllustratePrompt, 'picture'>): PictureSizes => SIZES[prompt.picture?.size ?? 'normal'];
 
 // The tags of a 삽화 prompt that sets none.
 export const PICTURE_DEFAULTS: PictureTags = {
@@ -235,7 +246,7 @@ export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Mo
       const drawnAs = portrait ? tags(portrait.look, wornBy(portrait, outfit), action) : tags(look, outfit, action);
       return { prompt: drawnAs, negative: '', center: { x, y } };
     }),
-    ...SIZES[scene.shape],
+    ...pictureSizes(prompt)[scene.shape],
     seed,
     steps,
     scale,

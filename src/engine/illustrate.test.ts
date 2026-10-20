@@ -57,6 +57,9 @@ it('builds the picture request: characters at their centers, the shape as its si
     sampler: null,
   });
   expect(pictureRequest({ ...parsed.scene, shape: 'portrait' }, illustratorPrompt(), model, 1, [])).toMatchObject({ width: 832, height: 1216 });
+  const large = { ...illustratorPrompt(), picture: { size: 'large' as const } };
+  expect(pictureRequest(parsed.scene, large, model, 1, [])).toMatchObject({ width: 1536, height: 1024 });
+  expect(pictureRequest({ ...parsed.scene, shape: 'square' }, large, model, 1, [])).toMatchObject({ width: 1472, height: 1472 });
 });
 
 it("puts a prompt's own tags and settings into the picture: artist first, an emptied field sends none, a fixed seed", () => {

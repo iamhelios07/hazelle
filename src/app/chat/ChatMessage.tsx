@@ -4,6 +4,7 @@ import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
 import { firstLine, shown, translationOutdated, type Message } from '../../model/chat';
+import type { PictureSizes } from '../../engine/illustrate';
 import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { runs, type Drawing } from '../../runtime/illustrate';
@@ -54,6 +55,7 @@ type Props = {
   // 번역's and 삽화's 기능: off, the message offers neither.
   canTranslate: boolean;
   canIllustrate: boolean;
+  pictureSizes: PictureSizes;
   awaited: boolean;
   flipped: boolean;
   showOriginal: boolean;
@@ -92,7 +94,7 @@ const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨', r
 const MARK = { length: 'length', 'no-terminal': 'length', stopped: 'stopped', refused: 'refused' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, pictureSizes, awaited, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -121,7 +123,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const running = drawing !== null && runs(drawing);
   const illustrations = places.map((place) => ({
     mark: place.paragraph === null ? null : placeMark(place.paragraph),
-    node: <ChatPicture key={place.paragraph ?? 'run'} place={place} message={message} running={running} url={decor.url} draws={canIllustrate} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />,
+    node: <ChatPicture key={place.paragraph ?? 'run'} place={place} message={message} running={running} url={decor.url} draws={canIllustrate} sizes={pictureSizes} onDraw={actions.draw} onDismiss={actions.dismissIllustration} onReshape={actions.reshape} onDrop={actions.dropPicture} />,
   }));
   const failed = receipt?.state === 'failed';
   const empty = original === '';
