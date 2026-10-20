@@ -1,4 +1,4 @@
-import { ACCOUNT_HEADER, RELAY_HEADER, ACCOUNT_USAGE_HEADERS, PULSE_HEADER, UNREAD_NOTICES_HEADER, VERSION_HEADER } from '../contracts/http';
+import { ACCOUNT_HEADER, RELAY_HEADER, ACCOUNT_USAGE_HEADERS, PULSE_HEADER, UNREAD_BOARD_HEADER, UNREAD_NOTICES_HEADER, VERSION_HEADER } from '../contracts/http';
 import { pulseHeader, type PulseLabel } from '../contracts/pulse';
 import { isRecord } from '../connectors/values';
 
@@ -6,7 +6,7 @@ export type ApiFailure = { ok: false; error: string; retryAfter?: number; status
 export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
 
 // What an answer says of the account the page holds rather than of the request.
-export type Heard = { kind: 'elsewhere' } | { kind: 'suspended' } | { kind: 'storage-full' } | { kind: 'restoring' } | { kind: 'bytes'; bytes: number } | { kind: 'file-bytes'; fileBytes: number } | { kind: 'notices'; unread: number };
+export type Heard = { kind: 'elsewhere' } | { kind: 'suspended' } | { kind: 'storage-full' } | { kind: 'restoring' } | { kind: 'bytes'; bytes: number } | { kind: 'file-bytes'; fileBytes: number } | { kind: 'notices'; unread: number } | { kind: 'board'; unread: number };
 
 const REFUSALS: Record<string, 'elsewhere' | 'suspended' | 'storage-full' | 'restoring'> = {
   'account-mismatch': 'elsewhere',
@@ -68,6 +68,8 @@ export async function fetchApi(path: string, { pulse, ...init }: Omit<RequestIni
   if (fileBytes !== null) tell({ kind: 'file-bytes', fileBytes: Number(fileBytes) });
   const unread = response.headers.get(UNREAD_NOTICES_HEADER);
   if (unread !== null) tell({ kind: 'notices', unread: Number(unread) });
+  const board = response.headers.get(UNREAD_BOARD_HEADER);
+  if (board !== null) tell({ kind: 'board', unread: Number(board) });
   // A provider's refusal comes through the relay marked x-relay, and its body is the provider's to read.
   if ((response.status === 403 || response.status === 409 || response.status === 413 || response.status === 503) && !response.headers.has(RELAY_HEADER)) {
     const body: unknown = await response.clone().json().catch(() => null);

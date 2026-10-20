@@ -4,6 +4,8 @@ export const ACCOUNT_HEADER = 'x-account';
 // The account's unread notices, on the answers a page keeps asking for (its sync) and on marking them seen, so a notice
 // sent while the page is open is told without a reload.
 export const UNREAD_NOTICES_HEADER = 'x-unread-notices';
+// The account's unread 게시판 activity (contracts/board Activity), on the same answers.
+export const UNREAD_BOARD_HEADER = 'x-unread-board';
 // The release the server runs, on every API answer, so a page built from an older one can offer a reload.
 export const VERSION_HEADER = 'x-hazelle-version';
 export const RELAY_HEADER = 'x-relay';
@@ -26,6 +28,7 @@ export type ServerError =
   | 'bad-id'
   | 'bad-input'
   | 'bad-key'
+  | 'bad-nickname'
   | 'bad-report'
   | 'bad-time'
   | 'bad-username'
@@ -38,9 +41,12 @@ export type ServerError =
   | 'files-full'
   | 'length-required'
   | 'no-consent'
+  | 'nickname-taken'
+  | 'no-nickname'
   | 'no-session'
   | 'not-admin'
   | 'not-found'
+  | 'post-locked'
   | 'server-error'
   | 'share-held'
   | 'signup-closed'
@@ -54,7 +60,9 @@ export type ServerError =
   | 'too-many-attempts'
   | 'too-many-bot-calls'
   | 'too-many-calls'
+  | 'too-many-comments'
   | 'too-many-live-calls'
+  | 'too-many-posts'
   | 'too-many-publishes'
   | 'too-many-reports'
   | 'too-many-restores'

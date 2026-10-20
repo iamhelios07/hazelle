@@ -3,7 +3,7 @@ import { api, type ApiResult } from './api';
 // next: what the following page is asked after, null on the last (server/admin page).
 export type Page<T> = { rows: T[]; next: string | null };
 // limit: the rows asked, the server's page when absent. A true flag narrows the list; a false one is left out.
-export type Ask = Record<string, number | boolean | undefined>;
+export type Ask = Record<string, string | number | boolean | undefined>;
 
 export async function page<K extends string, T>(path: string, key: K, after: string | null, ask: Ask = {}): Promise<ApiResult<Page<T>>> {
   const query = new URLSearchParams();

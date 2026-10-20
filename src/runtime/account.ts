@@ -7,7 +7,7 @@ import { page } from './pages';
 // Caps are null for none. bytes is null while the account is restored or its store does not answer. fileBytes: the
 // pictures stored for it, which deleting them in the app does not lower (server/files).
 export type Storage = { bytes: number | null; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
-export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: Exclude<AccountState, 'leaving'>; storage: Storage; unreadNotices: number; localProviders: readonly string[] };
+export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: Exclude<AccountState, 'leaving'>; storage: Storage; unreadNotices: number; unreadBoard: number; localProviders: readonly string[] };
 export type SignedIn = { session: SessionFacts; vault: VaultRecord };
 type Boot = { session: null; signupOpen: boolean } | SignedIn;
 export type Signup = { accountId: string; username: string; passwordProof: string; passwordWrap: string; recoveryProof: string; recoveryWrap: string };
@@ -22,16 +22,16 @@ const proven = ({ method, proof }: Proof) => ({ method, proof });
 
 // full: a write was refused for room and the account has not shrunk since, which another write or sync shows.
 // restoring: the server refused this account's objects while the operator restores it, and no store has answered since.
-// unreadNotices: as the session, then each sync, last said.
-export type Standing = { suspended: boolean; full: boolean; restoring: boolean; storage: Storage; unreadNotices: number };
+// unreadNotices, unreadBoard: as the session, then each sync, last said.
+export type Standing = { suspended: boolean; full: boolean; restoring: boolean; storage: Storage; unreadNotices: number; unreadBoard: number };
 
 // A cap the operator changes is learned on the next page load.
 export class AccountFacts {
   private now: Standing;
   private readonly changes = new ChangeSignal();
 
-  constructor({ suspended, state, storage, unreadNotices }: SessionFacts) {
-    this.now = { suspended, full: false, restoring: state === 'restoring', storage, unreadNotices };
+  constructor({ suspended, state, storage, unreadNotices, unreadBoard }: SessionFacts) {
+    this.now = { suspended, full: false, restoring: state === 'restoring', storage, unreadNotices, unreadBoard };
   }
 
   readonly snapshot = (): Standing => this.now;
@@ -54,6 +54,8 @@ export class AccountFacts {
         return this.set({ ...now, storage: { ...now.storage, fileBytes: heard.fileBytes } });
       case 'notices':
         return heard.unread === now.unreadNotices ? undefined : this.set({ ...now, unreadNotices: heard.unread });
+      case 'board':
+        return heard.unread === now.unreadBoard ? undefined : this.set({ ...now, unreadBoard: heard.unread });
     }
   };
 

@@ -1,3 +1,4 @@
+import { COMMENTS_PER_DAY, NICKNAME_LENGTH, POSTS_PER_DAY } from '../../contracts/board';
 import type { Costs } from '../../connectors/types';
 import type { RelayError, ServerError } from '../../contracts/http';
 import type { ApiFailure } from '../../runtime/api';
@@ -66,6 +67,12 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'picture-refused': '이미지 용량이 너무 크거나, 차단된 파일이거나, 파일 한도를 넘었어요.',
   'file-blocked': '운영자가 차단한 파일이라 올리거나 열 수 없어요.',
   'too-many-reports': '운영자가 아직 확인하지 않은 알림이 많아서 더 보낼 수 없어요.',
+  'bad-nickname': `닉네임은 ${count(NICKNAME_LENGTH.min)}~${count(NICKNAME_LENGTH.max)}자로, @ # / 같은 기호 없이 지을 수 있어요.`,
+  'nickname-taken': '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 지어 주세요.',
+  'no-nickname': '게시판에 쓰려면 먼저 닉네임을 정해야 해요.',
+  'post-locked': '운영자가 댓글을 닫은 글이에요.',
+  'too-many-posts': `글은 하루에 ${count(POSTS_PER_DAY)}개까지 쓸 수 있어요.`,
+  'too-many-comments': `댓글은 하루에 ${count(COMMENTS_PER_DAY)}개까지 쓸 수 있어요.`,
   'too-many-visits': '요청을 너무 자주 보냈어요. 잠시 뒤에 다시 시도해 주세요.',
   'too-many-shares': `링크는 ${count(SHARE_LIMITS.links)}개까지 만들 수 있어요. 안 쓰는 링크를 끊고 다시 시도해 주세요.`,
   'too-many-versions': `링크 하나에 새 버전은 ${count(SHARE_LIMITS.versions)}번까지 올릴 수 있어요. 링크를 끊고 새로 공유해 주세요.`,
