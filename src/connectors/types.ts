@@ -156,6 +156,8 @@ export type Codec = {
   // null when the payload is not this format's reply at all.
   whole(payload: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): Terminal | null;
   truncated(finishReason: string): boolean;
+  // The provider ended the reply by refusing it (a safety filter, most often), with or without text before it.
+  refused(finishReason: string): boolean;
   usage(raw: Record<string, unknown>): Usage;
   // null for a format with no embeddings.
   embeds: Embeds | null;

@@ -16,10 +16,11 @@ export function cost(value: Cost | 'pending' | null): string {
   return value.source === 'reported' ? amount : `약 ${amount}`;
 }
 
-const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김' } as const;
+const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김', refused: '제공자가 차단' } as const;
 
 export function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
   if (receipt.state === 'failed') return { label: '종료 사유', value: '실패', tone: 'warn' };
+  if (receipt.cut === 'refused') return { label: '종료 사유', value: receipt.finishReason ? `${CUT.refused} (${receipt.finishReason})` : CUT.refused, tone: 'warn' };
   if (receipt.cut) return { label: '종료 사유', value: CUT[receipt.cut], tone: receipt.cut === 'stopped' ? undefined : 'warn' };
   return { label: '종료 사유', value: '정상 종료' };
 }

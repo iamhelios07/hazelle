@@ -91,6 +91,14 @@ describe('chat completions stream', () => {
     expect(outcome).toMatchObject({ state: 'cut', cut: 'length', finishReason: 'length', usage: null, cost: null });
   });
 
+  it('keeps the text a content filter stopped as a refused cut, and fails a filter that let nothing through', async () => {
+    const kept = await decode(openRouter, body(sse(chunk({ content: '여기까지' }), chunk({}, 'content_filter'), '[DONE]')));
+    expect(kept.text).toBe('여기까지');
+    expect(kept.outcome).toMatchObject({ state: 'cut', cut: 'refused', finishReason: 'content_filter', error: null });
+    const none = await decode(openRouter, body(sse(chunk({}, 'content_filter'), '[DONE]')));
+    expect(none.outcome).toMatchObject({ state: 'failed', cut: null, error: { kind: 'provider', detail: 'content_filter' } });
+  });
+
   it('marks a stream that ends without a finish reason or end marker as cut, and one with a finish reason as done', async () => {
     expect((await decode(openRouter, body(sse(chunk({ content: '중간에' }))))).outcome).toMatchObject({ state: 'cut', cut: 'no-terminal' });
     const endedWithoutTerminal = (await decode(openRouter, body(sse(chunk({ content: '끝' }, 'stop'))))).outcome;
@@ -154,9 +162,11 @@ describe('anthropic messages stream', () => {
     });
   });
 
-  it('marks max_tokens as cut and an error event as failed', async () => {
+  it('marks max_tokens as cut, a refusal after text as a refused cut, and an error event as failed', async () => {
     const truncated = sse(start, { type: 'message_delta', delta: { stop_reason: 'max_tokens' }, usage: { output_tokens: 9 } }, { type: 'message_stop' });
     expect((await decode(anthropic, body(truncated))).outcome).toMatchObject({ state: 'cut', cut: 'length' });
+    const refused = sse(start, { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '여기까지' } }, { type: 'message_delta', delta: { stop_reason: 'refusal' }, usage: { output_tokens: 3 } }, { type: 'message_stop' });
+    expect((await decode(anthropic, body(refused))).outcome).toMatchObject({ state: 'cut', cut: 'refused', finishReason: 'refusal' });
     const failed = sse(start, { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } });
     expect((await decode(anthropic, body(failed))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Overloaded' } });
   });

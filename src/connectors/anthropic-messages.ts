@@ -186,6 +186,7 @@ export const anthropicMessages: Codec = {
   },
 
   truncated: (finishReason) => finishReason === 'max_tokens',
+  refused: (finishReason) => finishReason === 'refusal',
 
   // input_tokens counts only the uncached part; cache reads and writes are added to get what was sent.
   usage(raw) {

@@ -83,11 +83,15 @@ describe('Gemini', () => {
     expect(outcome.usage).toEqual({ inputTokens: 120, cachedInputTokens: 100, cacheWriteInputTokens: null, outputTokens: 20, reasoningTokens: 16 });
   });
 
-  it('cuts at MAX_TOKENS and fails a refused or blocked reply', async () => {
+  it('cuts at MAX_TOKENS, keeps the text a SAFETY stop came after as a refused cut, and fails one with none or a blocked prompt', async () => {
     expect((await decode(sse(recorded.cut))).outcome).toMatchObject({ state: 'cut', cut: 'length' });
     expect((await decode(JSON.stringify(recorded.blocked), 'application/json')).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'PROHIBITED_CONTENT' } });
-    const safety = { candidates: [{ content: { parts: [], role: 'model' }, finishReason: 'SAFETY', finishMessage: 'blocked' }] };
-    expect((await decode(sse(safety))).outcome).toMatchObject({ state: 'failed', error: { detail: 'SAFETY: blocked' } });
+    const said = { candidates: [{ content: { parts: [{ text: '여기까지는 왔다' }], role: 'model' }, finishReason: 'SAFETY' }] };
+    const kept = await decode(sse(said));
+    expect(kept.text).toBe('여기까지는 왔다');
+    expect(kept.outcome).toMatchObject({ state: 'cut', cut: 'refused', finishReason: 'SAFETY', error: null });
+    const safety = { candidates: [{ content: { parts: [], role: 'model' }, finishReason: 'SAFETY' }] };
+    expect((await decode(sse(safety))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'SAFETY' } });
     expect((await decode(sse(recorded.error))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Resource has been exhausted (e.g. check quota).' } });
   });
 

@@ -121,6 +121,7 @@ export const responses: Codec = {
   },
 
   truncated: (finishReason) => finishReason === 'max_output_tokens',
+  refused: (finishReason) => finishReason === 'content_filter',
 
   // Both cache reads and writes are already included in input_tokens.
   usage(raw) {

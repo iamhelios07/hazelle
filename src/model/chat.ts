@@ -68,7 +68,7 @@ export type Receipt = {
   modelName: string;
   entry?: string;
   state: 'done' | 'cut' | 'failed';
-  cut: 'length' | 'no-terminal' | 'stopped' | null;
+  cut: 'length' | 'no-terminal' | 'stopped' | 'refused' | null;
   error: ReceiptError | null;
   finishReason: string | null;
   usage: Usage | null;

@@ -194,6 +194,7 @@ export const chatCompletions: Codec = {
   },
 
   truncated: (finishReason) => finishReason === 'length',
+  refused: (finishReason) => finishReason === 'content_filter',
 
   usage(raw) {
     const prompt = isRecord(raw.prompt_tokens_details) ? raw.prompt_tokens_details : {};

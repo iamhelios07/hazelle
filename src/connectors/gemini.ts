@@ -48,15 +48,13 @@ function contents(messages: ChatMessage[]) {
   return turns;
 }
 
-// STOP and MAX_TOKENS end a reply that stands; every other reason, and a blocked prompt, is the provider refusing it.
+// STOP and MAX_TOKENS end a reply that stands; every other reason is the provider refusing it, after any text it sent.
 const STANDING = new Set(['STOP', 'MAX_TOKENS']);
 
-function refusal(event: Record<string, unknown>): string | null {
+// A blocked prompt has no candidate at all: nothing came, so it is a failure, not a refused reply.
+function blockedPrompt(event: Record<string, unknown>): string | null {
   const feedback = isRecord(event.promptFeedback) ? event.promptFeedback : {};
-  if (typeof feedback.blockReason === 'string') return feedback.blockReason;
-  const [candidate] = list(event.candidates);
-  if (!isRecord(candidate) || typeof candidate.finishReason !== 'string' || STANDING.has(candidate.finishReason)) return null;
-  return typeof candidate.finishMessage === 'string' && candidate.finishMessage ? `${candidate.finishReason}: ${candidate.finishMessage}` : candidate.finishReason;
+  return typeof feedback.blockReason === 'string' ? feedback.blockReason : null;
 }
 
 function read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void) {
@@ -80,8 +78,8 @@ function read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: s
 function terminal(event: unknown): Terminal | null {
   if (!isRecord(event)) return null;
   if (event.error !== undefined && event.error !== null) return failedTerminal(event.error);
-  const refused = refusal(event);
-  return refused === null ? null : { state: 'failed', error: refused };
+  const blocked = blockedPrompt(event);
+  return blocked === null ? null : { state: 'failed', error: blocked };
 }
 
 const TASKS: Record<EmbedPurpose, string> = { query: 'RETRIEVAL_QUERY', document: 'RETRIEVAL_DOCUMENT' };
@@ -192,6 +190,7 @@ export const gemini: Codec = {
   },
 
   truncated: (finishReason) => finishReason === 'MAX_TOKENS',
+  refused: (finishReason) => !STANDING.has(finishReason),
 
   // promptTokenCount already holds the cached part. candidatesTokenCount leaves thoughts out, and a count at zero is
   // left out of the JSON, so a missing thoughts count adds nothing.

@@ -105,6 +105,8 @@ describe('responses stream', () => {
     const { outcome, text } = await decode(route, sse(created, { type: 'response.output_text.delta', delta: '안녕' }, incomplete));
     expect(text).toBe('안녕');
     expect(outcome).toMatchObject({ state: 'cut', cut: 'length', finishReason: 'max_output_tokens', usage: { inputTokens: 10, cachedInputTokens: null, reasoningTokens: null } });
+    const filtered = { type: 'response.incomplete', response: { id: 'resp_2', status: 'incomplete', incomplete_details: { reason: 'content_filter' } } };
+    expect((await decode(route, sse(created, { type: 'response.output_text.delta', delta: '여기까지' }, filtered))).outcome).toMatchObject({ state: 'cut', cut: 'refused', finishReason: 'content_filter' });
   });
 
   it('fails on a failed reply and on an error event, with the provider’s message', async () => {

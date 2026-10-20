@@ -88,7 +88,8 @@ const NO_GREETING = '첫 메시지 없이';
 
 const NO_PERSONA = '페르소나 없음';
 
-const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
+const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨', refused: '차단됨' } as const;
+const MARK = { length: 'length', 'no-terminal': 'length', stopped: 'stopped', refused: 'refused' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
   const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, awaited, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, pinned, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
@@ -216,8 +217,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   } else if (failed) {
     body = (
       <>
-        {/* A continuation that failed still holds the text it continued, and 다시 시도 continues it again. */}
-        {receipt.continues && <Story html={shownHtml(original, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />}
+        {/* Text that came before the failure (a connection lost midway, a continuation that failed) is saved, and stays shown. */}
+        {!empty && <Story html={shownHtml(original, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />}
         <Failure
           title="응답 실패"
           actions={
@@ -225,6 +226,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
               <Button size="sm" disabled={busy} onClick={() => actions.retry(message)}>
                 다시 시도
               </Button>
+              {!empty && !receipt.continues && (
+                <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.continue(message)}>
+                  이어 쓰기
+                </Button>
+              )}
               <Button variant="secondary" size="sm" {...otherModel}>
                 다른 모델로
               </Button>
@@ -303,7 +309,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {drawing?.writing && <Marker reason="illustration" label="장면 정하는 중" />}
       {cut && (
         <Marker
-          reason={cut === 'stopped' ? 'stopped' : 'length'}
+          reason={MARK[cut]}
           label={cut === 'stopped' && empty ? '응답 전 중단됨' : CUT[cut]}
           action={
             !empty
