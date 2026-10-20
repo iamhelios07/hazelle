@@ -29,7 +29,7 @@ export type ServerError =
   | 'bad-input'
   | 'bad-key'
   | 'bad-nickname'
-  | 'bad-report'
+  | 'bad-post'
   | 'bad-time'
   | 'bad-username'
   | 'busy'

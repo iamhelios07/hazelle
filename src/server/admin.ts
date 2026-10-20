@@ -277,10 +277,10 @@ admin.delete('/accounts/:id', async (c) => {
 admin.post('/accounts/:id/restores', async (c) => {
   const id = c.req.param('id');
   const body = await readObject(c);
-  const report = body?.report;
+  const post = body?.post;
   const from = restoreFrom(body);
-  if (!ID.test(id) || !positive(report) || !from) return fail(c, 400, 'bad-input');
-  return answerBegin(c, id, report, from);
+  if (!ID.test(id) || !positive(post) || !from) return fail(c, 400, 'bad-input');
+  return answerBegin(c, id, post, from);
 });
 
 const incarnationOf = (c: Context<AppEnv>, id: string) => c.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
@@ -364,7 +364,7 @@ admin.get('/reports', async (c) => {
   const listed = await page<{ id: number; share: string | null; shared: string | null }>(
     c,
     `SELECT id, account_id AS accountId, CASE WHEN share IS NULL THEN (SELECT name FROM board_names WHERE board_names.account_id = reports.account_id) ELSE username END AS username,
-       text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link, diagnostics, ${SHARED} AS shared,
+       text, created_at AS createdAt, resolved_at AS resolvedAt, share, share_version AS shareVersion, link, ${SHARED} AS shared,
        post_id AS postId, comment_id AS commentId, (SELECT title FROM posts WHERE posts.id = reports.post_id) AS postTitle,
        (SELECT text FROM comments WHERE comments.id = reports.comment_id) AS commentText FROM reports`,
     c.req.query('open') === '1' ? 'resolved_at IS NULL' : 'TRUE',

@@ -3,12 +3,12 @@ import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 
 // Restores of one account, asked by the operator for it (whose: its id) or by the signed-in account for itself (null).
 
-// reportId: the report the operator answered, null for one the account began itself. at: the time asked for, null for
+// postId: the operator-only post the operator answered, null for one the account began itself. at: the time asked for, null for
 // an undo. targetAt: when the snapshot it rewinds to was taken, null until chosen. verified: the account was seen open
 // again after done. actions: what the server allows in this phase.
 export type Restore = {
   id: number;
-  reportId: number | null;
+  postId: number | null;
   at: number | null;
   undoes: number | null;
   targetAt: number | null;
@@ -22,8 +22,8 @@ export type Restore = {
   actions: RestoreAction[];
 };
 export type RestoreRun = Pick<Restore, 'id' | 'phase' | 'verified' | 'error'>;
-// report: the one the operator answers; the account's own restores name none.
-export type RestoreAsk = ({ at: number } | { undoes: number }) & { report?: number };
+// post: the operator-only post the operator answers; the account's own restores name none.
+export type RestoreAsk = ({ at: number } | { undoes: number }) & { post?: number };
 
 const base = (whose: string | null) => (whose === null ? 'account' : `admin/accounts/${whose}`);
 

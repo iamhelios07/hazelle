@@ -88,11 +88,11 @@ async function leftAt(username: string, phase: RestorePhase) {
   t.clock.now = () => now - HOUR_MS / 2;
   await write('new', 2);
   t.clock.now = () => Date.now();
-  const report = await t.askOperator(user.id);
-  const begun = await beginRestore(t.env, user.id, report, { at: now - (11 * HOUR_MS) / 12 });
+  const post = await t.askOperator(user.id);
+  const begun = await beginRestore(t.env, user.id, post, { at: now - (11 * HOUR_MS) / 12 });
   const operation = (begun as { begun: number }).begun;
   if (phase !== 'begun') await expect(runRestore(stoppingAt(phase), operation)).rejects.toThrow(Stop);
-  return { ...user, report, operation };
+  return { ...user, post, operation };
 }
 
 const bytesOf = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
@@ -266,7 +266,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     const armedCookie = await login('armed', 'password');
     expect(await contents(armedCookie)).toEqual(['old']);
     // The undo of an operation finished by the restore gives back the state it replaced.
-    const undo = await beginRestore(env, armed.id, armed.report, { undoes: armed.operation });
+    const undo = await beginRestore(env, armed.id, armed.post, { undoes: armed.operation });
     expect(await runRestore(env, (undo as { begun: number }).begun)).toMatchObject({ phase: 'done', verified: true });
     expect(await contents(armedCookie)).toEqual(['new']);
   } finally {
@@ -373,8 +373,8 @@ it('takes the first snapshot after a disaster restore whole, though the catalog 
   const baseline = await snapshotAt(day + HOUR_MS);
   await write('only in the checkpoint');
   t.clock.now = () => day + 4 * HOUR_MS;
-  const report = await t.askOperator(user.id);
-  const operation = ((await beginRestore(t.env, user.id, report, { at: day + 2 * HOUR_MS })) as { begun: number }).begun;
+  const post = await t.askOperator(user.id);
+  const operation = ((await beginRestore(t.env, user.id, post, { at: day + 2 * HOUR_MS })) as { begun: number }).begun;
   await expect(runRestore(stoppingAt('targeted'), operation)).rejects.toThrow(Stop);
   expect(await cancelRestore(t.env, operation)).toMatchObject({ phase: 'cancelled' });
   const checkpoint = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(operation).first<string>('checkpoint'))!;
@@ -420,8 +420,8 @@ it('names and restores the checkpoint of an account past its fence whose only ba
   const baseline = ((await t.stores.snapshot(user.incarnation)) as { taken: string }).taken;
   await write('after the baseline, in the checkpoint');
   t.clock.now = () => day + 3 * HOUR_MS;
-  const report = await t.askOperator(user.id);
-  const operation = ((await beginRestore(t.env, user.id, report, { at: day + 2 * HOUR_MS })) as { begun: number }).begun;
+  const post = await t.askOperator(user.id);
+  const operation = ((await beginRestore(t.env, user.id, post, { at: day + 2 * HOUR_MS })) as { begun: number }).begun;
   await expect(runRestore(stoppingAt('targeted'), operation)).rejects.toThrow(Stop);
   const checkpoint = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(operation).first<string>('checkpoint'))!;
   await t.env.db.prepare('UPDATE snapshots SET timeline = NULL, schema_version = NULL WHERE id = ?').bind(baseline).run();

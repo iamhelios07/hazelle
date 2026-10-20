@@ -205,7 +205,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
       {asking?.kind === 'status' && <StatusDialog post={post} onDone={done} onClose={close} />}
       {asking?.kind === 'restore' && (
         <RestoresDialog
-          operated={{ accountId: asking.account.id, username: asking.account.username, report: { id: post.id, text: post.text ?? post.title } }}
+          operated={{ accountId: asking.account.id, username: asking.account.username, post: { id: post.id, text: post.text ?? post.title } }}
           onClose={close}
         />
       )}
@@ -272,7 +272,7 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
           {comment.hidden && <Text variant="note">{hiddenLine('댓글', comment.hidden)}</Text>}
         </>
       ) : (
-        <Text variant="note">{comment.hidden ? '운영자가 가린 댓글' : '삭제된 댓글'}</Text>
+        <Text variant="note">{comment.deleted ? '삭제된 댓글' : '운영자가 가린 댓글'}</Text>
       );
     return (
       <ListItem

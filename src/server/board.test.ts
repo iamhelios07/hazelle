@@ -301,6 +301,6 @@ it("anchors an operator's restore on the account's open operator-only post, date
     clock.mockRestore();
   }
   expect(await t.env.db.prepare('SELECT created_at FROM posts WHERE id = ?').bind(asked).first('created_at')).toBe(created);
-  expect(await beginRestore(t.env, author.id, shown, { at: created - 3_600_000 })).toEqual({ refused: 'bad-report' });
+  expect(await beginRestore(t.env, author.id, shown, { at: created - 3_600_000 })).toEqual({ refused: 'bad-post' });
   expect(await beginRestore(t.env, author.id, asked, { at: created - 3_600_000 })).toEqual({ begun: expect.any(Number) });
 });

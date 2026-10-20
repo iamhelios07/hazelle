@@ -6,7 +6,7 @@ import { BUILT_VERSION } from '../common/release';
 import { useCopy } from '../common/useCopy';
 import { Button, Row, SettingRow, Stack, TextField } from '../ui';
 
-// 앱 정보's 문제 진단, what 운영자에게 알리기 sends along (ReportDialog): run, read, then copy in a press of its own, since the check outlasts the press's activation.
+// 앱 정보's 문제 진단, what a 운영자에게만 post sends along (board/WriteScreen): run, read, then copy in a press of its own, since the check outlasts the press's activation.
 export function Diagnostics() {
   const copy = useCopy();
   const [report, setReport] = useState<string | null>(null);

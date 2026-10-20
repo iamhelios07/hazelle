@@ -152,7 +152,8 @@ export function testServer() {
     // The page holds the account it signed up, as AccountFlow does, so every request states it.
     async account(username?: string) {
       const body = signupBody(username);
-      server!.cookie = sessionCookie(await app.post('signup', body));
+      const cookie = sessionCookie(await app.post('signup', body));
+      server!.cookie = cookie;
       const { accountId } = body;
       holdAccount(accountId);
       const vaultKey = randomBytes(32);
@@ -162,7 +163,7 @@ export function testServer() {
         return store;
       };
       const store = await open();
-      return { accountId, vaultKey, store, files: new Files(api, store), open };
+      return { accountId, cookie, vaultKey, store, files: new Files(api, store), open };
     },
     // The operator deletes the account on the server, which opens signup again (server/accounts): how a user
     // who lost both the password and the recovery key starts over.
@@ -200,6 +201,11 @@ export function testServer() {
     },
     // The first signup of a reset installation is its operator, so a test calls this before any account().
     operator: () => harness.account(),
+    // The page holds this account (an account()'s) again, as after signing in to it, until the next account() or as().
+    as({ accountId, cookie }: { accountId: string; cookie: string }) {
+      server!.cookie = cookie;
+      holdAccount(accountId);
+    },
   };
   return harness;
 }

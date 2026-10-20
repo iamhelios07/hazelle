@@ -1,13 +1,14 @@
 import { expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
-import { loadSession, markNoticesSeen, readNotices, sendReport } from './account';
-import { readAccounts, readAdminAccount, readServiceUsage, readLog, readReports, readService, removeAccount, resolveReport, sendNotice, setService, suspend } from './admin';
+import { loadSession, markNoticesSeen, readNotices } from './account';
+import { readAccounts, readAdminAccount, readServiceUsage, readLog, readService, removeAccount, sendNotice, setService, suspend } from './admin';
+import { markActivitySeen, readActivity, readPosts, setNickname, setPostStatus, writeComment, writePost } from './board';
 import { beginRestore, continueRestore, readPoints, readRestores, type Restore } from './restores';
 import { testServer } from './testing';
 
 const server = testServer();
 
-it('sets the service, suspends an account and resolves its report, each read back newest first in one short page', async () => {
+it('sets the service, suspends an account and settles its operator-only post, each read back newest first in one short page', async () => {
   const { accountId } = await server.operator();
   expect(await setService({ signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null })).toMatchObject({ ok: true });
   expect(await readService()).toEqual({
@@ -19,32 +20,51 @@ it('sets the service, suspends an account and resolves its report, each read bac
   expect(await readAccounts(null)).toMatchObject({ ok: true, data: { rows: [{ accountId, suspended: true }] } });
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { admin: true, suspended: true } } });
 
-  expect(await sendReport('그림이 이상해요', null)).toMatchObject({ ok: true });
-  const reports = await readReports(null);
-  expect(reports).toMatchObject({ ok: true, data: { rows: [{ accountId, text: '그림이 이상해요', resolvedAt: null }], next: null } });
-  expect(await resolveReport(reports.ok ? reports.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
+  const written = await writePost({ title: '그림이 이상해요', text: '그림이 이상해요', category: 'bug', visibility: 'operator', diagnostics: null });
+  expect(written).toMatchObject({ ok: true });
+  const post = written.ok ? written.data.id : 0;
+  expect(await readService()).toMatchObject({ ok: true, data: { pending: 1 } });
+  expect(await readPosts(null, { sort: 'new', visibility: 'operator' })).toMatchObject({
+    ok: true,
+    data: { rows: [{ id: post, title: '그림이 이상해요', visibility: 'operator', status: 'open', author: { operator: true, mine: true } }], next: null },
+  });
+  expect(await setPostStatus(post, 'seen', null)).toMatchObject({ ok: true });
+  expect(await readService()).toMatchObject({ ok: true, data: { pending: 0 } });
   const log = await readLog(null);
-  expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['resolve-report', 'send-notice', 'suspend', 'set-service']);
+  expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['post-status', 'send-notice', 'suspend', 'set-service']);
   expect(log.ok && log.data.next).toBeNull();
 });
 
-it('sends notices with a reply, a reason and to everyone, which the account reads newest first, counted unread until seen', async () => {
-  const { accountId } = await server.operator();
-  await sendReport('도와주세요', null);
-  const reports = await readReports(null);
-  const report = reports.ok ? reports.data.rows[0]!.id : 0;
-  expect(await resolveReport(report)).toMatchObject({ ok: true });
+it('counts a comment on an account\'s post unread until seen, and sends notices with a reason and to everyone, read newest first', async () => {
+  const operator = await server.operator();
+  expect(await setService({ signupCap: 2, accountBytesCap: null, accountFileBytesCap: null })).toMatchObject({ ok: true });
+  const other = await server.account('other');
+  const { accountId } = other;
+  expect(await setNickname('두 번째')).toMatchObject({ ok: true });
+  const written = await writePost({ title: '도와주세요', text: '도와주세요', category: 'question', visibility: 'public', diagnostics: null });
+  const post = written.ok ? written.data.id : 0;
+
+  server.as(operator);
+  expect(await writeComment(post, '고쳤어요', null)).toMatchObject({ ok: true });
+  server.as(other);
+  expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadBoard: 1, unreadNotices: 0 } } });
+  const activity = await readActivity(null);
+  expect(activity).toMatchObject({ ok: true, data: { rows: [{ kind: 'comment', postId: post, title: '도와주세요', by: { operator: true } }], next: null } });
+  expect(await markActivitySeen(activity.ok ? activity.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
+  expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadBoard: 0 } } });
+
+  server.as(operator);
   expect(await suspend(accountId, '잠시 멈춰요')).toMatchObject({ ok: true });
   expect(await sendNotice(null, '점검해요')).toMatchObject({ ok: true });
-
-  expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 3 } } });
+  server.as(other);
+  expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 2 } } });
   const notices = await readNotices(null);
-  expect(notices).toMatchObject({ ok: true, data: { rows: [{ text: '점검해요' }, { text: '잠시 멈춰요', reportId: null }, { text: '고쳤어요', reportId: report }], next: null } });
+  expect(notices).toMatchObject({ ok: true, data: { rows: [{ text: '점검해요' }, { text: '잠시 멈춰요' }], next: null } });
   expect(await markNoticesSeen(notices.ok ? notices.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 0 } } });
 });
 
-it('restores an account to a time on its report: its open device drops to the objects of that time, and the restore reads back with its undo', async () => {
+it('restores an account to a time on its operator-only post: its open device drops to the objects of that time, and the restore reads back with its undo', async () => {
   const { accountId, store, open } = await server.operator();
   const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
   const now = Date.now();
@@ -54,15 +74,14 @@ it('restores an account to a time on its report: its open device drops to the ob
   server.at(() => now - 1_800_000);
   await store.create('connection', connection('later'));
   server.at(() => Date.now());
-  await sendReport('되돌려 주세요', null);
-  const reports = await readReports(null);
-  const report = reports.ok ? reports.data.rows[0]!.id : 0;
+  const written = await writePost({ title: '되돌려 주세요', text: '되돌려 주세요', category: 'question', visibility: 'operator', diagnostics: null });
+  const post = written.ok ? written.data.id : 0;
   const at = now - 2_700_000;
 
   expect(await readPoints(accountId)).toEqual({ ok: true, data: [{ at: now - 3_600_000, takenAt: now - 3_600_000, kind: 'baseline' }] });
   const rewound = vi.fn();
   store.subscribeRewound(rewound);
-  const run = await beginRestore(accountId, { report, at });
+  const run = await beginRestore(accountId, { post, at });
   expect(run).toEqual({ ok: true, data: { id: expect.any(Number), phase: 'done', verified: true, error: null } });
   expect(await store.pull()).toEqual({ ok: false, error: 'timeline-changed' });
   await vi.waitFor(() => expect(rewound).toHaveBeenCalledWith(0));
@@ -71,7 +90,7 @@ it('restores an account to a time on its report: its open device drops to the ob
   expect(reopened.list('connection')).toEqual([kept.ok && kept.data]);
 
   expect(await readRestores(accountId)).toEqual({ ok: true, data: [{
-    id: run.ok && run.data.id, reportId: report, at, undoes: null, targetAt: now - 3_600_000, phase: 'done', verified: true, error: null,
+    id: run.ok && run.data.id, postId: post, at, undoes: null, targetAt: now - 3_600_000, phase: 'done', verified: true, error: null,
     createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [],
   }] });
   expect(await readAccounts(null)).toMatchObject({ ok: true, data: { rows: [{ accountId, state: 'active', bytes: expect.any(Number) }], next: null } });
@@ -121,9 +140,9 @@ it('finishes a leaving account by removing it again', async () => {
   expect(sent).toEqual([{ url: '/api/admin/accounts/a', method: 'DELETE', body: undefined }]);
 });
 
-it('asks a restore and an undo on a report, reads the restores with their actions, and continues one', async () => {
+it('asks a restore and an undo on a post, reads the restores with their actions, and continues one', async () => {
   const restore: Restore = {
-    id: 7, reportId: 3, at: 1_700_000_000_000, undoes: null, targetAt: 1_699_999_000_000, phase: 'done', verified: true, error: null,
+    id: 7, postId: 3, at: 1_700_000_000_000, undoes: null, targetAt: 1_699_999_000_000, phase: 'done', verified: true, error: null,
     createdAt: 1_700_000_100_000, updatedAt: 1_700_000_200_000, canUndo: true, undoExpiresAt: 1_702_000_000_000, actions: [],
   };
   const stuck: Restore = { ...restore, id: 8, at: null, undoes: 7, phase: 'armed', error: 'rewind-pending', canUndo: false, undoExpiresAt: null, actions: ['resume'] };
@@ -134,16 +153,16 @@ it('asks a restore and an undo on a report, reads the restores with their action
     Response.json({ id: 8, phase: 'done', verified: false, error: null }),
     Response.json({ error: 'bad-time' }, { status: 400 }),
   );
-  expect(await beginRestore('a', { report: 3, at: restore.at! })).toEqual({ ok: true, data: { id: 7, phase: 'done', verified: true, error: null } });
+  expect(await beginRestore('a', { post: 3, at: restore.at! })).toEqual({ ok: true, data: { id: 7, phase: 'done', verified: true, error: null } });
   expect(await readRestores('a')).toEqual({ ok: true, data: [stuck, restore] });
-  expect(await beginRestore('a', { report: 4, undoes: 7 })).toMatchObject({ ok: true, data: { phase: 'armed', error: 'rewind-pending' } });
+  expect(await beginRestore('a', { post: 4, undoes: 7 })).toMatchObject({ ok: true, data: { phase: 'armed', error: 'rewind-pending' } });
   expect(await continueRestore('a', 8, 'resume')).toMatchObject({ ok: true, data: { phase: 'done', verified: false } });
-  expect(await beginRestore('a', { report: 3, at: 1 })).toEqual({ ok: false, error: 'bad-time', retryAfter: undefined });
+  expect(await beginRestore('a', { post: 3, at: 1 })).toEqual({ ok: false, error: 'bad-time', retryAfter: undefined });
   expect(sent.map(({ url, method, body }) => [method, url, body])).toEqual([
-    ['POST', '/api/admin/accounts/a/restores', { report: 3, at: restore.at }],
+    ['POST', '/api/admin/accounts/a/restores', { post: 3, at: restore.at }],
     ['GET', '/api/admin/accounts/a/restores', undefined],
-    ['POST', '/api/admin/accounts/a/restores', { report: 4, undoes: 7 }],
+    ['POST', '/api/admin/accounts/a/restores', { post: 4, undoes: 7 }],
     ['POST', '/api/admin/restores/8/resume', undefined],
-    ['POST', '/api/admin/accounts/a/restores', { report: 3, at: 1 }],
+    ['POST', '/api/admin/accounts/a/restores', { post: 3, at: 1 }],
   ]);
 });

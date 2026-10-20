@@ -11,9 +11,8 @@ import { useToast } from '../toast';
 import { ConfirmDialog, Dialog, Empty, List, ListItem, MenuItem, MoreMenu, Section, Stack, Text } from '../ui';
 
 // The account the operator acts on, with the operator-only post a new restore or an undo answers (null when opened
-// from the account, which only continues one); the API still calls it report. The signed-in account's own restores
-// have none of it.
-export type Operated = { accountId: string; username: string; report: { id: number; text: string } | null };
+// from the account, which only continues one). The signed-in account's own restores have none of it.
+export type Operated = { accountId: string; username: string; post: { id: number; text: string } | null };
 
 type Words = { tag: string; says: string };
 const UNCHANGED = '계정 데이터는 바뀌지 않았어요.';
@@ -42,7 +41,7 @@ const ERRORS: Record<RestoreError, string> & Partial<Record<string, string>> = {
 };
 export const restoreError = (code: string) => ERRORS[code] ?? code;
 const REFUSED: Partial<Record<ServerError, string>> = {
-  'bad-report': '그 계정이 운영자에게만 보낸 글로만 복원할 수 있어요.',
+  'bad-post': '그 계정이 운영자에게만 보낸 글로만 복원할 수 있어요.',
   'too-many-restores': `복원은 하루에 최대 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`,
   'bad-time': '10분 전부터 6일 전 사이의 시점으로만 복원할 수 있어요.',
   'cannot-undo': '가장 최근에 한 복원만, 끝난 뒤 7일 안에 한 번 되돌릴 수 있어요.',
@@ -92,9 +91,9 @@ type Asking = { kind: 'restore'; point: RestorePoint } | { kind: 'undo'; restore
 export function RestoresDialog({ operated, onClose, onActed }: { operated: Operated | null; onClose: () => void; onActed?: () => void }) {
   const whose = operated?.accountId ?? null;
   const subject = operated ? `${operated.username} 계정` : '계정';
-  const report = operated?.report?.id;
-  // The operator begins one only on a report; the account itself always may.
-  const begins = operated === null || operated.report !== null;
+  const post = operated?.post?.id;
+  // The operator begins one only on a post; the account itself always may.
+  const begins = operated === null || operated.post !== null;
   const toast = useToast();
   const restores = useLoaded(() => readRestores(whose));
   const points = useLoaded(() => (begins ? readPoints(whose) : Promise.resolve({ ok: true as const, data: [] })));
@@ -130,14 +129,14 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
 
   if (asking?.kind === 'restore') {
     return (
-      <ConfirmDialog title={`${subject}을 ${moment(asking.point.takenAt)} 기록으로 복원할까요?`} confirm="복원" icon={History} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { report, at: asking.point.at }))} onClose={() => setAsking(null)}>
+      <ConfirmDialog title={`${subject}을 ${moment(asking.point.takenAt)} 기록으로 복원할까요?`} confirm="복원" icon={History} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { post, at: asking.point.at }))} onClose={() => setAsking(null)}>
         {standing('그 기록 이후에 저장한 텍스트와 캐릭터, 채팅, 설정은 모두 사라지고 이미지만 남아요. 복원하는 동안에는 계정을 쓸 수 없어요. 복원이 끝난 뒤 7일 안에는 복원 전 상태로 다시 되돌릴 수 있어요.')}
       </ConfirmDialog>
     );
   }
   if (asking?.kind === 'undo') {
     return (
-      <ConfirmDialog title={`${subject}을 복원 전으로 되돌릴까요?`} confirm="복원 전으로 되돌리기" icon={Undo2} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { report, undoes: asking.restore.id }))} onClose={() => setAsking(null)}>
+      <ConfirmDialog title={`${subject}을 복원 전으로 되돌릴까요?`} confirm="복원 전으로 되돌리기" icon={Undo2} busy={busy} onConfirm={() => void go(() => beginRestore(whose, { post, undoes: asking.restore.id }))} onClose={() => setAsking(null)}>
         {standing('복원하기 바로 전 상태로 돌아가요. 복원한 뒤에 새로 저장한 내용은 모두 사라져요.')}
       </ConfirmDialog>
     );
@@ -153,7 +152,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
   return (
     <Dialog title={operated ? `${operated.username} 복원` : '복원'} onClose={onClose}>
       <Stack gap="group">
-        {operated?.report && <Text variant="prose">{operated.report.text}</Text>}
+        {operated?.post && <Text variant="prose">{operated.post.text}</Text>}
         {begins && (
           <Section level={3} title="복원할 기록" help="텍스트와 캐릭터, 채팅, 설정을 그때의 기록으로 되돌려요. 10분 전부터 6일 전까지의 기록이 남아 있어요.">
             {points.loading}
@@ -186,7 +185,7 @@ export function RestoresDialog({ operated, onClose, onActed }: { operated: Opera
                   <ListItem
                     key={restore.id}
                     title={restore.at === null ? '복원 전으로 되돌리기' : `${moment(restore.targetAt ?? restore.at)} ${restore.targetAt === null ? '시점' : '기록'}으로 복원`}
-                    tags={operated && restore.reportId === null ? [wordsOf(restore).tag, '직접 복원'] : [wordsOf(restore).tag]}
+                    tags={operated && restore.postId === null ? [wordsOf(restore).tag, '직접 복원'] : [wordsOf(restore).tag]}
                     description={described(restore)}
                     note={ago(restore.updatedAt)}
                     trailing={

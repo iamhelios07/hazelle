@@ -126,13 +126,13 @@ type Operation = {
   error: string | null;
 };
 
-// The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the report (null: the account
-// asks itself), ?3 the time asked for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a
+// The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the operator-only post (null: the
+// account asks itself), ?3 the time asked for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a
 // refused one read the same text.
 const FREE = "accounts.state = 'active' AND NOT EXISTS (SELECT 1 FROM restores WHERE incarnation = accounts.incarnation AND verified = 0)";
 // The operator begins one on an operator-only post (board.ts) the account wrote and the operator has not settled. Only
-// the account's own route passes no report (accounts.ts); the operator's always names one.
-const REPORTED = `(?2 IS NULL OR EXISTS (SELECT 1 FROM posts WHERE id = ?2 AND account_id = accounts.id AND visibility = 'operator'
+// the account's own route passes no post (accounts.ts); the operator's always names one.
+const ON_POST = `(?2 IS NULL OR EXISTS (SELECT 1 FROM posts WHERE id = ?2 AND account_id = accounts.id AND visibility = 'operator'
   AND status NOT IN ('done', 'declined') AND deleted = 0 AND created_at >= accounts.created_at))`;
 // Counted by the checkpoints taken (SELF_RESTORES_PER_DAY): a restore stopped before one cost no disk.
 const WITHIN_LIMIT = `(?2 IS NOT NULL OR (SELECT COUNT(*) FROM restores WHERE incarnation = accounts.incarnation AND report_id IS NULL
@@ -144,11 +144,11 @@ export const undoable = (operation: string, now: string) =>
   `${operation} = (SELECT id FROM restores WHERE incarnation = accounts.incarnation AND phase = 'done' AND verified = 1 ORDER BY id DESC LIMIT 1)
    AND (SELECT ended_at FROM restores WHERE id = ${operation}) > ${now} - ${RETENTION_MS}`;
 
-type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'too-many-restores' | 'bad-time' | 'cannot-undo' };
+type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-post' | 'too-many-restores' | 'bad-time' | 'cannot-undo' };
 
 // The operation's row and the account's hold on it commit together or not at all: the hold is gated on the insert.
 // An undo's target, the undone restore's checkpoint, is recorded with the row, so it is pinned from the begin on.
-export async function beginRestore(env: Services, accountId: string, report: number | null, from: { at: number } | { undoes: number }): Promise<Begun> {
+export async function beginRestore(env: Services, accountId: string, post: number | null, from: { at: number } | { undoes: number }): Promise<Begun> {
   const db = env.db;
   const at = 'at' in from ? from.at : null;
   const undoes = 'undoes' in from ? from.undoes : null;
@@ -158,9 +158,9 @@ export async function beginRestore(env: Services, accountId: string, report: num
       .prepare(
         `INSERT INTO restores (incarnation, report_id, at, undoes, target, timeline, phase, created_at, updated_at)
          SELECT incarnation, ?2, ?3, ?4, (SELECT checkpoint FROM restores WHERE id = ?4), lower(hex(randomblob(16))), 'begun', ?5, ?5 FROM accounts
-         WHERE id = ?1 AND ${FREE} AND ${REPORTED} AND ${WITHIN_LIMIT} AND (${TIMELY} OR ${undoable('?4', '?5')}) RETURNING id`,
+         WHERE id = ?1 AND ${FREE} AND ${ON_POST} AND ${WITHIN_LIMIT} AND (${TIMELY} OR ${undoable('?4', '?5')}) RETURNING id`,
       )
-      .bind(accountId, report, at, undoes, now),
+      .bind(accountId, post, at, undoes, now),
     db
       .prepare(
         `UPDATE accounts SET state = 'restoring', operation = (SELECT MAX(id) FROM restores WHERE incarnation = accounts.incarnation AND phase = 'begun')
@@ -170,20 +170,20 @@ export async function beginRestore(env: Services, accountId: string, report: num
     db
       .prepare(
         `INSERT INTO admin_log (at, action, target, detail)
-         SELECT ?1, 'restore-begun', id, json_object('username', username, 'operation', operation, 'report', ?2, 'at', ?3, 'undoes', ?4)
+         SELECT ?1, 'restore-begun', id, json_object('username', username, 'operation', operation, 'post', ?2, 'at', ?3, 'undoes', ?4)
          FROM accounts WHERE id = ?5 AND state = 'restoring' AND changes() = 1`,
       )
-      .bind(now, report, at, undoes, accountId),
+      .bind(now, post, at, undoes, accountId),
   ]));
   const id = inserted!.results[0]?.id;
   if (id !== undefined) return { begun: id };
   const why = await db
-    .prepare(`SELECT ${FREE} AS free, ${REPORTED} AS reported, ${WITHIN_LIMIT} AS within FROM accounts WHERE id = ?1`)
-    .bind(accountId, report, null, null, now)
-    .first<{ free: number; reported: number; within: number }>();
+    .prepare(`SELECT ${FREE} AS free, ${ON_POST} AS onPost, ${WITHIN_LIMIT} AS within FROM accounts WHERE id = ?1`)
+    .bind(accountId, post, null, null, now)
+    .first<{ free: number; onPost: number; within: number }>();
   if (!why) return { refused: 'not-found' };
   if (!why.free) return { refused: 'account-busy' };
-  if (!why.reported) return { refused: 'bad-report' };
+  if (!why.onPost) return { refused: 'bad-post' };
   if (!why.within) return { refused: 'too-many-restores' };
   return { refused: at === null ? 'cannot-undo' : 'bad-time' };
 }
@@ -367,11 +367,11 @@ export function restoreFrom(body: Record<string, unknown> | null): { at: number 
   return undoes === undefined && whole(at) && at >= 0 ? { at } : null;
 }
 
-const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 400, 'too-many-restores': 429, 'bad-time': 400, 'cannot-undo': 400 } as const;
+const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-post': 400, 'too-many-restores': 429, 'bad-time': 400, 'cannot-undo': 400 } as const;
 
 // The operation runs in this request.
-export async function answerBegin(c: Context<AppEnv>, accountId: string, report: number | null, from: { at: number } | { undoes: number }) {
-  const begun = await beginRestore(c.env, accountId, report, from);
+export async function answerBegin(c: Context<AppEnv>, accountId: string, post: number | null, from: { at: number } | { undoes: number }) {
+  const begun = await beginRestore(c.env, accountId, post, from);
   if ('refused' in begun) return fail(c, REFUSAL_STATUS[begun.refused], begun.refused);
   return c.json(await runRestore(c.env, begun.begun));
 }
@@ -395,11 +395,12 @@ export async function restorePoints(db: Db, accountId: string, now = Date.now())
   return points;
 }
 
-// Newest first. targetAt: when the snapshot it rewinds to was taken, null until it is chosen.
+// Newest first. targetAt: when the snapshot it rewinds to was taken, null until it is chosen. report_id is the shipped column
+// name (migration 0005) for the operator-only post a restore answers.
 export async function restoresOf(db: Db, accountId: string) {
   const { results } = await db
     .prepare(
-      `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
+      `SELECT r.id, r.report_id AS postId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
          (SELECT taken_at FROM snapshots WHERE id = r.target) AS targetAt, r.ended_at, ${undoable('r.id', '?2')} AS canUndo
        FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
     )

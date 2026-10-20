@@ -1,21 +1,21 @@
 import { readLog, type LogRow } from '../../runtime/admin';
 import { sizeText } from '../common/size';
 import { ago } from '../common/time';
-import { NOTICES } from '../common/words';
+import { BOARD, NOTICES } from '../common/words';
 import { navigate } from '../shell/router';
 import { ListItem, Panel } from '../ui';
 import { restoreError } from '../common/RestoresDialog';
 import { moment } from '../common/time';
 import { HEAD_ROWS, PagedList, SeeAll, usePages } from '../common/useLoaded';
 
-// The actions server/admin logs. One it does not list shows as the server wrote it.
+// The actions server/admin and server/board log. One they do not list shows as the server wrote it.
 const ACTIONS: Record<string, string> = {
   suspend: '정지',
   lift: '정지 해제',
   'delete-account': '계정 삭제',
   'set-service': '서비스 설정',
   'set-caps': '저장 한도',
-  'resolve-report': '알림 확인',
+  'resolve-report': '신고 확인',
   'send-notice': NOTICES.send,
   'block-file': '파일 차단',
   'unblock-file': '파일 차단 해제',
@@ -26,6 +26,15 @@ const ACTIONS: Record<string, string> = {
   'restore-done': '복원 완료',
   'restore-cancelled': '복원 취소',
   'restore-failed': '복원 실패',
+  'post-status': '글 상태 변경',
+  'post-hide': '글 가림',
+  'post-show': '글 가림 풀기',
+  'post-lock': '글 잠금',
+  'post-unlock': '글 잠금 풀기',
+  'post-delete': '글 삭제',
+  'comment-hide': '댓글 가림',
+  'comment-show': '댓글 가림 풀기',
+  'comment-delete': '댓글 삭제',
 };
 
 const capText = (cap: unknown) => (typeof cap === 'number' ? sizeText(cap) : cap === 'default' ? '기본값' : '없음');
@@ -34,7 +43,12 @@ function detailOf({ action, detail }: LogRow): string | undefined {
   if (action === 'send-notice' && detail === null) return '모두에게';
   if (detail === null) return undefined;
   const values = detail as Record<string, unknown>;
+  // Rows from before the 게시판 (migration 0015) answered a report; they live a year.
   if (action === 'send-notice' && typeof values.report === 'number') return `${String(values.username)} · 알림 ${values.report}에 답변`;
+  if (action === 'post-status' && typeof values.status === 'string') return `${BOARD.statuses[values.status as keyof typeof BOARD.statuses] ?? values.status}${typeof values.version === 'string' ? ` · ${values.version}` : ''}`;
+  if ((action === 'post-hide' || action === 'comment-hide') && typeof values.reason === 'string') return `${values.reason}${typeof values.days === 'number' ? ` · ${values.days}일` : ''}`;
+  if (action === 'post-delete' && typeof values.title === 'string') return values.title;
+  if (action === 'comment-delete' && typeof values.post === 'number') return `글 ${values.post}`;
   if (action === 'set-caps') return `${String(values.username)} · 텍스트 한도 ${capText(values.bytesCap)} · 이미지 한도 ${capText(values.fileBytesCap)}`;
   if (action === 'restore-begun') return `${String(values.username)} · ${typeof values.at === 'number' ? `${moment(values.at)} 시점으로` : '복원 전으로 되돌리기'}`;
   if (action === 'restore-failed' && typeof values.error === 'string') return `${String(values.username)} · ${restoreError(values.error)}`;

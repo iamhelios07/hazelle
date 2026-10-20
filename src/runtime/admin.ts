@@ -57,7 +57,6 @@ export type Report = {
   share: string | null;
   shareVersion: number | null;
   link: string | null;
-  diagnostics: string | null;
   shared: SharedState | null;
   postId: number | null;
   commentId: number | null;

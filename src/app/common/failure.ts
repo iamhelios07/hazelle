@@ -45,7 +45,7 @@ type OnFallback =
   | 'too-many-writes'
   | 'wrong-login'
   // Restore refusals, worded by the restores dialog.
-  | 'bad-report'
+  | 'bad-post'
   | 'bad-time'
   | 'cannot-cancel'
   | 'cannot-undo'

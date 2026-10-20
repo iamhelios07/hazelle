@@ -184,7 +184,7 @@ export function AccountsSection({ loaded, total, onActed, children }: { loaded: 
       {restoring && (
         <RestoresDialog
           key={restoring.accountId}
-          operated={{ accountId: restoring.accountId, username: restoring.username, report: null }}
+          operated={{ accountId: restoring.accountId, username: restoring.username, post: null }}
           onClose={() => setRestoring(null)}
           onActed={() => acted(restoring.accountId)}
         />

@@ -1,5 +1,5 @@
 import { ChangeSignal } from '../change-signal';
-import { MAX_DIAGNOSTICS_LENGTH, type AccountState } from '../contracts/admin';
+import type { AccountState } from '../contracts/admin';
 import { passwordCredential, recoveryCredential, type Credential, type Method, type VaultRecord } from '../vault/keys';
 import { api, SLOW_ROUTE_WAIT, type Heard } from './api';
 import { page } from './pages';
@@ -75,15 +75,7 @@ export const changePassword = (current: Proof, next: { passwordProof: string; pa
 
 export const deleteAccount = (credential: Proof) => api<undefined>('DELETE', 'account', proven(credential), undefined, SLOW_ROUTE_WAIT);
 
-// diagnostics: the 문제 진단 the sender chose to send along, or null.
-export const sendReport = (text: string, diagnostics: string | null) =>
-  api<undefined>('POST', 'reports', { text, diagnostics: diagnostics?.slice(0, MAX_DIAGNOSTICS_LENGTH) ?? null });
-
-// question: what a reply (reportId set) answers, null once that report was forgotten, a year after it was resolved.
-export type Notice = { id: number; reportId: number | null; text: string; createdAt: number; question: string | null };
+export type Notice = { id: number; text: string; createdAt: number };
 export const readNotices = (after: string | null, ask: { limit?: number } = {}) => page<'notices', Notice>('notices', 'notices', after, ask);
-// What this account sent the operator, newest first. reply: the operator's answer, null for none (yet).
-export type SentReport = { id: number; text: string; createdAt: number; resolvedAt: number | null; reply: string | null };
-export const readSentReports = (after: string | null, ask: { limit?: number } = {}) => page<'reports', SentReport>('reports', 'reports', after, ask);
 // newest: the newest notice shown, so one sent since stays unread.
 export const markNoticesSeen = (newest: number) => api<undefined>('POST', 'notices/seen', { id: newest });

@@ -102,14 +102,6 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
           <Panel title={BOARD.title}>
             <SettingGroup label={BOARD.title}>
               <SettingRow
-                label="모든 글"
-                control={
-                  <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board', operator: false })}>
-                    보기
-                  </Button>
-                }
-              />
-              <SettingRow
                 label={BOARD.mine}
                 control={
                   <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'board-mine' })}>

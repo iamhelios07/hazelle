@@ -195,4 +195,4 @@ No RisuAI code (GPL-3.0) is used. Compatibility is implemented from a behavioral
 
 The names 헤이젤 and Hazelle, the icons in `public/` and the `hazelle.app` domain identify this project and its hosted instance. They are not covered by the license: a fork or another instance built from this code chooses its own name and icons.
 
-The project does not take code contributions at this time. Bug reports and suggestions are welcome as issues.
+The project does not take code contributions at this time. Code defects and security issues are welcome as issues here; feedback on using the hosted app goes to its 게시판 inside the app.
