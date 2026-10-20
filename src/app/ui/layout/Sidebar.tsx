@@ -51,13 +51,16 @@ export function LayerSidebar({ title, onClose, search, children, footer }: { tit
 type RailProps = {
   // Only while there is a panel beside the rail to fold.
   fold?: { open: boolean; onToggle: () => void };
+  // What acts on the library, above the faces; places: the ways to other parts of the app, pinned under them.
   actions: ReactNode;
+  places: ReactNode;
   children: ReactNode;
 };
 
-// Every button sits above the faces, the fold last so the others stay put when it comes and goes. The mark is only the
-// brand; the way home is a framed button among the actions (user ruling, 2026-10-12).
-export function Rail({ fold, actions, children }: RailProps) {
+// The library's actions sit above the faces, the fold last so the others stay put when it comes and goes; the places
+// stand at the bottom in two groups the eye reads apart (user, 2026-10-20). The mark is only the brand; the way home
+// is a framed button among the actions (user ruling, 2026-10-12).
+export function Rail({ fold, actions, places, children }: RailProps) {
   return (
     <aside className={styles.rail} aria-label="캐릭터 바로가기">
       <div className={styles.mark}>
@@ -67,6 +70,8 @@ export function Rail({ fold, actions, children }: RailProps) {
       {fold && <IconButton icon={PanelLeft} label={fold.open ? '사이드바 접기' : '사이드바 펼치기'} framed onClick={fold.onToggle} />}
       <Divider variant="rail" />
       <div className={styles.railList}>{children}</div>
+      <Divider variant="rail" />
+      <div className={styles.railPlaces}>{places}</div>
     </aside>
   );
 }

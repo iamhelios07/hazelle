@@ -40,6 +40,10 @@ export function SidebarRail({ shelves, current, home, board, typing, onEnter, fo
             <MenuItem icon={PackageOpen} label="Risu에서 이사" onClick={move} />
             <MenuItem icon={MessageSquarePlus} label={`${NO_CHARACTER} 새 채팅`} onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Menu>
+        </>
+      }
+      places={
+        <>
           <IconButton icon={MessagesSquare} label={BOARD.title} framed current={board} count={unreadBoard} onClick={() => navigate({ kind: 'board', operator: false })} />
           <IconButton icon={Wrench} label={TOOLS} framed onClick={() => navigate(toolsEntry(true))} />
           <IconButton icon={Settings} label={SETTINGS} framed onClick={() => navigate(settingsEntry(true))} />

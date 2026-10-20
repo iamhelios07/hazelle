@@ -114,6 +114,14 @@
   scrollbar-width: none;
 }
 
+.railPlaces {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+}
+
 .faceButton {
   position: relative;
   display: flex;

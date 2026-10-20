@@ -129,7 +129,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow |
 | layout | `SidePeek` (`SidePeeks`) | `SidePeek.module.css` | A tab at the story's right edge whose drawer slides over the story while the pointer rests on the tab, or stays open from a key or tap, such as 상태; `SidePeeks` holds them in ChatFrame's `peek` slot |
-| layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too, and a search under its title |
+| layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it (the library's actions above the faces, the places into other parts of the app pinned under them); a layer's own sidebar with its title and ×, which Esc closes too, and a search under its title |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | layout | `ToolFrame` | `ToolFrame.module.css` | An opaque-origin tool page that fills the rest of its column (a `fill` Screen or SidePanel); the caller connects its window |
 | layout | `TranslateDesk` | `TranslateDesk.module.css` | 번역기: a bar of choices, then the source and its translation side by side in one box, taking the height a `fill` Screen leaves, each scrolling its own text (stacked on a narrow page), each pane with a foot of counts and buttons |
