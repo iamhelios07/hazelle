@@ -1,7 +1,7 @@
 import { unzipSync } from 'fflate';
 import { bareModel } from './chat-completions';
 import { CONNECTOR_MODELS } from './models-dev';
-import { ConnectorError, type ConnectionType, type Meter, type Model, type PictureRequest } from './types';
+import { ConnectorError, type ConnectionType, type Costs, type Meter, type Model, type PictureRequest } from './types';
 import { count, isRecord } from './values';
 
 const drawing = (id: string, name: string): Model => ({ ...bareModel(id), name, input: ['text'], output: ['image'] });
@@ -115,15 +115,18 @@ const subscription = (secret: string) => ({ url: 'https://image.novelai.net/user
 
 // Free on Opus only, for one picture of at most 1,048,576 pixels at no more than 28 steps. Past its V5 allowance every
 // V5 picture costs Anlas until it refills, so a V5 picture is free only while some is left; a missing allowance is not
-// known, never free.
-function free(payload: unknown, picture: PictureRequest): boolean | null {
+// known, never free. The plan is answered before the picture's own size and steps: off Opus the normal size costs too,
+// so naming the size would send the user to a setting that changes nothing.
+function costs(payload: unknown, picture: PictureRequest): Costs | null {
   const { model, width, height } = picture;
-  if (!isRecord(payload) || typeof payload.tier !== 'number') return null;
-  if (payload.active !== true || payload.tier !== 3 || width * height > 1_048_576 || stepsOf(picture) > FREE_STEPS) return false;
-  if (!BODIES[model.id]?.v5) return true;
+  if (!isRecord(payload) || typeof payload.tier !== 'number') return 'unknown';
+  if (payload.active !== true || payload.tier !== 3) return 'plan';
+  if (width * height > 1_048_576) return 'size';
+  if (stepsOf(picture) > FREE_STEPS) return 'steps';
+  if (!BODIES[model.id]?.v5) return null;
   const usage = isRecord(payload.usage) ? payload.usage : null;
-  if (!usage || typeof usage.percent !== 'number') return null;
-  return usage.isNegative !== true && usage.percent > 0;
+  if (!usage || typeof usage.percent !== 'number') return 'unknown';
+  return usage.isNegative !== true && usage.percent > 0 ? null : 'allowance';
 }
 
 export const novelai: ConnectionType = {
@@ -141,6 +144,6 @@ export const novelai: ConnectionType = {
     request: (picture) => ({ url: 'https://image.novelai.net/ai/generate-image', method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(generateBody(picture)) }),
     authHeaders: bearer,
     parse: (body) => Promise.resolve(pictureIn(body)),
-    free: { request: subscription, parse: free },
+    free: { request: subscription, costs },
   },
 };

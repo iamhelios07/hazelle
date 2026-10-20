@@ -1,3 +1,4 @@
+import type { Costs } from '../../connectors/types';
 import type { RelayError, ServerError } from '../../contracts/http';
 import type { ApiFailure } from '../../runtime/api';
 import type { RouteFailure } from '../../runtime/assignment';
@@ -363,6 +364,14 @@ const EMBED: Partial<Record<Extract<MemoryFailure, { kind: 'embed' }>['reason'],
 
 const SCENE_INVALID = { ...INVALID, paragraph: '모델이 메시지에 없는 문단 번호를 선택했어요.' } as const;
 
+const COSTS: Record<Costs, string> = {
+  plan: '요금제에 무료 이미지 혜택이 없어요. 만들 때마다 Anlas가 차감돼요.',
+  size: '크기가 크게로 설정되어 있어 무료로 만들 수 없어요. 만들 때마다 Anlas가 차감돼요.',
+  steps: '스텝이 무료 범위를 넘어 무료로 만들 수 없어요. 만들 때마다 Anlas가 차감돼요.',
+  allowance: '무료 사용량을 다 썼어요. 다시 채워질 때까지 만들 때마다 Anlas가 차감돼요.',
+  unknown: '무료로 만들 수 있는지 확인할 수 없어요. 만들면 사용량이 차감될 수 있어요.',
+};
+
 export function describeIllustrateFailure(failure: IllustrateFailure): string {
   switch (failure.kind) {
     case 'no-model':
@@ -389,7 +398,7 @@ export function describeIllustrateFailure(failure: IllustrateFailure): string {
     case 'not-a-picture':
       return '모델에서 이미지가 아닌 응답을 보냈어요.';
     case 'costs':
-      return '무료로 만들 수 없는 이미지예요. 무료 사용량을 다 썼거나 요금제에 무료 이미지 혜택이 없어요.';
+      return COSTS[failure.why];
     case 'file-refused':
       return '서버에서 이미지 저장을 거절했어요.';
     case 'gone':

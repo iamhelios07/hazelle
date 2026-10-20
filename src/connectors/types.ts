@@ -302,10 +302,14 @@ export type Draws = {
   request(picture: PictureRequest): HttpRequest;
   authHeaders(secret: string): Record<string, string>;
   parse(body: Uint8Array<ArrayBuffer>, contentType: string | null): Promise<Picture | null>;
-  // Whether this picture costs the account nothing right now, asked with the stored credential before each draw. A
-  // picture not known to be free waits for the user's press; without this hook every picture is one.
-  free?: { request(secret: string): HttpRequest; parse(payload: unknown, picture: PictureRequest): boolean | null };
+  // Why this picture costs the account right now, asked with the stored credential before each draw; null for one that
+  // costs nothing. A picture not known to be free waits for the user's press; without this hook every picture is one.
+  free?: { request(secret: string): HttpRequest; costs(payload: unknown, picture: PictureRequest): Costs | null };
 };
+
+// plan: no free pictures on the plan. size, steps: the picture is past the free band. allowance: the free allowance
+// is used up. unknown: the connection cannot say.
+export type Costs = 'plan' | 'size' | 'steps' | 'allowance' | 'unknown';
 
 export type Token = { value: string; expiresAt: number };
 

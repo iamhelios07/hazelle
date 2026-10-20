@@ -26,7 +26,7 @@ const { PAINTER } = vi.hoisted(() => {
       request: (picture) => ({ url: 'https://image.example/generate', method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(picture) }),
       authHeaders: (secret) => ({ authorization: `Bearer ${secret}` }),
       parse: async (bytes, type) => (type === 'image/png' ? { bytes, type } : null),
-      free: { request: () => ({ url: 'https://image.example/free', method: 'GET', headers: {}, body: null }), parse: (payload) => (payload as { free: boolean }).free },
+      free: { request: () => ({ url: 'https://image.example/free', method: 'GET', headers: {}, body: null }), costs: (payload) => ((payload as { free: boolean }).free ? null : 'allowance') },
     },
   };
   return { PAINTER };
@@ -110,7 +110,7 @@ describe('Illustrator', () => {
       const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scene)), free(false), picture()]));
       await takeTurn(session, chat, { kind: 'answer' });
       const reply = fold(session.store.children('entry', chat))[1]!;
-      await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ writing: false, failure: null, sketches: [{ failure: { kind: 'costs' }, scene: { paragraph: 1 } }] }), { timeout: 5000 });
+      await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ writing: false, failure: null, sketches: [{ failure: { kind: 'costs', why: 'allowance' }, scene: { paragraph: 1 } }] }), { timeout: 5000 });
       expect(log).toHaveLength(3);
       const failed = session.illustrator.snapshot().get(reply.id)!.sketches[0]!;
       session.illustrator.draw(chat, reply.id, shown(reply).id, { scene: failed.scene, spend: true });

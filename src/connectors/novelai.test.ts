@@ -86,17 +86,18 @@ describe('NovelAI', () => {
     expect(() => novelai.draws!.request({ ...own, sampler: 'ddim' })).toThrow(new ConnectorError('unknown-sampler'));
   });
 
-  it('calls a picture free only on Opus, inside the free size, and for V5 only while its allowance lasts', () => {
-    const { parse } = novelai.draws!.free!;
+  it('calls a picture free only on Opus, inside the free size, and for V5 only while its allowance lasts, naming what costs', () => {
+    const { costs } = novelai.draws!.free!;
     const opus = { tier: 3, active: true, usage: { percent: 12, isNegative: false } };
-    expect(parse(opus, picture(v5!))).toBe(true);
-    expect(parse({ ...opus, usage: { percent: 0, isNegative: false } }, picture(v5!))).toBe(false);
-    expect(parse({ ...opus, usage: { percent: -3, isNegative: true } }, picture(v5!))).toBe(false);
-    expect(parse({ tier: 3, active: true }, picture(v5!))).toBeNull();
-    expect(parse({ ...opus, usage: { percent: 0, isNegative: false } }, picture(v45!))).toBe(true);
-    expect(parse({ ...opus, tier: 2 }, picture(v5!))).toBe(false);
-    expect(parse(opus, { ...picture(v5!), width: 1024, height: 1536 })).toBe(false);
-    expect(parse(opus, { ...picture(v5!), steps: 29 })).toBe(false);
+    expect(costs(opus, picture(v5!))).toBeNull();
+    expect(costs({ ...opus, usage: { percent: 0, isNegative: false } }, picture(v5!))).toBe('allowance');
+    expect(costs({ ...opus, usage: { percent: -3, isNegative: true } }, picture(v5!))).toBe('allowance');
+    expect(costs({ tier: 3, active: true }, picture(v5!))).toBe('unknown');
+    expect(costs({ ...opus, usage: { percent: 0, isNegative: false } }, picture(v45!))).toBeNull();
+    expect(costs({ ...opus, tier: 2 }, picture(v5!))).toBe('plan');
+    expect(costs({ ...opus, tier: 2 }, { ...picture(v5!), width: 1024, height: 1536 })).toBe('plan');
+    expect(costs(opus, { ...picture(v5!), width: 1024, height: 1536 })).toBe('size');
+    expect(costs(opus, { ...picture(v5!), steps: 29 })).toBe('steps');
   });
 
   it('reads the V5 usage limit and Anlas from the subscription, and names the tier', () => {

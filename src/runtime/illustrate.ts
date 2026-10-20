@@ -1,7 +1,7 @@
 import { ChangeSignal } from '../change-signal';
 import { refOf, sameModelRef, type ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
-import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
+import { ConnectorError, type Costs, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
 import { imageSize } from '../engine/import/card';
 import { asPov, parseScenes, pictureRequest, toldProfiles, type Earlier, type SceneInvalid } from '../engine/illustrate';
 import { namesOf } from '../engine/likeness';
@@ -94,9 +94,8 @@ export type IllustrateFailure =
   | { kind: 'image-model-gone' }
   | { kind: 'undrawn'; error: Exclude<ReplyError, { kind: 'stopped' }> }
   | { kind: 'not-a-picture' }
-  // Not known to cost nothing (a used-up allowance, a plan without free pictures, or a connection that cannot say):
-  // drawn only on the user's press, with spend.
-  | { kind: 'costs' }
+  // Not known to cost nothing: drawn only on the user's press, with spend. why: the connector's answer.
+  | { kind: 'costs'; why: Costs }
   | { kind: 'file-refused' }
   | { kind: 'gone' }
   | { kind: 'empty' }
@@ -336,10 +335,11 @@ export class Illustrator {
     const credential = await credentials.get(resolveConnection(connection.value)!, picked.account.secret, signal);
     if (!credential.ok) return failed(credential.failure);
     if (!spend) {
-      if (!draws.free) return { kind: 'costs' };
+      if (!draws.free) return { kind: 'costs', why: 'unknown' };
       const asked = await relayJson(draws.free.request(credential.credential), signal);
       if (!asked.ok) return failed(asked.failure);
-      if (draws.free.parse(asked.data, picture) !== true) return { kind: 'costs' };
+      const why = draws.free.costs(asked.data, picture);
+      if (why) return { kind: 'costs', why };
     }
     const answer = await relayBytes({ ...request, headers: { ...request.headers, ...draws.authHeaders(credential.credential) } }, signal, callLabel('image', connection.value, picture.model.id));
     if (!answer.ok) return failed(answer.failure);
