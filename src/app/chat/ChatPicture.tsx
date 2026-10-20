@@ -3,45 +3,23 @@ import { useState } from 'react';
 import type { PictureUrl } from '../../engine/assets';
 import { parseScene, sceneText, sentText, SIZES, type SceneInvalid } from '../../engine/illustrate';
 import { shown } from '../../model/chat';
-import { byParagraph, paragraphsOf, type Scene } from '../../model/illustration';
-import type { Stored } from '../../model/kinds';
-import type { Drawing, IllustrateFailure } from '../../runtime/illustrate';
+import { paragraphsOf, type Scene } from '../../model/illustration';
 import type { Shown } from '../../runtime/talk';
 import { ACTS } from '../common/acts';
 import { moduleName } from '../common/words';
 import { describeIllustrateFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
-import { Button, Dialog, Failure, IconButton, SceneBoard, StoryPicture, Switcher, Text, TextField } from '../ui';
+import { Button, Dialog, Failure, IconButton, SceneBoard, StoryPicture, Text, TextField } from '../ui';
+import { pagedPicture, type Paged, type PicturePlace } from './picturePlaces';
 import { moveFigure, removeFigure } from './sceneEdit';
 import type { IllustrationActions, Reshaping } from './useChatIllustrations';
-
-// What a place of a message holds: a scene being drawn or failed comes before the picture paged to there. A run that
-// failed with no scene has no paragraph and goes at the message end. pictures: the place's, oldest first.
-export type Slot = { paragraph: number | null } & (
-  | { kind: 'drawing'; scene: Scene }
-  | { kind: 'failed'; failure: IllustrateFailure; version: string; scene: Scene | null }
-  | { kind: 'picture'; picture: Stored<'illustration'>; pictures: Stored<'illustration'>[] }
-);
-
-// pictures: the shown version's. pages: by paragraph, the picture paged to; none follows the newest.
-export function slotsOf(drawing: Drawing | null, pictures: Stored<'illustration'>[], pages: ReadonlyMap<number, string>): Slot[] {
-  const slots = new Map<number, Slot>();
-  for (const [paragraph, place] of byParagraph(pictures)) slots.set(paragraph, { paragraph, kind: 'picture', picture: place.find(({ id }) => id === pages.get(paragraph)) ?? place.at(-1)!, pictures: place });
-  for (const { scene, failure } of drawing?.sketches ?? []) {
-    const { paragraph } = scene;
-    slots.set(paragraph, failure ? { paragraph, kind: 'failed', failure, version: drawing!.version, scene } : { paragraph, kind: 'drawing', scene });
-  }
-  const placed = [...slots.values()].sort((a, b) => a.paragraph! - b.paragraph!);
-  return drawing?.failure ? [...placed, { paragraph: null, kind: 'failed', failure: drawing.failure, version: drawing.version, scene: null }] : placed;
-}
 
 const LABEL = '삽화';
 
 type Props = {
-  slot: Slot;
+  place: PicturePlace;
   message: Shown;
-  onPage: (picture: string | null) => void;
   // A run under way for the message, which another must wait for.
   running: boolean;
   url: PictureUrl;
@@ -53,13 +31,14 @@ type Props = {
   onDrop: IllustrationActions['dropPicture'];
 };
 
-export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw, onDismiss, onReshape, onDrop }: Props) {
-  if (slot.kind === 'drawing') {
-    const { width, height } = SIZES[slot.scene.shape];
+export function ChatPicture({ place, message, running, url, draws, onDraw, onDismiss, onReshape, onDrop }: Props) {
+  const [paged, setPaged] = useState<Paged>(null);
+  if (place.kind === 'drawing') {
+    const { width, height } = SIZES[place.scene.shape];
     return <StoryPicture src={undefined} label={LABEL} width={width} height={height} status="그리는 중" />;
   }
-  if (slot.kind === 'failed') {
-    const { failure, version, scene } = slot;
+  if (place.kind === 'failed') {
+    const { failure, version, scene } = place;
     return (
       <Failure
         title={failure.kind === 'costs' ? '비용이 드는 이미지' : '삽화 실패'}
@@ -84,16 +63,11 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
       </Failure>
     );
   }
-  const { picture, pictures } = slot;
+  const { pictures } = place;
+  const picture = pagedPicture(pictures, paged);
   const { value } = picture;
-  const at = pictures.indexOf(picture);
-  const step = (by: -1 | 1) => onPage(pictures[(at + by + pictures.length) % pictures.length]!.id);
   // The picture's own version may be one its message's edits replaced since.
   const { id: version, text } = shown(message);
-  const again = (scene: Scene) => {
-    onPage(null);
-    onDraw(message.id, version, scene);
-  };
   const { width, height } = 'tool' in value ? value : value.sent;
   return (
     <StoryPicture
@@ -101,31 +75,15 @@ export function ChatPicture({ slot, message, onPage, running, url, draws, onDraw
       label={'tool' in value ? (value.caption ?? LABEL) : LABEL}
       width={width}
       height={height}
-      pages={{ at, count: pictures.length, onStep: step }}
+      pages={{ at: pictures.indexOf(picture), versions: pictures.map(({ value }) => timeOfDay(value.at)), onPage: (index) => setPaged({ id: pictures[index]!.id, newest: pictures.at(-1)!.id }) }}
       foot={
         <>
-          {pictures.length > 1 && (
-            <Switcher
-              label={`${at + 1} / ${pictures.length}`}
-              prevDisabled={false}
-              nextDisabled={false}
-              nextLabel="다음"
-              prevTitle="이전"
-              nextTitle="다음"
-              onPrev={() => step(-1)}
-              onNext={() => step(1)}
-              versions={pictures.map(({ value }) => timeOfDay(value.at))}
-              selected={at}
-              pickDisabled={false}
-              onPick={(index) => onPage(pictures[index]!.id)}
-            />
-          )}
           {/* A tool's picture is redrawn by its tool, never here. */}
           {'tool' in value ? (
             <Text variant="note">{`${withParticle(moduleName(value.tool.name), '이/가')} 만든 이미지`}</Text>
           ) : draws && (
             <>
-              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={() => again(value.scene)} />
+              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={() => onDraw(message.id, version, value.scene)} />
               <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene: value.scene, sent: value.sent, paragraphs: paragraphsOf(text).length })} />
             </>
           )}

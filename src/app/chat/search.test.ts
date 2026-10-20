@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { finder } from './search';
+import type { Version } from '../../model/chat';
+import { finder, seenText } from './search';
 
 describe('finder', () => {
   it('finds the term in what the reader sees, in chat order', () => {
@@ -10,4 +11,12 @@ describe('finder', () => {
     expect(find(texts, 'class')).toEqual([]);
     expect(find(texts, '  ')).toEqual([]);
   });
+});
+
+it('reads a version as its translation, the translation streaming in, or the original once flipped', () => {
+  const version = { translation: { text: '번역' } } as Version;
+  expect(seenText('원문', version, null, false)).toBe('번역');
+  expect(seenText('원문', version, '번역 중', false)).toBe('번역 중');
+  expect(seenText('원문', version, '번역 중', true)).toBe('원문');
+  expect(seenText('원문', {} as Version, null, false)).toBe('원문');
 });

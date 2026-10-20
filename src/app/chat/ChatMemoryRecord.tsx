@@ -4,7 +4,7 @@ import type { MemoryView } from '../../runtime/memory-view';
 import { editRecord, forgetRecord, pinRecord, recallRecord, restoreRecord, type RecordPatch } from '../../runtime/memory';
 import { EntryList } from '../common/EntryList';
 import { ago } from '../common/time';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { useAutosave } from '../common/useAutosave';
 import { CHAPTER } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
@@ -77,7 +77,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
   return (
     <SidePanel
       title="장기 기억"
-      nav={{ title: noun, subtitle: span.words, backLabel: holder ? CHAPTER : '장기 기억', onBack: back, status: save.status ? SAVE_STATUS[save.status] : undefined }}
+      nav={{ title: noun, subtitle: span.words, backLabel: holder ? CHAPTER : '장기 기억', onBack: back, status: save.words }}
       page={item.id}
       onClose={actions.closePanel}
     >

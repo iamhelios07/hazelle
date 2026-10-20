@@ -1,6 +1,9 @@
-// What a message reads as: its translation unless flipped to the original, or the translation streaming in.
-export const seenText = (original: string, translation: string | null, translating: string | null, flipped: boolean) =>
-  flipped ? original : translating || (translation ?? original);
+import type { Version } from '../../model/chat';
+
+// What a message's version reads as: its translation unless flipped to the original, or the translation streaming in.
+// original: its text as the display shows it.
+export const seenText = (original: string, version: Version, translating: string | null, flipped: boolean) =>
+  flipped ? original : translating || (version.translation?.text ?? original);
 
 // Only what is shaped like a tag, so prose such as "a < b > c" keeps its words.
 const TAG = /<\/?[a-z][^>]*>/gi;

@@ -7,7 +7,7 @@ import { ACTS } from '../common/acts';
 import { day } from '../common/time';
 import { useChatSummary } from '../session';
 import { navigate } from '../shell/router';
-import { Callout, Divider, Empty, Progress, Text, Viewport } from '../ui';
+import { Callout, Divider, Empty, Progress, Text, TimePinContext, Viewport } from '../ui';
 import { ChatMessage } from './ChatMessage';
 import { foldTerm } from './search';
 import type { OpenChat } from './useChat';
@@ -24,7 +24,7 @@ const NO_PICTURES: Stored<'illustration'>[] = [];
 const NO_BADGES: string[] = [];
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, placed, pictures, remarks, fresh, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, personaNote, busy, editing, pinned, bookmarked, found, search, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, placed, pictures, remarks, fresh, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, personaNote, busy, editing, timePin, bookmarked, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -43,7 +43,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
     {personaNote && <Text variant="note" align="center">{personaNote}</Text>}
     {messages.length === 0 ? <Empty variant="story">
       {card ? '첫인사가 없는 캐릭터예요.' : '캐릭터 없이 모델과 바로 대화하는 채팅이에요.'}
-    </Empty> : <Viewport keys={chat.keys} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}
+    </Empty> : <TimePinContext value={timePin}><Viewport keys={chat.keys} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}
       // Story bodies are shadow roots, whose controls a row's light-DOM query cannot see: Tab stays the browser's.
       traverse={false}>{(index) => {
       const message = messages[index]!;
@@ -82,7 +82,6 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           last={index === messages.length - 1}
           busy={busy}
           editing={editing?.id === message.id ? editing : null}
-          pinned={pinned === message.id}
           bookmarked={bookmarked.has(message.id)}
           found={found?.ids.has(message.id) ? found.at : 0}
           marked={search?.at === message.id}
@@ -98,6 +97,6 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           action={originChat !== null ? { label: '원래 채팅 보기', onClick: () => navigate({ kind: 'chat', id: origin.id }) } : undefined}
         />}
       </Fragment>;
-    }}</Viewport>}
+    }}</Viewport></TimePinContext>}
   </>;
 }

@@ -6,6 +6,7 @@ import styles from './LogExport.module.css';
 import { useMath } from './math';
 import { pageLook, staticHtml, type Snapshot } from './snapshot';
 import { Story } from './Story';
+import { Speech } from './StoryMessage';
 
 // stories: what the message draws, in order: its boxes and its text, each as the chat draws it.
 export type LogRow = { key: string; name: string; mine: boolean; stories: string[] };
@@ -50,11 +51,11 @@ function Drawn({ title, sub, css, reading, rows, onDrawn }: Props) {
             {sub && <p className={styles.sub}>{sub}</p>}
           </header>
           {rows.map(({ key, name, mine, stories }) => {
-            const parts = stories.map((html, index) => <Story key={index} html={html} css={css} whole />);
             return (
               <section key={key} className={styles.message}>
-                <p className={mine ? styles.me : styles.name}>{name}</p>
-                {mine ? <div className={styles.bubble}>{parts}</div> : parts}
+                <Speech name={name} mine={mine}>
+                  {stories.map((html, index) => <Story key={index} html={html} css={css} whole />)}
+                </Speech>
               </section>
             );
           })}

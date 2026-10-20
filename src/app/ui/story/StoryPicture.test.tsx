@@ -18,3 +18,9 @@ it('makes a shown picture the button that enlarges it, and a veiled one not', ()
   expect(renderToStaticMarkup(picture)).toContain('aria-label="삽화 크게 보기"><img');
   expect(renderToStaticMarkup(<VeilContext.Provider value={{ revealed: new Set() }}>{picture}</VeilContext.Provider>)).not.toContain('크게 보기');
 });
+
+// Several versions draw the stepper's menu, which needs a client render; one draws no foot at all.
+it('steps through no versions when its place holds one', () => {
+  const picture = <StoryPicture src="blob:x" label="삽화" width={2} height={3} pages={{ at: 0, versions: ['12:00'], onPage: () => {} }} />;
+  expect(renderToStaticMarkup(picture)).not.toContain('figcaption');
+});

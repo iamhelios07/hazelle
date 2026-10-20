@@ -42,17 +42,3 @@
   flex-direction: column;
   gap: var(--space-8);
 }
-
-.name {
-  composes: name from './StoryMessage.module.css';
-  margin: 0;
-}
-
-.me {
-  composes: me from './StoryMessage.module.css';
-  margin: 0;
-}
-
-.bubble {
-  composes: bubble from './StoryMessage.module.css';
-}

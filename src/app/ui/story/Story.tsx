@@ -5,6 +5,8 @@ import { scrollbarKind } from '../foundation/scrollbar';
 import { useQuoteShape } from '../foundation/quotes';
 import { useVeil, type Veil } from '../foundation/veil';
 import { inlaid } from './inlay';
+import { useMarginRoom } from '../layout/ChatFrame';
+import { MarginPictures } from './MarginPictures';
 import type { SelectionEnd } from './SelectionButton';
 import { useMath } from './math';
 import styles from './Story.module.css';
@@ -13,6 +15,8 @@ import shadowCss from './Story.shadow.css?inline';
 // One of the bot's buttons, as its HTML names it: risu-trigger names a function of its script, risu-btn carries data to it.
 // id: the trigger's element's risu-id, which {{triggerid}} reads; '' when it has none.
 export type BotButton = { trigger: string; id: string } | { data: string };
+
+type Inlay = { mark: string | null; node: ReactNode };
 
 type Props = {
   html: string;
@@ -26,8 +30,10 @@ type Props = {
   term?: string;
   // Every picture open, for a page drawn once where nothing can be tapped open (snapshot).
   whole?: boolean;
-  // The message's 삽화, each put where its mark stands in html (inlaid), or at the end for a mark null.
-  inlays?: { mark: string | null; node: ReactNode }[];
+  // Each put where its mark stands in html (inlaid), or at the end for a mark null, such as a part being edited.
+  inlays?: Inlay[];
+  // The message's 삽화, each by its mark as an inlay is, or on the stage beside the story where the chat has room for it.
+  illustrations?: Inlay[];
   // The element storySelection reads.
   ref?: Ref<HTMLDivElement>;
 };
@@ -450,7 +456,12 @@ function fit(at: ChildNode, node: ChildNode) {
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
-export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [], ref }: Props) {
+export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlays = [], illustrations = [], ref }: Props) {
+  const room = useMarginRoom();
+  const beside = illustrations.length > 0 && room;
+  // Beside, each picture's slot stands empty where its mark is, which MarginPictures levels the picture with.
+  const anchors = useRef<(HTMLElement | null)[]>([]);
+  const slotted = [...illustrations, ...inlays];
   const pictures = useRowState(PICTURES, () => new Set<string>());
   // The picture the pointer holds open, kept over a draw as a tapped one is.
   const hovered = useRef<string | null>(null);
@@ -461,7 +472,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
 
-  const marks = inlays.map(({ mark }) => mark);
+  const marks = slotted.map(({ mark }) => mark);
   // A dependency that changes only when a mark does.
   const placed = JSON.stringify(marks);
   const math = useMath(html);
@@ -586,16 +597,34 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     };
   }, [onPress, pictures, veil]);
 
+  // The stage is laid out against the message, outside the story's containment, which would clip it.
   return (
-    <div ref={ref} className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
-      <div ref={host} data-buttons={buttons} data-quotes={quotes} data-scrollbars={scrollbarKind()}>
-        {cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}
-        {inlays.map(({ node }, index) => (
-          <div key={index} slot={inlayName(index)}>
-            {node}
-          </div>
-        ))}
+    <>
+      <div ref={ref} className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
+        <div ref={host} data-buttons={buttons} data-quotes={quotes} data-scrollbars={scrollbarKind()}>
+          {cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}
+          {slotted.map(({ node }, index) =>
+            beside && index < illustrations.length ? (
+              <div
+                key={index}
+                slot={inlayName(index)}
+                ref={(element) => {
+                  anchors.current[index] = element;
+                }}
+              />
+            ) : (
+              <div key={index} slot={inlayName(index)}>
+                {node}
+              </div>
+            ),
+          )}
+        </div>
       </div>
-    </div>
+      {beside && (
+        <MarginPictures anchors={anchors} side={beside}>
+          {illustrations.map(({ node }) => node)}
+        </MarginPictures>
+      )}
+    </>
   );
 }

@@ -1,7 +1,8 @@
 import { useReducer, useState, type CSSProperties, type ReactNode } from 'react';
 import { useVeil } from '../foundation/veil';
-import { PictureView, type Pages } from '../overlays/PictureView';
+import { PictureView } from '../overlays/PictureView';
 import styles from './StoryPicture.module.css';
+import { Switcher } from './StoryMessage';
 
 type Props = {
   // undefined while it loads; the frame keeps its shape meanwhile.
@@ -12,10 +13,13 @@ type Props = {
   // In the picture's place while it is being made.
   status?: string;
   foot?: ReactNode;
-  pages?: Pages;
+  // The versions of its place: the one shown, and each one's words in the menu that picks it (such as its time).
+  pages?: { at: number; versions: string[]; onPage: (index: number) => void };
 };
 
 export function StoryPicture({ src, label, width, height, status, foot, pages }: Props) {
+  const count = pages?.versions.length ?? 0;
+  const step = (by: -1 | 1) => pages!.onPage((pages!.at + by + count) % count);
   const veil = useVeil();
   // A veil tapped open or shut changes only veil.revealed, which no render sees.
   const [, tapVeil] = useReducer((count: number) => count + 1, 0);
@@ -48,7 +52,7 @@ export function StoryPicture({ src, label, width, height, status, foot, pages }:
               <button type="button" className={styles.open} aria-label={`${label} 크게 보기`} onClick={() => setOpen(true)}>
                 <img className={styles.image} src={src} alt={label} />
               </button>
-              {open && <PictureView src={src} label={label} ratio={width / height} pages={pages} onClose={close} />}
+              {open && <PictureView src={src} label={label} ratio={width / height} pages={pages && { at: pages.at, count, onStep: step }} onClose={close} />}
               {veil && (
                 <button
                   type="button"
@@ -66,7 +70,19 @@ export function StoryPicture({ src, label, width, height, status, foot, pages }:
           )
         )}
       </div>
-      {foot && <figcaption className={styles.foot}>{foot}</figcaption>}
+      {(count > 1 || foot) && (
+        <figcaption className={styles.foot}>
+          {pages && count > 1 && (
+            <Switcher
+              count={`${pages.at + 1} / ${count}`}
+              prev={{ label: '이전', onClick: () => step(-1) }}
+              next={{ label: '다음', onClick: () => step(1) }}
+              pick={{ versions: pages.versions, selected: pages.at, disabled: false, onPick: pages.onPage }}
+            />
+          )}
+          {foot}
+        </figcaption>
+      )}
     </figure>
   );
 }

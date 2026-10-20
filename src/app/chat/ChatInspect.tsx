@@ -3,7 +3,7 @@ import type { From } from '../../engine/pipeline';
 import type { Sending } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { useSession } from '../session';
-import { Empty, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
+import { Empty, SidePanel, Tab, Tabs, Text } from '../ui';
 import { Log } from './InspectLog';
 import { Modules } from './InspectModules';
 import { NextRequest } from './InspectRequest';
@@ -43,14 +43,12 @@ export function ChatInspect({ chat, character, tab, notes, busy, prompt, onTab, 
     : <Text variant="note">계산하는 중…</Text>;
   return (
     <SidePanel title="점검" onClose={onClose}>
-      <Stack gap="section">
-        {tabs}
-        {tab === 'request' && ready((sending) => <NextRequest chat={chat} sending={sending} request={notes.request} cache={notes.cache} editor={editor} onEdit={onEdit} />)}
-        {tab === 'variables' && <Variables chat={chat} sending={notes.sending && 'turn' in notes.sending ? notes.sending : null} busy={busy} />}
-        {tab === 'modules' && ready((sending) => <Modules sending={sending} />)}
-        {tab === 'scripts' && <Scripts chat={chat} />}
-        {tab === 'log' && <Log chat={chat} />}
-      </Stack>
+      {tabs}
+      {tab === 'request' && ready((sending) => <NextRequest chat={chat} sending={sending} request={notes.request} cache={notes.cache} editor={editor} onEdit={onEdit} />)}
+      {tab === 'variables' && <Variables chat={chat} sending={notes.sending && 'turn' in notes.sending ? notes.sending : null} busy={busy} />}
+      {tab === 'modules' && ready((sending) => <Modules sending={sending} />)}
+      {tab === 'scripts' && <Scripts chat={chat} />}
+      {tab === 'log' && <Log chat={chat} />}
     </SidePanel>
   );
 }
