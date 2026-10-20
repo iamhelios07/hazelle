@@ -341,11 +341,10 @@
 
 .meta {
   composes: ellipsis from '../foundation/a11y.module.css';
+  composes: detail from '../foundation/type.module.css';
   justify-self: end;
   max-width: var(--outline-meta);
-  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
 }
 
 .row[aria-current='true'] .meta {
@@ -385,13 +384,12 @@
 }
 
 .append {
+  composes: note from '../foundation/type.module.css';
   grid-template-columns: var(--outline-number) var(--outline-node-chat) minmax(0, 1fr);
   width: 100%;
   height: var(--control-compact);
   margin-top: var(--space-8);
   border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
   text-align: start;
 }
 

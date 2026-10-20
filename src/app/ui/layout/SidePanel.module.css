@@ -52,8 +52,7 @@
 }
 
 .title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
+  composes: title from '../foundation/type.module.css';
 }
 
 .subtitle {

@@ -1,4 +1,5 @@
 .tool {
+  composes: note from '../foundation/type.module.css';
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -6,8 +7,6 @@
   height: var(--control-tool);
   padding: 0 var(--space-8);
   border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
   transition: background-color var(--duration-fast), color var(--duration-fast);
 }
 

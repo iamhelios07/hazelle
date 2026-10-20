@@ -25,7 +25,7 @@ const TOKEN_PROPERTIES = [
 const KEYWORDS = ['0', 'auto', 'inherit', 'transparent', 'currentColor', 'none'];
 
 export default {
-  plugins: ['stylelint-declaration-strict-value'],
+  plugins: ['stylelint-declaration-strict-value', './stylelint-shared-looks.js'],
   rules: {
     'color-no-hex': true,
     'color-named': 'never',
@@ -46,6 +46,14 @@ export default {
     ],
   },
   overrides: [
+    {
+      files: ['src/**/*.module.css'],
+      rules: { 'hazelle/shared-looks': true },
+    },
+    {
+      files: ['src/app/ui/foundation/**'],
+      rules: { 'hazelle/shared-looks': null },
+    },
     {
       files: ['src/app/ui/foundation/tokens.css'],
       rules: {

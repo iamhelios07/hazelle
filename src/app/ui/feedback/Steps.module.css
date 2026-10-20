@@ -4,9 +4,8 @@
 }
 
 .step {
+  composes: track from '../foundation/surface.module.css';
   flex-grow: 1;
-  height: var(--bar-height);
-  border-radius: var(--radius-xs);
   background: var(--color-border);
 }
 

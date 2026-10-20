@@ -38,12 +38,11 @@
 }
 
 .subtitle {
+  composes: detail from '../foundation/type.module.css';
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-8);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
 }
 
 .status {

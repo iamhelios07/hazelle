@@ -222,6 +222,12 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 - stylelint: outside `tokens.css`, colors, fonts, spacing, radii, shadows, border widths, z-index,
   animation and transition timings, widths and heights must use `var(--…)`. A width or height may
   also be a percentage, `100dvh` or `max-content`. Hex colors, named colors and `rgb()`/`hsl()` are refused.
+- stylelint (`hazelle/shared-looks`, `stylelint-shared-looks.js`): a `.module.css` outside `foundation` fails on a rule that
+  redeclares a look of `type.module.css` (its font-size with its weight, or with its colour where it has none, and no
+  text property set otherwise) or the fraction bar's `track` of `surface.module.css` (its height and radius with a
+  background of its own); it takes the look with `composes`. It reads the looks from those files. It does not see a
+  look with a text property of its own added (compose the look, then add it), a grouped or nested selector, or
+  `surface`'s other looks.
 - Vitest: `foundation/media.test.ts` fails on a media query that `MEDIA` does not list.
 - ESLint: no `className` or `style` props and no CSS imports outside this folder and `main.tsx`,
   no hex color strings anywhere in `src/app`, an act's `lucide-react` icon (`ACT_ICONS`) only in `common/acts.ts` and this folder,
