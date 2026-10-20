@@ -18,6 +18,8 @@ export const SHORTCUTS = {
   stop: { label: '응답 멈추기', keys: [{ key: 'Escape' }] },
   editLast: { label: '내 마지막 메시지 수정', keys: [{ key: 'ArrowUp' }] },
   swipe: { label: '응답 넘기기, 마지막에서 다시 생성', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
+  storyStep: { label: '메시지 단위로 위 · 아래로', keys: [{ key: 'ArrowUp', alt: true }, { key: 'ArrowDown', alt: true }] },
+  storyEnds: { label: '채팅 맨 위 · 맨 아래로', keys: [{ key: 'Home' }, { key: 'End' }] },
   saveEdit: { label: '수정 저장', keys: [{ key: 'Enter', mod: true }] },
   translate: { label: '번역하기', keys: [{ key: 'Enter', mod: true }] },
   cancelEdit: { label: '수정 취소', keys: [{ key: 'Escape' }] },
@@ -44,7 +46,7 @@ export const keysOf = (name: Name, enterSends: boolean) => (enterSends ? undefin
 // Where each shortcut works, in the order 단축키 lists them.
 export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: readonly Name[] }[] = [
   { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'pictures', 'undoToast'] },
-  { title: '채팅', note: '입력창에서 작동하고, 화살표 키는 입력창이 비어 있을 때만 작동해요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit', 'find', 'inspect'] },
+  { title: '채팅', note: '입력창에서 작동하고, 화살표 키와 Home · End는 입력창이 비어 있을 때만 작동해요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'storyStep', 'storyEnds', 'saveEdit', 'cancelEdit', 'find', 'inspect'] },
   { title: '채팅 검색창', names: ['findNext', 'findPrevious', 'closeFind'] },
   { title: '번역기', note: '원문 칸에서 작동해요.', names: ['translate'] },
   { title: '프롬프트 편집', note: '블록과 토글 변경을 되돌리고, 텍스트 칸 안에서는 입력한 내용을 되돌려요.', names: ['undo', 'redo'] },
@@ -72,7 +74,7 @@ const inTurn = () => [...handlers.filter((entry) => !entry.fallback).reverse(), 
 function onKey(event: KeyboardEvent) {
   // A key a focused control already took, such as Ctrl+Enter saving an edit, is not a shortcut.
   if (event.defaultPrevented) return;
-  const press = { key: event.key, code: event.code, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, nativeEvent: event };
+  const press = { key: event.key, code: event.code, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, altKey: event.altKey, nativeEvent: event };
   for (const { name, run } of inTurn()) {
     if (!pressed(press, SHORTCUTS[name].keys) || run(event) === false) continue;
     event.preventDefault();

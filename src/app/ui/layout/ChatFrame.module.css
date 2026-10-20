@@ -151,6 +151,7 @@
   /* Viewport owns anchoring; excluding only its rows still lets the browser anchor to the surrounding content. */
   overflow-anchor: none;
   scroll-padding-top: var(--header-height);
+  scroll-padding-bottom: var(--footer-space);
 }
 
 /* Named for StoryMessage's foot, which stands above the 맨 아래로 pill where the story's text is narrow. */
@@ -164,6 +165,31 @@
   flex-direction: column;
   gap: var(--space-24);
   padding: calc(var(--header-height) + var(--space-24)) var(--read-gutter) calc(var(--footer-space) + var(--space-32));
+}
+
+/* The story's right gutter, from under the header to the composer. The box is the scroller's width, so the story's lead
+   and width resolve in it as they do in .content. */
+.edge {
+  position: absolute;
+  top: calc(var(--header-height) + var(--space-16));
+  bottom: calc(var(--footer-height) + var(--space-12));
+  left: 0;
+  right: var(--story-scrollbar);
+  z-index: var(--layer-raised);
+  pointer-events: none;
+}
+
+.gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--story-lead) + min(var(--read-width), 100% - var(--story-lead)) - var(--read-gutter));
+  width: var(--read-gutter);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-12);
 }
 
 /* Few messages sit at the bottom, next to the composer. */
@@ -303,6 +329,12 @@
 
   .footer {
     padding: 0 var(--space-12) var(--space-12);
+  }
+
+  /* The gutter is narrower than what stands in it, so its foot clears the last message's tools, which stand above the
+     맨 아래로 pill (StoryMessage.module.css .foot). */
+  .edge {
+    bottom: calc(var(--footer-height) + var(--space-12) + var(--control-chip) + var(--space-8) + var(--control-tool) + 2 * var(--space-2) + 2 * var(--border-thin) + var(--space-8));
   }
 
   .chevron {

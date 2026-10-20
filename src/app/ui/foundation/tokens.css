@@ -221,6 +221,12 @@
   --shadow-popover: 0 12px 32px var(--palette-shadow);
   --shadow-toast: 0 22px 44px -14px var(--palette-shadow-deep), 0 4px 12px var(--palette-shadow);
 
+  /* Glass, for what floats over the story (controls/Pill, story/StepButtons): the story shows through, blurred. */
+  --color-glass: color-mix(in oklab, var(--color-surface) 60%, transparent);
+  --color-glass-edge: var(--palette-cream-line);
+  --color-glass-press: var(--palette-cream-wash);
+  --shadow-glass: 0 10px 28px var(--palette-shadow), inset 0 1px 0 var(--palette-cream-line);
+
   /* The toast wears the other theme's colors; Toast.module.css turns the kit's tokens to these. */
   --color-toast-bg: var(--palette-cream-100);
   --color-toast-text: var(--palette-ink-800);
@@ -330,6 +336,10 @@
   --prose-original-size: 0.875em;
   /* A bot's button that nothing answers (design §6.4). */
   --story-inert-opacity: 0.45;
+  /* The story's scrubber (story/Scrubber): its thumb, and how faint it stands while the reader is still. */
+  --scrubber-thumb: 44px;
+  --scrubber-thumb-width: 6px;
+  --scrubber-idle-opacity: 0.35;
   /* A picture line's defaults (Story.shadow.css); a character's own replace them (ChatFrame's pictures). */
   --story-picture-peek: 40vh;
   --story-picture-widest: 100%;
@@ -495,6 +505,7 @@
   --border-thin: 1px;
   --border-medium: 1.5px;
   --border-thick: 2px;
+  --filter-glass: blur(16px) saturate(150%);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
   /* How far a ring reaches past its element: the room a box that scrolls or clips keeps around what can take focus. */
@@ -605,6 +616,9 @@
 
   --shadow-popover: 0 12px 32px var(--palette-shadow-soft);
   --shadow-toast: 0 22px 44px -14px var(--palette-shadow-soft-deep), 0 4px 12px var(--palette-shadow-soft);
+  --color-glass-edge: var(--palette-ink-line);
+  --color-glass-press: var(--palette-ink-wash);
+  --shadow-glass: 0 10px 28px var(--palette-shadow-soft), inset 0 1px 0 var(--palette-white);
 
   --color-toast-bg: var(--palette-ink-800);
   --color-toast-text: var(--palette-cream-100);

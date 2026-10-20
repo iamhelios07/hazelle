@@ -6,7 +6,7 @@ import { withParticle } from '../common/particles';
 import { ANSWER } from '../common/words';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
-import { keysOf, SHORTCUTS, titled } from '../shortcuts';
+import { keysOf, SHORTCUTS, titled, typing, useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
 import { Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
@@ -46,6 +46,16 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
   const input = useRef<HTMLTextAreaElement>(null);
   const sendKeys = keysOf('send', useDisplay().display.enterSends);
   const typed = draft.text.trim() !== '';
+  // Moving through the story works where no text is typed: outside a text field, or in this one while it is empty.
+  const free = (event?: globalThis.KeyboardEvent) => !typing(event) || (event!.target === input.current && draft.text === '');
+  useShortcut('storyStep', (event) => {
+    if (!free(event)) return false;
+    actions.step(event?.key === 'ArrowDown' ? 'down' : 'up');
+  });
+  useShortcut('storyEnds', (event) => {
+    if (!free(event)) return false;
+    actions.toEnd(event?.key === 'End' ? 'down' : 'up');
+  });
   const editPrompt = (door: PromptDoor) => actions.side(promptEditor(door));
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {

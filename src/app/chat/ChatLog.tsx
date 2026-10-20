@@ -43,7 +43,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
     {personaNote && <Text variant="note" align="center">{personaNote}</Text>}
     {messages.length === 0 ? <Empty variant="story">
       {card ? '첫인사가 없는 캐릭터예요.' : '캐릭터 없이 모델과 바로 대화하는 채팅이에요.'}
-    </Empty> : <Viewport keys={messages.map((message) => message.id)} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}
+    </Empty> : <Viewport keys={chat.keys} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}
       // Story bodies are shadow roots, whose controls a row's light-DOM query cannot see: Tab stays the browser's.
       traverse={false}>{(index) => {
       const message = messages[index]!;

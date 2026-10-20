@@ -49,6 +49,8 @@ type Props = {
   // close the other.
   beside?: ReactNode;
   peek?: ReactNode;
+  // Stands in the story's right gutter, from under the header down to the composer, at the gutter's foot.
+  edge?: ReactNode;
   reading: Reading;
   hideHeader: boolean;
   // The chat has 삽화, or will: its story makes room beside it for them where the page is wide enough.
@@ -64,7 +66,7 @@ type Props = {
   onScroll: () => void;
 };
 
-export function ChatFrame({ back, title, actions, children, above, footer, dockRef, panel, beside, peek, reading, hideHeader, stage, side, portrait, pictures, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, dockRef, panel, beside, peek, edge, reading, hideHeader, stage, side, portrait, pictures, compact, scrollRef, onScroll }: Props) {
   const scope = readingScope(reading);
   const pairs = usePanelsBeside();
   const [shown, setShown] = useState(true);
@@ -176,6 +178,9 @@ export function ChatFrame({ back, title, actions, children, above, footer, dockR
           </div>
         )}
         {peek}
+        <div className={styles.edge}>
+          <div className={styles.gutter}>{edge}</div>
+        </div>
         <div ref={footerRef} className={`${styles.footer} ${compact ? styles.compact : ''}`}>
           <div className={styles.above}>{above}</div>
           <div ref={dockRef} className={styles.dock}>{footer}</div>

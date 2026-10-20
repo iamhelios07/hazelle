@@ -1,0 +1,73 @@
+.steps {
+  position: relative;
+  flex: none;
+  display: flex;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-enter);
+}
+
+.awake,
+.steps:focus-within {
+  opacity: 1;
+}
+
+.buttons {
+  composes: glass from '../foundation/surface.module.css';
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.awake .buttons,
+.steps:focus-within .buttons {
+  pointer-events: auto;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-chip);
+  height: var(--control-chip);
+  color: var(--color-text);
+  transition: background-color var(--duration-fast);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.step:hover,
+.step:active {
+  background: var(--color-glass-press);
+}
+
+.rule {
+  width: 50%;
+  height: var(--border-thin);
+  background: var(--color-glass-edge);
+}
+
+/* Left of the buttons, over the story's text, and only for a moment. */
+.hint {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--space-8));
+  transform: translateY(-50%);
+}
+
+.label {
+  composes: glass from '../foundation/surface.module.css';
+  composes: fadeIn from '../foundation/motion.module.css';
+  display: flex;
+  align-items: center;
+  height: var(--control-xs);
+  padding: 0 var(--space-12);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}

@@ -8,7 +8,8 @@ import { useShortcut } from '../shortcuts';
 import { useToastFloor } from '../toast';
 import { useDisplay } from '../display';
 import { useAssetUrl } from '../session';
-import { ChatFrame, Pill, SidePeeks, usePanelsBeside } from '../ui';
+import { day } from '../common/time';
+import { ChatFrame, Pill, Scrubber, SidePeeks, StepButtons, usePanelsBeside } from '../ui';
 import { ChatAutopilot } from './ChatAutopilot';
 import { ChatBookmarks } from './ChatBookmarks';
 import { ChatInspect } from './ChatInspect';
@@ -28,6 +29,8 @@ import { useChat } from './useChat';
 
 // The lorebook panel brings the lorebook editor and the CBS language with it, so a chat loads them only when it opens.
 const ChatLore = lazy(() => import('./ChatLore').then(({ ChatLore }) => ({ default: ChatLore })));
+
+const STEP_LABELS = { up: '위로 · 길게 누르면 맨 위로', down: '아래로 · 길게 누르면 맨 아래로' };
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
 export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Panel) => void; onClose: () => void };
@@ -120,6 +123,12 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
           )
         }
         beside={panel && inspect}
+        edge={
+          <>
+            {display.scrubber && <Scrubber scrollRef={scroll.scrollRef} keys={chat.keys} stops={chat.stops} label={(index) => `#${index + 1} · ${day(chat.messages[index]!.at)}`} onSeek={actions.seek} />}
+            {display.stepButtons && chat.messages.length > 0 && <StepButtons scrollRef={scroll.scrollRef} labels={STEP_LABELS} onStep={actions.step} onEnd={actions.toEnd} />}
+          </>
+        }
         peek={
           <SidePeeks>
             {chat.peeking && <ChatStatusPeek status={chat.status} held={chat.held} decor={chat.decor} onHold={actions.hold} onPress={actions.press} onUnmark={(script) => actions.markStatus(script, false)} />}

@@ -31,6 +31,7 @@ import { useDraft } from './useDraft';
 import { budgetCut, pickStarted } from './infoReply';
 import { toggleRows, toggleSaveKey } from './toggles';
 import { anchorOf, useFollow } from './useFollow';
+import { useStorySteps } from './useStorySteps';
 import { useChatSearch } from './useChatSearch';
 import { useChatStatus } from './useChatStatus';
 import { useMessageEdit } from './useMessageEdit';
@@ -105,6 +106,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   const draft = useDraft(id, chat.character);
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, anchor, reply === 'stay');
+  const story = useStorySteps(messages, scroll.scrollRef, seekTo, follow);
   const memory = useChatMemory(id);
   const sendNotes = useSendNotes(id, chat, messages, memory, draft.text, busy || displayPending === true);
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);
@@ -353,7 +355,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     castMenu,
     draft,
     scroll,
+    keys: story.keys,
+    stops: story.stops,
     actions: {
+      ...story.actions,
       ...searchActions,
       ...statusActions,
       ...editActions,

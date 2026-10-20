@@ -40,11 +40,11 @@ export function parseReading(stored: string, fallback: Reading): Reading {
 // The default draws every picture as before the cap (user, 2026-10-17).
 // quotes (대사 모양), pictureSide and portrait: reading habits, so no preset sets them.
 // portrait: the character's picture on the stage, only in a chat without 삽화: the stage is theirs (user, 2026-10-16).
-export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; enterSends: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; portrait: boolean };
+export type Display = Scheme & { quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; enterSends: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; portrait: boolean; stepButtons: boolean; scrubber: boolean; userStops: boolean };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, enterSends: true, hidePictures: false, pictureWidest: 100, wideFill: true, pictureSide: 'right', portrait: false };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, quotes: 'color', hideHeader: false, foldComposer: true, enterSends: true, hidePictures: false, pictureWidest: 100, wideFill: true, pictureSide: 'right', portrait: false, stepButtons: false, scrubber: true, userStops: false };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -63,6 +63,9 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     wideFill: flag(read.wideFill, fallback.wideFill),
     pictureSide: known(SIDE, read.pictureSide, fallback.pictureSide),
     portrait: flag(read.portrait, fallback.portrait),
+    stepButtons: flag(read.stepButtons, fallback.stepButtons),
+    scrubber: flag(read.scrubber, fallback.scrubber),
+    userStops: flag(read.userStops, fallback.userStops),
   };
 }
 

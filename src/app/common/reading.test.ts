@@ -20,7 +20,7 @@ describe('stored reading settings', () => {
 
 describe('stored display settings', () => {
   it('keeps a known theme, color picks and real switches, and starts anything else from the fallback', () => {
-    const chosen = { theme: 'light', bg: 'blue', ink: 'soft', accent: 'rose', dialogue: 'plain', quotes: 'box', hideHeader: false, foldComposer: true, enterSends: false, hidePictures: true, pictureWidest: 60, wideFill: false, pictureSide: 'left', portrait: true } as const;
+    const chosen = { theme: 'light', bg: 'blue', ink: 'soft', accent: 'rose', dialogue: 'plain', quotes: 'box', hideHeader: false, foldComposer: true, enterSends: false, hidePictures: true, pictureWidest: 60, wideFill: false, pictureSide: 'left', portrait: true, stepButtons: true, scrubber: false, userStops: true } as const;
     expect(parseDisplay(JSON.stringify(chosen), DISPLAY_DEFAULT)).toEqual(chosen);
     expect(parseDisplay(JSON.stringify({ theme: 'sepia', bg: 'teal', accent: 3, quotes: 'bubble', hideHeader: 'no', enterSends: 0, hidePictures: 1, pictureWidest: 5, wideFill: 'no', pictureSide: 'top', portrait: 'yes' }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
   });

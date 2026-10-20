@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { formatKeys, keyCaps, pressed, pressedKey, type Chord } from './keys';
 
-const press = (key: string, { shift = false, ctrl = false, meta = false, composing = false, keyCode = 0, code = '' } = {}) => ({
+const press = (key: string, { shift = false, ctrl = false, meta = false, alt = false, composing = false, keyCode = 0, code = '' } = {}) => ({
   key,
   code,
   shiftKey: shift,
   ctrlKey: ctrl,
   metaKey: meta,
+  altKey: alt,
   nativeEvent: { isComposing: composing, keyCode },
 });
 
@@ -16,6 +17,11 @@ const escape: Chord[] = [{ key: 'Escape' }];
 const arrows: Chord[] = [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }];
 
 describe('keys', () => {
+  it('tells Alt held apart, whether or not a chord names it', () => {
+    expect(pressed(press('ArrowLeft', { alt: true }), arrows)).toBe(false);
+    expect(pressed(press('ArrowUp', { alt: true }), [{ key: 'ArrowUp', alt: true }])).toBe(true);
+  });
+
   it('checks only the modifiers a chord names', () => {
     expect(pressed(press('Enter'), enter)).toBe(true);
     expect(pressed(press('Enter', { ctrl: true }), enter)).toBe(true);

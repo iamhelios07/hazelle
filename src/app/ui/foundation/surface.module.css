@@ -4,6 +4,14 @@
   background: var(--color-surface);
 }
 
+/* Floats over the story, which shows through it. */
+.glass {
+  border: var(--border-thin) solid var(--color-glass-edge);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: var(--filter-glass);
+}
+
 .ruled + .ruled {
   border-top: var(--border-thin) solid var(--color-divider);
 }

@@ -19,4 +19,4 @@ export { SideTitle } from './SideTitle';
 export { Table, type TableColumn, type TableRow } from './Table';
 export { StepList, type StepRow } from './StepList';
 export { Tab, Tabs } from './Tabs';
-export { ROWS_RESIZED, Viewport, type Seek } from './Viewport';
+export { ROWS_RESIZED, rowAt, Viewport, viewLines, type Seek } from './Viewport';

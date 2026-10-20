@@ -17,12 +17,30 @@ type Props = {
   traverse?: boolean;
 };
 
-// top: the row's top at the scroller's scroll-padding-top, which a header floating over it sets.
-export type Seek = { key: string; revision: number; align: 'center' | 'top' };
+// top: the row's top at the scroller's scroll-padding-top, which a header floating over it sets; bottom: the row's end
+// at its scroll-padding-bottom, which a composer floating over it sets.
+export type Seek = { key: string; revision: number; align: 'center' | 'top' | 'bottom' };
 
 // Sent from the root once a row's new height is in place, before the scroll events of that frame: a follower that waits
 // for its own resize observer would read the old bottom from them.
 export const ROWS_RESIZED = 'rowsresized';
+
+// The scroller's view between what floats over its ends (its scroll padding), in client px.
+export function viewLines(frame: HTMLElement) {
+  const box = frame.getBoundingClientRect();
+  const style = getComputedStyle(frame);
+  return { top: box.top + (parseFloat(style.scrollPaddingTop) || 0), bottom: box.bottom - (parseFloat(style.scrollPaddingBottom) || 0) };
+}
+
+// The mounted row across y (client px), or the first below it where y falls between rows; above and below are how far
+// its top and end are from y. Rows around the view are always mounted.
+export function rowAt(frame: HTMLElement, y: number): { key: string; above: number; below: number } | null {
+  for (const row of frame.querySelectorAll<HTMLElement>(`.${styles.row}`)) {
+    const box = row.getBoundingClientRect();
+    if (box.bottom > y) return { key: row.dataset.key!, above: y - box.top, below: box.bottom - y };
+  }
+  return null;
+}
 
 // Uses its existing scroll ancestor: the feature keeps one scroller and one follow policy.
 // The nearest ancestor that scrolls, or null where the page itself does.
@@ -59,9 +77,9 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
   const scroll = useRef<HTMLElement | null>(null);
   const anchor = useRef<{ index: number; inside: number } | null>(null);
   const jump = useRef<Props['seek']>(null);
-  // A seek or reveal holds its row where it put it: measuring the rows above corrects the scroll, until the reader
-  // moves the view.
-  const held = useRef<string | null>(null);
+  // A seek or reveal holds its row where it put it: measuring the rows above corrects the scroll, and the row's own
+  // height too where its end was put, until the reader moves the view.
+  const held = useRef<{ key: string; end: boolean } | null>(null);
   // A top seek keeps room below its row for it to stay at the top while what follows it is shorter than the view:
   // below is from the row's top to the root's end, so rows above it may still change size.
   const room = useRef<{ key: string; below: number } | null>(null);
@@ -86,7 +104,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
     element.style.height = `${rootHeight()}px`;
     // After the seek, only up to the line: a scroll past it is the view sent down from outside, such as to follow the reply.
     const at = offset + sizes.offset(index) - line;
-    if (seek || (held.current === room.current!.key && frame.scrollTop < at)) frame.scrollTop = at;
+    if (seek || (held.current?.key === room.current!.key && frame.scrollTop < at)) frame.scrollTop = at;
   };
   const reading = useRef<Reading | null>(null);
   const update = useRef<() => void>(() => {});
@@ -163,11 +181,12 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
         const top = offset + sizes.offset(index);
         const bottom = offset + sizes.offset(index + 1);
         if (seek || top < frame.scrollTop || bottom > frame.scrollTop + frameHeight(frame)) {
-          held.current = target.key;
+          held.current = { key: target.key, end: target.align === 'bottom' };
           if (target.align === 'top') {
             room.current = { key: target.key, below: 0 };
             fit.current(true);
-          } else frame.scrollTop = (top + bottom) / 2 - frameHeight(frame) / 2;
+          } else if (target.align === 'bottom') frame.scrollTop = bottom - frameHeight(frame) + (parseFloat(getComputedStyle(frame).scrollPaddingBottom) || 0);
+          else frame.scrollTop = (top + bottom) / 2 - frameHeight(frame) / 2;
           opened.current = true;
         }
       }
@@ -209,14 +228,14 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
     if (frame) {
       const scrolled = frame.scrollTop;
       const top = scrolled - offsetIn(root.current!, frame);
-      const anchor = held.current === null ? -1 : keys.indexOf(held.current);
+      const anchor = held.current === null ? -1 : keys.indexOf(held.current.key);
       const crossed = reading.current?.row.dataset.key === key ? reading.current : null;
       // A story drawn again, as when a message flips to its original, replaced what was read: the element at its place
       // stands in for it.
       const read = crossed && (crossed.element.isConnected ? crossed.element : at(crossed.row, crossed.path));
       // The browser cannot anchor across unmounted rows. Correct rows wholly above the reading position, and in the row
       // across it, by how far what was read moved.
-      const correction = anchor >= 0 ? (index < anchor ? delta : 0)
+      const correction = anchor >= 0 ? (index < anchor || (index === anchor && held.current!.end) ? delta : 0)
         : position + height - delta <= top ? delta
         : position < top && crossed && read ? inside({ row: crossed.row, element: read }) - crossed.inside : 0;
       // The root takes its height before the render that sets it, so the correction is not clamped to the old one; and

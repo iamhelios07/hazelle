@@ -1,0 +1,103 @@
+.scrubber {
+  position: relative;
+  flex-grow: 1;
+  min-height: 0;
+  width: 100%;
+  opacity: var(--scrubber-idle-opacity);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  transition: opacity var(--duration-slow) var(--ease-enter);
+}
+
+.awake,
+.scrubber:hover {
+  opacity: 1;
+}
+
+.line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--border-thick);
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  transform: translateX(-50%);
+}
+
+.thumb {
+  position: absolute;
+  top: calc(var(--scrubber-at, 0) * (100% - var(--scrubber-thumb)));
+  left: 50%;
+  width: var(--scrubber-thumb-width);
+  height: var(--scrubber-thumb);
+  border-radius: var(--radius-full);
+  background: var(--color-text-faint);
+  transform: translateX(-50%);
+  transition: background-color var(--duration-fast);
+  pointer-events: auto;
+}
+
+/* A finger's reach round the thumb. */
+.thumb::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--space-8)) calc(-1 * var(--space-16));
+}
+
+.scrubber:hover .thumb {
+  background: var(--color-text-muted);
+}
+
+.held,
+.scrubber:hover .held {
+  background: var(--color-accent);
+}
+
+/* A touch on the story's edge scrolls it, so only the thumb is grabbed; a mouse takes the whole track. */
+@media (pointer: fine) {
+  .scrubber {
+    pointer-events: auto;
+  }
+}
+
+/* The story's gutter is narrow here (ChatFrame.module.css): the track keeps to the screen's edge. */
+@media (max-width: 959px) {
+  .line,
+  .thumb {
+    left: auto;
+    transform: none;
+  }
+
+  .line {
+    right: calc(var(--space-8) + (var(--scrubber-thumb-width) - var(--border-thick)) / 2);
+  }
+
+  .thumb {
+    right: var(--space-8);
+  }
+}
+
+/* Left of the thumb, over the story's text, while the drag lasts. */
+.bubble {
+  composes: glass from '../foundation/surface.module.css';
+  position: absolute;
+  top: calc(var(--scrubber-at, 0) * (100% - var(--scrubber-thumb)) + var(--scrubber-thumb) / 2);
+  right: calc(100% + var(--space-8));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.note {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

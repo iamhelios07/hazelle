@@ -4,6 +4,8 @@ export { MarginPictures } from './MarginPictures';
 export { ReadingPreview, type PreviewRow } from './ReadingPreview';
 export { MascotRemark } from './MascotRemark';
 export { StatusBox } from './StatusBox';
+export { Scrubber } from './Scrubber';
+export { StepButtons } from './StepButtons';
 export { StoryPicture } from './StoryPicture';
 export { SceneBoard } from './SceneBoard';
 export { SelectionButton, type SelectionEnd } from './SelectionButton';

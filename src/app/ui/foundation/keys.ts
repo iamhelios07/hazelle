@@ -1,8 +1,9 @@
 // A key as KeyboardEvent.key names it. A modifier set here must be in that state; one left out is not checked.
-export type Chord = { key: string; shift?: boolean; mod?: boolean };
+// Alt is never left out: held, it is a different key (AltGr types a letter as Ctrl+Alt).
+export type Chord = { key: string; shift?: boolean; mod?: boolean; alt?: boolean };
 
 type KeyState = { isComposing: boolean; keyCode: number };
-type Press = { key: string; code: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; nativeEvent: KeyState };
+type Press = { key: string; code: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean; nativeEvent: KeyState };
 
 // A key pressed while an IME is still composing a syllable belongs to the syllable, so it is never a shortcut:
 // Enter cannot send a Korean word half-typed, and Esc cannot close what it was typed into.
@@ -14,8 +15,8 @@ const LETTER = /^[a-z]$/;
 const sameKey = (event: Press, key: string) =>
   LETTER.test(key) ? event.key.toLowerCase() === key || event.code === `Key${key.toUpperCase()}` : event.key === key;
 
-const matches = (event: Press, { key, shift, mod }: Chord) =>
-  sameKey(event, key) && (shift === undefined || shift === event.shiftKey) && (mod === undefined || mod === (event.ctrlKey || event.metaKey));
+const matches = (event: Press, { key, shift, mod, alt = false }: Chord) =>
+  sameKey(event, key) && (shift === undefined || shift === event.shiftKey) && (mod === undefined || mod === (event.ctrlKey || event.metaKey)) && alt === event.altKey;
 
 export function pressedKey(event: Press, chords: readonly Chord[]): number {
   if (isComposing(event.nativeEvent)) return -1;
@@ -24,8 +25,8 @@ export function pressedKey(event: Press, chords: readonly Chord[]): number {
 
 export const pressed = (event: Press, chords: readonly Chord[]) => pressedKey(event, chords) !== -1;
 
-const NAMES: Record<string, string> = { Escape: 'Esc', ArrowUp: '↑', ArrowLeft: '←', ArrowRight: '→' };
+const NAMES: Record<string, string> = { Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 
-export const keyCaps = ({ key, shift, mod }: Chord) => [...(mod ? ['Ctrl'] : []), ...(shift ? ['Shift'] : []), NAMES[key] ?? (LETTER.test(key) ? key.toUpperCase() : key)];
+export const keyCaps = ({ key, shift, mod, alt }: Chord) => [...(mod ? ['Ctrl'] : []), ...(alt ? ['Alt'] : []), ...(shift ? ['Shift'] : []), NAMES[key] ?? (LETTER.test(key) ? key.toUpperCase() : key)];
 
 export const formatKeys = (chords: readonly Chord[]) => chords.map((chord) => keyCaps(chord).join('+')).join(' ');

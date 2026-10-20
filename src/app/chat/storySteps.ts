@@ -1,0 +1,25 @@
+export type Direction = 'up' | 'down';
+export type Step = { index: number; align: 'top' | 'bottom' } | 'start' | 'end';
+
+// Within this many px of a row's edge the view is at that edge already.
+const NEAR = 8;
+
+// The rows the story's steps and its scrubber stop at: the replies, and the user's own messages too with
+// 내 메시지에서도 멈추기 on. A user's line sits right above the reply that answers it, so stopping there costs a press.
+export function storyStops(messages: readonly { role: 'user' | 'assistant' }[], mine: boolean): number[] {
+  return messages.flatMap((message, index) => (mine || message.role !== 'user' ? [index] : []));
+}
+
+// at: the row across the view's edge the step leaves by (its top line going up, its bottom line going down), and how
+// far that line is from the row's top and end. The row the view is inside is the reader's, a stop or not: going up
+// reaches its start and going down its end before any other row.
+export function stepFrom(stops: readonly number[], last: number, at: { index: number; above: number; below: number } | null, direction: Direction): Step {
+  if (!at) return direction === 'up' ? 'start' : 'end';
+  const target = direction === 'up'
+    ? at.above > NEAR ? at.index : stops.findLast((stop) => stop < at.index)
+    : at.above > NEAR && at.below > NEAR ? at.index : stops.find((stop) => (at.below > NEAR ? stop >= at.index : stop > at.index));
+  if (target === undefined) return direction === 'up' ? 'start' : 'end';
+  // The last row's end is the story's, which only following reaches: its end leaves the room under it.
+  if (direction === 'down' && target === last) return 'end';
+  return { index: target, align: direction === 'up' ? 'top' : 'bottom' };
+}

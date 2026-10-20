@@ -1,14 +1,12 @@
 .pill {
   composes: riseIn from '../foundation/motion.module.css';
+  composes: glass from '../foundation/surface.module.css';
   display: flex;
   align-items: center;
   gap: var(--space-8);
   height: var(--control-chip);
   padding: 0 var(--space-16);
-  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-full);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-popover);
   color: var(--color-text);
   font-size: var(--text-sm);
 }
