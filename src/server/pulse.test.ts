@@ -157,6 +157,16 @@ it('closes a past week into the totals that passed the floors and deletes its li
   expect((await board())!.weeks).toEqual([WEEK_FROM]);
 });
 
+it("names a merged row in the spelling most people used, not most provider uses", async () => {
+  await t.env.db.prepare("INSERT INTO models_dev (list, model, name) VALUES ('openrouter', 'z-ai/glm-5.2-air', 'GLM-5.2 Air'), ('vercel', 'zai/glm-5.2-air', 'GLM-5.2 Air'), ('groq', 'glm-5.2-air', 'GLM 5.2 Air')").run();
+  const cookies = await people(10);
+  await seen(cookies);
+  for (const cookie of cookies.slice(0, 3)) for (const [type, model] of [['openrouter', 'z-ai/glm-5.2-air'], ['vercel', 'zai/glm-5.2-air']] as const) await call(cookie, 'aux', type, model);
+  for (const cookie of cookies.slice(3, 7)) await call(cookie, 'aux', 'groq', 'glm-5.2-air');
+  at(NOON + 10 * 60 * 1000);
+  expect((await board())!.ranking.aux.merged).toEqual([{ key: 'glm 5.2 air', model: 'GLM 5.2 Air', share: 1, people: 7 }]);
+});
+
 const insert = (table: string, ...rows: (string | number | null)[][]) =>
   t.env.db.batch(rows.map((row) => t.env.db.prepare(`INSERT INTO ${table} VALUES (${row.map(() => '?').join(', ')})`).bind(...row)));
 const EMPTY = { merged: [], split: [] };

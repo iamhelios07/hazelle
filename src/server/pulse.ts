@@ -126,17 +126,20 @@ const add = <K>(map: Map<K, number>, key: K, count: number) => map.set(key, (map
 
 // The week's lists counted: each row's spelling is the one most of its people used.
 async function countWeek(db: Db, week: number): Promise<Week | null> {
-  const [seen, roles, merged, split] = await Promise.all([
+  const [seen, roles, merged, mergedNames, split] = await Promise.all([
     db.prepare('SELECT COUNT(*) AS people FROM pulse_seen WHERE week = ?').bind(week).first<number>('people'),
     db.prepare('SELECT role, COUNT(DISTINCT account) AS people FROM pulse_used WHERE week = ? GROUP BY role').bind(week).all<{ role: PulseRole; people: number }>(),
     db.prepare('SELECT role, key, COUNT(DISTINCT account) AS people FROM pulse_used WHERE week = ? GROUP BY role, key').bind(week).all<Omit<WeekRow, 'type' | 'name'>>(),
+    db.prepare('SELECT role, key, name, COUNT(DISTINCT account) AS people FROM pulse_used WHERE week = ? GROUP BY role, key, name ORDER BY name').bind(week).all<Omit<WeekRow, 'type'>>(),
     db.prepare('SELECT role, key, type, name, COUNT(*) AS people FROM pulse_used WHERE week = ? GROUP BY role, key, type, name ORDER BY name').bind(week).all<WeekRow>(),
   ]);
   if (seen! < PULSE_FLOORS.board) return null;
   const names = new Map<string, Map<string | null, number>>();
   const people = new Map<string, number>();
+  const vote = (id: string, name: string | null, count: number) => add(names.get(id) ?? names.set(id, new Map()).get(id)!, name, count);
+  for (const row of mergedNames.results) vote(`${row.role}\0${row.key}\0`, row.name, row.people);
   for (const row of split.results) {
-    for (const id of [`${row.role}\0${row.key}\0`, `${row.role}\0${row.key}\0${row.type}`]) add(names.get(id) ?? names.set(id, new Map()).get(id)!, row.name, row.people);
+    vote(`${row.role}\0${row.key}\0${row.type}`, row.name, row.people);
     add(people, `${row.role}\0${row.key}\0${row.type}`, row.people);
   }
   for (const row of merged.results) people.set(`${row.role}\0${row.key}\0`, row.people);
