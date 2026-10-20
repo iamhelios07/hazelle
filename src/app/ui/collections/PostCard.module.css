@@ -1,0 +1,122 @@
+.feed {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.card {
+  position: relative;
+  display: flex;
+  gap: var(--space-16);
+  padding: var(--space-16) var(--space-24) var(--space-16) var(--space-16);
+  border: var(--border-thin) solid var(--box-line, var(--color-divider));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  transition: background-color var(--duration-fast);
+}
+
+.card:hover {
+  background: var(--color-surface-hover);
+}
+
+.card:has(.open:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.vote {
+  position: relative;
+  z-index: var(--layer-raised);
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.main {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+.open {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.open:focus-visible {
+  outline: none;
+}
+
+.open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.excerpt {
+  composes: note from '../foundation/type.module.css';
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  margin-top: var(--space-4);
+  min-width: 0;
+}
+
+.stats {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--space-12);
+}
+
+.stat {
+  composes: detail from '../foundation/type.module.css';
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted .open,
+.muted .excerpt {
+  color: var(--color-text-faint);
+}
+
+@media (max-width: 599px) {
+  .card {
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-16) var(--space-12) var(--space-12);
+  }
+}

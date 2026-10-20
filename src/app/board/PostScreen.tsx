@@ -1,4 +1,4 @@
-import { Check, EyeOff, Eye, Flag, History, Lock, LockOpen, PenLine, Send, ThumbsUp, Tag as TagIcon } from 'lucide-react';
+import { Check, EyeOff, Eye, Flag, History, Lock, LockOpen, PenLine, Tag as TagIcon } from 'lucide-react';
 import { useState } from 'react';
 import { HOLD_DAYS_MAX, MAX_COMMENT_LENGTH, STATUSES, type Comment, type Hidden, type Post, type Status } from '../../contracts/board';
 import type { ApiResult } from '../../runtime/api';
@@ -13,13 +13,12 @@ import {
   setPostHidden,
   setPostLocked,
   setPostStatus,
-  votePost,
   writeComment,
 } from '../../runtime/board';
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { linkify } from '../common/linkify';
-import { authorName, postTags } from '../common/postRow';
+import { AuthorLine, authorName, PostMarks } from '../common/postRow';
 import { RestoresDialog } from '../common/RestoresDialog';
 import { ago, moment } from '../common/time';
 import { count, readCount } from '../common/typedNumber';
@@ -30,11 +29,13 @@ import { useAccount } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, ConfirmDialog, Dialog, Empty, List, ListItem, MenuHeading, MenuItem, MoreMenu, NavBar, Row, Screen, Section, Stack, Tag, Text, TextField } from '../ui';
+import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadItem, VoteButton } from '../ui';
 import { useNicknameGate } from './nickname';
 import { counted, ReasonDialog } from './parts';
+import { useVotes } from './vote';
 
 type Gate = (then: () => void) => void;
+type Author = Post['author'];
 type Asking =
   | { kind: 'delete-post' }
   | { kind: 'report-post' }
@@ -65,27 +66,15 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
   const { admin } = useAccount();
   const toast = useToast();
   const { gate, dialog } = useNicknameGate();
-  // A flip shown before the server answers; only over the post it was made on, so a reload's counts replace it.
-  const [vote, setVote] = useState<{ of: Post; voted: boolean; votes: number } | null>(null);
+  const vote = useVotes(gate)(post);
   const [asking, setAsking] = useState<Asking | null>(null);
   const { busy, run } = useAttempt();
-  const shown = vote?.of === post ? vote : post;
   const mine = post.author.mine;
   const close = () => setAsking(null);
   const done = () => {
     close();
     reload();
   };
-
-  async function flip() {
-    const before = { voted: shown.voted, votes: shown.votes };
-    const voted = !before.voted;
-    setVote({ of: post, voted, votes: before.votes + (voted ? 1 : -1) });
-    const answer = await votePost(post.id, voted);
-    if (answer.ok) return setVote({ of: post, voted, votes: answer.data.votes });
-    setVote({ of: post, ...before });
-    toast.failed(answer, '추천하지 못했어요.');
-  }
 
   const act = (request: () => Promise<ApiResult<undefined>>, failed: string) =>
     void request().then((answer) => (answer.ok ? reload() : toast.failed(answer, failed)));
@@ -144,34 +133,21 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
       : []),
   ];
 
-  const voteLabel = `${BOARD.vote} ${count(shown.votes)}`;
+  const voteLabel = `${BOARD.vote} ${count(vote.votes)}`;
   return (
-    <Screen
-      width="form"
-      top={
-        <NavBar
-          title={post.title}
-          subtitle={`${authorName(post.author)} · ${edited(post.createdAt, post.editedAt)}`}
-          {...backBar(back)}
-          menu={items.length ? { of: '글', items } : undefined}
-        />
-      }
-    >
+    <Screen width="form" top={<NavBar title={post.title} {...backBar(back)} menu={items.length ? { of: '글', items } : undefined} />}>
       <Stack gap="group">
         <Row kind="tags">
-          {postTags(post).map((tag) => (
-            <Tag key={tag}>{tag}</Tag>
-          ))}
+          <PostMarks row={post} />
         </Row>
+        <AuthorLine author={post.author} note={edited(post.createdAt, post.editedAt)} size="md" />
         {post.hidden && <Callout tone="warn">{hiddenLine('글', post.hidden)}</Callout>}
         {post.visibility === 'operator' && <Text variant="note">운영자만 읽을 수 있는 글이에요.</Text>}
-        {live ? <Text variant="prose">{linkify(post.text!)}</Text> : <Text variant="note">삭제된 글이에요.</Text>}
+        {live ? <Text variant="written">{linkify(post.text!)}</Text> : <Text variant="note">삭제된 글이에요.</Text>}
         {admin && post.diagnostics !== null && <TextField label="진단 정보" lines={8} value={post.diagnostics} onChange={() => {}} readOnly />}
         {live && post.visibility === 'public' && (
           <Row kind="actions">
-            <Button variant={shown.voted ? 'primary' : 'secondary'} icon={ThumbsUp} label={shown.voted ? `${voteLabel}, 추천함` : voteLabel} onClick={() => gate(() => void flip())}>
-              {voteLabel}
-            </Button>
+            <VoteButton label={vote.voted ? `${voteLabel}, 추천함` : voteLabel} count={count(vote.votes)} pressed={vote.voted} onClick={vote.onFlip} />
           </Row>
         )}
       </Stack>
@@ -253,82 +229,104 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
           ]
         : []),
     ];
-    const body =
-      editing === comment.id ? (
-        <CommentComposer
-          label={BOARD.comment}
-          initial={comment.text ?? ''}
-          confirm="저장"
-          gate={gate}
-          send={(text) => editComment(comment.id, text)}
-          onDone={() => {
-            setEditing(null);
-            onChanged();
-          }}
-          onCancel={() => setEditing(null)}
-        />
-      ) : live ? (
-        <>
-          <Text variant="prose">{linkify(comment.text!)}</Text>
-          {comment.hidden && <Text variant="note">{hiddenLine('댓글', comment.hidden)}</Text>}
-        </>
-      ) : (
-        <Text variant="note">{comment.deleted ? '삭제된 댓글' : '운영자가 가린 댓글'}</Text>
-      );
+    const replies = top ? repliesOf(comment.id).map((reply) => item(reply, false)) : [];
+    const answering = top && open && replying === comment.id;
     return (
-      <ListItem
+      <ThreadItem
         key={comment.id}
-        title={authorName(comment.author)}
-        tags={comment.hidden ? [BOARD.hidden] : []}
-        note={edited(comment.createdAt, comment.editedAt)}
+        byline={
+          <AuthorLine
+            author={comment.author}
+            size="md"
+            note={edited(comment.createdAt, comment.editedAt)}
+            marks={
+              <>
+                {byAuthor(comment.author, post.author) && <Tag>{BOARD.author}</Tag>}
+                {comment.hidden && <Tag tone="faint">{BOARD.hidden}</Tag>}
+              </>
+            }
+          />
+        }
         control={menu.length ? <MoreMenu of={BOARD.comment}>{menu}</MoreMenu> : undefined}
-        detail={
-          <Stack gap="related">
-            {body}
-            {top && open && replying !== comment.id && (
-              <Row kind="actions">
-                <Button variant="link" size="sm" onClick={() => gate(() => setReplying(comment.id))}>
-                  {BOARD.reply}
-                </Button>
-              </Row>
-            )}
-            {top && open && replying === comment.id && (
-              <CommentComposer
-                label={BOARD.reply}
-                confirm="등록"
-                gate={gate}
-                send={(text) => writeComment(post.id, text, comment.id)}
-                onDone={() => {
-                  setReplying(null);
-                  onChanged();
-                }}
-                onCancel={() => setReplying(null)}
-              />
-            )}
-          </Stack>
+        foot={
+          top && open && !answering && editing !== comment.id ? (
+            <Button variant="link" size="xs" onClick={() => gate(() => setReplying(comment.id))}>
+              {BOARD.reply}
+            </Button>
+          ) : undefined
+        }
+        replies={
+          replies.length || answering ? (
+            <>
+              {replies}
+              {answering && (
+                <li>
+                  <CommentComposer
+                    label={BOARD.reply}
+                    placeholder={`${authorName(comment.author)}님에게 ${BOARD.reply}`}
+                    confirm="등록"
+                    focus
+                    gate={gate}
+                    send={(text) => writeComment(post.id, text, comment.id)}
+                    onDone={() => {
+                      setReplying(null);
+                      onChanged();
+                    }}
+                    onCancel={() => setReplying(null)}
+                  />
+                </li>
+              )}
+            </>
+          ) : undefined
         }
       >
-        {top ? repliesOf(comment.id).map((reply) => item(reply, false)) : undefined}
-      </ListItem>
+        {editing === comment.id ? (
+          <CommentComposer
+            label={BOARD.comment}
+            initial={comment.text ?? ''}
+            confirm="저장"
+            focus
+            gate={gate}
+            send={(text) => editComment(comment.id, text)}
+            onDone={() => {
+              setEditing(null);
+              onChanged();
+            }}
+            onCancel={() => setEditing(null)}
+          />
+        ) : live ? (
+          <>
+            <Text variant="written">{linkify(comment.text!)}</Text>
+            {comment.hidden && <Text variant="note">{hiddenLine('댓글', comment.hidden)}</Text>}
+          </>
+        ) : (
+          <Text variant="note">{comment.deleted ? '삭제된 댓글' : '운영자가 가린 댓글'}</Text>
+        )}
+      </ThreadItem>
     );
   }
 
   return (
     <Section title={`${BOARD.comment} ${count(post.comments.length)}`}>
-      {tops.length ? <List label={BOARD.comment}>{tops.map((comment) => item(comment, true))}</List> : <Empty variant="section">댓글이 없어요.</Empty>}
+      {tops.length ? <Thread label={BOARD.comment}>{tops.map((comment) => item(comment, true))}</Thread> : <Empty variant="section">첫 댓글을 남겨 보세요.</Empty>}
       {post.locked ? (
         <Text variant="note">운영자가 댓글을 닫았어요.</Text>
       ) : (
-        post.text !== null && <CommentComposer label={BOARD.comment} confirm="등록" gate={gate} send={(text) => writeComment(post.id, text, null)} onDone={onChanged} />
+        post.text !== null && <CommentComposer label={BOARD.comment} placeholder="댓글 남기기" confirm="등록" gate={gate} send={(text) => writeComment(post.id, text, null)} onDone={onChanged} />
       )}
     </Section>
   );
 }
 
-function CommentComposer({ label, initial = '', confirm, gate, send, onDone, onCancel }: {
+// Names are unique, so the same name is the same account; an account without one, or gone, matches nothing.
+const byAuthor = (by: Author, author: Author) => (by.operator && author.operator) || (!by.left && !author.left && by.name !== null && by.name === author.name);
+
+function CommentComposer({ label, placeholder, initial = '', confirm, focus = false, gate, send, onDone, onCancel }: {
   label: string;
+  placeholder?: string;
   initial?: string;
   confirm: string;
+  focus?: boolean;
   gate: Gate;
   send: (text: string) => Promise<ApiResult<unknown>>;
   onDone: () => void;
@@ -347,17 +345,27 @@ function CommentComposer({ label, initial = '', confirm, gate, send, onDone, onC
     });
   return (
     <Stack gap="related">
-      <TextField label={label} lines={3} value={text} onChange={setText} hint={hint} error={error} />
-      <Row kind="actions">
-        {onCancel && (
-          <Button variant="secondary" size="sm" onClick={onCancel}>
-            취소
-          </Button>
-        )}
-        <Button size="sm" icon={Send} busy={busy} disabled={length === 0 || over || text.trim() === initial.trim()} onClick={() => gate(() => void submit())}>
-          {confirm}
-        </Button>
-      </Row>
+      <CommentBox
+        label={label}
+        placeholder={placeholder}
+        value={text}
+        onChange={setText}
+        hint={length ? hint : undefined}
+        error={error}
+        focus={focus}
+        actions={
+          <>
+            {onCancel && (
+              <Button variant="ghost" size="sm" onClick={onCancel}>
+                취소
+              </Button>
+            )}
+            <Button size="sm" busy={busy} disabled={length === 0 || over || text.trim() === initial.trim()} onClick={() => gate(() => void submit())}>
+              {confirm}
+            </Button>
+          </>
+        }
+      />
       {failure && (
         <Callout tone="warn" alert>
           {failure}

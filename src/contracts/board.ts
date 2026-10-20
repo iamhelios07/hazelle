@@ -47,6 +47,8 @@ export type Hidden = { reason: string; until: number | null };
 export type PostRow = {
   id: number;
   title: string;
+  // The start of its text; null once deleted.
+  excerpt: string | null;
   category: Category;
   status: Status;
   version: string | null;

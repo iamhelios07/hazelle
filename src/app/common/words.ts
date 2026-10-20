@@ -124,6 +124,7 @@ export const BOARD = {
   vote: '추천',
   comment: '댓글',
   reply: '답글',
+  author: '작성자',
 };
 
 export const TOOLS = '도구';

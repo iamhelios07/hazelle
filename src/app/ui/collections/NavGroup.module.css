@@ -27,3 +27,13 @@
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  margin-bottom: var(--space-4);
+  border-bottom: var(--border-thin) solid var(--color-divider);
+}

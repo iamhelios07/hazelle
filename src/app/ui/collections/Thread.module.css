@@ -1,0 +1,53 @@
+.thread,
+.replies {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.thread > .item {
+  padding: var(--space-16) 0;
+}
+
+.thread > .item + .item {
+  border-top: var(--border-thin) solid var(--color-divider);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.control {
+  flex-shrink: 0;
+}
+
+/* Set in to the name, past the face (Byline md). */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-inline-start: calc(var(--avatar-md) + var(--space-12));
+}
+
+.foot {
+  /* Back by a small link's own padding, so its words start on the text's line. */
+  margin-inline-start: calc(-1 * var(--space-4));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.replies {
+  gap: var(--space-16);
+  margin-top: var(--space-12);
+  margin-inline-start: calc(var(--avatar-md) / 2);
+  padding-inline-start: calc(var(--avatar-md) / 2 + var(--space-8));
+  border-inline-start: var(--border-medium) solid var(--color-divider);
+}

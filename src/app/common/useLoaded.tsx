@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ApiResult } from '../../runtime/api';
 import type { Page } from '../../runtime/pages';
-import { Button, Callout, Empty, List, Text } from '../ui';
+import { Button, Callout, Empty, List, PostFeed, Text } from '../ui';
 import { ACTS } from './acts';
 import { describeFailure } from './failure';
 import { count } from './typedNumber';
@@ -92,18 +92,22 @@ export function SeeAll({ total, open = false, onClick }: { total?: number; open?
 }
 
 // A paged list's body. head: the few a page shows beside its door to the rest, so it pages no further.
-export function PagedList<T>({ pages, head, label, empty, children }: { pages: ReturnType<typeof usePages<T>>; head: boolean; label: string; empty: string; children: (row: T) => ReactNode }) {
+// feed: rows that are cards of their own (PostCard), not a box of rows.
+export function PagedList<T>({ pages, head, label, empty, feed = false, children }: { pages: ReturnType<typeof usePages<T>>; head: boolean; label: string; empty: string; feed?: boolean; children: (row: T) => ReactNode }) {
   const { rows } = pages;
   return (
     <>
       {pages.loading}
       {pages.failure}
       {rows && rows.length === 0 && <Empty variant="section">{empty}</Empty>}
-      {rows && rows.length > 0 && (
-        <List label={label} box>
-          {rows.map(children)}
-        </List>
-      )}
+      {rows && rows.length > 0 &&
+        (feed ? (
+          <PostFeed label={label}>{rows.map(children)}</PostFeed>
+        ) : (
+          <List label={label} box>
+            {rows.map(children)}
+          </List>
+        ))}
       {!head && pages.more}
     </>
   );

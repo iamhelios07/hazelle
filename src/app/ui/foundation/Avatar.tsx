@@ -10,7 +10,8 @@ type Props = {
   image?: string | null;
   // fill: the whole of the frame it stands in, which sets the letter's size (CardGrid's pictures).
   size?: 'sm' | 'md' | 'rail' | 'lg' | 'fill';
-  tone?: 'plain' | 'you';
+  // accent: the operator's face on the board.
+  tone?: 'plain' | 'you' | 'accent';
 };
 
 const TINTS = [styles.tint1, styles.tint2, styles.tint3, styles.tint4, styles.tint5];

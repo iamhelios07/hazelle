@@ -15,7 +15,8 @@ type Props<T extends string> = {
   options: { value: T; label: string; sub?: string; mark?: ReactNode }[];
   value: T | null;
   onChange: (value: T) => void;
-  layout?: 'chips' | 'buttons' | 'segmented' | 'list' | 'menu' | 'fit';
+  // cards: a few choices that each need their meaning, a card each with its mark, label and sub.
+  layout?: 'chips' | 'buttons' | 'segmented' | 'list' | 'menu' | 'fit' | 'cards';
 };
 
 export function ChoiceGroup<T extends string>({ label, showLabel = false, options, value, onChange, layout = 'chips' }: Props<T>) {
@@ -38,8 +39,24 @@ export function ChoiceGroup<T extends string>({ label, showLabel = false, option
         layout === 'chips' ? (
           <Item key={option.value} density="chip" scheme="tab" leading={option.mark} title={option.label} pressed={option.value === value} onClick={() => onChange(option.value)} />
         ) : (
-          <button key={option.value} type="button" className={layout === 'list' ? `${styles.choice} ${styles.option}` : styles.choice} aria-pressed={option.value === value} onClick={() => onChange(option.value)}>
-            {layout === 'list' ? (
+          <button key={option.value} type="button" className={layout === 'list' ? `${styles.choice} ${styles.option}` : layout === 'cards' ? `${styles.choice} ${styles.card}` : styles.choice} aria-pressed={option.value === value}
+            // A card is named by its label alone; its sub describes it.
+            {...(layout === 'cards' && { 'aria-labelledby': `${id}-${option.value}`, 'aria-describedby': option.sub ? `${id}-${option.value}-sub` : undefined })}
+            onClick={() => onChange(option.value)}
+          >
+            {layout === 'cards' ? (
+              <>
+                {option.mark && <span className={styles.cardMark}>{option.mark}</span>}
+                <span id={`${id}-${option.value}`} className={styles.cardLabel}>
+                  {option.label}
+                </span>
+                {option.sub && (
+                  <span id={`${id}-${option.value}-sub`} className={styles.sub}>
+                    {option.sub}
+                  </span>
+                )}
+              </>
+            ) : layout === 'list' ? (
               <>
                 <span className={styles.dot} aria-hidden />
                 <span className={styles.text}>
@@ -59,10 +76,11 @@ export function ChoiceGroup<T extends string>({ label, showLabel = false, option
     </div>
   );
   if (!showLabel) return group;
-  // Chips stand as a field among fields, their label above as TextField's; the other layouts sit in a toolbar row.
+  // Chips and cards stand as a field among fields, their label above as TextField's; the other layouts sit in a toolbar row.
+  const field = layout === 'chips' || layout === 'cards';
   return (
-    <div className={layout === 'chips' ? styles.field : styles.labelled}>
-      <span id={id} className={layout === 'chips' ? styles.fieldLabel : styles.label}>
+    <div className={field ? styles.field : styles.labelled}>
+      <span id={id} className={field ? styles.fieldLabel : styles.label}>
         {label}
       </span>
       {group}

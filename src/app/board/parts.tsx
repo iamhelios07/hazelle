@@ -9,6 +9,8 @@ import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { PagedList, usePages } from '../common/useLoaded';
 import { Button, Callout, Dialog, TextField } from '../ui';
+import { useNicknameGate } from './nickname';
+import { useVotes } from './vote';
 
 // A text field's count against its limit, and the error once past it. Counted as the server counts: trimmed.
 export function counted(text: string, max: number) {
@@ -17,16 +19,21 @@ export function counted(text: string, max: number) {
   return { length, over, hint: `${count(length)} / ${count(max)}자`, error: over ? `${count(max)}자까지 쓸 수 있어요.` : undefined };
 }
 
-// Every list of posts: asked again whole when its ask changes, as its caller keys it.
-export function PostList({ ask, label, empty }: { ask: ListAsk; label: string; empty: string }) {
+// Every list of posts: asked again whole when its ask changes, as its caller keys it. votes: 추천 pressed in the feed,
+// on the public posts that take one.
+export function PostList({ ask, label, empty, votes = false }: { ask: ListAsk; label: string; empty: string; votes?: boolean }) {
   const pages = usePages((after) => readPosts(after, ask));
+  const { gate, dialog } = useNicknameGate();
+  const vote = useVotes(gate);
   return (
-    <PagedList pages={pages} head={false} label={label} empty={empty}>
-      {(row) => <PostItem key={row.id} row={row} />}
-    </PagedList>
+    <>
+      <PagedList pages={pages} head={false} label={label} empty={empty} feed>
+        {(row) => <PostItem key={row.id} row={row} vote={votes && row.visibility === 'public' && !row.deleted ? vote(row) : null} />}
+      </PagedList>
+      {dialog}
+    </>
   );
 }
-
 // A reason typed before an act on a post or comment: a 신고, or the operator hiding it. also: fields beside the reason.
 export function ReasonDialog({ title, note, label, confirm, also, ready = true, send, onDone, onClose }: {
   title: string;

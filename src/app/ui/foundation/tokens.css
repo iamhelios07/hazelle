@@ -370,6 +370,8 @@
   --icon-sm: 18px;
   --icon-md: 22px;
   --icon-lg: 24px;
+  /* An icon inside a Tag, a step under the xs icon to sit in its small line. */
+  --icon-tag: 14px;
   --row-min-height: 64px;
   --viewport-card-estimate: 280px;
   --viewport-story-estimate: 320px;
@@ -433,6 +435,13 @@
   /* The rail's faces, the only ones between a row's and a card's. */
   --avatar-rail: 40px;
   --avatar-lg: 72px;
+  /* A post's 추천 column in a feed (VoteButton). */
+  --vote-width: 52px;
+  --vote-fill-opacity: 0.25;
+  /* The narrowest a picked card stands in a grid of them (ChoiceGroup cards). */
+  --choice-card-min: 148px;
+  /* A comment box at rest: room for two lines and its foot. */
+  --comment-box-min-height: 56px;
   --menu-width: 300px;
   --chat-title-max-width: 320px;
   --hint-width: 280px;

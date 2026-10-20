@@ -58,7 +58,9 @@ const HIDDEN = (a: string) => `${a}.hidden_reason AS hiddenReason, ${a}.hidden_u
 // Its author and the operator see why a post or comment is hidden; others see no reason.
 const hiddenOf = (row: HiddenSql, sees: boolean): Hidden | null => (row.hiddenNow && sees ? { reason: row.hiddenReason!, until: row.hiddenUntil } : null);
 
-const POST_COLUMNS = (account: Account) => `p.id, p.title, p.category, p.status, p.version, p.visibility, p.created_at AS createdAt, p.edited_at AS editedAt,
+// A list shows the start of each post's text, a feed card's two lines at most.
+const EXCERPT_LENGTH = 200;
+const POST_COLUMNS = (account: Account) => `p.id, p.title, substr(p.text, 1, ${EXCERPT_LENGTH}) AS excerpt, p.category, p.status, p.version, p.visibility, p.created_at AS createdAt, p.edited_at AS editedAt,
   p.locked, p.deleted, ${HIDDEN('p')}, ${AUTHOR('p')},
   (SELECT COUNT(*) FROM post_votes v WHERE v.post_id = p.id) AS votes,
   EXISTS (SELECT 1 FROM post_votes v WHERE v.post_id = p.id AND v.account_id = ?1) AS voted,

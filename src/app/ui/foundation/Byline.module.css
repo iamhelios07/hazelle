@@ -1,0 +1,59 @@
+.byline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.text {
+  display: flex;
+  min-width: 0;
+}
+
+.sm .text {
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.md {
+  gap: var(--space-12);
+}
+
+.md .text {
+  flex-direction: column;
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.name {
+  composes: ellipsis from './a11y.module.css';
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+.sm .name {
+  font-size: var(--text-sm);
+}
+
+.md .name {
+  font-size: var(--text-md);
+}
+
+.accent {
+  color: var(--color-accent);
+}
+
+.note {
+  composes: detail from './type.module.css';
+  white-space: nowrap;
+}
+
+.sm .note::before {
+  content: '·';
+  margin-inline-end: var(--space-8);
+}

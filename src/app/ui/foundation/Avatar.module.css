@@ -57,6 +57,11 @@
   color: var(--color-you-text);
 }
 
+.accent {
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+}
+
 .letter {
   background:
     radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--face) 22%, transparent), transparent 70%),

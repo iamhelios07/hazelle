@@ -1,5 +1,6 @@
 export { Avatar } from './Avatar';
 export { Brand } from './Brand';
+export { Byline } from './Byline';
 export { ColorDot } from './ColorDot';
 export { Divider } from './Divider';
 export { FONT_IDS, FONT_KIND, FONTS, type FontId } from './fonts';

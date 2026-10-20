@@ -1,0 +1,63 @@
+.box {
+  composes: frame from '../foundation/surface.module.css';
+  display: flex;
+  flex-direction: column;
+  transition: border-color var(--duration-fast);
+}
+
+/* The ring a field takes, drawn round the whole box with its buttons, not round the text alone. */
+.box:has(.input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: calc(-1 * var(--border-thin));
+}
+
+.box[data-invalid] {
+  border-color: var(--color-warn-border);
+}
+
+.input {
+  width: 100%;
+  height: var(--autosize);
+  min-height: var(--comment-box-min-height);
+  max-height: var(--edit-max-height);
+  padding: var(--space-12) var(--space-16) var(--space-4);
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  resize: none;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-8) var(--space-8) var(--space-16);
+}
+
+.note {
+  composes: detail from '../foundation/type.module.css';
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  color: var(--color-warn);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-8);
+}
