@@ -78,8 +78,9 @@ export function Shortcuts({ items }: { items: readonly { label: string; keys: re
         <div key={item.label} className={styles.shortcut}>
           <dt className={styles.action}>{item.label}</dt>
           <dd className={styles.keys}>
-            {item.keys.flatMap(keyCaps).map((cap) => (
-              <Kbd key={cap}>{cap}</Kbd>
+            {item.keys.flatMap(keyCaps).map((cap, index) => (
+              // A cap repeats across chords (Ctrl+, and Ctrl+S): its place is its identity.
+              <Kbd key={index}>{cap}</Kbd>
             ))}
           </dd>
         </div>

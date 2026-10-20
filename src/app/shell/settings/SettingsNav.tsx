@@ -1,4 +1,4 @@
-import { FileText, FlaskConical, Languages, Layers, Lock, MessageSquare, Package, Plug, Puzzle, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
+import { FileText, FlaskConical, Hand, Languages, Layers, Lock, MessageSquare, Package, Plug, Puzzle, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useSearch } from '../../common/useSearch';
 import { PAGES, SETTINGS } from '../../common/words';
@@ -30,6 +30,7 @@ const GROUPS: Place[][] = [
 ];
 const APP: Place[] = [
   { page: 'display', label: PAGES.display, icon: SunMoon, route: { kind: 'display' } },
+  { page: 'controls', label: PAGES.controls, icon: Hand, route: { kind: 'controls' } },
   { page: 'labs', label: PAGES.labs, icon: FlaskConical, route: { kind: 'labs' } },
   { page: 'account', label: PAGES.account, icon: Lock, route: { kind: 'account', section: null } },
 ];
@@ -57,6 +58,7 @@ function useHolds(): Record<SettingsPage, string | undefined> {
     modules: `${modules.length}개`,
     plugins: `${plugins.length}개`,
     display: presetOf(presets, reading, display)?.name,
+    controls: undefined,
     translator: undefined,
     labs: undefined,
     account: username,

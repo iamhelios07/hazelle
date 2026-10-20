@@ -46,6 +46,7 @@ const AccountScreen = lazy(() => import('../settings/AccountScreen').then(({ Acc
 const FeatureScreen = lazy(() => import('../settings/FeatureScreen').then(({ FeatureScreen }) => ({ default: FeatureScreen })));
 const ChatSettingsScreen = lazy(() => import('../settings/ChatSettingsScreen').then(({ ChatSettingsScreen }) => ({ default: ChatSettingsScreen })));
 const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ DisplayScreen }) => ({ default: DisplayScreen })));
+const ControlsScreen = lazy(() => import('../settings/ControlsScreen').then(({ ControlsScreen }) => ({ default: ControlsScreen })));
 const UsageScreen = lazy(() => import('../settings/UsageScreen').then(({ UsageScreen }) => ({ default: UsageScreen })));
 const NoticesScreen = lazy(() => import('../settings/NoticesSection').then(({ NoticesScreen }) => ({ default: NoticesScreen })));
 const SentScreen = lazy(() => import('../settings/SentSection').then(({ SentScreen }) => ({ default: SentScreen })));
@@ -138,6 +139,8 @@ export function Page({ route, closeSettings, onPaired }: { route: Route; closeSe
         return <FeatureScreen key={at.feature} feature={at.feature} back={back(at)} />;
       case 'display':
         return <DisplayScreen back={sideBack(at)} />;
+      case 'controls':
+        return <ControlsScreen back={sideBack(at)} />;
       case 'translator':
         return <TranslatorScreen back={sideBack(at)} />;
       case 'labs':

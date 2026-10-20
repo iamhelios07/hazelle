@@ -66,6 +66,7 @@ const EXAMPLES = {
   'chat-settings': [{ kind: 'chat-settings' }],
   feature: FEATURES.map((feature) => ({ kind: 'feature', feature })),
   display: [{ kind: 'display' }],
+  controls: [{ kind: 'controls' }],
   translator: [{ kind: 'translator' }],
   labs: [{ kind: 'labs' }],
   settings: [{ kind: 'settings' }],

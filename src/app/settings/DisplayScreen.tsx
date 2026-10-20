@@ -5,7 +5,7 @@ import { EMPTY_SETTINGS, type SavedLook } from '../../model/settings';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { PICTURE_PERCENT_ERROR, readPicturePercent } from '../common/picturePercent';
-import { HidePicturesRow, ReadingRows, ReplyRow } from '../common/ReadingRows';
+import { HidePicturesRow, ReadingRows } from '../common/ReadingRows';
 import { choices, describeLook, SIDE, lookOf, moveLook, presetOf, savedPresets, type OwnPreset, type Preset } from '../common/reading';
 import { typedText } from '../common/typed';
 import { PAGES } from '../common/words';
@@ -14,7 +14,7 @@ import { useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { ACCENT, Beside, BG, Button, DIALOGUE, Disclosure, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
+import { ACCENT, Beside, BG, Button, DIALOGUE, QUOTE_SHAPE, ChoiceGroup, ColorDot, INK, MenuItem, NavBar, NumberInput, ReadingPreview, Screen, Section, SettingGroup, SettingRow, Swatches, Switch, THEME, type PreviewRow } from '../ui';
 
 const SAMPLE: PreviewRow[] = [
   { name: '캐릭터', mine: false, html: storyHtml(`*창밖으로 늦은 오후의 햇살이 기울어 든다.* 그녀는 찻잔을 내려놓고 고개를 들었다. "오늘은 어디까지 읽었어? 지난번엔 중간에 잠들었잖아." '또 잠든 건 아니겠지.'`, true) },
@@ -142,51 +142,6 @@ export function DisplayScreen({ back }: { back: Back | null }) {
           <SettingGroup label="텍스트">
             <ReadingRows />
             <SettingRow label="대사 모양" control={<ChoiceGroup label="대사 모양" options={choices(QUOTE_SHAPE)} value={display.quotes} onChange={(quotes) => changeDisplay({ quotes })} />} />
-          </SettingGroup>
-        </Section>
-        <Section title="스크롤할 때">
-          <SettingGroup label="스크롤할 때">
-            <ReplyRow />
-            <SettingRow
-              label="헤더 숨기기"
-              help="아래로 스크롤하면 숨기고, 위로 스크롤하면 다시 보여요."
-              control={<Switch label="헤더 숨기기" checked={display.hideHeader} onChange={(hideHeader) => changeDisplay({ hideHeader })} />}
-            />
-            <SettingRow
-              label="입력창 접기"
-              help="위로 스크롤하면 한 줄로 접고, 맨 아래로 내려가면 다시 펼쳐요."
-              control={<Switch label="입력창 접기" checked={display.foldComposer} onChange={(foldComposer) => changeDisplay({ foldComposer })} />}
-            />
-            <SettingRow
-              label="빠른 스크롤 막대"
-              help="오른쪽 막대를 끌면 메시지마다 멈춰요. 긴 채팅에선 막대에서 왼쪽으로 끌어내면 하나씩 움직여요."
-              control={<Switch label="빠른 스크롤 막대" checked={display.scrubber} onChange={(scrubber) => changeDisplay({ scrubber })} />}
-            />
-            <SettingRow
-              label="메시지 이동 버튼"
-              help="스크롤하면 오른쪽 아래에 버튼이 잠깐 떠요. 누르면 메시지 처음이나 끝으로, 길게 누르면 채팅 맨 위나 맨 아래로 가요."
-              control={<Switch label="메시지 이동 버튼" checked={display.stepButtons} onChange={(stepButtons) => changeDisplay({ stepButtons })} />}
-            />
-          </SettingGroup>
-          {(display.scrubber || display.stepButtons) && (
-            <Disclosure label="세부 설정">
-              <SettingGroup label="세부 설정">
-                <SettingRow
-                  label="내 메시지에서도 멈추기"
-                  help="끄면 캐릭터 메시지에서만 멈춰요. 읽던 메시지의 처음과 끝에는 늘 멈춰요."
-                  control={<Switch label="내 메시지에서도 멈추기" checked={display.userStops} onChange={(userStops) => changeDisplay({ userStops })} />}
-                />
-              </SettingGroup>
-            </Disclosure>
-          )}
-        </Section>
-        <Section title="입력창">
-          <SettingGroup label="입력창">
-            <SettingRow
-              label="Enter로 보내기"
-              help="끄면 Enter는 줄을 바꾸고, Ctrl+Enter로 보내요."
-              control={<Switch label="Enter로 보내기" checked={display.enterSends} onChange={(enterSends) => changeDisplay({ enterSends })} />}
-            />
           </SettingGroup>
         </Section>
       </Beside>
