@@ -21,6 +21,7 @@ import type { MenuItem, ToolFrames, ToolHosts, ToolMenu, ToolPage, ToolSlot, Too
 import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
 import { readToolAsset, saveToolAsset, setToolSettings, toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
+import { DEFAULT_ORDER } from '../../engine/import/convert';
 import { fieldValue, TOOL_ACTION_CHARS, TOOL_ACTIONS } from '../../engine/import/tool';
 import { attachIllustration } from '../illustrate';
 import { RISU_DECLINED } from '../../tool-api/risu-methods';
@@ -110,8 +111,15 @@ function isOutcome(value: unknown, event: ToolEvent['kind'] | undefined): value 
   return isRecord(value) && answers(event, value.value) && isPairs(value.writes) && isPairs(value.data)
     && Array.isArray(value.edits) && value.edits.every((edit) => isRecord(edit) && Number.isInteger(edit.index) && typeof edit.text === 'string')
     && Array.isArray(value.added) && value.added.every((item) => isRecord(item) && (item.role === 'user' || item.role === 'char') && typeof item.text === 'string')
-    && Array.isArray(value.badges) && value.badges.every((badge) => isRecord(badge) && Number.isInteger(badge.index) && (badge.text === null || typeof badge.text === 'string'));
+    && Array.isArray(value.badges) && value.badges.every((badge) => isRecord(badge) && Number.isInteger(badge.index) && (badge.text === null || typeof badge.text === 'string'))
+    && Array.isArray(value.lore) && value.lore.every((entry) => isRecord(entry) && typeof entry.name === 'string' && Array.isArray(entry.keys) && entry.keys.every((key) => typeof key === 'string')
+      && typeof entry.text === 'string' && typeof entry.always === 'boolean' && typeof entry.on === 'boolean');
 }
+// The fields a tool writes, over a new entry's defaults; upsertChatLore keeps the folder of the one it replaces.
+const chatLore = ({ name, keys, text, always, on }: ToolOutcome['lore'][number]): ScriptOutcome['lore'][number] => ({
+  name, keys, secondaryKeys: [], content: text, enabled: on, constant: always, selective: false, useRegex: false, caseSensitive: false,
+  insertionOrder: DEFAULT_ORDER, priority: null, position: null,
+});
 const eventFields = (event: ToolEvent): Partial<Extract<Down, { kind: 'event' }>> => {
   switch (event.kind) {
     case 'reply': return { reply: event.reply };
@@ -150,7 +158,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   private called: ToolHosts = new Map();
   private ids = 0;
 
-  constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly scripts: () => Pick<Scripts, 'report' | 'pageContext' | 'pageWrite'>, private readonly open: OpenFrame = toolFrame) {
+  constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly scripts: () => Pick<Scripts, 'report' | 'pageContext' | 'pageWrite' | 'send'>, private readonly open: OpenFrame = toolFrame) {
     this.writes = new ToolWrites(session.store);
     this.unsubscribe = session.store.subscribe((changes) => this.changed(changes));
   }
@@ -515,6 +523,12 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         if (!saved.ok) throw new Error(saved.error);
         return;
       }
+      case 'chat.send': {
+        if (typeof first !== 'string' || typeof second !== 'string') break;
+        if (!this.allowed(first, entry.module)) throw new ToolStopped();
+        if (!entry.tool.manifest.uses.includes('model')) return { ok: false, reason: 'not-declared' } satisfies Hazelle.SendAnswer;
+        return this.scripts().send(first, second, { kind: 'module', id: entry.module }, AbortSignal.any([frame.closing.signal, cancel]));
+      }
       case 'settings': return this.session.store.get('tool', toolId(entry.module))!.value.settings;
       case 'settings.set': {
         const field = entry.tool.manifest.settings.find(({ key }) => key === first);
@@ -636,9 +650,9 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     const data = [...new Map(value.data)];
     const badges = [...new Map(value.badges.map(({ index, text }) => [index, text]))].map(([index, text]) => ({ index, text }));
     // A page's write takes its share of the write rate before it is converted (pageWrite).
-    if (context.event && (data.length || badges.length)) this.writes.take(frame.entry.module);
+    if (context.event && (data.length || badges.length || value.lore.length)) this.writes.take(frame.entry.module);
     const story = context.event && STORY_LOCKED.has(context.event) ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
-    return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, json]) => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...story, tool: { data, badges } };
+    return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, json]) => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...story, lore: value.lore.map(chatLore), tool: { data, badges } };
   }
 
   private async pageWrite(frame: Frame, value: unknown) {

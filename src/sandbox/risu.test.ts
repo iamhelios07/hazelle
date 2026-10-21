@@ -14,6 +14,7 @@ function fakeApi({ open = true } = {}) {
   const edits: [number, string][] = [];
   const added: [Hazelle.Role, string][] = [];
   const said: string[] = [];
+  const lore: Omit<Hazelle.LoreEntry, 'owner'>[] = [];
   const messages: Hazelle.Message[] = [
     { index: 0, id: 'm0', version: 'v0', role: 'user', text: 'hello', time: 1 },
     { index: 1, id: 'm1', version: 'v1', role: 'char', text: 'hi there', time: 2 },
@@ -33,11 +34,13 @@ function fakeApi({ open = true } = {}) {
   const setup: Hazelle.Setup = { persona: 'p1', limits: { context: 8000, reply: null }, modules: [{ id: 'module-1', name: 'Harbor' }] };
   const settings: Hazelle.Settings = { image_base: 'none' };
   const model = vi.fn<Hazelle.Chat['model']>(async () => ({ ok: true, text: 'made' }));
+  const send = vi.fn<Hazelle.Chat['send']>(async () => ({ ok: true }));
   const chat = {
     id: 'chat-1', character: { name: 'Mira', description: 'A sailor' }, persona: null, length: messages.length,
     messages: async () => messages, greeting: async () => null, card: async () => card, lorebook: async () => lorebook, setup: async () => setup,
     edit: (index: number, text: string) => { edits.push([index, text]); }, add: (role: Hazelle.Role, text: string) => { added.push([role, text]); },
-    model, say: (text: string) => { said.push(text); },
+    writeLore: (entry: Omit<Hazelle.LoreEntry, 'owner'>) => { lore.push(entry); },
+    model, send, say: (text: string) => { said.push(text); },
   } as unknown as Hazelle.Chat;
   const api = {
     api: 1, tool: { name: 'test', author: 'jin', displayName: 'Test', version: '1' }, context: 'frame',
@@ -50,7 +53,7 @@ function fakeApi({ open = true } = {}) {
     frame: { chat: async () => (open ? chat : null), show: vi.fn(), hide: vi.fn(), menu: (items: { id: string; label: string }[]) => { menus.push(items); }, missing: (name: string) => { missing.push(name); } },
   } as unknown as Hazelle.Api;
   const fire = (event: string, ...args: unknown[]) => (handlers.get(event) as (...args: unknown[]) => unknown)(...args);
-  return { api, chat, card, handlers, storage, menus, missing, edits, added, said, model, settings, fire };
+  return { api, chat, card, handlers, storage, menus, missing, edits, added, said, lore, model, send, settings, fire };
 }
 const install = (fake: ReturnType<typeof fakeApi>, scope: Record<string, unknown> = { confirm: () => false, prompt: () => null }) => {
   installRisu(fake.api, scope);
@@ -64,7 +67,10 @@ describe('the Risu adapter', () => {
     const characterIndex = await Risuai.getCurrentCharacterIndex!() as number;
     const chatIndex = await Risuai.getCurrentChatIndex!() as number;
     expect((await Risuai.getDatabase!(['characters'] as never) as { characters: { chaId: string }[] }).characters[characterIndex]?.chaId).toBe('character-1');
-    expect(await Risuai.getChatFromIndex!(characterIndex as never, chatIndex as never)).toEqual({ id: 'chat-1', message: [{ role: 'user', data: 'hello', time: 1, chatId: 'm0' }, { role: 'char', data: 'hi there', time: 2, chatId: 'm1' }] });
+    expect(await Risuai.getChatFromIndex!(characterIndex as never, chatIndex as never)).toEqual({
+      id: 'chat-1', message: [{ role: 'user', data: 'hello', time: 1, chatId: 'm0' }, { role: 'char', data: 'hi there', time: 2, chatId: 'm1' }],
+      localLore: [{ comment: 'Weather', key: '', content: 'Rain.', alwaysActive: true, disabled: false }],
+    });
     expect(await Risuai.getChatFromIndex!(characterIndex as never, (chatIndex + 1) as never)).toBeNull();
     await Risuai.setChatToIndex!(characterIndex as never, chatIndex as never, { message: [{ role: 'user', data: 'hello' }, { role: 'char', data: 'edited' }, { role: 'user', data: 'more' }] } as never);
     expect(fake.edits).toEqual([[1, 'edited']]);
@@ -75,6 +81,30 @@ describe('the Risu adapter', () => {
     expect(await closed.getCurrentChatIndex!()).toBe(-1);
     expect(await closed.getChatFromIndex!(-1 as never, -1 as never)).toBeNull();
     expect(await closed.getCharacter!()).toBeNull();
+  });
+
+  it('writes back the localLore it changed and tells 점검 of what it cannot write', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    const at = [await Risuai.getCurrentCharacterIndex!(), await Risuai.getCurrentChatIndex!()] as never[];
+    const chat = await Risuai.getChatFromIndex!(...at) as { localLore: Record<string, unknown>[] };
+    const save = { key: '', comment: 'save', content: '{"turn":1}', mode: 'normal', insertorder: 100, alwaysActive: false, secondkey: '', selective: false, useRegex: false };
+    await Risuai.setChatToIndex!(...at, { ...chat, scriptstate: { $sh_Player_Name: 'Jin' }, localLore: [...chat.localLore, save] } as never);
+    expect(fake.lore).toEqual([{ name: 'save', keys: [], text: '{"turn":1}', always: false, on: true }]);
+    expect(fake.missing).toEqual(['setChatToIndex:scriptstate']);
+    await Risuai.setChatToIndex!(...at, { ...chat, localLore: [] } as never);
+    expect(fake.missing).toContain('setChatToIndex:localLore.remove');
+  });
+
+  it('sends as the user through the chat, answering false when models are refused as Risu does its permission', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    expect(await Risuai.sendChat!('' as never)).toBe(true);
+    expect(fake.send).toHaveBeenCalledWith('');
+    fake.send.mockResolvedValueOnce({ ok: false, reason: 'not-allowed' });
+    expect(await Risuai.sendChat!('go' as never)).toBe(false);
+    fake.send.mockResolvedValueOnce({ ok: false, reason: 'busy' });
+    await expect(Risuai.sendChat!('go' as never)).rejects.toThrow('A chat is already in progress');
   });
 
   it('relabels a button registered again under its id and runs the latest callback when pressed', async () => {
@@ -333,8 +363,8 @@ describe.runIf(availableB)('the phase B acceptance plugins, unmodified', () => {
     expect(sent[0]).toEqual(request[0]);
     expect(sent.at(-1)).toEqual(request[1]);
     expect(sent.slice(1, -1).every(({ role, content }) => role === 'system' && content.includes('RISUPOT'))).toBe(true);
-    // It reaches for the app's page, which stays declined, and goes on without it.
-    expect(fake.missing).toEqual(['getRootDocument']);
+    // It reaches for the app's page, which stays declined, and goes on without it; its scope id on the chat is not kept.
+    expect(fake.missing).toEqual(['getRootDocument', 'setChatToIndex:risupotWikiScopeId']);
   }, 30_000);
 
   // Opening its screen needs a real document, which only a browser run gives.

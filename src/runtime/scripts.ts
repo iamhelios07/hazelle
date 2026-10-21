@@ -248,6 +248,8 @@ export class Scripts {
   private readonly lastPrompt = new Map<string, Map<string, Answered>>();
   // Presses queued behind an earlier run and not begun, by chat and button.
   private readonly waiting = new Map<string, Promise<boolean>>();
+  // The open chat screens' own send, by chat (useChat): null once sent, or why not.
+  private readonly screens = new Map<string, (text: string) => Promise<'busy' | 'failed' | null>>();
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
@@ -725,6 +727,22 @@ export class Scripts {
     if (this.closing.signal.aborted || !this.unit(chat, module)) return null;
     const scope = this.scope(chat);
     return { scope, host: this.host(chat, scope, signal) };
+  }
+
+  sender(chat: string, send: (text: string) => Promise<'busy' | 'failed' | null>): () => void {
+    this.screens.set(chat, send);
+    return () => { if (this.screens.get(chat) === send) this.screens.delete(chat); };
+  }
+
+  // A tool's message as the user's (Hazelle.Chat.send): through the screen's send, never a turn of its own, so
+  // translation, the bot's scripts, tools and memory run as when it is typed (as 오토파일럿's do).
+  async send(chat: string, text: string, from: PackOwner, signal: AbortSignal): Promise<Hazelle.SendAnswer> {
+    if (!this.screens.has(chat)) return { ok: false, reason: 'closed' };
+    if (!(await this.interactions.allowed(chat, from, false, signal))) return { ok: false, reason: 'not-allowed' };
+    const screen = this.screens.get(chat);
+    if (!screen) return { ok: false, reason: 'closed' };
+    const refused = await screen(text);
+    return refused ? { ok: false, reason: refused } : { ok: true };
   }
 
   pageWrite(chat: string, module: string, outcome: ScriptOutcome): Promise<void> {

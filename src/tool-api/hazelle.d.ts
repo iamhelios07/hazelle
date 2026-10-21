@@ -22,6 +22,10 @@ declare namespace Hazelle {
   type FetchRefusal = 'not-allowed' | 'not-declared' | 'flood' | 'refused' | 'offline' | 'stopped';
   type FetchInit = { method?: 'GET' | 'POST'; headers?: Record<string, string>; body?: string; signal?: AbortSignal };
   type FetchAnswer = { ok: true; status: number; headers: [string, string][]; body: ArrayBuffer } | { ok: false; reason: FetchRefusal; code?: string };
+  // busy: a turn is under way in the chat. closed: the chat is not open on screen. failed: the turn failed, which the
+  // screen tells as it tells a typed message's failure.
+  type SendRefusal = 'not-allowed' | 'not-declared' | 'busy' | 'closed' | 'failed';
+  type SendAnswer = { ok: true } | { ok: false; reason: SendRefusal };
   type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; text?: string; options: string[] };
   type Settings = Record<string, string | number | boolean>;
   // The chat's character card. id: the character's, the same in every chat with it. greeting: the card's first
@@ -80,9 +84,17 @@ declare namespace Hazelle {
     tokens(text: string): Promise<number>;
     lore(reserve?: number): Promise<{ role: 'system' | 'user' | 'assistant'; text: string }[]>;
     lorebook(): Promise<LoreEntry[]>;           // every entry the chat's lorebooks hold, as written, in the prompt's order
+    // An entry of the chat's own lorebook, taking the place of every one of its name there, as Lua's
+    // upsertLocalLoreBook does; lands with the event's outcome.
+    writeLore(entry: Omit<LoreEntry, 'owner'>): void;
     setup(): Promise<Setup>;
     ask(question: Question): Promise<string | null>;
     say(text: string, tone?: 'normal' | 'error'): void;
+    // needs //@uses model, under the same answer, since the turn spends on the chat's model. text goes as the user's
+    // message through the chat screen's own send, as if typed; '' asks for a reply after the last message (응답 받기).
+    // Bound to the chat, not the event, and sent once this tool's page writes have landed; answers when the turn ends,
+    // so an event that awaits it keeps this tool out of that turn.
+    send(text: string): Promise<SendAnswer>;
   }
   interface Storage {                           // tool data: synced, owned by the module
     get<T extends Json = Json>(key: string): Promise<T | undefined>;

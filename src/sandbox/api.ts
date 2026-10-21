@@ -2,12 +2,15 @@ import type { Json, Settings } from '../tool-api/manifest';
 import type { ChatHeader, Down, EventName, Message, Method, Port, ToolOutcome, Up } from '../tool-api/protocol';
 
 type Load = Extract<Down, { kind: 'load' }>;
-type Buffer = { writes: Map<string, Json | undefined>; edits: Map<number, string>; added: ToolOutcome['added']; data: Map<string, Json | undefined>; badges: Map<number, string | null> };
-const buffer = (): Buffer => ({ writes: new Map(), edits: new Map(), added: [], data: new Map(), badges: new Map() });
-const empty = (pending: Buffer) => !pending.writes.size && !pending.edits.size && !pending.added.length && !pending.data.size && !pending.badges.size;
+type Buffer = {
+  writes: Map<string, Json | undefined>; edits: Map<number, string>; added: ToolOutcome['added']; data: Map<string, Json | undefined>; badges: Map<number, string | null>;
+  lore: Map<string, ToolOutcome['lore'][number]>;
+};
+const buffer = (): Buffer => ({ writes: new Map(), edits: new Map(), added: [], data: new Map(), badges: new Map(), lore: new Map() });
+const empty = (pending: Buffer) => !pending.writes.size && !pending.edits.size && !pending.added.length && !pending.data.size && !pending.badges.size && !pending.lore.size;
 const outcome = (pending: Buffer, value?: ToolOutcome['value']): ToolOutcome => ({
   value, writes: [...pending.writes], edits: [...pending.edits].map(([index, text]) => ({ index, text })), added: pending.added,
-  data: [...pending.data], badges: [...pending.badges].map(([index, text]) => ({ index, text })),
+  data: [...pending.data], badges: [...pending.badges].map(([index, text]) => ({ index, text })), lore: [...pending.lore.values()],
 });
 // An event about the user's own change must not rewrite the story under them, nor one inside a turn or a showing.
 const STORY_LOCKED = new Set<EventName>(['change', 'branch', 'replying', 'sending', 'requesting', 'showing']);
@@ -25,6 +28,9 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
   let pageWrites = buffer();
   let pageFlush = false;
   let pageSent: Buffer | null = null;
+  const landing: (() => void)[] = [];
+  // The page's writes all sent and answered.
+  const landed = () => !pageFlush && !pageSent && empty(pageWrites) ? Promise.resolve() : new Promise<void>((resolve) => landing.push(resolve));
   const waiting = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
   const handlers = new Map<EventName, ((...args: never[]) => unknown)[]>();
   const storageListeners = new Set<(keys: string[]) => void>();
@@ -47,7 +53,7 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
     pageFlush = true;
     queueMicrotask(() => {
       pageFlush = false;
-      if (empty(pageWrites)) return;
+      if (empty(pageWrites)) { for (const resolve of landing.splice(0)) resolve(); return; }
       const pending = pageSent = pageWrites;
       pageWrites = buffer();
       send({ kind: 'done', id: 0, outcome: outcome(pending) });
@@ -95,6 +101,7 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
       },
       edit: (index, text) => { story(); pending().edits.set(index, text); changed(); },
       add: (role, text) => { story(); pending().added.push({ role, text }); changed(); },
+      writeLore: ({ name, keys, text, always, on }) => { pending().lore.set(name, { name, keys: [...keys], text, always, on }); changed(); },
       model: (role, messages) => call('model', [role, messages], event),
       embed: (texts, as) => call('embed', [texts, as ?? null], event),
       fetch: (url, { method = 'GET', headers = {}, body, signal } = {}) => call('fetch', [url, { method, headers, body: body ?? null }], event, signal),
@@ -104,6 +111,7 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
       tokens: (text) => call('tokens', [text], event),
       lore: (reserve) => call('lore', [reserve ?? null], event),
       lorebook: () => call('chat.lorebook', [], event),
+      send: async (text) => { await landed(); return call('chat.send', [header.id, text]); },
       setup: () => call('chat.setup', [], event),
       ask: (question) => call('ask', [question], event),
       say: (text, tone = 'normal') => fire('say', [tone, text], event),

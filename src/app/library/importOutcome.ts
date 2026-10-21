@@ -103,7 +103,6 @@ export const DECLINED_WORDS: Record<string, string> = {
   addProvider: '모델 제공자 추가',
   registerBodyIntercepter: '모델 요청 내용 바꾸기',
   unregisterBodyIntercepter: '모델 요청 내용 바꾸기',
-  sendChat: '사용자 대신 메시지 보내기',
   addPluginChannelListener: '다른 플러그인과 주고받기',
   postPluginChannelMessage: '다른 플러그인과 주고받기',
 };

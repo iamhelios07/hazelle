@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveAssets } from '../../engine/assets';
 import { holdsPersona, unused } from '../../engine/pipeline';
 import type { Card } from '../../engine/import/types';
@@ -225,10 +225,25 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   function ask(target: Target, skip = false) {
-    if (!id || busy) return;
-    asking();
-    void takeTurn(session, id, target, null, skip).then((failure) => report(failure, target));
+    if (id && !busy) void asked(id, target, skip);
   }
+
+  async function asked(chat: string, target: Target, skip = false) {
+    asking();
+    const failure = await takeTurn(session, chat, target, null, skip);
+    report(failure, target);
+    return failure;
+  }
+
+  // A tool's send (Scripts.sender), as typed or, for '', 응답 받기. It reads the turn under way now: busy is this
+  // render's.
+  async function sendForTool(chat: string, text: string) {
+    if (talk.snapshot(chat)) return 'busy';
+    return (text ? await say(text) : await asked(chat, { kind: 'answer' })) ? 'failed' : null;
+  }
+  const toolSend = useRef(sendForTool);
+  toolSend.current = sendForTool;
+  useEffect(() => id === null ? undefined : session.scripts.sender(id, (text) => toolSend.current(id, text)), [id]);
 
   // A send's text went back to the draft, or was kept when its message was saved; either way the composer sends again.
   const sendUnshortened = (target: Target) => (target.kind === 'send' ? void send(true) : ask(target, true));

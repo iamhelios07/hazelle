@@ -30,7 +30,20 @@ const character = (card: Hazelle.Card, lorebook: Hazelle.LoreEntry[]) => ({
   globalLore: lorebook.filter(({ owner }) => owner.kind === 'character').map(loreEntry),
 });
 
-const chatOf = (id: string, messages: Hazelle.Message[]) => ({ id, message: messages.map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })) });
+// localLore: the chat's own lorebook, which setChatToIndex writes back.
+const chatOf = (id: string, messages: Hazelle.Message[], lorebook: Hazelle.LoreEntry[]) => ({
+  id, message: messages.map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })),
+  localLore: lorebook.filter(({ owner }) => owner.kind === 'chat').map(loreEntry),
+});
+// Risu's lore has no enabled flag; loreEntry's disabled is the only one a plugin meets.
+const fromLore = (entry: Record<string, unknown>): Omit<Hazelle.LoreEntry, 'owner'> => ({
+  name: String(entry.comment ?? ''), keys: String(entry.key ?? '').split(',').map((key) => key.trim()).filter(Boolean),
+  text: String(entry.content ?? ''), always: entry.alwaysActive === true, on: entry.disabled !== true,
+});
+const sameLore = (a: Omit<Hazelle.LoreEntry, 'owner'>, b: Omit<Hazelle.LoreEntry, 'owner'>) =>
+  a.text === b.text && a.always === b.always && a.on === b.on && a.keys.join('\n') === b.keys.join('\n');
+// The keys of the chat getChatFromIndex hands out, which setChatToIndex writes; any other is told to 점검.
+const CHAT_KEYS = new Set(['id', 'message', 'localLore']);
 
 const MODEL_ROLES = new Set(['system', 'user', 'assistant']);
 // A Response with one of these statuses throws when given a body.
@@ -95,7 +108,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   const read = async (chat: Hazelle.Chat) => {
     const messages = await chat.messages();
     for (const message of messages) place(chat, message);
-    return chatOf(chat.id, messages);
+    return chatOf(chat.id, messages, await chat.lorebook());
   };
   // Risu's three button places (action, chat, hamburger) are one ⋯ here, so a button a plugin offers in two of them
   // (Asset Maid, SimCore) is listed once. Splitting by place instead would strand one only in the side menu (Fishing's 도감).
@@ -206,15 +219,35 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
       const chat = await at(characterIndex, chatIndex);
       return chat && read(chat);
     },
-    setChatToIndex: async (characterIndex: number, chatIndex: number, value: { message: { role: string; data: string }[] }) => {
+    // An entry of localLore left out stays: Hazelle's chat lorebook writes replace by name, never remove.
+    setChatToIndex: async (characterIndex: number, chatIndex: number, value: { message: { role: string; data: string }[]; localLore?: Record<string, unknown>[] }) => {
       const chat = await at(characterIndex, chatIndex);
       if (!chat) throw new Error('Risu API \'setChatToIndex\' reaches only the open chat in Hazelle');
       const messages = await chat.messages();
       if (value.message.length < messages.length) throw new Error('Risu API \'setChatToIndex\' cannot remove messages in Hazelle');
+      for (const key of Object.keys(value)) if (!CHAT_KEYS.has(key)) tell(`setChatToIndex:${key}`);
       value.message.forEach((message, at) => {
         if (at >= messages.length) chat.add(message.role === 'user' ? 'user' : 'char', message.data);
         else if (message.data !== messages[at]!.text) chat.edit(at, message.data);
       });
+      if (!value.localLore) return;
+      const before = new Map((await chat.lorebook()).filter(({ owner }) => owner.kind === 'chat').map((entry) => [entry.name, entry]));
+      const written = value.localLore.map(fromLore);
+      const names = new Set(written.map(({ name }) => name));
+      if ([...before.keys()].some((name) => !names.has(name))) tell('setChatToIndex:localLore.remove');
+      for (const entry of written) {
+        const held = before.get(entry.name);
+        if (!held || !sameLore(held, entry)) chat.writeLore(entry);
+      }
+    },
+    // Risu answers false when its permission is refused and throws for any other refusal.
+    sendChat: async (message: string) => {
+      const chat = await frame.chat();
+      if (!chat) throw new Error('No active chat found');
+      const answer = await chat.send(String(message));
+      if (answer.ok) return true;
+      if (answer.reason === 'not-allowed') return false;
+      throw new Error(answer.reason === 'busy' ? 'A chat is already in progress' : `Risu API 'sendChat' failed in Hazelle: ${answer.reason}`);
     },
     runLLMModel: async ({ messages, mode, staticModel }: { messages: { role: string; content: unknown }[]; mode: string; staticModel?: string }) => {
       if (staticModel !== undefined) return { type: 'fail', result: 'staticModel is not available in Hazelle' };

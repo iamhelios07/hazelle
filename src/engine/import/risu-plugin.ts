@@ -49,7 +49,7 @@ function readRisuPlugin(header: HeaderLine[], body: string, bytes: Uint8Array<Ar
   const network = /\b(?:nativeFetch|risuFetch)\b/.test(body) || risu.hosts.length > 0;
   const manifest: ToolManifest = {
     api: 1, name, author: RISU_AUTHOR, displayName: last('display-name') || name, version: last('version') ?? '', description: about.join('\n'),
-    uses: [...(/\brunLLMModel\b/.test(body) ? ['model' as const] : []), ...(network ? ['network' as const] : [])], page: null, menu: [], settings, actions: [], composer: null, risu,
+    uses: [...(/\b(?:runLLMModel|sendChat)\b/.test(body) ? ['model' as const] : []), ...(network ? ['network' as const] : [])], page: null, menu: [], settings, actions: [], composer: null, risu,
   };
   return { ok: true, tool: { manifest, bytes } };
 }

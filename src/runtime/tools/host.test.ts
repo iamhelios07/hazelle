@@ -14,7 +14,7 @@ import { ToolLate, ToolStuck } from '../script-binding';
 import type { Session } from '../session';
 import { answerable, stubRelay, testServer } from '../testing';
 import { RELAY_HEADER } from '../../contracts/http';
-import { setNetwork } from '../pack';
+import { setModels, setNetwork } from '../pack';
 import { blankCard } from '../../engine/import/card';
 import { projectGreetings } from '../greetings';
 import { upsertChatLore } from '../lore';
@@ -428,7 +428,7 @@ it('notifies a running tool after pulling a data change written on another devic
   await startChat(account.store, chat, { title: null, character: null, models: {} }, null);
   const changes = vi.fn();
   const transport = inProcessTools((api) => { api.storage.onChange(changes); });
-  const host = new ToolHost(account, () => ({ report: () => {}, pageContext: () => null, pageWrite: async () => {} }), transport.open);
+  const host = new ToolHost(account, () => ({ report: () => {}, pageContext: () => null, pageWrite: async () => {}, send: async () => ({ ok: true as const }) }), transport.open);
   try {
     await host.warm(chat);
     const peer = await account.open();
@@ -465,6 +465,28 @@ it('applies page chat writes through Scripts, distinguishes null and deletion, a
   } finally { vi.useRealTimers(); close(); host.close(); }
 }));
 
+it('writes the chat\'s own lorebook by name and sends through the open chat screen once models are allowed', () => withTools(async (session, connect) => {
+  const f = await fixture(session);
+  const transport = inProcessTools(() => {});
+  const host = connect(transport.open);
+  const close = host.page(f.module, page(f.chat));
+  const screen = vi.fn<(text: string) => Promise<'busy' | 'failed' | null>>(async () => null);
+  try {
+    await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
+    const chat = transport.frames[0]!.api!.page!.chat!;
+    expect(await chat.send('go')).toEqual({ ok: false, reason: 'closed' });
+    const leave = session.scripts.sender(f.chat, screen);
+    await setModels(session.store, { kind: 'module', id: f.module }, true);
+    chat.writeLore({ name: 'save', keys: ['hero'], text: '{}', always: false, on: true });
+    expect(await chat.send('')).toEqual({ ok: true });
+    expect(screen).toHaveBeenCalledWith('');
+    expect(session.store.children('lore', f.chat).map(({ value }) => value)).toMatchObject([{ name: 'save', keys: ['hero'], content: '{}', constant: false, enabled: true }]);
+    screen.mockResolvedValueOnce('busy');
+    expect(await chat.send('go')).toEqual({ ok: false, reason: 'busy' });
+    leave();
+  } finally { close(); host.close(); }
+}));
+
 it('allows a standalone page storage but refuses chat calls with no chat capability', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
@@ -490,7 +512,7 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
     await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
     const frame = transport.frames[0]!;
     await expect(frame.api!.storage.set('x'.repeat(257), null)).rejects.toThrow('key-too-long');
-    for (let i = 0; i < 1000; i++) frame.emit({ kind: 'done', id: 0, outcome: { writes: [], edits: [], added: [{ role: 'char', text: 'flood' }], data: [], badges: [] } });
+    for (let i = 0; i < 1000; i++) frame.emit({ kind: 'done', id: 0, outcome: { writes: [], edits: [], added: [{ role: 'char', text: 'flood' }], data: [], badges: [], lore: [] } });
     await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(30));
     expect(frame.host.sent).toContainEqual(expect.objectContaining({ kind: 'answer', call: 0, ok: false, value: 'too-many-writes' }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
