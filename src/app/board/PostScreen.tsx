@@ -223,6 +223,16 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
   const repliesOf = (id: number) => post.comments.filter((comment) => comment.parentId === id);
   const writable = (admin || post.author.mine) && post.text !== null;
   const open = writable && (!post.locked || admin);
+  // 소식 reads as a notice: others are sent to a 질문 of their own, and with no comments the section goes.
+  const ask = post.category === 'news' && !writable && (
+    <Row kind="spread">
+      <Text variant="note">궁금한 점은 질문 글로 남겨 주세요.</Text>
+      <Button variant="secondary" size="sm" icon={PenLine} onClick={() => gate(() => navigate({ kind: 'board-write', operator: false, category: 'question' }))}>
+        질문 쓰기
+      </Button>
+    </Row>
+  );
+  if (ask && !post.comments.length) return ask;
 
   function item(comment: Comment, top: boolean) {
     const { mine } = comment.author;
@@ -355,7 +365,7 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
       {post.locked ? (
         <Text variant="note">운영자가 댓글을 닫았어요.</Text>
       ) : !writable ? (
-        post.text !== null && <Text variant="note">글쓴이와 운영자만 댓글을 달 수 있어요.</Text>
+        ask || (post.text !== null && <Text variant="note">글쓴이와 운영자만 댓글을 달 수 있어요.</Text>)
       ) : (
         <CommentComposer label={BOARD.comment} placeholder="댓글 남기기" confirm="등록" gate={gate} send={(text) => writeComment(post.id, text, null)} onDone={onChanged} />
       )}

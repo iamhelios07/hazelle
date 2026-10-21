@@ -61,7 +61,7 @@ const EXAMPLES = {
   notices: [{ kind: 'notices' }],
   board: [{ kind: 'board', operator: false }, { kind: 'board', operator: true }, { kind: 'board', operator: false, category: 'news' }, { kind: 'board', operator: true, category: 'bug' }],
   post: [{ kind: 'post', id: 1 }, { kind: 'post', id: 4821 }],
-  'board-write': [{ kind: 'board-write', operator: false }, { kind: 'board-write', operator: true }],
+  'board-write': [{ kind: 'board-write', operator: false }, { kind: 'board-write', operator: true }, { kind: 'board-write', operator: false, category: 'question' }],
   'board-edit': [{ kind: 'board-edit', id: 12 }],
   'board-activity': [{ kind: 'board-activity' }],
   'board-mine': [{ kind: 'board-mine' }],

@@ -65,7 +65,7 @@ export function EditScreen({ id, back }: { id: number; back: Back }) {
 }
 
 // operator: 운영자에게만 preset, as 설정 › 계정 and 내 글 open it. A suspended account writes nothing else (design §6.13).
-export function WriteScreen({ editing, operator, back }: { editing: Post | null; operator: boolean; back: Back }) {
+export function WriteScreen({ editing, operator, category: preset, back }: { editing: Post | null; operator: boolean; category?: Category; back: Back }) {
   const { suspended } = useStanding();
   const { username } = useSession();
   const { admin } = useAccount();
@@ -73,7 +73,8 @@ export function WriteScreen({ editing, operator, back }: { editing: Post | null;
   const key = draftKey(username);
   const [restored] = useState(() => (editing ? null : readPersisted(key, parseDraft, null)));
   // An error report is what an operator-only post most often is.
-  const start = editing ?? restored ?? { title: '', text: operator ? BUG_TEMPLATE : '', category: operator ? ('bug' as const) : null };
+  const fresh = operator ? 'bug' : (preset ?? null);
+  const start = editing ?? restored ?? { title: '', text: fresh === 'bug' ? BUG_TEMPLATE : '', category: fresh };
   const [title, setTitle] = useState(start.title);
   const [text, setText] = useState(start.text ?? '');
   const [category, setCategory] = useState<Category | null>(start.category);

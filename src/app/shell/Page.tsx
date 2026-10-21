@@ -160,7 +160,7 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
       case 'post':
         return <PostScreen key={at.id} id={at.id} back={back(at)} />;
       case 'board-write':
-        return <WriteScreen key={String(at.operator)} editing={null} operator={at.operator} back={back(at)} />;
+        return <WriteScreen key={`${at.operator}:${at.category}`} editing={null} operator={at.operator} category={at.category} back={back(at)} />;
       case 'board-edit':
         return <EditScreen key={at.id} id={at.id} back={back(at)} />;
       case 'board-activity':
