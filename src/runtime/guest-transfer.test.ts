@@ -1,22 +1,30 @@
 import 'fake-indexeddb/auto';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { unzipSync } from 'fflate';
+import { readTool } from '../engine/import/tool';
+import { cachePrintId } from '../model/cache';
+import { likenessId } from '../model/likeness';
+import { toolId } from '../model/tool';
+import { unavailableCalibration } from '../model/token-calibration';
+import { ledgerId } from './usage';
+import { summaryId } from './summary';
 import { blankCard } from '../engine/import/card';
-import { BATCH_LIMITS } from '../contracts/objects';
+import { BATCH_LIMITS, type SealedChange } from '../contracts/objects';
 import { SETTINGS_ID } from '../model/settings';
 import { ORDER_ID } from '../model/order';
-import { addPrompt, STARTER_ID } from './prompts';
+import { addDefaults, addPrompt, PREREADER_ID, STARTER_ID } from './prompts';
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
-import { memoryId } from '../model/memory';
-import { testApp, sessionCookie, signupBody, testConnection } from './testing';
+import { KINDS, type Kind } from '../model/kinds';
+import { memoryId, vectorsId } from '../model/memory';
+import { testApp, sessionCookie, signupBody, testConnection, png } from './testing';
 import { randomBytes } from '../vault/aead';
 import { lockVault, recallGuest, recallVault, rememberVault } from '../vault/device';
 import { createVault, openVault, passwordCredential, recoveryCredential } from '../vault/keys';
 import { objectKey, openObject } from '../vault/objects';
 import { logIn, prepareGuestSignup, signUp, signUpGuest, uploadGuest } from './account';
 import { holdAccount } from './api';
-import { feedQuery, serverBackend } from './backend';
+import { feedQuery, serverBackend, type Backend } from './backend';
 import { deviceCache } from './device-cache';
 import { Files } from './files';
 import { guestAccount, guestBackend } from './guest-store';
@@ -25,7 +33,7 @@ import { openSession } from './session';
 import { ObjectStore } from './store';
 import { exportBackup, readBackup, restoreBackup } from './testing/backup';
 import type { BackupOutput } from './backup-zip';
-import { toolChatId, toolDataId } from './tools/store';
+import { importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, toolChatId, toolDataId } from './tools/store';
 
 let app: Awaited<ReturnType<typeof testApp>>;
 let password: Awaited<ReturnType<typeof passwordCredential>>;
@@ -66,6 +74,34 @@ async function guest() {
   stores.push(store);
   expect(await store.pull()).toBeNull();
   return { ...account, backend, store, files: new Files(backend, store) };
+}
+
+async function destination() {
+  const accountId = crypto.randomUUID();
+  const account = await createVault(accountId, password);
+  expect((await signUp({ accountId, username: 'tester', ...account.signup })).ok).toBe(true);
+  holdAccount(accountId);
+  const backend = serverBackend();
+  const store = await ObjectStore.open(accountId, account.vaultKey, backend);
+  stores.push(store);
+  expect(await store.pull()).toBeNull();
+  return { accountId, vaultKey: account.vaultKey, backend, store, files: new Files(backend, store) };
+}
+
+async function rows(backend: Backend) {
+  const rows: SealedChange[] = [];
+  let since = 0;
+  let until: number | null = null;
+  let timeline: string | null = null;
+  for (;;) {
+    const page = await backend.feed(feedQuery({ since, until, timeline, bootstrap: true }));
+    if (!page.ok) throw new Error(page.error);
+    rows.push(...page.data.changes);
+    since = page.data.cursor;
+    until = page.data.until!;
+    timeline = page.data.timeline;
+    if (!page.data.more) return rows;
+  }
 }
 
 async function contents() {
@@ -168,25 +204,39 @@ it('refuses a full signup cap without changing guest content, pictures or its va
   expect(await recallGuest()).toEqual({ accountId: source.accountId, vaultKey: source.vaultKey });
 });
 
-it('keeps guest ids, copies edited seeded prompts with their references, and retries without changing account items or picture seals', async () => {
+it('remaps inventory ids regardless of field names, preserving only engine seeds and literal tool keys', async () => {
   const source = await contents();
   expect((await addPrompt(source.store, 'Guest starter', 'conversation', STARTER_ID)).ok).toBe(true);
-  await source.store.update('prompt', STARTER_ID, (current) => ({ ...current, authorNote: 'Guest edited instructions' }));
-  await source.store.update('chat', source.chat, (current) => ({ ...current, prompt: STARTER_ID }));
+  await source.store.update('prompt', STARTER_ID, (current) => ({ ...current, authorNote: 'Guest instructions' }));
+  await source.store.update('chat', source.chat, (current) => ({ ...current, prompt: STARTER_ID, futureReference: source.character }));
   await source.store.upsert('order', () => ({ ids: [source.character] }));
   const sealedPicture = await source.backend.readFile(source.ref.id);
   const module = crypto.randomUUID();
-  const providerModel = crypto.randomUUID();
+  const providerModel = testConnection.starred[0]!.id;
   const connectionAccount = crypto.randomUUID();
   const group = crypto.randomUUID();
+  const connectionId = crypto.randomUUID();
+  const call = crypto.randomUUID();
+  const toolKey = source.character;
   await source.store.batch([
-    { type: 'create', kind: 'connection', id: crypto.randomUUID(), parent: null, value: { ...testConnection, accounts: [{ id: connectionAccount, secret: 'synthetic' }], turns: { day: 1, groups: [{ id: group, name: 'one', accounts: [connectionAccount] }], anchor: { group, cycle: 0 } }, starred: [{ ...testConnection.starred[0]!, id: providerModel, profile: FIRST_PROFILE_ID }] } },
+    { type: 'create', kind: 'connection', id: connectionId, parent: null, value: { ...testConnection, accounts: [{ id: connectionAccount, secret: 'synthetic' }], turns: { day: 1, groups: [{ id: group, name: 'one', accounts: [connectionAccount] }], anchor: { group, cycle: 0 } }, starred: [{ ...testConnection.starred[0]!, id: providerModel, profile: FIRST_PROFILE_ID }] } },
     { type: 'create', kind: 'profile', id: FIRST_PROFILE_ID, parent: null, value: { name: 'Guest profile', settings: {} } },
     { type: 'create', kind: 'memory', id: memoryId(source.chat), parent: source.chat, value: { records: [], chapters: [], state: [], threads: [] } },
+    { type: 'create', kind: 'vectors', id: vectorsId(source.chat), parent: source.chat, value: { model: providerModel, items: {} } },
+    { type: 'create', kind: 'cacheprint', id: cachePrintId(source.chat), parent: source.chat, value: { call, connection: connectionId, account: connectionAccount, model: providerModel, messages: [] } },
+    { type: 'create', kind: 'likeness', id: likenessId(source.character), parent: source.character, value: { portraits: [], at: 1, receipt: null } },
+    { type: 'create', kind: 'summary', id: summaryId(source.chat), parent: source.chat, value: { version: 1, head: 0, chatRev: 0, dependencies: [{ kind: 'character', id: source.character, rev: 1 }], rendered: { now: 1, timeZone: 'UTC' }, character: source.character, title: 'A chat', preview: 'Hello', count: 1, at: 1, order: 1, recent: [] } },
+    { type: 'create', kind: 'ledger', id: ledgerId(call), parent: SETTINGS_ID, value: { type: 'call', at: 1, call: { id: call, connection: connectionId, model: providerModel, modelName: 'Model', source: 'Connection', usage: null, cost: null, calibration: unavailableCalibration('historical') }, chat: source.chat, character: source.character } },
     { type: 'create', kind: 'module', id: module, parent: null, value: { name: 'Tool', description: '', namespace: null, loreFolders: [], toggles: [], regex: [], triggers: [] } },
-    { type: 'create', kind: 'tooldata', id: await toolDataId(module, 'key'), parent: module, value: { key: 'key', value: { message: source.message, nested: [{ unrecognized: STARTER_ID }, FIRST_PROFILE_ID, SETTINGS_ID] } } },
-    { type: 'create', kind: 'toolchat', id: await toolChatId(module, source.chat, null), parent: source.chat, value: { module, key: null, value: { [source.message]: { version: source.message, text: source.message } } } },
   ], undefined, { unheld: true });
+  expect((await setToolData(source.store, module, toolKey, {
+    message: source.message, nested: [{ unrecognized: STARTER_ID }, FIRST_PROFILE_ID, SETTINGS_ID],
+    [source.character]: { self: await toolDataId(module, toolKey), unrelated: call },
+    text: source.character, seed: source.message, replyId: source.message, fragment: `prefix ${source.character}`,
+  })).ok).toBe(true);
+  expect((await source.store.withChat(source.chat, () => saveToolChat(source.store, module, source.chat,
+    [[toolKey, { replyId: source.message }]], [{ message: source.message, version: source.message, text: 'A badge' }],
+  ))).ok).toBe(true);
   const accountId = crypto.randomUUID();
   const account = await createVault(accountId, password);
   expect((await signUp({ accountId, username: 'tester', ...account.signup })).ok).toBe(true);
@@ -213,13 +263,14 @@ it('keeps guest ids, copies edited seeded prompts with their references, and ret
   await target.pull();
   expect(target.list('character').map(({ value }) => value.card.name).sort()).toEqual(['Account bot', 'Guest bot']);
   expect([target.get('character', accountCharacter), target.get('persona', FIRST_ID), target.get('profile', FIRST_PROFILE_ID), target.get('prompt', STARTER_ID), target.get('settings', SETTINGS_ID), target.get('order', ORDER_ID)]).toEqual(untouched);
-  expect(target.get('character', source.character)?.value.card.name).toBe('Guest bot');
+  const character = target.list('character').find(({ value }) => value.card.name === 'Guest bot')!;
+  expect(character.id).not.toBe(source.character);
   expect(target.list('persona')).toHaveLength(2);
   expect(target.list('profile')).toHaveLength(2);
   expect(target.list('prompt')).toHaveLength(2);
   const prompt = target.list('prompt').find(({ value }) => value.name === 'Guest starter')!;
   expect(prompt.id).not.toBe(STARTER_ID);
-  expect(prompt.value).toMatchObject({ authorNote: 'Guest edited instructions' });
+  expect(prompt.value).toMatchObject({ authorNote: 'Guest instructions' });
   const persona = target.list('persona').find(({ value }) => value.name === 'Guest persona')!;
   expect(persona.id).not.toBe(FIRST_ID);
   const connection = target.list('connection')[0]!.value;
@@ -231,27 +282,172 @@ it('keeps guest ids, copies edited seeded prompts with their references, and ret
   expect(connection.starred[0]!.profile).toBe(profile.id);
   const chat = target.list('chat')[0]!;
   expect(chat.value.persona).toBe(persona.id);
-  expect(chat.id).toBe(source.chat);
+  expect(chat.id).not.toBe(source.chat);
+  expect(chat.value.character).toBe(character.id);
+  expect(chat.value).toMatchObject({ futureReference: character.id });
   expect(chat.value.prompt).toBe(prompt.id);
-  expect(chat.value.seed).toBeUndefined();
+  expect(chat.value.seed).toBe(source.chat);
   const lease = target.retainChat(chat.id);
   expect(await lease.ready).toBeNull();
   expect(target.get('memory', memoryId(chat.id))).not.toBeNull();
+  expect(target.get('vectors', vectorsId(chat.id))?.value.model).toBe(providerModel);
+  expect(target.get('likeness', likenessId(character.id))).not.toBeNull();
+  const cached = target.get('cacheprint', cachePrintId(chat.id))!.value;
+  expect(cached).toMatchObject({ connection: target.list('connection')[0]!.id, account: connectionAccount, model: providerModel });
+  expect(cached.call).toBe(call);
+  const summary = target.get('summary', summaryId(chat.id))!.value;
+  expect(summary.character).toBe(character.id);
+  expect(summary.dependencies).toContainEqual(expect.objectContaining({ kind: 'character', id: character.id }));
+  const ledger = (await rows(serverBackend())).find(({ kind }) => kind === 'ledger')!;
+  expect(ledger.id).not.toBe(ledgerId(call));
+  expect(await openObject(await objectKey(account.vaultKey), accountId, ledger, ledger.body!)).toMatchObject({ chat: chat.id, character: character.id, call: { id: cached.call, connection: target.list('connection')[0]!.id } });
   const message = target.children('entry', chat.id)[0]!;
-  expect(message.id).toBe(source.message);
+  expect(message.id).not.toBe(source.message);
   expect(message.value).toMatchObject({ text: 'Hello' });
-  expect('seed' in message.value && message.value.seed).toBe(false);
-  const badge = target.children('toolchat', chat.id)[0]!;
+  expect('seed' in message.value && message.value.seed).toBe(source.message);
+  const badge = target.children('toolchat', chat.id).find(({ value }) => value.key === null)!;
   const importedModule = target.list('module')[0]!.id;
-  expect(importedModule).toBe(module);
+  expect(importedModule).not.toBe(module);
   expect(badge.id).toBe(await toolChatId(importedModule, chat.id, null));
-  expect(badge.value.value).toEqual({ [message.id]: { version: message.id, text: source.message } });
-  expect(target.get('tooldata', await toolDataId(importedModule, 'key'))?.value.value).toEqual({ message: source.message, nested: [{ unrecognized: prompt.id }, profile.id, SETTINGS_ID] });
+  expect(badge.value.value).toEqual({ [message.id]: { version: message.id, text: 'A badge' } });
+  const data = target.get('tooldata', await toolDataId(importedModule, toolKey))!.value;
+  expect(data.key).toBe(toolKey);
+  expect(data.value).toEqual({ message: message.id, nested: [{ unrecognized: prompt.id }, profile.id, SETTINGS_ID], [character.id]: { self: await toolDataId(importedModule, toolKey), unrelated: call }, text: character.id, seed: message.id, replyId: message.id, fragment: `prefix ${source.character}` });
+  expect(target.get('toolchat', await toolChatId(importedModule, chat.id, toolKey))?.value).toEqual({ module: importedModule, key: toolKey, value: { replyId: message.id } });
   lease.release();
   expect(await serverBackend().readFile(source.ref.id)).toEqual(sealedPicture);
-  expect(target.children('avatar', source.character)[0]!.value.file).toEqual(source.ref);
+  expect(target.children('avatar', character.id)[0]!.value.file).toEqual(source.ref);
   expect(await new Files(serverBackend(), target).read(source.ref)).toEqual({ ok: true, data: source.image });
   expect(await recallGuest()).toBeNull();
+});
+
+it('keeps copied tools and their content-named pictures at the addresses computed from the new module', async () => {
+  const source = await guest();
+  const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name notes\n//@author jin\n//@version 1\nhazelle.on("message", () => {});'));
+  if (!parsed.ok) throw new Error('Tool failed');
+  const imported = await importTool(source.store, source.files, parsed.tool);
+  if (!imported.ok) throw new Error(imported.error);
+  const picture = png();
+  const saved = await saveToolAsset(source.store, source.files, imported.data.id, picture);
+  if (!saved.ok) throw new Error(saved.error);
+  const target = await destination();
+  expect(await transferGuest(target.accountId, target.vaultKey)).toEqual({ ok: true, data: null });
+  expect(await target.store.pull()).toBeNull();
+  const module = target.store.list('module')[0]!.id;
+  expect(module).not.toBe(imported.data.id);
+  const tool = target.store.get('tool', toolId(module))!;
+  expect(await target.files.read(tool.value.file)).toEqual({ ok: true, data: parsed.tool.bytes });
+  expect(await readToolAsset(target.store, target.files, module, saved.data)).toEqual({ ok: true, data: picture });
+  const asset = target.store.children('asset', module)[0]!;
+  expect((await saveToolAsset(target.store, target.files, module, picture)).ok).toBe(true);
+  expect(target.store.children('asset', module)).toEqual([asset]);
+});
+
+it('adds an account backup loaded into a guest as new objects, leaving every account revision and body untouched', async () => {
+  const original = await contents();
+  const draft = await prepareGuestSignup('tester', password);
+  expect((await signUpGuest(draft)).ok).toBe(true);
+  const backend = serverBackend();
+  const target = await ObjectStore.open(original.accountId, original.vaultKey, backend);
+  stores.push(target);
+  expect(await target.pull()).toBeNull();
+  const files = new Files(backend, target);
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  expect(await exportBackup(target, files, { write: async (bytes) => { chunks.push(bytes.slice()); }, close: async () => {}, abort: async () => {} })).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
+  const read = await readBackup(new Blob(chunks));
+  if (!read.ok) throw new Error(read.error);
+  await target.update('character', original.character, (value) => ({ ...value, card: { ...value.card, name: 'Account now' } }));
+  await target.update('chat', original.chat, (value) => ({ ...value, title: 'Account now' }));
+  const before = await rows(backend);
+  const source = await guest();
+  try {
+    expect(await restoreBackup(source.store, source.files, read.backup)).toEqual({ ok: true, data: { skipped: 0 } });
+  } finally { await read.backup.records.close(); }
+  const imported = (await rows(source.backend)).filter((row) => row.body !== null && !('id' in KINDS[row.kind as Kind]));
+  expect(await transferGuest(original.accountId, original.vaultKey)).toEqual({ ok: true, data: null });
+  const after = await rows(backend);
+  const originals = new Set(before.map(({ id }) => id));
+  expect(after.filter(({ id }) => originals.has(id))).toEqual(before);
+  expect(after.filter(({ id }) => !originals.has(id))).toHaveLength(imported.length);
+  expect(await target.pull()).toBeNull();
+  const character = target.list('character').find(({ value }) => value.card.name === 'Guest bot')!;
+  expect(character.id).not.toBe(original.character);
+  const chat = target.list('chat').find(({ value }) => value.character === character.id)!;
+  expect(chat.id).not.toBe(original.chat);
+  const lease = target.retainChat(chat.id);
+  expect(await lease.ready).toBeNull();
+  const message = target.children('entry', chat.id)[0]!;
+  expect(message.id).not.toBe(original.message);
+  expect(message.value).toMatchObject({ text: 'Hello', seed: original.message });
+  lease.release();
+  expect(target.children('avatar', character.id)[0]!.value.file).toEqual(original.ref);
+  expect(await files.read(original.ref)).toEqual({ ok: true, data: original.image });
+});
+
+it('reads a lost import batch answer and resumes later batches without recreating or rewriting any landed copy', async () => {
+  const source = await guest();
+  expect((await source.store.batch(Array.from({ length: 420 }, (_, index) => ({ type: 'create' as const, kind: 'persona' as const, id: crypto.randomUUID(), parent: null, value: { name: `Guest ${index}`, description: '', picture: null } })))).ok).toBe(true);
+  const target = await destination();
+  dropBatches = true;
+  expect(await transferGuest(target.accountId, target.vaultKey)).toMatchObject({ ok: false, error: 'offline' });
+  dropBatches = false;
+  const landed = await rows(target.backend);
+  expect(landed).toHaveLength(BATCH_LIMITS.items);
+  const batch = vi.fn(target.backend.batch);
+  const feed = vi.fn(target.backend.feed);
+  expect(await transferGuest(target.accountId, target.vaultKey, {}, { ...target.backend, batch, feed })).toEqual({ ok: true, data: null });
+  expect(feed.mock.calls).toHaveLength(2);
+  expect(feed.mock.calls.every(([query]) => query.metadata)).toBe(true);
+  const after = await rows(target.backend);
+  expect(after).toHaveLength(420);
+  expect(new Set(after.map(({ id }) => id)).size).toBe(420);
+  expect(after.filter(({ id }) => landed.some((row) => row.id === id))).toEqual(landed);
+  const sent = batch.mock.calls.flatMap(([, writes]) => writes);
+  expect(sent).toHaveLength(220);
+  expect(sent.every(({ id, baseRev }) => baseRev === null && !landed.some((row) => row.id === id))).toBe(true);
+});
+
+it.each(['edited', 'deleted'] as const)('finishes an interrupted import without overwriting an account-%s copy', async (change) => {
+  const source = await guest();
+  const made = await source.store.create('persona', { name: 'Guest', description: '', picture: null });
+  if (!made.ok) throw new Error(made.error);
+  const target = await destination();
+  dropBatches = true;
+  expect(await transferGuest(target.accountId, target.vaultKey)).toMatchObject({ ok: false, error: 'offline' });
+  dropBatches = false;
+  expect(await target.store.pull()).toBeNull();
+  const copy = target.store.list('persona')[0]!;
+  if (change === 'edited') await target.store.update('persona', copy.id, (value) => ({ ...value, name: 'Account edit' }));
+  else expect((await target.store.remove(copy.id)).ok).toBe(true);
+  await source.store.update('persona', made.data.id, (value) => ({ ...value, name: 'Later guest edit' }));
+  const before = await rows(target.backend);
+  const feed = vi.fn(target.backend.feed);
+  const batch = vi.fn(target.backend.batch);
+  expect(await transferGuest(target.accountId, target.vaultKey, {}, { ...target.backend, feed, batch })).toEqual({ ok: true, data: null });
+  expect(feed.mock.calls.every(([query]) => query.metadata)).toBe(true);
+  expect(batch).not.toHaveBeenCalled();
+  expect(await rows(target.backend)).toEqual(before);
+  expect(await recallGuest()).toBeNull();
+  expect(await rows(source.backend)).toEqual([]);
+});
+
+it('adds the guest pre-reader alongside the account pre-reader without changing the account prompt or settings', async () => {
+  const source = await guest();
+  await source.store.upsert('settings', () => ({ models: {}, labs: ['preread'] }));
+  await addDefaults(source.store);
+  await source.store.update('prompt', PREREADER_ID, (value) => ({ ...value, name: 'Guest pre-reader' }));
+  const target = await destination();
+  await target.store.upsert('settings', () => ({ models: {}, labs: ['preread'] }));
+  await addDefaults(target.store);
+  const before = await rows(target.backend);
+  expect(await transferGuest(target.accountId, target.vaultKey)).toEqual({ ok: true, data: null });
+  const after = await rows(target.backend);
+  expect(after.filter(({ id }) => before.some((row) => row.id === id))).toEqual(before);
+  expect(await target.store.pull()).toBeNull();
+  const copied = target.store.list('prompt').find(({ value }) => value.name === 'Guest pre-reader')!;
+  expect(copied.id).not.toBe(PREREADER_ID);
+  expect(copied.value).toMatchObject({ task: 'preread' });
+  expect(target.store.list('prompt')).toHaveLength(12);
 });
 
 it('retains the guest master on a concurrent tab write or a destination rewind, and reconciles edits and deletions on retry', async () => {
@@ -327,7 +523,7 @@ it('writes a version-3 guest backup and loads it into a fresh guest without any 
 
 it('asks for persistence only at guest creation', async () => {
   const persist = vi.fn(async () => true);
-  vi.stubGlobal('navigator', { storage: { persist } });
+  vi.stubGlobal('navigator', { locks: navigator.locks, storage: { persist } });
   const made = await guestAccount();
   expect(await guestAccount()).toEqual(made);
   expect(persist).toHaveBeenCalledTimes(1);

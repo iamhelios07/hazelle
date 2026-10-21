@@ -4,6 +4,7 @@ import type { Card } from '../engine/import/types';
 import { fold, type Chat } from '../model/chat';
 import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
+import { SETTINGS_ID } from '../model/settings';
 import type { BackupStep } from './backup-core';
 import { exportBackup, readBackup, restoreBackup } from './testing/backup';
 import type { Files } from './files';
@@ -12,7 +13,7 @@ import { appendUserMessage, removeChat, startChat } from './chat-log';
 import { projectGreetings } from './greetings';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
-import { addDefaults, addPrompt, removePrompt } from './prompts';
+import { addDefaults, addPrompt, PREREADER_ID, removePrompt } from './prompts';
 import type { ObjectStore } from './store';
 import type { Write } from './object-writes';
 import { SUMMARY_WINDOW, summaryId, summaryStale } from './summary';
@@ -294,6 +295,27 @@ describe('backup', () => {
     const before = await held(store);
     expect(await restoreBackup(store, files, backup)).toEqual({ ok: false, error: 'not-backup' });
     expect(await held(store)).toEqual(before);
+  });
+
+  it.each([true, false])('treats the lab pre-reader as a seeded default when restoring (in backup: %s)', async (included) => {
+    const old = await open('old');
+    if (included) {
+      await old.store.upsert('settings', (value) => ({ ...value!, labs: ['preread'] }));
+      await addDefaults(old.store);
+      await old.store.update('prompt', PREREADER_ID, (value) => ({ ...value, name: 'Backed up pre-reader' }));
+    }
+    const backup = await read(await exported(old.store, old.files));
+    await server.wipe();
+    const fresh = await open('new');
+    await fresh.store.upsert('settings', (value) => ({ ...value!, labs: ['preread'] }));
+    await addDefaults(fresh.store);
+    expect(fresh.store.get('prompt', PREREADER_ID)).not.toBeNull();
+    expect(await restoreBackup(fresh.store, fresh.files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
+    expect(fresh.store.get('prompt', PREREADER_ID)?.value.name ?? null).toBe(included ? 'Backed up pre-reader' : null);
+    expect(fresh.store.get('settings', SETTINGS_ID)?.value.prereadPrompt).toBe(included ? PREREADER_ID : undefined);
+    const restored = await held(fresh.store);
+    expect(await restoreBackup(fresh.store, fresh.files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
+    expect(await held(fresh.store)).toEqual(restored);
   });
 
   it('refuses to carry on with another backup of the same account, whose ids it shares, and writes nothing', async () => {

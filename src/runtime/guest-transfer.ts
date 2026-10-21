@@ -9,6 +9,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { deviceCache } from './device-cache';
 import { clearGuestStore, guestBackend } from './guest-store';
 import { SEEDED } from './backup-core';
+import { toolAssetId, toolChatId, toolDataId } from './tools/store';
 
 export type GuestTransferStep = { kind: 'objects' | 'pictures'; done: number; total: number };
 export type GuestTransferOptions = { signal?: AbortSignal; progress?: (step: GuestTransferStep) => void };
@@ -64,6 +65,12 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
   const source = guestBackend(guest.accountId);
   const held = await inventory(source, options.signal);
   if (!held.ok) return held;
+  let replacements: ReadonlyMap<string, string> | null = null;
+  if (!conversion) {
+    const copying = await copyAddresses(guest, accountId, source, held.data, options.signal);
+    if (!copying.ok) return copying;
+    replacements = copying.data;
+  }
   const destination = await inventory(target, options.signal);
   if (!destination.ok) return destination;
   const { signal, progress = () => {} } = options;
@@ -116,16 +123,19 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
     if (signal?.aborted) return failed('stopped');
     const page = await source.feed(feedQuery({ since, timeline: held.data.timeline, bootstrap: true, until: held.data.rev }), signal);
     if (!page.ok) return page;
-    const prepared = conversion ? { ok: true as const, data: page.data.changes } : await copies(guest, accountId, vaultKey, page.data.changes);
+    const prepared = conversion ? { ok: true as const, data: page.data.changes } : await copies(guest, accountId, vaultKey, page.data.changes, replacements!, present);
     if (!prepared.ok) return prepared;
     const writes: SealedWrite[] = [];
     for (const row of prepared.data) {
       const prior = present.get(row.id);
+      if (!conversion && prior) {
+        progress({ kind: 'objects', done: ++done, total });
+        continue;
+      }
       if (prior && (prior.kind !== row.kind || prior.parent !== row.parent)) return failed('conflict');
-      // Reconcile against confirmed revisions rather than blind creates: the source can have been edited or deleted
-      // after an earlier partial upload. A lost answer is read on the next attempt, never a duplicate create.
+      // Conversion reconciles guest edits/deletions. Imports never revise an account row, even an earlier copy.
       if (row.body === null && (!conversion || !prior || prior.body === null)) continue;
-      writes.push({ id: row.id, kind: row.kind, parent: row.parent, body: row.body!, baseRev: prior?.rev ?? null });
+      writes.push({ id: row.id, kind: row.kind, parent: row.parent, body: row.body!, baseRev: conversion ? prior?.rev ?? null : null });
     }
     for (let start = 0; start < writes.length;) {
       if (signal?.aborted) return failed('stopped');
@@ -162,12 +172,14 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
 
 const sameKey = (one: VaultKey, two: VaultKey) => one.length === two.length && one.every((byte, index) => byte === two[index]);
 
-async function copies(guest: Guest, accountId: string, vaultKey: VaultKey, rows: SealedChange[]): Promise<ApiResult<SealedChange[]>> {
+// An account-pair mask gives every guest object a retry-stable copy address, including objects from a backup.
+// XOR-derived addresses commute with it; hash-addressed tool rows are recalculated from their new owners.
+// Only inventory ids enter the replacement set: an unrelated UUID is not a reference. Presence at a copy address,
+// even a tombstone, acknowledges an earlier upload; subsequent account edits and guest edits never overwrite it.
+async function copyAddresses(guest: Guest, accountId: string, source: Backend, held: Inventory, signal?: AbortSignal): Promise<ApiResult<ReadonlyMap<string, string>>> {
   const mask = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`risu-alpha/guest-import/v1/${guest.accountId}/${accountId}`)));
   const singletons = new Set<string>(Object.values(KINDS).flatMap((rule) => 'id' in rule ? [rule.id] : []));
-  // Only seeded non-singletons share ids across accounts. Keep every other id, including derived addresses and
-  // implicit random seeds; the same seeded replacements must be used after an interrupted import.
-  const replacements = new Map([...SEEDED].filter((id) => !singletons.has(id)).map((id) => {
+  const replacements = new Map(held.rows.filter(({ id }) => !singletons.has(id)).map(({ id }) => {
     let index = 0;
     const copy = id.replace(/[0-9a-f]/g, (digit, offset: number) => {
       const at = index++;
@@ -175,25 +187,66 @@ async function copies(guest: Guest, accountId: string, vaultKey: VaultKey, rows:
     });
     return [id, copy];
   }));
+  const copyId = (id: string) => replacements.get(id) ?? id;
+  const kinds = new Map(held.rows.map(({ id, kind }) => [id, kind]));
+  const key = await objectKey(guest.vaultKey);
+  // Resolve these before copying any page: a summary on an earlier page can refer to one on a later page.
+  for (const kind of ['tooldata', 'toolchat', 'asset']) {
+    if (!held.rows.some((row) => row.kind === kind && row.body !== null)) continue;
+    let since = 0;
+    for (;;) {
+      if (signal?.aborted) return failed('stopped');
+      const page = await source.feed(feedQuery({ since, timeline: held.timeline, until: held.rev, bootstrap: true, kind }), signal);
+      if (!page.ok) return page;
+      for (const row of page.data.changes) {
+        if (row.body === null) continue;
+        const value = await openObject(key, guest.accountId, row, row.body!);
+        if (!isRecord(value)) return failed('unreadable');
+        if (kind === 'tooldata') replacements.set(row.id, await toolDataId(copyId(row.parent!), value.key as string));
+        else if (kind === 'toolchat') replacements.set(row.id, await toolChatId(copyId(value.module as string), copyId(row.parent!), value.key as string | null));
+        else if (kinds.get(row.parent!) === 'module' && row.id === await toolAssetId(row.parent!, value.name as string)) {
+          replacements.set(row.id, await toolAssetId(copyId(row.parent!), value.name as string));
+        }
+      }
+      since = page.data.cursor;
+      if (!page.data.more) break;
+    }
+  }
+  return { ok: true, data: replacements };
+}
+
+async function copies(guest: Guest, accountId: string, vaultKey: VaultKey, rows: SealedChange[], replacements: ReadonlyMap<string, string>, present: ReadonlyMap<string, SealedChange>): Promise<ApiResult<SealedChange[]>> {
   const oldKey = await objectKey(guest.vaultKey);
   const nextKey = await objectKey(vaultKey);
   const result: SealedChange[] = [];
+  const copyId = (id: string) => replacements.get(id) ?? id;
   for (const row of rows) {
     if (row.body === null) continue;
     if (!Object.hasOwn(KINDS, row.kind)) return failed('unreadable');
-    const rule = KINDS[row.kind as Kind];
-    if ('id' in rule) continue;
+    const kind = row.kind as Kind;
+    if ('id' in KINDS[kind]) continue;
+    const address = { id: copyId(row.id), kind, parent: row.parent === null ? null : copyId(row.parent) };
+    if (present.has(address.id)) {
+      result.push({ ...address, rev: row.rev, omitted: true });
+      continue;
+    }
     const value = await openObject(oldKey, guest.accountId, row, row.body!);
-    if (value === undefined) return failed('unreadable');
-    const address = { id: replacements.get(row.id) ?? row.id, kind: row.kind, parent: row.parent === null ? null : replacements.get(row.parent) ?? row.parent };
-    result.push({ ...address, rev: row.rev, body: await sealObject(nextKey, accountId, address, remap(value, replacements)) });
+    if (!isRecord(value)) return failed('unreadable');
+    // Seeds are values, not references. Materialize the implicit one before changing its object's identity.
+    if (kind === 'chat' || (kind === 'entry' && (value.type === 'message' || value.type === 'version'))) value.seed ??= row.id;
+    result.push({ ...address, rev: row.rev, body: await sealObject(nextKey, accountId, address, remap(value, replacements, kind)) });
   }
   return { ok: true, data: result };
 }
 
-function remap(value: unknown, replacements: ReadonlyMap<string, string>): unknown {
+function remap(value: unknown, replacements: ReadonlyMap<string, string>, kind: Kind, path: string[] = []): unknown {
+  const field = path.at(-1);
+  // Engine seeds keep their original roll; tool keys keep the literal lookup name used by tools/store's hashes.
+  if ((kind === 'chat' || kind === 'entry') && path.length === 1 && field === 'seed') return value;
+  if (kind === 'stream' && path.join('.') === 'for.continues.seed') return value;
+  if ((kind === 'tooldata' || kind === 'toolchat') && path.length === 1 && field === 'key') return value;
   if (typeof value === 'string') return replacements.get(value) ?? value;
-  if (Array.isArray(value)) return value.map((item: unknown) => remap(item, replacements));
+  if (Array.isArray(value)) return value.map((item: unknown) => remap(item, replacements, kind, [...path, '*']));
   if (!isRecord(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, remap(item, replacements)]));
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [replacements.get(key) ?? key, remap(item, replacements, kind, [...path, key])]));
 }

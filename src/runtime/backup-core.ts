@@ -11,7 +11,7 @@ import type { Files } from './files';
 import { BACKUP_PAGE_BYTES as PAGE_BYTES, BACKUP_PAGE_ROWS as PAGE_ROWS, BackupStorageError, type BackupRecord, type BackupRecords } from './backup-records';
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
-import { COMMENTATOR_ID, ILLUSTRATOR_ID, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
+import { DEFAULT_PROMPT_IDS } from './prompts';
 import { ownershipDepth } from './removal';
 import { readRow } from './upgrade';
 import type { ObjectRow, ObjectStore, Pin } from './store';
@@ -27,7 +27,7 @@ const FILES = 'files/';
 const HELD_BYTES = 8 * 1024 * 1024;
 const PICTURE_ROWS = 12;
 
-export const SEEDED: ReadonlySet<string> = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, ILLUSTRATOR_ID, COMMENTATOR_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
+export const SEEDED: ReadonlySet<string> = new Set([...DEFAULT_PROMPT_IDS, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
 
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 

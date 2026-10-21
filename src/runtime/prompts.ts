@@ -43,6 +43,8 @@ const DEFAULTS = {
   preread: { setting: 'prereadPrompt', id: PREREADER_ID, make: () => Promise.resolve(BUILT_IN.preread()), lab: 'preread' },
 } as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null>; lab?: LabId } };
 
+export const DEFAULT_PROMPT_IDS: readonly string[] = Object.values(DEFAULTS).map(({ id }) => id);
+
 export type StoredPrompt<S extends PromptSort> = Stored<'prompt'> & { value: PromptOf<S> };
 export const ofSort = <S extends PromptSort>(prompt: Stored<'prompt'>, sort: S): prompt is StoredPrompt<S> => sortOf(prompt.value) === sort;
 

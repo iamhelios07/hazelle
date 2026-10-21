@@ -117,7 +117,7 @@ export async function deleteToolData(store: ObjectStore, module: string, key: st
 // A tool's picture is an asset of its module: gone with it, counted in the account's picture budget, listed on the module
 // page. It is named by its bytes' hash and kept at an id made from the module and that name, so the same bytes saved
 // again, on any device, find their row and send nothing; the first part keeps the id apart from every toolDataId.
-const toolAssetId = (module: string, name: string) => keyId(`asset\0${module}\0${name}`);
+export const toolAssetId = (module: string, name: string) => keyId(`asset\0${module}\0${name}`);
 
 export async function saveToolAsset(store: ObjectStore, files: Files, module: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<string>> {
   if (!live(store.get('module', module))) return { ok: false, error: 'gone' };
