@@ -13,7 +13,7 @@ export const EFFECTIVE: string = '2026년 10월 21일';
 type Block = string | string[];
 export type LegalText = { path: string; title: string; sections: { title: string; body: Block[] }[] };
 
-const CONTACT = 'contact@hazelle.app';
+export const CONTACT = 'contact@hazelle.app';
 const ASK = `문의는 게시판에서 운영자에게만 보내기로 보내 주시기 바랍니다. 계정이 없거나 로그인할 수 없으면 ${CONTACT}으로 보내 주시기 바랍니다.`;
 
 export const TERMS: LegalText = {

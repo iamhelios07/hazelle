@@ -1,7 +1,7 @@
 import { Bell, FileText, Inbox, ListFilter, PenLine, Send } from 'lucide-react';
 import { useState } from 'react';
 import { CATEGORIES, STATUSES, type Category, type Sort, type Status } from '../../contracts/board';
-import { GuestLine } from '../common/GuestNotice';
+import { GuestLine, ReportElsewhere } from '../common/GuestNotice';
 import { AuthorLine } from '../common/postRow';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
@@ -60,6 +60,7 @@ export function BoardScreen({ operator, category, back }: { operator: boolean; c
       }
     >
       <GuestLine note={`${BOARD.write}, ${BOARD.comment}, ${BOARD.vote}은 ${ACCOUNT_ONLY}.`} />
+      {guest && <ReportElsewhere />}
       <Row kind="spread">
         <Tabs
           label="분류"
