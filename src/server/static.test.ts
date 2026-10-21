@@ -59,6 +59,15 @@ describe('the client files', () => {
     }
   });
 
+  it('words the guest home for search engines and keeps every page but the public four out of the index', async () => {
+    writeFileSync(join(dir, 'index.html'), '<title>헤이젤</title><meta name="description" content="app" />');
+    expect(await (await client.request('/', { headers: PAGE })).text()).toContain('<title>헤이젤 · RisuAI 봇으로 캐릭터 챗</title>');
+    for (const path of ['/', '/now', '/terms', '/privacy', '/board', '/s/no-cover-share00', '/index.html']) {
+      expect([path, (await client.request(path, { headers: PAGE })).headers.get('x-robots-tag')]).toEqual([path, ['/board', '/s/no-cover-share00', '/index.html'].includes(path) ? 'noindex' : null]);
+    }
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
+  });
+
   it("fills a share page's embed with its escaped cover text, and never with a picture", async () => {
     writeFileSync(join(dir, 'index.html'), '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta property="og:image" content="https://hazelle.app/og.png" /><meta name="twitter:card" content="summary_large_image" />');
     const covered = await (await client.request('/s/covered-share-id', { headers: PAGE })).text();
