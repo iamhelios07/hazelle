@@ -30,7 +30,7 @@ export function GuestDataScreen({ username, failure, onUpload, onDiscard }: Prop
       }
     >
       <Intro title="계정에 올릴까요?">
-        이 브라우저에 손님으로 만든 내용이 있어요. 올리면 {username} 계정에 새 항목으로 더해져요.
+        손님으로 만든 내용을 {username} 계정에 더해요. 설정은 계정 것을 그대로 써요.
       </Intro>
       {shown && (
         <Callout tone="warn" alert>

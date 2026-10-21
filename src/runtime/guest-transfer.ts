@@ -1,6 +1,7 @@
 import { isRecord } from '../connectors/values';
 import { BATCH_LIMITS, type SealedChange, type SealedWrite } from '../contracts/objects';
-import { KINDS, type Kind } from '../model/kinds';
+import { isValue, KINDS, type Kind } from '../model/kinds';
+import { ORDER_ID, toFront, type Order } from '../model/order';
 import { forgetGuestVault, recallGuest, rememberVault } from '../vault/device';
 import type { VaultKey } from '../vault/keys';
 import { objectKey, openObject, sealObject } from '../vault/objects';
@@ -118,11 +119,20 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
   let done = 0;
   let known = destination.data.rev;
   progress({ kind: 'objects', done, total });
+  let guestOrder: Order | null = null;
   let since = 0;
   for (;;) {
     if (signal?.aborted) return failed('stopped');
     const page = await source.feed(feedQuery({ since, timeline: held.data.timeline, bootstrap: true, until: held.data.rev }), signal);
     if (!page.ok) return page;
+    if (!conversion) {
+      const row = page.data.changes.find(({ id, body }) => id === ORDER_ID && body !== null);
+      if (row) {
+        const value = await openObject(await objectKey(guest.vaultKey), guest.accountId, row, row.body!);
+        if (!isValue('order', value)) return failed('unreadable');
+        guestOrder = value;
+      }
+    }
     const prepared = conversion ? { ok: true as const, data: page.data.changes } : await copies(guest, accountId, vaultKey, page.data.changes, replacements!, present);
     if (!prepared.ok) return prepared;
     const writes: SealedWrite[] = [];
@@ -133,7 +143,7 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
         continue;
       }
       if (prior && (prior.kind !== row.kind || prior.parent !== row.parent)) return failed('conflict');
-      // Conversion reconciles guest edits/deletions. Imports never revise an account row, even an earlier copy.
+      // Conversion reconciles guest edits/deletions. Copies never revise an account row, even an earlier copy.
       if (row.body === null && (!conversion || !prior || prior.body === null)) continue;
       writes.push({ id: row.id, kind: row.kind, parent: row.parent, body: row.body!, baseRev: conversion ? prior?.rev ?? null : null });
     }
@@ -157,6 +167,15 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
     since = page.data.cursor;
     if (!page.data.more) break;
   }
+  if (guestOrder) {
+    const copied = new Set(held.data.rows.filter(({ kind, body }) => body !== null && (kind === 'character' || kind === 'folder')).map(({ id }) => id));
+    const ids = guestOrder.ids.filter((id) => copied.has(id)).map((id) => replacements!.get(id)!);
+    if (ids.length) {
+      const ordered = await copyOrder(target, accountId, vaultKey, destination.data.timeline, ids, signal);
+      if (!ordered.ok) return ordered;
+      known = Math.max(known, ordered.data);
+    }
+  }
   if (signal?.aborted) return failed('stopped');
   const confirmed = await target.feed(feedQuery({ since: known, timeline: destination.data.timeline, metadata: true }), signal);
   if (!confirmed.ok) return confirmed;
@@ -171,6 +190,28 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
 }
 
 const sameKey = (one: VaultKey, two: VaultKey) => one.length === two.length && one.every((byte, index) => byte === two[index]);
+
+async function copyOrder(target: Backend, accountId: string, vaultKey: VaultKey, timeline: string, ids: string[], signal?: AbortSignal): Promise<ApiResult<number>> {
+  const key = await objectKey(vaultKey);
+  const address = { id: ORDER_ID, kind: 'order', parent: null };
+  for (;;) {
+    if (signal?.aborted) return failed('stopped');
+    const page = await target.feed(feedQuery({ since: 0, timeline, bootstrap: true, kind: 'order' }), signal);
+    if (!page.ok) return page;
+    const row = page.data.changes[0];
+    let current: Order = { ids: [] };
+    if (row && row.body !== null) {
+      const value = await openObject(key, accountId, row, row.body!);
+      if (!isValue('order', value)) return failed('unreadable');
+      current = value;
+    }
+    // Retrying after this write landed puts the same copies first again, even if another device moved one meanwhile.
+    const body = await sealObject(key, accountId, address, { ids: toFront(current.ids, ids) });
+    const sent = await target.batch(timeline, [{ ...address, body, baseRev: row?.rev ?? null }], [], signal);
+    if (sent.ok) return { ok: true, data: sent.data.revs[0]! };
+    if (sent.error !== 'conflict') return sent;
+  }
+}
 
 // An account-pair mask gives every guest object a retry-stable copy address, including objects from a backup.
 // XOR-derived addresses commute with it; hash-addressed tool rows are recalculated from their new owners.

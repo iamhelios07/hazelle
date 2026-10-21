@@ -254,7 +254,7 @@ it('remaps inventory ids regardless of field names, preserving only engine seeds
   const accountCharacter = crypto.randomUUID();
   await target.create('character', { card: blankCard('Account bot'), folder: null, loreFolders: [] }, { id: accountCharacter });
   await target.upsert('order', () => ({ ids: [accountCharacter] }));
-  const untouched = [target.get('character', accountCharacter), target.get('persona', FIRST_ID), target.get('profile', FIRST_PROFILE_ID), target.get('prompt', STARTER_ID), target.get('settings', SETTINGS_ID), target.get('order', ORDER_ID)];
+  const untouched = [target.get('character', accountCharacter), target.get('persona', FIRST_ID), target.get('profile', FIRST_PROFILE_ID), target.get('prompt', STARTER_ID), target.get('settings', SETTINGS_ID)];
   dropBatches = true;
   expect(await uploadGuest(accountId, account.vaultKey)).toMatchObject({ ok: false, error: 'offline' });
   expect(await recallGuest()).not.toBeNull();
@@ -262,7 +262,7 @@ it('remaps inventory ids regardless of field names, preserving only engine seeds
   expect(await uploadGuest(accountId, account.vaultKey)).toEqual({ ok: true, data: null });
   await target.pull();
   expect(target.list('character').map(({ value }) => value.card.name).sort()).toEqual(['Account bot', 'Guest bot']);
-  expect([target.get('character', accountCharacter), target.get('persona', FIRST_ID), target.get('profile', FIRST_PROFILE_ID), target.get('prompt', STARTER_ID), target.get('settings', SETTINGS_ID), target.get('order', ORDER_ID)]).toEqual(untouched);
+  expect([target.get('character', accountCharacter), target.get('persona', FIRST_ID), target.get('profile', FIRST_PROFILE_ID), target.get('prompt', STARTER_ID), target.get('settings', SETTINGS_ID)]).toEqual(untouched);
   const character = target.list('character').find(({ value }) => value.card.name === 'Guest bot')!;
   expect(character.id).not.toBe(source.character);
   expect(target.list('persona')).toHaveLength(2);
@@ -318,6 +318,48 @@ it('remaps inventory ids regardless of field names, preserving only engine seeds
   expect(await serverBackend().readFile(source.ref.id)).toEqual(sealedPicture);
   expect(target.children('avatar', character.id)[0]!.value.file).toEqual(source.ref);
   expect(await new Files(serverBackend(), target).read(source.ref)).toEqual({ ok: true, data: source.image });
+  expect(await recallGuest()).toBeNull();
+});
+
+it('puts copied characters and folders first in the guest manual order without moving the account ids, retrying an order conflict', async () => {
+  const source = await guest();
+  const first = crypto.randomUUID();
+  const second = crypto.randomUUID();
+  const folder = crypto.randomUUID();
+  expect((await source.store.batch([
+    { type: 'create', kind: 'character', id: first, parent: null, value: { card: blankCard('A guest'), folder: null, loreFolders: [] } },
+    { type: 'create', kind: 'character', id: second, parent: null, value: { card: blankCard('Z guest'), folder: null, loreFolders: [] } },
+    { type: 'create', kind: 'folder', id: folder, parent: null, value: { name: 'Guest folder' } },
+  ])).ok).toBe(true);
+  await source.store.upsert('order', () => ({ ids: [second, folder, first] }));
+  const target = await destination();
+  const accountIds: string[] = [];
+  for (const name of ['Z account', 'A account']) {
+    const made = await target.store.create('character', { card: blankCard(name), folder: null, loreFolders: [] });
+    if (!made.ok) throw new Error(made.error);
+    accountIds.push(made.data.id);
+  }
+  await target.store.upsert('order', () => ({ ids: accountIds }));
+  const feed = vi.fn(target.backend.feed);
+  let raced = false;
+  const batch = vi.fn(async (...args: Parameters<Backend['batch']>) => {
+    if (!raced && args[1].some(({ kind }) => kind === 'order')) {
+      raced = true;
+      expect((await target.store.upsert('order', () => ({ ids: accountIds }))).ok).toBe(true);
+    }
+    return target.backend.batch(...args);
+  });
+  expect(await transferGuest(target.accountId, target.vaultKey, {}, { ...target.backend, feed, batch })).toEqual({ ok: true, data: null });
+  expect(await target.store.pull()).toBeNull();
+  const copiedFirst = target.store.list('character').find(({ value }) => value.card.name === 'A guest')!.id;
+  const copiedSecond = target.store.list('character').find(({ value }) => value.card.name === 'Z guest')!.id;
+  const copiedFolder = target.store.list('folder')[0]!.id;
+  expect(copiedFirst).not.toBe(first);
+  expect(copiedSecond).not.toBe(second);
+  expect(copiedFolder).not.toBe(folder);
+  expect(target.store.get('order', ORDER_ID)?.value.ids).toEqual([copiedSecond, copiedFolder, copiedFirst, ...accountIds]);
+  expect(batch.mock.calls.flatMap(([, writes]) => writes).filter(({ kind }) => kind === 'order')).toHaveLength(2);
+  expect(feed.mock.calls.every(([query]) => query.metadata || query.kind === 'order')).toBe(true);
   expect(await recallGuest()).toBeNull();
 });
 
