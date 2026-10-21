@@ -567,7 +567,7 @@ export class Scripts {
       const timer = setTimeout(() => deadline.abort(new ToolLate()), TOOL_DEADLINE_MS);
       try {
         const run = { tool: unit, event: step.event(value) };
-        const outcome = step.quiet ? await this.run(chat, run, step.scope(writes), stop).finally(() => clearTimeout(timer)) : (await this.dispatch(chat, run, step.scope(writes), null, stop, () => clearTimeout(timer))).outcome;
+        const outcome = step.quiet ? await this.run(chat, run, step.scope(writes), stop, true).finally(() => clearTimeout(timer)) : (await this.dispatch(chat, run, step.scope(writes), null, stop, () => clearTimeout(timer))).outcome;
         if (stop.aborted) continue;
         writes = [...writes, ...outcome.writes];
         const next = outcome.value === undefined ? value : step.answer(outcome.value, value);
@@ -797,8 +797,9 @@ export class Scripts {
     });
   }
 
-  private async dispatch(chat: string, units: Units, scope: ChatScope, anchor: Anchor | null, signal?: AbortSignal, finished?: () => void) {
-    const outcome = await this.run(chat, units, scope, signal).finally(finished);
+  // deadline: the run is under a tool deadline, ended by this once the run ends.
+  private async dispatch(chat: string, units: Units, scope: ChatScope, anchor: Anchor | null, signal?: AbortSignal, deadline?: () => void) {
+    const outcome = await this.run(chat, units, scope, signal, deadline !== undefined).finally(deadline);
     return this.event(chat, scope, outcome, anchor, ownerOf(units), units.event.kind === 'reply' ? units.event.reply.version : undefined);
   }
 
@@ -847,7 +848,7 @@ export class Scripts {
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.
-  private async run(chat: string, units: Units, scope: ChatScope, signal?: AbortSignal): Promise<ScriptOutcome> {
+  private async run(chat: string, units: Units, scope: ChatScope, signal?: AbortSignal, deadline = false): Promise<ScriptOutcome> {
     const began = performance.now();
     const at = Date.now();
     const { event } = units;
@@ -855,7 +856,7 @@ export class Scripts {
     if (this.closing.signal.aborted || signal?.aborted) return nothing;
     const from = ownerOf(units);
     try {
-      const host = this.host(chat, scope, signal, event.kind === 'prompt');
+      const host = this.host(chat, scope, signal, deadline);
       const running = 'lua' in units
         ? this.bindings.lua().then((runner) => runner.run(chat, units.lua, scope, event, host, 'event'))
         : this.bindings.tools.run(chat, units.tool, scope, units.event, host, signal);
@@ -871,7 +872,7 @@ export class Scripts {
     }
   }
 
-  // deadline: the run answers the prompt event, whose deadline would dismiss a card before anyone read it.
+  // deadline: the run is under a tool deadline (TOOL_DEADLINE_MS), which would dismiss a card before anyone read it.
   private host(chat: string, scope: ChatScope, signal?: AbortSignal, deadline = false): ToolReach {
     const either = (callSignal?: AbortSignal) => (callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal);
     return {

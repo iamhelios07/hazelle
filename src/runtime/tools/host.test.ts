@@ -197,7 +197,7 @@ it('asks one card for all of a plugin\'s uses once the tool starts in a chat, ke
   expect(session.scripts.snapshot().questions).toEqual([]);
 }));
 
-it('moves a plugin card to the chat that joins it, since a card shows only in its own chat', () => withTools(async (session) => {
+it('moves a plugin card to the chat on screen that joins it, since a card shows only in its own chat, and not to a background one', () => withTools(async (session) => {
   const f = await fixture(session, '//@uses model\n');
   const other = crypto.randomUUID();
   await server.hold(session.store, other);
@@ -206,6 +206,23 @@ it('moves a plugin card to the chat that joins it, since a card shows only in it
   await vi.waitFor(() => expect(session.scripts.snapshot().questions).toMatchObject([{ chat: f.chat }]));
   session.scripts.claims(other);
   expect(session.scripts.snapshot().questions).toMatchObject([{ chat: other, question: { kind: 'plugin', grants: ['model'] } }]);
+  session.scripts.screen(f.chat, { send: async () => null, rendered: () => null });
+  const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, new AbortController().signal);
+  expect(session.scripts.snapshot().questions).toMatchObject([{ chat: other }]);
+  session.scripts.claims(f.chat);
+  expect(session.scripts.snapshot().questions).toMatchObject([{ chat: f.chat }]);
+  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'no');
+  await expect(sending).resolves.toEqual({ ok: false, reason: 'not-allowed' });
+}));
+
+it('tells that a consent answer could not be saved, and saves nothing for it', () => withTools(async (session) => {
+  const f = await fixture(session, '//@uses model\n');
+  session.scripts.claims(f.chat);
+  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toHaveLength(1));
+  vi.spyOn(session.store, 'update').mockResolvedValueOnce({ ok: false, error: 'offline' });
+  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  await vi.waitFor(() => expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'answer-unsaved', failure: { ok: false, error: 'offline' } })));
+  expect(session.store.get('module', f.module)!.value.botModels).toBeUndefined();
 }));
 
 it('keeps a plugin card past the asker that stopped waiting, and sends nothing for it once answered', () => withTools(async (session) => {

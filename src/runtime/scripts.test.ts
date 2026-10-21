@@ -669,10 +669,10 @@ describe('tool events through Scripts', () => {
     }, { run, close: () => {} });
   });
 
-  it('answers an unasked consent with no card under the prompt deadline, asks from a menu press, and tells a missing 임베딩 모델 once', async () => {
+  it('answers an unasked consent with no card under a tool deadline, the prompt\'s or a request\'s, asks from a menu press, and tells a missing 임베딩 모델 once', async () => {
     const answers: unknown[] = [];
     const binding: Binding<ToolUnit> = { run: async (_chat, unit, _scope, event, host) => {
-      if (event.kind === 'prompt' || event.kind === 'menu') {
+      if (event.kind === 'prompt' || event.kind === 'menu' || event.kind === 'requesting') {
         answers.push(await host.embed(['query'], 'query', { kind: 'module', id: unit.module }));
         if (event.kind === 'prompt') answers.push(await host.model('aux', [{ role: 'user', content: 'x' }], { kind: 'module', id: unit.module }));
       }
@@ -685,14 +685,15 @@ describe('tool events through Scripts', () => {
       const turn = gatherTurn(session, f.chat, { kind: 'answer' });
       if (!turn || 'kind' in turn) throw new Error('fixture');
       await session.scripts.prompting(f.chat, turn, async () => turn, new AbortController().signal);
-      expect(answers).toEqual([{ ok: false, reason: 'not-allowed' }, expect.objectContaining({ success: false, reason: 'not-allowed' })]);
+      await session.scripts.requesting(f.chat, turn, { messages: [{ role: 'user', content: 'hello' }], parts: [{ from: { kind: 'script' }, tokens: 1, origin: 'message' }] });
+      expect(answers).toEqual([{ ok: false, reason: 'not-allowed' }, expect.objectContaining({ success: false, reason: 'not-allowed' }), { ok: false, reason: 'not-allowed' }]);
       expect(session.scripts.snapshot().questions).toEqual([]);
       const pressed = session.scripts.menu(f.chat, f.module, 'now');
       await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['model'] } }]);
       session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
       await pressed;
       await session.scripts.menu(f.chat, f.module, 'now');
-      expect(answers.slice(2)).toEqual([{ ok: false, reason: 'no-model' }, { ok: false, reason: 'no-model' }]);
+      expect(answers.slice(3)).toEqual([{ ok: false, reason: 'no-model' }, { ok: false, reason: 'no-model' }]);
       expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'no-model')).toMatchObject([{ role: 'embed' }]);
     }, binding);
   });

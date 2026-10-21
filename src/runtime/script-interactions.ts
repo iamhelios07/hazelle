@@ -18,7 +18,7 @@ import { toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
 // lets a chat's scripts (server/streams). late: a tool missed the prompt deadline and the turn went without its slot.
 // stuck: disabled once a tool stalled too often, until reload. memory-held: a tool the user let take the memory slot
 // cannot, since another tool before it in the chat holds it.
-// unsaved: what a run did to the chat could not be saved. runaway: the script's commands were stopped for making too
+// unsaved: what a run did to the chat could not be saved; answer-unsaved: a consent answer could not, and is asked again. runaway: the script's commands were stopped for making too
 // much text. input-stop: a script stopped a send before onStart (design §6.8: Risu ignores it there and replies), told
 // once per chat, so the missing reply is not read as a dead bot.
 type Note =
@@ -32,6 +32,7 @@ type Note =
   | { kind: 'stale-reply' }
   | { kind: 'flood' }
   | { kind: 'unsaved'; failure: ApiFailure }
+  | { kind: 'answer-unsaved'; failure: ApiFailure }
   | { kind: 'runaway' }
   | { kind: 'input-stop' };
 export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
@@ -50,7 +51,10 @@ export class ScriptInteractions {
   // What each chat was already told of its bot's errors, so a script failing on every message says so once.
   private readonly told = new Map<string, Set<string>>();
   private ids = 0;
-  private readonly consents = new Map<string, { question: number; deciding: Promise<boolean> }>();
+  // waiting: the chats whose runs wait on it.
+  private readonly consents = new Map<string, { question: number; deciding: Promise<boolean>; waiting: Set<string> }>();
+  // The chat on screen, as claims last named it.
+  private shown: string | null = null;
   private readonly notices = new ToolRate(TOOL_NOTICES_PER_MINUTE);
 
   constructor(private readonly store: ObjectStore, private readonly closing: AbortSignal) {}
@@ -136,8 +140,11 @@ export class ScriptInteractions {
     return this.grant(chat, module, 'network', signal);
   }
 
-  // The plugin cards of the chat's tools, asked when a tool starts in a chat (design §6.10), not first when it uses one.
+  // The chat opened: it takes the cards its runs wait on, and its tools' plugin cards are asked (design §6.10), not first
+  // when a tool uses one.
   claims(chat: string) {
+    this.shown = chat;
+    for (const { question, waiting } of this.consents.values()) if (waiting.has(chat)) this.move(question, chat);
     const stored = live(this.store.get('chat', chat));
     if (!stored || this.closing.aborted) return;
     for (const { module } of toolsOf(this.store, stored.value)) if (this.unanswered(module).length > 0) void this.card(chat, module);
@@ -169,24 +176,30 @@ export class ScriptInteractions {
     return this.decide(`plugin:${module}`, chat, { kind: 'plugin', grants, hosts }, { kind: 'module', id: module }, (yes) => setGrants(this.store, module, grants, yes));
   }
 
-  // One question per key at a time, its 'yes' or 'no' saved by save; a dismissal saves nothing and is no. A chat that
-  // joins it takes its card, since the chat open is the one waiting and a card shows only in its own chat.
+  // One question per key at a time, its 'yes' or 'no' saved by save; a dismissal saves nothing and is no. A card shows
+  // only in its own chat, so the chat on screen takes one it joins; a background chat joining leaves it where it is.
   private decide(key: string, chat: string, question: ScriptQuestion['question'], from: PackOwner, save: (yes: boolean) => Promise<ApiResult<unknown>>, signal?: AbortSignal): Promise<boolean> {
     const asked = this.consents.get(key);
     if (asked) {
-      if (this.state.questions.some((each) => each.id === asked.question && each.chat !== chat)) {
-        this.set({ ...this.state, questions: this.state.questions.map((each) => (each.id === asked.question ? { ...each, chat } : each)) });
-      }
+      asked.waiting.add(chat);
+      if (chat === this.shown) this.move(asked.question, chat);
       return asked.deciding;
     }
     const id = ++this.ids;
     const deciding = this.asked(id, chat, question, from, signal).then(async (answer) => {
       if (answer === null) return false;
       const saved = await save(answer === 'yes');
+      if (!saved.ok) this.note(chat, { kind: 'answer-unsaved', failure: saved }, from);
       return saved.ok && answer === 'yes';
     }).finally(() => this.consents.delete(key));
-    this.consents.set(key, { question: id, deciding });
+    this.consents.set(key, { question: id, deciding, waiting: new Set([chat]) });
     return deciding;
+  }
+
+  private move(question: number, chat: string) {
+    if (this.state.questions.some((each) => each.id === question && each.chat !== chat)) {
+      this.set({ ...this.state, questions: this.state.questions.map((each) => (each.id === question ? { ...each, chat } : each)) });
+    }
   }
 
   // A claim holds up no run, so it stays until the user answers it; a fetch that joined a network claim waits with it,
