@@ -1,5 +1,5 @@
-import { Hono } from 'hono';
-import { MODELS_DEV_LISTS, MODELS_DEV_MODALITIES, type ListedModality, type ListedModel, type ModelsDevList, type PriceTier, type Rates } from '../connectors/models-dev';
+import { Hono, type Context } from 'hono';
+import { MODELS_DEV_LISTS, MODELS_DEV_MODALITIES, type ListedModality, type ListedModel, type ModelsDevList, type PriceTable, type PriceTier, type Rates } from '../connectors/models-dev';
 import type { Db } from './db/service-db';
 import { fail, isRecord, type AppEnv } from './http';
 import type { Upstream } from './relay';
@@ -87,24 +87,41 @@ export async function refreshModelsDev(db: Db, outbound: Upstream, now = Date.no
 }
 
 type Row = { model: string; price: string | null; input: string | null; output: string | null };
+type TableRow = { list: string; model: string; name: string | null; price: string | null };
 const parsed = <T>(json: string | null): T | null => (json === null ? null : (JSON.parse(json) as T));
 
-// Before the first fetch has landed it answers an empty list and starts one; the hourly cron would otherwise leave every
-// cost 알 수 없음 for up to an hour after a deploy.
-export const modelsDev = new Hono<AppEnv>().get('/', async (c) => {
-  if (!c.env.limits.visitors.reads.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success) return fail(c, 429, 'too-many-visits');
-  const list = c.req.query('provider');
-  if (!list || !LISTS.has(list)) return fail(c, 400, 'bad-input');
+// Before the first fetch has landed it answers empty and starts one; the hourly cron would otherwise leave every cost
+// 알 수 없음 for up to an hour after a deploy.
+async function answer<T extends { fetchedAt: number | null }>(c: Context<AppEnv>, empty: T, read: (fetchedAt: number) => Promise<T>) {
   const db = c.env.db;
   const fetchedAt = await db.prepare('SELECT fetched_at FROM models_dev_fetch WHERE id = 1').first<number | null>('fetched_at');
   if (fetchedAt === null) {
     c.executionCtx.waitUntil(refreshModelsDev(db, c.env.outbound));
-    return c.json({ fetchedAt: null, models: {} } satisfies ModelsDevList);
+    return c.json(empty);
   }
   const etag = `"${fetchedAt}"`;
   const headers = { etag, 'cache-control': 'private, no-cache' };
   if (c.req.header('if-none-match') === etag) return c.body(null, 304, headers);
-  const { results } = await db.prepare('SELECT model, price, input, output FROM models_dev WHERE list = ?').bind(list).all<Row>();
-  const models = Object.fromEntries(results.map((row) => [row.model, { price: parsed<Rates>(row.price), input: parsed<ListedModality[]>(row.input), output: parsed<ListedModality[]>(row.output) }]));
-  return c.json({ fetchedAt, models } satisfies ModelsDevList, 200, headers);
-});
+  return c.json(await read(fetchedAt), 200, headers);
+}
+
+const visits = (c: Context<AppEnv>) => c.env.limits.visitors.reads.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success;
+
+export const modelsDev = new Hono<AppEnv>()
+  .get('/', async (c) => {
+    if (!visits(c)) return fail(c, 429, 'too-many-visits');
+    const list = c.req.query('provider');
+    if (!list || !LISTS.has(list)) return fail(c, 400, 'bad-input');
+    return answer<ModelsDevList>(c, { fetchedAt: null, models: {} }, async (fetchedAt) => {
+      const { results } = await c.env.db.prepare('SELECT model, price, input, output FROM models_dev WHERE list = ?').bind(list).all<Row>();
+      const models = Object.fromEntries(results.map((row) => [row.model, { price: parsed<Rates>(row.price), input: parsed<ListedModality[]>(row.input), output: parsed<ListedModality[]>(row.output) }]));
+      return { fetchedAt, models };
+    });
+  })
+  .get('/table', async (c) => {
+    if (!visits(c)) return fail(c, 429, 'too-many-visits');
+    return answer<PriceTable>(c, { fetchedAt: null, models: [] }, async (fetchedAt) => {
+      const { results } = await c.env.db.prepare('SELECT list, model, name, price FROM models_dev').all<TableRow>();
+      return { fetchedAt, models: results.map((row) => ({ ...row, price: parsed<Rates>(row.price) })) };
+    });
+  });

@@ -59,6 +59,7 @@ const ActivityScreen = lazy(() => import('../board/ActivityScreen').then(({ Acti
 const MineScreen = lazy(() => import('../board/MineScreen').then(({ MineScreen }) => ({ default: MineScreen })));
 const LabsScreen = lazy(() => import('../settings/LabsScreen').then(({ LabsScreen }) => ({ default: LabsScreen })));
 const TranslatorScreen = lazy(() => import('../tools/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
+const CalculatorScreen = lazy(() => import('../tools/CalculatorScreen').then(({ CalculatorScreen }) => ({ default: CalculatorScreen })));
 const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
 
 const side = (at: SideAt) => <ScreenLoad><ChatSide {...at} /></ScreenLoad>;
@@ -152,6 +153,8 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
         return wide ? <Replace to={toolsEntry(true)} /> : <ToolsList onClose={closeLayer} />;
       case 'translator':
         return <TranslatorScreen back={sideBack(at)} />;
+      case 'calculator':
+        return <CalculatorScreen back={sideBack(at)} />;
       case 'board':
         return <BoardScreen key={String(at.operator)} operator={at.operator} category={at.category ?? null} back={sideBack(at)} />;
       case 'post':

@@ -51,6 +51,7 @@ export type Route =
   | { kind: 'controls' }
   | { kind: 'tools' }
   | { kind: 'translator' }
+  | { kind: 'calculator' }
   // 게시판 (design §6.13). operator: the operator-only posts, listed or preset in the compose.
   // category: the tab open, none for 전체.
   | { kind: 'board'; operator: boolean; category?: Category }
@@ -173,6 +174,7 @@ export function parseRoute(at: string): Route {
   if (top === 'tools' && sub === undefined) {
     if (id === undefined) return { kind: 'tools' };
     if (id === 'translator') return { kind: 'translator' };
+    if (id === 'calculator') return { kind: 'calculator' };
   }
   if (top === 'board') {
     const operator = params.get('to') === 'operator';
@@ -268,6 +270,8 @@ export function href(route: Route): string {
       return '/tools';
     case 'translator':
       return '/tools/translator';
+    case 'calculator':
+      return '/tools/calculator';
     case 'board':
       return `/board${route.operator || route.category ? `?${[route.operator && TO_OPERATOR, route.category && `category=${route.category}`].filter(Boolean).join('&')}` : ''}`;
     case 'post':
@@ -357,12 +361,13 @@ const BOARD_KINDS: readonly Route['kind'][] = ['board', 'post', 'board-write', '
 // The rail's 게시판 stays lit on every page of the board.
 export const onBoard = (route: Route) => BOARD_KINDS.includes(route.kind);
 
-export type ToolsPage = 'translator';
+export type ToolsPage = 'translator' | 'calculator';
 
 // 도구, a layer beside 설정 for tools apart from every chat: 'list' for its own list, or null outside it.
 export function toolsPage(route: Route): ToolsPage | 'list' | null {
   switch (route.kind) {
     case 'translator':
+    case 'calculator':
       return route.kind;
     case 'tools':
       return 'list';
@@ -426,6 +431,7 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'admin':
       return { kind: 'settings' };
     case 'translator':
+    case 'calculator':
       return { kind: 'tools' };
     case 'usage':
     case 'notices':

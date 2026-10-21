@@ -32,8 +32,10 @@ export function priceCost(price: Rates, usage: Usage | null, unit: Cost['unit'])
   const rates = price.tiers.findLast((tier) => input > tier.above) ?? price;
   // A cache rate the list leaves out bills the token as plain input: earlier OpenAI models have no cache write price.
   const dollars = (fresh * rates.input + cached * (rates.cacheRead ?? rates.input) + written * (rates.cacheWrite ?? rates.input) + usage.outputTokens * rates.output) / 1_000_000;
-  return { unit, amount: unit === 'credit' ? dollars * 100 : dollars, source: 'price-list' };
+  return { unit, amount: inUnit(dollars, unit), source: 'price-list' };
 }
+
+export const inUnit = (dollars: number, unit: Cost['unit']) => (unit === 'credit' ? dollars * 100 : dollars);
 
 // A price as a discount lane bills it (ConnectionType discount). A cache rate the list leaves out stays out, so priceCost
 // still bills it as plain input, at the input rate discounted.

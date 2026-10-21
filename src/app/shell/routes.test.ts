@@ -73,6 +73,7 @@ const EXAMPLES = {
   controls: [{ kind: 'controls' }],
   tools: [{ kind: 'tools' }],
   translator: [{ kind: 'translator' }],
+  calculator: [{ kind: 'calculator' }],
   labs: [{ kind: 'labs' }],
   settings: [{ kind: 'settings' }],
   share: [{ kind: 'share', id: 'AbCd-Ef_GhIjKlMn' }],

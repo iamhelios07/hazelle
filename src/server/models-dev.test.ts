@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import type { ModelsDevList } from '../connectors/models-dev';
+import type { ModelsDevList, PriceTable } from '../connectors/models-dev';
 import modelsDev from './fixtures/models-dev.json';
 import { VISITOR_HEADER } from '../contracts/http';
 import { tokenBucket } from './limits';
@@ -35,6 +35,14 @@ it('stores the listed providers models.dev prices and inputs and outputs, pricin
   });
   expect((await t.get('models-dev?provider=poe', cookie)).status).toBe(400);
   expect(await t.env.db.prepare("SELECT name FROM models_dev WHERE list = 'github-copilot' AND model = 'gpt-5.4'").first('name')).toBe('GPT-5.4');
+});
+
+it("serves every listed provider's models, named and unpriced ones too, on one table", async () => {
+  const table = (await (await t.get('models-dev/table')).json()) as PriceTable;
+  expect(table.fetchedAt).toEqual(expect.any(Number));
+  expect(table.models).toContainEqual({ list: 'github-copilot', model: 'claude-opus-4.7', name: expect.any(String), price: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, tiers: [] } });
+  expect(table.models).toContainEqual(expect.objectContaining({ list: 'groq', model: 'whisper-large-v3', price: null }));
+  expect(table.models.some(({ list }) => list === 'poe')).toBe(false);
 });
 
 

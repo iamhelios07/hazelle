@@ -132,7 +132,7 @@ export const BOARD = {
 };
 
 export const TOOLS = '도구';
-export const TOOL_PAGES = { translator: '번역기' };
+export const TOOL_PAGES = { translator: '번역기', calculator: '비용 계산기' };
 
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
 export const inFeature = (feature: Feature) => `${inSettings('chat')} › ${FEATURE_NAMES[feature]}`;

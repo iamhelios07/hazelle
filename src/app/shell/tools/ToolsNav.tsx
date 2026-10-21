@@ -1,4 +1,4 @@
-import { Languages, type LucideIcon } from 'lucide-react';
+import { Calculator, Languages, type LucideIcon } from 'lucide-react';
 import { TOOL_PAGES, TOOLS } from '../../common/words';
 import { LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
@@ -7,7 +7,10 @@ import type { Route, ToolsPage } from '../routes';
 type Place = { page: ToolsPage; label: string; icon: LucideIcon; route: Route };
 
 // Only built tools are listed.
-const PLACES: Place[] = [{ page: 'translator', label: TOOL_PAGES.translator, icon: Languages, route: { kind: 'translator' } }];
+const PLACES: Place[] = [
+  { page: 'translator', label: TOOL_PAGES.translator, icon: Languages, route: { kind: 'translator' } },
+  { page: 'calculator', label: TOOL_PAGES.calculator, icon: Calculator, route: { kind: 'calculator' } },
+];
 
 export const toolsEntry = (wide: boolean): Route => (wide ? PLACES[0]!.route : { kind: 'tools' });
 
