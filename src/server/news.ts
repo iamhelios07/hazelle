@@ -5,15 +5,12 @@ import type { DatabaseSync } from 'node:sqlite';
 // sets it to null for one that brings nothing to tell; once published, the post is the record and is edited on the board.
 export type ReleaseNews = { version: string; title: string; text: string };
 export const RELEASE_NEWS: ReleaseNews | null = {
-  version: 'v0.4.1',
-  title: 'Risu 플러그인을 더 많이 쓸 수 있어요',
+  version: 'v0.4.2',
+  title: '게시판 댓글은 글쓴이와 운영자의 대화가 돼요',
   text: [
-    'RisuAI 플러그인이 쓰는 기능을 더 연결했어요. 플러그인이 채팅을 보내고, 채팅 로어북과 봇의 채팅 변수를 읽고 쓸 수 있어요. 선택지 용사 같은 플러그인이 이제 끝까지 돌아가요.',
-    '플러그인이 화면에 그려진 메시지를 읽을 수 있어요. 봇 CSS가 입혀진 모습 그대로 미리보기에 보여 줄 수 있어요.',
-    '플러그인 허용 카드는 플러그인마다 한 장이에요. 앱 밖으로 보내기, 모델 호출, 장기 기억을 한 번에 묻고, 답은 플러그인 화면에서 하나씩 바꿀 수 있어요.',
-    '저장하기 전 새 채팅에서도 플러그인이 돌아가요.',
-    '손님도 게시판에 글을 쓸 수 있어요.',
-    '내 말풍선 안의 봇 카드가 좁게 그려지던 문제를 고쳤어요.',
+    '이제 게시판 글에는 글쓴이와 운영자만 댓글과 답글을 달 수 있어요. 다른 분들은 글을 읽고 추천할 수 있어요. 전에 달린 댓글은 그대로 남아요.',
+    '소식은 공지처럼 읽어요. 궁금한 점은 소식 글 아래 질문 쓰기로 남겨 주세요.',
+    '게시판 전체 맨 위에서 가장 최근 소식을 볼 수 있어요.',
   ].join('\n\n'),
 };
 
