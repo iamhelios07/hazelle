@@ -740,7 +740,7 @@ export class Scripts {
     if (!this.screens.has(chat)) return { ok: false, reason: 'closed' };
     if (!(await this.interactions.allowed(chat, from, false, signal))) return { ok: false, reason: 'not-allowed' };
     const screen = this.screens.get(chat);
-    if (!screen) return { ok: false, reason: 'closed' };
+    if (!screen || signal.aborted) return { ok: false, reason: 'closed' };
     const refused = await screen(text);
     return refused ? { ok: false, reason: refused } : { ok: true };
   }

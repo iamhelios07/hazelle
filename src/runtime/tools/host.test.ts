@@ -208,6 +208,43 @@ it('moves a plugin card to the chat that joins it, since a card shows only in it
   expect(session.scripts.snapshot().questions).toMatchObject([{ chat: other, question: { kind: 'plugin', grants: ['model'] } }]);
 }));
 
+it('keeps a plugin card past the asker that stopped waiting, and sends nothing for it once answered', () => withTools(async (session) => {
+  const f = await fixture(session, '//@uses model\n');
+  const sent: string[] = [];
+  session.scripts.sender(f.chat, async (text) => { sent.push(text); return null; });
+  const stop = new AbortController();
+  const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, stop.signal);
+  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toHaveLength(1));
+  stop.abort();
+  await expect(sending).resolves.toEqual({ ok: false, reason: 'not-allowed' });
+  expect(session.scripts.snapshot().questions).toHaveLength(1);
+  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  await vi.waitFor(() => expect(session.store.get('module', f.module)!.value.botModels).toBe(true));
+  expect(sent).toEqual([]);
+}));
+
+it('lets no use borrow the answer of a card that never named it, as one asked before a re-import added the use', () => withTools(async (session) => {
+  const f = await fixture(session, '//@uses memory\n');
+  session.scripts.claims(f.chat);
+  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['memory'] } }]));
+  await session.store.update('tool', toolId(f.module), (tool) => ({ ...tool, manifest: { ...tool.manifest, uses: [...tool.manifest.uses, 'model'] } }));
+  session.scripts.sender(f.chat, async () => null);
+  const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, new AbortController().signal);
+  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  await expect(sending).resolves.toEqual({ ok: false, reason: 'not-allowed' });
+  expect(session.store.get('module', f.module)!.value).toMatchObject({ takesMemory: true });
+  expect(session.store.get('module', f.module)!.value.botModels).toBeUndefined();
+}));
+
+it('keeps a switch answered while its plugin card waited', () => withTools(async (session) => {
+  const f = await fixture(session, '//@uses network\n//@uses model\n');
+  session.scripts.claims(f.chat);
+  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toHaveLength(1));
+  await setModels(session.store, { kind: 'module', id: f.module }, false);
+  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  await vi.waitFor(() => expect(session.store.get('module', f.module)!.value).toMatchObject({ network: true, botModels: false }));
+}));
+
 it('opens a Risu frame with the sandbox network variant only under its module consent, and restarts it when given or withdrawn', () => withTools(async (session, connect) => {
   await answerable(session);
   const parsed = source('1', '//@uses network\n');

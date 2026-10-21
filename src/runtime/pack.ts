@@ -127,5 +127,6 @@ export const setModels = (store: ObjectStore, { kind, id }: PackOwner, botModels
 export const GRANTS = { network: 'network', model: 'botModels', memory: 'takesMemory' } as const;
 export type Grant = keyof typeof GRANTS;
 
+// A switch answered while the card waited keeps its answer.
 export const setGrants = (store: ObjectStore, module: string, grants: Grant[], yes: boolean): Promise<ApiResult<unknown>> =>
-  store.update('module', module, (current) => current.deleted === undefined ? { ...current, ...Object.fromEntries(grants.map((grant) => [GRANTS[grant], yes])) } : null);
+  store.update('module', module, (current) => current.deleted === undefined ? { ...current, ...Object.fromEntries(grants.filter((grant) => current[GRANTS[grant]] === undefined).map((grant) => [GRANTS[grant], yes])) } : null);

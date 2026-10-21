@@ -8,8 +8,8 @@ import type { ApiFailure, ApiResult } from './api';
 import { EvaluationStuck } from './evaluation';
 import { LuaStuck } from './lua/client';
 import { setCardWrites } from './characters';
-import { setGrants, setModels, type Grant } from './pack';
-import { ToolLate, ToolStopped, ToolStuck } from './script-binding';
+import { GRANTS, setGrants, setModels, type Grant } from './pack';
+import { ToolLate, ToolStopped, ToolStuck, until } from './script-binding';
 import type { ObjectStore } from './store';
 import { toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
 
@@ -113,7 +113,7 @@ export class ScriptInteractions {
     const spender = live(store.get(from.kind, from.id))!;
     if (spender.value.botModels !== undefined) return spender.value.botModels;
     if (deadline) return false;
-    if (from.kind === 'module' && this.unanswered(from.id).includes('model')) return this.grant(chat, from.id, signal);
+    if (from.kind === 'module' && this.unanswered(from.id).includes('model')) return this.grant(chat, from.id, 'model', signal);
     return this.decide(`${from.kind}:${from.id}`, chat, { kind: 'model' }, from, (yes) => setModels(store, from, yes), signal);
   }
 
@@ -133,14 +133,14 @@ export class ScriptInteractions {
     if (!stored) return false;
     if (stored.value.network !== undefined) return stored.value.network;
     if (deadline) return false;
-    return this.grant(chat, module, signal);
+    return this.grant(chat, module, 'network', signal);
   }
 
   // The plugin cards of the chat's tools, asked when a tool starts in a chat (design §6.10), not first when it uses one.
   claims(chat: string) {
     const stored = live(this.store.get('chat', chat));
     if (!stored || this.closing.aborted) return;
-    for (const { module } of toolsOf(this.store, stored.value)) if (this.unanswered(module).length > 0) void this.grant(chat, module);
+    for (const { module } of toolsOf(this.store, stored.value)) if (this.unanswered(module).length > 0) void this.card(chat, module);
   }
 
   // What module's tool declares and its module has not answered.
@@ -155,11 +155,18 @@ export class ScriptInteractions {
     ];
   }
 
-  // One card per plugin and account (ruled 2026-10-21): its one answer saves every use it names.
-  private grant(chat: string, module: string, signal?: AbortSignal): Promise<boolean> {
+  // One card per plugin and account (ruled 2026-10-21): its one answer saves every use it names. No asker owns it, as
+  // no claim does: each stops waiting on its own signal and the card stays. An asker reads its own use's answer after,
+  // since a card asked before a re-import added that use never named it.
+  private async grant(chat: string, module: string, use: Grant, signal?: AbortSignal): Promise<boolean> {
+    const answered = await until(this.card(chat, module), signal).then(() => true, () => false);
+    return answered && this.store.get('module', module)?.value[GRANTS[use]] === true;
+  }
+
+  private card(chat: string, module: string): Promise<boolean> {
     const grants = this.unanswered(module);
     const hosts = this.store.get('tool', toolId(module))?.value.manifest.risu?.hosts ?? [];
-    return this.decide(`plugin:${module}`, chat, { kind: 'plugin', grants, hosts }, { kind: 'module', id: module }, (yes) => setGrants(this.store, module, grants, yes), signal);
+    return this.decide(`plugin:${module}`, chat, { kind: 'plugin', grants, hosts }, { kind: 'module', id: module }, (yes) => setGrants(this.store, module, grants, yes));
   }
 
   // One question per key at a time, its 'yes' or 'no' saved by save; a dismissal saves nothing and is no. A chat that
