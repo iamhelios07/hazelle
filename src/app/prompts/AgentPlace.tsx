@@ -1,5 +1,5 @@
 import type { AgentPlace as Place } from '../../model/prompt';
-import { ChoiceGroup } from '../ui';
+import { ChoiceGroup, Section } from '../ui';
 
 type Choice = Place | 'rewrite';
 const OPTIONS: { value: Choice; label: string; sub: string }[] = [
@@ -10,5 +10,9 @@ const OPTIONS: { value: Choice; label: string; sub: string }[] = [
 
 // A post agent's: where its answer goes beside the reply (AgentPrompt place).
 export function AgentPlace({ place, onChange }: { place: Place | undefined; onChange: (place: Place | undefined) => void }) {
-  return <ChoiceGroup<Choice> label="답에 넣는 방법" showLabel layout="list" options={OPTIONS} value={place ?? 'rewrite'} onChange={(value) => onChange(value === 'rewrite' ? undefined : value)} />;
+  return (
+    <Section title="답에 넣는 방법" level={3}>
+      <ChoiceGroup<Choice> label="답에 넣는 방법" layout="list" options={OPTIONS} value={place ?? 'rewrite'} onChange={(value) => onChange(value === 'rewrite' ? undefined : value)} />
+    </Section>
+  );
 }
