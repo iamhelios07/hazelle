@@ -19,9 +19,9 @@ export const tourArt: Record<TourArt, ReactNode> = {
         <Sketch.Mark icon={ThumbsUp} count={12} lit />
       </Sketch.Row>
       <Sketch.Row>
-        <Tag>{BOARD.categories.talk}</Tag>
+        <Tag>{BOARD.categories.question}</Tag>
         <Sketch.Line width="long" />
-        <Sketch.Mark icon={MessageSquare} count={5} />
+        <Sketch.Mark icon={ThumbsUp} count={1} />
       </Sketch.Row>
     </Sketch>
   ),

@@ -249,7 +249,9 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
         : []),
     ];
     const replies = top ? repliesOf(comment.id).map((reply) => item(reply, false)) : [];
-    const answering = top && open && replying === comment.id;
+    // 답글 are the author and the operator talking (server/board): others comment and 추천.
+    const repliable = top && open && (admin || post.author.mine) && (comment.author.operator || byAuthor(comment.author, post.author));
+    const answering = repliable && replying === comment.id;
     return (
       <ThreadItem
         key={comment.id}
@@ -268,7 +270,7 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
         }
         control={menu.length ? <MoreMenu of={BOARD.comment}>{menu}</MoreMenu> : undefined}
         foot={
-          top && open && !answering && editing !== comment.id ? (
+          repliable && !answering && editing !== comment.id ? (
             <Button variant="link" size="xs" onClick={() => gate(() => setReplying(comment.id))}>
               {BOARD.reply}
             </Button>

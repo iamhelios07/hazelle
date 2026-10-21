@@ -1,4 +1,4 @@
-import { Bug, CircleCheck, Megaphone, CircleDot, CircleDashed, CircleHelp, CircleSlash, Eye, EyeOff, Lightbulb, Lock, MessageSquare, MessagesSquare, ShieldCheck, ThumbsUp, UserX, type LucideIcon } from 'lucide-react';
+import { Bug, CircleCheck, Megaphone, CircleDot, CircleDashed, CircleHelp, CircleSlash, Eye, EyeOff, Lightbulb, Lock, MessageSquare, ShieldCheck, ThumbsUp, UserX, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OPERATOR_NAME, type Author, type Category, type PostRow, type Status } from '../../contracts/board';
 import { navigate } from '../shell/router';
@@ -15,7 +15,6 @@ export const CATEGORY_LOOK: Record<Category, { hue: 1 | 2 | 3 | 4 | 5; icon: Luc
   bug: { hue: 4, icon: Bug, sub: '고장 나거나 이상하게 움직여요' },
   idea: { hue: 1, icon: Lightbulb, sub: '있으면 좋을 기능, 바꿀 점' },
   question: { hue: 2, icon: CircleHelp, sub: '쓰는 법이 궁금해요' },
-  talk: { hue: 3, icon: MessagesSquare, sub: '봇, 프롬프트, 사용기 나누기' },
   news: { hue: 5, icon: Megaphone, sub: '새 버전과 공지' },
 };
 

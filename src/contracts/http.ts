@@ -47,6 +47,7 @@ export type ServerError =
   | 'not-admin'
   | 'not-found'
   | 'post-locked'
+  | 'reply-closed'
   | 'server-error'
   | 'share-held'
   | 'signup-closed'

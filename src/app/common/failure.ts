@@ -71,6 +71,7 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'nickname-taken': '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 지어 주세요.',
   'no-nickname': '게시판에 쓰려면 먼저 닉네임을 정해야 해요.',
   'post-locked': '운영자가 댓글을 닫은 글이에요.',
+  'reply-closed': '답글은 글쓴이와 운영자만 서로 달 수 있어요.',
   'too-many-posts': `글은 하루에 ${count(POSTS_PER_DAY)}개까지 쓸 수 있어요.`,
   'too-many-comments': `댓글은 하루에 ${count(COMMENTS_PER_DAY)}개까지 쓸 수 있어요.`,
   'too-many-visits': '요청을 너무 자주 보냈어요. 잠시 뒤에 다시 시도해 주세요.',

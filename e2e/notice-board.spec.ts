@@ -11,7 +11,7 @@ test('the operator posts, comments, votes, and finds it all after a reload', asy
 
   await test.step('write a public post', async () => {
     await page.getByLabel('제목', { exact: true }).fill('첫 글');
-    await page.getByRole('group', { name: '분류', exact: true }).getByRole('button', { name: '이야기', exact: true }).click();
+    await page.getByRole('group', { name: '분류', exact: true }).getByRole('button', { name: '제안', exact: true }).click();
     await page.getByLabel('내용', { exact: true }).fill('게시판이 열렸어요. https://hazelle.app');
     await page.getByRole('button', { name: '올리기', exact: true }).click();
     await expect(page.getByRole('heading', { name: '첫 글', exact: true })).toBeVisible();

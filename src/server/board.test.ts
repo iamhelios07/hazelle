@@ -62,10 +62,10 @@ it('keeps 소식 to the operator, public and without a status, and out of the fe
   expect((await write(reader, { category: 'news' })).status).toBe(400);
   expect((await write(admin, { category: 'news', visibility: 'operator' })).status).toBe(400);
   const news = await posted(admin, { title: '소식', category: 'news' });
-  const talk = await posted(reader, { title: '이야기', category: 'talk' });
-  expect((await t.put(`board/posts/${talk}`, { title: '이야기', text: '본문', category: 'news' }, reader.cookie)).status).toBe(400);
+  const idea = await posted(reader, { title: '제안' });
+  expect((await t.put(`board/posts/${idea}`, { title: '제안', text: '본문', category: 'news' }, reader.cookie)).status).toBe(400);
   expect((await t.put(`board/posts/${news}/status`, { status: 'done', version: null }, admin.cookie)).status).toBe(404);
-  expect(await titles(reader)).toEqual(['이야기']);
+  expect(await titles(reader)).toEqual(['제안']);
   expect(await titles(reader, 'sort=new&category=news')).toEqual(['소식']);
 });
 
@@ -133,18 +133,35 @@ it('counts one vote per account, taken back by voting false, and refuses votes o
 });
 
 it('keeps comments flat with one level of 답글: a 답글 to a 답글 joins the top-level thread', async () => {
-  await operator();
+  const admin = await operator();
   const author = await member('author');
-  const other = await member('other');
   const id = await posted(author);
-  const top = await commented(other, id, '첫 댓글');
-  const reply = await commented(author, id, '답글', top);
-  await commented(other, id, '답글의 답글', reply);
-  expect((await comment(other, id, '남의 글 댓글', 999)).status).toBe(400);
+  const top = await commented(author, id, '첫 댓글');
+  const reply = await commented(admin, id, '답글', top);
+  await commented(author, id, '답글의 답글', reply);
+  expect((await comment(author, id, '없는 댓글에', 999)).status).toBe(400);
 
   const post = await read(author, id);
   expect(post.comments.map(({ text, parentId }) => [text, parentId])).toEqual([['첫 댓글', null], ['답글', top], ['답글의 답글', top]]);
   expect(post.commentCount).toBe(3);
+});
+
+it('keeps 답글 to the post\'s author and the operator: everyone else only comments', async () => {
+  const admin = await operator();
+  const author = await member('author');
+  const other = await member('other');
+  const id = await posted(author);
+  const byAuthor = await commented(author, id, '글쓴이 댓글');
+  const byOperator = await commented(admin, id, '운영자 댓글');
+  const byOther = await commented(other, id, '다른 사람 댓글');
+  for (const parent of [byAuthor, byOperator, byOther]) expect(await (await comment(other, id, '끼어들기', parent)).json()).toEqual({ error: 'reply-closed' });
+  for (const who of [author, admin]) expect((await comment(who, id, '남에게', byOther)).status).toBe(403);
+  expect((await comment(author, id, '운영자에게', byOperator)).status).toBe(200);
+  expect((await comment(admin, id, '글쓴이에게', byAuthor)).status).toBe(200);
+  // On the operator's own post the author and the operator are one, so nobody answers anyone else.
+  const news = await posted(admin, { category: 'news' });
+  const asked = await commented(other, news, '소식 댓글');
+  expect((await comment(admin, news, '답', asked)).status).toBe(403);
 });
 
 it("lets only the author edit a post or comment, the operator included among the others", async () => {
@@ -244,7 +261,7 @@ it("lists what others did to one's posts and comments, counts it unread, and mar
   const mine = await commented(author, id, '내 댓글');
   await commented(author, id, '스스로 단 답글', mine);
   const top = await commented(other, id, '남의 댓글');
-  const reply = await commented(other, id, '남의 답글', mine);
+  const reply = await commented(admin, id, '운영자 답글', mine);
   await t.env.db.prepare('UPDATE comments SET created_at = id').run();
   await t.put(`board/posts/${id}/status`, { status: 'done', version: 'v0.4.0' }, admin.cookie);
   expect((await t.put(`board/posts/${id}/status`, { status: 'working', version: 'v0.4.0' }, admin.cookie)).status).toBe(400);
@@ -256,7 +273,7 @@ it("lists what others did to one's posts and comments, counts it unread, and mar
   expect([activity, next]).toEqual([
     [
       { id: id * 2 + 1, kind: 'status', postId: id, title: '내 글', by: { name: '운영자', operator: true, mine: false, left: false }, at: expect.any(Number), commentId: null, status: 'done' },
-      { id: reply * 2, kind: 'reply', postId: id, title: '내 글', by, at: reply, commentId: reply, status: null },
+      { id: reply * 2, kind: 'reply', postId: id, title: '내 글', by: { name: '운영자', operator: true, mine: false, left: false }, at: reply, commentId: reply, status: null },
       { id: top * 2, kind: 'comment', postId: id, title: '내 글', by, at: top, commentId: top, status: null },
     ],
     null,

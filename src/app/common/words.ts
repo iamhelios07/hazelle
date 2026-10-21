@@ -111,7 +111,7 @@ export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 �
 // author whose account is gone; unnamed: one that has not chosen a nickname (contracts/board Author).
 export const BOARD = {
   title: '게시판',
-  categories: { bug: '버그', idea: '제안', question: '질문', talk: '이야기', news: '소식' } satisfies Record<Category, string>,
+  categories: { bug: '버그', idea: '제안', question: '질문', news: '소식' } satisfies Record<Category, string>,
   statuses: { open: '열림', seen: '확인함', working: '진행 중', done: '완료', declined: '안 함' } satisfies Record<Status, string>,
   write: '글쓰기',
   mine: '내 글',

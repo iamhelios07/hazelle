@@ -26,8 +26,9 @@ export const COMMENTS_PER_DAY = 60;
 // 임시조치 (정보통신망법 제44조의2): a reported post is held hidden at most this long.
 export const HOLD_DAYS_MAX = 30;
 
-// news: 소식, the operator's public release notes (design §6.15), kept out of the feed that names no category.
-export const CATEGORIES = ['bug', 'idea', 'question', 'talk', 'news'] as const;
+// news: 소식, the operator's public release notes (design §6.15), kept out of the feed that names no category. No 잡담
+// category: the board is feedback, not a place for users to talk among themselves (migration 0019).
+export const CATEGORIES = ['bug', 'idea', 'question', 'news'] as const;
 export type Category = (typeof CATEGORIES)[number];
 // The operator moves a post along; 'done' may name the version that shipped it. A 소식 post takes none, its version
 // being the release it tells of.

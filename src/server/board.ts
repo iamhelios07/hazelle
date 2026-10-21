@@ -256,8 +256,9 @@ board.put('/posts/:id/vote', async (c) => {
 
 const commentText = (value: unknown) => (typeof value === 'string' && value.trim() && value.length <= MAX_COMMENT_LENGTH ? value : null);
 
-// A 답글 sits under a top-level comment: one to a 답글 joins that 답글's thread. The operator still comments on a locked
-// post, and on an operator-only post that comment is its reply.
+// A 답글 sits under a top-level comment: one to a 답글 joins that 답글's thread. A thread is the post's author and the
+// operator talking, never users among themselves: its top comment is by one of them, and so is every 답글. The operator still
+// comments on a locked post, and on an operator-only post that comment is its reply.
 board.post('/posts/:id/comments', async (c) => {
   const account = c.get('account');
   const id = idOf(c);
@@ -267,11 +268,17 @@ board.post('/posts/:id/comments', async (c) => {
   if (id === null || text === null || !(parentId === null || positive(parentId))) return fail(c, 400, 'bad-input');
   if (!account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
   const db = c.env.db;
-  const post = await db.prepare(`SELECT p.locked FROM posts p WHERE p.id = ?2 AND p.deleted = 0 AND ${readable(account)}`).bind(account.id, id).first<{ locked: number }>();
+  const post = await db.prepare(`SELECT p.locked, p.account_id AS author FROM posts p WHERE p.id = ?2 AND p.deleted = 0 AND ${readable(account)}`).bind(account.id, id).first<{ locked: number; author: string | null }>();
   if (!post) return fail(c, 404, 'not-found');
   if (post.locked && !account.admin) return fail(c, 409, 'post-locked');
-  const parent = parentId === null ? null : await db.prepare('SELECT COALESCE(parent_id, id) AS top FROM comments WHERE id = ? AND post_id = ?').bind(parentId, id).first<number>('top');
-  if (parentId !== null && parent === null) return fail(c, 400, 'bad-input');
+  const thread = parentId === null ? null : await db
+    .prepare(`SELECT t.id AS top, t.account_id = ${OPERATOR} AS byOperator, t.account_id AS by FROM comments c JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) WHERE c.id = ? AND c.post_id = ?`)
+    .bind(parentId, id)
+    .first<{ top: number; byOperator: number | null; by: string | null }>();
+  if (parentId !== null && thread === null) return fail(c, 400, 'bad-input');
+  const ours = (by: string | null, operator: boolean) => operator || (by !== null && by === post.author);
+  if (thread && !(ours(account.id, account.admin) && ours(thread.by, Boolean(thread.byOperator)))) return fail(c, 403, 'reply-closed');
+  const parent = thread?.top ?? null;
   const added = await db
     .prepare(
       `INSERT INTO comments (post_id, parent_id, account_id, text, created_at) SELECT ?2, ?3, ?1, ?4, ?5
