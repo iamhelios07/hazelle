@@ -197,6 +197,17 @@ it('asks one card for all of a plugin\'s uses once the tool starts in a chat, ke
   expect(session.scripts.snapshot().questions).toEqual([]);
 }));
 
+it('moves a plugin card to the chat that joins it, since a card shows only in its own chat', () => withTools(async (session) => {
+  const f = await fixture(session, '//@uses model\n');
+  const other = crypto.randomUUID();
+  await server.hold(session.store, other);
+  await startChat(session.store, other, { title: null, character: null, models: {} }, null);
+  session.scripts.claims(f.chat);
+  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toMatchObject([{ chat: f.chat }]));
+  session.scripts.claims(other);
+  expect(session.scripts.snapshot().questions).toMatchObject([{ chat: other, question: { kind: 'plugin', grants: ['model'] } }]);
+}));
+
 it('opens a Risu frame with the sandbox network variant only under its module consent, and restarts it when given or withdrawn', () => withTools(async (session, connect) => {
   await answerable(session);
   const parsed = source('1', '//@uses network\n');

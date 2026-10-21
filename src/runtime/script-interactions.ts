@@ -50,7 +50,7 @@ export class ScriptInteractions {
   // What each chat was already told of its bot's errors, so a script failing on every message says so once.
   private readonly told = new Map<string, Set<string>>();
   private ids = 0;
-  private readonly consents = new Map<string, Promise<boolean>>();
+  private readonly consents = new Map<string, { question: number; deciding: Promise<boolean> }>();
   private readonly notices = new ToolRate(TOOL_NOTICES_PER_MINUTE);
 
   constructor(private readonly store: ObjectStore, private readonly closing: AbortSignal) {}
@@ -88,9 +88,12 @@ export class ScriptInteractions {
   }
 
   ask(chat: string, question: ScriptQuestion['question'], from: PackOwner, signal?: AbortSignal): Promise<string | null> {
+    return this.asked(++this.ids, chat, question, from, signal);
+  }
+
+  private asked(id: number, chat: string, question: ScriptQuestion['question'], from: PackOwner, signal?: AbortSignal): Promise<string | null> {
     if (this.closing.aborted || signal?.aborted) return Promise.resolve(null);
     return new Promise((resolve) => {
-      const id = ++this.ids;
       const abort = () => this.answer(id, null);
       signal?.addEventListener('abort', abort, { once: true });
       this.answers.set(id, (answer) => {
@@ -159,17 +162,23 @@ export class ScriptInteractions {
     return this.decide(`plugin:${module}`, chat, { kind: 'plugin', grants, hosts }, { kind: 'module', id: module }, (yes) => setGrants(this.store, module, grants, yes), signal);
   }
 
-  // One question per key at a time, its 'yes' or 'no' saved by save; a dismissal saves nothing and is no.
+  // One question per key at a time, its 'yes' or 'no' saved by save; a dismissal saves nothing and is no. A chat that
+  // joins it takes its card, since the chat open is the one waiting and a card shows only in its own chat.
   private decide(key: string, chat: string, question: ScriptQuestion['question'], from: PackOwner, save: (yes: boolean) => Promise<ApiResult<unknown>>, signal?: AbortSignal): Promise<boolean> {
-    let deciding = this.consents.get(key);
-    if (!deciding) {
-      deciding = this.ask(chat, question, from, signal).then(async (answer) => {
-        if (answer === null) return false;
-        const saved = await save(answer === 'yes');
-        return saved.ok && answer === 'yes';
-      }).finally(() => this.consents.delete(key));
-      this.consents.set(key, deciding);
+    const asked = this.consents.get(key);
+    if (asked) {
+      if (this.state.questions.some((each) => each.id === asked.question && each.chat !== chat)) {
+        this.set({ ...this.state, questions: this.state.questions.map((each) => (each.id === asked.question ? { ...each, chat } : each)) });
+      }
+      return asked.deciding;
     }
+    const id = ++this.ids;
+    const deciding = this.asked(id, chat, question, from, signal).then(async (answer) => {
+      if (answer === null) return false;
+      const saved = await save(answer === 'yes');
+      return saved.ok && answer === 'yes';
+    }).finally(() => this.consents.delete(key));
+    this.consents.set(key, { question: id, deciding });
     return deciding;
   }
 
