@@ -133,7 +133,8 @@
   composes: fadeAway from '../foundation/motion.module.css';
 }
 
-/* A story sized by its words can be no size container (Story.module.css), nor one a status box nests in it. */
+/* A story sized by its words can be no size container (Story.module.css), nor one a status box nests in it. The bot's
+   boxes in its shadow root are freed by Story.shadow.css (FitsWordsContext). */
 .bubble * {
   container-type: normal;
 }

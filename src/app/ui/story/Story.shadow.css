@@ -10,6 +10,11 @@
 ::after {
   box-sizing: border-box;
 }
+/* In a box sized by its words (Story.tsx FitsWordsContext) a bot's size container has no width of its own and folds the
+   box to a sliver: Risu's messages run the column's width, which a card of inline-size 100% filled. */
+:host([data-fits]) * {
+  container-type: normal !important;
+}
 /* Block flow, as Risu's message root (a span whose blocks break out), since bots lay out for it: a float wraps text,
    inline-block chips sit in a row, a centered box keeps its width. A flex column broke all three. */
 :host {

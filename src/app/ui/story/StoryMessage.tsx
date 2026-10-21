@@ -8,6 +8,7 @@ import { QuoteShapeContext } from '../foundation/quotes';
 import { useHover } from '../foundation/media';
 import { Menu, MenuItem } from '../overlays/Menu';
 import { RowMemoryContext } from '../collections/row-memory';
+import { FitsWordsContext } from './Story';
 import { MESSAGE, RAIL } from './readingRail';
 import styles from './StoryMessage.module.css';
 
@@ -106,7 +107,7 @@ export function Speech({ name, mine, head, children }: { name: string; mine: boo
         {head}
       </div>
       {/* The bubble is already a box: its dialogue keeps to color, whatever 대사 모양 says. */}
-      {mine ? <div className={styles.bubble}><QuoteShapeContext value="color">{children}</QuoteShapeContext></div> : children}
+      {mine ? <div className={styles.bubble}><FitsWordsContext value><QuoteShapeContext value="color">{children}</QuoteShapeContext></FitsWordsContext></div> : children}
     </>
   );
 }
