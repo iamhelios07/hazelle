@@ -16,3 +16,7 @@ it("answers each kind of a bot's question in the values its script reads", () =>
 it('names a module that holds a tool a plugin when it asks', () => {
   expect(asking({ kind: 'model' }, 'plugin').text).toBe('이 플러그인이 모델을 추가로 호출하려고 해요');
 });
+
+it("names each of a plugin's grants in its one card, the network first", () => {
+  expect(asking({ kind: 'plugin', grants: ['network', 'model'], hosts: [] }, 'plugin').text).toBe('이 플러그인이 대화 내용을 앱 밖으로 보내고, 모델을 추가로 호출할 수 있어요');
+});

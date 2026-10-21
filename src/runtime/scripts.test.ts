@@ -627,7 +627,7 @@ describe('tool events through Scripts', () => {
       session.scripts.claims(chat);
       session.scripts.claims(chat);
       await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(2);
-      expect(session.scripts.snapshot().questions.map(({ question }) => question.kind)).toEqual(['memory', 'memory']);
+      expect(session.scripts.snapshot().questions.map(({ question }) => question.kind)).toEqual(['plugin', 'plugin']);
       await session.scripts.pageWrite(chat, modules[0]!, noOutcome());
       expect(session.scripts.snapshot().questions).toHaveLength(2);
       for (const { id } of session.scripts.snapshot().questions) session.scripts.answer(id, 'yes');
@@ -688,7 +688,7 @@ describe('tool events through Scripts', () => {
       expect(answers).toEqual([{ ok: false, reason: 'not-allowed' }, expect.objectContaining({ success: false, reason: 'not-allowed' })]);
       expect(session.scripts.snapshot().questions).toEqual([]);
       const pressed = session.scripts.menu(f.chat, f.module, 'now');
-      await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ question: { kind: 'model' } }]);
+      await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['model'] } }]);
       session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
       await pressed;
       await session.scripts.menu(f.chat, f.module, 'now');

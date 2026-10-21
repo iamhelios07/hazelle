@@ -122,3 +122,10 @@ export const setNetwork = (store: ObjectStore, module: string, network: boolean)
 
 export const setModels = (store: ObjectStore, { kind, id }: PackOwner, botModels: boolean): Promise<ApiResult<unknown>> =>
   store.update(kind, id, (current) => current.deleted === undefined ? { ...current, botModels } : null);
+
+// What a plugin's one card answers (design §6.10), each kept in its own field, which its switch edits alone.
+export const GRANTS = { network: 'network', model: 'botModels', memory: 'takesMemory' } as const;
+export type Grant = keyof typeof GRANTS;
+
+export const setGrants = (store: ObjectStore, module: string, grants: Grant[], yes: boolean): Promise<ApiResult<unknown>> =>
+  store.update('module', module, (current) => current.deleted === undefined ? { ...current, ...Object.fromEntries(grants.map((grant) => [GRANTS[grant], yes])) } : null);

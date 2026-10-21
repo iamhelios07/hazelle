@@ -158,7 +158,7 @@ it('asks once before a tool reaches the network, sends nothing when refused, and
     const chat = transport.frames[0]!.api!.page!.chat!;
     const init = { method: 'POST', headers: { authorization: 'Bearer secret' }, body: '{"q":1}' } as const;
     const refused = chat.fetch(url, init);
-    await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'network', hosts: [] } })]));
+    await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'plugin', grants: ['network'], hosts: [] } })]));
     session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'no');
     expect(await refused).toEqual({ ok: false, reason: 'not-allowed' });
     expect(log).toEqual([]);
@@ -184,15 +184,17 @@ it('asks once before a tool reaches the network, sends nothing when refused, and
   } finally { close(); host.close(); }
 }));
 
-it('asks for the network once the tool starts in a chat, before any fetch, and keeps the card past a send', () => withTools(async (session) => {
-  const f = await fixture(session, '//@uses network\n');
+it('asks one card for all of a plugin\'s uses once the tool starts in a chat, keeps it past a send, and saves its one answer to each', () => withTools(async (session) => {
+  const f = await fixture(session, '//@uses network\n//@uses model\n');
   session.scripts.claims(f.chat);
   session.scripts.claims(f.chat);
-  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'network', hosts: [] } })]));
+  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'plugin', grants: ['network', 'model'], hosts: [] } })]));
   await session.scripts.pageWrite(f.chat, f.module, noOutcome());
   expect(session.scripts.snapshot().questions).toHaveLength(1);
   session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
-  await vi.waitFor(() => expect(session.store.get('module', f.module)!.value.network).toBe(true));
+  await vi.waitFor(() => expect(session.store.get('module', f.module)!.value).toMatchObject({ network: true, botModels: true }));
+  session.scripts.claims(f.chat);
+  expect(session.scripts.snapshot().questions).toEqual([]);
 }));
 
 it('opens a Risu frame with the sandbox network variant only under its module consent, and restarts it when given or withdrawn', () => withTools(async (session, connect) => {

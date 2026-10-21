@@ -1,11 +1,11 @@
 import type { ScriptQuestion } from '../../runtime/script-interactions';
-import { CARD_WRITE_ASK_HELP, cardWriteConsent, MEMORY_CLAIM, MEMORY_CLAIM_HELP, modelConsent, modelsHelp, NETWORK_CONSENT, networkAskHelp, type Asker } from '../common/words';
+import { CARD_WRITE_ASK_HELP, cardWriteConsent, modelConsent, modelsHelp, pluginConsent, pluginConsentHelp, type Asker } from '../common/words';
 import type { AskAnswer } from '../ui';
 
 const CONSENT: AskAnswer = { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] };
 
 // Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
-// option's index, and for a model call, a memory claim, a card write or the network 'yes' or 'no'.
+// option's index, and for a model call, a card write or a plugin's grants 'yes' or 'no'.
 export function asking(question: ScriptQuestion['question'], asker: Asker): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {
     case 'input':
@@ -20,11 +20,9 @@ export function asking(question: ScriptQuestion['question'], asker: Asker): { te
         help: modelsHelp(asker),
         answer: CONSENT,
       };
-    case 'memory':
-      return { text: MEMORY_CLAIM, help: MEMORY_CLAIM_HELP, answer: CONSENT };
     case 'card':
       return { text: cardWriteConsent(asker), help: CARD_WRITE_ASK_HELP, answer: CONSENT };
-    case 'network':
-      return { text: NETWORK_CONSENT, help: networkAskHelp(question.hosts), answer: CONSENT };
+    case 'plugin':
+      return { text: pluginConsent(question.grants), help: pluginConsentHelp(question.grants, question.hosts), answer: CONSENT };
   }
 }

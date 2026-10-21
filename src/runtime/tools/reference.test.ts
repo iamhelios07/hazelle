@@ -81,7 +81,7 @@ it('runs reference memory through real Scripts, the aux connection, the tool slo
     let summaries = 0;
     const log = stubRelay(({ body }) => saying(body?.includes('Summarize the conversation') ? `summary ${++summaries}` : 'main reply'));
     await takeTurn(session, chat, { kind: 'send', text: 'The gate is open.' });
-    await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: module }, question: { kind: 'model' } }]);
+    await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: module }, question: { kind: 'plugin' } }]);
     session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
     const messages = () => fold(session.store.children('entry', chat));
     const key = 'tool:hazelle/memory-lite:summary';

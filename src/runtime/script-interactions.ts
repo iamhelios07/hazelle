@@ -8,7 +8,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { EvaluationStuck } from './evaluation';
 import { LuaStuck } from './lua/client';
 import { setCardWrites } from './characters';
-import { setModels, setNetwork, setTakesMemory } from './pack';
+import { setGrants, setModels, type Grant } from './pack';
 import { ToolLate, ToolStopped, ToolStuck } from './script-binding';
 import type { ObjectStore } from './store';
 import { toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
@@ -36,10 +36,11 @@ type Note =
   | { kind: 'input-stop' };
 export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
 // Consent is saved on the spender, not the chat's character: 'yes' allows it and 'no' refuses it.
-// A dismissal leaves it to be asked again. memory: a tool's claim on the memory slot, saved on its module.
-// card: a script would rewrite the chat's character's card, saved on that character whichever script asked. network: a
-// tool would reach the outside, saved on its module; hosts: the literal hosts its code names, none for a Hazelle tool.
-export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'memory' } | { kind: 'card' } | { kind: 'network'; hosts: string[] } };
+// A dismissal leaves it to be asked again. card: a script would rewrite the chat's character's card, saved on that
+// character whichever script asked. plugin: one card for every use of a module's tool its module has not answered,
+// the memory slot included (design §6.10), each saved on the module; hosts: the literal hosts its code names, none for a
+// Hazelle tool. model: a bot's or a plain module's Lua.
+export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'card' } | { kind: 'plugin'; grants: Grant[]; hosts: string[] } };
 export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
 export class ScriptInteractions {
@@ -109,6 +110,7 @@ export class ScriptInteractions {
     const spender = live(store.get(from.kind, from.id))!;
     if (spender.value.botModels !== undefined) return spender.value.botModels;
     if (deadline) return false;
+    if (from.kind === 'module' && this.unanswered(from.id).includes('model')) return this.grant(chat, from.id, signal);
     return this.decide(`${from.kind}:${from.id}`, chat, { kind: 'model' }, from, (yes) => setModels(store, from, yes), signal);
   }
 
@@ -122,30 +124,39 @@ export class ScriptInteractions {
     return this.decide(`card:${character}`, chat, { kind: 'card' }, from, (yes) => setCardWrites(store, character, yes), signal);
   }
 
-  // Whether module's tool may reach the outside (design §6.10): asked once per module and kept on it, as allowed is.
+  // Whether module's tool may reach the outside (design §6.10), under its plugin card.
   async mayFetch(chat: string, module: string, deadline: boolean, signal?: AbortSignal): Promise<boolean> {
-    const { store } = this;
-    const stored = live(store.get('module', module));
+    const stored = live(this.store.get('module', module));
     if (!stored) return false;
     if (stored.value.network !== undefined) return stored.value.network;
     if (deadline) return false;
-    const hosts = store.get('tool', toolId(module))?.value.manifest.risu?.hosts ?? [];
-    return this.decide(`network:${module}`, chat, { kind: 'network', hosts }, { kind: 'module', id: module }, (yes) => setNetwork(store, module, yes), signal);
+    return this.grant(chat, module, signal);
   }
 
-  // What the chat's tools claim and the user has not answered, memory and network, each asked once per module when the
-  // tool starts in a chat (design §6.10), not first when it uses it.
+  // The plugin cards of the chat's tools, asked when a tool starts in a chat (design §6.10), not first when it uses one.
   claims(chat: string) {
-    const { store } = this;
-    const stored = live(store.get('chat', chat));
+    const stored = live(this.store.get('chat', chat));
     if (!stored || this.closing.aborted) return;
-    for (const { module, tool } of toolsOf(store, stored.value)) {
-      const key = `memory:${module}`;
-      if (tool.manifest.uses.includes('memory') && store.get('module', module)?.value.takesMemory === undefined && !this.consents.has(key)) {
-        void this.decide(key, chat, { kind: 'memory' }, { kind: 'module', id: module }, (yes) => setTakesMemory(store, module, yes));
-      }
-      if (tool.manifest.uses.includes('network')) void this.mayFetch(chat, module, false);
-    }
+    for (const { module } of toolsOf(this.store, stored.value)) if (this.unanswered(module).length > 0) void this.grant(chat, module);
+  }
+
+  // What module's tool declares and its module has not answered.
+  private unanswered(module: string): Grant[] {
+    const uses = this.store.get('tool', toolId(module))?.value.manifest.uses ?? [];
+    const value = this.store.get('module', module)?.value;
+    if (!value) return [];
+    return [
+      ...(uses.includes('network') && value.network === undefined ? ['network' as const] : []),
+      ...(uses.some((use) => use === 'model' || use === 'embed') && value.botModels === undefined ? ['model' as const] : []),
+      ...(uses.includes('memory') && value.takesMemory === undefined ? ['memory' as const] : []),
+    ];
+  }
+
+  // One card per plugin and account (ruled 2026-10-21): its one answer saves every use it names.
+  private grant(chat: string, module: string, signal?: AbortSignal): Promise<boolean> {
+    const grants = this.unanswered(module);
+    const hosts = this.store.get('tool', toolId(module))?.value.manifest.risu?.hosts ?? [];
+    return this.decide(`plugin:${module}`, chat, { kind: 'plugin', grants, hosts }, { kind: 'module', id: module }, (yes) => setGrants(this.store, module, grants, yes), signal);
   }
 
   // One question per key at a time, its 'yes' or 'no' saved by save; a dismissal saves nothing and is no.
@@ -165,7 +176,7 @@ export class ScriptInteractions {
   // A claim holds up no run, so it stays until the user answers it; a fetch that joined a network claim waits with it,
   // holding only its own tool's lane.
   dismiss(chat: string) {
-    for (const { id, chat: asked, question } of this.state.questions) if (asked === chat && question.kind !== 'memory' && question.kind !== 'network') this.answer(id, null);
+    for (const { id, chat: asked, question } of this.state.questions) if (asked === chat && question.kind !== 'plugin') this.answer(id, null);
   }
 
   tell(chat: string, key: string, note: Note, from: PackOwner | null = null) {

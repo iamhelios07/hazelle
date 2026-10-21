@@ -48,13 +48,24 @@ export type Asker = keyof typeof ASKER;
 export const modelsHelp = (asker: Asker) => (asker === 'character' ? BOT_MODELS_HELP : `이 ${ASKER[asker]}이 대화 응답과 별개로 모델을 호출해요. 호출한 만큼 요금이 더 나올 수 있어요.`);
 export const modelConsent = (asker: Asker) => `이 ${ASKER[asker]}이 모델을 추가로 호출하려고 해요`;
 export const cardWriteConsent = (asker: Asker) => `이 ${ASKER[asker]}이 캐릭터 카드를 수정하려고 해요`;
-export const MEMORY_CLAIM = '이 플러그인이 장기 기억을 대신 관리하려고 해요';
 export const MEMORY_CLAIM_HELP = '허용하면 이 플러그인을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
-// The ruling (design §6.10) is that the ask says plainly what the network allows, so the card's line is that sentence.
 export const NETWORK = '외부 연결';
 export const NETWORK_HELP = '켜면 이 플러그인이 대화 내용을 앱 밖으로 보낼 수 있어요. 바깥 이미지와 글꼴은 화면을 새로고침한 뒤부터 보여요.';
-export const NETWORK_CONSENT = '이 플러그인이 대화 내용을 앱 밖으로 보낼 수 있어요';
-export const networkAskHelp = (hosts: string[]) => ['허용하면 이 플러그인이 바깥 주소에 연결해요. 이 플러그인에서는 한 번만 물어보고, 플러그인 화면에서 다시 바꿀 수 있어요.', ...(hosts.length ? [`코드에 적힌 주소: ${hosts.join(', ')}`] : [])].join(' ');
+// A plugin's one card (design §6.10). The ruling is that it says plainly what it allows, so its line names each grant,
+// the network first.
+const GRANT_CLAUSES = {
+  network: ['대화 내용을 앱 밖으로 보내고', '대화 내용을 앱 밖으로 보낼 수 있어요'],
+  model: ['모델을 추가로 호출하고', '모델을 추가로 호출할 수 있어요'],
+  memory: ['장기 기억을 대신 맡고', '장기 기억을 대신 맡을 수 있어요'],
+} as const;
+const GRANT_HELP = {
+  network: '바깥 이미지와 글꼴은 화면을 새로고침한 뒤부터 보여요.',
+  model: '내 메시지를 대신 보내 응답을 받을 수도 있어요. 호출한 만큼 요금이 더 나올 수 있어요.',
+  memory: MEMORY_CLAIM_HELP,
+};
+export const pluginConsent = (grants: (keyof typeof GRANT_CLAUSES)[]) => `이 플러그인이 ${grants.map((grant, index) => GRANT_CLAUSES[grant][index === grants.length - 1 ? 1 : 0]).join(', ')}`;
+export const pluginConsentHelp = (grants: (keyof typeof GRANT_CLAUSES)[], hosts: string[]) =>
+  [...grants.map((grant) => GRANT_HELP[grant]), ...(hosts.length ? [`코드에 적힌 주소: ${hosts.join(', ')}.`] : []), '플러그인마다 한 번만 물어보고, 플러그인 화면에서 하나씩 다시 바꿀 수 있어요.'].join(' ');
 export const NETWORK_CALLED = '연결한 곳';
 export const TOOL_LATE = '플러그인 응답이 늦어져서 이번에는 빼고 보냈어요';
 export const TOOL_STALE = '이미 다음 응답이 나와서 플러그인이 바꾼 내용은 반영하지 않았어요';
