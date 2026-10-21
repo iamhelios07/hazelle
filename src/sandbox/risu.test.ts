@@ -17,8 +17,8 @@ function fakeApi({ open = true } = {}) {
   const lore: Omit<Hazelle.LoreEntry, 'owner'>[] = [];
   const variables: [string, string][] = [];
   const messages: Hazelle.Message[] = [
-    { index: 0, id: 'm0', version: 'v0', role: 'user', text: 'hello', time: 1 },
-    { index: 1, id: 'm1', version: 'v1', role: 'char', text: 'hi there', time: 2 },
+    { index: 0, id: 'm0', version: 'v0', role: 'user', text: 'hello', raw: 'hello', time: 1 },
+    { index: 1, id: 'm1', version: 'v1', role: 'char', text: 'hi there', raw: '<b>hi there</b>', time: 2 },
   ];
   const card: Hazelle.Card = {
     id: 'character-1', name: 'Mira', description: 'A sailor', personality: 'calm', scenario: 'harbor', greeting: null, creatorNotes: '', tags: ['sea'],
@@ -63,19 +63,19 @@ const install = (fake: ReturnType<typeof fakeApi>, scope: Record<string, unknown
 };
 
 describe('the Risu adapter', () => {
-  it('names the open chat by stable indices that getChatFromIndex answers, and nothing else', async () => {
+  it('names the open chat by stable indices that getChatFromIndex answers with its messages as written, and nothing else', async () => {
     const fake = fakeApi();
     const { Risuai } = install(fake);
     const characterIndex = await Risuai.getCurrentCharacterIndex!() as number;
     const chatIndex = await Risuai.getCurrentChatIndex!() as number;
     expect((await Risuai.getDatabase!(['characters'] as never) as { characters: { chaId: string }[] }).characters[characterIndex]?.chaId).toBe('character-1');
     expect(await Risuai.getChatFromIndex!(characterIndex as never, chatIndex as never)).toEqual({
-      id: 'chat-1', message: [{ role: 'user', data: 'hello', time: 1, chatId: 'm0' }, { role: 'char', data: 'hi there', time: 2, chatId: 'm1' }],
+      id: 'chat-1', message: [{ role: 'user', data: 'hello', time: 1, chatId: 'm0' }, { role: 'char', data: '<b>hi there</b>', time: 2, chatId: 'm1' }],
       localLore: [{ comment: 'Weather', key: '', content: 'Rain.', alwaysActive: true, disabled: false }],
     });
     expect(await Risuai.getChatFromIndex!(characterIndex as never, (chatIndex + 1) as never)).toBeNull();
-    await Risuai.setChatToIndex!(characterIndex as never, chatIndex as never, { message: [{ role: 'user', data: 'hello' }, { role: 'char', data: 'edited' }, { role: 'user', data: 'more' }] } as never);
-    expect(fake.edits).toEqual([[1, 'edited']]);
+    await Risuai.setChatToIndex!(characterIndex as never, chatIndex as never, { message: [{ role: 'user', data: 'edited' }, { role: 'char', data: '<b>hi there</b>' }, { role: 'user', data: 'more' }] } as never);
+    expect(fake.edits).toEqual([[0, 'edited']]);
     expect(fake.added).toEqual([['user', 'more']]);
     expect(await Risuai.getCharacter!()).toMatchObject({ chaId: 'character-1', name: 'Mira', desc: 'A sailor', firstMessage: '', type: 'character', globalLore: [{ key: 'port, dock', content: 'The port.' }] });
 
@@ -201,6 +201,8 @@ describe('the Risu adapter', () => {
     expect(await Risuai.pluginStorage!.getItem!('missing' as never)).toBeNull();
     expect(await Risuai.pluginStorage!.keys!()).toEqual(['k']);
     expect(fake.storage.size).toBe(3);
+    await Risuai.pluginStorage!.setItem!('draft' as never, { name: 'Leon', notes: undefined } as never);
+    expect(await Risuai.pluginStorage!.getItem!('draft' as never)).toStrictEqual({ name: 'Leon' });
   });
 
   it('hands beforeRequest the request in Risu shape after the process handlers, and maps its answer back', async () => {

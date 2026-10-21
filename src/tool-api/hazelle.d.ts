@@ -3,8 +3,9 @@ declare namespace Hazelle {
   type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
   type Role = 'user' | 'char';
   // index: place after the greeting (index 0 = first message after it), as Lua counts. id: the message's, the same
-  // across its versions. version: the version shown. text: as the prompt reads it.
-  interface Message { index: number; id: string; version: string; role: Role; text: string; time: number }
+  // across its versions. version: the version shown. text: as the prompt reads it. raw: as written, before the bot's
+  // scripts and CBS, what Risu's chat data holds.
+  interface Message { index: number; id: string; version: string; role: Role; text: string; raw: string; time: number }
   type At = { index: number; id: string; version: string };
   interface ModelMessage { role: 'system' | 'user' | 'assistant'; content: string }
   // A message of the request about to be sent. message: the id of the chat message it renders, absent for the prompt's

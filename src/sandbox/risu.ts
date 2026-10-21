@@ -32,7 +32,7 @@ const character = (card: Hazelle.Card, lorebook: Hazelle.LoreEntry[]) => ({
 
 // localLore: the chat's own lorebook, which setChatToIndex writes back.
 const chatOf = (id: string, messages: Hazelle.Message[], lorebook: Hazelle.LoreEntry[]) => ({
-  id, message: messages.map((message) => ({ role: message.role, data: message.text, time: message.time, chatId: message.id })),
+  id, message: messages.map((message) => ({ role: message.role, data: message.raw, time: message.time, chatId: message.id })),
   localLore: lorebook.filter(({ owner }) => owner.kind === 'chat').map(loreEntry),
 });
 // Risu's lore has no enabled flag; loreEntry's disabled is the only one a plugin meets.
@@ -140,7 +140,9 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     const keys = async () => (await api.storage.keys()).filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length));
     return {
       getItem: async (key: string) => (await api.storage.get(prefix + key)) ?? null,
-      setItem: (key: string, value: Hazelle.Json) => api.storage.set(prefix + key, value),
+      // Risu keeps whatever object it is handed, undefined fields included (selection-hero's drafts); the native store
+      // takes JSON, so they drop out as a save would drop them.
+      setItem: (key: string, value: unknown) => api.storage.set(prefix + key, JSON.parse(JSON.stringify(value)) as Hazelle.Json),
       removeItem: (key: string) => api.storage.delete(prefix + key),
       keys,
       clear: async () => { for (const key of await keys()) await api.storage.delete(prefix + key); },
@@ -230,7 +232,7 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
       for (const key of Object.keys(value)) if (!CHAT_KEYS.has(key)) tell(`setChatToIndex:${key}`);
       value.message.forEach((message, at) => {
         if (at >= messages.length) chat.add(message.role === 'user' ? 'user' : 'char', message.data);
-        else if (message.data !== messages[at]!.text) chat.edit(at, message.data);
+        else if (message.data !== messages[at]!.raw) chat.edit(at, message.data);
       });
       for (const [key, held] of Object.entries(value.scriptstate ?? {})) {
         if (!key.startsWith('$') || held === undefined) tell(`setChatToIndex:scriptstate.${key}`);
