@@ -86,6 +86,12 @@ const once = <T>(read: () => Promise<T>) => {
   return () => held ??= read();
 };
 
+// Risu's main document as far as Hazelle has one: a message's body as the chat screen draws it (chat.rendered), and the
+// page's sheets as the bot's. CSS.escape escapes an id that starts with a digit, which the selector is read back from.
+const CHATTEXT = /^\.risu-chat\[data-chat-(id|index)="((?:[^"\\]|\\.)+)"\]\s+\.chattext(?::not\(\.hidden\))?$/;
+const SHEETS = /^style\s*,\s*link\[rel="?stylesheet"?\]$/;
+const unescapeCss = (text: string) => text.replace(/\\([0-9a-f]{1,6})\s?|\\(.)/gi, (_, hex?: string, char?: string) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : char!));
+
 // Risu runs a plugin as the body of an async function (apiV3/factory.ts), so a top-level await works (선택지 용사) and
 // its declarations stay its own. The line break keeps a closing line comment from swallowing the brace.
 export const risuScript = (code: string) => `(async () => {${code}\n})()`;
@@ -122,6 +128,8 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   const handlers: Record<Mode, Set<Handler>> = { display: new Set(), output: new Set(), input: new Set(), process: new Set() };
   const listeners = new Set<Listener>();
   const unloads: Callback[] = [];
+  // The bot's sheet of the last message getRootDocument found, which is the whole chat's.
+  let sheet: string | null = null;
   // Risu does not await a button or setting; holding the tool's lane for a whole screen would stall its other events.
   const press = (run: Callback | undefined) => { if (run) void Promise.resolve().then(run).catch((error: unknown) => console.error(error)); };
 
@@ -191,8 +199,28 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     getArg: async (key: string) => (await api.settings())[key],
     setArgument: (key: string, value: string | number) => api.setSetting(key, value),
     setArg: (key: string, value: string | number) => api.setSetting(key, value),
-    // Risu wraps its main document's elements in SafeClassArray; nothing here hands one out.
+    // Risu wraps its main document's elements in SafeClassArray; getRootDocument hands out plain arrays.
     unwarpSafeArray: async (array: unknown[]) => array,
+    // Read-only, and only where a message is drawn: the rest of the page (body, to put a box of its own on the app) is
+    // declined (design §6.10) and found nowhere.
+    getRootDocument: async () => ({
+      querySelector: async (selector: string) => {
+        const found = CHATTEXT.exec(selector.trim());
+        if (!found) { tell('getRootDocument:page'); return null; }
+        const chat = await frame.chat();
+        const messages = chat ? await chat.messages() : [];
+        const key = unescapeCss(found[2]!);
+        const message = found[1] === 'id' ? messages.find(({ id }) => id === key) : messages[Number(key)];
+        const drawn = message && await chat!.rendered({ index: message.index, id: message.id, version: message.version });
+        if (!drawn) return null;
+        sheet = drawn.css;
+        return { getOuterHTML: async () => `<div class="chattext">${drawn.html}</div>`, getInnerHTML: async () => drawn.html, innerText: async () => drawn.text };
+      },
+      querySelectorAll: async (selector: string) => {
+        if (!SHEETS.test(selector.trim())) { tell('getRootDocument:page'); return []; }
+        return sheet === null ? [] : [{ getOuterHTML: async () => `<style>${sheet}</style>` }];
+      },
+    }),
     getDatabase: async (keys: string[] | 'all' = 'all') => {
       const chat = await frame.chat();
       const reads: Reads = { account: once(() => api.account()), setup: once(async () => chat && chat.setup()), lorebook: once(async () => chat ? chat.lorebook() : []) };

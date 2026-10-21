@@ -52,8 +52,8 @@ describe('the Risu scan', () => {
   });
 
   it('lists unmapped and declined names and replacer kinds once each', () => {
-    expect(scanRisu("risuai.readInlay(); risuai.readInlay(); Risuai.getRootDocument(); risuai.addRisuReplacer('beforeTranslate', f); risuai.addRisuReplacer('beforeRequest', f);")).toEqual({
-      verdict: 'partial', missing: ['readInlay', 'getRootDocument', 'addRisuReplacer:beforeTranslate'], hosts: [],
+    expect(scanRisu("risuai.readInlay(); risuai.readInlay(); Risuai.addProvider(); risuai.addRisuReplacer('beforeTranslate', f); risuai.addRisuReplacer('beforeRequest', f);")).toEqual({
+      verdict: 'partial', missing: ['readInlay', 'addProvider', 'addRisuReplacer:beforeTranslate'], hosts: [],
     });
   });
 

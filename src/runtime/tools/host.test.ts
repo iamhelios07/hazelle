@@ -211,7 +211,7 @@ it('moves a plugin card to the chat that joins it, since a card shows only in it
 it('keeps a plugin card past the asker that stopped waiting, and sends nothing for it once answered', () => withTools(async (session) => {
   const f = await fixture(session, '//@uses model\n');
   const sent: string[] = [];
-  session.scripts.sender(f.chat, async (text) => { sent.push(text); return null; });
+  session.scripts.screen(f.chat, { send: async (text) => { sent.push(text); return null; }, rendered: () => null });
   const stop = new AbortController();
   const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, stop.signal);
   await vi.waitFor(() => expect(session.scripts.snapshot().questions).toHaveLength(1));
@@ -228,7 +228,7 @@ it('lets no use borrow the answer of a card that never named it, as one asked be
   session.scripts.claims(f.chat);
   await vi.waitFor(() => expect(session.scripts.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['memory'] } }]));
   await session.store.update('tool', toolId(f.module), (tool) => ({ ...tool, manifest: { ...tool.manifest, uses: [...tool.manifest.uses, 'model'] } }));
-  session.scripts.sender(f.chat, async () => null);
+  session.scripts.screen(f.chat, { send: async () => null, rendered: () => null });
   const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, new AbortController().signal);
   session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
   await expect(sending).resolves.toEqual({ ok: false, reason: 'not-allowed' });
@@ -478,7 +478,7 @@ it('notifies a running tool after pulling a data change written on another devic
   await startChat(account.store, chat, { title: null, character: null, models: {} }, null);
   const changes = vi.fn();
   const transport = inProcessTools((api) => { api.storage.onChange(changes); });
-  const host = new ToolHost(account, () => ({ report: () => {}, pageContext: () => null, pageWrite: async () => {}, send: async () => ({ ok: true as const }) }), transport.open);
+  const host = new ToolHost(account, () => ({ report: () => {}, pageContext: () => null, pageWrite: async () => {}, send: async () => ({ ok: true as const }), rendered: () => null }), transport.open);
   try {
     await host.warm(chat);
     const peer = await account.open();
@@ -515,7 +515,7 @@ it('applies page chat writes through Scripts, distinguishes null and deletion, a
   } finally { vi.useRealTimers(); close(); host.close(); }
 }));
 
-it('writes the chat\'s own lorebook by name and its variables unprefixed, and sends through the open chat screen once models are allowed', () => withTools(async (session, connect) => {
+it('writes the chat\'s own lorebook by name and its variables unprefixed, sends through the open chat screen once models are allowed, and reads a message as it draws it', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
   const host = connect(transport.open);
@@ -525,7 +525,11 @@ it('writes the chat\'s own lorebook by name and its variables unprefixed, and se
     await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
     const chat = transport.frames[0]!.api!.page!.chat!;
     expect(await chat.send('go')).toEqual({ ok: false, reason: 'closed' });
-    const leave = session.scripts.sender(f.chat, screen);
+    const [hello] = await chat.messages();
+    expect(await chat.rendered(hello!)).toBeNull();
+    const drawn = { html: '<p>hello</p>', css: '', text: 'hello' };
+    const leave = session.scripts.screen(f.chat, { send: screen, rendered: (at) => (at.id === hello!.id && at.version === hello!.version ? drawn : null) });
+    expect(await chat.rendered(hello!)).toEqual(drawn);
     await setModels(session.store, { kind: 'module', id: f.module }, true);
     chat.writeLore({ name: 'save', keys: ['hero'], text: '{}', always: false, on: true });
     chat.variables.set('sh_Player', 'Jin');

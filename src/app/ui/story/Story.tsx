@@ -213,6 +213,16 @@ export function groundRules(rules: Iterable<object>) {
 
 let base: CSSStyleSheet | null = null;
 export const botSheets = (shadow: ShadowRoot) => shadow.adoptedStyleSheets.filter((sheet) => sheet !== base);
+
+// What an element draws in its stories, in order (Hazelle.Rendered): the base sheet stays the app's, and a slotted picture
+// or edit box is no story's own.
+export function storySnapshot(element: Element): { html: string; css: string; text: string } | null {
+  const roots = [...element.querySelectorAll(`.${styles.story} > div`)].flatMap((host) => (host.shadowRoot ? [host.shadowRoot] : []));
+  if (roots.length === 0) return null;
+  const css = botSheets(roots[0]!).flatMap((sheet) => [...sheet.cssRules].map((rule) => rule.cssText)).join('\n');
+  const text = (root: ShadowRoot) => [...root.childNodes].map((node) => (node instanceof HTMLElement ? node.innerText : node.nodeType === Node.TEXT_NODE ? node.textContent!.trim() : '')).filter(Boolean).join('\n');
+  return { html: roots.map((root) => root.innerHTML).join(''), css, text: roots.map(text).join('\n\n') };
+}
 const sheets = new Map<string, CSSStyleSheet>();
 function sheetFor(css: string, veiled: boolean): CSSStyleSheet {
   const key = `${veiled}:${css}`;

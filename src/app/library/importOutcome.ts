@@ -99,7 +99,7 @@ export function toolOutcome(file: string, manifest: ToolManifest, saved: ToolImp
 
 // Keyed by every name in RISU_DECLINED.
 export const DECLINED_WORDS: Record<string, string> = {
-  getRootDocument: '앱 화면 직접 바꾸기',
+  'getRootDocument:page': '앱 화면 직접 바꾸기',
   addProvider: '모델 제공자 추가',
   registerBodyIntercepter: '모델 요청 내용 바꾸기',
   unregisterBodyIntercepter: '모델 요청 내용 바꾸기',

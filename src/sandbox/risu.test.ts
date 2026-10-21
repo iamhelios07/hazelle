@@ -43,6 +43,7 @@ function fakeApi({ open = true } = {}) {
     writeLore: (entry: Omit<Hazelle.LoreEntry, 'owner'>) => { lore.push(entry); },
     variables: { set: (name: string, value: string) => { variables.push([name, value]); } },
     model, send, say: (text: string) => { said.push(text); },
+    rendered: async (at: Hazelle.At) => (at.id === 'm1' ? { html: '<b>hi there</b>', css: '.b { color: red; }', text: 'hi there' } : null),
   } as unknown as Hazelle.Chat;
   const api = {
     api: 1, tool: { name: 'test', author: 'jin', displayName: 'Test', version: '1' }, context: 'frame',
@@ -152,14 +153,28 @@ describe('the Risu adapter', () => {
     for (const name of RISU_MAPPED) expect(Risuai[name], name).toBeDefined();
     await expect(Risuai.readInlay!()).rejects.toThrow("Risu API 'readInlay' is not available in Hazelle");
     await expect(Risuai.readInlay!()).rejects.toThrow();
-    expect(typeof Risuai.getRootDocument).toBe('undefined');
-    expect(Risuai.getRootDocument).toBeUndefined();
+    expect(typeof Risuai.addProvider).toBe('undefined');
     await expect(Risuai.addRisuReplacer!('beforeTranslate' as never, (() => []) as never)).rejects.toThrow("'addRisuReplacer:beforeTranslate'");
     expect((Risuai as Record<string, unknown>).then).toBeUndefined();
     (scope.confirm as () => boolean)();
     (scope.confirm as () => boolean)();
-    expect(fake.missing).toEqual(['readInlay', 'getRootDocument', 'addRisuReplacer:beforeTranslate', 'confirm']);
+    expect(fake.missing).toEqual(['readInlay', 'addProvider', 'addRisuReplacer:beforeTranslate', 'confirm']);
     expect(await Risuai.getRuntimeInfo!()).toEqual({ apiVersion: '3.0', platform: 'hazelle', saveMethod: 'account' });
+  });
+
+  it('finds in getRootDocument only a drawn message, by chatId as CSS.escape writes it or by index, and the bot\'s sheet', async () => {
+    type Found = { getOuterHTML(): Promise<string>; innerText(): Promise<string> };
+    const fake = fakeApi();
+    const root = await install(fake).Risuai.getRootDocument!() as { querySelector(selector: string): Promise<Found | null>; querySelectorAll(selector: string): Promise<Found[]> };
+    expect(await root.querySelectorAll('style, link[rel="stylesheet"]')).toEqual([]);
+    const body = (await root.querySelector('.risu-chat[data-chat-id="\\6d 1"] .chattext:not(.hidden)'))!;
+    expect(await body.getOuterHTML()).toBe('<div class="chattext"><b>hi there</b></div>');
+    expect(await body.innerText()).toBe('hi there');
+    expect(await (await root.querySelector('.risu-chat[data-chat-index="1"] .chattext'))!.innerText()).toBe('hi there');
+    expect(await Promise.all((await root.querySelectorAll('style, link[rel="stylesheet"]')).map((sheet) => sheet.getOuterHTML()))).toEqual(['<style>.b { color: red; }</style>']);
+    expect(await root.querySelector('.risu-chat[data-chat-index="0"] .chattext')).toBeNull();
+    expect(await root.querySelector('body')).toBeNull();
+    expect(fake.missing).toEqual(['getRootDocument:page']);
   });
 
   it('saves an asset at Risu\'s path and reads it back with or without the assets/ prefix, refusing other folders', async () => {
@@ -368,8 +383,9 @@ describe.runIf(availableB)('the phase B acceptance plugins, unmodified', () => {
     expect(sent[0]).toEqual(request[0]);
     expect(sent.at(-1)).toEqual(request[1]);
     expect(sent.slice(1, -1).every(({ role, content }) => role === 'system' && content.includes('RISUPOT'))).toBe(true);
-    // It reaches for the app's page, which stays declined, and goes on without it; its scope id on the chat is not kept.
-    expect(fake.missing).toEqual(['getRootDocument', 'setChatToIndex:risupotWikiScopeId']);
+    // It reaches for the app's page past a drawn message, which stays declined, and goes on without it; its scope id on
+    // the chat is not kept.
+    expect(fake.missing).toEqual(['getRootDocument:page', 'setChatToIndex:risupotWikiScopeId']);
   }, 30_000);
 
   // Opening its screen needs a real document, which only a browser run gives.

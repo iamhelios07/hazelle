@@ -24,7 +24,7 @@ import { BIN_KEEPS, LORE_BUDGET_LABEL } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useToolFrames, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, usePanelsBeside, useTimePin, useViewport, type BotButton, type Reading } from '../ui';
+import { storySnapshot, useMenuHandle, usePanelsBeside, useTimePin, useViewport, type BotButton, type Reading } from '../ui';
 import { inspectShown, NO_PANELS, opened, type InfoTab, type InspectTab, type Panel, type Panels } from './panels';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
@@ -237,9 +237,15 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (talk.snapshot(chat)) return 'busy';
     return (text ? await say(text) : await asked(chat, { kind: 'answer' })) ? 'failed' : null;
   }
-  const toolSend = useRef(sendForTool);
-  toolSend.current = sendForTool;
-  useEffect(() => id === null ? undefined : session.scripts.sender(id, (text) => toolSend.current(id, text)), [id]);
+  // The row as drawn, on the version shown and not under an edit.
+  function renderedForTool(at: { id: string; version: string }) {
+    const message = messages.find((each) => each.id === at.id);
+    const row = message && shown(message).id === at.version && editing?.id !== at.id && scroll.scrollRef.current?.querySelector(`[data-key="${CSS.escape(at.id)}"]`);
+    return row ? storySnapshot(row) : null;
+  }
+  const toolScreen = useRef({ send: sendForTool, rendered: renderedForTool });
+  toolScreen.current = { send: sendForTool, rendered: renderedForTool };
+  useEffect(() => id === null ? undefined : session.scripts.screen(id, { send: (text) => toolScreen.current.send(id, text), rendered: (at) => toolScreen.current.rendered(at) }), [id]);
 
   // A send's text went back to the draft, or was kept when its message was saved; either way the composer sends again.
   const sendUnshortened = (target: Target) => (target.kind === 'send' ? void send(true) : ask(target, true));

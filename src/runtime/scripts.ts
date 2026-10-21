@@ -50,6 +50,8 @@ const EMPTY_LOG: ScriptLog = { entries: [], omitted: 0 };
 export type Halted = { kind: 'halted' };
 // turn: as it goes on. Its said is null once the user's message was saved here; a failure after that is kept
 // (runtime/turn TurnFailure).
+// send: the screen's own send, null once sent or why not. rendered: a message version as the screen draws it now.
+export type ChatScreen = { send(text: string): Promise<'busy' | 'failed' | null>; rendered(at: { id: string; version: string }): Hazelle.Rendered | null };
 export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone' } | { kind: 'unsent'; failure: ApiFailure }) & { kept?: true });
 
 // The triggers of a chat's packs, in the packs' order (design §6.5), which is the order a run walks them in. A block
@@ -248,8 +250,8 @@ export class Scripts {
   private readonly lastPrompt = new Map<string, Map<string, Answered>>();
   // Presses queued behind an earlier run and not begun, by chat and button.
   private readonly waiting = new Map<string, Promise<boolean>>();
-  // The open chat screens' own send, by chat (useChat): null once sent, or why not.
-  private readonly screens = new Map<string, (text: string) => Promise<'busy' | 'failed' | null>>();
+  // The open chat screens, by chat (useChat).
+  private readonly screens = new Map<string, ChatScreen>();
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; log: RequestLog; costs: Costs; tokens: Tokens; display: Pick<ScriptDisplay, 'stale'> },
@@ -729,9 +731,13 @@ export class Scripts {
     return { scope, host: this.host(chat, scope, signal) };
   }
 
-  sender(chat: string, send: (text: string) => Promise<'busy' | 'failed' | null>): () => void {
-    this.screens.set(chat, send);
-    return () => { if (this.screens.get(chat) === send) this.screens.delete(chat); };
+  screen(chat: string, screen: ChatScreen): () => void {
+    this.screens.set(chat, screen);
+    return () => { if (this.screens.get(chat) === screen) this.screens.delete(chat); };
+  }
+
+  rendered(chat: string, at: { id: string; version: string }): Hazelle.Rendered | null {
+    return this.screens.get(chat)?.rendered(at) ?? null;
   }
 
   // A tool's message as the user's (Hazelle.Chat.send): through the screen's send, never a turn of its own, so
@@ -741,7 +747,7 @@ export class Scripts {
     if (!(await this.interactions.allowed(chat, from, false, signal))) return { ok: false, reason: 'not-allowed' };
     const screen = this.screens.get(chat);
     if (!screen || signal.aborted) return { ok: false, reason: 'closed' };
-    const refused = await screen(text);
+    const refused = await screen.send(text);
     return refused ? { ok: false, reason: refused } : { ok: true };
   }
 

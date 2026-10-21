@@ -162,7 +162,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   private called: ToolHosts = new Map();
   private ids = 0;
 
-  constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly scripts: () => Pick<Scripts, 'report' | 'pageContext' | 'pageWrite' | 'send'>, private readonly open: OpenFrame = toolFrame) {
+  constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly scripts: () => Pick<Scripts, 'report' | 'pageContext' | 'pageWrite' | 'send' | 'rendered'>, private readonly open: OpenFrame = toolFrame) {
     this.writes = new ToolWrites(session.store);
     this.unsubscribe = session.store.subscribe((changes) => this.changed(changes));
   }
@@ -549,6 +549,11 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         if (!this.allowed(first, entry.module)) throw new ToolStopped();
         if (!entry.tool.manifest.uses.includes('model')) return { ok: false, reason: 'not-declared' } satisfies Hazelle.SendAnswer;
         return this.scripts().send(first, second, { kind: 'module', id: entry.module }, AbortSignal.any([frame.closing.signal, cancel]));
+      }
+      case 'chat.rendered': {
+        if (typeof first !== 'string' || !isRecord(second) || typeof second.id !== 'string' || typeof second.version !== 'string') break;
+        if (!this.allowed(first, entry.module)) throw new ToolStopped();
+        return this.scripts().rendered(first, { id: second.id, version: second.version });
       }
       case 'settings': return this.session.store.get('tool', toolId(entry.module))!.value.settings;
       case 'settings.set': {
