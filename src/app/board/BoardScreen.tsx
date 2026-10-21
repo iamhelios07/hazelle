@@ -2,15 +2,16 @@ import { Bell, FileText, Inbox, ListFilter, PenLine, Send } from 'lucide-react';
 import { useState } from 'react';
 import { CATEGORIES, STATUSES, type Category, type Sort, type Status } from '../../contracts/board';
 import { GuestLine } from '../common/GuestNotice';
-import { AuthorLine } from '../common/postRow';
+import { AuthorLine, CATEGORY_LOOK } from '../common/postRow';
+import { ago } from '../common/time';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
 import { ACCOUNT_ONLY, BOARD } from '../common/words';
 import { useAccount, useStanding } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, ChoiceGroup, IconButton, Menu, MenuItem, NavBar, NavGroup, NavRow, Row, Screen, Tabs, useSplit } from '../ui';
-import { readNickname } from '../../runtime/board';
+import { Button, ChoiceGroup, IconButton, Menu, MenuItem, NavBar, NavGroup, NavRow, NoticeBar, Row, Screen, Tabs, useSplit } from '../ui';
+import { readNickname, readPosts } from '../../runtime/board';
 import { NicknameDialog, useNicknameGate } from './nickname';
 import { PostList } from './parts';
 
@@ -84,9 +85,29 @@ export function BoardScreen({ operator, category, back }: { operator: boolean; c
           )}
         </Row>
       </Row>
+      {category === null && !onlyOperator && <LatestNews />}
       <PostList key={JSON.stringify(ask)} ask={ask} label={BOARD.title} empty="아직 글이 없어요." votes={!onlyOperator && !guest} />
       {dialog}
     </Screen>
+  );
+}
+
+// 소식 stay out of 전체 (server/board); the newest one stands over it like a pinned notice.
+function LatestNews() {
+  const loaded = useLoaded(() => readPosts(null, { sort: 'new', category: 'news', limit: 1 }));
+  const news = loaded.data?.rows[0];
+  if (!news) return null;
+  return (
+    <NoticeBar
+      icon={CATEGORY_LOOK.news.icon}
+      title={news.title}
+      note={[BOARD.categories.news, news.version, ago(news.createdAt)].filter(Boolean).join(' · ')}
+      actions={
+        <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'post', id: news.id })}>
+          보기
+        </Button>
+      }
+    />
   );
 }
 
