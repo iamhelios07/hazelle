@@ -8,7 +8,7 @@ import { PULSE } from './words';
 export const OPERATOR = '정말고마워요';
 export const REPOSITORY = 'https://github.com/jiniill/hazelle';
 // The date the current text takes effect, set by the operator. Changing either text sets it anew.
-export const EFFECTIVE: string = '2026년 10월 20일';
+export const EFFECTIVE: string = '2026년 10월 21일';
 
 type Block = string | string[];
 export type LegalText = { path: string; title: string; sections: { title: string; body: Block[] }[] };
@@ -118,7 +118,7 @@ export const TERMS: LegalText = {
     {
       title: '약관의 변경',
       body: [
-        '운영자는 약관을 변경하는 경우 적어도 7일 전에, 이용자가 할 수 있던 일을 줄이거나 없애는 변경은 적어도 30일 전에 운영자가 보낸 알림으로, 손님에게는 게시판의 소식 글로 통지합니다. 변경된 약관에 동의하지 않는 이용자는 전체 백업을 받은 뒤 탈퇴할 수 있습니다.',
+        '운영자는 약관을 변경하는 경우 운영자가 보낸 알림으로, 손님에게는 게시판의 소식 글로 통지하며, 변경된 약관은 통지한 때부터 적용됩니다. 변경된 약관에 동의하지 않는 이용자는 전체 백업을 받은 뒤 탈퇴할 수 있습니다.',
       ],
     },
     {
