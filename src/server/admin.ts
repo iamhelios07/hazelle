@@ -10,6 +10,7 @@ import { fail, ID, readObject, type AppEnv, type Services } from './http';
 import { answerAction, answerBegin, leaveAccount, refuseLeft, restoreFrom, restorePoints, restoresOf, store } from './lifecycle';
 import { requireSession } from './session';
 import { tellUnread, VISIBLE } from './unread';
+import { readVisits } from './visits';
 
 // Reports are plaintext rows no byte cap counts, so one account's unresolved ones are bounded (board.ts).
 export const MAX_OPEN_REPORTS = 20;
@@ -54,6 +55,8 @@ export const admin = new Hono<AppEnv>();
 
 admin.use(requireSession);
 admin.use(createMiddleware<AppEnv>(async (c, next) => (c.get('account').admin ? next() : fail(c, 403, 'not-admin'))));
+
+admin.get('/visits', async (c) => c.json({ days: await readVisits(c.env.db) }));
 
 // Every action below goes in one batch with its admin_log row, so the log never misses an action that happened and
 // never holds one that did not. The row comes first and is written only if the target is there: a delete could not

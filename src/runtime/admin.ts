@@ -1,4 +1,4 @@
-import type { BackupWarning, AccountState } from '../contracts/admin';
+import type { BackupWarning, AccountState, VisitDay } from '../contracts/admin';
 import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 import { page } from './pages';
 
@@ -8,7 +8,7 @@ import { page } from './pages';
 // The caps every account has unless given its own; null is no cap. accounts: the rows the signup cap counts, a leaving one
 // too, since it holds its seat until removed. people: the accounts not leaving. pending: open reports plus held shares,
 // a held share counted again with its report, so it is only ever zero or not. fileBytes: every account's pictures
-// together. links: the links not cut. databaseBytes: the service database, which every backup copies whole.
+// together. links: the links not cut. databaseBytes: the service database; backups leave out daily visitor keys and hashes.
 // backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says
 // needs the operator (server/backup/freshness).
 export type Service = {
@@ -65,6 +65,7 @@ export type Report = {
 };
 export type LogRow = { id: number; at: number; action: string; target: string; detail: unknown };
 export const readService = () => api<Service>('GET', 'admin/service');
+export const readVisits = () => api<{ days: VisitDay[] }>('GET', 'admin/visits');
 export const setService = (values: Pick<Service, 'signupCap' | 'accountBytesCap' | 'accountFileBytesCap'>) => api<undefined>('PUT', 'admin/service', values);
 
 // flagged: only the accounts suspended, restoring or leaving.

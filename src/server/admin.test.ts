@@ -26,6 +26,18 @@ async function stored(bytes: Uint8Array<ArrayBuffer>, cookie: string) {
 }
 
 describe('the operator', () => {
+  it('shows daily visit totals only to the operator, never a signed-out visitor or another account', async () => {
+    const admin = await operator();
+    const other = await t.signUp('other');
+    expect((await t.get('admin/visits')).status).toBe(401);
+    expect((await t.get('admin/visits', other.cookie)).status).toBe(403);
+    const answer = await t.get('admin/visits', admin.cookie);
+    expect(answer.status).toBe(200);
+    const { days } = await answer.json() as { days: unknown[] };
+    expect(days).toHaveLength(14);
+    expect(days[0]).toEqual({ day: expect.any(Number), visitors: 0, guests: 0, accounts: 2, converted: 0 });
+  });
+
   it('is the first account signed up: the session says so, nobody else passes, and the installation keeps naming it', async () => {
     const admin = await operator();
     const other = await t.signUp('other');

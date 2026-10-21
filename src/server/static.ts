@@ -5,6 +5,8 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
 import { PULSE_PAGE, type PulseAnswer } from '../contracts/pulse';
 import { SHARE_ID, type ShareCover } from '../contracts/shares';
+import { VISITOR_HEADER } from '../contracts/http';
+import type { PageVisit } from './visits';
 
 // frame-src is also the tool pages' navigation boundary: adding any host there opens a way out for them.
 export const CSP =
@@ -27,11 +29,14 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
 const INDEXED = new Set(['/', PULSE_PAGE.path, '/terms', '/privacy']);
 const LANDING = { title: '헤이젤 · RisuAI 봇으로 캐릭터 챗', line: 'RisuAI 봇과 포켓리스 백업을 가져와 내 API 키로 캐릭터 챗을 해요. 가입 없이 바로 써요.' };
 
-export function clientFiles(clientDir: string, cover: (share: string) => Promise<ShareCover | null>, pulse: () => Promise<PulseAnswer>) {
+export function clientFiles(clientDir: string, cover: (share: string) => Promise<ShareCover | null>, pulse: () => Promise<PulseAnswer>, visit: (page: PageVisit) => void = () => {}) {
   const client = new Hono();
   client.use(async (c, next) => {
     const started = performance.now();
     await next();
+    if (c.req.method === 'GET' && c.res.ok && c.res.headers.get('Content-Type')?.startsWith('text/html') && !c.req.path.startsWith('/assets/') && c.req.path !== '/api' && !c.req.path.startsWith('/api/')) {
+      visit({ kind: 'visit', address: c.req.header(VISITOR_HEADER)!, agent: c.req.header('user-agent') ?? '' });
+    }
     c.res.headers.set('Server-Timing', `static;dur=${(performance.now() - started).toFixed(1)}`);
     if (c.res.ok && /^(?:text\/|application\/(?:javascript|json|wasm)|image\/svg\+xml)/.test(c.res.headers.get('Content-Type') ?? '')) c.res.headers.set('Vary', 'Accept-Encoding');
   });

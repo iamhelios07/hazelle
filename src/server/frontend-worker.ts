@@ -26,7 +26,7 @@ async function pulse(): Promise<PulseAnswer> {
   if (!answer.ok) throw new Error(`pulse ${answer.status}`);
   return (await answer.json()) as PulseAnswer;
 }
-const files = getRequestListener(clientFiles(clientDir, cover, pulse).fetch);
+const files = getRequestListener(clientFiles(clientDir, cover, pulse, (page) => parentPort!.postMessage(page)).fetch);
 // A finite socket timeout lets Node honor the API's shorter keep-alive hint; zero keeps idle sockets until
 // the server closes them and races reuse. The agent destroys timed-out free sockets, not active requests.
 const agent = new Agent({ keepAlive: true, timeout: 5000 });
@@ -34,12 +34,6 @@ let draining = false;
 
 const server = createServer((incoming, outgoing) => {
   const path = incoming.url?.split('?')[0] ?? '/';
-  if (path !== '/api' && !path.startsWith('/api/')) return void files(incoming, outgoing);
-
-  const startedAt = Date.now();
-  const started = performance.now();
-  let connectedMs: number | null = null;
-  let sentMs: number | null = null;
   // The visitor is the connection's peer, unless the peer is a trusted proxy (Caddy, the hosted machine's only way in):
   // then the last X-Forwarded-For entry, which that proxy wrote. Written over whatever the request says, so no one
   // names their own key, and loopback, which credentials.ts does not count, only comes from this machine.
@@ -47,6 +41,13 @@ const server = createServer((incoming, outgoing) => {
   const forwarded = incoming.headers['x-forwarded-for'];
   const proxied = peer !== undefined && trustedProxies.check(peer, isIPv6(peer) ? 'ipv6' : 'ipv4');
   const visitor = (proxied && (Array.isArray(forwarded) ? forwarded.join(',') : forwarded)?.split(',').at(-1)?.trim()) || peer || 'unknown';
+  incoming.headers[VISITOR_HEADER] = visitor;
+  if (path !== '/api' && !path.startsWith('/api/')) return void files(incoming, outgoing);
+
+  const startedAt = Date.now();
+  const started = performance.now();
+  let connectedMs: number | null = null;
+  let sentMs: number | null = null;
   // After endToEnd: a header the request's Connection names could otherwise remove the visitor.
   const headers = { ...endToEnd(incoming.headers), [VISITOR_HEADER]: visitor };
   const failed = (error: NodeJS.ErrnoException, reusedSocket: boolean | null) => {

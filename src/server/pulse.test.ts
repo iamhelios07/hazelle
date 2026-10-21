@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { PULSE_HEADER, VISITOR_HEADER } from '../contracts/http';
 import { pulseHeader, type PulseAnswer, type PulseRole } from '../contracts/pulse';
 import { tokenBucket } from './limits';
 import { forgetPulse } from './pulse';
 import { replyKey, testApp } from './testing';
+import { readVisits } from './visits';
 
 const request = { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' };
 // Wednesday 2026-10-21, 12:00 KST.
@@ -45,6 +46,39 @@ const seen = async (cookies: string[]) => {
 };
 const board = async () => ((await (await t.get('pulse')).json()) as PulseAnswer).board;
 const hourCalls = async () => (await t.env.db.prepare('SELECT role, calls FROM pulse_hours').all()).results;
+
+it('keeps daily guest replies and signups with conversions from the existing ping, even with guest rankings off', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NOON);
+  try {
+    await t.env.db.prepare('UPDATE service SET pulse_guests = 0').run();
+    const guest = crypto.randomUUID();
+    const another = crypto.randomUUID();
+    const ping = async (client: string, role: PulseRole = 'chat', type = 'direct') => {
+      expect((await t.post('pulse/guest', { client, label: pulseHeader({ kind: 'call', role, type, model: 'model' }) })).status).toBe(204);
+    };
+    await ping(guest);
+    await ping(guest, 'chat', 'openai');
+    await ping(another, 'aux');
+    await t.signUp('regular');
+    await t.signUp('converted', guest);
+    expect((await readVisits(t.env.db, NOON))[0]).toMatchObject({ guests: 1, accounts: 2, converted: 1 });
+    const tomorrow = NOON + DAY;
+    at(tomorrow);
+    clock.mockReturnValue(tomorrow);
+    await ping(another);
+    await ping(another);
+    await t.signUp('convertedtomorrow', another);
+    expect((await readVisits(t.env.db, tomorrow)).slice(0, 2).map(({ guests, accounts, converted }) => ({ guests, accounts, converted }))).toEqual([
+      { guests: 1, accounts: 1, converted: 1 },
+      { guests: 1, accounts: 2, converted: 1 },
+    ]);
+    await forgetPulse(t.env.db, tomorrow + 3 * DAY);
+    await t.env.db.prepare('DELETE FROM accounts').run();
+    expect((await readVisits(t.env.db, tomorrow))[1]).toMatchObject({ guests: 1, accounts: 2, converted: 1 });
+  } finally {
+    clock.mockRestore();
+  }
+});
 
 it('answers with no board before anyone is counted, cached publicly for 5 minutes', async () => {
   const answer = await t.get('pulse');

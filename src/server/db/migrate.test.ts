@@ -19,6 +19,25 @@ const ledger = (db: DatabaseSync) => (db.prepare('SELECT name FROM migrations OR
 const tables = (db: DatabaseSync) => (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'migrations' ORDER BY name").all() as { name: string }[]).map(({ name }) => name);
 
 describe('the migration runner', () => {
+  it('adds daily visit totals to an existing installation without changing its accounts or guest pulse rows', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const earlier = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0021_visits.sql').sort();
+      migrate(db, dir(Object.fromEntries(earlier.map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')]))));
+      db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('a', 'existing', 'hash', 1, 'inc', 'timeline');
+        INSERT INTO pulse_guest_seen (week, account) VALUES (1, 'a');
+        INSERT INTO pulse_guest_replies (hour, key, type, account, name, replies) VALUES (0, '', 'direct', 'a', NULL, 1)`);
+      expect(migrate(db, 'migrations').applied).toEqual(['0021_visits.sql']);
+      expect(db.prepare('SELECT id, username FROM accounts').all()).toEqual([{ id: 'a', username: 'existing' }]);
+      expect(db.prepare('SELECT * FROM pulse_guest_seen').all()).toEqual([{ week: 1, account: 'a' }]);
+      expect(db.prepare('SELECT accounts, converted, guests FROM visit_days').all()).toEqual([{ accounts: 1, converted: 1, guests: 1 }]);
+      expect(['visit_days', 'visit_keys', 'visit_hashes'].every((name) => tables(db).includes(name))).toBe(true);
+      expect(migrate(db, 'migrations').applied).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('applies the shipped baseline to an empty database, and a restart applies nothing more', () => {
     const db = new DatabaseSync(':memory:');
     expect(migrate(db, 'migrations').applied).toEqual(readdirSync('migrations').filter((n) => n.endsWith('.sql')).sort());

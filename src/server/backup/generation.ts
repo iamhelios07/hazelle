@@ -167,6 +167,13 @@ export async function captureGeneration(
       SELECT 1 FROM snapshots s WHERE s.incarnation = file_removals.incarnation AND s.taken_at <= file_removals.released_at)`)
       .bind(clock() + RETENTION_MS).run();
     await env.db.snapshot(plain);
+    const copy = new DatabaseSync(plain);
+    try {
+      // A backup outlives the day: no daily visitor key or hash may enter its retained copy, even in free pages.
+      copy.exec('PRAGMA secure_delete = ON; DELETE FROM visit_hashes; DELETE FROM visit_keys');
+    } finally {
+      copy.close();
+    }
     expireDepartures(generationsDir(dataDir), clock());
     const { named, sources } = readNamed(plain, clock());
     const dirs = new Set<string>([pool]);

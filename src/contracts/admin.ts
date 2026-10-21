@@ -1,6 +1,8 @@
 export const MAX_REPORT_LENGTH = 4000;
 export const MAX_NOTICE_LENGTH = 2000;
 
+export type VisitDay = { day: number; visitors: number; guests: number; accounts: number; converted: number };
+
 export type BackupWarning = 'backup-stale' | 'disk-full';
 // restoring: held by a restore until it ends. leaving: its deletion stopped before the end; removing it again finishes it.
 export type AccountState = 'active' | 'restoring' | 'leaving';

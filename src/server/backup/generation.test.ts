@@ -103,6 +103,28 @@ function pausedAtSnapshot() {
 }
 
 describe('a backup generation', () => {
+  it('keeps daily totals in the backup but removes visitor keys and hashes without changing the live day', async () => {
+    const now = Date.now();
+    await t.env.db.batch([
+      t.env.db.prepare('INSERT INTO visit_days (day, visitors) VALUES (?, 1)').bind(now),
+      t.env.db.prepare("INSERT INTO visit_keys (day, key) VALUES (?, X'1234')").bind(now),
+      t.env.db.prepare("INSERT INTO visit_hashes (day, hash) VALUES (?, 'daily-hash')").bind(now),
+    ]);
+    expect((await t.daily(now)).generation.outcome).toBe('ok');
+    const manifest = await newest();
+    const copy = serviceOf(manifest);
+    try {
+      expect(copy.prepare('SELECT visitors FROM visit_days').all()).toEqual([{ visitors: 1 }]);
+      expect(copy.prepare('SELECT * FROM visit_keys').all()).toEqual([]);
+      expect(copy.prepare('SELECT * FROM visit_hashes').all()).toEqual([]);
+      expect(gunzipSync(readFileSync(join(generationsDir(t.dir), manifest.id, manifest.service.path))).includes(Buffer.from('daily-hash'))).toBe(false);
+    } finally {
+      copy.close();
+    }
+    expect(await t.env.db.prepare('SELECT COUNT(*) AS n FROM visit_hashes').first('n')).toBe(1);
+    expect(await t.env.db.prepare('SELECT COUNT(*) AS n FROM visit_keys').first('n')).toBe(1);
+  });
+
   it('holds lifecycle steps out while it captures, lets password changes and uploads through, and names only what is durable', async () => {
     await t.signUp('operator');
     const keeper = await t.signUp('keeper');

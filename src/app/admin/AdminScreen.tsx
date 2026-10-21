@@ -15,6 +15,7 @@ import { moderates } from './moderation';
 import { useAccounts } from './useAccounts';
 import { ToolsSection } from './ToolsSection';
 import { UsageRow } from './UsageRow';
+import { VisitsSection } from './VisitsSection';
 
 const WARNINGS: Record<BackupWarning, string> = {
   'backup-stale': '백업이 36시간 넘게 없음',
@@ -42,6 +43,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
       <Beside side={<LogSection key={acts} head />}>
         {moderating && <ReportsSection head onActed={acted} />}
         <OperatorPostsSection />
+        <VisitsSection />
         <AccountsSection loaded={accounts} total={service.data?.accounts ?? null} onActed={acted}>
           {shared && <UsageRow />}
         </AccountsSection>

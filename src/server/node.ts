@@ -18,7 +18,7 @@ import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
 import { chooseBucket } from './files/choose';
 import type { FrontendOptions } from './frontend-worker';
-import { fail, type Services } from './http';
+import { DAY_MS, fail, type Services } from './http';
 import { RELAY_DAILY, relayBudget, tokenBucket, uploadBudget, visitorLimits } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshModelsDev } from './models-dev';
@@ -29,6 +29,7 @@ import { streamStore } from './db/streams-db';
 import app from './worker';
 import { publishNews, RELEASE_NEWS } from './news';
 import { VERSION_HEADER } from '../contracts/http';
+import { openVisits, visitDay, type FrontendMessage } from './visits';
 
 // Configuration is the environment (docs/research/docker-port-plan.md §11).
 const dataDir = process.env.HAZELLE_DATA ?? '/data';
@@ -101,6 +102,16 @@ const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
 publishNews(raw, version, RELEASE_NEWS, Date.now());
 const db = serviceDb(raw);
+const visits = openVisits(raw);
+let dayClose: ReturnType<typeof setTimeout>;
+const scheduleDayClose = () => {
+  dayClose = setTimeout(() => {
+    visits.close();
+    scheduleDayClose();
+  }, visitDay(Date.now()) + DAY_MS - Date.now());
+  dayClose.unref();
+};
+scheduleDayClose();
 const limits = {
   relay: relayBudget(
     wholeFrom('HAZELLE_RELAY_DAILY_BYTES', RELAY_DAILY.bytes, 1, Number.MAX_SAFE_INTEGER),
@@ -158,7 +169,10 @@ const frontend = new Worker(new URL(import.meta.url.endsWith('.ts') ? './fronten
 });
 frontend.on('error', (error) => { log('frontend failed', { error: String(error) }); process.exit(1); });
 frontend.on('exit', (code) => { if (!draining) { log('frontend stopped', { code }); process.exit(1); } });
-const frontendClosed = new Promise<void>((resolve) => frontend.on('message', (message: string) => { if (message === 'closed') resolve(); }));
+frontend.on('message', (message: FrontendMessage) => {
+  if (typeof message !== 'string') visits.page(message);
+});
+const frontendClosed = new Promise<void>((resolve) => frontend.on('message', (message: FrontendMessage) => { if (message === 'closed') resolve(); }));
 await once(frontend, 'message');
 log('listening', { port, dataDir, files: files.kind, migrationsApplied: applied });
 
@@ -200,7 +214,14 @@ for (const timer of timers) timer.unref();
 async function shutdown(signal: string) {
   if (draining) return;
   draining = true;
-  const frontendDraining = once(frontend, 'message');
+  const frontendDraining = new Promise<void>((resolve) => {
+    const drainingMessage = (message: FrontendMessage) => {
+      if (message !== 'draining') return;
+      frontend.off('message', drainingMessage);
+      resolve();
+    };
+    frontend.on('message', drainingMessage);
+  });
   frontend.postMessage('drain');
   await frontendDraining;
   log('draining', { signal, drainMs });
@@ -221,6 +242,7 @@ async function shutdown(signal: string) {
   try {
     services.stores.close();
     services.streams.close();
+    clearTimeout(dayClose);
     raw.close();
     lock.close();
   } catch (error) {
