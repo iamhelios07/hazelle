@@ -48,7 +48,7 @@ const CATEGORY_CARDS = CATEGORIES.map((value) => ({
 }));
 type Reach = 'public' | 'operator';
 const REACH_CARDS: { value: Reach; label: string; sub: string; mark: ReactNode }[] = [
-  { value: 'public', label: '모두에게', sub: '게시판의 누구나 읽고 댓글을 달아요', mark: <Tag icon={Globe} /> },
+  { value: 'public', label: '모두에게', sub: '게시판의 누구나 읽어요', mark: <Tag icon={Globe} /> },
   { value: 'operator', label: BOARD.operatorOnly, sub: '운영자와 나만 읽어요. 오류 제보에 좋아요', mark: <Tag icon={Lock} /> },
 ];
 

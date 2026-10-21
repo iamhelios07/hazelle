@@ -106,12 +106,12 @@ it("opens the public reads to a page stating no account, as no one's, whatever c
 });
 
 it('lets a suspended account write and read only operator-only posts', async () => {
-  await operator();
+  const admin = await operator();
   const writer = await member('writer');
   const suspended = await member('suspended');
   await posted(writer, { title: '공개' });
   const before = await posted(suspended, { title: '정지 전에 쓴 글' });
-  await commented(writer, before, '정지 뒤에 달린 댓글');
+  await commented(admin, before, '정지 뒤에 달린 댓글');
   await t.env.db.prepare('UPDATE accounts SET suspended_at = 1 WHERE id = ?').bind(suspended.id).run();
 
   expect(await (await write(suspended)).json()).toEqual({ error: 'suspended' });
@@ -167,22 +167,21 @@ it('keeps comments flat with one level of 답글: a 답글 to a 답글 joins the
   expect(post.commentCount).toBe(3);
 });
 
-it('keeps 답글 to the post\'s author and the operator: everyone else only comments', async () => {
+it("keeps comments and 답글 to the post's author and the operator, and 소식 to the operator alone", async () => {
   const admin = await operator();
   const author = await member('author');
   const other = await member('other');
   const id = await posted(author);
   const byAuthor = await commented(author, id, '글쓴이 댓글');
   const byOperator = await commented(admin, id, '운영자 댓글');
-  const byOther = await commented(other, id, '다른 사람 댓글');
-  for (const parent of [byAuthor, byOperator, byOther]) expect(await (await comment(other, id, '끼어들기', parent)).json()).toEqual({ error: 'reply-closed' });
-  for (const who of [author, admin]) expect((await comment(who, id, '남에게', byOther)).status).toBe(403);
+  for (const parent of [null, byAuthor, byOperator]) expect(await (await comment(other, id, '끼어들기', parent)).json()).toEqual({ error: 'not-author' });
   expect((await comment(author, id, '운영자에게', byOperator)).status).toBe(200);
   expect((await comment(admin, id, '글쓴이에게', byAuthor)).status).toBe(200);
-  // On the operator's own post the author and the operator are one, so nobody answers anyone else.
+  const before = await t.env.db.prepare('INSERT INTO comments (post_id, account_id, text, created_at) VALUES (?, ?, ?, ?) RETURNING id').bind(id, other.id, '규칙 전 댓글', Date.now()).first<number>('id');
+  expect((await comment(author, id, '답', before)).status).toBe(200);
   const news = await posted(admin, { category: 'news' });
-  const asked = await commented(other, news, '소식 댓글');
-  expect((await comment(admin, news, '답', asked)).status).toBe(403);
+  expect(await (await comment(other, news, '소식 댓글')).json()).toEqual({ error: 'not-author' });
+  expect((await comment(admin, news, '덧붙임')).status).toBe(200);
 });
 
 it("lets only the author edit a post or comment, the operator included among the others", async () => {
@@ -236,13 +235,13 @@ it('hides a comment: its text reaches only its author and the operator', async (
   const author = await member('author');
   const other = await member('other');
   const id = await posted(author);
-  const said = await commented(other, id, '거친 말');
+  const said = await commented(author, id, '거친 말');
   expect((await t.put(`board/comments/${said}/hidden`, { hidden: { reason: '욕설', days: null } }, admin.cookie)).status).toBe(204);
-  expect((await read(author, id)).comments[0]).toMatchObject({ text: null, hidden: null });
-  expect((await read(other, id)).comments[0]).toMatchObject({ text: '거친 말', hidden: { reason: '욕설', until: null } });
+  expect((await read(other, id)).comments[0]).toMatchObject({ text: null, hidden: null });
+  expect((await read(author, id)).comments[0]).toMatchObject({ text: '거친 말', hidden: { reason: '욕설', until: null } });
   expect((await read(admin, id)).comments[0]).toMatchObject({ text: '거친 말', hidden: { reason: '욕설', until: null } });
-  expect(await (await t.get('notices', other.cookie)).json()).toMatchObject({ notices: [{ text: '"제목" 글에 쓴 댓글을 가렸어요. 이유: 욕설.' }] });
-  expect(await (await t.get('session', author.cookie)).json()).toMatchObject({ session: { unreadNotices: 0 } });
+  expect(await (await t.get('notices', author.cookie)).json()).toMatchObject({ notices: [{ text: '"제목" 글에 쓴 댓글을 가렸어요. 이유: 욕설.' }] });
+  expect(await (await t.get('session', other.cookie)).json()).toMatchObject({ session: { unreadNotices: 0 } });
 });
 
 it('holds each account to its posts a day, counted in the database', async () => {
@@ -260,7 +259,7 @@ it('leaves a placeholder over the comments of a deleted post, and removes a post
   const other = await member('other');
   const kept = await posted(author, { title: '댓글 있는 글' });
   const gone = await posted(author, { title: '댓글 없는 글' });
-  const said = await commented(other, kept, '댓글');
+  const said = await commented(author, kept, '댓글');
   expect((await t.delete(`board/posts/${kept}`, undefined, other.cookie)).status).toBe(404);
   expect((await t.delete(`board/posts/${kept}`, undefined, author.cookie)).status).toBe(204);
   expect((await t.delete(`board/posts/${kept}`, undefined, author.cookie)).status).toBe(404);
@@ -270,18 +269,17 @@ it('leaves a placeholder over the comments of a deleted post, and removes a post
   expect((await t.get(`board/posts/${gone}`, other.cookie)).status).toBe(404);
   expect(await log(admin)).toMatchObject([{ action: 'post-delete', target: String(gone), detail: { title: '댓글 없는 글' } }]);
   // The placeholder goes with the last comment under it.
-  expect((await t.delete(`board/comments/${said}`, undefined, other.cookie)).status).toBe(204);
+  expect((await t.delete(`board/comments/${said}`, undefined, author.cookie)).status).toBe(204);
   expect((await t.get(`board/posts/${kept}`, other.cookie)).status).toBe(404);
 });
 
 it("lists what others did to one's posts and comments, counts it unread, and marks it seen up to the newest shown", async () => {
   const admin = await operator();
   const author = await member('author');
-  const other = await member('other');
   const id = await posted(author, { title: '내 글' });
   const mine = await commented(author, id, '내 댓글');
   await commented(author, id, '스스로 단 답글', mine);
-  const top = await commented(other, id, '남의 댓글');
+  const top = await commented(admin, id, '운영자 댓글');
   const reply = await commented(admin, id, '운영자 답글', mine);
   await t.env.db.prepare('UPDATE comments SET created_at = id').run();
   await t.put(`board/posts/${id}/status`, { status: 'done', version: 'v0.4.0' }, admin.cookie);
@@ -289,12 +287,12 @@ it("lists what others did to one's posts and comments, counts it unread, and mar
   const read = (await (await t.get(`board/posts/${id}`, author.cookie)).json()) as { post: Post };
   expect(read.post).toMatchObject({ status: 'done', version: 'v0.4.0', statusAt: expect.any(Number) });
 
-  const by = { operator: false, mine: false, left: false, name: 'other' };
+  const by = { name: '운영자', operator: true, mine: false, left: false };
   const { activity, next } = (await (await t.get('board/activity', author.cookie)).json()) as { activity: Activity[]; next: string | null };
   expect([activity, next]).toEqual([
     [
-      { id: id * 2 + 1, kind: 'status', postId: id, title: '내 글', by: { name: '운영자', operator: true, mine: false, left: false }, at: expect.any(Number), commentId: null, status: 'done' },
-      { id: reply * 2, kind: 'reply', postId: id, title: '내 글', by: { name: '운영자', operator: true, mine: false, left: false }, at: reply, commentId: reply, status: null },
+      { id: id * 2 + 1, kind: 'status', postId: id, title: '내 글', by, at: expect.any(Number), commentId: null, status: 'done' },
+      { id: reply * 2, kind: 'reply', postId: id, title: '내 글', by, at: reply, commentId: reply, status: null },
       { id: top * 2, kind: 'comment', postId: id, title: '내 글', by, at: top, commentId: top, status: null },
     ],
     null,
@@ -388,8 +386,8 @@ it('labels guests by browser hash regardless of address, public or operator-only
   const post = await guestRead(who, publicId);
   expect(post.author).toEqual({ name: guestTag('a'.repeat(64)), guest: true, mine: true, operator: false, left: false });
   expect(post).not.toHaveProperty('guest_secret_hash');
-  const operatorPost = await posted(admin);
-  expect((await who.send('POST', `posts/${operatorPost}/comments`, { text: '손님 댓글', parentId: null })).status).toBe(200);
+  const asked = await commented(admin, publicId, '확인');
+  expect((await who.send('POST', `posts/${publicId}/comments`, { text: '손님 답글', parentId: asked })).status).toBe(200);
   expect(await (await t.get('board/activity', admin.cookie)).json()).toMatchObject({ activity: [{ by: { name: guestTag('a'.repeat(64)), guest: true, left: false } }] });
   expect(await (await who.send('GET', 'posts?mine=1')).json()).toMatchObject({ posts: [{ id: privateId }, { id: publicId }] });
   expect((await guestRead(who, privateId)).diagnostics).toBeNull();
@@ -411,7 +409,7 @@ it('labels guests by browser hash regardless of address, public or operator-only
   }
 });
 
-it('never treats a colliding four-character tag as ownership or a reply permission', async () => {
+it('never treats a colliding four-character tag as ownership or a comment permission', async () => {
   const who = guest('7d'.padStart(64, '0'), '123.45.2.1');
   const other = guest('15c'.padStart(64, '0'), '123.45.2.1');
   const id = await guestPosted(who);
@@ -420,9 +418,7 @@ it('never treats a colliding four-character tag as ownership or a reply permissi
   expect((await guestRead(other, otherId)).author).toMatchObject({ name: '손님#4757', mine: true });
   expect((await other.send('PUT', `posts/${id}`, { title: '수정', text: '본문', category: 'bug' })).status).toBe(404);
   const top = ((await (await who.send('POST', `posts/${id}/comments`, { text: '작성자', parentId: null })).json()) as { comment: { id: number } }).comment.id;
-  expect(await (await other.send('POST', `posts/${id}/comments`, { text: '답글', parentId: top })).json()).toEqual({ error: 'reply-closed' });
-  const added = await other.send('POST', `posts/${id}/comments`, { text: '별도 댓글', parentId: null });
-  expect(await added.json()).toMatchObject({ comment: { byAuthor: false } });
+  for (const parentId of [null, top]) expect(await (await other.send('POST', `posts/${id}/comments`, { text: '끼어들기', parentId })).json()).toEqual({ error: 'not-author' });
 });
 
 it('edits and deletes guest posts and comments only with their secret, including placeholder cleanup', async () => {
@@ -450,7 +446,7 @@ it('edits and deletes guest posts and comments only with their secret, including
   expect((await who.send('GET', `posts/${empty}`)).status).toBe(404);
 });
 
-it('admits guest replies only between the actual post author and the operator, never another guest behind the same address', async () => {
+it('admits guest comments and 답글 only from the actual post author and the operator, never another guest behind the same address', async () => {
   const admin = await operator();
   const who = guest('f'.repeat(64), '123.47.1.1');
   const other = guest('1'.repeat(64), '123.47.1.1');
@@ -460,11 +456,7 @@ it('admits guest replies only between the actual post author and the operator, n
   expect(reply.status).toBe(200);
   const own = ((await reply.json()) as { comment: { id: number } }).comment.id;
   expect((await comment(admin, id, '재답글', own)).status).toBe(200);
-  expect(await (await other.send('POST', `posts/${id}/comments`, { text: '끼어들기', parentId: top })).json()).toEqual({ error: 'reply-closed' });
-  const outsider = ((await (await other.send('POST', `posts/${id}/comments`, { text: '별도 댓글', parentId: null })).json()) as { comment: { id: number } }).comment.id;
-  expect((await guestRead(who, id)).comments.at(-1)).toMatchObject({ byAuthor: false });
-  expect(await (await who.send('POST', `posts/${id}/comments`, { text: '답글', parentId: outsider })).json()).toEqual({ error: 'reply-closed' });
-  expect(await (await comment(admin, id, '답글', outsider)).json()).toEqual({ error: 'reply-closed' });
+  for (const parentId of [null, top]) expect(await (await other.send('POST', `posts/${id}/comments`, { text: '끼어들기', parentId })).json()).toEqual({ error: 'not-author' });
 });
 
 it('applies the account daily post and comment caps per browser secret, even after an address change', async () => {
@@ -475,10 +467,10 @@ it('applies the account daily post and comment caps per browser secret, even aft
   const id = await guestPosted(who);
   for (let i = 1; i < POSTS_PER_DAY; i++) expect((await guestPost(who)).status).toBe(200);
   expect(await (await guestPost(reconnected)).json()).toEqual({ error: 'too-many-posts' });
-  expect((await guestPost(other)).status).toBe(200);
+  const otherId = await guestPosted(other);
   for (let i = 0; i < COMMENTS_PER_DAY; i++) expect((await who.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).status).toBe(200);
   expect(await (await reconnected.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json()).toEqual({ error: 'too-many-comments' });
-  expect((await other.send('POST', `posts/${id}/comments`, { text: '다른 손님', parentId: null })).status).toBe(200);
+  expect((await other.send('POST', `posts/${otherId}/comments`, { text: '다른 손님', parentId: null })).status).toBe(200);
   await t.env.db.prepare('UPDATE posts SET created_at = ? WHERE guest_secret_hash IS NOT NULL').bind(Date.now() - 86_400_001).run();
   await t.env.db.prepare('UPDATE comments SET created_at = ? WHERE guest_secret_hash IS NOT NULL').bind(Date.now() - 86_400_001).run();
   expect((await guestPost(who)).status).toBe(200);
@@ -500,15 +492,17 @@ it('bounds fresh guest secrets at one address to ten times the post and comment 
   ]);
   const last = guest('a'.repeat(64), '123.48.2.1');
   const fresh = guest('b'.repeat(64), '123.48.2.1');
-  expect((await guestPost(last)).status).toBe(200);
+  // fresh's own post, outside this address's count, so the comment cap is what refuses fresh below
+  const freshId = (await t.env.db.prepare("INSERT INTO posts (title, text, category, visibility, created_at, guest_secret_hash) VALUES ('글', '본문', 'bug', 'public', ?, ?) RETURNING id").bind(now, sha256Hex('b'.repeat(64))).first<number>('id'))!;
+  const lastId = await guestPosted(last);
   expect(await (await guestPost(fresh)).json()).toEqual({ error: 'too-many-posts' });
-  expect((await last.send('POST', `posts/${id}/comments`, { text: '마지막 댓글', parentId: null })).status).toBe(200);
-  expect(await (await fresh.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json()).toEqual({ error: 'too-many-comments' });
+  expect((await last.send('POST', `posts/${lastId}/comments`, { text: '마지막 댓글', parentId: null })).status).toBe(200);
+  expect(await (await fresh.send('POST', `posts/${freshId}/comments`, { text: '댓글', parentId: null })).json()).toEqual({ error: 'too-many-comments' });
   expect((await guestPost(guest('b'.repeat(64), '123.48.2.2'))).status).toBe(200);
   const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 86_400_001);
   try {
     expect((await guestPost(fresh)).status).toBe(200);
-    expect((await fresh.send('POST', `posts/${id}/comments`, { text: '다음 날', parentId: null })).status).toBe(200);
+    expect((await fresh.send('POST', `posts/${freshId}/comments`, { text: '다음 날', parentId: null })).status).toBe(200);
   } finally { clock.mockRestore(); }
 });
 
@@ -524,7 +518,8 @@ it('permanently blocks the browser secret from either moderation menu, including
   expect(await (await guestPost(guest('4'.repeat(64), '123.49.1.2'))).json()).toEqual({ error: 'guest-board-blocked' });
   expect((await who.send('GET', `posts/${id}`)).status).toBe(200);
   const other = guest('5'.repeat(64), '123.49.1.2');
-  const comment = ((await (await other.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json()) as { comment: { id: number } }).comment.id;
+  const otherId = await guestPosted(other);
+  const comment = ((await (await other.send('POST', `posts/${otherId}/comments`, { text: '댓글', parentId: null })).json()) as { comment: { id: number } }).comment.id;
   expect((await t.put(`board/comments/${comment}/guest-block`, undefined, admin.cookie)).status).toBe(204);
   expect(await (await guestPost(guest('5'.repeat(64), '123.49.1.3'))).json()).toEqual({ error: 'guest-board-blocked' });
   const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3 * 86_400_000);

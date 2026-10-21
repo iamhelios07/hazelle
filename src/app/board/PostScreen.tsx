@@ -221,7 +221,8 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
   const ids = new Set(post.comments.map((comment) => comment.id));
   const tops = post.comments.filter((comment) => comment.parentId === null || !ids.has(comment.parentId));
   const repliesOf = (id: number) => post.comments.filter((comment) => comment.parentId === id);
-  const open = (!post.locked || admin) && post.text !== null;
+  const writable = (admin || post.author.mine) && post.text !== null;
+  const open = writable && (!post.locked || admin);
 
   function item(comment: Comment, top: boolean) {
     const { mine } = comment.author;
@@ -254,7 +255,7 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
     ];
     const replies = top ? repliesOf(comment.id).map((reply) => item(reply, false)) : [];
     // 답글 are the author and the operator talking (server/board): others leave top-level comments.
-    const repliable = top && open && (admin || post.author.mine) && (comment.author.operator || comment.byAuthor);
+    const repliable = top && open;
     const answering = repliable && replying === comment.id;
     return (
       <ThreadItem
@@ -349,12 +350,14 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
           {tops.slice(before).map((comment) => item(comment, true))}
         </Thread>
       ) : (
-        <Empty variant="section">첫 댓글을 남겨 보세요.</Empty>
+        writable && <Empty variant="section">첫 댓글을 남겨 보세요.</Empty>
       )}
       {post.locked ? (
         <Text variant="note">운영자가 댓글을 닫았어요.</Text>
+      ) : !writable ? (
+        post.text !== null && <Text variant="note">글쓴이와 운영자만 댓글을 달 수 있어요.</Text>
       ) : (
-        post.text !== null && <CommentComposer label={BOARD.comment} placeholder="댓글 남기기" confirm="등록" gate={gate} send={(text) => writeComment(post.id, text, null)} onDone={onChanged} />
+        <CommentComposer label={BOARD.comment} placeholder="댓글 남기기" confirm="등록" gate={gate} send={(text) => writeComment(post.id, text, null)} onDone={onChanged} />
       )}
     </Section>
   );

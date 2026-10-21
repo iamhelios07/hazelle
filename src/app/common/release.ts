@@ -16,7 +16,7 @@ export const TOURS: Tour[] = [
     title: '새로 생긴 게시판',
     pages: [
       { title: '게시판이 생겼어요', text: '버그, 제안, 질문을 모두가 읽고 써요. 중요한 버그와 좋은 제안은 추천으로 밀어 올려요. 첫 글을 쓸 때 닉네임을 골라요.', art: 'board-list' },
-      { title: '댓글과 답글, 그리고 알림', text: '글에 댓글을 달아요. 답글은 글쓴이와 운영자가 서로 주고받아요. 내 글에 무슨 일이 생기면 게시판 알림으로 알려 줘요.', art: 'board-thread' },
+      { title: '댓글과 답글, 그리고 알림', text: '댓글과 답글은 글쓴이와 운영자만 달아요. 내 글에 무슨 일이 생기면 게시판 알림으로 알려 줘요.', art: 'board-thread' },
       { title: '운영자에게만 보내기', text: '운영자에게 알리기는 여기로 왔어요. 운영자에게만 보내면 둘만 읽고, 예전에 보낸 글도 내 글에 있어요.', art: 'board-operator' },
     ],
     go: { label: '게시판 가기', route: { kind: 'board', operator: false } },
