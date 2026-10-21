@@ -12,6 +12,7 @@ import type { Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
 import type { Illustrating } from '../runtime/illustrate';
 import type { Commenting } from '../runtime/mascot';
+import type { Polishing } from '../runtime/agents';
 import type { Likenesses, LikenessRuns } from '../runtime/likeness';
 import type { Remembering } from '../runtime/memory';
 import { modulesOf } from '../runtime/modules';
@@ -280,6 +281,11 @@ export function useIllustrating(): Illustrating {
 export function useCommenting(): Commenting {
   const { commentator } = useSession();
   return useSyncExternalStore(commentator.subscribe, commentator.snapshot);
+}
+
+export function usePolishing(): Polishing {
+  const { polisher } = useSession();
+  return useSyncExternalStore(polisher.subscribe, polisher.snapshot);
 }
 
 // The profiles themselves: useStored('likeness', likenessId(owner)).

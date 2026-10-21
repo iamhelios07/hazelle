@@ -24,7 +24,7 @@ const NO_PICTURES: Stored<'illustration'>[] = [];
 const NO_BADGES: string[] = [];
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, placed, pictures, remarks, fresh, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, personaNote, busy, editing, timePin, bookmarked, found, search, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, placed, pictures, remarks, fresh, polishing, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, card, notUsed, personaNote, busy, editing, timePin, bookmarked, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -73,6 +73,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           canIllustrate={chat.features.illustrate}
           pictureSizes={chat.pictureSizes}
           awaited={awaited(version)}
+          polishing={polishing.has(message.id)}
           flipped={flipped.has(version)}
           showOriginal={chat.translate.original}
           replyNext={message.role === 'user' && messages[index + 1]?.role === 'assistant'}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { costUnit, resolveConnection } from '../../connectors/registry';
-import { fold, shown, type Message } from '../../model/chat';
+import { fold, handEdited, shown, type Message } from '../../model/chat';
 import { copyVersion } from '../../runtime/message-acts';
 import type { Session } from '../../runtime/session';
 import { autoContinue } from '../../runtime/turn';
@@ -43,7 +43,7 @@ const nextTurn = ({ store, talk }: Pick<Session, 'store' | 'talk'>, chat: string
 // only the chat's last message as saved, unedited, so an onOutput edit or a message the bot added after it ends the wait.
 function continues(reply: Message, last: Message | undefined) {
   const version = shown(reply);
-  return last?.id === reply.id && !version.edited && version.receipt !== null && autoContinue({ text: version.text, receipt: version.receipt });
+  return last?.id === reply.id && !handEdited(version) && version.receipt !== null && autoContinue({ text: version.text, receipt: version.receipt });
 }
 
 export function useAutopilot(chat: OpenChat) {

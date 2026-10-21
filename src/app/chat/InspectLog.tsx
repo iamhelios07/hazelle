@@ -22,6 +22,7 @@ const PURPOSES: Record<CallPurpose, string> = {
   likeness: '삽화 프로필',
   mascot: FEATURE_NAMES.mascot,
   preread: FEATURE_NAMES.preread,
+  agent: FEATURE_NAMES.agents,
   embedding: ROLE_TAGS.embed,
 };
 

@@ -3,6 +3,7 @@ import type { Role } from '../../connectors/assignment';
 import type { RegexScript } from '../../engine/import/types';
 import type { Feature } from '../../model/features';
 import type { PrereadParts } from '../../model/settings';
+import type { AgentStage } from '../../model/prompt';
 import { KEEP_DAYS } from '../../model/library';
 import { FIRST_PROFILE_NAME } from '../../runtime/profiles';
 import { PULSE_PAGE } from '../../contracts/pulse';
@@ -163,7 +164,13 @@ export const PRE_READ = '토큰 절약';
 export const PRE_READ_HELP = `${MODEL_ROLES.aux}이 긴 내용을 먼저 읽고 줄여서 ${MODEL_ROLES.main} 입력을 아껴요. 답이 늦게 시작되고, 빠진 내용은 답에 안 나올 수 있어요. pdf-pod 플러그인에서 가져온 아이디어예요.`;
 export const PRE_READ_PARTS: Record<keyof PrereadParts, string> = { chat: '대화', system: '시스템 프롬프트', lore: '로어북' };
 export const PRE_READ_WAITING = `${MODEL_ROLES.aux}이 긴 내용을 먼저 줄이고 있어요.`;
-export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억', mascot: '마스코트', preread: PRE_READ };
+// 에이전트 (runtime/agents, design §6.16), a 실험실 experiment.
+export const AGENTS = '에이전트';
+export const AGENTS_HELP = `답을 쓰기 전에 장면을 정리하거나(전처리), 받은 답을 다듬어요(후처리). 에이전트마다 모델을 한 번 더 불러요. Agents! P! 플러그인에서 가져온 아이디어예요.`;
+export const STAGE_NAMES: Record<AgentStage, string> = { pre: '전처리', post: '후처리' };
+export const AGENTS_WAITING = '전처리 에이전트가 먼저 읽고 있어요.';
+export const POLISHING = '후처리 에이전트가 답을 다듬고 있어요.';
+export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억', mascot: '마스코트', preread: PRE_READ, agents: AGENTS };
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;

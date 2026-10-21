@@ -6,14 +6,14 @@ import { shown, type ChatItem, type ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { resetToggles, setToggle } from '../../runtime/characters';
 import { chatTranslate, featuresOf } from '../../runtime/features';
-import { removeChat, renameChat, restoreChat } from '../../runtime/chat-log';
+import { removeChat, renameChat, restoreChat, restoreRaw } from '../../runtime/chat-log';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
 import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf } from '../../runtime/chat-context';
-import { takeTurn, type TurnFailure } from '../../runtime/turn';
+import { takeTurn, type Skip, type TurnFailure } from '../../runtime/turn';
 import type { PersonaChoice } from '../../runtime/personas';
 import type { PromptChoice } from '../../runtime/prompts';
 import { describeTurnFailure } from '../common/failure';
@@ -39,6 +39,7 @@ import { useNewChat } from './useNewChat';
 import { useChatBookmarks } from './useChatBookmarks';
 import { useChatIllustrations } from './useChatIllustrations';
 import { useChatRemarks } from './useChatRemarks';
+import { useChatPolishing } from './useChatPolishing';
 import { useChatTranslation } from './useChatTranslation';
 import { useChatSettings } from './useChatSettings';
 
@@ -93,6 +94,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { actions: translationActions, ...translation } = useChatTranslation(chatId, chat, messages, texts, translate);
   const { actions: illustrationActions, ...illustration } = useChatIllustrations(chatId, id, chat, messages);
   const { actions: remarkActions, ...remark } = useChatRemarks(chatId, id);
+  const polishing = useChatPolishing(chatId);
   const toolData = useChildren('toolchat', id);
   const badges = useMemo(() => badgesByVersion(toolData, tools), [toolData, tools]);
   const frames = useToolFrames();
@@ -137,8 +139,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
   const problem = stopped ? blocked(session, chat) : null;
-  // A failed 토큰 절약 call, shown on the composer until the next turn, which may ask again without it.
-  const [unshortened, setUnshortened] = useState<{ failure: TurnFailure; target: Target } | null>(null);
+  // A failed 토큰 절약 call or pre agent, shown on the composer until the next turn, which may ask again without it.
+  // skip: what that turn went without, and the failed step.
+  const [skippable, setSkippable] = useState<{ failure: Extract<TurnFailure, { kind: 'preread' | 'agent' }>; target: Target; skip: Skip } | null>(null);
 
   useEffect(() => {
     if (id) session.memory.check(id);
@@ -165,10 +168,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (replyTarget && panel?.kind === 'info') setInfoPick(pickStarted(messages, replyTarget));
   }, [replyTarget]);
 
-  function report(failure: TurnFailure | null, target?: Target) {
+  function report(failure: TurnFailure | null, target?: Target, skip: Skip = {}) {
     if (!failure) return;
     if (isBlocked(failure)) return setStopped(true);
-    if (target && failure.kind === 'preread' && failure.failure.kind !== 'stopped') return setUnshortened({ failure, target });
+    if (target && failure.kind === 'preread' && failure.failure.kind !== 'stopped') return setSkippable({ failure, target, skip: { ...skip, preread: true } });
+    if (target && failure.kind === 'agent') return setSkippable({ failure, target, skip: { ...skip, agents: true } });
     const kept = failure.kind === 'unsaved' ? failure.reply : null;
     toast.error(describeTurnFailure(failure), kept === null ? undefined : { action: { label: '다시 저장', onClick: () => void talk.saveAgain(kept).then(report) } });
   }
@@ -180,22 +184,22 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function asking() {
     beforeTurn();
-    setUnshortened(null);
+    setSkippable(null);
     timePin.clear();
   }
 
   // The one way a message goes out, typed or one of 오토파일럿's.
-  async function say(text: string, skip = false) {
+  async function say(text: string, skip: Skip = {}) {
     setStopped(false);
     asking();
     const target = { kind: 'send' as const, text };
     const failure = await takeTurn(session, chatId, target, id === null ? starting() : null, skip);
-    report(failure, target);
+    report(failure, target, skip);
     return failure;
   }
 
   // Nothing typed asks for a reply after the last message (응답 받기), as RisuAI's empty send does.
-  async function send(skip = false) {
+  async function send(skip: Skip = {}) {
     if (busy) return;
     if (!draft.text.trim()) {
       if (answerable) ask({ kind: 'answer' }, skip);
@@ -220,14 +224,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!(await answered)) unanswered();
   }
 
-  function ask(target: Target, skip = false) {
+  function ask(target: Target, skip: Skip = {}) {
     if (id && !busy) void asked(id, target, skip);
   }
 
-  async function asked(chat: string, target: Target, skip = false) {
+  async function asked(chat: string, target: Target, skip: Skip = {}) {
     asking();
     const failure = await takeTurn(session, chat, target, null, skip);
-    report(failure, target);
+    report(failure, target, skip);
     return failure;
   }
 
@@ -248,7 +252,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   useEffect(() => id === null ? undefined : session.scripts.screen(id, { send: (text) => toolScreen.current.send(id, text), rendered: (at) => toolScreen.current.rendered(at) }), [id]);
 
   // A send's text went back to the draft, or was kept when its message was saved; either way the composer sends again.
-  const sendUnshortened = (target: Target) => (target.kind === 'send' ? void send(true) : ask(target, true));
+  const sendSkipping = ({ target, skip }: { target: Target; skip: Skip }) => (target.kind === 'send' ? void send(skip) : ask(target, skip));
 
   function select(message: Shown, index: number) {
     if (!id) return;
@@ -355,6 +359,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     ...translation,
     ...illustration,
     ...remark,
+    polishing,
     badges,
     messageTools,
     composerTools,
@@ -367,7 +372,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     found,
     search,
     problem,
-    unshortened,
+    skippable,
     editing,
     timePin: timePin.value,
     branching,
@@ -393,13 +398,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       ...bookmarkActions,
       ...settingActions,
       send: () => void send(),
-      sendUnshortened: () => unshortened && sendUnshortened(unshortened.target),
+      sendSkipping: () => skippable && sendSkipping(skippable),
       say,
       retryRegex,
       stop: () => talk.stop(chatId),
       regenerate: (message: Shown) => ask({ kind: 'regenerate', message: message.id }),
       retry: (message: Shown) => ask({ kind: 'retry', message: message.id, version: shown(message).id }),
       continue: (message: Shown) => ask({ kind: 'continue', message: message.id, version: shown(message).id }),
+      restoreRaw: (message: Shown) => void (id && restoreRaw(store, id, message).then((saved) => saved.ok || toast.failed(saved))),
       swipe,
       pick,
       copy,

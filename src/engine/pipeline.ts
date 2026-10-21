@@ -4,7 +4,7 @@ import { fitChat, remembered, type ChatSent, type ProviderFit, type Part, type T
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
 import type { MascotId } from '../model/mascot';
-import type { Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, PrereadPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
+import type { AgentPrompt, Block, ConversationPrompt, IllustratePrompt, MascotPrompt, MemoryPrompt, PrereadPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway, type CbsContext, type CbsProblem, type CbsTrace } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -17,6 +17,7 @@ import { COMIC_PAGE, lastScene, numbered, profileNames, seenBy, severalScenes, t
 import { mascotSheet } from './mascot';
 import type { TranslationRequest } from './translate';
 import { protect, protectRules, type ProtectInvalid } from './protect';
+import { keepsMemory, memorySheet } from './agent';
 
 export type PromptInput = {
   tools: { module: string; name: string; text: string }[];
@@ -35,6 +36,8 @@ export type PromptInput = {
   answerInstruction: string;
   // null while the chat's memory is off.
   memory: MemoryFill | null;
+  // The pre agents' notes for this reply (engine/agent agentNotes); absent or empty for none.
+  notes?: string;
 };
 
 // What fills the memory slot: the built-in memory, or the text the tool holding the slot gave (design §6.10). through:
@@ -75,7 +78,9 @@ export type From =
   | { kind: 'script' }
   | { kind: 'tool'; name: string }
   // 토큰 절약's brief, in place of the parts it shortened (engine/preread).
-  | { kind: 'preread' };
+  | { kind: 'preread' }
+  // The pre agents' notes, after the chat, in a prompt with no 에이전트 노트 slot.
+  | { kind: 'agents' };
 
 // parts[i] says where messages[i] came from (origin as Sent's) and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. invalidKeys: regex keys that
@@ -206,11 +211,12 @@ function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) 
 }
 
 type Filling =
-  | { sort: 'conversation'; note: string; memory: string; tools: PromptInput['tools'] }
+  | { sort: 'conversation'; note: string; memory: string; tools: PromptInput['tools']; notes: string }
   | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'illustrate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'mascot'; recent: (block: RecentSlot) => string; source: string; sheet: string }
   | { sort: 'preread'; source: string }
+  | { sort: 'agent'; recent: (block: RecentSlot) => string; source: string; memory: string }
   | { sort: 'memory'; memory: string; span: string };
 
 const loreMessage = ({ entry }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: entry(id, body) });
@@ -281,10 +287,10 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
           if (filling.sort === 'illustrate') wrapped(block, filling.note);
           break;
         case 'recent':
-          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot') verbatim(block, filling.recent(block));
+          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot' || filling.sort === 'agent') verbatim(block, filling.recent(block));
           break;
         case 'source':
-          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot' || filling.sort === 'preread') verbatim(block, filling.source);
+          if (filling.sort === 'translate' || filling.sort === 'illustrate' || filling.sort === 'mascot' || filling.sort === 'preread' || filling.sort === 'agent') verbatim(block, filling.source);
           break;
         case 'memory':
           if (filling.sort === 'conversation' || filling.sort === 'memory') memory = verbatim(block, filling.memory);
@@ -297,6 +303,13 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
           break;
         case 'mascot':
           if (filling.sort === 'mascot') verbatim(block, filling.sheet);
+          break;
+        // A model wrote the notes, so they are never evaluated as CBS.
+        case 'agentNotes':
+          if (filling.sort === 'conversation') verbatim(block, filling.notes);
+          break;
+        case 'agentMemory':
+          if (filling.sort === 'agent') verbatim(block, filling.memory);
           break;
       }
     if (block.cache) parts.push({ cache: true });
@@ -325,7 +338,7 @@ const UTILITY: Block[] = [
 // A chat whose prompt is gone has no block for an @@inject_at entry to go into.
 const conversationBlocks = (scope: ChatScope) => (scope.card?.utility ? UTILITY : (scope.prompt?.blocks ?? []));
 
-function conversation({ scope, seed, countTokens, budget, fit, continuing, answerInstruction, memory, tools }: PromptInput): Assembled | TooLong {
+function conversation({ scope, seed, countTokens, budget, fit, continuing, answerInstruction, memory, tools, notes = '' }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const blocks = conversationBlocks(scope);
   const chat = renderChat('prompt', scope);
@@ -338,7 +351,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
   const recalled = built && standing(built.memory, read!, memoryBudget(built.budget, budget), tokens);
   const told = memory?.kind === 'tool' ? memory : null;
 
-  const { parts: template, memory: slot } = templateOf(blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: told?.text ?? recalled?.text ?? '', tools });
+  const { parts: template, memory: slot } = templateOf(blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: told?.text ?? recalled?.text ?? '', tools, notes });
   // Retrieval rides only where memory does, before the latest user message so it follows the last cache point.
   const found = built && slot ? retrieval(built.memory, built.found, recalled!, read!, retrievalRoom(memoryBudget(built.budget, budget)), tokens) : null;
   // A tool's text stands for its messages only where it reaches the request: without it there, none leave.
@@ -348,6 +361,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
   const out = (...parts: Sent[]) => template.push(...filled(parts));
   if (!blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
   if (!hasToolSlot && toolText.trim()) out({ message: { role: 'system', content: toolText }, from: toolFrom(tools) });
+  if (!blocks.some((block) => block.kind === 'slot' && block.slot === 'agentNotes') && notes.trim()) out({ message: { role: 'system', content: notes.trim() }, from: { kind: 'agents' } });
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
   else if (scope.messages.at(-1)?.role === 'assistant') out({ message: { role: 'user', content: answerInstruction }, from: { kind: 'answer' } });
 
@@ -444,6 +458,9 @@ function translation({ scope, take, prompt, translations, notes, request, langua
 
 const keepTokens = (count: number) =>
   `Tokens like ⟦1⟧ stand for parts of the source kept out of the translation; it holds ${count}, ⟦1⟧ to ⟦${count}⟧. Keep every token exactly as written, in its place; never translate, drop, change or add one.`;
+
+const keepEditTokens = (count: number) =>
+  `Tokens like ⟦1⟧ stand for parts of the reply kept out of the edit; it holds ${count}, ⟦1⟧ to ⟦${count}⟧. Keep every token exactly as written, in its place; never drop, change or add one.`;
 
 // 이전 메시지: the messages before the one at before, as displayed, each with its translation unless the slot holds none.
 const recentOf = (scope: ChatScope, texts: string[], before: number, translations: (string | null)[]) => ({ count, translations: withTranslations }: RecentSlot) => {
@@ -542,6 +559,38 @@ function preread({ scope, prompt, material, seed, countTokens }: PrereadInput): 
   if (stopped) throw stopped;
   const laid = lay(scope, prompt.blocks, scope.messages, variables, seed, remembered(countTokens), null);
   return { messages: taskMessages(templateOf(prompt.blocks, laid, scope.persona, { sort: 'preread', source: material }).parts) };
+}
+
+export type AgentInput = {
+  // The chat's, its messages up to the source, as a request sends them.
+  scope: ChatScope;
+  prompt: AgentPrompt;
+  // The source's place in scope.messages: for a pre agent the message the reply answers, for a post agent the reply.
+  index: number;
+  // A post agent's: the reply as the agent before it left it, the stored text for the first. Absent for a pre agent,
+  // whose source is the message as sent. Only one that rewrites the reply gets it masked by its 보호 패턴.
+  text?: string;
+  // The agent's memory as it stands (runtime/agents memoryOf), '' for none yet.
+  memory: string;
+  seed: string;
+  countTokens: (text: string) => number;
+};
+
+// spans: what the tokens in a post agent's source stand for (engine/protect), which its answer must bring back.
+export const assembleAgent = (input: AgentInput): { messages: ChatMessage[]; spans: string[] } | ProtectInvalid | RanAway => stoppable(() => agent(input));
+
+function agent({ scope, prompt, index, text, memory, seed, countTokens }: AgentInput): { messages: ChatMessage[]; spans: string[] } | ProtectInvalid {
+  const rewrites = text !== undefined && prompt.place === undefined;
+  const rules = protectRules(rewrites ? (prompt.protect ?? []) : []);
+  if ('kind' in rules) return rules;
+  const { texts, variables, stopped } = renderChat('prompt', scope);
+  if (stopped) throw stopped;
+  const { masked: source, spans } = rewrites ? protect(text, rules) : { masked: text ?? texts[index] ?? '', spans: [] };
+  const laid = lay(scope, prompt.blocks, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'agent', recent: recentOf(scope, texts, index, []), source, memory: keepsMemory(prompt) ? memorySheet(memory) : '' });
+  const sent = parts.find((part): part is Sent => 'message' in part && part.from.kind === 'block' && part.from.slot === 'source');
+  if (sent && spans.length) parts.splice(parts.indexOf(sent), 0, { message: { role: 'system', content: keepEditTokens(spans.length) }, from: sent.from });
+  return { messages: taskMessages(parts), spans: sent ? spans : [] };
 }
 
 export type MemoryTaskInput = {

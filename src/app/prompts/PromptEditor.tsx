@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { holdsPersona } from '../../engine/pipeline';
 import type { Stored } from '../../model/kinds';
 import { live } from '../../model/library';
+import { labOn } from '../../model/settings';
 import { isToggle, slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, resetPromptBlocks, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
@@ -12,7 +13,7 @@ import { ModuleSwitches } from '../common/ModuleSwitches';
 import { NO_PERSONA_SLOT, SLOT } from '../common/prompt-words';
 import type { Frame } from '../common/frame';
 import { useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, cannotRemove, copyName, copyOf, ORIGINAL_GONE, PRE_READ, promptName, SEE_ORIGINAL, SET_DEFAULT } from '../common/words';
+import { BIN_KEEPS, cannotRemove, copyName, copyOf, ORIGINAL_GONE, PRE_READ, promptName, SEE_ORIGINAL, SET_DEFAULT, STAGE_NAMES } from '../common/words';
 import { useConnections, useSettings, useStore, useStored } from '../session';
 import type { PromptPane } from '../shell/routes';
 import { typing, useShortcut } from '../shortcuts';
@@ -49,6 +50,8 @@ import { chatWarning } from './ranges';
 import { PicturePane } from './PicturePane';
 import { PresetExport } from './PresetExport';
 import { ProtectRules } from './ProtectRules';
+import { AgentPlace } from './AgentPlace';
+import { AgentSwitches } from '../common/AgentSwitches';
 import { TogglePane } from '../common/TogglePane';
 import { withParticle } from '../common/particles';
 import { lineTitle } from '../common/toggleWords';
@@ -64,7 +67,7 @@ const SORT_WORDS = {
   illustrate: { default: '기본 삽화 프롬프트', makeDefault: '삽화 프롬프트를 따로 선택하지 않은 채팅에 써요' },
   mascot: { default: '기본 마스코트 프롬프트', makeDefault: '마스코트가 이 프롬프트로 대사를 써요' },
   preread: { default: `기본 ${PRE_READ} 프롬프트`, makeDefault: '이 프롬프트로 긴 내용을 먼저 줄여요' },
-} satisfies Record<PromptSort, { default: string; makeDefault: string }>;
+} satisfies Record<Exclude<PromptSort, 'agent'>, { default: string; makeDefault: string }>;
 const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
 
 const CACHE_WORDS = { set: '여기까지 캐시', auto: '자동 캐시' } as const;
@@ -95,13 +98,16 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
+  // 에이전트 노트 is offered only while the 실험실 switch is on, as everything of an experiment.
+  const agentsLab = labOn(settings, 'agents');
   const connections = useConnections();
   const uses = usePromptUse().get(stored.id) ?? EMPTY_USE;
   const original = live(useStored('prompt', stored.value.origin?.id ?? null));
   const split = layout === 'split';
   const save = useAutosave<PromptPatch>(`prompt:${stored.id}`, (patch) => editPrompt(store, stored.id, patch));
   const sort = sortOf(stored.value);
-  const words = SORT_WORDS[sort];
+  // An agent has no default: the chats whose lists hold it run it (runtime/agents).
+  const words = sort === 'agent' ? null : SORT_WORDS[sort];
 
   // The stored prompt under what waits to be saved, so another device's edit to a field nothing here changed shows.
   const draft: Draft = { ...draftOf(stored.value), ...save.unsaved };
@@ -285,7 +291,7 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
       ))}
       <Divider variant="menu" />
       <MenuHeading>자동 입력</MenuHeading>
-      {slotsOf(sort).map((slot) => {
+      {slotsOf(sort).filter((slot) => slot !== 'agentNotes' || agentsLab).map((slot) => {
         const there = placedOnce(draft.blocks, slot);
         return there ? (
           <MenuItem key={slot} tone="muted" label={SLOT[slot].name} sub="추가된 블록으로 이동" onClick={() => pick(there.id)} />
@@ -347,11 +353,18 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
           drill={!split}
         />
       </Section>
-      {sort === 'translate' && <ProtectRules rules={draft.protect ?? []} onChange={(protect) => update(() => ({ protect }))} />}
+      {sort === 'translate' && <ProtectRules task="translate" rules={draft.protect ?? []} onChange={(protect) => update(() => ({ protect }))} />}
+      {ofSort(stored, 'agent') && stored.value.stage === 'post' && (
+        <>
+          <AgentPlace place={draft.place} onChange={(place) => update(() => ({ place }))} />
+          {draft.place === undefined && <ProtectRules task="agent" rules={draft.protect ?? []} onChange={(protect) => update(() => ({ protect }))} />}
+        </>
+      )}
       {ofSort(stored, 'conversation') && (
         <>
           <ModuleSwitches owner={{ kind: 'prompt', prompt: stored }} own={stored.value.modules ?? []} />
           <FeatureSwitches owner={{ kind: 'prompt', id: stored.id }} own={stored.value.features} />
+          <AgentSwitches owner={{ kind: 'prompt', id: stored.id }} own={stored.value.agents ?? []} />
         </>
       )}
     </>
@@ -430,10 +443,10 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
   }
 
   const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? copyOf(promptName(stored.value.origin.name)) : null;
-  const facts = [sort === 'conversation' && promptUseWords(uses), origin].filter(Boolean).join(' · ');
+  const facts = [sort === 'conversation' && promptUseWords(uses), ofSort(stored, 'agent') && STAGE_NAMES[stored.value.stage], origin].filter(Boolean).join(' · ');
   const subtitle = (isDefault || facts) && (
     <>
-      {isDefault && <Tag tone="accent">{words.default}</Tag>} {facts}
+      {isDefault && <Tag tone="accent">{words?.default}</Tag>} {facts}
     </>
   );
   const head: NavBarProps = {
@@ -450,9 +463,9 @@ export function PromptEditor({ stored, layout, pane, onPane, block: openAt, pane
           {stored.value.origin && <MenuItem label={SEE_ORIGINAL} sub={original ? undefined : ORIGINAL_GONE} disabled={!original} onClick={() => onOpen(stored.value.origin!.id)} />}
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
           {ofSort(stored, 'conversation') && <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} onClick={() => setExporting(true)} />}
-          {!isDefault && <MenuItem label={SET_DEFAULT} sub={words.makeDefault} onClick={() => void makeDefault()} />}
+          {words && !isDefault && <MenuItem label={SET_DEFAULT} sub={words.makeDefault} onClick={() => void makeDefault()} />}
           {sort !== 'conversation' && <MenuItem label="기본 블록으로 되돌리기" sub="블록을 앱의 기본으로 바꿔요. 이름과 모델은 그대로예요." onClick={() => void resetBlocks()} />}
-          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? cannotRemove(words.default) : undefined} tone="warn" disabled={isDefault} onClick={() => void erase()} />
+          <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} sub={isDefault ? cannotRemove(words!.default) : undefined} tone="warn" disabled={isDefault} onClick={() => void erase()} />
         </>
       ),
     },

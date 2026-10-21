@@ -10,6 +10,7 @@ import { sceneWriterOf } from '../../runtime/illustrate';
 import { prereadPrompt, setDefaultPrompt } from '../../runtime/prompts';
 import { sendsNotes, translatorOf } from '../../runtime/translate';
 import { SHARED_CHAT } from '../../runtime/turn';
+import { AgentSwitches } from '../common/AgentSwitches';
 import { DetailFold } from '../common/DetailFold';
 import { IllustrateRows } from '../common/IllustrateRows';
 import { Missing } from '../common/Missing';
@@ -18,7 +19,7 @@ import { TranslateRows } from '../common/TranslateRows';
 import { TranslatorNoteField } from '../common/TranslatorNoteField';
 import { useTypedNumber } from '../common/typed';
 import { readWhole } from '../common/typedNumber';
-import { FEATURE_NAMES, MODEL_ROLES, MODEL_SETTINGS, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
+import { AGENTS_HELP, FEATURE_NAMES, MODEL_ROLES, MODEL_SETTINGS, NOTE_UNSENT, noteLines, PAGES, PRE_READ, PRE_READ_HELP, PRE_READ_PARTS } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -38,7 +39,7 @@ export function FeatureScreen({ feature, back }: { feature: Feature; back: Back 
   return (
     <Screen width="form" top={<NavBar title={name} subtitle={PAGES.chat} {...backBar(back)} />}>
       <SettingGroup label={name}>
-        <SettingRow label={name} help={feature === 'preread' ? `${PRE_READ_HELP} ${FEATURE_HELP}` : FEATURE_HELP} control={<FeatureSwitch feature={feature} />} />
+        <SettingRow label={name} help={feature === 'preread' ? `${PRE_READ_HELP} ${FEATURE_HELP}` : feature === 'agents' ? `${AGENTS_HELP} ${FEATURE_HELP}` : FEATURE_HELP} control={<FeatureSwitch feature={feature} />} />
       </SettingGroup>
       <Defaults />
     </Screen>
@@ -199,4 +200,8 @@ function PrereadDefaults() {
   );
 }
 
-const DEFAULTS: Record<Feature, ComponentType> = { translate: TranslateDefaults, illustrate: IllustrateDefaults, memory: MemoryDefaults, mascot: MascotDefaults, preread: PrereadDefaults };
+function AgentDefaults() {
+  return <AgentSwitches owner={{ kind: 'settings' }} own={useSettings().agents ?? []} />;
+}
+
+const DEFAULTS: Record<Feature, ComponentType> = { translate: TranslateDefaults, illustrate: IllustrateDefaults, memory: MemoryDefaults, mascot: MascotDefaults, preread: PrereadDefaults, agents: AgentDefaults };

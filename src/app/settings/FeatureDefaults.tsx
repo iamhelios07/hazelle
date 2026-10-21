@@ -6,12 +6,14 @@ import { availableFeatures, setFeatureAt, sharedFeatures } from '../../runtime/f
 import { drawingModels } from '../../runtime/illustrate';
 import { defaultMemory } from '../../runtime/memory-read';
 import { prereadSetup } from '../../runtime/preread';
+import { agentsOf } from '../../runtime/agents';
+import { SHARED_CHAT } from '../../runtime/turn';
 import type { ObjectStore } from '../../runtime/store';
 import { imageModelOf } from '../common/IllustrateRows';
 import { languageLabel } from '../common/languages';
 import { chosenPrompt } from '../common/TaskPrompt';
 import { count } from '../common/typedNumber';
-import { FEATURE_NAMES, FEATURES_TITLE, NOT_STARRED, PRE_READ_PARTS } from '../common/words';
+import { FEATURE_NAMES, FEATURES_TITLE, NOT_STARRED, PRE_READ_PARTS, STAGE_NAMES } from '../common/words';
 import { useConnections, usePrompts, useSettings, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -42,6 +44,10 @@ const LINES: Record<Feature, (store: ObjectStore, routes: ReturnType<typeof draw
     const { parts, recent } = prereadSetup(store);
     const chosen = (Object.keys(PRE_READ_PARTS) as (keyof typeof PRE_READ_PARTS)[]).filter((part) => parts[part]).map((part) => PRE_READ_PARTS[part]);
     return [chosen.length ? chosen.join('·') : '줄일 부분 없음', `최근 대화 ${recent}개는 원문`].join(' · ');
+  },
+  agents: (store) => {
+    const { pre, post } = agentsOf(store, SHARED_CHAT);
+    return pre.length + post.length ? `${STAGE_NAMES.pre} ${pre.length}개 · ${STAGE_NAMES.post} ${post.length}개` : '붙인 에이전트 없음';
   },
 };
 

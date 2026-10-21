@@ -53,6 +53,8 @@ export type Character = Mark & {
   modules?: string[];
   // 기능 in its chats, over its chats' prompt's (runtime/features).
   features?: FeatureSwitches;
+  // 에이전트 in its chats, stacked after its chats' prompt's (runtime/agents agentsOf).
+  agents?: string[];
 };
 
 // Its lorebook and assets are its children, as a character's are.

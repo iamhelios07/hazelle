@@ -138,6 +138,7 @@ const ENTRIES = {
   vars: shape({ version: str, set: listOf(Array.isArray), at: num }),
   call: shape({ version: str, receipt: isRecord, at: num }),
   follow: shape({ message: str, follows: str, at: num }),
+  agentMemory: shape({ version: str, agent: str, memory: str, at: num }),
 } satisfies Record<Entry['type'], Check>;
 
 const picture = shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) });
@@ -150,7 +151,7 @@ const toggleLine: Check = (value) =>
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(toggleLine) });
 const optStr: Check = (value) => value === undefined || str(value);
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord, folder: optStr });
-const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate' || value === 'mascot' || value === 'preread', model: (value) => value === undefined || isRecord(value) });
+const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate' || value === 'mascot' || value === 'preread' || value === 'agent', model: (value) => value === undefined || isRecord(value) });
 
 const SHAPES = {
   character: shape({

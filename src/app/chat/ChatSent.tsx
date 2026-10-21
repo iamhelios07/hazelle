@@ -43,6 +43,8 @@ export function partName(from: From, role: Role): string {
       return '봇의 스크립트';
     case 'preread':
       return PRE_READ;
+    case 'agents':
+      return SLOT.agentNotes.name;
   }
 }
 

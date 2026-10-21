@@ -8,7 +8,7 @@ import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
 import type { Settle } from './preread';
 import type { CacheForecast } from '../model/cache';
-import type { Message, Receipt, Writes } from '../model/chat';
+import type { AgentRun, Message, Receipt, Writes } from '../model/chat';
 import { without } from '../model/fields';
 import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
@@ -40,22 +40,24 @@ export type Turn = {
   whole?: true;
   // batch: waiting for a discount lane's batch (design §6.7), which answers whole. retrying: a try failed before any of it
   // came and is sent again (retry on failure). stopping: 멈추기 canceled the batch, which is asked about until it ends.
-  // prereading: 토큰 절약's call runs before the reply's (runtime/preread).
+  // preparing: a call the reply waits for runs first, 토큰 절약's (runtime/preread) or the pre agents' (runtime/agents).
   batch?: true;
   retrying?: true;
   stopping?: true;
-  prereading?: true;
+  preparing?: Preparing;
 };
+export type Preparing = 'preread' | 'agents';
 
 // unstored: the user's message shown before the store has it. Nothing may be saved against it yet: fold skips, for
 // good, an entry that names a message saved after it.
-export type Shown = Message & { live: string | null; whole?: true; batch?: true; retrying?: true; stopping?: true; prereading?: true; unstored?: true };
+export type Shown = Message & { live: string | null; whole?: true; batch?: true; retrying?: true; stopping?: true; preparing?: Preparing; unstored?: true };
 
 // The prompt, which the reply's id seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model.
 // said: the user's message as it is saved, which a message sent translated saves translated; null when prepare saved it
 // itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt. preread: makes
-// the record of the 토큰 절약 call that shortened the prompt from the reply's receipt, which keeps it.
-export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast; preread?: Settle };
+// the record of the 토큰 절약 call that shortened the prompt from the reply's receipt, which keeps it. agents: the pre
+// agents' calls, which the receipt keeps.
+export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast; preread?: Settle; agents?: AgentRun[] };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
@@ -84,7 +86,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
     out.push(message);
   }
   const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
-  const live = { live: reply.id, ...(turn.whole && { whole: true as const }), ...(turn.batch && { batch: true as const }), ...(turn.retrying && { retrying: true as const }), ...(turn.stopping && { stopping: true as const }), ...(turn.prereading && { prereading: true as const }) };
+  const live = { live: reply.id, ...(turn.whole && { whole: true as const }), ...(turn.batch && { batch: true as const }), ...(turn.retrying && { retrying: true as const }), ...(turn.stopping && { stopping: true as const }), ...(turn.preparing && { preparing: turn.preparing }) };
   // A reply saved while its turn is held stays live until the turn ends, so nothing between its save and Talk's end
   // shows it settled (Translator.expect).
   const saved = out.findIndex((message) => message.id === (reply.message ?? reply.id) && message.versions.some((existing) => existing.id === reply.id));
@@ -106,8 +108,8 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   return slot === -1 ? out.slice(0, index + 1) : out;
 }
 
-// prereading: shows 토큰 절약's call running, until the prompt is ready.
-type Prepare<F> = (signal: AbortSignal, prereading: () => void) => Promise<Ask | F>;
+// preparing: shows a call the reply waits for running, until the prompt is ready.
+type Prepare<F> = (signal: AbortSignal, preparing: (step: Preparing) => void) => Promise<Ask | F>;
 
 // abort: stops the turn's reading. cancel: 멈추기, which cancels a batch, still read until it ends (GenerateInput batching).
 type Held = { turn: Turn; abort: AbortController; cancel: AbortController; calling: string | null };
@@ -251,13 +253,13 @@ export class Talk {
     const { abort } = held;
     const failure = await lease.ready;
     if (failure) return { kind: 'unsent', failure };
-    const ready = await prepare(abort.signal, () => this.change(held, { ...held.turn, prereading: true }));
+    const ready = await prepare(abort.signal, (step) => this.change(held, { ...held.turn, preparing: step }));
     if ('kind' in ready) return ready;
     const { route, settings } = ready;
     let prompt = ready.prompt;
     const reply = ready.before ? { ...asked, before: ready.before } : asked;
     // A message sent translated or changed by the bot shows as it is saved from the moment it is made so.
-    this.change(held, { ...without(held.turn, 'prereading'), reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
+    this.change(held, { ...without(held.turn, 'preparing'), reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
     const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
     const target = { chat, result: reply.id, for: { kind: 'reply' as const, message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), continues: reply.continues, ...(reply.before && { before: reply.before }) } };
     const batching = { waiting: () => this.change(held, { ...held.turn, whole: true, batch: true }), cancel: held.cancel.signal };
@@ -293,7 +295,7 @@ export class Talk {
     const forecast = answer.calibration.retries.length ? undefined : ready.forecast;
     // Kept before the save, whose store change is what shows the reply's 정보.
     this.log.attach(chat, call.id, { prompt, forecast });
-    const written = this.written(held, reply, callOf(route), answer, Date.now(), forecast, ready.preread);
+    const written = this.written(held, reply, callOf(route), answer, Date.now(), forecast, ready.preread, ready.agents);
     // A receipt's cache is the view's, so one kept means the answer has its view.
     const printing = cacheKept(written.receipt) && writePrint(this.store, chat, call.id, wireOf(route.connection.id, answer.account, answer.cache!, prompt.parts));
     const saved = await this.save(chat, await this.ended(chat, written), call.id);
@@ -343,8 +345,8 @@ export class Talk {
     return { keep, takeBack: (chars) => this.change(held, { ...held.turn, reasoning: held.turn.reasoning.slice(0, held.turn.reasoning.length - chars) }) };
   }
 
-  private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply, at: number, forecast?: CacheForecast, preread?: Ask['preread']): Written {
-    const made: Receipt = { ...receiptOf(call, answer), ...(forecast && { forecast }), ...(reply.continues && { continues: reply.continues.receipt }) };
+  private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply, at: number, forecast?: CacheForecast, preread?: Ask['preread'], agents?: AgentRun[]): Written {
+    const made: Receipt = { ...receiptOf(call, answer), ...(forecast && { forecast }), ...(reply.continues && { continues: reply.continues.receipt }), ...(agents?.length && { agents }) };
     const receipt: Receipt = preread ? { ...made, preread: preread(made) } : made;
     return { id: reply.id, message: reply.message, replaces: reply.replaces, ...(reply.follows !== undefined && { follows: reply.follows }), at, text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   }

@@ -3,11 +3,12 @@ import { illustratorPrompt } from '../engine/illustrate';
 import { commentatorPrompt } from '../engine/mascot';
 import { memoryTaskPrompt } from '../engine/memory';
 import { prereadTaskPrompt } from '../engine/preread';
+import { agentPrompt, builtInAgent, type AgentStart } from '../engine/agent';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live, type Module } from '../model/library';
-import { sortOf, type Block, type ConversationPrompt, type PictureSettings, type PictureTags, type Prompt, type PromptOf, type PromptSort, type ToggleLine } from '../model/prompt';
+import { sortOf, type AgentPlace, type Block, type ConversationPrompt, type PictureSettings, type PictureTags, type Prompt, type PromptOf, type PromptSort, type ToggleLine } from '../model/prompt';
 import { EMPTY_SETTINGS, labOn, SETTINGS_ID, type LabId, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiResult } from './api';
@@ -30,8 +31,10 @@ export const ILLUSTRATOR_ID = '00000000-0000-4000-8000-000000000006';
 export const COMMENTATOR_ID = '00000000-0000-4000-8000-000000000007';
 export const PREREADER_ID = '00000000-0000-4000-8000-000000000008';
 
-// Each task's built-in prompt, which a new prompt of its sort starts from while the account's default is gone.
-const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt, illustrate: illustratorPrompt, mascot: commentatorPrompt, preread: prereadTaskPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
+// Each task's built-in prompt, which a new prompt of its sort starts from while the account's default is gone. An agent
+// has no default: a chat runs every agent its lists hold (runtime/agents), each made by addAgent.
+type Defaulted = Exclude<PromptSort, 'agent'>;
+const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt, illustrate: illustratorPrompt, mascot: commentatorPrompt, preread: prereadTaskPrompt } satisfies { [S in Exclude<Defaulted, 'conversation'>]: () => PromptOf<S> };
 
 const DEFAULTS = {
   conversation: { setting: 'prompt', id: STARTER_ID, make: starter },
@@ -41,7 +44,7 @@ const DEFAULTS = {
   mascot: { setting: 'mascotPrompt', id: COMMENTATOR_ID, make: () => Promise.resolve(BUILT_IN.mascot()) },
   // Added once its 실험실 switch is on (addDefaults), so an account that never turns it on holds none.
   preread: { setting: 'prereadPrompt', id: PREREADER_ID, make: () => Promise.resolve(BUILT_IN.preread()), lab: 'preread' },
-} as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null>; lab?: LabId } };
+} as const satisfies { [S in Defaulted]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null>; lab?: LabId } };
 
 export const DEFAULT_PROMPT_IDS: readonly string[] = Object.values(DEFAULTS).map(({ id }) => id);
 
@@ -52,7 +55,7 @@ export const ofSort = <S extends PromptSort>(prompt: Stored<'prompt'>, sort: S):
 // stops on it ("기본 프롬프트가 없어요").
 export type PromptChoice<S extends PromptSort = 'conversation'> = { kind: 'prompt'; prompt: StoredPrompt<S>; own: boolean } | { kind: 'missing'; own: boolean };
 
-function choose<S extends PromptSort>(store: Pick<ObjectStore, 'get'>, sort: S, chosen: string | undefined): PromptChoice<S> {
+function choose<S extends Defaulted>(store: Pick<ObjectStore, 'get'>, sort: S, chosen: string | undefined): PromptChoice<S> {
   const own = chosen !== undefined;
   const id = chosen ?? store.get('settings', SETTINGS_ID)?.value[DEFAULTS[sort].setting];
   const prompt = id === undefined ? null : live(store.get('prompt', id));
@@ -79,7 +82,7 @@ export const prereadPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, 
 // a card replaces start empty, so a card's system prompt and post-history instructions have their places. A new
 // task prompt starts as the account's default of its sort is, or the built-in one while that is gone.
 // folder: where a conversation prompt is filed (model/folders); task prompts are never filed.
-export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id?: string, folder?: string): Promise<ApiResult<Stored<'prompt'>>> {
+export function addPrompt(store: ObjectStore, name: string, sort: Defaulted, id?: string, folder?: string): Promise<ApiResult<Stored<'prompt'>>> {
   const named = () => ({ id: crypto.randomUUID(), name: null });
   if (sort !== 'conversation') {
     const base = choose(store, sort, undefined);
@@ -100,6 +103,9 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id
   ];
   return store.create('prompt', { name, blocks, toggles: [], authorNote: '', models: {}, ...(folder !== undefined && { folder }) }, { id });
 }
+
+// An agent starts as a built-in (기본 장면 메모, 기본 문장 다듬기) or empty with its stage's slots (engine/agent).
+export const addAgent = (store: ObjectStore, start: AgentStart, name: string) => store.create('prompt', agentPrompt(start, name));
 
 // paired: the modules turned on for it, those its preset named that were here and then made, the module that holds its
 // preset's regex, written with it in one batch. waiting: the names its preset gave that no module here answered.
@@ -159,9 +165,10 @@ async function starterBytes(): Promise<Uint8Array<ArrayBuffer>> {
 }
 
 // Only the fields given, merged into the current prompt, so an edit to another field on another device survives.
-// authorNote is a conversation prompt's only, tags and picture a 삽화 prompt's, protect a translation prompt's; tags
-// undefined goes back to the app's, protect undefined stores no 보호 패턴.
-export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: ToggleLine[]; authorNote: string; tags: PictureTags; picture: PictureSettings; protect: string[] }>;
+// authorNote is a conversation prompt's only, tags and picture a 삽화 prompt's, protect a translation prompt's or a post agent's,
+// place a post agent's; tags undefined goes back to the app's, protect undefined stores no 보호 패턴, place undefined
+// rewrites the reply.
+export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: ToggleLine[]; authorNote: string; tags: PictureTags; picture: PictureSettings; protect: string[]; place: AgentPlace }>;
 
 export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current): Prompt => ({ ...current, ...patch }));
 
@@ -171,7 +178,7 @@ export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) =
 export function resetPromptBlocks(store: ObjectStore, id: string): Promise<ApiResult<Stored<'prompt'>>> {
   const prompt = store.get('prompt', id)?.value;
   if (!prompt || prompt.task === undefined) return Promise.resolve({ ok: false, error: 'gone' });
-  const { blocks, toggles } = BUILT_IN[prompt.task]();
+  const { blocks, toggles } = prompt.task === 'agent' ? builtInAgent(prompt.stage) : BUILT_IN[prompt.task]();
   return editPrompt(store, id, { blocks, toggles });
 }
 
@@ -194,10 +201,14 @@ export async function removePrompt(store: ObjectStore, id: string): Promise<ApiR
 
 export const restorePrompt = (store: ObjectStore, id: string) => markDeleted(store, 'prompt', id, null);
 
-export const isDefaultPrompt = (settings: Settings, prompt: Stored<'prompt'>) => settings[DEFAULTS[sortOf(prompt.value)].setting] === prompt.id;
+export function isDefaultPrompt(settings: Settings, prompt: Stored<'prompt'>) {
+  const sort = sortOf(prompt.value);
+  return sort !== 'agent' && settings[DEFAULTS[sort].setting] === prompt.id;
+}
 
 export function setDefaultPrompt(store: ObjectStore, id: string): Promise<ApiResult<Stored<'settings'>>> {
   const prompt = store.get('prompt', id);
-  if (!prompt) return Promise.resolve({ ok: false, error: 'gone' });
-  return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, [DEFAULTS[sortOf(prompt.value)].setting]: id }));
+  const sort = prompt && sortOf(prompt.value);
+  if (!sort || sort === 'agent') return Promise.resolve({ ok: false, error: 'gone' });
+  return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, [DEFAULTS[sort].setting]: id }));
 }

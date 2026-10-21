@@ -21,6 +21,7 @@ import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
 import { scriptHolds } from '../common/pack';
 import { featureHolds, FeatureSwitches } from '../common/FeatureSwitches';
+import { AgentSwitches } from '../common/AgentSwitches';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { PackToggles } from '../common/PackToggles';
 import { ScriptsEditor } from '../common/ScriptsEditor';
@@ -320,7 +321,12 @@ export function CharacterEditor({ shelf, layout, part, onPart, partBack, frame }
     ),
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} variables={card.variables} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
-    features: <FeatureSwitches owner={{ kind: 'character', id }} own={character.features} />,
+    features: (
+      <>
+        <FeatureSwitches owner={{ kind: 'character', id }} own={character.features} />
+        <AgentSwitches owner={{ kind: 'character', id }} own={character.agents ?? []} />
+      </>
+    ),
     scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} variables={card.variables} />,
     toggles: <PackToggles owner={{ kind: 'character', id }} lines={card.toggles} />,
     variables: (

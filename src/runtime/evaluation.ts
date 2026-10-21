@@ -1,7 +1,7 @@
 import { Runaway } from '../engine/cbs/evaluate';
 import type { DisplayPatch } from '../engine/display';
 import type { RegexScript } from '../engine/import/types';
-import type { assembleIllustration, assembleMascot, assembleMemory, assemblePreread, assembleTranslation, IllustrationInput, MascotInput, MemoryTaskInput, PrereadInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
+import type { AgentInput, assembleAgent, assembleIllustration, assembleMascot, assembleMemory, assemblePreread, assembleTranslation, IllustrationInput, MascotInput, MemoryTaskInput, PrereadInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
 import type { ChatScope, VariableInspection } from '../engine/render';
 import type { ApiFailure } from './api';
 import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState, TrialRead } from './evaluation-core';
@@ -55,6 +55,9 @@ const GATES = {
   'auto-translation': 'passive',
   'auto-illustration': 'passive',
   mascot: 'passive',
+  // A post agent's, which runs on its own after a reply; a pre agent's runs within the send.
+  polish: 'passive',
+  agent: 'press',
   send: 'press',
   translation: 'press',
   illustration: 'press',
@@ -154,6 +157,12 @@ export class Evaluation {
   mascot(lane: Lane<'mascot'>, input: Omit<MascotInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleMascot>>> {
     const { scope, ...rest } = input;
     return this.once(lane.asker, onChat(lane), scope, { kind: 'mascot', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleMascot>>>;
+  }
+
+  // Each its own lane, as a translation's: a turn's pre agents run at once.
+  agent(lane: Lane<'agent' | 'polish'>, input: Omit<AgentInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleAgent>>> {
+    const { scope, ...rest } = input;
+    return this.once(lane.asker, onChat(lane), scope, { kind: 'agent', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleAgent>>>;
   }
 
   lore(lane: Lane<'lore'>, scope: ChatScope, seed: string, limit: number): Promise<Counted<{ role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway>> {

@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
-import { calls, shown, type Receipt } from '../../model/chat';
+import { useEffect, useState } from 'react';
+import { calls, handEdited, shown, type AgentRun, type Receipt, type Version } from '../../model/chat';
+import { setAgentMemory } from '../../runtime/chat-log';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
-import { useChatMemory, useSession } from '../session';
-import { Breakdown, Callout, Empty, Facts, Section, SidePanel, Stack, Switcher, Tabs, Text } from '../ui';
+import { useChatMemory, useSession, useStore } from '../session';
+import { useToast } from '../toast';
+import { Breakdown, Button, Callout, Disclosure, Empty, Facts, Section, SidePanel, Stack, Switcher, Tabs, Text, TextField } from '../ui';
 import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
 import { money } from '../common/money';
 import { cost, finish, seconds, speed, tokens } from '../common/receipt';
-import { DISCOUNT, PDF_SEND, PRE_READ, UNKNOWN } from '../common/words';
+import { DISCOUNT, PDF_SEND, PRE_READ, STAGE_NAMES, UNKNOWN } from '../common/words';
 import { infoReply } from './infoReply';
 import type { InfoTab, Side } from './panels';
 import type { OpenChat } from './useChat';
@@ -109,12 +111,13 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
         {earlier.length > 0 && tab !== 'reply' && <Text variant="note">마지막으로 이어 쓴 요청의 정보예요.</Text>}
         {tab === 'reply' && (
           <>
-            {version.edited && <Text variant="note">수정하기 전 응답의 정보예요.</Text>}
+            {handEdited(version) && <Text variant="note">수정하기 전 응답의 정보예요.</Text>}
             {earlier.length > 0 && (
               <Text variant="note">{`${earlier.length + 1}번 호출해서 이어 쓴 응답이에요. 비용은 호출할 때마다 발생해요.`}</Text>
             )}
             <Call receipt={receipt} />
             {receipt.preread && <PrereadCall preread={receipt.preread} />}
+            {chat && receipt.agents?.map((run) => <AgentCall key={`${run.stage}:${run.agent}`} chat={chat} version={version} run={run} />)}
             {translated && <TranslationCall receipt={translated} />}
             {thought}
             {earlier.length > 0 && (
@@ -163,6 +166,46 @@ function PrereadCall({ preread: { material, brief, receipt, reused, saved } }: {
     <Section level={3} title={PRE_READ} note={`원문 약 ${tokens(material)} → 줄인 뒤 ${tokens(brief)}`}>
       <Text variant="note">{reused ? '앞 응답에서 줄인 내용을 다시 썼어요. 이번에는 비용이 들지 않았어요.' : `${receipt.modelName} · ${receipt.source}`}</Text>
       <Facts variant="tiles" items={[net || { label: '아낀 비용', value: UNKNOWN, tone: 'muted' as const }, ...(reused ? [] : callFacts(receipt))]} />
+    </Section>
+  );
+}
+
+// An agent's call for the reply, with what a pre agent noted and the memory it left, which the user may set here: the
+// next replies read it (runtime/agents memoryOf).
+function AgentCall({ chat, version, run: { agent, name, stage, receipt, note, memory, reused } }: { chat: string; version: Version; run: AgentRun }) {
+  const store = useStore();
+  const toast = useToast();
+  const kept = version.memories?.[agent] ?? memory;
+  const [draft, setDraft] = useState<string | null>(null);
+  const save = () => void setAgentMemory(store, chat, version.id, agent, draft!).then((saved) => (saved.ok ? setDraft(null) : toast.failed(saved, '저장하지 못했어요.')));
+  return (
+    <Section level={3} title={name} note={STAGE_NAMES[stage]}>
+      <Text variant="note">{reused ? '같은 메시지의 앞 응답에서 쓴 노트를 다시 썼어요. 이번에는 비용이 들지 않았어요.' : `${receipt.modelName} · ${receipt.source}`}</Text>
+      {!reused && <Facts variant="tiles" items={callFacts(receipt)} />}
+      {note !== undefined && (
+        <Disclosure label="노트">
+          <Text>{note}</Text>
+        </Disclosure>
+      )}
+      {kept !== undefined && (
+        <Disclosure label="기억">
+          {draft === null ? (
+            <Stack gap="related">
+              <Text>{kept || '비어 있어요.'}</Text>
+              <Button variant="secondary" size="sm" onClick={() => setDraft(kept)}>
+                편집
+              </Button>
+            </Stack>
+          ) : (
+            <Stack gap="related">
+              <TextField label="기억" showLabel={false} lines={6} value={draft} onChange={setDraft} />
+              <Button size="sm" onClick={save}>
+                저장
+              </Button>
+            </Stack>
+          )}
+        </Disclosure>
+      )}
     </Section>
   );
 }

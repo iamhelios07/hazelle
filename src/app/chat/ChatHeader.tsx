@@ -4,6 +4,7 @@ import { entryName } from '../../connectors/types';
 import { BookKey, BookOpen, Bookmark, Brain, Keyboard, MessageSquarePlus, Package, PlaneTakeoff, ScanSearch, Search, SlidersHorizontal, SquarePen, ToggleRight, UsersRound } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { FeatureSwitches } from '../common/FeatureSwitches';
+import { AgentSwitches } from '../common/AgentSwitches';
 import { NameDialog } from '../common/NameDialog';
 import { BOOKMARK, CAST, CHAT_LORE, EXPORT, FEATURE_NAMES, FEATURES_TITLE, NO_CHARACTER } from '../common/words';
 import { useRemembering, useSession, useToolFrames } from '../session';
@@ -59,6 +60,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
       {item && (
         <Menu kind="dialog" size="form" handle={featuresMenu} place="below-end" label={FEATURES_TITLE} trigger={() => null}>
           <FeatureSwitches owner={{ kind: 'chat', id: item.id }} own={item.chat.features} />
+          <AgentSwitches owner={{ kind: 'chat', id: item.id }} own={item.chat.agents ?? []} />
         </Menu>
       )}
       <ToolButton

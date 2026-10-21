@@ -1,5 +1,5 @@
 import { TOGGLE_GLOBAL } from '../../engine/cbs/tags';
-import { isWrapped, SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
+import { isWrapped, SLOTS, type AgentPlace, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
 import { rekeyed } from '../../model/toggles';
 import type { PromptPatch } from '../../runtime/prompts';
 import type { Command } from '../common/code/cbsCommands';
@@ -7,7 +7,7 @@ import { blockSource } from './blocks';
 import { renameToggle, toggleUses } from './rekey';
 
 // authorNote: null for a sort of prompt that has none.
-export type Draft = Pick<Prompt, 'name' | 'blocks' | 'toggles'> & { authorNote: string | null; tags?: PictureTags; picture?: PictureSettings; protect?: string[] };
+export type Draft = Pick<Prompt, 'name' | 'blocks' | 'toggles'> & { authorNote: string | null; tags?: PictureTags; picture?: PictureSettings; protect?: string[]; place?: AgentPlace };
 export const draftOf = (prompt: Prompt): Draft => ({
   name: prompt.name,
   blocks: prompt.blocks,
@@ -15,7 +15,8 @@ export const draftOf = (prompt: Prompt): Draft => ({
   authorNote: prompt.task === undefined ? prompt.authorNote : null,
   tags: prompt.task === 'illustrate' ? prompt.tags : undefined,
   picture: prompt.task === 'illustrate' ? prompt.picture : undefined,
-  protect: prompt.task === 'translate' ? prompt.protect : undefined,
+  protect: prompt.task === 'translate' || prompt.task === 'agent' ? prompt.protect : undefined,
+  place: prompt.task === 'agent' ? prompt.place : undefined,
 });
 
 export type NewBlock = { text: Role } | { slot: SlotKind };

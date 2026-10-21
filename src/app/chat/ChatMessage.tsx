@@ -3,7 +3,7 @@ import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
-import { firstLine, shown, translationOutdated, type Message } from '../../model/chat';
+import { firstLine, handEdited, shown, translationOutdated, type Message } from '../../model/chat';
 import type { PictureSizes } from '../../engine/illustrate';
 import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
@@ -17,7 +17,8 @@ import { describeFailedReply, describeTranslateFailure } from '../common/failure
 import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
-import { DISCOUNT_STOPPING, DISCOUNT_WAITING, PRE_READ_WAITING, RETRYING } from '../common/words';
+import { AGENTS_WAITING, DISCOUNT_STOPPING, DISCOUNT_WAITING, POLISHING, PRE_READ_WAITING, RETRYING } from '../common/words';
+import type { Preparing } from '../../runtime/talk';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
@@ -32,6 +33,8 @@ import { seenText } from './search';
 import { useReveal } from './useReveal';
 import { useSelectedPart } from './useSelectedPart';
 import { withOriginal } from './withOriginal';
+
+const PREPARING: Record<Preparing, string> = { preread: PRE_READ_WAITING, agents: AGENTS_WAITING };
 
 type Props = {
   message: Shown;
@@ -57,6 +60,8 @@ type Props = {
   canIllustrate: boolean;
   pictureSizes: PictureSizes;
   awaited: boolean;
+  // Its post agents are rewriting the reply shown (runtime/agents Polisher).
+  polishing: boolean;
   flipped: boolean;
   showOriginal: boolean;
   replyNext: boolean;
@@ -94,7 +99,7 @@ const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨', r
 const MARK = { length: 'length', 'no-terminal': 'length', stopped: 'stopped', refused: 'refused' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, pictureSizes, awaited, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, pictureSizes, awaited, polishing, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -105,6 +110,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const sentTranslated = translation?.sentIn !== undefined;
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
+  // 다듬기 전 답 보기 of a reply its post agents rewrote: the text as the model wrote it, as it is stored.
+  const hasRaw = version.raw !== undefined && version.raw !== version.text;
+  const [rawShown, setRawShown] = useState(false);
+  const raw = hasRaw && rawShown;
   const text = seenText(original, version, translatingText, flipped);
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live && !message.whole);
@@ -128,7 +137,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
-  const cut = !live && !version.edited && receipt?.state === 'cut' ? receipt.cut : null;
+  const cut = !live && !handEdited(version) && receipt?.state === 'cut' ? receipt.cut : null;
 
   const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (pressed(event, SHORTCUTS.cancelEdit.keys)) {
@@ -166,7 +175,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       />
     );
   } else if (live && empty) {
-    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : message.prereading ? PRE_READ_WAITING : null;
+    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : message.preparing ? PREPARING[message.preparing] : null;
     body = waiting ? <Waiting note={waiting} /> : <Elapsed thinking={Boolean(version.reasoning)} />;
   } else if (failed) {
     body = (
@@ -203,7 +212,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
         {/* A message may be all box: a status window's script took every word of it. */}
-        {!empty && (
+        {raw ? (
+          <Story html={shownHtml(version.raw!, decor)} css={decor.css} buttons="inert" />
+        ) : !empty && (
           <Story
             html={html}
             css={decor.css}
@@ -257,6 +268,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {selected && <SelectionButton icon={SquarePen} label="수정" at={selected.end} onPress={() => actions.edit(message, selected.part)} />}
       {editing === null && translationMark}
       {drawing?.writing && <Marker reason="illustration" label="장면 정하는 중" />}
+      {polishing && <Marker reason="agent" label={POLISHING} />}
+      {raw && <Marker reason="agent" label="다듬기 전 답" action={{ label: '다듬기 전으로 되돌리기', disabled: busy, onClick: () => actions.restoreRaw(message) }} />}
       {cut && (
         <Marker
           reason={MARK[cut]}
@@ -342,6 +355,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           )}
           <MenuItem label={BOOKMARK} checked={bookmarked} multiple onClick={() => actions.bookmark(message.id)} />
           <MenuItem label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />
+          {hasRaw && <MenuItem label="다듬기 전 답 보기" checked={rawShown} multiple onClick={() => setRawShown(!rawShown)} />}
           {!mine && <MenuItem label="응답 정보" onClick={() => actions.info(message.id)} />}
           {offered.length > 0 && <MenuHeading>상태창으로 지정</MenuHeading>}
           {offered.map((script) => (

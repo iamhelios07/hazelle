@@ -4,7 +4,7 @@ import type { FeatureSwitches } from './features';
 
 export type Role = 'system' | 'user' | 'assistant';
 
-export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate' | 'mascot' | 'preread';
+export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate' | 'mascot' | 'preread' | 'agent';
 
 // A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 텍스트 with
 // {{slot}} where its content goes; role is the one a new block of it starts with (app/prompts/edits newBlock).
@@ -13,19 +13,24 @@ export const SLOTS = {
   // 캐릭터 설명 and 페르소나 repeat because Risu presets put them in several places and open one by a toggle (누렁이's
   // 탈옥조정 for the description, 소악마's topbotpersona for the persona): with one place, the other toggle states send
   // nothing at all.
-  description: { wrapped: true, role: 'system', repeats: true, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
-  persona: { wrapped: true, role: 'system', repeats: true, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
-  lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
+  description: { wrapped: true, role: 'system', repeats: true, sorts: ['conversation', 'translate', 'memory', 'illustrate', 'agent'] },
+  persona: { wrapped: true, role: 'system', repeats: true, sorts: ['conversation', 'translate', 'memory', 'illustrate', 'agent'] },
+  lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate', 'agent'] },
   authorNote: { wrapped: true, role: 'system', repeats: false, sorts: ['conversation'] },
   postEverything: { wrapped: false, repeats: false, sorts: ['conversation'] },
   chat: { wrapped: false, repeats: true, sorts: ['conversation'] },
   note: { wrapped: true, role: 'system', repeats: false, sorts: ['translate'] },
   // 삽화 노트: a chat's own directions for its pictures (Chat.illustrateNote).
   illustrateNote: { wrapped: true, role: 'system', repeats: false, sorts: ['illustrate'] },
-  recent: { wrapped: true, role: 'system', repeats: false, sorts: ['translate', 'illustrate', 'mascot'] },
+  recent: { wrapped: true, role: 'system', repeats: false, sorts: ['translate', 'illustrate', 'mascot', 'agent'] },
   // In a 삽화 task, the message's paragraphs, numbered (model/illustration paragraphsOf); in a 마스코트 task, the reply as
-  // shown; in a 토큰 절약 task, the parts of the request it shortens, each headed by its kind (engine/preread).
-  source: { wrapped: true, role: 'user', repeats: false, sorts: ['translate', 'illustrate', 'mascot', 'preread'] },
+  // shown; in a 토큰 절약 task, the parts of the request it shortens, each headed by its kind (engine/preread); in a pre
+  // agent, the message the reply answers, and in a post agent the reply as saved.
+  source: { wrapped: true, role: 'user', repeats: false, sorts: ['translate', 'illustrate', 'mascot', 'preread', 'agent'] },
+  // 에이전트 노트: the pre agents' notes for the reply (design §6.16); a prompt without it gets them after the chat.
+  agentNotes: { wrapped: true, role: 'system', repeats: false, sorts: ['conversation'] },
+  // An agent's own memory as it last left it, with the answer shape that keeps it (engine/agent memorySheet).
+  agentMemory: { wrapped: true, role: 'system', repeats: false, sorts: ['agent'] },
   // The mascot's own sheet, which the engine writes (engine/mascot): its voice, faces, last lines and answer shape.
   mascot: { wrapped: true, role: 'system', repeats: false, sorts: ['mascot'] },
   // 장기 기억: in a conversation, the chat's memory as sent; in a memory task, the memory the new records follow.
@@ -98,6 +103,8 @@ export type ConversationPrompt = {
   companions?: string[];
   // 기능 in its chats, over the 공용 ones (runtime/features).
   features?: FeatureSwitches;
+  // 에이전트 in its chats, stacked after 공용's (runtime/agents agentsOf).
+  agents?: string[];
 };
 
 // model: the one place a translation's model is chosen; without one, the chat's 보조 모델. Its text blocks carry no mark,
@@ -167,7 +174,25 @@ export type PrereadPrompt = {
   origin?: { id: string; name: string };
 };
 
-export type Prompt = (ConversationPrompt | TranslatePrompt | MemoryPrompt | IllustratePrompt | MascotPrompt | PrereadPrompt) & Mark;
-export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt; illustrate: IllustratePrompt; mascot: MascotPrompt; preread: PrereadPrompt }[S];
+// 에이전트 (design §6.16): pre reads before the reply and leaves a note in the conversation's 에이전트 노트, post rewrites
+// the saved reply. model: the one place an agent's model is chosen; without one, the chat's 보조 모델, then its 대화 모델.
+// protect: a post agent's 보호 패턴, as a translation prompt's. place: where a post agent's answer goes beside the reply
+// (Agents! P!'s prefix and suffix modes), absent for in its place.
+export type AgentStage = 'pre' | 'post';
+export type AgentPlace = 'before' | 'after';
+export type AgentPrompt = {
+  task: 'agent';
+  name: string;
+  stage: AgentStage;
+  model?: ModelRef;
+  blocks: Block[];
+  toggles: ToggleLine[];
+  protect?: string[];
+  place?: AgentPlace;
+  origin?: { id: string; name: string };
+};
+
+export type Prompt = (ConversationPrompt | TranslatePrompt | MemoryPrompt | IllustratePrompt | MascotPrompt | PrereadPrompt | AgentPrompt) & Mark;
+export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt; illustrate: IllustratePrompt; mascot: MascotPrompt; preread: PrereadPrompt; agent: AgentPrompt }[S];
 
 export const sortOf = (prompt: Prompt): PromptSort => prompt.task ?? 'conversation';

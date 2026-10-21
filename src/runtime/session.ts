@@ -17,6 +17,7 @@ import { Files } from './files';
 import { Illustrator } from './illustrate';
 import { Likenesses } from './likeness';
 import { Commentator } from './mascot';
+import { Polisher } from './agents';
 import type { Briefs } from './preread';
 import { deviceCache } from './device-cache';
 import { Drafts } from './drafts';
@@ -59,6 +60,7 @@ export type Session = {
   illustrator: Illustrator;
   likenesses: Likenesses;
   commentator: Commentator;
+  polisher: Polisher;
   briefs: Briefs;
   drafts: Drafts;
   streams: Streams;
@@ -128,6 +130,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const likenesses = new Likenesses({ tokens, store, credentials, log, files, catalogs });
   const illustrator = new Illustrator({ tokens, store, credentials, log, files, likenesses });
   const commentator = new Commentator({ tokens, store, credentials, log });
+  const polisher = new Polisher({ tokens, store, credentials, log });
   const briefs: Briefs = new Map();
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
   const scripts: Scripts = new Scripts({ tokens, store, read, credentials, log, costs, display }, { lua: machine, tools });
@@ -206,6 +209,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     illustrator.close();
     likenesses.close();
     commentator.close();
+    polisher.close();
     costs.close();
     usage.close();
     tokens.clear();
@@ -214,7 +218,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { transport, tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, briefs, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { transport, tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, polisher, briefs, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }
 

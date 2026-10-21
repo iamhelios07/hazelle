@@ -2,7 +2,7 @@ import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
 import { VARIABLE_LIMITS } from '../engine/render';
-import { CAST_MAX, foldTree, shown, standing, translationOutdated, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Version, type Writes } from '../model/chat';
+import { CAST_MAX, foldTree, shown, standing, translationOutdated, type AgentRun, type Bookmark, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Version, type Writes } from '../model/chat';
 import { cachePrintId } from '../model/cache';
 import type { Illustration } from '../model/illustration';
 import type { Remark } from '../model/mascot';
@@ -252,13 +252,14 @@ function copied(id: string, { role, at, versions, selected, after }: Message, fo
   if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
   for (const version of versions) if (version.after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(version.id)!, set: version.after, at: version.at }]);
   for (const version of versions) if (version.byHand) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(version.id)!, set: version.byHand, at: version.at, byHand: true }]);
+  for (const version of versions) for (const [agent, memory] of Object.entries(version.memories ?? {})) entries.push([crypto.randomUUID(), { type: 'agentMemory', version: made.get(version.id)!, agent, memory, at: version.at }]);
   if (after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(versions[selected]!.id)!, set: after, at, stays: true }]);
   return { entries, versions: made };
 }
 
 // What a copy of a version carries. A field added to versions must be written here too, or a copy drops it. The calls
 // the bot's Lua made (Version.calls) are dropped on purpose: usage counts a call where it was made.
-const held = ({ text, receipt, seed, translation, staged, before, reasoning, greeting }: Version) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }), ...(reasoning && { reasoning }), ...(greeting !== undefined && { greeting }) });
+const held = ({ text, receipt, seed, translation, staged, before, reasoning, greeting, raw }: Version) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }), ...(reasoning && { reasoning }), ...(greeting !== undefined && { greeting }), ...(raw !== undefined && { raw }) });
 
 // A new last version of the message, a copy of the one shown, which it shows: what followed the one shown stays that
 // version's continuation (Entry follows), so a line written after the copy leaves the story before it a switch away.
@@ -422,6 +423,24 @@ export function editMessage(store: ObjectStore, chat: string, message: Message, 
   const kept = translation?.trim() && current.translation && { translation: { ...current.translation, text: translation, at: outdated ? current.translation.at : at } };
   return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...(current.greeting !== undefined && { greeting: current.greeting }), ...kept }, id);
 }
+
+// The post agents' text in the place of the version shown (design §6.16), as an onOutput edit is, keeping the text it
+// takes the place of as raw and the agents' calls on its receipt. A reply always has a receipt.
+export function appendPolished(store: ObjectStore, chat: string, message: Message, text: string, runs: AgentRun[]) {
+  const current = shown(message);
+  const receipt = { ...current.receipt!, agents: [...(current.receipt!.agents ?? []), ...runs] };
+  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at: Date.now(), text, receipt, seed: current.seed, raw: current.raw ?? current.text });
+}
+
+// 원문으로 되돌리기: the reply as written before its post agents, in the place of the version shown, which keeps raw.
+export function restoreRaw(store: ObjectStore, chat: string, message: Message) {
+  const current = shown(message);
+  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at: Date.now(), text: current.raw!, receipt: current.receipt, seed: current.seed });
+}
+
+// An agent's memory as the user sets it at a version (Entry agentMemory).
+export const setAgentMemory = (store: ObjectStore, chat: string, version: string, agent: string, memory: string) =>
+  append(store, chat, { type: 'agentMemory', version, agent, memory, at: Date.now() });
 
 // id: the call's, so a call another device saved too is known as saved (runtime/streams).
 export const appendTranslation = (store: ObjectStore, chat: string, version: string, translation: Translation, id: string) =>

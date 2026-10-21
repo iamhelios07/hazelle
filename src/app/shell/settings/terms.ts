@@ -28,6 +28,7 @@ const FEATURE_TERMS: Record<Feature, string[]> = {
   memory: ['기록 최대 분량', '임베딩 모델로 찾는 기록', '원문으로 보낼 최근 대화', '한 번에 정리할 분량'],
   mascot: ['마스코트 프롬프트'],
   preread: ['줄일 부분', '원문으로 둘 최근 대화', '한 번에 줄일 분량', `${PRE_READ} 프롬프트`],
+  agents: ['전처리', '후처리', '에이전트 노트', '에이전트 기억'],
 };
 
 // A page's own pages, a feature's under 설정 › 채팅: a hit on one of their labels or terms opens that page.
