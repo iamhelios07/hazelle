@@ -120,7 +120,7 @@ function Result({ row, counts }: { row: Row; counts: Record<Count, number | null
     const base = pick(price);
     const above = price.tiers.flatMap((tier) => {
       const value = pick(tier);
-      return value === null ? [] : [`${count(tier.above)}토큰 넘으면 ${perMillion(value, unit)}`];
+      return value === null ? [] : [`입력 ${count(tier.above)}토큰 넘으면 ${perMillion(value, unit)}`];
     });
     return base === null ? { label, value: '표에 없음', notes: ['입력 가격으로 계산', ...above], tone: 'muted' as const } : { label, value: perMillion(base, unit), notes: above };
   };
