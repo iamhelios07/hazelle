@@ -1,3 +1,4 @@
+import type { Chat } from '../../model/chat';
 import type { ToolManifest } from '../../tool-api/manifest';
 import type { EventName } from '../../tool-api/protocol';
 
@@ -15,6 +16,10 @@ export type ToolHosts = ReadonlyMap<string, ReadonlyMap<string, number>>;
 export type Tools = {
   warm(chat: string): Promise<void>;
   menus(chat: string): ToolMenu[];
+  // A new chat's, from its settings before its first save.
+  menusOf(chat: Chat): ToolMenu[];
+  // Runs a new chat's tools before its first save, until the call it answers; its presses save it first (useChat).
+  draft(chat: string, value: Chat): () => void;
   // A tool's ⋯ items: its header's, or for a frame tool what its frame registered while it runs.
   items(module: string): MenuItem[];
   // Its items in a message's ⋯, from the same source as items.

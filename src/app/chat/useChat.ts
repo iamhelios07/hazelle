@@ -60,13 +60,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const toast = useToast();
   const copy = useCopy();
   const id = item ? chatId : null;
-  const tools = useChatTools(id);
+  const stored = useChatTools(id);
+  const { chat, route, prompt, persona, actions: settingActions } = useChatSettings(id, item?.chat ?? null, shelf?.id ?? null);
+  const tools = useMemo(() => id === null ? session.tools.menusOf(chat) : stored, [id, chat, stored]);
   useEffect(() => {
-    if (!id) return;
+    if (!id) return session.tools.draft(chatId, chat);
     void session.tools.warm(id);
     session.scripts.claims(id);
   }, [id, tools]);
-  const { chat, route, prompt, persona, actions: settingActions } = useChatSettings(id, item?.chat ?? null, shelf?.id ?? null);
   const toggles = toggleRows(togglesOf(store, chat, prompt));
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
@@ -213,12 +214,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   async function press(button: BotButton | null) {
     const unanswered = () => toast.show('아무 동작도 연결되지 않은 버튼이에요.');
     if (!scripted) return unanswered();
-    if (button === null) return;
-    // A script runs over a saved chat only, so a press on a new chat's greeting saves it first.
-    if (id === null) {
-      const unstarted = await starting().saved;
-      if (unstarted) return toast.failed(unstarted);
-    }
+    if (button === null || !(await saved())) return;
     const { waits, answered } = session.scripts.press(chatId, button);
     if (waits) toast.show('앞선 작업이 끝나면 이 버튼이 동작해요.');
     if (!(await answered)) unanswered();
@@ -308,8 +304,16 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toast.show(`토글 ${toggles.changed}개를 기본값으로 되돌렸어요.`);
   }
 
+  // A script or a tool runs over a saved chat only, so a press in a new chat (on its greeting, or a tool's) saves it
+  // first.
+  async function saved() {
+    const unstarted = id === null && await starting().saved;
+    if (unstarted) toast.failed(unstarted);
+    return !unstarted;
+  }
+
   function runTool(module: string, run: (chat: string) => Promise<unknown>) {
-    if (id) void run(id).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
+    void saved().then((ok) => ok && run(chatId)).catch((error: unknown) => session.scripts.report(chatId, error, { kind: 'module', id: module }));
   }
 
   function rename(name: string) {
@@ -407,7 +411,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       openInspect: (tab: InspectTab) => open({ kind: 'inspect', tab }),
       switchInspectTab: (tab: InspectTab) => setPanels((current) => current.inspect ? { ...current, inspect: { kind: 'inspect', tab } } : current),
       closeInspect: () => setPanels((current) => ({ ...current, inspect: null })),
-      tool: (module: string) => flipPanel({ kind: 'tool', module }, (current) => current.kind === 'tool' && current.module === module),
+      tool: (module: string) => void saved().then((ok) => ok && flipPanel({ kind: 'tool', module }, (current) => current.kind === 'tool' && current.module === module)),
       toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scripts.menu(chat, module, item)),
       toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),
       side: (panel: Panel) => open(panel),

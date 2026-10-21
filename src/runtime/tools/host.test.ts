@@ -527,6 +527,40 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
   } finally { vi.useRealTimers(); close(); host.close(); }
 }));
 
+it('runs a new chat\'s frame tool from its draft before the first save, and lets go of a draft once it is left', () => withTools(async (session, connect) => {
+  await answerable(session);
+  const parsed = source('1', '');
+  const added = await importTool(session.store, session.files, { ...parsed, manifest: { ...parsed.manifest, page: null, menu: [], risu: { verdict: 'all', missing: [], hosts: [] } } });
+  if (!added.ok) throw new Error(added.error);
+  await setModuleAlways(session.store, added.data.id, true);
+  const module = added.data.id;
+  const chat = crypto.randomUUID();
+  const draft = { title: null, character: null, models: {} };
+  const pressed = vi.fn();
+  const transport = inProcessRisu((scope) => {
+    const risu = scope.Risuai as Record<string, (...args: unknown[]) => Promise<unknown>>;
+    void risu.registerButton!({ name: 'Cast', id: 'cast' }, async () => pressed(await risu.getCurrentChatIndex!()));
+  });
+  const host = connect(transport.open);
+  try {
+    expect(host.menusOf(draft).map((menu) => menu.module)).toEqual([module]);
+    const leave = host.draft(chat, draft);
+    await vi.waitFor(() => expect(host.items(module)).toEqual([{ id: 'cast', label: 'Cast' }]));
+    await setToolData(session.store, module, 'touch', 1);
+    expect(host.frames().get(module)?.chat).toBe(chat);
+    await server.hold(session.store, chat);
+    await startChat(session.store, chat, draft, null);
+    await session.scripts.menu(chat, module, 'cast');
+    await vi.waitFor(() => expect(pressed).toHaveBeenCalledWith(expect.any(Number)));
+    expect(pressed).not.toHaveBeenCalledWith(-1);
+    leave();
+    await Promise.resolve();
+    expect(host.frames().get(module)?.chat).toBe(chat);
+    host.draft(crypto.randomUUID(), draft)();
+    await vi.waitFor(() => expect(host.frames().get(module)?.chat).toBeNull());
+  } finally { host.close(); }
+}));
+
 it('runs a frame tool as one frame: its registered items, a press from the chat, a remounted slot, its page and the chat it reads', () => withTools(async (session, connect) => {
   await answerable(session);
   const parsed = source('1', '');

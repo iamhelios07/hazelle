@@ -5,6 +5,7 @@ import { RELAY_HEADER } from '../../contracts/http';
 import { Runaway } from '../../engine/cbs/evaluate';
 import type { ToolEvent, ToolReach, ModelMessage, Question } from '../../engine/script-api';
 import type { ChatScope } from '../../engine/render';
+import type { Chat } from '../../model/chat';
 import { live } from '../../model/library';
 import { toolId, toolVar, type Tool, type ToolUnit } from '../../model/tool';
 import type { Json } from '../../tool-api/manifest';
@@ -154,6 +155,8 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   private readonly closing = new AbortController();
   private readonly unsubscribe: () => void;
   private readonly signal = new ChangeSignal();
+  // A new chat's settings until its first save (useChat): its tools run and list their items before it exists.
+  private readonly drafts = new Map<string, Chat>();
   private shownFrames: ToolFrames = new Map();
   private called: ToolHosts = new Map();
   private ids = 0;
@@ -164,8 +167,25 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   }
 
   menus(chat: string): ToolMenu[] {
-    const stored = live(this.session.store.get('chat', chat));
-    return stored ? toolsOf(this.session.store, stored.value).map(({ module, tool }) => ({ module, manifest: tool.manifest })) : [];
+    const value = this.chatValue(chat);
+    return value ? this.menusOf(value) : [];
+  }
+
+  readonly menusOf = (chat: Chat): ToolMenu[] => toolsOf(this.session.store, chat).map(({ module, tool }) => ({ module, manifest: tool.manifest }));
+
+  draft(chat: string, value: Chat): () => void {
+    this.drafts.set(chat, value);
+    void this.warm(chat);
+    // Ended after the commit, which may register the same chat's next draft: a settings change is no reason to restart.
+    return () => {
+      if (this.drafts.get(chat) !== value) return;
+      this.drafts.delete(chat);
+      queueMicrotask(() => this.changed([]));
+    };
+  }
+
+  private chatValue(chat: string): Chat | null {
+    return live(this.session.store.get('chat', chat))?.value ?? this.drafts.get(chat) ?? null;
   }
 
   readonly items = (module: string): MenuItem[] => {
@@ -304,8 +324,8 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   }
 
   private allowed(chat: string, module: string): boolean {
-    const stored = live(this.session.store.get('chat', chat));
-    return !!stored && toolsOf(this.session.store, stored.value).some((unit) => unit.module === module);
+    const value = this.chatValue(chat);
+    return !!value && toolsOf(this.session.store, value).some((unit) => unit.module === module);
   }
 
   private entry(module: string): Entry {
