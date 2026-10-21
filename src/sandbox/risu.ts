@@ -42,8 +42,8 @@ const fromLore = (entry: Record<string, unknown>): Omit<Hazelle.LoreEntry, 'owne
 });
 const sameLore = (a: Omit<Hazelle.LoreEntry, 'owner'>, b: Omit<Hazelle.LoreEntry, 'owner'>) =>
   a.text === b.text && a.always === b.always && a.on === b.on && a.keys.join('\n') === b.keys.join('\n');
-// The keys of the chat getChatFromIndex hands out, which setChatToIndex writes; any other is told to 점검.
-const CHAT_KEYS = new Set(['id', 'message', 'localLore']);
+// The keys of a chat setChatToIndex writes; any other is told to 점검.
+const CHAT_KEYS = new Set(['id', 'message', 'localLore', 'scriptstate']);
 
 const MODEL_ROLES = new Set(['system', 'user', 'assistant']);
 // A Response with one of these statuses throws when given a body.
@@ -220,7 +220,9 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
       return chat && read(chat);
     },
     // An entry of localLore left out stays: Hazelle's chat lorebook writes replace by name, never remove.
-    setChatToIndex: async (characterIndex: number, chatIndex: number, value: { message: { role: string; data: string }[]; localLore?: Record<string, unknown>[] }) => {
+    // scriptstate's $ names are the chat's variables, written as Risu's import reads them; getChatFromIndex hands out
+    // none, so a plugin that spreads them keeps the rest by leaving them out.
+    setChatToIndex: async (characterIndex: number, chatIndex: number, value: { message: { role: string; data: string }[]; localLore?: Record<string, unknown>[]; scriptstate?: Record<string, unknown> }) => {
       const chat = await at(characterIndex, chatIndex);
       if (!chat) throw new Error('Risu API \'setChatToIndex\' reaches only the open chat in Hazelle');
       const messages = await chat.messages();
@@ -230,6 +232,10 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
         if (at >= messages.length) chat.add(message.role === 'user' ? 'user' : 'char', message.data);
         else if (message.data !== messages[at]!.text) chat.edit(at, message.data);
       });
+      for (const [key, held] of Object.entries(value.scriptstate ?? {})) {
+        if (!key.startsWith('$') || held === undefined) tell(`setChatToIndex:scriptstate.${key}`);
+        else chat.variables.set(key.slice(1), typeof held === 'string' ? held : JSON.stringify(held));
+      }
       if (!value.localLore) return;
       const before = new Map((await chat.lorebook()).filter(({ owner }) => owner.kind === 'chat').map((entry) => [entry.name, entry]));
       const written = value.localLore.map(fromLore);

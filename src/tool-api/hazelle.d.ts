@@ -48,6 +48,12 @@ declare namespace Hazelle {
     set(key: string, value: Json): void;        // lands with the event's outcome; from a page, after the latest message
     delete(key: string): void;
   }
+  // The chat's own variables, the bot's: what its CBS getvar and Lua getChatVar read, shared with it and every tool.
+  // Text only; replayed with the story as ChatState is. A name under tool: is a tool's own state and throws.
+  interface ChatVariables {
+    get(name: string): Promise<string | undefined>;
+    set(name: string, value: string): void;     // lands with the event's outcome; from a page, after the latest message
+  }
   // This tool's data for this chat: synced, goes with the chat and its branches, not versioned. Vectors keep best as
   // base64 float32 or int8, not JSON numbers. A message id it holds that the chat no longer has is stale: a branch made
   // while the tool was off keeps the source chat's ids.
@@ -66,6 +72,7 @@ declare namespace Hazelle {
     greeting(): Promise<string | null>;         // the character's opening message, before index 0
     card(): Promise<Card | null>;               // null in a chat with no character
     readonly state: ChatState;
+    readonly variables: ChatVariables;
     readonly data: ChatData;
     edit(index: number, text: string): void;    // a new version, as Lua's setChat; throws in change and branch
     add(role: Role, text: string): void;        // as Lua's addChat; throws in change and branch

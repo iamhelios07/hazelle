@@ -1,5 +1,8 @@
 export type Json = Hazelle.Json;
 export type Settings = Hazelle.Settings;
+// Where every tool's own chat state lives among the chat's variables; the bot's are the rest.
+export const TOOL_VARIABLES = 'tool:';
+export const toolVar = (manifest: Pick<ToolManifest, 'author' | 'name'>, key: string) => `${TOOL_VARIABLES}${manifest.author}/${manifest.name}:${key}`;
 export type ToolUse = 'model' | 'embed' | 'memory' | 'network';
 // composer: the field is shown in the tool's composer popover too.
 export type ToolField = { key: string; type: 'text' | 'number' | 'switch' | 'choice'; label: string; options?: string[]; default?: string | number | boolean; composer?: true };

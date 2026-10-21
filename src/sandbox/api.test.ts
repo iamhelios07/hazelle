@@ -36,7 +36,7 @@ it('buffers per-event changes, reads its own writes, and answers heartbeats whil
   port.receive({ kind: 'ping' });
   expect(port.sent.at(-1)).toEqual({ kind: 'pong' });
   port.receive({ kind: 'answer', call: call.call, ok: true, value: { ok: true, text: 'made' } });
-  await vi.waitFor(() => expect(port.sent).toContainEqual({ kind: 'done', id: 7, outcome: { value: 'summary', writes: [['n', 1], ['gone', undefined]], edits: [{ index: 0, text: 'edited' }], added: [{ role: 'char', text: 'added' }], data: [], badges: [], lore: [] } }));
+  await vi.waitFor(() => expect(port.sent).toContainEqual({ kind: 'done', id: 7, outcome: { value: 'summary', writes: [['n', 1], ['gone', undefined]], edits: [{ index: 0, text: 'edited' }], added: [{ role: 'char', text: 'added' }], data: [], badges: [], lore: [], variables: [] } }));
   close();
 });
 
@@ -60,7 +60,7 @@ it('buffers chat data and badges, merges pending keys, carries the prompt answer
   const keys = port.sent.findLast((message) => message.kind === 'call')!;
   expect(keys).toMatchObject({ event: 1, args: [] });
   port.receive({ kind: 'answer', call: keys.call, ok: true, value: ['old', 'kept'] });
-  await vi.waitFor(() => expect(port.sent).toContainEqual({ kind: 'done', id: 1, outcome: { value: { memory: { text: 'remembered', through: 'm2' }, tool: 'recall' }, writes: [], edits: [], added: [], data: [['index', [1]], ['old', undefined]], badges: [{ index: 2, text: '요약됨' }], lore: [] } }));
+  await vi.waitFor(() => expect(port.sent).toContainEqual({ kind: 'done', id: 1, outcome: { value: { memory: { text: 'remembered', through: 'm2' }, tool: 'recall' }, writes: [], edits: [], added: [], data: [['index', [1]], ['old', undefined]], badges: [{ index: 2, text: '요약됨' }], lore: [], variables: [] } }));
   port.receive({ kind: 'event', id: 2, event: 'change', chat, change: { kind: 'edit', index: 0, id: 'm1', version: 'v2' } });
   await vi.waitFor(() => expect(port.sent).toContainEqual(expect.objectContaining({ kind: 'failed', id: 2 })));
   close();

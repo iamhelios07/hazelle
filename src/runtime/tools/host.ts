@@ -7,8 +7,8 @@ import type { ToolEvent, ToolReach, ModelMessage, Question } from '../../engine/
 import type { ChatScope } from '../../engine/render';
 import type { Chat } from '../../model/chat';
 import { live } from '../../model/library';
-import { toolId, toolVar, type Tool, type ToolUnit } from '../../model/tool';
-import type { Json } from '../../tool-api/manifest';
+import { toolId, type Tool, type ToolUnit } from '../../model/tool';
+import { TOOL_VARIABLES, toolVar, type Json } from '../../tool-api/manifest';
 import type { ChatHeader, Down, EventName, Message, ToolOutcome } from '../../tool-api/protocol';
 import type { ToolState } from '../evaluation-core';
 import { changedTail } from '../history-delta';
@@ -114,7 +114,8 @@ function isOutcome(value: unknown, event: ToolEvent['kind'] | undefined): value 
     && Array.isArray(value.added) && value.added.every((item) => isRecord(item) && (item.role === 'user' || item.role === 'char') && typeof item.text === 'string')
     && Array.isArray(value.badges) && value.badges.every((badge) => isRecord(badge) && Number.isInteger(badge.index) && (badge.text === null || typeof badge.text === 'string'))
     && Array.isArray(value.lore) && value.lore.every((entry) => isRecord(entry) && typeof entry.name === 'string' && Array.isArray(entry.keys) && entry.keys.every((key) => typeof key === 'string')
-      && typeof entry.text === 'string' && typeof entry.always === 'boolean' && typeof entry.on === 'boolean');
+      && typeof entry.text === 'string' && typeof entry.always === 'boolean' && typeof entry.on === 'boolean')
+    && Array.isArray(value.variables) && value.variables.every((pair) => Array.isArray(pair) && pair.length === 2 && typeof pair[0] === 'string' && !pair[0].startsWith(TOOL_VARIABLES) && typeof pair[1] === 'string');
 }
 // The fields a tool writes, over a new entry's defaults; upsertChatLore keeps the folder of the one it replaces.
 const chatLore = ({ name, keys, text, always, on }: ToolOutcome['lore'][number]): ScriptOutcome['lore'][number] => ({
@@ -599,6 +600,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         }
         if (method === 'chat.greeting') return context.scope.greeting === null ? null : (await this.state(frame, context)).texts[0]!;
         if (method === 'chat.state.get' && typeof first === 'string') return decodeState(new Map((await this.state(frame, context)).variables).get(toolVar(entry.tool.manifest, first)));
+        if (method === 'chat.variables.get' && typeof first === 'string' && !first.startsWith(TOOL_VARIABLES)) return new Map((await this.state(frame, context)).variables).get(first);
         if (method === 'chat.data.get' && typeof first === 'string') return toolChatData(this.session.store, entry.module, context.chat, first);
         if (method === 'chat.data.keys') return toolChatKeys(this.session.store, entry.module, context.chat);
         if (method === 'embed' && Array.isArray(first) && first.every((text) => typeof text === 'string') && (second === null || second === 'query' || second === 'document')) {
@@ -653,7 +655,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     frame.lanes.add(context.chat);
     // Concurrent events have immutable snapshots but one ordered changed-tail transport per frame.
     const reading = frame.reading.catch(() => {}).then(async () => {
-      const state = await this.session.store.evaluation.state(lane, context.scope, toolVar(frame.entry.tool.manifest, ''), context.signal);
+      const state = await this.session.store.evaluation.state(lane, context.scope, '', context.signal);
       if ('kind' in state) throw new Runaway();
       return state;
     });
@@ -672,7 +674,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     // A page's write takes its share of the write rate before it is converted (pageWrite).
     if (context.event && (data.length || badges.length || value.lore.length)) this.writes.take(frame.entry.module);
     const story = context.event && STORY_LOCKED.has(context.event) ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
-    return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, json]) => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...story, lore: value.lore.map(chatLore), tool: { data, badges } };
+    return { ...noOutcome(), value: value.value, handled: true, writes: [...[...new Map(value.writes)].map(([key, json]): [string, string] => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...new Map(value.variables)], ...story, lore: value.lore.map(chatLore), tool: { data, badges } };
   }
 
   private async pageWrite(frame: Frame, value: unknown) {

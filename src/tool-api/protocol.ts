@@ -5,13 +5,14 @@ export type ChatHeader = Pick<Hazelle.Chat, 'id' | 'character' | 'persona' | 'le
 export type Message = Hazelle.Message;
 // value: the event's answer (prompt, replying, sending, requesting, showing). data: this chat's tool data
 // (Hazelle.ChatData), undefined for a deletion. badges: by message index, null to clear. lore: the chat's own lorebook
-// entries written, one per name.
+// entries written, one per name. variables: the chat's own (Hazelle.ChatVariables), by name.
 export type ToolOutcome = {
   value?: Hazelle.PromptAnswer | Hazelle.RequestMessage[] | string[]; writes: [string, Json | undefined][]; edits: { index: number; text: string }[]; added: { role: 'user' | 'char'; text: string }[];
   data: [string, Json | undefined][]; badges: { index: number; text: string | null }[]; lore: Omit<Hazelle.LoreEntry, 'owner'>[];
+  variables: [string, string][];
 };
 export type Method =
-  | 'chat.messages' | 'chat.greeting' | 'chat.card' | 'chat.state.get' | 'chat.data.get' | 'chat.data.keys' | 'chat.lorebook' | 'chat.setup' | 'chat.picture' | 'chat.send' | 'model' | 'embed' | 'fetch' | 'ask' | 'say' | 'tokens' | 'lore'
+  | 'chat.messages' | 'chat.greeting' | 'chat.card' | 'chat.state.get' | 'chat.variables.get' | 'chat.data.get' | 'chat.data.keys' | 'chat.lorebook' | 'chat.setup' | 'chat.picture' | 'chat.send' | 'model' | 'embed' | 'fetch' | 'ask' | 'say' | 'tokens' | 'lore'
   | 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'assets.save' | 'assets.read' | 'settings' | 'settings.set' | 'account' | 'post' | 'page.close' | 'frame.chat' | 'frame.show' | 'frame.hide' | 'frame.menu' | 'frame.actions' | 'frame.missing';
 export type Role = 'background' | 'page' | 'frame';
 export type Down =

@@ -15,6 +15,7 @@ function fakeApi({ open = true } = {}) {
   const added: [Hazelle.Role, string][] = [];
   const said: string[] = [];
   const lore: Omit<Hazelle.LoreEntry, 'owner'>[] = [];
+  const variables: [string, string][] = [];
   const messages: Hazelle.Message[] = [
     { index: 0, id: 'm0', version: 'v0', role: 'user', text: 'hello', time: 1 },
     { index: 1, id: 'm1', version: 'v1', role: 'char', text: 'hi there', time: 2 },
@@ -40,6 +41,7 @@ function fakeApi({ open = true } = {}) {
     messages: async () => messages, greeting: async () => null, card: async () => card, lorebook: async () => lorebook, setup: async () => setup,
     edit: (index: number, text: string) => { edits.push([index, text]); }, add: (role: Hazelle.Role, text: string) => { added.push([role, text]); },
     writeLore: (entry: Omit<Hazelle.LoreEntry, 'owner'>) => { lore.push(entry); },
+    variables: { set: (name: string, value: string) => { variables.push([name, value]); } },
     model, send, say: (text: string) => { said.push(text); },
   } as unknown as Hazelle.Chat;
   const api = {
@@ -53,7 +55,7 @@ function fakeApi({ open = true } = {}) {
     frame: { chat: async () => (open ? chat : null), show: vi.fn(), hide: vi.fn(), menu: (items: { id: string; label: string }[]) => { menus.push(items); }, missing: (name: string) => { missing.push(name); } },
   } as unknown as Hazelle.Api;
   const fire = (event: string, ...args: unknown[]) => (handlers.get(event) as (...args: unknown[]) => unknown)(...args);
-  return { api, chat, card, handlers, storage, menus, missing, edits, added, said, lore, model, send, settings, fire };
+  return { api, chat, card, handlers, storage, menus, missing, edits, added, said, lore, variables, model, send, settings, fire };
 }
 const install = (fake: ReturnType<typeof fakeApi>, scope: Record<string, unknown> = { confirm: () => false, prompt: () => null }) => {
   installRisu(fake.api, scope);
@@ -83,15 +85,16 @@ describe('the Risu adapter', () => {
     expect(await closed.getCharacter!()).toBeNull();
   });
 
-  it('writes back the localLore it changed and tells 점검 of what it cannot write', async () => {
+  it('writes back the localLore it changed and scriptstate\'s variables, and tells 점검 of what it cannot write', async () => {
     const fake = fakeApi();
     const { Risuai } = install(fake);
     const at = [await Risuai.getCurrentCharacterIndex!(), await Risuai.getCurrentChatIndex!()] as never[];
     const chat = await Risuai.getChatFromIndex!(...at) as { localLore: Record<string, unknown>[] };
     const save = { key: '', comment: 'save', content: '{"turn":1}', mode: 'normal', insertorder: 100, alwaysActive: false, secondkey: '', selective: false, useRegex: false };
-    await Risuai.setChatToIndex!(...at, { ...chat, scriptstate: { $sh_Player_Name: 'Jin' }, localLore: [...chat.localLore, save] } as never);
+    await Risuai.setChatToIndex!(...at, { ...chat, name: 'Run', scriptstate: { $sh_Player_Name: 'Jin', $sh_Turn: 2, plain: 'x' }, localLore: [...chat.localLore, save] } as never);
     expect(fake.lore).toEqual([{ name: 'save', keys: [], text: '{"turn":1}', always: false, on: true }]);
-    expect(fake.missing).toEqual(['setChatToIndex:scriptstate']);
+    expect(fake.variables).toEqual([['sh_Player_Name', 'Jin'], ['sh_Turn', '2']]);
+    expect(fake.missing).toEqual(['setChatToIndex:name', 'setChatToIndex:scriptstate.plain']);
     await Risuai.setChatToIndex!(...at, { ...chat, localLore: [] } as never);
     expect(fake.missing).toContain('setChatToIndex:localLore.remove');
   });

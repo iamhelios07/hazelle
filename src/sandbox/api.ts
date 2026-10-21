@@ -1,16 +1,16 @@
-import type { Json, Settings } from '../tool-api/manifest';
+import { TOOL_VARIABLES, type Json, type Settings } from '../tool-api/manifest';
 import type { ChatHeader, Down, EventName, Message, Method, Port, ToolOutcome, Up } from '../tool-api/protocol';
 
 type Load = Extract<Down, { kind: 'load' }>;
 type Buffer = {
   writes: Map<string, Json | undefined>; edits: Map<number, string>; added: ToolOutcome['added']; data: Map<string, Json | undefined>; badges: Map<number, string | null>;
-  lore: Map<string, ToolOutcome['lore'][number]>;
+  lore: Map<string, ToolOutcome['lore'][number]>; variables: Map<string, string>;
 };
-const buffer = (): Buffer => ({ writes: new Map(), edits: new Map(), added: [], data: new Map(), badges: new Map(), lore: new Map() });
-const empty = (pending: Buffer) => !pending.writes.size && !pending.edits.size && !pending.added.length && !pending.data.size && !pending.badges.size && !pending.lore.size;
+const buffer = (): Buffer => ({ writes: new Map(), edits: new Map(), added: [], data: new Map(), badges: new Map(), lore: new Map(), variables: new Map() });
+const empty = (pending: Buffer) => !pending.writes.size && !pending.edits.size && !pending.added.length && !pending.data.size && !pending.badges.size && !pending.lore.size && !pending.variables.size;
 const outcome = (pending: Buffer, value?: ToolOutcome['value']): ToolOutcome => ({
   value, writes: [...pending.writes], edits: [...pending.edits].map(([index, text]) => ({ index, text })), added: pending.added,
-  data: [...pending.data], badges: [...pending.badges].map(([index, text]) => ({ index, text })), lore: [...pending.lore.values()],
+  data: [...pending.data], badges: [...pending.badges].map(([index, text]) => ({ index, text })), lore: [...pending.lore.values()], variables: [...pending.variables],
 });
 // An event about the user's own change must not rewrite the story under them, nor one inside a turn or a showing.
 const STORY_LOCKED = new Set<EventName>(['change', 'branch', 'replying', 'sending', 'requesting', 'showing']);
@@ -64,7 +64,7 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
     const pending = () => { if (quiet) throw new Error('Nothing is saved in this event'); return event === undefined ? pageWrites : writes; };
     const changed = () => { if (event === undefined) flushPage(); };
     const story = () => { if (locked) throw new Error('The story cannot be changed in this event'); };
-    const overlaid = async <T extends Json>(layer: 'writes' | 'data', method: 'chat.state.get' | 'chat.data.get', key: string): Promise<T | undefined> => {
+    const overlaid = async <T extends Json>(layer: 'writes' | 'data' | 'variables', method: 'chat.state.get' | 'chat.data.get' | 'chat.variables.get', key: string): Promise<T | undefined> => {
       const current = (event === undefined ? pageWrites : writes)[layer];
       if (current.has(key)) return current.get(key) as T | undefined;
       if (event === undefined && pageSent?.[layer].has(key)) return pageSent[layer].get(key) as T | undefined;
@@ -83,6 +83,14 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
         get: <T extends Json>(key: string) => overlaid<T>('writes', 'chat.state.get', key),
         set: (key, value) => { pending().writes.set(key, value); changed(); },
         delete: (key) => { pending().writes.set(key, undefined); changed(); },
+      },
+      variables: {
+        get: (name) => overlaid<string>('variables', 'chat.variables.get', name),
+        set: (name, value) => {
+          if (name.startsWith(TOOL_VARIABLES)) throw new Error(`A chat variable named ${TOOL_VARIABLES}… is a tool's own state`);
+          pending().variables.set(name, String(value));
+          changed();
+        },
       },
       data: {
         get: <T extends Json>(key: string) => overlaid<T>('data', 'chat.data.get', key),

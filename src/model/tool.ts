@@ -9,4 +9,3 @@ export type ToolChatData = { module: string; key: string | null; value: Json };
 export type Badges = Record<string, { version: string; text: string }>;
 export type ToolUnit = { module: string; tool: Tool };
 export const toolId = (module: string) => module.replace(/^[0-9a-f]{8}/, inverted);
-export const toolVar = (manifest: Pick<ToolManifest, 'author' | 'name'>, key: string) => `tool:${manifest.author}/${manifest.name}:${key}`;

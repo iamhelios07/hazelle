@@ -465,7 +465,7 @@ it('applies page chat writes through Scripts, distinguishes null and deletion, a
   } finally { vi.useRealTimers(); close(); host.close(); }
 }));
 
-it('writes the chat\'s own lorebook by name and sends through the open chat screen once models are allowed', () => withTools(async (session, connect) => {
+it('writes the chat\'s own lorebook by name and its variables unprefixed, and sends through the open chat screen once models are allowed', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
   const host = connect(transport.open);
@@ -478,7 +478,11 @@ it('writes the chat\'s own lorebook by name and sends through the open chat scre
     const leave = session.scripts.sender(f.chat, screen);
     await setModels(session.store, { kind: 'module', id: f.module }, true);
     chat.writeLore({ name: 'save', keys: ['hero'], text: '{}', always: false, on: true });
+    chat.variables.set('sh_Player', 'Jin');
+    expect(() => chat.variables.set('tool:other/x:k', '1')).toThrow();
     expect(await chat.send('')).toEqual({ ok: true });
+    expect(session.store.children('entry', f.chat).filter(({ value }) => value.type === 'vars')).toMatchObject([{ value: { set: [['sh_Player', 'Jin']] } }]);
+    expect(await chat.variables.get('sh_Player')).toBe('Jin');
     expect(screen).toHaveBeenCalledWith('');
     expect(session.store.children('lore', f.chat).map(({ value }) => value)).toMatchObject([{ name: 'save', keys: ['hero'], content: '{}', constant: false, enabled: true }]);
     screen.mockResolvedValueOnce('busy');
@@ -512,7 +516,7 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
     await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
     const frame = transport.frames[0]!;
     await expect(frame.api!.storage.set('x'.repeat(257), null)).rejects.toThrow('key-too-long');
-    for (let i = 0; i < 1000; i++) frame.emit({ kind: 'done', id: 0, outcome: { writes: [], edits: [], added: [{ role: 'char', text: 'flood' }], data: [], badges: [], lore: [] } });
+    for (let i = 0; i < 1000; i++) frame.emit({ kind: 'done', id: 0, outcome: { writes: [], edits: [], added: [{ role: 'char', text: 'flood' }], data: [], badges: [], lore: [], variables: [] } });
     await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(30));
     expect(frame.host.sent).toContainEqual(expect.objectContaining({ kind: 'answer', call: 0, ok: false, value: 'too-many-writes' }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
