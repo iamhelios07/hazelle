@@ -84,6 +84,24 @@ it('lists a public post to every account and an operator-only one to its author 
   expect((await list(author)).posts[0]).toMatchObject({ author: { name: 'author', operator: false, mine: true }, votes: 0, voted: false, commentCount: 0, hidden: null, deleted: false });
 });
 
+it("opens the public reads to a page stating no account, as no one's, whatever cookie it carries", async () => {
+  await operator();
+  const author = await member('author');
+  const id = await posted(author, { title: '공개' });
+  await posted(author, { title: '비공개', visibility: 'operator' });
+  await commented(author, id, '댓글');
+  // An author who left: its rows must not read as the visitor's own.
+  await t.env.db.prepare('UPDATE posts SET account_id = NULL').run();
+  await t.env.db.prepare('UPDATE comments SET account_id = NULL').run();
+
+  const visitor = (path: string) => t.get(path, undefined, { cookie: author.cookie });
+  const { posts } = (await (await visitor('board/posts?sort=new')).json()) as PostList;
+  expect(posts.map(({ title, author: by }) => [title, by.mine, by.left])).toEqual([['공개', false, true]]);
+  const { post } = (await (await visitor(`board/posts/${id}`)).json()) as { post: Post };
+  expect([post.author.mine, post.comments.map(({ author: by }) => by.mine)]).toEqual([false, [false]]);
+  expect((await visitor('board/name')).status).toBe(400);
+});
+
 it('lets a suspended account write and read only operator-only posts', async () => {
   await operator();
   const writer = await member('writer');

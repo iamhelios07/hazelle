@@ -4,13 +4,24 @@ import { cutShare, readShares } from '../../runtime/share-link';
 import { ago } from '../common/time';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
-import { SHARE, UNKNOWN } from '../common/words';
-import { useShares, useStore } from '../session';
+import { ACCOUNT_ONLY, SHARE, UNKNOWN } from '../common/words';
+import { useAccount, useShares, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, Empty, List, ListItem, Panel } from '../ui';
 
-// A link no character here names, its character purged, is listed by what the server knows.
+// A link lives on the server, which holds nothing of a guest's (design §6.14).
 export function SharedLinksSection() {
+  const { guest } = useAccount();
+  if (!guest) return <SharedLinks />;
+  return (
+    <Panel title={SHARE.list}>
+      <Empty variant="section">{`${SHARE.act}는 ${ACCOUNT_ONLY}.`}</Empty>
+    </Panel>
+  );
+}
+
+// A link no character here names, its character purged, is listed by what the server knows.
+function SharedLinks() {
   const store = useStore();
   const toast = useToast();
   const own = useShares();

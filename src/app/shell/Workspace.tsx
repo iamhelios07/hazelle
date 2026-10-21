@@ -15,7 +15,7 @@ import { usePersisted } from '../common/usePersisted';
 import { DisplayProvider } from '../display';
 import { BIN, BOARD, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
-import { SessionProvider } from '../session';
+import { SessionProvider, useSaves, useSession } from '../session';
 import { ToastProvider, useToast, type Standing } from '../toast';
 import { Brand, Progress, Screen, Text } from '../ui';
 import { BotNotes } from './BotNotes';
@@ -82,6 +82,30 @@ function Stale() {
     });
     return () => hearServedVersion(null);
   }, [toast]);
+  return null;
+}
+
+// A reply that streams in this page ends with it (a guest's, design §6.14): while one is written the browser asks
+// before the tab goes.
+function ReplyHold() {
+  const { transport, talk } = useSession();
+  const saves = useSaves();
+  useEffect(() => {
+    if (transport.detached) return;
+    let release: (() => void) | null = null;
+    const leave = talk.subscribe(() => {
+      const writing = talk.writing().size > 0;
+      if (writing && !release) release = saves.hold();
+      if (!writing && release) {
+        release();
+        release = null;
+      }
+    });
+    return () => {
+      leave();
+      release?.();
+    };
+  }, [transport, talk, saves]);
   return null;
 }
 
@@ -190,8 +214,8 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
           <Unread facts={account.facts} kind="unreadNotices" />
           <Unread facts={account.facts} kind="unreadBoard" />
           <Stale />
-          {/* A release's 소식 and its tour's door are on the 게시판, which a guest cannot open yet (design §6.14 batch 4). */}
-          {!account.guest && <News />}
+          <ReplyHold />
+          <News />
           <BotNotes />
           <ImportProvider>
             <Layout />

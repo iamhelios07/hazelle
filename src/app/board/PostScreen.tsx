@@ -1,4 +1,4 @@
-import { Check, EyeOff, Sparkles, Eye, Flag, History, Lock, LockOpen, PenLine, Tag as TagIcon } from 'lucide-react';
+import { Check, EyeOff, Sparkles, Eye, Flag, History, Lock, LockOpen, PenLine, Tag as TagIcon, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
 import { HOLD_DAYS_MAX, MAX_COMMENT_LENGTH, OPERATOR_NAME, STATUSES, type Comment, type Hidden, type Post, type Status } from '../../contracts/board';
 import type { ApiResult } from '../../runtime/api';
@@ -17,6 +17,7 @@ import {
 } from '../../runtime/board';
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
+import { GuestLine } from '../common/GuestNotice';
 import { linkify } from '../common/linkify';
 import { tourOf } from '../common/release';
 import { TOUR, TourDialog } from '../common/Tour';
@@ -27,12 +28,12 @@ import { ago, moment } from '../common/time';
 import { count, readCount } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { useLoaded } from '../common/useLoaded';
-import { BOARD, SHARE } from '../common/words';
+import { ACCOUNT_ONLY, BOARD, SHARE } from '../common/words';
 import { useAccount } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadEvent, ThreadItem, TourCard, VoteButton } from '../ui';
+import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, PostStat, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadEvent, ThreadItem, TourCard, VoteButton } from '../ui';
 import { useNicknameGate } from './nickname';
 import { counted, ReasonDialog } from './parts';
 import { useVotes } from './vote';
@@ -66,8 +67,9 @@ export function PostScreen({ id, back }: { id: number; back: Back }) {
   return <PostView post={post} reload={loaded.reload} back={back} />;
 }
 
+// A guest reads and writes nothing: no 추천, 댓글 or 신고 (design §6.14).
 function PostView({ post, reload, back }: { post: Post; reload: () => void; back: Back }) {
-  const { admin } = useAccount();
+  const { admin, guest } = useAccount();
   const toast = useToast();
   const { gate, dialog } = useNicknameGate();
   const vote = useVotes(gate)(post);
@@ -113,7 +115,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
           <MenuItem key="delete" icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => setAsking({ kind: 'delete-post' })} />,
         ]
       : []),
-    ...(!mine && live ? [<MenuItem key="report" icon={Flag} label={SHARE.report} onClick={() => setAsking({ kind: 'report-post' })} />] : []),
+    ...(!mine && live && !guest ? [<MenuItem key="report" icon={Flag} label={SHARE.report} onClick={() => setAsking({ kind: 'report-post' })} />] : []),
     ...(admin
       ? [
           <MenuHeading key="operate">운영</MenuHeading>,
@@ -165,11 +167,11 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
         {admin && post.diagnostics !== null && <TextField label="진단 정보" lines={8} value={post.diagnostics} onChange={() => {}} readOnly />}
         {live && post.visibility === 'public' && (
           <Row kind="center">
-            <VoteButton label={vote.voted ? `${voteLabel}, 추천함` : voteLabel} word={BOARD.vote} count={count(vote.votes)} pressed={vote.voted} onClick={vote.onFlip} />
+            {guest ? <PostStat icon={ThumbsUp} label={BOARD.vote} count={count(vote.votes)} /> : <VoteButton label={vote.voted ? `${voteLabel}, 추천함` : voteLabel} word={BOARD.vote} count={count(vote.votes)} pressed={vote.voted} onClick={vote.onFlip} />}
           </Row>
         )}
       </Stack>
-      <Comments post={post} admin={admin} gate={gate} onAsk={setAsking} onChanged={reload} />
+      <Comments post={post} admin={admin} guest={Boolean(guest)} gate={gate} onAsk={setAsking} onChanged={reload} />
       {dialog}
       {asking?.kind === 'delete-post' && (
         <ConfirmDialog title="이 글을 삭제할까요?" confirm={ACTS.remove.label} icon={ACTS.remove.icon} busy={busy} onConfirm={() => void removePost()} onClose={close}>
@@ -211,7 +213,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
 
 // Flat under the post, each 답글 one level under the comment it answers; a 답글 whose comment is not here stands at the
 // top rather than vanish.
-function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: boolean; gate: Gate; onAsk: (asking: Asking) => void; onChanged: () => void }) {
+function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; admin: boolean; guest: boolean; gate: Gate; onAsk: (asking: Asking) => void; onChanged: () => void }) {
   const toast = useToast();
   const [replying, setReplying] = useState<number | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
@@ -230,7 +232,7 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
             <MenuItem key="delete" icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onAsk({ kind: 'delete-comment', comment })} />,
           ]
         : []),
-      ...(!mine && live ? [<MenuItem key="report" icon={Flag} label={SHARE.report} onClick={() => onAsk({ kind: 'report-comment', comment })} />] : []),
+      ...(!mine && live && !guest ? [<MenuItem key="report" icon={Flag} label={SHARE.report} onClick={() => onAsk({ kind: 'report-comment', comment })} />] : []),
       ...(admin && !comment.deleted
         ? [
             <MenuHeading key="operate">운영</MenuHeading>,
@@ -349,6 +351,8 @@ function Comments({ post, admin, gate, onAsk, onChanged }: { post: Post; admin: 
       )}
       {post.locked ? (
         <Text variant="note">운영자가 댓글을 닫았어요.</Text>
+      ) : guest ? (
+        post.text !== null && <GuestLine note={`${BOARD.comment}은 ${ACCOUNT_ONLY}.`} />
       ) : (
         post.text !== null && <CommentComposer label={BOARD.comment} placeholder="댓글 남기기" confirm="등록" gate={gate} send={(text) => writeComment(post.id, text, null)} onDone={onChanged} />
       )}

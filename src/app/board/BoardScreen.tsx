@@ -1,10 +1,11 @@
 import { Bell, FileText, Inbox, ListFilter, PenLine, Send } from 'lucide-react';
 import { useState } from 'react';
 import { CATEGORIES, STATUSES, type Category, type Sort, type Status } from '../../contracts/board';
+import { GuestLine } from '../common/GuestNotice';
 import { AuthorLine } from '../common/postRow';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
-import { BOARD } from '../common/words';
+import { ACCOUNT_ONLY, BOARD } from '../common/words';
 import { useAccount, useStanding } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -17,8 +18,10 @@ const ALL = 'all';
 const SORTS: { value: Sort; label: string }[] = [{ value: 'new', label: '최신' }, { value: 'top', label: BOARD.vote }];
 
 // operator: the operator-only posts, the only ones a suspended account reads (design §6.13).
-// category: the tab open, held in the address so back and a reload return to it.
+// category: the tab open, held in the address so back and a reload return to it. A guest reads the public posts and
+// writes nothing (design §6.14).
 export function BoardScreen({ operator, category, back }: { operator: boolean; category: Category | null; back: Back | null }) {
+  const { guest } = useAccount();
   const { unreadBoard, suspended } = useStanding();
   const split = useSplit();
   const { gate, dialog } = useNicknameGate();
@@ -31,12 +34,13 @@ export function BoardScreen({ operator, category, back }: { operator: boolean; c
   return (
     <Screen
       width={split ? 'wide' : 'form'}
-      aside={split ? <BoardAside operator={onlyOperator} /> : undefined}
+      aside={split && !guest ? <BoardAside operator={onlyOperator} /> : undefined}
       top={
         <NavBar
           title={onlyOperator ? BOARD.operatorOnly : BOARD.title}
           {...backBar(back)}
           actions={
+            !guest && (
             <>
               {!split && (
                 <>
@@ -50,10 +54,12 @@ export function BoardScreen({ operator, category, back }: { operator: boolean; c
                 {BOARD.write}
               </Button>
             </>
+            )
           }
         />
       }
     >
+      <GuestLine note={`${BOARD.write}, ${BOARD.comment}, ${BOARD.vote}은 ${ACCOUNT_ONLY}.`} />
       <Row kind="spread">
         <Tabs
           label="분류"
@@ -81,7 +87,7 @@ export function BoardScreen({ operator, category, back }: { operator: boolean; c
           )}
         </Row>
       </Row>
-      <PostList key={JSON.stringify(ask)} ask={ask} label={BOARD.title} empty="아직 글이 없어요." votes={!onlyOperator} />
+      <PostList key={JSON.stringify(ask)} ask={ask} label={BOARD.title} empty="아직 글이 없어요." votes={!onlyOperator && !guest} />
       {dialog}
     </Screen>
   );

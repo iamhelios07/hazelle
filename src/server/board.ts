@@ -23,15 +23,30 @@ import {
   type Post,
   type PostRow,
 } from '../contracts/board';
+import { ACCOUNT_HEADER, VISITOR_HEADER } from '../contracts/http';
 import { act, limitOf, MAX_OPEN_REPORTS, positive } from './admin';
 import type { SqlValue } from './db/service-db';
 import { DAY_MS, fail, readObject, type Account, type AppEnv } from './http';
 import { requireSession } from './session';
 import { activity, hidden, OPERATOR, tellUnread } from './unread';
 
-// 게시판 (design §6.13). Every route needs a session (the one gate signed-out reading would change), and every
-// statement binds the asking account as ?1.
-export const board = new Hono<AppEnv>().use(requireSession);
+// 게시판 (design §6.13). Every statement binds the asking account as ?1. Every route needs a session but the two reads,
+// which a guest's page (design §6.14) may ask: one that states no account (runtime/api), whatever cookie it carries,
+// reads as a visitor; a page stating one goes through the session.
+const OPEN_READS = /^\/api\/board\/posts(\/[^/]+)?$/;
+export const board = new Hono<AppEnv>().use(async (c, next) => {
+  if (c.req.method !== 'GET' || !OPEN_READS.test(c.req.path) || c.req.header(ACCOUNT_HEADER) !== undefined) return requireSession(c, next);
+  return c.env.limits.visitors.reads.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success ? next() : fail(c, 429, 'too-many-visits');
+});
+
+// A guest reads as an account no one has: '' matches no account id, where NULL would make every post and comment of
+// an author who left its own (AUTHOR's IS).
+type Reader = Pick<Account, 'id' | 'admin' | 'suspended'>;
+const VISITOR: Reader = { id: '', admin: false, suspended: false };
+const readerOf = (c: Context<AppEnv>): Reader => {
+  const account: Account | undefined = c.get('account');
+  return account ?? VISITOR;
+};
 
 const MAX_VERSION_LENGTH = 40;
 const ROW_ID = /^[1-9]\d{0,15}$/;
@@ -41,12 +56,12 @@ const idOf = (c: Context<AppEnv>) => (ROW_ID.test(c.req.param('id') ?? '') ? Num
 
 // Over a posts row aliased p: what the asker may read. The operator reads every post; a suspended account only its own
 // operator-only ones; anyone else the public ones not hidden, and its own.
-function readable(account: Account) {
+function readable(account: Reader) {
   if (account.admin) return 'TRUE';
   if (account.suspended) return "(p.account_id = ?1 AND p.visibility = 'operator')";
   return `(p.account_id = ?1 OR (p.visibility = 'public' AND NOT ${hidden('p')}))`;
 }
-const commentShown = (account: Account) => (account.admin ? 'TRUE' : `(c.account_id = ?1 OR NOT ${hidden('c')})`);
+const commentShown = (account: Reader) => (account.admin ? 'TRUE' : `(c.account_id = ?1 OR NOT ${hidden('c')})`);
 
 const AUTHOR = (a: string) =>
   `${a}.account_id IS ?1 AS mine, ${a}.account_id = ${OPERATOR} AS byOperator, ${a}.account_id IS NULL AS gone, (SELECT name FROM board_names WHERE account_id = ${a}.account_id) AS name`;
@@ -60,13 +75,13 @@ const hiddenOf = (row: HiddenSql, sees: boolean): Hidden | null => (row.hiddenNo
 
 // A list shows the start of each post's text, a feed card's two lines at most.
 const EXCERPT_LENGTH = 200;
-const POST_COLUMNS = (account: Account) => `p.id, p.title, substr(p.text, 1, ${EXCERPT_LENGTH}) AS excerpt, p.category, p.status, p.version, p.visibility, p.created_at AS createdAt, p.edited_at AS editedAt,
+const POST_COLUMNS = (account: Reader) => `p.id, p.title, substr(p.text, 1, ${EXCERPT_LENGTH}) AS excerpt, p.category, p.status, p.version, p.visibility, p.created_at AS createdAt, p.edited_at AS editedAt,
   p.locked, p.deleted, ${HIDDEN('p')}, ${AUTHOR('p')},
   (SELECT COUNT(*) FROM post_votes v WHERE v.post_id = p.id) AS votes,
   EXISTS (SELECT 1 FROM post_votes v WHERE v.post_id = p.id AND v.account_id = ?1) AS voted,
   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted = 0 AND ${commentShown(account)}) AS commentCount`;
 type PostSql = Omit<PostRow, 'author' | 'voted' | 'locked' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { voted: number; locked: number; deleted: number };
-const postRow = ({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, voted, locked, deleted, ...row }: PostSql, account: Account): PostRow => ({
+const postRow = ({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, voted, locked, deleted, ...row }: PostSql, account: Reader): PostRow => ({
   ...row,
   author: author({ mine, byOperator, gone, name }),
   voted: Boolean(voted),
@@ -77,7 +92,7 @@ const postRow = ({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hidd
 
 const COMMENT_COLUMNS = `c.id, c.post_id AS postId, c.parent_id AS parentId, c.text, c.created_at AS createdAt, c.edited_at AS editedAt, c.deleted, ${HIDDEN('c')}, ${AUTHOR('c')}`;
 type CommentSql = Omit<Comment, 'author' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { deleted: number };
-function comment({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, deleted, text, ...row }: CommentSql, account: Account): Comment {
+function comment({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, deleted, text, ...row }: CommentSql, account: Reader): Comment {
   const sees = account.admin || Boolean(mine);
   return { ...row, author: author({ mine, byOperator, gone, name }), text: deleted || (hiddenNow && !sees) ? null : text, hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, sees), deleted: Boolean(deleted) };
 }
@@ -111,7 +126,7 @@ board.put('/name', async (c) => {
 // mine: the asker's own posts of both visibilities, else one visibility, public when not asked. A 'top' page cursors on
 // `${votes}:${id}` (contracts/board PostList), a 'new' one on id.
 board.get('/posts', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const sort = c.req.query('sort') ?? 'new';
   const category = c.req.query('category');
   const status = c.req.query('status');
@@ -147,7 +162,7 @@ board.get('/posts', async (c) => {
 });
 
 board.get('/posts/:id', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const id = idOf(c);
   if (id === null) return fail(c, 400, 'bad-input');
   const db = c.env.db;

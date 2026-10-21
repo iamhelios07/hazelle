@@ -33,11 +33,11 @@ export function GuestNotice({ guest, onClose }: { guest: GuestDoors; onClose?: (
 }
 
 // The doors stay on a guest's home for good, the more so as what it holds grows: where the card is closed, or gone
-// with the empty home, this line stands in its place.
-export function GuestLine() {
+// with the empty home, this line stands in its place. note: what the place it stands in waits for.
+export function GuestLine({ note = NOTE }: { note?: string }) {
   const { guest } = useAccount();
   if (!guest) return null;
-  return <NoticeBar icon={CloudOff} title={TITLE} note={NOTE} actions={<Doors guest={guest} signIn="로그인" />} />;
+  return <NoticeBar icon={CloudOff} title={TITLE} note={note} actions={<Doors guest={guest} signIn="로그인" />} />;
 }
 
 function Doors({ guest, signIn }: { guest: GuestDoors; signIn: string }) {

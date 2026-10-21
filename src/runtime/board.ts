@@ -2,7 +2,8 @@ import { MAX_DIAGNOSTICS_LENGTH, type Activity, type Category, type Comment, typ
 import { api } from './api';
 import { page } from './pages';
 
-// 게시판 (design §6.13), one thin wrapper per route of server/board. Every route needs a session.
+// 게시판 (design §6.13), one thin wrapper per route of server/board. Every route needs a session but readPosts and
+// readPost, which a guest asks as a visitor.
 
 // null: not chosen yet, which the board asks for before the first write. The operator has none and needs none.
 export const readNickname = () => api<{ name: string | null }>('GET', 'board/name');

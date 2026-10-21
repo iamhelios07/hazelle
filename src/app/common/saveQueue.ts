@@ -195,7 +195,8 @@ export class Saves {
     this.queues.delete(key);
   }
 
-  // Held by work that dies with the page, a backup or a restore under way: the browser asks before the tab goes.
+  // Held by work that dies with the page, a backup, a restore or a reply streaming in it: the browser asks before the
+  // tab goes.
   hold(): () => void {
     this.holds++;
     let held = true;

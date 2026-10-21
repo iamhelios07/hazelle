@@ -5,7 +5,7 @@ import { exportBackup, readBackup, restoreBackup, type Backup, type BackupStep }
 import { ACTS, importOf } from '../common/acts';
 import { downloadOutput } from '../common/download';
 import { RestoresDialog } from '../common/RestoresDialog';
-import { STOP } from '../common/words';
+import { ACCOUNT_ONLY, STOP } from '../common/words';
 import { useToast } from '../toast';
 import { useAccount, useSaves, useSession } from '../session';
 import { Button, Dialog, FileButton, Panel, Progress, SettingGroup, SettingRow, type ProgressStep } from '../ui';
@@ -129,17 +129,16 @@ export function BackupSection() {
           }
         />
         {/* The server's history, which a guest has none of (design §6.14). */}
-        {!guest && (
         <SettingRow
           label="이전 시점으로 복원"
           help={`10분 전부터 6일 전 사이의 기록으로 돌아가요. 하루에 ${SELF_RESTORES_PER_DAY}번까지 할 수 있어요.`}
+          sub={guest ? ACCOUNT_ONLY : undefined}
           control={
-            <Button variant="secondary" size="sm" icon={History} onClick={() => setRestoring(true)}>
+            <Button variant="secondary" size="sm" icon={History} disabled={Boolean(guest)} onClick={() => setRestoring(true)}>
               복원
             </Button>
           }
         />
-        )}
       </SettingGroup>
       {restoring && <RestoresDialog operated={null} onClose={() => setRestoring(false)} />}
       {active && (
