@@ -9,6 +9,29 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+it('rejects a blocked upgrade, retries after the old tab closes, and releases late and current connections', async () => {
+  const old = await new Promise<IDBDatabase>((resolve) => {
+    const req = indexedDB.open('risu-alpha', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('device');
+    req.onsuccess = () => resolve(req.result);
+  });
+  const { recallGuest } = await import('./device');
+  const { DatabaseBlocked } = await import('./database');
+  try {
+    await expect(recallGuest()).rejects.toBeInstanceOf(DatabaseBlocked);
+  } finally {
+    old.close();
+  }
+  expect(await recallGuest()).toBeNull();
+  await new Promise<void>((resolve, reject) => {
+    const req = indexedDB.deleteDatabase('risu-alpha');
+    req.onsuccess = () => resolve();
+    req.onblocked = () => reject(new Error('A late or current connection stayed open'));
+    req.onerror = () => reject(req.error);
+  });
+  expect(await recallGuest()).toBeNull();
+});
+
 it.each([false, true])('migrates the v1 single vault into its v2 slot (guest=%s) and deletes the old slot', async (guest) => {
   const accountId = crypto.randomUUID();
   const vaultKey = randomBytes(32);

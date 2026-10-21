@@ -11,9 +11,11 @@ import type { StoreChange } from '../../runtime/object-index';
 import { SessionProvider, type Account } from '../session';
 import { Page } from './Page';
 import type { Route } from './routes';
+import { navigate } from './router';
 import { probeRoot } from '../ui/probe';
 
 const seen = vi.hoisted(() => ({ chats: [] as string[], mounts: 0, unmounts: 0, prompts: [] as string[], missing: [] as string[] }));
+vi.mock('./router', async (original) => ({ ...await original<typeof import('./router')>(), navigate: vi.fn() }));
 vi.mock('../chat/ChatScreen', () => ({ ChatScreen: ({ id }: { id: string }) => {
   seen.chats.push(id);
   useEffect(() => { seen.mounts++; return () => { seen.unmounts++; }; }, []);
@@ -28,6 +30,7 @@ vi.mock('../common/ScreenLoad', async () => {
 });
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.unstubAllGlobals();
   seen.chats = [];
   seen.mounts = 0;
@@ -38,7 +41,7 @@ afterEach(() => {
 
 const prompt = (id: string, name: string): Stored<'prompt'> => ({ id, kind: 'prompt', parent: null, rev: 1, value: { name, blocks: [], toggles: [], models: {}, authorNote: '' } });
 
-function page(initial: Stored<Kind>[]) {
+function page(initial: Stored<Kind>[], guest = false) {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
   const items = new Map(initial.map((item) => [item.id, item]));
   const models = new Map<string, ChatModel>();
@@ -58,7 +61,7 @@ function page(initial: Stored<Kind>[]) {
   } as unknown as ObjectStore;
   const read = new ReadModels(store);
   const session = { store, read } as Session;
-  const account: Account = { admin: false, localProviders: [], facts: {} as AccountFacts, guest: null, onLock() {}, onLogout: async () => null };
+  const account: Account = { admin: false, localProviders: [], facts: {} as AccountFacts, ...(guest ? { guest: { signupOpen: true, onSignup() {}, onSignIn() {} } } : { guest: null, onLock() {}, onLogout: async () => null }) };
   const root = probeRoot();
   const commits = vi.fn();
   const closeLayer = () => {};
@@ -70,6 +73,32 @@ function page(initial: Stored<Kind>[]) {
     close: async () => { await act(() => root.unmount()); read.close(); },
   };
 }
+
+it.each([
+  { kind: 'board-write', operator: false },
+  { kind: 'board-write', operator: true },
+  { kind: 'board-edit', id: 1 },
+  { kind: 'board-activity' },
+  { kind: 'board-mine' },
+] satisfies Route[])('replaces the guest’s $kind URL with the board list', async (route) => {
+  const p = page([], true);
+  try {
+    await p.render(route);
+    expect(navigate).toHaveBeenCalledExactlyOnceWith({ kind: 'board', operator: false }, { replace: true });
+  } finally {
+    await p.close();
+  }
+});
+
+it('replaces a guest’s account notices URL with the account screen', async () => {
+  const p = page([], true);
+  try {
+    await p.render({ kind: 'notices' });
+    expect(navigate).toHaveBeenCalledExactlyOnceWith({ kind: 'account', section: null }, { replace: true });
+  } finally {
+    await p.close();
+  }
+});
 
 it('subscribes only to the routed item and follows its deleted, purging and restored states', async () => {
   const p = page([prompt('p', '선택한 프롬프트'), prompt('q', '다른 프롬프트')]);

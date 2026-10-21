@@ -1,4 +1,5 @@
 import { open, randomBytes, seal } from './aead';
+import { cachedDatabase } from './database';
 import type { VaultKey } from './keys';
 
 // The vault stays unlocked on this device: the vault key is kept sealed under a non-extractable
@@ -92,27 +93,17 @@ async function read<T>(name: string): Promise<T | undefined> {
   return request<T | undefined>(db.transaction(STORE).objectStore(STORE).get(name));
 }
 
-let opened: Promise<IDBDatabase> | undefined;
-
-function database(): Promise<IDBDatabase> {
-  opened ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 2);
-    req.onupgradeneeded = (event) => {
-      const store = event.oldVersion === 0 ? req.result.createObjectStore(STORE) : req.transaction!.objectStore(STORE);
-      if (event.oldVersion < 2) {
-        const old = store.get('vault');
-        old.onsuccess = () => {
-          const vault = old.result as (StoredVault & { guest?: true }) | undefined;
-          if (vault) store.put({ [vault.guest ? 'guest' : 'account']: { accountId: vault.accountId, sealed: vault.sealed } } satisfies StoredVaults, VAULTS);
-          store.delete('vault');
-        };
-      }
+const database = cachedDatabase(DB_NAME, 2, (req, event) => {
+  const store = event.oldVersion === 0 ? req.result.createObjectStore(STORE) : req.transaction!.objectStore(STORE);
+  if (event.oldVersion < 2) {
+    const old = store.get('vault');
+    old.onsuccess = () => {
+      const vault = old.result as (StoredVault & { guest?: true }) | undefined;
+      if (vault) store.put({ [vault.guest ? 'guest' : 'account']: { accountId: vault.accountId, sealed: vault.sealed } } satisfies StoredVaults, VAULTS);
+      store.delete('vault');
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  return opened;
-}
+  }
+});
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {

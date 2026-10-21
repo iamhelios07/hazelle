@@ -1,3 +1,4 @@
+import { cachedDatabase } from '../vault/database';
 import type { SealedChange } from '../contracts/objects';
 import { lockVault } from '../vault/device';
 import { adoptable, cacheNewer, cacheScope, GenerationChanged, sameGeneration, type CachedScope, type CacheWrite, type DeviceCache, type Generation } from './object-cache';
@@ -141,37 +142,23 @@ class BrowserCache implements DeviceCache {
 // Transactions aborted because the stated generation was not the stored one.
 const changed = new WeakSet<IDBTransaction>();
 
-let opened: Promise<IDBDatabase> | undefined;
 // Also a guest's own store (runtime/guest-store), the account's master rather than a copy of the server's.
-export function database(): Promise<IDBDatabase> {
-  opened ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open('risu-alpha-objects', 3);
-    req.onupgradeneeded = (event) => {
-      const db = req.result;
-      if (event.oldVersion === 0) {
-        db.createObjectStore('generations');
-        db.createObjectStore('states');
-        db.createObjectStore('objects').createIndex('scope', ['account', 'scope']);
-      }
-      db.createObjectStore('guest-heads');
-      const objects = db.createObjectStore('guest-objects');
-      objects.createIndex('rev', ['account', 'rev']);
-      objects.createIndex('parent', ['account', 'parent', 'rev']);
-      objects.createIndex('scope', ['account', 'scope', 'rev']);
-      objects.createIndex('kind', ['account', 'kind', 'rev']);
-      db.createObjectStore('guest-files');
-    };
-    // A tab of an older version holding the database open blocks the upgrade: this tab goes on without the cache rather
-    // than wait, and this version lets go of it for a newer one.
-    req.onblocked = () => reject(new Error('An older tab holds the cache open'));
-    req.onsuccess = () => {
-      req.result.onversionchange = () => req.result.close();
-      resolve(req.result);
-    };
-    req.onerror = () => reject(req.error);
-  });
-  return opened;
-}
+// An account's page goes on without a blocked cache; the guest store cannot, so it surfaces the block.
+export const database = cachedDatabase('risu-alpha-objects', 3, (req, event) => {
+  const db = req.result;
+  if (event.oldVersion === 0) {
+    db.createObjectStore('generations');
+    db.createObjectStore('states');
+    db.createObjectStore('objects').createIndex('scope', ['account', 'scope']);
+  }
+  db.createObjectStore('guest-heads');
+  const objects = db.createObjectStore('guest-objects');
+  objects.createIndex('rev', ['account', 'rev']);
+  objects.createIndex('parent', ['account', 'parent', 'rev']);
+  objects.createIndex('scope', ['account', 'scope', 'rev']);
+  objects.createIndex('kind', ['account', 'kind', 'rev']);
+  db.createObjectStore('guest-files');
+});
 
 function completed(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {

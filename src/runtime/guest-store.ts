@@ -29,18 +29,21 @@ const RESET = failure('cache-reset');
 // The guest this browser holds, made at its first use: an account id and a vault key no server has seen, kept as
 // 잠금 유지 keeps an account's (vault/device).
 export async function guestAccount(): Promise<{ accountId: string; vaultKey: VaultKey }> {
-  const held = await recallGuest();
-  if (held) return held;
-  const accountId = crypto.randomUUID();
-  const vaultKey = randomBytes(32);
-  // The head first: a page closed between the two leaves a head nobody names, never a vault without its store.
-  await transact(['guest-heads'], 'readwrite', async (tx) => {
-    tx.objectStore('guest-heads').put({ rev: 0, timeline: crypto.randomUUID() } satisfies Head, accountId);
-    return { ok: true, data: null };
+  return navigator.locks.request('risu-alpha/guest', async () => {
+    const held = await recallGuest();
+    if (held) return held;
+    const accountId = crypto.randomUUID();
+    const vaultKey = randomBytes(32);
+    // The head first: a page closed between the two leaves a head nobody names, never a vault without its store.
+    const head = await transact(['guest-heads'], 'readwrite', async (tx) => {
+      tx.objectStore('guest-heads').put({ rev: 0, timeline: crypto.randomUUID() } satisfies Head, accountId);
+      return { ok: true, data: null };
+    });
+    if (!head.ok) throw new Error(head.error);
+    await rememberVault(accountId, vaultKey, true);
+    await navigator.storage?.persist?.().catch(() => false);
+    return { accountId, vaultKey };
   });
-  await rememberVault(accountId, vaultKey, true);
-  await navigator.storage?.persist?.().catch(() => false);
-  return { accountId, vaultKey };
 }
 
 export async function clearGuestStore(account: string, expected?: { timeline: string; rev: number; files: string[] }): Promise<ApiResult<null>> {

@@ -34,8 +34,9 @@ async function guest() {
 }
 
 describe('a guest’s browser store', () => {
-  it('is made once and found again by every later page', async () => {
-    const first = await guestAccount();
+  it('serializes two first visits into one guest and finds it again on later pages', async () => {
+    const [first, second] = await Promise.all([guestAccount(), guestAccount()]);
+    expect(second).toEqual(first);
     expect(await guestAccount()).toEqual(first);
   });
 

@@ -5,6 +5,7 @@ import { cachedAccounts, forgetVault } from '../../runtime/device-cache';
 import { guestAccount } from '../../runtime/guest-store';
 import { discardGuest, guestWithContent, type GuestTransferStep } from '../../runtime/guest-transfer';
 import { lockVault, recallVault, rememberVault } from '../../vault/device';
+import { DatabaseBlocked } from '../../vault/database';
 import { canonicalUsername, openVault, passwordCredential, wrapWithPassword, type Credential, type VaultKey } from '../../vault/keys';
 import { clearDownloads } from '../common/download';
 import { describeFailure, wrongSecret } from '../common/failure';
@@ -97,17 +98,21 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
   }
 
   function settle(next: Loaded) {
-    if (next.kind === 'landing') void land(next.session, next.vaultKey);
+    if (next.kind === 'landing') return land(next.session, next.vaultKey);
     else show(next);
+  }
+
+  function failed(error: unknown) {
+    show({ kind: 'unreachable', message: describeFailure({ ok: false, error: error instanceof DatabaseBlocked ? 'browser-storage-blocked' : 'browser-storage' }) });
   }
 
   function reload(notice: string | null = null, prefer: 'auto' | 'guest' | 'login' = 'auto') {
     show({ kind: 'loading' });
-    void loadState(notice, prefer).then(settle);
+    void loadState(notice, prefer).then(settle).catch(failed);
   }
 
   useEffect(() => {
-    void loadState().then(settle);
+    reload();
   }, []);
 
   const moving = (title: string) => (step: GuestTransferStep) =>
@@ -116,17 +121,22 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
   // Every way into an account ends here, so what a guest made in this browser is never passed by: a guest whose upload
   // into this same account was cut off finishes it, and another guest's content waits for 올리기 or 버리기.
   async function land(session: SessionFacts, vaultKey: VaultKey) {
-    const held = await guestWithContent();
-    const guest = held.ok ? held.data : null;
-    if (guest?.accountId === session.accountId) {
-      const title = '계정에 올리는 중';
-      show({ kind: 'moving', moved: { title, steps: {} } });
-      const uploaded = await uploadGuest(session.accountId, vaultKey, { progress: moving(title) });
-      if (!uploaded.ok) return show({ kind: 'unreachable', message: describeFailure(uploaded) });
-    } else if (guest) return show({ kind: 'guest-data', session, vaultKey, failure: null });
-    await rememberVault(session.accountId, vaultKey);
-    enterAs(session.username);
-    show({ kind: 'unlocked', session, vaultKey, facts: new AccountFacts(session) });
+    try {
+      const held = await guestWithContent();
+      if (!held.ok) return show({ kind: 'unreachable', message: describeFailure(held) });
+      const guest = held.data;
+      if (guest?.accountId === session.accountId) {
+        const title = '계정에 올리는 중';
+        show({ kind: 'moving', moved: { title, steps: {} } });
+        const uploaded = await uploadGuest(session.accountId, vaultKey, { progress: moving(title) });
+        if (!uploaded.ok) return show({ kind: 'unreachable', message: describeFailure(uploaded) });
+      } else if (guest) return show({ kind: 'guest-data', session, vaultKey, failure: null });
+      await rememberVault(session.accountId, vaultKey);
+      enterAs(session.username);
+      show({ kind: 'unlocked', session, vaultKey, facts: new AccountFacts(session) });
+    } catch (error) {
+      failed(error);
+    }
   }
 
   // A recovery key opens the vault but then asks for a new password, since the old one is lost.

@@ -75,6 +75,7 @@ const VARIANTS = { connections: 'stack', 'add-connection': 'list' } as const;
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
 export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer: () => void; onPaired: (paired: boolean) => void }) {
+  const { guest } = useAccount();
   const wide = useWide();
   const split = useSplit();
   const back = (at: Below) => backTo(up(at), wide);
@@ -137,6 +138,7 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
       case 'usage':
         return <UsageScreen back={back(at)} />;
       case 'notices':
+        if (guest) return <Replace to={{ kind: 'account', section: null }} />;
         return <NoticesScreen back={back(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
@@ -155,12 +157,16 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
       case 'post':
         return <PostScreen key={at.id} id={at.id} back={back(at)} />;
       case 'board-write':
+        if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <WriteScreen key={String(at.operator)} editing={null} operator={at.operator} back={back(at)} />;
       case 'board-edit':
+        if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <EditScreen key={at.id} id={at.id} back={back(at)} />;
       case 'board-activity':
+        if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <ActivityScreen back={back(at)} />;
       case 'board-mine':
+        if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <MineScreen back={back(at)} />;
       case 'labs':
         return <LabsScreen back={sideBack(at)} />;

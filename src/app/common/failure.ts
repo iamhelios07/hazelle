@@ -93,6 +93,7 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   // A guest's store (runtime/guest-store).
   'browser-full': `브라우저 저장 공간이 꽉 찼어요. ${BIN}에서 영구 삭제하거나 계정을 만들면 공간이 생겨요.`,
   'browser-storage': '이 브라우저의 저장소를 열지 못했어요. 새로고침한 뒤 다시 시도해 주세요.',
+  'browser-storage-blocked': '다른 탭에서 열어 둔 헤이젤을 닫고 다시 시도해 주세요.',
   offline: '서버에 연결하지 못했어요. 네트워크 상태를 확인해 주세요.',
   'timeline-changed': '계정이 복원돼서 작업을 멈췄어요. 다시 시도해 주세요.',
   'account-restoring': '계정을 복원하고 있어요. 잠시 뒤에 다시 시도해 주세요.',
