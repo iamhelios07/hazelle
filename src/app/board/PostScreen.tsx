@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { HOLD_DAYS_MAX, MAX_COMMENT_LENGTH, OPERATOR_NAME, STATUSES, type Comment, type Hidden, type Post, type Status } from '../../contracts/board';
 import type { ApiResult } from '../../runtime/api';
 import {
+  blockGuestPost,
+  blockGuestComment,
   deleteComment,
   deletePost,
   editComment,
@@ -17,7 +19,6 @@ import {
 } from '../../runtime/board';
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
-import { GuestLine } from '../common/GuestNotice';
 import { linkify } from '../common/linkify';
 import { tourOf } from '../common/release';
 import { TOUR, TourDialog } from '../common/Tour';
@@ -28,7 +29,7 @@ import { ago, moment } from '../common/time';
 import { count, readCount } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { useLoaded } from '../common/useLoaded';
-import { ACCOUNT_ONLY, BOARD, SHARE } from '../common/words';
+import { BOARD, SHARE } from '../common/words';
 import { useAccount } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -39,7 +40,6 @@ import { counted, ReasonDialog } from './parts';
 import { useVotes } from './vote';
 
 type Gate = (then: () => void) => void;
-type Author = Post['author'];
 type Asking =
   | { kind: 'delete-post' }
   | { kind: 'report-post' }
@@ -67,7 +67,7 @@ export function PostScreen({ id, back }: { id: number; back: Back }) {
   return <PostView post={post} reload={loaded.reload} back={back} />;
 }
 
-// A guest reads and writes nothing: no 추천, 댓글 or 신고 (design §6.14).
+// Guests write as authors, but 추천 and 신고 remain account-only.
 function PostView({ post, reload, back }: { post: Post; reload: () => void; back: Back }) {
   const { admin, guest } = useAccount();
   const toast = useToast();
@@ -119,6 +119,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
     ...(admin
       ? [
           <MenuHeading key="operate">운영</MenuHeading>,
+          ...(post.author.guest ? [<MenuItem key="block-guest" icon={Lock} label="이 손님 글쓰기 막기" onClick={() => act(() => blockGuestPost(post.id), '막지 못했어요.')} />] : []),
           ...(post.category === 'news' ? [] : [<MenuItem key="status" icon={TagIcon} label="상태 바꾸기" onClick={() => setAsking({ kind: 'status' })} />]),
           post.hidden ? (
             <MenuItem key="show" icon={Eye} label="보이기" onClick={() => act(() => setPostHidden(post.id, null), '보이게 하지 못했어요.')} />
@@ -236,6 +237,7 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
       ...(admin && !comment.deleted
         ? [
             <MenuHeading key="operate">운영</MenuHeading>,
+            ...(comment.author.guest ? [<MenuItem key="block-guest" icon={Lock} label="이 손님 글쓰기 막기" onClick={() => void blockGuestComment(comment.id).then((answer) => answer.ok ? onChanged() : toast.failed(answer, '막지 못했어요.'))} />] : []),
             comment.hidden ? (
               <MenuItem
                 key="show"
@@ -251,8 +253,8 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
         : []),
     ];
     const replies = top ? repliesOf(comment.id).map((reply) => item(reply, false)) : [];
-    // 답글 are the author and the operator talking (server/board): others comment and 추천.
-    const repliable = top && open && (admin || post.author.mine) && (comment.author.operator || byAuthor(comment.author, post.author));
+    // 답글 are the author and the operator talking (server/board): others leave top-level comments.
+    const repliable = top && open && (admin || post.author.mine) && (comment.author.operator || comment.byAuthor);
     const answering = repliable && replying === comment.id;
     return (
       <ThreadItem
@@ -264,7 +266,7 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
             note={edited(comment.createdAt, comment.editedAt)}
             marks={
               <>
-                {byAuthor(comment.author, post.author) && <Tag>{BOARD.author}</Tag>}
+                {comment.byAuthor && <Tag>{BOARD.author}</Tag>}
                 {comment.hidden && <Tag tone="faint">{BOARD.hidden}</Tag>}
               </>
             }
@@ -351,17 +353,12 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
       )}
       {post.locked ? (
         <Text variant="note">운영자가 댓글을 닫았어요.</Text>
-      ) : guest ? (
-        post.text !== null && <GuestLine note={`${BOARD.comment}은 ${ACCOUNT_ONLY}.`} />
       ) : (
         post.text !== null && <CommentComposer label={BOARD.comment} placeholder="댓글 남기기" confirm="등록" gate={gate} send={(text) => writeComment(post.id, text, null)} onDone={onChanged} />
       )}
     </Section>
   );
 }
-
-// Names are unique, so the same name is the same account; an account without one, or gone, matches nothing.
-const byAuthor = (by: Author, author: Author) => (by.operator && author.operator) || (!by.left && !author.left && by.name !== null && by.name === author.name);
 
 function CommentComposer({ label, placeholder, initial = '', confirm, focus = false, gate, send, onDone, onCancel }: {
   label: string;

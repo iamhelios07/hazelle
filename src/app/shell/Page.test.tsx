@@ -75,11 +75,7 @@ function page(initial: Stored<Kind>[], guest = false) {
 }
 
 it.each([
-  { kind: 'board-write', operator: false },
-  { kind: 'board-write', operator: true },
-  { kind: 'board-edit', id: 1 },
   { kind: 'board-activity' },
-  { kind: 'board-mine' },
 ] satisfies Route[])('replaces the guest’s $kind URL with the board list', async (route) => {
   const p = page([], true);
   try {

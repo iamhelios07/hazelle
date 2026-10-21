@@ -264,3 +264,21 @@ it('migrates pulse without rewriting signed-in rows and keeps guest lists outsid
   for (const table of ['pulse_guest_seen', 'pulse_guest_used', 'pulse_guest_replies']) expect(db.prepare(`PRAGMA foreign_key_list(${table})`).all()).toEqual([]);
   db.close();
 });
+
+it('adds guest authors and a persistent keyed address identity without changing existing board rows', () => {
+  const db = new DatabaseSync(':memory:');
+  migrate(db, dir(Object.fromEntries(readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0020').map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
+  db.exec("INSERT INTO posts (title, text, category, visibility, created_at) VALUES ('이전 글', '본문', 'bug', 'public', 1); INSERT INTO comments (post_id, text, created_at) VALUES (1, '이전 댓글', 2)");
+  expect(migrate(db, 'migrations').applied).toEqual(['0020_board_guests.sql', '0021_visits.sql']);
+  const settings = db.prepare('SELECT board_guests, board_guest_key FROM service').get();
+  expect(settings).toEqual({ board_guests: 1, board_guest_key: expect.stringMatching(/^[a-f0-9]{64}$/) });
+  migrate(db, 'migrations');
+  expect(db.prepare('SELECT board_guests, board_guest_key FROM service').get()).toEqual(settings);
+  for (const table of ['posts', 'comments']) expect(db.prepare(`SELECT text, guest_secret_hash, guest_address_hash FROM ${table}`).get()).toMatchObject({ guest_secret_hash: null, guest_address_hash: null });
+  for (const table of ['posts', 'comments']) expect((db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(({ name }) => name)).not.toContain('guest_prefix');
+  expect((db.prepare('PRAGMA table_info(board_guest_blocks)').all() as { name: string }[]).map(({ name }) => name)).toEqual(['secret_hash']);
+  expect((db.prepare('PRAGMA table_info(board_guest_address_blocks)').all() as { name: string }[]).map(({ name }) => name)).toEqual(['address_hash', 'until']);
+  expect(db.prepare('SELECT text FROM posts').get()).toEqual({ text: '본문' });
+  expect(db.prepare('SELECT text FROM comments').get()).toEqual({ text: '이전 댓글' });
+  db.close();
+});

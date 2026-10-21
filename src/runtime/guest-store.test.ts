@@ -5,7 +5,7 @@ import type { Connection } from '../connectors/types';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { feedQuery } from './backend';
-import { guestAccount, guestBackend } from './guest-store';
+import { guestAccount, guestBackend, guestBoardSecret } from './guest-store';
 import { Files } from './files';
 import { openSession } from './session';
 import { ObjectStore, type PullProgress } from './store';
@@ -121,4 +121,14 @@ describe('a guest’s browser store', () => {
     opened.data.close();
     expect(fetched).not.toHaveBeenCalled();
   });
+});
+
+it('keeps one board secret across tabs beside the guest head and out of the object and file feeds', async () => {
+  const { accountId, backend } = await guest();
+  const [one, two] = await Promise.all([guestBoardSecret(accountId, true), guestBoardSecret(accountId, true)]);
+  expect(one).toEqual(two);
+  expect(one).toEqual({ ok: true, data: expect.stringMatching(/^[0-9a-f]{64}$/) });
+  expect(await guestBoardSecret(accountId)).toEqual(one);
+  expect(JSON.stringify(await backend.feed(feedQuery({ since: 0, timeline: null })))).not.toContain(one.ok ? one.data! : '');
+  expect(JSON.stringify(await backend.heldFiles(null))).not.toContain(one.ok ? one.data! : '');
 });

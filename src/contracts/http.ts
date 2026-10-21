@@ -73,6 +73,8 @@ export type ServerError =
   | 'too-many-visits'
   | 'too-many-writes'
   | 'username-taken'
+  | 'guest-board-blocked'
+  | 'guest-board-closed'
   | 'wrong-login';
 // The relay's own refusals, answered marked RELAY_HEADER: error (server/relay).
 export type RelayError = 'bad-envelope' | 'not-https' | 'not-public' | 'upstream-unreachable' | 'upstream-redirect' | 'upstream-not-api' | 'relay-traffic-limit' | 'relay-host-limit';

@@ -1,6 +1,9 @@
+import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { MAX_DIAGNOSTICS_LENGTH, POSTS_PER_DAY, type Activity, type Compose, type Post, type PostList } from '../contracts/board';
-import { UNREAD_BOARD_HEADER } from '../contracts/http';
+import { COMMENTS_PER_DAY, GUEST_ADDRESS_CAP_MULTIPLIER, GUEST_BOARD_HEADER, MAX_DIAGNOSTICS_LENGTH, POSTS_PER_DAY, type Activity, type Compose, type Post, type PostList } from '../contracts/board';
+import { UNREAD_BOARD_HEADER, VISITOR_HEADER } from '../contracts/http';
+import { sha256Hex } from './http';
+import { forgetOldRecords } from './admin';
 import { beginRestore } from './lifecycle';
 import { testApp } from './testing';
 
@@ -363,4 +366,226 @@ it("anchors an operator's restore on the account's open operator-only post, date
   expect(await t.env.db.prepare('SELECT created_at FROM posts WHERE id = ?').bind(asked).first('created_at')).toBe(created);
   expect(await beginRestore(t.env, author.id, shown, { at: created - 3_600_000 })).toEqual({ refused: 'bad-post' });
   expect(await beginRestore(t.env, author.id, asked, { at: created - 3_600_000 })).toEqual({ begun: expect.any(Number) });
+});
+
+const guest = (secret = 'a'.repeat(64), address = '123.45.67.89') => ({
+  send: (method: string, path: string, body?: unknown, prove = true) => t.raw(`board/${path}`, {
+    method,
+    headers: { 'content-type': 'application/json', [VISITOR_HEADER]: address, ...(prove ? { [GUEST_BOARD_HEADER]: secret } : {}) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }),
+});
+const guestPost = (who: ReturnType<typeof guest>, compose: Partial<Compose> = {}) => who.send('POST', 'posts', { title: '손님 글', text: '본문', category: 'bug', visibility: 'public', diagnostics: null, ...compose });
+const guestPosted = async (who: ReturnType<typeof guest>, compose: Partial<Compose> = {}) => ((await (await guestPost(who, compose)).json()) as { id: number }).id;
+const guestTag = (secret: string) => `손님#${sha256Hex(secret).slice(0, 4)}`;
+const guestRead = async (who: ReturnType<typeof guest>, id: number) => ((await (await who.send('GET', `posts/${id}`)).json()) as { post: Post }).post;
+
+it('labels guests by browser hash regardless of address, public or operator-only, never news or account-only actions', async () => {
+  const admin = await operator();
+  const who = guest();
+  const publicId = await guestPosted(who);
+  const privateId = await guestPosted(who, { visibility: 'operator', diagnostics: '문제 진단' });
+  const post = await guestRead(who, publicId);
+  expect(post.author).toEqual({ name: guestTag('a'.repeat(64)), guest: true, mine: true, operator: false, left: false });
+  expect(post).not.toHaveProperty('guest_secret_hash');
+  const operatorPost = await posted(admin);
+  expect((await who.send('POST', `posts/${operatorPost}/comments`, { text: '손님 댓글', parentId: null })).status).toBe(200);
+  expect(await (await t.get('board/activity', admin.cookie)).json()).toMatchObject({ activity: [{ by: { name: guestTag('a'.repeat(64)), guest: true, left: false } }] });
+  expect(await (await who.send('GET', 'posts?mine=1')).json()).toMatchObject({ posts: [{ id: privateId }, { id: publicId }] });
+  expect((await guestRead(who, privateId)).diagnostics).toBeNull();
+  expect((await read(admin, privateId)).diagnostics).toBe('문제 진단');
+  expect((await guest('b'.repeat(64)).send('GET', `posts/${privateId}`)).status).toBe(404);
+  expect((await guest('b'.repeat(64)).send('GET', 'posts?visibility=operator')).status).toBe(200);
+  expect((await guestPost(who, { category: 'news' })).status).toBe(400);
+  for (const [method, path, body] of [
+    ['PUT', `posts/${publicId}/vote`, { voted: true }], ['POST', `posts/${publicId}/reports`, { text: '신고' }],
+    ['PUT', 'name', { name: '손님 이름' }], ['GET', 'activity', undefined], ['POST', 'seen', { id: 1 }],
+  ] as const) expect((await who.send(method, path, body)).status).toBe(401);
+  const sameAddress = guest('b'.repeat(64));
+  const otherTag = (await guestRead(sameAddress, await guestPosted(sameAddress))).author.name;
+  expect(otherTag).toBe(guestTag('b'.repeat(64)));
+  expect(otherTag).not.toBe(post.author.name);
+  for (const address of ['2001:db8:abcd::1', '::1', '12.34.56.78']) {
+    const reconnected = guest('a'.repeat(64), address);
+    expect((await guestRead(reconnected, await guestPosted(reconnected))).author.name).toBe(post.author.name);
+  }
+});
+
+it('never treats a colliding four-character tag as ownership or a reply permission', async () => {
+  const who = guest('7d'.padStart(64, '0'), '123.45.2.1');
+  const other = guest('15c'.padStart(64, '0'), '123.45.2.1');
+  const id = await guestPosted(who);
+  const otherId = await guestPosted(other);
+  expect((await guestRead(other, id)).author).toMatchObject({ name: '손님#4757', mine: false });
+  expect((await guestRead(other, otherId)).author).toMatchObject({ name: '손님#4757', mine: true });
+  expect((await other.send('PUT', `posts/${id}`, { title: '수정', text: '본문', category: 'bug' })).status).toBe(404);
+  const top = ((await (await who.send('POST', `posts/${id}/comments`, { text: '작성자', parentId: null })).json()) as { comment: { id: number } }).comment.id;
+  expect(await (await other.send('POST', `posts/${id}/comments`, { text: '답글', parentId: top })).json()).toEqual({ error: 'reply-closed' });
+  const added = await other.send('POST', `posts/${id}/comments`, { text: '별도 댓글', parentId: null });
+  expect(await added.json()).toMatchObject({ comment: { byAuthor: false } });
+});
+
+it('edits and deletes guest posts and comments only with their secret, including placeholder cleanup', async () => {
+  const admin = await operator();
+  const who = guest('d'.repeat(64), '123.46.1.1');
+  const other = guest('e'.repeat(64), '123.46.1.1');
+  const id = await guestPosted(who);
+  const { comment: own } = await (await who.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json() as { comment: { id: number } };
+  const reply = await commented(admin, id, '답글', own.id);
+  for (const [path, body] of [[`posts/${id}`, { title: '수정', text: '수정 본문', category: 'question' }], [`comments/${own.id}`, { text: '수정 댓글' }]] as const) {
+    expect((await who.send('PUT', path, body, false)).status).toBe(401);
+    expect((await other.send('PUT', path, body)).status).toBe(404);
+    expect((await other.send('DELETE', path)).status).toBe(404);
+    expect((await who.send('DELETE', path, undefined, false)).status).toBe(401);
+    expect((await who.send('PUT', path, body)).status).toBe(204);
+  }
+  expect((await guestRead(who, id)).comments[0]).toMatchObject({ text: '수정 댓글', byAuthor: true });
+  expect((await who.send('DELETE', `comments/${own.id}`)).status).toBe(204);
+  expect((await who.send('DELETE', `posts/${id}`)).status).toBe(204);
+  expect(await guestRead(who, id)).toMatchObject({ text: null, deleted: true, comments: [{ text: null, deleted: true }, { id: reply }] });
+  expect((await t.delete(`board/comments/${reply}`, undefined, admin.cookie)).status).toBe(204);
+  expect((await who.send('GET', `posts/${id}`)).status).toBe(404);
+  const empty = await guestPosted(who);
+  expect((await who.send('DELETE', `posts/${empty}`)).status).toBe(204);
+  expect((await who.send('GET', `posts/${empty}`)).status).toBe(404);
+});
+
+it('admits guest replies only between the actual post author and the operator, never another guest behind the same address', async () => {
+  const admin = await operator();
+  const who = guest('f'.repeat(64), '123.47.1.1');
+  const other = guest('1'.repeat(64), '123.47.1.1');
+  const id = await guestPosted(who);
+  const top = await commented(admin, id, '확인');
+  const reply = await who.send('POST', `posts/${id}/comments`, { text: '답글', parentId: top });
+  expect(reply.status).toBe(200);
+  const own = ((await reply.json()) as { comment: { id: number } }).comment.id;
+  expect((await comment(admin, id, '재답글', own)).status).toBe(200);
+  expect(await (await other.send('POST', `posts/${id}/comments`, { text: '끼어들기', parentId: top })).json()).toEqual({ error: 'reply-closed' });
+  const outsider = ((await (await other.send('POST', `posts/${id}/comments`, { text: '별도 댓글', parentId: null })).json()) as { comment: { id: number } }).comment.id;
+  expect((await guestRead(who, id)).comments.at(-1)).toMatchObject({ byAuthor: false });
+  expect(await (await who.send('POST', `posts/${id}/comments`, { text: '답글', parentId: outsider })).json()).toEqual({ error: 'reply-closed' });
+  expect(await (await comment(admin, id, '답글', outsider)).json()).toEqual({ error: 'reply-closed' });
+});
+
+it('applies the account daily post and comment caps per browser secret, even after an address change', async () => {
+  const secret = '2'.repeat(64);
+  const who = guest(secret, '123.48.1.1');
+  const reconnected = guest(secret, '123.48.1.2');
+  const other = guest('3'.repeat(64), '123.48.1.1');
+  const id = await guestPosted(who);
+  for (let i = 1; i < POSTS_PER_DAY; i++) expect((await guestPost(who)).status).toBe(200);
+  expect(await (await guestPost(reconnected)).json()).toEqual({ error: 'too-many-posts' });
+  expect((await guestPost(other)).status).toBe(200);
+  for (let i = 0; i < COMMENTS_PER_DAY; i++) expect((await who.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).status).toBe(200);
+  expect(await (await reconnected.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json()).toEqual({ error: 'too-many-comments' });
+  expect((await other.send('POST', `posts/${id}/comments`, { text: '다른 손님', parentId: null })).status).toBe(200);
+  await t.env.db.prepare('UPDATE posts SET created_at = ? WHERE guest_secret_hash IS NOT NULL').bind(Date.now() - 86_400_001).run();
+  await t.env.db.prepare('UPDATE comments SET created_at = ? WHERE guest_secret_hash IS NOT NULL').bind(Date.now() - 86_400_001).run();
+  expect((await guestPost(who)).status).toBe(200);
+  expect((await who.send('POST', `posts/${id}/comments`, { text: '다음 날', parentId: null })).status).toBe(200);
+});
+
+it('bounds fresh guest secrets at one address to ten times the post and comment caps, over a rolling day', async () => {
+  const who = guest('9'.repeat(64), '123.48.2.1');
+  const id = await guestPosted(who);
+  const source = await t.env.db.prepare('SELECT guest_address_hash FROM posts WHERE id = ?').bind(id).first<string>('guest_address_hash');
+  const now = Date.now();
+  await t.env.db.batch([
+    ...Array.from({ length: POSTS_PER_DAY * GUEST_ADDRESS_CAP_MULTIPLIER - 2 }, (_, i) => t.env.db.prepare(
+      "INSERT INTO posts (title, text, category, visibility, created_at, guest_secret_hash, guest_address_hash) VALUES ('글', '본문', 'bug', 'public', ?, ?, ?)",
+    ).bind(now, sha256Hex(`post browser ${i}`), source)),
+    ...Array.from({ length: COMMENTS_PER_DAY * GUEST_ADDRESS_CAP_MULTIPLIER - 1 }, (_, i) => t.env.db.prepare(
+      'INSERT INTO comments (post_id, text, created_at, guest_secret_hash, guest_address_hash) VALUES (?, ?, ?, ?, ?)',
+    ).bind(id, '댓글', now, sha256Hex(`comment browser ${i}`), source)),
+  ]);
+  const last = guest('a'.repeat(64), '123.48.2.1');
+  const fresh = guest('b'.repeat(64), '123.48.2.1');
+  expect((await guestPost(last)).status).toBe(200);
+  expect(await (await guestPost(fresh)).json()).toEqual({ error: 'too-many-posts' });
+  expect((await last.send('POST', `posts/${id}/comments`, { text: '마지막 댓글', parentId: null })).status).toBe(200);
+  expect(await (await fresh.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json()).toEqual({ error: 'too-many-comments' });
+  expect((await guestPost(guest('b'.repeat(64), '123.48.2.2'))).status).toBe(200);
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 86_400_001);
+  try {
+    expect((await guestPost(fresh)).status).toBe(200);
+    expect((await fresh.send('POST', `posts/${id}/comments`, { text: '다음 날', parentId: null })).status).toBe(200);
+  } finally { clock.mockRestore(); }
+});
+
+it('permanently blocks the browser secret from either moderation menu, including after an address change', async () => {
+  const admin = await operator();
+  const who = guest('4'.repeat(64), '123.49.1.1');
+  const id = await guestPosted(who);
+  const row = await t.env.db.prepare('SELECT guest_secret_hash, guest_address_hash FROM posts WHERE id = ?').bind(id).first<{ guest_secret_hash: string; guest_address_hash: string }>();
+  expect(row!.guest_secret_hash).toBe(sha256Hex('4'.repeat(64)));
+  const key = await t.env.db.prepare('SELECT board_guest_key FROM service').first<string>('board_guest_key');
+  expect(row!.guest_address_hash).toBe(createHmac('sha256', key!).update('123.49.1.1').digest('hex'));
+  expect((await t.put(`board/posts/${id}/guest-block`, undefined, admin.cookie)).status).toBe(204);
+  expect(await (await guestPost(guest('4'.repeat(64), '123.49.1.2'))).json()).toEqual({ error: 'guest-board-blocked' });
+  expect((await who.send('GET', `posts/${id}`)).status).toBe(200);
+  const other = guest('5'.repeat(64), '123.49.1.2');
+  const comment = ((await (await other.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json()) as { comment: { id: number } }).comment.id;
+  expect((await t.put(`board/comments/${comment}/guest-block`, undefined, admin.cookie)).status).toBe(204);
+  expect(await (await guestPost(guest('5'.repeat(64), '123.49.1.3'))).json()).toEqual({ error: 'guest-board-blocked' });
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3 * 86_400_000);
+  try {
+    expect(await (await guestPost(who)).json()).toEqual({ error: 'guest-board-blocked' });
+  } finally { clock.mockRestore(); }
+  expect((await write(admin)).status).toBe(200);
+  expect((await log(admin)).filter(({ action }) => action === 'guest-block')).toHaveLength(2);
+});
+
+it('expires an address block exactly 24 hours after moderation, then sweeps it without forgetting the secret block', async () => {
+  const admin = await operator();
+  const now = Date.now();
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+  try {
+    const who = guest('a'.repeat(64), '123.49.2.1');
+    const newcomer = guest('b'.repeat(64), '123.49.2.1');
+    const id = await guestPosted(who);
+    expect((await t.put(`board/posts/${id}/guest-block`, undefined, admin.cookie)).status).toBe(204);
+    expect(await (await guestPost(newcomer)).json()).toEqual({ error: 'guest-board-blocked' });
+    clock.mockReturnValue(now + 86_400_000 - 1);
+    expect(await (await guestPost(newcomer)).json()).toEqual({ error: 'guest-board-blocked' });
+    clock.mockReturnValue(now + 86_400_000);
+    expect((await guestPost(newcomer)).status).toBe(200);
+    expect(await (await guestPost(who)).json()).toEqual({ error: 'guest-board-blocked' });
+    await forgetOldRecords(t.env.db);
+    expect(await t.env.db.prepare('SELECT COUNT(*) AS n FROM board_guest_address_blocks').first('n')).toBe(0);
+    expect(await t.env.db.prepare('SELECT secret_hash FROM board_guest_blocks').first('secret_hash')).toBe(sha256Hex('a'.repeat(64)));
+  } finally { clock.mockRestore(); }
+});
+
+it('closes all guest writes with the operator switch while keeping reads and account writes open', async () => {
+  const admin = await operator();
+  const who = guest('6'.repeat(64), '123.50.1.1');
+  const id = await guestPosted(who);
+  const own = ((await (await who.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).json()) as { comment: { id: number } }).comment.id;
+  expect(await (await t.get('admin/board', admin.cookie)).json()).toEqual({ guests: true });
+  expect((await t.put('admin/board', { guests: false }, admin.cookie)).status).toBe(204);
+  for (const [method, path, body] of [
+    ['POST', 'posts', {}], ['PUT', `posts/${id}`, {}], ['DELETE', `posts/${id}`, undefined],
+    ['POST', `posts/${id}/comments`, {}], ['PUT', `comments/${own}`, {}], ['DELETE', `comments/${own}`, undefined],
+  ] as const) expect(await (await who.send(method, path, body)).json()).toEqual({ error: 'guest-board-closed' });
+  expect((await who.send('GET', `posts/${id}`)).status).toBe(200);
+  expect((await write(admin)).status).toBe(200);
+  expect((await t.put('admin/board', { guests: true }, admin.cookie)).status).toBe(204);
+  expect((await guestPost(who)).status).toBe(200);
+});
+
+it('moves guest posts and comments to a session account by secret, idempotently, without requiring or inventing a nickname', async () => {
+  await operator();
+  const account = await t.signUp();
+  const secret = '7'.repeat(64);
+  const who = guest(secret, '123.51.1.1');
+  const id = await guestPosted(who, { visibility: 'operator' });
+  expect((await who.send('POST', `posts/${id}/comments`, { text: '댓글', parentId: null })).status).toBe(200);
+  await guestPosted(guest('8'.repeat(64), '123.51.1.2'));
+  for (let i = 0; i < 2; i++) expect((await t.post('board/claim', { secret }, account.cookie)).status).toBe(204);
+  const post = await read(account, id);
+  expect(post.author).toEqual({ name: null, operator: false, mine: true, left: false });
+  expect(post.comments[0]).toMatchObject({ author: post.author, byAuthor: true });
+  for (const table of ['posts', 'comments']) expect(await t.env.db.prepare(`SELECT account_id, guest_secret_hash, guest_address_hash FROM ${table} WHERE id = ?`).bind(table === 'posts' ? id : post.comments[0]!.id).first()).toEqual({ account_id: account.id, guest_secret_hash: null, guest_address_hash: null });
+  expect((await who.send('GET', `posts/${id}`)).status).toBe(404);
+  expect((await t.env.db.prepare('SELECT COUNT(*) AS n FROM posts WHERE guest_secret_hash IS NOT NULL').first<number>('n'))).toBe(1);
 });

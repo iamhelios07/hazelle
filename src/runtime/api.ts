@@ -19,6 +19,8 @@ const REFUSALS: Record<string, 'elsewhere' | 'suspended' | 'storage-full' | 'res
 let held: string | null = null;
 let hear: ((heard: Heard) => void) | null = null;
 
+export const hasAccount = () => held !== null;
+
 export function holdAccount(account: string | null, onHeard: ((heard: Heard) => void) | null = null) {
   held = account;
   hear = onHeard;
@@ -93,7 +95,7 @@ export const SLOW_ROUTE_WAIT = 5 * 60_000;
 // connection dropped while its answer was being read, or a 5xx without the JSON error shape every API route uses, which
 // the proxy in front wrote while the app was not answering (a container swap, Cloudflare's 52x). 'server-error' means
 // an answer that was neither, with its status.
-export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal, headersWait = HEADERS_WAIT): Promise<ApiResult<T>> {
+export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal, headersWait = HEADERS_WAIT, headers: Record<string, string> = {}): Promise<ApiResult<T>> {
   const bytes = body instanceof Uint8Array ? (body as Uint8Array<ArrayBuffer>) : null;
   const payload = body === undefined ? undefined : (bytes ?? JSON.stringify(body));
   const late = new AbortController();
@@ -105,7 +107,7 @@ export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE'
       response = await fetchApi(path, {
         method,
         signal: signal ? AbortSignal.any([signal, late.signal]) : late.signal,
-        headers: method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' },
+        headers: method === 'GET' ? headers : { ...headers, 'content-type': bytes ? 'application/octet-stream' : 'application/json' },
         body: payload,
       });
     } finally {

@@ -23,11 +23,12 @@ import { lockVault, recallGuest, recallVault, rememberVault } from '../vault/dev
 import { createVault, openVault, passwordCredential, recoveryCredential } from '../vault/keys';
 import { objectKey, openObject } from '../vault/objects';
 import { logIn, prepareGuestSignup, signUp, signUpGuest, uploadGuest } from './account';
+import { writePost, writeComment, readPost, readPosts } from './board';
 import { holdAccount } from './api';
 import { feedQuery, serverBackend, type Backend } from './backend';
 import { deviceCache } from './device-cache';
 import { Files } from './files';
-import { guestAccount, guestBackend } from './guest-store';
+import { guestAccount, guestBackend, guestBoardSecret } from './guest-store';
 import { discardGuest, guestWithContent, transferGuest } from './guest-transfer';
 import { openSession } from './session';
 import { ObjectStore } from './store';
@@ -598,4 +599,47 @@ it('validates client ids and refuses a taken id', async () => {
   await app.env.db.prepare('UPDATE service SET signup_cap = 2').run();
   expect((await app.post('signup', { ...body, username: 'another' })).status).toBe(409);
   expect(await app.env.db.prepare('SELECT COUNT(*) AS count FROM accounts').first('count')).toBe(1);
+});
+
+it('keeps the board usable after failed signup, then converts a board-only guest without uploading its secret', async () => {
+  const source = await guest();
+  const prepared = await prepareGuestSignup('tester', password);
+  await app.env.db.prepare('UPDATE service SET signup_cap = 0').run();
+  expect(await signUpGuest(prepared)).toMatchObject({ ok: false, error: 'signup-closed' });
+  const written = await writePost({ title: '가입이 안 돼요', text: '본문', category: 'bug', visibility: 'operator', diagnostics: null });
+  if (!written.ok) throw new Error(written.error);
+  expect((await writeComment(written.data.id, '추가 내용', null)).ok).toBe(true);
+  const secret = await guestBoardSecret(source.accountId);
+  expect(await guestWithContent()).toEqual({ ok: true, data: { accountId: source.accountId, vaultKey: source.vaultKey } });
+  await app.env.db.prepare('UPDATE service SET signup_cap = 1').run();
+  source.store.close();
+  expect((await signUpGuest(prepared)).ok).toBe(true);
+  expect(await recallGuest()).toBeNull();
+  const post = await readPost(written.data.id);
+  expect(post).toMatchObject({ ok: true, data: { post: { author: { mine: true }, comments: [{ byAuthor: true, author: { mine: true } }] } } });
+  if (!post.ok) throw new Error(post.error);
+  expect(post.data.post.author.guest).toBeUndefined();
+  expect(post.data.post.comments[0]!.author.guest).toBeUndefined();
+  expect(JSON.stringify(await rows(serverBackend()))).not.toContain(secret.ok ? secret.data! : '');
+  expect(await guestBoardSecret(source.accountId)).toEqual({ ok: true, data: null });
+});
+
+it('moves a board-only guest to an existing account when 올리기 is chosen and keeps its posts in 내 글', async () => {
+  const target = await destination();
+  const signedInCookie = cookie;
+  holdAccount(null);
+  cookie = null;
+  const source = await guest();
+  const written = await writePost({ title: '손님 제안', text: '본문', category: 'idea', visibility: 'public', diagnostics: null });
+  if (!written.ok) throw new Error(written.error);
+  expect((await writeComment(written.data.id, '보충', null)).ok).toBe(true);
+  expect(await guestWithContent()).toMatchObject({ ok: true, data: { accountId: source.accountId } });
+  cookie = signedInCookie;
+  expect((await logIn('tester', password)).ok).toBe(true);
+  source.store.close();
+  expect(await uploadGuest(target.accountId, target.vaultKey)).toEqual({ ok: true, data: null });
+  expect(await readPosts(null, { sort: 'new', mine: true })).toMatchObject({ ok: true, data: { rows: [{ id: written.data.id, author: { mine: true } }] } });
+  const post = await readPost(written.data.id);
+  expect(post).toMatchObject({ ok: true, data: { post: { comments: [{ author: { mine: true } }] } } });
+  expect(await recallGuest()).toBeNull();
 });

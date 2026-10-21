@@ -14,6 +14,8 @@ const ACTIONS: Record<string, string> = {
   lift: '정지 해제',
   'delete-account': '계정 삭제',
   'set-service': '서비스 설정',
+  'set-board': '게시판 설정',
+  'guest-block': '손님 글쓰기 차단',
   'set-caps': '저장 한도',
   'resolve-report': '신고 확인',
   'send-notice': NOTICES.send,
@@ -49,6 +51,7 @@ function detailOf({ action, detail }: LogRow): string | undefined {
   if ((action === 'post-hide' || action === 'comment-hide') && typeof values.reason === 'string') return `${values.reason}${typeof values.days === 'number' ? ` · ${values.days}일` : ''}`;
   if (action === 'post-delete' && typeof values.title === 'string') return values.title;
   if (action === 'comment-delete' && typeof values.post === 'number') return `글 ${values.post}`;
+  if (action === 'set-board' && typeof values.guests === 'boolean') return `손님 글쓰기 ${values.guests ? '열기' : '닫기'}`;
   if (action === 'set-caps') return `${String(values.username)} · 텍스트 한도 ${capText(values.bytesCap)} · 이미지 한도 ${capText(values.fileBytesCap)}`;
   if (action === 'restore-begun') return `${String(values.username)} · ${typeof values.at === 'number' ? `${moment(values.at)} 시점으로` : '복원 전으로 되돌리기'}`;
   if (action === 'restore-failed' && typeof values.error === 'string') return `${String(values.username)} · ${restoreError(values.error)}`;

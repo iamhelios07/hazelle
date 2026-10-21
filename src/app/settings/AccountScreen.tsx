@@ -9,7 +9,7 @@ import type { AccountSection, Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
 import { BUILT_VERSION } from '../common/release';
-import { ACCOUNT_ONLY, BIN, BOARD, PAGES, PULSE, UNKNOWN } from '../common/words';
+import { BIN, BOARD, PAGES, PULSE, UNKNOWN } from '../common/words';
 import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingGroup, SettingRow, Stack, Switch, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { Diagnostics } from './Diagnostics';
@@ -23,7 +23,7 @@ function Used({ label, bytes, cap }: { label: string; bytes: number | null; cap:
   return <Gauge label={label} share={share} amount={bytes === null ? UNKNOWN : sizeText(bytes)} of={cap === null ? undefined : `/ ${sizeText(cap)}`} />;
 }
 
-// A guest's rows: the browser's own copy, its file backup and the app's facts; what needs the server greyed until
+// A guest's rows: the browser's own copy, its file backup, board and app facts; account-only features greyed until
 // 계정 만들기 (design §6.14), and 잠그기, 로그아웃, 알림 and 탈퇴, which only an account has, left out.
 export function AccountScreen({ section, back }: { section: AccountSection | null; back: Back | null }) {
   const { guest } = useAccount();
@@ -124,14 +124,12 @@ function Storage() {
 }
 
 function BoardRows() {
-  const { guest } = useAccount();
   const open = (label: string, help: string | undefined, go: () => void, act: string) => (
     <SettingRow
       label={label}
       help={help}
-      sub={guest ? ACCOUNT_ONLY : undefined}
       control={
-        <Button variant="secondary" size="sm" disabled={Boolean(guest)} onClick={go}>
+        <Button variant="secondary" size="sm" onClick={go}>
           {act}
         </Button>
       }

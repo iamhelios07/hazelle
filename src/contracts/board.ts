@@ -20,9 +20,11 @@ export const MAX_COMMENT_LENGTH = 2000;
 export const MAX_REASON_LENGTH = 200;
 // A 문제 진단 sent with an operator-only post, clipped to this by the sender.
 export const MAX_DIAGNOSTICS_LENGTH = 16000;
-// Per account, counted over the last 24 hours in the database, so a restart resets nothing.
+// Per account or guest browser, counted over the last 24 hours in the database, so a restart resets nothing.
 export const POSTS_PER_DAY = 10;
 export const COMMENTS_PER_DAY = 60;
+// Shared mobile-carrier addresses need room for several browsers, but not unlimited fresh secrets.
+export const GUEST_ADDRESS_CAP_MULTIPLIER = 10;
 // 임시조치 (정보통신망법 제44조의2): a reported post is held hidden at most this long.
 export const HOLD_DAYS_MAX = 30;
 
@@ -40,8 +42,8 @@ export const SORTS = ['new', 'top'] as const;
 export type Sort = (typeof SORTS)[number];
 
 // left: the account is gone (탈퇴한 사용자). name null while not left: the account has not chosen a nickname, which only
-// a post moved from 운영자에게 알리기 (migration 0015) can be, since writing asks for one. mine: written by the asking account.
-export type Author = { name: string | null; operator: boolean; mine: boolean; left: boolean };
+// a post moved from 운영자에게 알리기 (migration 0015) or from a guest can be. mine: written by the asking account or guest.
+export type Author = { name: string | null; operator: boolean; mine: boolean; left: boolean; guest?: boolean };
 // A post or comment the operator hid: its reason, and when a hold ends (null: hidden until the operator shows it again).
 // Shown to its author and the operator; others see no trace of a hidden post, and a comment's placeholder (text and
 // hidden both null, deleted false), which the client draws as hidden, not deleted.
@@ -71,6 +73,8 @@ export type Comment = {
   id: number;
   postId: number;
   parentId: number | null;
+  // Short guest tags can collide, and converted accounts may have no nickname: match identity on the server.
+  byAuthor: boolean;
   author: Author;
   // null once deleted or hidden from the asking account.
   text: string | null;
@@ -98,3 +102,6 @@ export type Activity = { id: number; kind: ActivityKind; postId: number; title: 
 
 // The cursor of a 'top' list is `${votes}:${id}` of the last row shown, since votes order it; a 'new' list cursors on id.
 export type PostList = { posts: PostRow[]; next: string | null };
+
+export const GUEST_BOARD_HEADER = 'x-hazelle-board-secret';
+export type BoardSettings = { guests: boolean };

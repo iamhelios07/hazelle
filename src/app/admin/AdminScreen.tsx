@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { BackupWarning } from '../../contracts/admin';
-import { readService } from '../../runtime/admin';
+import { readService, readBoardSettings, setBoardGuests } from '../../runtime/admin';
+import { useAttempt } from '../common/useAttempt';
+import { describeFailure } from '../common/failure';
 import { PAGES } from '../common/words';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Beside, Callout, NavBar, Screen } from '../ui';
+import { Beside, Callout, NavBar, Screen, Section, SettingGroup, SettingRow, Switch } from '../ui';
 import { AccountsSection } from './AccountsSection';
 import { LogSection } from './LogSection';
 import { OperatorPostsSection } from './OperatorPostsSection';
@@ -44,6 +46,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
         {moderating && <ReportsSection head onActed={acted} />}
         <OperatorPostsSection />
         <VisitsSection />
+        <GuestBoardSection onSaved={acted} />
         <AccountsSection loaded={accounts} total={service.data?.accounts ?? null} onActed={acted}>
           {shared && <UsageRow />}
         </AccountsSection>
@@ -52,5 +55,34 @@ export function AdminScreen({ back }: { back: Back | null }) {
         {moderating && <ToolsSection onActed={acted} />}
       </Beside>
     </Screen>
+  );
+}
+
+function GuestBoardSection({ onSaved }: { onSaved: () => void }) {
+  const settings = useLoaded(readBoardSettings);
+  const { busy, failure, run } = useAttempt();
+  const save = (guests: boolean) =>
+    void run(async () => {
+      const saved = await setBoardGuests(guests);
+      if (!saved.ok) return describeFailure(saved);
+      settings.reload();
+      onSaved();
+      return null;
+    });
+  return (
+    <Section title="게시판">
+      {settings.loading}
+      {settings.failure}
+      {settings.data && (
+        <SettingGroup label="게시판">
+          <SettingRow
+            label="손님 글쓰기"
+            help="끄면 손님은 글을 읽기만 할 수 있어요."
+            control={<Switch label="손님 글쓰기" checked={settings.data.guests} disabled={busy} onChange={save} />}
+          />
+        </SettingGroup>
+      )}
+      {failure && <Callout tone="warn" alert>{failure}</Callout>}
+    </Section>
   );
 }

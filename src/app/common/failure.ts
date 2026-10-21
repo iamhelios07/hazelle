@@ -72,6 +72,8 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'no-nickname': '게시판에 쓰려면 먼저 닉네임을 정해야 해요.',
   'post-locked': '운영자가 댓글을 닫은 글이에요.',
   'reply-closed': '답글은 글쓴이와 운영자만 서로 달 수 있어요.',
+  'guest-board-blocked': '운영자가 글쓰기를 막았어요.',
+  'guest-board-closed': '지금은 손님 글쓰기가 닫혀 있어요. 계정을 만들면 쓸 수 있어요.',
   'too-many-posts': `글은 하루에 ${count(POSTS_PER_DAY)}개까지 쓸 수 있어요.`,
   'too-many-comments': `댓글은 하루에 ${count(COMMENTS_PER_DAY)}개까지 쓸 수 있어요.`,
   'too-many-visits': '요청을 너무 자주 보냈어요. 잠시 뒤에 다시 시도해 주세요.',

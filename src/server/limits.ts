@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto';
+import { COMMENTS_PER_DAY, GUEST_ADDRESS_CAP_MULTIPLIER, POSTS_PER_DAY } from '../contracts/board';
 
 // A token bucket per key, in process: calls (240 a minute per account), bot calls (20 a minute per account:chat) and
 // visitors (visitorLimits). The caller picks the key.
@@ -206,3 +207,11 @@ export const visitorLimits = () => ({
   reads: tokenBucket(120), files: tokenBucket(1200), reports: tokenBucket(6), signups: tokenBucket(10, 60 * 60_000),
   logins: tokenBucket(30, 60_000, () => performance.now(), LOGIN_VISITORS), proofs: proofBackoff(),
 });
+
+// Count the rows themselves, not parallel counters. A browser has the account cap; shared addresses have more room.
+export function boardDailyLimit(table: 'posts' | 'comments', identity: { account: string } | { secret: string; address: string }, now: string) {
+  const cap = table === 'posts' ? POSTS_PER_DAY : COMMENTS_PER_DAY;
+  const under = (column: string, key: string, multiple = 1) => `(SELECT COUNT(*) FROM ${table} WHERE ${column} = ${key} AND created_at > ${now} - 86400000) < ${cap * multiple}`;
+  return 'account' in identity ? under('account_id', identity.account)
+    : `(${under('guest_secret_hash', identity.secret)} AND ${under('guest_address_hash', identity.address, GUEST_ADDRESS_CAP_MULTIPLIER)})`;
+}

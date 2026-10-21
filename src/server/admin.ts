@@ -1,3 +1,4 @@
+import type { BoardSettings } from '../contracts/board';
 import type { PulseSettings } from '../contracts/pulse';
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
@@ -21,11 +22,13 @@ const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
 // Also the rows of cut links whose reports were resolved or forgotten since (shares.ts forgetCut).
 export async function forgetOldRecords(db: Db): Promise<void> {
-  const before = Date.now() - KEEP_MS;
+  const now = Date.now();
+  const before = now - KEEP_MS;
   await db.batch([
     db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before),
     db.prepare("DELETE FROM posts WHERE visibility = 'operator' AND status IN ('seen', 'done', 'declined') AND status_at < ?").bind(before),
     db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before),
+    db.prepare('DELETE FROM board_guest_address_blocks WHERE until <= ?').bind(now),
     ...forgetCut(db, 'TRUE'),
   ]);
 }
@@ -300,6 +303,18 @@ admin.post('/restores/:id/:action{resume|finalize|cancel}', async (c) => {
   const id = Number(c.req.param('id'));
   if (!positive(id)) return fail(c, 400, 'bad-input');
   return answerAction(c, id, c.req.param('action') as RestoreAction);
+});
+
+admin.get('/board', async (c) => c.json({ guests: (await c.env.db.prepare('SELECT board_guests FROM service').first<number>('board_guests')) === 1 } satisfies BoardSettings));
+
+admin.put('/board', async (c) => {
+  const body = await readObject(c);
+  if (typeof body?.guests !== 'boolean') return fail(c, 400, 'bad-input');
+  await c.env.db.batch([
+    c.env.db.prepare('UPDATE service SET board_guests = ?').bind(Number(body.guests)),
+    c.env.db.prepare("INSERT INTO admin_log (at, action, target, detail) VALUES (?, 'set-board', 'service', ?)").bind(Date.now(), JSON.stringify({ guests: body.guests })),
+  ]);
+  return c.body(null, 204);
 });
 
 admin.get('/pulse', async (c) => c.json({ guests: (await c.env.db.prepare('SELECT pulse_guests FROM service').first<number>('pulse_guests')) === 1 } satisfies PulseSettings));

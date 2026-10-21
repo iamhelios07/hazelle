@@ -6,9 +6,9 @@ import { forgetGuestVault, recallGuest, rememberVault } from '../vault/device';
 import type { VaultKey } from '../vault/keys';
 import { objectKey, openObject, sealObject } from '../vault/objects';
 import { feedQuery, serverBackend, type Backend } from './backend';
-import type { ApiFailure, ApiResult } from './api';
+import { api, type ApiFailure, type ApiResult } from './api';
 import { deviceCache } from './device-cache';
-import { clearGuestStore, guestBackend } from './guest-store';
+import { clearGuestStore, guestBackend, guestBoardSecret } from './guest-store';
 import { SEEDED } from './backup-core';
 import { toolAssetId, toolChatId, toolDataId } from './tools/store';
 
@@ -38,6 +38,9 @@ async function inventory(backend: Backend, signal?: AbortSignal): Promise<ApiRes
 export async function guestWithContent(): Promise<ApiResult<Guest | null>> {
   const guest = await recallGuest();
   if (!guest) return { ok: true, data: null };
+  const secret = await guestBoardSecret(guest.accountId);
+  if (!secret.ok) return secret;
+  if (secret.data) return { ok: true, data: guest };
   const held = await inventory(guestBackend(guest.accountId));
   if (!held.ok) return held;
   // The first open's defaults alone are not asked about, or every sign-in from a browser that once showed the guest home
@@ -179,6 +182,12 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
   if (signal?.aborted) return failed('stopped');
   const confirmed = await target.feed(feedQuery({ since: known, timeline: destination.data.timeline, metadata: true }), signal);
   if (!confirmed.ok) return confirmed;
+  const secret = await guestBoardSecret(guest.accountId);
+  if (!secret.ok) return secret;
+  if (secret.data) {
+    const moved = await api<undefined>('POST', 'board/claim', { secret: secret.data }, signal);
+    if (!moved.ok) return moved;
+  }
   // No cached timeline or guest-era row may stand in front of the account's first pull.
   if (conversion) await deviceCache(accountId).forget();
   const cleared = await clearGuestStore(guest.accountId, { ...held.data, files: pictures });

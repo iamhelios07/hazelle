@@ -1,10 +1,11 @@
+import { createHmac } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { MAX_REPORT_LENGTH } from '../contracts/admin';
 import {
   CATEGORIES,
-  COMMENTS_PER_DAY,
   HOLD_DAYS_MAX,
+  GUEST_BOARD_HEADER,
   MAX_COMMENT_LENGTH,
   MAX_DIAGNOSTICS_LENGTH,
   MAX_POST_LENGTH,
@@ -12,7 +13,6 @@ import {
   MAX_TITLE_LENGTH,
   nicknameKey,
   OPERATOR_NAME,
-  POSTS_PER_DAY,
   SORTS,
   STATUSES,
   validNickname,
@@ -26,27 +26,43 @@ import {
 import { ACCOUNT_HEADER, VISITOR_HEADER } from '../contracts/http';
 import { act, limitOf, MAX_OPEN_REPORTS, positive } from './admin';
 import type { SqlValue } from './db/service-db';
-import { DAY_MS, fail, readObject, type Account, type AppEnv } from './http';
+import { DAY_MS, fail, readObject, sha256Hex, type Account, type AppEnv } from './http';
+import { boardDailyLimit } from './limits';
 import { requireSession } from './session';
 import { activity, hidden, OPERATOR, tellUnread } from './unread';
 
-// 게시판 (design §6.13). Every statement binds the asking account as ?1. Every route needs a session but the two reads,
-// which a guest's page (design §6.14) may ask: one that states no account (runtime/api), whatever cookie it carries,
-// reads as a visitor; a page stating one goes through the session.
-const OPEN_READS = /^\/api\/board\/posts(\/[^/]+)?$/;
+// A page stating an account always goes through its session, whatever guest secret it carries. Guests may only
+// read posts and use the author routes: 추천, 신고, nicknames and activity remain account-only.
+const GUEST_ROUTES = /^\/api\/board\/(posts(\/[^/]+(\/comments)?)?|comments\/[^/]+)$/;
 export const board = new Hono<AppEnv>().use(async (c, next) => {
-  if (c.req.method !== 'GET' || !OPEN_READS.test(c.req.path) || c.req.header(ACCOUNT_HEADER) !== undefined) return requireSession(c, next);
-  return c.env.limits.visitors.reads.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success ? next() : fail(c, 429, 'too-many-visits');
+  if (!GUEST_ROUTES.test(c.req.path) || c.req.header(ACCOUNT_HEADER) !== undefined) return requireSession(c, next);
+  if (!c.env.limits.visitors.reads.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success) return fail(c, 429, 'too-many-visits');
+  if (c.req.method !== 'GET') {
+    const secret = guestSecret(c);
+    if (!secret) return fail(c, 401, 'no-session');
+    const settings = await c.env.db.prepare('SELECT board_guests, board_guest_key FROM service').first<{ board_guests: number; board_guest_key: string }>();
+    if (!settings!.board_guests) return fail(c, 403, 'guest-board-closed');
+    const address = c.req.header(VISITOR_HEADER) ?? 'direct';
+    const addressHash = createHmac('sha256', settings!.board_guest_key).update(address).digest('hex');
+    if (await c.env.db.prepare('SELECT 1 FROM board_guest_blocks WHERE secret_hash = ?1 UNION ALL SELECT 1 FROM board_guest_address_blocks WHERE address_hash = ?2 AND until > ?3 LIMIT 1').bind(sha256Hex(secret), addressHash, Date.now()).first()) return fail(c, 403, 'guest-board-blocked');
+    c.set('boardGuest', { addressHash });
+  }
+  return next();
 });
 
-// A guest reads as an account no one has: '' matches no account id, where NULL would make every post and comment of
-// an author who left its own (AUTHOR's IS).
+// A guest's hash and an account's UUID inhabit disjoint namespaces; '' matches neither, including departed authors.
 type Reader = Pick<Account, 'id' | 'admin' | 'suspended'>;
-const VISITOR: Reader = { id: '', admin: false, suspended: false };
-const readerOf = (c: Context<AppEnv>): Reader => {
-  const account: Account | undefined = c.get('account');
-  return account ?? VISITOR;
+const GUEST_SECRET = /^[0-9a-f]{64}$/;
+const guestSecret = (c: Context<AppEnv>) => {
+  const secret = c.req.header(GUEST_BOARD_HEADER);
+  return secret && GUEST_SECRET.test(secret) ? secret : null;
 };
+const readerOf = (c: Context<AppEnv>): Reader & { guest: boolean } => {
+  const account: Account | undefined = c.get('account');
+  const secret = guestSecret(c);
+  return account ? { ...account, guest: false } : { id: secret ? sha256Hex(secret) : '', admin: false, suspended: false, guest: true };
+};
+const owns = (alias: string, identity = '?1') => `(${alias}.account_id = ${identity} OR (${alias}.account_id IS NULL AND ${alias}.guest_secret_hash = ${identity}))`;
 
 const MAX_VERSION_LENGTH = 40;
 const ROW_ID = /^[1-9]\d{0,15}$/;
@@ -58,15 +74,17 @@ const idOf = (c: Context<AppEnv>) => (ROW_ID.test(c.req.param('id') ?? '') ? Num
 // operator-only ones; anyone else the public ones not hidden, and its own.
 function readable(account: Reader) {
   if (account.admin) return 'TRUE';
-  if (account.suspended) return "(p.account_id = ?1 AND p.visibility = 'operator')";
-  return `(p.account_id = ?1 OR (p.visibility = 'public' AND NOT ${hidden('p')}))`;
+  if (account.suspended) return `(${owns('p')} AND p.visibility = 'operator')`;
+  return `(${owns('p')} OR (p.visibility = 'public' AND NOT ${hidden('p')}))`;
 }
-const commentShown = (account: Reader) => (account.admin ? 'TRUE' : `(c.account_id = ?1 OR NOT ${hidden('c')})`);
+const commentShown = (account: Reader) => (account.admin ? 'TRUE' : `(${owns('c')} OR NOT ${hidden('c')})`);
 
+const GUEST_NAME = (hash: string) => `'손님#' || substr(${hash}, 1, 4)`;
 const AUTHOR = (a: string) =>
-  `${a}.account_id IS ?1 AS mine, ${a}.account_id = ${OPERATOR} AS byOperator, ${a}.account_id IS NULL AS gone, (SELECT name FROM board_names WHERE account_id = ${a}.account_id) AS name`;
-type AuthorSql = { mine: number; byOperator: number | null; gone: number; name: string | null };
-const author = (row: AuthorSql): Author => ({ name: row.byOperator ? OPERATOR_NAME : row.name, operator: Boolean(row.byOperator), mine: Boolean(row.mine), left: Boolean(row.gone) });
+  `${owns(a)} AS mine, ${a}.account_id = ${OPERATOR} AS byOperator, (${a}.account_id IS NULL AND ${a}.guest_secret_hash IS NULL) AS gone,
+   ${a}.guest_secret_hash IS NOT NULL AS guest, CASE WHEN ${a}.guest_secret_hash IS NOT NULL THEN ${GUEST_NAME(`${a}.guest_secret_hash`)} ELSE (SELECT name FROM board_names WHERE account_id = ${a}.account_id) END AS name`;
+type AuthorSql = { mine: number | null; byOperator: number | null; gone: number; name: string | null; guest: number };
+const author = (row: AuthorSql): Author => ({ name: row.byOperator ? OPERATOR_NAME : row.name, operator: Boolean(row.byOperator), mine: Boolean(row.mine), left: Boolean(row.gone), ...(row.guest ? { guest: true } : {}) });
 
 type HiddenSql = { hiddenReason: string | null; hiddenUntil: number | null; hiddenNow: number };
 const HIDDEN = (a: string) => `${a}.hidden_reason AS hiddenReason, ${a}.hidden_until AS hiddenUntil, ${hidden(a)} AS hiddenNow`;
@@ -81,20 +99,20 @@ const POST_COLUMNS = (account: Reader) => `p.id, p.title, substr(p.text, 1, ${EX
   EXISTS (SELECT 1 FROM post_votes v WHERE v.post_id = p.id AND v.account_id = ?1) AS voted,
   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted = 0 AND ${commentShown(account)}) AS commentCount`;
 type PostSql = Omit<PostRow, 'author' | 'voted' | 'locked' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { voted: number; locked: number; deleted: number };
-const postRow = ({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, voted, locked, deleted, ...row }: PostSql, account: Reader): PostRow => ({
+const postRow = ({ mine, byOperator, gone, name, guest, hiddenReason, hiddenUntil, hiddenNow, voted, locked, deleted, ...row }: PostSql, account: Reader): PostRow => ({
   ...row,
-  author: author({ mine, byOperator, gone, name }),
+  author: author({ mine, byOperator, gone, name, guest }),
   voted: Boolean(voted),
   locked: Boolean(locked),
   hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, account.admin || Boolean(mine)),
   deleted: Boolean(deleted),
 });
 
-const COMMENT_COLUMNS = `c.id, c.post_id AS postId, c.parent_id AS parentId, c.text, c.created_at AS createdAt, c.edited_at AS editedAt, c.deleted, ${HIDDEN('c')}, ${AUTHOR('c')}`;
-type CommentSql = Omit<Comment, 'author' | 'hidden' | 'deleted'> & AuthorSql & HiddenSql & { deleted: number };
-function comment({ mine, byOperator, gone, name, hiddenReason, hiddenUntil, hiddenNow, deleted, text, ...row }: CommentSql, account: Reader): Comment {
+const COMMENT_COLUMNS = `c.id, c.post_id AS postId, c.parent_id AS parentId, EXISTS (SELECT 1 FROM posts p WHERE p.id = c.post_id AND ((c.account_id IS NOT NULL AND c.account_id = p.account_id) OR (c.guest_secret_hash IS NOT NULL AND c.guest_secret_hash = p.guest_secret_hash))) AS byAuthor, c.text, c.created_at AS createdAt, c.edited_at AS editedAt, c.deleted, ${HIDDEN('c')}, ${AUTHOR('c')}`;
+type CommentSql = Omit<Comment, 'author' | 'hidden' | 'deleted' | 'byAuthor'> & AuthorSql & HiddenSql & { deleted: number; byAuthor: number };
+function comment({ mine, byOperator, gone, name, guest, hiddenReason, hiddenUntil, hiddenNow, deleted, text, byAuthor, ...row }: CommentSql, account: Reader): Comment {
   const sees = account.admin || Boolean(mine);
-  return { ...row, author: author({ mine, byOperator, gone, name }), text: deleted || (hiddenNow && !sees) ? null : text, hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, sees), deleted: Boolean(deleted) };
+  return { ...row, byAuthor: Boolean(byAuthor), author: author({ mine, byOperator, gone, name, guest }), text: deleted || (hiddenNow && !sees) ? null : text, hidden: hiddenOf({ hiddenReason, hiddenUntil, hiddenNow }, sees), deleted: Boolean(deleted) };
 }
 
 const hasNickname = async (c: Context<AppEnv>) => (await c.env.db.prepare('SELECT 1 AS named FROM board_names WHERE account_id = ?').bind(c.get('account').id).first()) !== null;
@@ -143,7 +161,7 @@ board.get('/posts', async (c) => {
   }
   const values: SqlValue[] = [account.id];
   const bind = (value: SqlValue) => `?${values.push(value)}`;
-  const where = [readable(account), mine ? 'p.account_id = ?1' : `p.visibility = ${bind(visibility)}`];
+  const where = [readable(account), mine ? owns('p') : `p.visibility = ${bind(visibility)}`];
   if (category !== undefined) where.push(`p.category = ${bind(category)}`);
   else if (!mine) where.push("p.category != 'news'");
   if (status !== undefined) where.push(`p.status = ${bind(status)}`);
@@ -186,7 +204,7 @@ board.get('/posts/:id', async (c) => {
 });
 
 // 소식 is the operator's alone.
-function readEdit(body: Record<string, unknown> | null, account: Account) {
+function readEdit(body: Record<string, unknown> | null, account: Reader) {
   const title = typeof body?.title === 'string' ? body.title.trim() : '';
   const text = body?.text;
   const category = body?.category;
@@ -197,7 +215,7 @@ function readEdit(body: Record<string, unknown> | null, account: Account) {
 
 // A suspended account writes only operator-only posts, since that is how it asks for its own deletion.
 board.post('/posts', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const body = await readObject(c);
   const edit = readEdit(body, account);
   const visibility = body?.visibility;
@@ -205,29 +223,30 @@ board.post('/posts', async (c) => {
   const diagnosed = diagnostics === null || (visibility === 'operator' && typeof diagnostics === 'string' && diagnostics.length <= MAX_DIAGNOSTICS_LENGTH);
   if (!edit || !oneOf(['public', 'operator'], visibility) || !diagnosed || (edit.category === 'news' && visibility !== 'public')) return fail(c, 400, 'bad-input');
   if (account.suspended && visibility !== 'operator') return fail(c, 403, 'suspended');
-  if (!account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
+  if (!account.guest && !account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
   // Never before its account was created, even if the wall clock went back: a restore's anchor reads that bound (lifecycle.ts).
   const id = await c.env.db
     .prepare(
-      `INSERT INTO posts (account_id, title, text, category, visibility, diagnostics, created_at)
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6, MAX(?7, created_at) FROM accounts
-       WHERE id = ?1 AND (?8 OR (SELECT COUNT(*) FROM posts WHERE account_id = ?1 AND created_at > ?7 - ${DAY_MS}) < ${POSTS_PER_DAY}) RETURNING id`,
+      `INSERT INTO posts (account_id, title, text, category, visibility, diagnostics, created_at, guest_secret_hash, guest_address_hash)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, MAX(?7, COALESCE((SELECT created_at FROM accounts WHERE id = ?1), ?7)), ?9, ?10
+       WHERE (?8 OR ${boardDailyLimit('posts', account.guest ? { secret: '?9', address: '?10' } : { account: '?1' }, '?7')}) RETURNING id`,
     )
-    .bind(account.id, edit.title, edit.text, edit.category, visibility, diagnostics, Date.now(), account.admin ? 1 : 0)
+    .bind(account.guest ? null : account.id, edit.title, edit.text, edit.category, visibility, diagnostics, Date.now(), account.admin ? 1 : 0,
+      account.guest ? account.id : null, c.get('boardGuest')?.addressHash ?? null)
     .first<number>('id');
   return id === null ? fail(c, 429, 'too-many-posts') : c.json({ id });
 });
 
 // The author's alone: the operator hides or deletes another's post, never rewrites it.
 board.put('/posts/:id', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const id = idOf(c);
   const edit = readEdit(await readObject(c), account);
   if (id === null || !edit) return fail(c, 400, 'bad-input');
   const edited = await c.env.db
     .prepare(
       `UPDATE posts AS p SET title = ?3, text = ?4, category = ?5, edited_at = ?6
-       WHERE p.id = ?2 AND p.account_id = ?1 AND p.deleted = 0 AND (?5 != 'news' OR p.visibility = 'public') AND ${readable(account)} RETURNING id`,
+       WHERE p.id = ?2 AND ${owns('p')} AND p.deleted = 0 AND (?5 != 'news' OR p.visibility = 'public') AND ${readable(account)} RETURNING id`,
     )
     .bind(account.id, id, edit.title, edit.text, edit.category, Date.now())
     .first();
@@ -236,11 +255,11 @@ board.put('/posts/:id', async (c) => {
 
 // The author's or the operator's. With comments it stays as a placeholder over them; without, it goes with its votes.
 board.delete('/posts/:id', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const id = idOf(c);
   if (id === null) return fail(c, 400, 'bad-input');
   const db = c.env.db;
-  const own = `p.id = ?2 AND p.deleted = 0 AND (?3 OR p.account_id = ?1) AND ${readable(account)}`;
+  const own = `p.id = ?2 AND p.deleted = 0 AND (?3 OR ${owns('p')}) AND ${readable(account)}`;
   const bound = [account.id, id, account.admin ? 1 : 0];
   const done = await db.batch([
     ...(account.admin ? [db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'post-delete', id, json_object('title', title) FROM posts WHERE id = ?1 AND deleted = 0`).bind(id, Date.now())] : []),
@@ -275,19 +294,19 @@ const commentText = (value: unknown) => (typeof value === 'string' && value.trim
 // operator talking, never users among themselves: its top comment is by one of them, and so is every 답글. The operator still
 // comments on a locked post, and on an operator-only post that comment is its reply.
 board.post('/posts/:id/comments', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const id = idOf(c);
   const body = await readObject(c);
   const text = commentText(body?.text);
   const parentId = body?.parentId;
   if (id === null || text === null || !(parentId === null || positive(parentId))) return fail(c, 400, 'bad-input');
-  if (!account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
+  if (!account.guest && !account.admin && !(await hasNickname(c))) return fail(c, 403, 'no-nickname');
   const db = c.env.db;
-  const post = await db.prepare(`SELECT p.locked, p.account_id AS author FROM posts p WHERE p.id = ?2 AND p.deleted = 0 AND ${readable(account)}`).bind(account.id, id).first<{ locked: number; author: string | null }>();
+  const post = await db.prepare(`SELECT p.locked, COALESCE(p.account_id, p.guest_secret_hash) AS author FROM posts p WHERE p.id = ?2 AND p.deleted = 0 AND ${readable(account)}`).bind(account.id, id).first<{ locked: number; author: string | null }>();
   if (!post) return fail(c, 404, 'not-found');
   if (post.locked && !account.admin) return fail(c, 409, 'post-locked');
   const thread = parentId === null ? null : await db
-    .prepare(`SELECT t.id AS top, t.account_id = ${OPERATOR} AS byOperator, t.account_id AS by FROM comments c JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) WHERE c.id = ? AND c.post_id = ?`)
+    .prepare(`SELECT t.id AS top, t.account_id = ${OPERATOR} AS byOperator, COALESCE(t.account_id, t.guest_secret_hash) AS by FROM comments c JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) WHERE c.id = ? AND c.post_id = ?`)
     .bind(parentId, id)
     .first<{ top: number; byOperator: number | null; by: string | null }>();
   if (parentId !== null && thread === null) return fail(c, 400, 'bad-input');
@@ -296,10 +315,11 @@ board.post('/posts/:id/comments', async (c) => {
   const parent = thread?.top ?? null;
   const added = await db
     .prepare(
-      `INSERT INTO comments (post_id, parent_id, account_id, text, created_at) SELECT ?2, ?3, ?1, ?4, ?5
-       WHERE (?6 OR (SELECT COUNT(*) FROM comments WHERE account_id = ?1 AND created_at > ?5 - ${DAY_MS}) < ${COMMENTS_PER_DAY}) RETURNING id`,
+      `INSERT INTO comments (post_id, parent_id, account_id, text, created_at, guest_secret_hash, guest_address_hash) SELECT ?2, ?3, ?1, ?4, ?5, ?7, ?8
+       WHERE (?6 OR ${boardDailyLimit('comments', account.guest ? { secret: '?7', address: '?8' } : { account: '?1' }, '?5')}) RETURNING id`,
     )
-    .bind(account.id, id, parent, text, Date.now(), account.admin ? 1 : 0)
+    .bind(account.guest ? null : account.id, id, parent, text, Date.now(), account.admin ? 1 : 0,
+      account.guest ? account.id : null, c.get('boardGuest')?.addressHash ?? null)
     .first<number>('id');
   if (added === null) return fail(c, 429, 'too-many-comments');
   const row = await db.prepare(`SELECT ${COMMENT_COLUMNS} FROM comments c WHERE c.id = ?2`).bind(account.id, added).first<CommentSql>();
@@ -307,12 +327,12 @@ board.post('/posts/:id/comments', async (c) => {
 });
 
 board.put('/comments/:id', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const id = idOf(c);
   const text = commentText((await readObject(c))?.text);
   if (id === null || text === null) return fail(c, 400, 'bad-input');
   const edited = await c.env.db
-    .prepare(`UPDATE comments AS c SET text = ?3, edited_at = ?4 WHERE c.id = ?2 AND c.account_id = ?1 AND c.deleted = 0
+    .prepare(`UPDATE comments AS c SET text = ?3, edited_at = ?4 WHERE c.id = ?2 AND ${owns('c')} AND c.deleted = 0
       AND EXISTS (SELECT 1 FROM posts p WHERE p.id = c.post_id AND ${readable(account)}) RETURNING id`)
     .bind(account.id, id, text, Date.now())
     .first();
@@ -322,7 +342,7 @@ board.put('/comments/:id', async (c) => {
 // The author's or the operator's. With 답글 it stays as a placeholder over them; a placeholder, of a comment or of its
 // post, goes once nothing is left under it.
 board.delete('/comments/:id', async (c) => {
-  const account = c.get('account');
+  const account = readerOf(c);
   const id = idOf(c);
   if (id === null) return fail(c, 400, 'bad-input');
   const db = c.env.db;
@@ -334,8 +354,8 @@ board.delete('/comments/:id', async (c) => {
   const own = [id, account.admin ? 1 : 0, account.id];
   const done = await db.batch([
     ...(account.admin ? [db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'comment-delete', id, json_object('post', post_id) FROM comments WHERE id = ?1 AND deleted = 0`).bind(id, Date.now())] : []),
-    db.prepare('UPDATE comments AS c SET text = NULL, deleted = 1 WHERE c.id = ?1 AND c.deleted = 0 AND (?2 OR c.account_id = ?3) AND EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id) RETURNING id').bind(...own),
-    db.prepare('DELETE FROM comments AS c WHERE c.id = ?1 AND c.deleted = 0 AND (?2 OR c.account_id = ?3) AND NOT EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id) RETURNING id').bind(...own),
+    db.prepare(`UPDATE comments AS c SET text = NULL, deleted = 1 WHERE c.id = ?1 AND c.deleted = 0 AND (?2 OR ${owns('c', '?3')}) AND EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id) RETURNING id`).bind(...own),
+    db.prepare(`DELETE FROM comments AS c WHERE c.id = ?1 AND c.deleted = 0 AND (?2 OR ${owns('c', '?3')}) AND NOT EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id) RETURNING id`).bind(...own),
     db.prepare('DELETE FROM comments AS c WHERE c.post_id = ? AND c.deleted = 1 AND NOT EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id)').bind(post),
     db.prepare('DELETE FROM posts AS p WHERE p.id = ? AND p.deleted = 1 AND NOT EXISTS (SELECT 1 FROM comments WHERE post_id = p.id)').bind(post),
   ]);
@@ -343,7 +363,7 @@ board.delete('/comments/:id', async (c) => {
 });
 
 // 신고, into the operator's inbox beside share reports (admin.ts): one open report per reporter and target.
-async function report(c: Context<AppEnv>, target: (account: Account) => string) {
+async function report(c: Context<AppEnv>, target: (account: Reader) => string) {
   const account = c.get('account');
   const id = idOf(c);
   const text = (await readObject(c))?.text;
@@ -378,14 +398,16 @@ board.get('/activity', async (c) => {
   if (limit === null || (after !== undefined && cursor === null)) return fail(c, 400, 'bad-input');
   const { results } = await c.env.db
     .prepare(
-      `SELECT a.id, a.kind, a.postId, a.title, a.at, a.commentId, a.status, a.byId = ${OPERATOR} AS byOperator, a.byId IS NULL AS gone, (SELECT name FROM board_names WHERE account_id = a.byId) AS name FROM (${activity('?1')}) a
+      `SELECT a.id, a.kind, a.postId, a.title, a.at, a.commentId, a.status, a.byId = ${OPERATOR} AS byOperator, (a.byId IS NULL AND NOT EXISTS (SELECT 1 FROM comments WHERE id = a.commentId AND guest_secret_hash IS NOT NULL)) AS gone,
+       EXISTS (SELECT 1 FROM comments WHERE id = a.commentId AND guest_secret_hash IS NOT NULL) AS guest,
+       CASE WHEN a.byId IS NULL THEN (SELECT ${GUEST_NAME('guest_secret_hash')} FROM comments WHERE id = a.commentId) ELSE (SELECT name FROM board_names WHERE account_id = a.byId) END AS name FROM (${activity('?1')}) a
        WHERE ?2 IS NULL OR (a.at, a.id) < (?2, ?3) ORDER BY a.at DESC, a.id DESC LIMIT ?4`,
     )
     .bind(account.id, cursor ? Number(cursor[1]) : null, cursor ? Number(cursor[2]) : null, limit)
-    .all<Omit<Activity, 'by'> & { byOperator: number | null; gone: number; name: string | null }>();
+    .all<Omit<Activity, 'by'> & { byOperator: number | null; gone: number; name: string | null; guest: number }>();
   const last = results.length === limit ? results.at(-1)! : null;
   return c.json({
-    activity: results.map(({ byOperator, gone, name, ...row }): Activity => ({ ...row, by: author({ mine: 0, byOperator, gone, name }) })),
+    activity: results.map(({ byOperator, gone, name, guest, ...row }): Activity => ({ ...row, by: author({ mine: 0, byOperator, gone, name, guest }) })),
     next: last && `${last.at}:${last.id}`,
   });
 });
@@ -474,3 +496,27 @@ board.put('/posts/:id/locked', operator, async (c) => {
     db.prepare('UPDATE posts SET locked = ?2 WHERE id = ?1 RETURNING id').bind(id, locked ? 1 : 0),
   );
 });
+
+// Retrying a cut-off conversion is harmless: claimed rows no longer carry the guest hash.
+board.post('/claim', async (c) => {
+  const secret = (await readObject(c))?.secret;
+  if (typeof secret !== 'string' || !GUEST_SECRET.test(secret)) return fail(c, 400, 'bad-input');
+  await c.env.db.batch(['posts', 'comments'].map((table) => c.env.db.prepare(
+    `UPDATE ${table} SET account_id = ?1, guest_secret_hash = NULL, guest_address_hash = NULL WHERE guest_secret_hash = ?2`,
+  ).bind(c.get('account').id, sha256Hex(secret))));
+  return c.body(null, 204);
+});
+
+const blockGuest = (table: 'posts' | 'comments') => async (c: Context<AppEnv>) => {
+  const id = idOf(c);
+  if (id === null) return fail(c, 400, 'bad-input');
+  const db = c.env.db;
+  const now = Date.now();
+  return act(c,
+    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, 'guest-block', id FROM ${table} WHERE id = ?1 AND guest_secret_hash IS NOT NULL`).bind(id, now),
+    db.prepare(`INSERT INTO board_guest_address_blocks (address_hash, until) SELECT guest_address_hash, ?2 FROM ${table} WHERE id = ?1 AND guest_address_hash IS NOT NULL ON CONFLICT (address_hash) DO UPDATE SET until = excluded.until`).bind(id, now + DAY_MS),
+    db.prepare(`INSERT INTO board_guest_blocks (secret_hash) SELECT guest_secret_hash FROM ${table} WHERE id = ? AND guest_secret_hash IS NOT NULL ON CONFLICT (secret_hash) DO UPDATE SET secret_hash = excluded.secret_hash RETURNING secret_hash`).bind(id),
+  );
+};
+board.put('/posts/:id/guest-block', operator, blockGuest('posts'));
+board.put('/comments/:id/guest-block', operator, blockGuest('comments'));

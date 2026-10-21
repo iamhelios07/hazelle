@@ -5,7 +5,7 @@ import { readNickname, setNickname } from '../../runtime/board';
 import { describeFailure } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
 import { BOARD } from '../common/words';
-import { useSession } from '../session';
+import { useAccount, useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, Dialog, TextField } from '../ui';
 
@@ -66,9 +66,11 @@ export function NicknameDialog({ current, onSet, onClose }: { current: string | 
 // Before the first 글쓰기, 댓글 or 추천: an account without a nickname picks one, then the act goes on.
 export function useNicknameGate() {
   const { username } = useSession();
+  const { guest } = useAccount();
   const toast = useToast();
   const [pending, setPending] = useState<(() => void) | null>(null);
   async function gate(then: () => void) {
+    if (guest) return then();
     if (known.has(username)) return then();
     const read = await readNickname();
     if (!read.ok) return toast.failed(read, '닉네임을 확인하지 못했어요.');

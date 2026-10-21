@@ -11,12 +11,9 @@ import { Button, NavBar, Row, Screen } from '../ui';
 import { NicknameDialog } from './nickname';
 import { PostList } from './parts';
 
-// What this account wrote, public and operator-only alike, under the nickname it writes as.
+// What this account or guest wrote, public and operator-only alike. Guests never ask for a nickname.
 export function MineScreen({ back }: { back: Back }) {
-  const { admin } = useAccount();
-  const nickname = useLoaded(readNickname);
-  const [changing, setChanging] = useState(false);
-  const name = nickname.data?.name;
+  const { guest } = useAccount();
   return (
     <Screen
       width="form"
@@ -32,6 +29,19 @@ export function MineScreen({ back }: { back: Back }) {
         />
       }
     >
+      {!guest && <MineNickname />}
+      <PostList ask={{ sort: 'new', mine: true }} label={BOARD.mine} empty="쓴 글이 없어요." />
+    </Screen>
+  );
+}
+
+function MineNickname() {
+  const { admin } = useAccount();
+  const nickname = useLoaded(readNickname);
+  const [changing, setChanging] = useState(false);
+  const name = nickname.data?.name;
+  return (
+    <>
       {nickname.failure}
       {nickname.data && (
         <Row kind="spread">
@@ -44,7 +54,6 @@ export function MineScreen({ back }: { back: Back }) {
           )}
         </Row>
       )}
-      <PostList ask={{ sort: 'new', mine: true }} label={BOARD.mine} empty="쓴 글이 없어요." />
       {changing && (
         <NicknameDialog
           current={name ?? null}
@@ -55,6 +64,6 @@ export function MineScreen({ back }: { back: Back }) {
           onClose={() => setChanging(false)}
         />
       )}
-    </Screen>
+    </>
   );
 }

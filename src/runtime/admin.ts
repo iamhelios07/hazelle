@@ -1,3 +1,4 @@
+import type { BoardSettings } from '../contracts/board';
 import type { BackupWarning, AccountState, VisitDay } from '../contracts/admin';
 import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 import { page } from './pages';
@@ -119,3 +120,6 @@ export const readShareVersions = (share: string) => api<{ versions: { version: n
 export const holdShare = (share: string) => api<undefined>('POST', `admin/shares/${share}/hold`);
 export const releaseShare = (share: string) => api<undefined>('POST', `admin/shares/${share}/release`);
 export const blockShare = (share: string, version: number, notice: string, suspend: boolean) => api<undefined>('POST', `admin/shares/${share}/block`, { version, notice, suspend });
+
+export const readBoardSettings = () => api<BoardSettings>('GET', 'admin/board');
+export const setBoardGuests = (guests: boolean) => api<undefined>('PUT', 'admin/board', { guests } satisfies BoardSettings);

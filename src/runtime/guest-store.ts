@@ -13,7 +13,7 @@ import { UNFED } from './object-cache';
 // budgets, the sweep's revision check), each call one IndexedDB transaction, so a second tab reads and writes the same
 // account as a second device would. No device cache stands in front of it.
 
-type Head = { rev: number; timeline: string };
+type Head = { rev: number; timeline: string; boardSecret?: string };
 // scope: '' for a kind the feed carries, its parent for one it omits (object-cache UNFED), so a bootstrap reads past
 // every message without opening it.
 type Row = { account: string; id: string; kind: string; parent: string | null; rev: number; body: string | null; scope: string };
@@ -43,6 +43,19 @@ export async function guestAccount(): Promise<{ accountId: string; vaultKey: Vau
     await rememberVault(accountId, vaultKey, true);
     await navigator.storage?.persist?.().catch(() => false);
     return { accountId, vaultKey };
+  });
+}
+
+// Kept beside the sealed objects, never in their feed or an account upload. A transaction makes all tabs share it.
+export async function guestBoardSecret(account: string, create = false): Promise<ApiResult<string | null>> {
+  return transact(['guest-heads'], 'readwrite', async (tx) => {
+    const head = await headOf(tx, account);
+    if (!head) return failure('browser-storage');
+    if (!head.boardSecret && create) {
+      head.boardSecret = Array.from(randomBytes(32), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      tx.objectStore('guest-heads').put(head, account);
+    }
+    return { ok: true, data: head.boardSecret ?? null };
   });
 }
 
@@ -90,7 +103,7 @@ export function guestBackend(account: string): Backend {
       if (!head) return failure('browser-storage');
       const range = IDBKeyRange.bound(after === null ? [account] : [account, after], [account, []], after !== null);
       const keys = await got<IDBValidKey[]>(tx.objectStore('guest-files').getAllKeys(range, MAX_FILE_IDS + 1));
-      return { ok: true, data: { ids: keys.slice(0, MAX_FILE_IDS).map((key) => (key as [string, string])[1]), more: keys.length > MAX_FILE_IDS, ...head } };
+      return { ok: true, data: { ids: keys.slice(0, MAX_FILE_IDS).map((key) => (key as [string, string])[1]), more: keys.length > MAX_FILE_IDS, rev: head.rev, timeline: head.timeline } };
     }),
     // Nothing is ever taken back: a file no longer here has no other copy to come from.
     sweepFiles: ({ timeline, rev, unused }) => transact(['guest-heads', 'guest-files'], 'readwrite', async (tx) => {

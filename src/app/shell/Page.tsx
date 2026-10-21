@@ -160,16 +160,13 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
       case 'post':
         return <PostScreen key={at.id} id={at.id} back={back(at)} />;
       case 'board-write':
-        if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <WriteScreen key={String(at.operator)} editing={null} operator={at.operator} back={back(at)} />;
       case 'board-edit':
-        if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <EditScreen key={at.id} id={at.id} back={back(at)} />;
       case 'board-activity':
         if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <ActivityScreen back={back(at)} />;
       case 'board-mine':
-        if (guest) return <Replace to={{ kind: 'board', operator: false }} />;
         return <MineScreen back={back(at)} />;
       case 'labs':
         return <LabsScreen back={sideBack(at)} />;

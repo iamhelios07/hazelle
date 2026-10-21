@@ -1,7 +1,7 @@
 import { Bell, FileText, Inbox, ListFilter, PenLine, Send } from 'lucide-react';
 import { useState } from 'react';
 import { CATEGORIES, STATUSES, type Category, type Sort, type Status } from '../../contracts/board';
-import { GuestLine, ReportElsewhere } from '../common/GuestNotice';
+import { GuestLine } from '../common/GuestNotice';
 import { AuthorLine } from '../common/postRow';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
@@ -18,8 +18,7 @@ const ALL = 'all';
 const SORTS: { value: Sort; label: string }[] = [{ value: 'new', label: '최신' }, { value: 'top', label: BOARD.vote }];
 
 // operator: the operator-only posts, the only ones a suspended account reads (design §6.13).
-// category: the tab open, held in the address so back and a reload return to it. A guest reads the public posts and
-// writes nothing (design §6.14).
+// category: the tab open, held in the address so back and a reload return to it. Guests write without a nickname.
 export function BoardScreen({ operator, category, back }: { operator: boolean; category: Category | null; back: Back | null }) {
   const { guest } = useAccount();
   const { unreadBoard, suspended } = useStanding();
@@ -40,11 +39,10 @@ export function BoardScreen({ operator, category, back }: { operator: boolean; c
           title={onlyOperator ? BOARD.operatorOnly : BOARD.title}
           {...backBar(back)}
           actions={
-            !guest && (
             <>
-              {!split && (
+              {(!split || guest) && (
                 <>
-                  <IconButton icon={Bell} label={BOARD.activity} size="sm" count={unreadBoard} onClick={() => navigate({ kind: 'board-activity' })} />
+                  {!guest && <IconButton icon={Bell} label={BOARD.activity} size="sm" count={unreadBoard} onClick={() => navigate({ kind: 'board-activity' })} />}
                   <Button variant="secondary" onClick={() => navigate({ kind: 'board-mine' })}>
                     {BOARD.mine}
                   </Button>
@@ -54,13 +52,11 @@ export function BoardScreen({ operator, category, back }: { operator: boolean; c
                 {BOARD.write}
               </Button>
             </>
-            )
           }
         />
       }
     >
-      <GuestLine note={`${BOARD.write}, ${BOARD.comment}, ${BOARD.vote}은 ${ACCOUNT_ONLY}.`} />
-      {guest && <ReportElsewhere />}
+      <GuestLine note={`${BOARD.vote}은 ${ACCOUNT_ONLY}.`} />
       <Row kind="spread">
         <Tabs
           label="분류"

@@ -37,7 +37,7 @@ export type Services = {
 };
 
 // label: the request's 헤이젤 나우 label (worker.ts).
-export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number; label?: PulseLabel } };
+export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number; label?: PulseLabel; boardGuest?: { addressHash: string } } };
 
 export function fail(c: Context, status: ContentfulStatusCode, error: ServerError, detail: Record<string, unknown> = {}) {
   return c.json({ error, ...detail }, status);
