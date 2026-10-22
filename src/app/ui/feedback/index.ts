@@ -1,6 +1,7 @@
 export { ActionCard } from './ActionCard';
 export { AskCard, type AskAnswer } from './AskCard';
 export { Callout } from './Callout';
+export { Cheer } from './Cheer';
 export { CodeBlock } from './CodeBlock';
 export { CodeCard } from './CodeCard';
 export { Empty } from './Empty';

@@ -5,13 +5,12 @@ import { describeTurnFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
 import { ACTS } from '../common/acts';
 import { ANSWER } from '../common/words';
-import { MARKS } from '../common/tutorial';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
 import { keysOf, SHORTCUTS, titled, typing, useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
 import { useRemembering } from '../session';
-import { Callout, Composer, GuideMark, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
+import { Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
 import { ChatComposerTools } from './ChatComposerTools';
@@ -107,48 +106,46 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         </Callout>
       )}
       <ChatAsk id={chat.id} onTyped={() => input.current?.focus()} />
-      <GuideMark name={MARKS.composer}>
-        <Composer
-          inputRef={input}
-          compact={folded}
-          value={draft.text}
-          onChange={draft.set}
-          onKeyDown={onKey}
-          placeholder={translate.input ? `${withParticle(sendLanguage, '으로/로')} 번역해서 보내요` : '메시지'}
-          tools={
-            <>
-              <ChatPersonaPicker persona={chat.persona} open={chat.dialog === 'persona'} onOpen={() => actions.openDialog('persona')} />
-              <ChatNote id={chat.id} note={chat.note} prompt={chat.prompt} onSave={actions.setNote} />
-              {chat.features.translate && <ChatTranslate
-                translate={translate}
-                translation={chat.translation}
-                card={chat.card}
-                note={shelf?.character.translatorNote}
-                onChange={actions.setTranslate}
-                onOwnChange={actions.setOwnTranslate}
-                onEditPrompt={editPrompt}
-                onEditCharacter={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: 'instructions' }) : undefined}
-              />}
-              {chat.features.illustrate && <ChatIllustrate id={chat.id} illustrate={chat.illustrate} note={chat.illustrateNote} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} onSaveNote={actions.setIllustrateNote} sceneWriter={chat.sceneWriter} onEditPrompt={editPrompt} />}
-              <ChatComposerTools tools={chat.composerTools} onOpen={actions.tool} />
-              <ChatPinnedToggles toggles={chat.toggles} onFlip={actions.flip} />
-            </>
-          }
-          actions={
-            <>
-              {!busy && chat.sendNotes.leaving ? <SendNote label={`메시지 ${chat.sendNotes.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
-              {indexing && <SendNote label={`기억 검색 준비 ${indexing.done}/${indexing.total}`} title="장기 기억 검색 준비" onClick={() => actions.memory(null)} />}
-              {!busy && <ChatCache cache={chat.sendNotes.cache} onOpen={() => chat.actions.openInspect('request')} />}
-              <SendButton
-                streaming={busy}
-                disabled={!busy && !typed && !answerable}
-                title={busy ? titled(SHORTCUTS.stop.label, SHORTCUTS.stop.keys) : titled(typed ? SHORTCUTS.send.label : ANSWER, sendKeys)}
-                onClick={() => (busy ? actions.stop() : void actions.send())}
-              />
-            </>
-          }
-        />
-      </GuideMark>
+      <Composer
+        inputRef={input}
+        compact={folded}
+        value={draft.text}
+        onChange={draft.set}
+        onKeyDown={onKey}
+        placeholder={translate.input ? `${withParticle(sendLanguage, '으로/로')} 번역해서 보내요` : '메시지'}
+        tools={
+          <>
+            <ChatPersonaPicker persona={chat.persona} open={chat.dialog === 'persona'} onOpen={() => actions.openDialog('persona')} />
+            <ChatNote id={chat.id} note={chat.note} prompt={chat.prompt} onSave={actions.setNote} />
+            {chat.features.translate && <ChatTranslate
+              translate={translate}
+              translation={chat.translation}
+              card={chat.card}
+              note={shelf?.character.translatorNote}
+              onChange={actions.setTranslate}
+              onOwnChange={actions.setOwnTranslate}
+              onEditPrompt={editPrompt}
+              onEditCharacter={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: 'instructions' }) : undefined}
+            />}
+            {chat.features.illustrate && <ChatIllustrate id={chat.id} illustrate={chat.illustrate} note={chat.illustrateNote} card={chat.card} onChange={actions.setIllustrate} onOwnChange={actions.setOwnIllustrate} onSaveNote={actions.setIllustrateNote} sceneWriter={chat.sceneWriter} onEditPrompt={editPrompt} />}
+            <ChatComposerTools tools={chat.composerTools} onOpen={actions.tool} />
+            <ChatPinnedToggles toggles={chat.toggles} onFlip={actions.flip} />
+          </>
+        }
+        actions={
+          <>
+            {!busy && chat.sendNotes.leaving ? <SendNote label={`메시지 ${chat.sendNotes.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
+            {indexing && <SendNote label={`기억 검색 준비 ${indexing.done}/${indexing.total}`} title="장기 기억 검색 준비" onClick={() => actions.memory(null)} />}
+            {!busy && <ChatCache cache={chat.sendNotes.cache} onOpen={() => chat.actions.openInspect('request')} />}
+            <SendButton
+              streaming={busy}
+              disabled={!busy && !typed && !answerable}
+              title={busy ? titled(SHORTCUTS.stop.label, SHORTCUTS.stop.keys) : titled(typed ? SHORTCUTS.send.label : ANSWER, sendKeys)}
+              onClick={() => (busy ? actions.stop() : void actions.send())}
+            />
+          </>
+        }
+      />
     </>
   );
 }

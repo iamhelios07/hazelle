@@ -1,0 +1,108 @@
+.cheer {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--cheer-height);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(circle closest-side, var(--color-accent-border), transparent);
+}
+
+.cheer > * {
+  grid-area: 1 / 1;
+}
+
+.badge {
+  composes: popIn from '../foundation/motion.module.css';
+  display: grid;
+  place-items: center;
+  width: var(--cheer-badge);
+  height: var(--cheer-badge);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-cheer);
+}
+
+.glyph {
+  width: var(--cheer-icon);
+  height: var(--cheer-icon);
+  stroke-width: var(--icon-stroke);
+}
+
+.ripple {
+  composes: ripple from '../foundation/motion.module.css';
+  width: var(--cheer-badge);
+  height: var(--cheer-badge);
+  border: var(--border-thick) solid var(--color-accent);
+  border-radius: var(--radius-full);
+}
+
+.later {
+  animation-delay: calc(var(--duration-ripple) / 2);
+}
+
+.piece {
+  composes: burst from '../foundation/motion.module.css';
+  width: var(--cheer-piece-width);
+  height: var(--cheer-piece-height);
+  border-radius: var(--radius-xs);
+  animation-delay: var(--duration-fast);
+}
+
+.round {
+  height: var(--cheer-piece-width);
+  border-radius: var(--radius-full);
+}
+
+.accent {
+  background: var(--color-accent);
+}
+
+.rose {
+  background: var(--color-pick-accent-rose);
+}
+
+.blue {
+  background: var(--color-pick-accent-blue);
+}
+
+.green {
+  background: var(--color-pick-accent-green);
+}
+
+.violet {
+  background: var(--color-pick-accent-violet);
+}
+
+.spark {
+  composes: twinkle from '../foundation/motion.module.css';
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-accent);
+  fill: currentColor;
+}
+
+.left {
+  translate: calc(var(--cheer-badge) * -1.1) calc(var(--cheer-badge) * -0.55);
+}
+
+.right {
+  translate: calc(var(--cheer-badge) * 1.15) calc(var(--cheer-badge) * -0.2);
+  animation-delay: calc(var(--duration-ripple) / 3);
+}
+
+.low {
+  translate: calc(var(--cheer-badge) * -0.7) calc(var(--cheer-badge) * 0.6);
+  width: var(--icon-tag);
+  height: var(--icon-tag);
+  animation-delay: calc(var(--duration-ripple) / 1.5);
+}
+
+/* Without motion the badge stands alone: thrown pieces and pulsing rings have no still form. */
+@media (prefers-reduced-motion: reduce) {
+  .ripple,
+  .piece,
+  .spark {
+    display: none;
+  }
+}

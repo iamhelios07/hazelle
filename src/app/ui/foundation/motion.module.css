@@ -48,6 +48,23 @@
   animation: sway var(--duration-sway) var(--ease-loop) infinite;
 }
 
+.popIn {
+  animation: pop var(--duration-pop) var(--ease-enter) both;
+}
+
+/* A piece flies out along its --turn, by its share of the reach, and is gone. */
+.burst {
+  animation: burst var(--duration-burst) var(--ease-enter) both;
+}
+
+.ripple {
+  animation: ripple var(--duration-ripple) var(--ease-enter) infinite;
+}
+
+.twinkle {
+  animation: twinkle var(--duration-ripple) var(--ease-loop) infinite;
+}
+
 @keyframes fade {
   from {
     opacity: 0;
@@ -131,6 +148,60 @@
 
   80% {
     transform: translateX(2px);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes burst {
+  from {
+    opacity: 1;
+    transform: rotate(calc(var(--turn) * 1turn)) translateY(0) scale(0.3);
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: rotate(calc(var(--turn) * 1turn)) translateY(calc(var(--reach) * var(--cheer-reach) * -1)) rotate(calc(var(--turn) * 3turn)) scale(1);
+  }
+}
+
+@keyframes ripple {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+
+  70%,
+  to {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

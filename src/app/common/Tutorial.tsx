@@ -1,14 +1,14 @@
-import { GraduationCap } from 'lucide-react';
+import { Check, GraduationCap, PartyPopper } from 'lucide-react';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useConnections, useReplied } from '../session';
 import { navigate, useRoute } from '../shell/router';
-import { Button, Coach, Dialog, guideShown, List, ListItem, Row, Text, useGuideTarget } from '../ui';
+import { Button, Cheer, Coach, Dialog, guideShown, Intro, List, ListItem, Row, Stack, Tag, Text, useGuideTarget } from '../ui';
 import { stepAt, TUTORIALS, type Facts, type Tutorial } from './tutorial';
 import { usePersisted } from './usePersisted';
 
 export const TUTORIAL = { open: '튜토리얼 보기', icon: GraduationCap, title: '헤이젤이 처음이라면', later: '나중에', stop: '그만', resume: '이어 하기', done: '완료' };
 
-// offered: the tutorials to show, none once a reply has come; listed: their titles, a door's note. open: the list;
+// offered: the tutorials to show, those this device has not finished and none once a reply has come; listed: their titles, a door's note. open: the list;
 // welcome: the list at arrival, unless this device closed it before, true when it opened.
 type Tutorials = { offered: readonly Tutorial[]; listed: string; open: () => void; welcome: () => boolean };
 const TutorialContext = createContext<Tutorials | null>(null);
@@ -22,18 +22,26 @@ export function useTutorials(): Tutorials {
 function useFacts(): Facts {
   const route = useRoute();
   const connections = useConnections();
-  const replied = useReplied();
-  return { route, connection: connections[0]?.id ?? null, added: connections.some(({ value }) => value.starred.length > 0), replied };
+  return { route, connection: connections[0]?.id ?? null, added: connections.some(({ value }) => value.starred.length > 0) };
 }
 
-// running: the tutorial being followed on this device, kept across reloads until 그만 or its end is closed.
+// running: the tutorial being followed on this device, kept across reloads until 그만 or its end is closed. finished:
+// the ones this device walked to the end, set as the end is reached, since the last step's state (being on a chat
+// screen) does not last.
 export function TutorialProvider({ children }: { children: ReactNode }) {
   const facts = useFacts();
+  const replied = useReplied();
   const [runningId, setRunning] = usePersisted('risu-alpha:tutorial', String, '', String);
+  const [finished, setFinished] = usePersisted('risu-alpha:tutorials-done', (stored) => stored.split(' ').filter(Boolean), [], (ids) => ids.join(' '));
   const [welcomed, setWelcomed] = usePersisted('risu-alpha:welcome-seen', (stored) => stored === '1', false, (value) => (value ? '1' : ''));
   const [listing, setListing] = useState(false);
-  const offered = facts.replied ? [] : TUTORIALS;
+  const offered = replied ? [] : TUTORIALS.filter(({ id }) => !finished.includes(id));
   const running = TUTORIALS.find(({ id }) => id === runningId) ?? null;
+  const at = running && stepAt(running, facts);
+  const ended = running !== null && (at === null || finished.includes(running.id));
+  useEffect(() => {
+    if (running && ended && !finished.includes(running.id)) setFinished([...finished, running.id]);
+  }, [ended]);
 
   function close() {
     setListing(false);
@@ -44,8 +52,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   function start(tutorial: Tutorial) {
     close();
     setRunning(tutorial.id);
-    const at = stepAt(tutorial, facts);
-    const step = at === null ? null : tutorial.steps[at]!;
+    const first = stepAt(tutorial, facts);
+    const step = first === null ? null : tutorial.steps[first]!;
     if (step && !guideShown(step.mark)) navigate(step.at(facts));
   }
 
@@ -71,12 +79,12 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         >
           <List label={TUTORIAL.title} places>
             {offered.map((tutorial) => (
-              <ListItem key={tutorial.id} title={tutorial.title} description={tutorial.description} onClick={() => start(tutorial)} />
+              <ListItem key={tutorial.id} title={tutorial.title} description={tutorial.description} note={`${tutorial.steps.length}단계`} onClick={() => start(tutorial)} />
             ))}
           </List>
         </Dialog>
       )}
-      {running && <Running tutorial={running} facts={facts} onEnd={() => setRunning('')} />}
+      {running && (ended ? <Finish tutorial={running} onClose={() => setRunning('')} /> : <Running tutorial={running} at={at!} facts={facts} onEnd={() => setRunning('')} />)}
     </TutorialContext.Provider>
   );
 }
@@ -84,10 +92,9 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 // A step's control can take a moment to come after its screen: the note docks only once it has been missing a while.
 const DOCK_AFTER = 400;
 
-function Running({ tutorial, facts, onEnd }: { tutorial: Tutorial; facts: Facts; onEnd: () => void }) {
-  const at = stepAt(tutorial, facts);
-  const step = at === null ? null : tutorial.steps[at]!;
-  const target = useGuideTarget((step ?? tutorial.steps.at(-1)!).mark);
+function Running({ tutorial, at, facts, onEnd }: { tutorial: Tutorial; at: number; facts: Facts; onEnd: () => void }) {
+  const step = tutorial.steps[at]!;
+  const target = useGuideTarget(step.mark);
   const [docked, setDocked] = useState(false);
   useEffect(() => {
     if (target) return setDocked(false);
@@ -96,20 +103,9 @@ function Running({ tutorial, facts, onEnd }: { tutorial: Tutorial; facts: Facts;
   }, [target]);
   if (!target && !docked) return null;
 
-  if (!step) {
-    return (
-      <Coach target={target} title={tutorial.finish.title}>
-        <Text>{tutorial.finish.text}</Text>
-        <Row kind="actions">
-          <Button size="sm" onClick={onEnd}>
-            {TUTORIAL.done}
-          </Button>
-        </Row>
-      </Coach>
-    );
-  }
+  // Keyed by the step, so a new step enters as a new note.
   return (
-    <Coach target={target} title={tutorial.title} note={`${at! + 1}/${tutorial.steps.length}`} above={step.above}>
+    <Coach key={at} target={target} title={step.label} progress={{ current: at + 1, total: tutorial.steps.length }} above={step.above}>
       {target && <Text>{step.text}</Text>}
       <Row kind="actions">
         <Button variant="ghost" size="sm" onClick={onEnd}>
@@ -128,5 +124,31 @@ function Running({ tutorial, facts, onEnd }: { tutorial: Tutorial; facts: Facts;
         )}
       </Row>
     </Coach>
+  );
+}
+
+function Finish({ tutorial, onClose }: { tutorial: Tutorial; onClose: () => void }) {
+  return (
+    <Dialog
+      title={tutorial.title}
+      onClose={onClose}
+      actions={
+        <Button variant="primary" onClick={onClose}>
+          {TUTORIAL.done}
+        </Button>
+      }
+    >
+      <Stack gap="group">
+        <Cheer icon={PartyPopper} />
+        <Intro title={tutorial.finish.title}>{tutorial.finish.text}</Intro>
+        <Row kind="tags">
+          {tutorial.steps.map((step) => (
+            <Tag key={step.label} tone="accent" icon={Check}>
+              {step.label}
+            </Tag>
+          ))}
+        </Row>
+      </Stack>
+    </Dialog>
   );
 }

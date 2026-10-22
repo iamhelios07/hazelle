@@ -16,7 +16,7 @@ import { usePersisted } from '../common/usePersisted';
 import { DisplayProvider } from '../display';
 import { BIN, BOARD, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
-import { SessionProvider, useReplied, useSaves, useSession } from '../session';
+import { SessionProvider, useSaves, useSession } from '../session';
 import { ToastProvider, useToast, type Standing } from '../toast';
 import { Brand, Progress, Screen, Text } from '../ui';
 import { BotNotes } from './BotNotes';
@@ -111,12 +111,11 @@ function ReplyHold() {
 }
 
 // The release this device last opened, and the tour it saw (closing it in any way is seeing it); the ref: StrictMode
-// runs a mount's effect twice. The open's one dialog: the tutorials' welcome for an account with no reply yet, else a
-// tour; either stands in for the toast of the same open, which says the release only when the board holds its 소식
+// runs a mount's effect twice. The open's one dialog: the tutorials' welcome while one is left to offer, else a tour;
+// either stands in for the toast of the same open, which says the release only when the board holds its 소식
 // (server/news), and opens that post.
 function News() {
   const toast = useToast();
-  const replied = useReplied();
   const tutorials = useTutorials();
   const [lastOpened, setLastOpened] = usePersisted('risu-alpha:opened-version', String, '', String);
   const [tourSeen, setTourSeen] = usePersisted('risu-alpha:tour-seen', String, '', String);
@@ -125,8 +124,9 @@ function News() {
   useEffect(() => {
     if (BUILT_VERSION === null || said.current) return;
     said.current = true;
-    const showing = tourToShow(BUILT_VERSION, tourSeen, TOURS, replied);
-    const welcoming = !replied && tutorials.welcome();
+    const settled = tutorials.offered.length === 0;
+    const showing = tourToShow(BUILT_VERSION, tourSeen, TOURS, settled);
+    const welcoming = !settled && tutorials.welcome();
     if (showing) setTour(showing);
     else if (!welcoming && openedNewRelease(BUILT_VERSION, lastOpened)) {
       void readPosts(null, { sort: 'new', category: 'news', limit: 1 }).then((read) => {

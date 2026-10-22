@@ -219,6 +219,7 @@
   --markup-heading-shadow: 0.35px 0 0 var(--color-markup-heading), -0.35px 0 0 var(--color-markup-heading);
 
   --shadow-popover: 0 12px 32px var(--palette-shadow);
+  --shadow-cheer: 0 0 0 8px var(--color-accent-bg), 0 14px 36px var(--color-accent-border);
   --shadow-toast: 0 22px 44px -14px var(--palette-shadow-deep), 0 4px 12px var(--palette-shadow);
 
   /* Glass, for what floats over the story (controls/Pill, story/StepButtons): the story shows through, blurred. */
@@ -384,6 +385,13 @@
   --rank-place: 32px;
   --bar-height-thick: 8px;
   --sketch-height: 168px;
+  /* A finish's burst (feedback/Cheer): the badge at its middle, and how far the farthest piece flies. */
+  --cheer-height: 184px;
+  --cheer-badge: 76px;
+  --cheer-icon: 36px;
+  --cheer-reach: 168px;
+  --cheer-piece-width: 8px;
+  --cheer-piece-height: 14px;
   --chart-height: 120px;
   --chart-bar-max: 40px;
   --screen-narrow: 440px;
@@ -534,6 +542,9 @@
   --duration-found: 2.4s;
   --duration-slide: 1.4s;
   --duration-sway: 2.4s;
+  --duration-pop: 480ms;
+  --duration-burst: 1.7s;
+  --duration-ripple: 2.6s;
   --ease-enter: ease-out;
   --ease-loop: ease-in-out;
 

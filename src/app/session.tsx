@@ -142,8 +142,8 @@ function useKind<K extends Kind>(kind: K) {
 }
 
 export const useConnections = () => useKind('connection');
-// A model's reply received in this account, a deleted chat's too (a version with a receipt, Summary.recent): what ends
-// the tutorial and opens the release tours (design §6.15, §6.17).
+// A model's reply received in this account, a deleted chat's too (a version with a receipt, Summary.recent): what stops
+// offering the tutorials (design §6.17).
 export function useReplied() {
   const summaries = useKind('summary');
   return useMemo(() => summaries.some(({ value }) => value.recent.length > 0), [summaries]);

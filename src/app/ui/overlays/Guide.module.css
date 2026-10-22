@@ -3,6 +3,7 @@
 }
 
 .ring {
+  composes: pulse from '../foundation/motion.module.css';
   position: fixed;
   top: calc(var(--anchor-top) - var(--focus-ring-reach));
   left: calc(var(--anchor-left) - var(--focus-ring-reach));

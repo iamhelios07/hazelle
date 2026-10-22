@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ChangeSignal } from '../../../change-signal';
+import { Steps } from '../feedback/Steps';
 import styles from './Guide.module.css';
 
 // The marks on screen by name. A mark wraps one control without a box of its own, so what is pointed at is its
@@ -54,8 +55,9 @@ const GAP = 8;
 // A note by a control with a ring around it, following it each frame; nothing modal, so the control stays pressable.
 // It stands right of the control where the screen has room, else under it, or over it when above (what comes next is
 // under the control), turning to the other side where it runs off the screen; without a target it docks in the corner.
-// note: quiet words at the title's end.
-export function Coach({ target, title, note, above = false, children }: { target: HTMLElement | null; title: string; note?: string; above?: boolean; children: ReactNode }) {
+// progress: where the note stands in its walk, said at the title's end and drawn under it.
+type Progress = { current: number; total: number };
+export function Coach({ target, title, progress, above = false, children }: { target: HTMLElement | null; title: string; progress: Progress; above?: boolean; children: ReactNode }) {
   const ring = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
 
@@ -107,8 +109,11 @@ export function Coach({ target, title, note, above = false, children }: { target
       <div ref={bubble} role="note" aria-label={title} className={target ? styles.bubble : `${styles.bubble} ${styles.docked}`}>
         <div className={styles.head}>
           <span className={styles.title}>{title}</span>
-          {note && <span className={styles.note}>{note}</span>}
+          <span className={styles.note}>
+            {progress.current}/{progress.total}
+          </span>
         </div>
+        <Steps current={progress.current} total={progress.total} />
         {children}
       </div>
     </>,
