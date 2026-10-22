@@ -1,4 +1,6 @@
 import { expect, type Page } from '@playwright/test';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { unpack } from '../src/engine/import/risum';
 
@@ -254,3 +256,25 @@ export const saving = (page: Page) => page.waitForResponse((response) => respons
 // A settings page from the settings sidebar, whose rows read their label then what the page holds (모델 2개).
 export const settingsPage = (page: Page, label: string) =>
   page.getByRole('navigation', { name: '설정' }).getByRole('button', { name: new RegExp(`^${label}( |$)`) }).click();
+
+// A built server of a spec's own (npm run e2e builds first), on a port and data directory apart from the suite's, for a
+// spec that stops it or needs signup still open; it lets the fake provider through like the suite's (playwright.config.ts).
+export async function startServer(port: number, data: string, fresh = false): Promise<ChildProcess> {
+  const health = () => fetch(`http://localhost:${port}/api/health`).then((response) => response.status, () => 0);
+  // A server an earlier run left on the port would answer for this one; its data directory is checked for only after.
+  expect(await health()).toBe(0);
+  if (fresh) rmSync(data, { recursive: true, force: true });
+  const server = spawn(process.execPath, ['dist/server/node.js'], {
+    env: { ...process.env, HAZELLE_DATA: data, HAZELLE_CLIENT: 'dist/client', PORT: String(port), HAZELLE_LOCAL_PROVIDERS: FAKE_PROVIDER },
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
+  await expect.poll(health, { timeout: 30_000 }).toBe(200);
+  return server;
+}
+
+// SIGTERM drains and closes the databases; SIGKILL is a crash, with whatever the WAL holds.
+export async function stopServer(server: ChildProcess, signal: 'SIGTERM' | 'SIGKILL' = 'SIGTERM') {
+  const exited = new Promise((resolve) => server.once('exit', resolve));
+  server.kill(signal);
+  await exited;
+}

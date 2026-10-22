@@ -1,11 +1,12 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { ROW_BYTES } from '../src/server/caps';
+import { startServer, stopServer } from './helpers';
 
 // The account stores over HTTP on the built server (npm run e2e builds first), which this spec starts on a data
 // directory of its own so it can stop, kill and start it again, and whose account files and pictures it reads on disk.
@@ -39,23 +40,10 @@ let server: ChildProcess;
 test.use({ baseURL: `http://localhost:${PORT}` });
 
 async function start(fresh = false) {
-  const health = () => fetch(`http://localhost:${PORT}/api/health`).then((response) => response.status, () => 0);
-  // A server an earlier run left on the port would answer for this one; its data directory is checked for only after.
-  expect(await health()).toBe(0);
-  if (fresh) rmSync(DATA, { recursive: true, force: true });
-  server = spawn(process.execPath, ['dist/server/node.js'], {
-    env: { ...process.env, HAZELLE_DATA: DATA, HAZELLE_CLIENT: 'dist/client', PORT: String(PORT) },
-    stdio: ['ignore', 'ignore', 'inherit'],
-  });
-  await expect.poll(health, { timeout: 30_000 }).toBe(200);
+  server = await startServer(PORT, DATA, fresh);
 }
 
-// SIGTERM drains and closes the databases; SIGKILL is a crash, with whatever the WAL holds.
-async function stop(signal: 'SIGTERM' | 'SIGKILL') {
-  const exited = new Promise((resolve) => server.once('exit', resolve));
-  server.kill(signal);
-  await exited;
-}
+const stop = (signal: 'SIGTERM' | 'SIGKILL') => stopServer(server, signal);
 
 async function restart(signal: 'SIGTERM' | 'SIGKILL' = 'SIGTERM') {
   await stop(signal);
