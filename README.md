@@ -33,6 +33,7 @@ Prompts, modules and tools
 - Modules switched on always, per prompt, per character or per persona.
 - Tools: JavaScript modules that run in an isolated frame with no network access, and can take over long-term memory, add message actions and badges.
 - Personas, per-model setting profiles, prompt caching settings, and auxiliary model slots for translation, memory and other tasks.
+- Agents (experimental): pre agents write notes the reply is written with, post agents rewrite the reply or add to it. Each agent call shows the request it sent and the answer it got.
 
 Connections
 - OpenRouter, Vercel AI Gateway, OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Moonshot, Upstage, Groq, Together, Cerebras, DeepInfra, Perplexity, NanoGPT, Chutes, Featherless, Friendli, Surplus, Ollama, and GitHub Copilot through GitHub sign-in. NovelAI for pictures and Voyage for embeddings.
