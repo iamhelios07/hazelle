@@ -78,7 +78,10 @@ export async function forward(upstream: Upstream, body: unknown, bytes: number, 
       signal: upstreamSignal,
     });
   } catch (error) {
-    return error instanceof PolicyRefusal ? refuse(403, error.refusal) : refuse(502, 'upstream-unreachable');
+    if (error instanceof PolicyRefusal) return refuse(403, error.refusal);
+    // The client or the stream ended the call: nothing failed on the way.
+    if (upstreamSignal.aborted) return refuse(502, 'upstream-unreachable');
+    return unreachable({ codes: errorCodes(error) });
   }
 
   // A Response carries 200 to 599 alone. Never left to its constructor: the server's Response (@hono/node-server)
@@ -86,7 +89,7 @@ export async function forward(upstream: Upstream, body: unknown, bytes: number, 
   if (response.status < 200 || response.status > 599) {
     call.abort();
     await response.body?.cancel().catch(() => {});
-    return refuse(502, 'upstream-unreachable');
+    return unreachable({ status: response.status });
   }
 
   if (!allowance.take(Buffer.byteLength(JSON.stringify([...response.headers])))) {
@@ -166,6 +169,22 @@ function outboundHeaders(input: Record<string, string>): Headers {
     headers.set(key, value);
   }
   return headers;
+}
+
+// No URL, host, headers, body or error message: the relay keeps no record of where a call went, and a message can name
+// the host. The codes along the cause chain (ENOTFOUND, ECONNRESET, UND_ERR_CONNECT_TIMEOUT) name the transport failure.
+function unreachable(detail: { codes: string[] } | { status: number }): Response {
+  console.error(JSON.stringify({ at: new Date().toISOString(), event: 'relay unreachable', ...detail }));
+  return refuse(502, 'upstream-unreachable');
+}
+
+function errorCodes(error: unknown): string[] {
+  const codes: string[] = [];
+  for (let at = error; at instanceof Error; at = at.cause) {
+    const { code } = at as NodeJS.ErrnoException;
+    if (code) codes.push(code);
+  }
+  return codes;
 }
 
 export function refuse(status: number, error: RelayError, detail: Record<string, unknown> = {}): Response {

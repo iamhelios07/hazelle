@@ -166,15 +166,19 @@ describe('relay', () => {
     await new Promise((resolve) => server.close(resolve));
   });
 
-  it('reports a failed upstream call as unreachable', async () => {
+  it('reports a failed upstream call as unreachable and logs its codes, not its message', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const relay = createRelay(async () => {
-      throw new TypeError('fetch failed');
+      throw new TypeError('fetch failed', { cause: Object.assign(new Error('getaddrinfo ENOTFOUND api.example.com'), { code: 'ENOTFOUND' }) });
     });
     const response = await relay(post(envelope()));
 
     expect(response.status).toBe(502);
     expect(response.headers.get('x-relay')).toBe('error');
     expect(await response.json()).toEqual({ error: 'upstream-unreachable' });
+    const line = String(logged.mock.calls[0]?.[0]);
+    expect([JSON.parse(line).codes, line.includes('example')]).toEqual([['ENOTFOUND'], false]);
+    logged.mockRestore();
   });
 });
 
@@ -239,6 +243,7 @@ it('refuses mutation methods outside the provider GET/POST contract before reach
 });
 
 it('answers an upstream status no response can carry as unreachable, ending the call, and passes no reason phrase on', async () => {
+  const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
   const cancel = vi.fn();
   const signals: AbortSignal[] = [];
   const answering = (status: number, statusText: string) =>
@@ -254,4 +259,5 @@ it('answers an upstream status no response can carry as unreachable, ending the 
   const phrased = await answering(200, 'OK\x01')(post(envelope()));
   expect([phrased.status, phrased.statusText, phrased.headers.get('x-relay')]).toEqual([200, '', 'upstream']);
   await phrased.body!.cancel();
+  logged.mockRestore();
 });
