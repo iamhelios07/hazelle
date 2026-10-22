@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { entryName } from '../../connectors/types';
 import { resolveAssets } from '../../engine/assets';
 import { holdsPersona, unused } from '../../engine/pipeline';
 import type { Card } from '../../engine/import/types';
@@ -13,7 +14,8 @@ import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf } from '../../runtime/chat-context';
-import { polishAgain, takeTurn, type Skip, type TurnFailure } from '../../runtime/turn';
+import { polishAgain, takeTurn, type TurnFailure } from '../../runtime/turn';
+import { skippedStep, type Skip, type StepFailure } from '../../runtime/turn-steps';
 import { agentsOf } from '../../runtime/agents';
 import type { PersonaChoice } from '../../runtime/personas';
 import type { PromptChoice } from '../../runtime/prompts';
@@ -43,6 +45,7 @@ import { useChatRemarks } from './useChatRemarks';
 import { useChatPolishing } from './useChatPolishing';
 import { useChatTranslation } from './useChatTranslation';
 import { useChatSettings } from './useChatSettings';
+import { joinParts } from './joinParts';
 
 // The chats told this session that a reply's lorebook entries went past the 로어북 최대 분량: each is told once.
 const cutTold = new Set<string>();
@@ -79,7 +82,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   useStored('prompt', prompt.kind === 'prompt' ? prompt.prompt.id : null);
   const features = featuresOf(store, chat);
   const stages = agentsOf(store, chat);
-  const agents = { pre: stages.pre.length > 0, post: stages.post.length > 0 };
+  const pre = stages.pre.length > 0;
+  const post = stages.post.length > 0;
+  const agents = useMemo(() => ({ pre, post }), [pre, post]);
   const translate = chatTranslate(store, chat);
   const { unstarted, pickGreeting, starting } = useNewChat(chatId, item === null, chat, shelf, translate.replyLanguage);
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
@@ -94,6 +99,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { texts, css } = view;
   const bot = shelf?.character.decor !== false;
   const url = useAssetUrl();
+  const decor = useMemo(() => ({ bot, css: bot ? resolveAssets(css, url) : '', url, buttons: scripted ? ('live' as const) : ('inert' as const) }), [bot, css, url, scripted]);
+  const names = {
+    character: card && { name: card.nickname || card.name, image: shelf!.face },
+    me: persona.kind === 'persona' ? { name: persona.persona.value.name, image: persona.persona.value.picture } : null,
+    modelName: 'kind' in route ? null : entryName(route.model),
+  };
   const { actions: translationActions, ...translation } = useChatTranslation(chatId, chat, messages, texts, translate);
   const { actions: illustrationActions, ...illustration } = useChatIllustrations(chatId, id, chat, messages);
   const { actions: remarkActions, ...remark } = useChatRemarks(chatId, id);
@@ -144,7 +155,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const problem = stopped ? blocked(session, chat) : null;
   // A failed 토큰 절약 call or pre agent, shown on the composer until the next turn, which may ask again without it.
   // skip: what that turn went without, and the failed step.
-  const [skippable, setSkippable] = useState<{ failure: Extract<TurnFailure, { kind: 'preread' | 'agent' }>; target: Target; skip: Skip } | null>(null);
+  const [skippable, setSkippable] = useState<{ failure: StepFailure; target: Target; skip: Skip } | null>(null);
 
   useEffect(() => {
     if (id) session.memory.check(id);
@@ -174,8 +185,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   function report(failure: TurnFailure | null, target?: Target, skip: Skip = {}) {
     if (!failure) return;
     if (isBlocked(failure)) return setStopped(true);
-    if (target && failure.kind === 'preread' && failure.failure.kind !== 'stopped') return setSkippable({ failure, target, skip: { ...skip, preread: true } });
-    if (target && failure.kind === 'agent') return setSkippable({ failure, target, skip: { ...skip, agents: true } });
+    const skipped = target && skippedStep(failure, skip);
+    if (skipped) return setSkippable({ ...skipped, target });
     const kept = failure.kind === 'unsaved' ? failure.reply : null;
     toast.error(describeTurnFailure(failure), kept === null ? undefined : { action: { label: '다시 저장', onClick: () => void talk.saveAgain(kept).then(report) } });
   }
@@ -335,7 +346,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setDialog(null);
   }
 
-  return {
+  return joinParts(status, translation, illustration, remark, {
     displayPending, displayError, retryDisplay, stuck,
     id,
     item,
@@ -344,6 +355,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     route,
     prompt,
     persona,
+    names,
     note: chat.note,
     illustrateNote: chat.illustrateNote,
     cast: chat.cast ?? [],
@@ -354,15 +366,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     messages,
     texts,
     view,
-    decor: { bot, css: bot ? resolveAssets(css, url) : '', url, buttons: scripted ? ('live' as const) : ('inert' as const) },
-    ...status,
+    decor,
     infoPick,
     features,
     agents,
     translate,
-    ...translation,
-    ...illustration,
-    ...remark,
     polishing,
     badges,
     messageTools,
@@ -391,16 +399,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     scroll,
     keys: story.keys,
     stops: story.stops,
-    actions: {
-      ...story.actions,
-      ...searchActions,
-      ...statusActions,
-      ...editActions,
-      ...translationActions,
-      ...illustrationActions,
-      ...remarkActions,
-      ...bookmarkActions,
-      ...settingActions,
+    actions: joinParts(story.actions, searchActions, statusActions, editActions, translationActions, illustrationActions, remarkActions, bookmarkActions, settingActions, {
       send: () => void send(),
       sendSkipping: () => skippable && sendSkipping(skippable),
       say,
@@ -441,8 +440,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       resetToggles: reset,
       rename,
       drop,
-    },
-  };
+    }),
+  });
 }
 
 // A missing prompt or persona stops the turn on its own; a utility card leaves the persona out as Risu does.

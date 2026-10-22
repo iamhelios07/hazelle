@@ -14,7 +14,8 @@ import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
 import { sharedModel, taskModel, type Route, type RouteFailure } from './assignment';
 import { setTextTranslation, translatorNotes } from './characters';
-import { chatTranslate } from './features';
+import { chatTranslate, SHARED_CHAT } from './features';
+import { scopeOf } from './chat-context';
 import { appendTranslation, savedElsewhere, type Written } from './chat-log';
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
@@ -50,6 +51,28 @@ export type TranslateFailure =
 export type TranslationTarget = Omit<CallTarget, 'for'> & { for: Extract<Stream['for'], { kind: 'translation' | 'input' }> };
 
 type Deps = { store: ObjectStore; credentials: Credentials; log: RequestLog; tokens: Tokens };
+
+// A character's text, as a new chat of its would translate it (its card's texts).
+export const translateText = (session: Deps, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) =>
+  translateLoose(session, chat, text, language, (input, target) => translate(session, input, target, signal, onText));
+
+export function translateOnTool(session: Deps, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
+  const tool = toolTranslatorOf(session.store);
+  if (!tool.ok) return Promise.resolve(tool);
+  return translateLoose(session, SHARED_CHAT, text, language, (input, target) => translateWith(session, tool.with, input, target, signal, onText));
+}
+
+// A text of no story, with no persona and no card: a card's text would go along as context of its own translation,
+// every time. Nothing is saved, so no marker is written. The call ends however it went, stopped too: the abort only
+// stops reading, and no reload picks this call up.
+function translateLoose(session: Deps, chat: Chat, text: string, language: string, run: (input: TranslateInput, target: TranslationTarget) => ReturnType<typeof translate>) {
+  const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language, lane: null };
+  const target: TranslationTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
+  return run(input, target).then(async (made) => {
+    if (made.ok) await keepRow(session.store, made.translation.receipt!, made.translation.at, { chat: null, character: chat.character });
+    return made;
+  }).finally(() => endCall(session.store, target.id));
+}
 
 // What a translation goes out with: a chat's (translatorOf, translatorNotes) or 번역기's (toolTranslatorOf).
 export type TranslateWith = { prompt: TranslatePrompt; route: Route; notes: string };

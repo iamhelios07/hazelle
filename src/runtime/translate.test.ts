@@ -6,8 +6,9 @@ import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { setTranslate, setTranslatorNote } from './characters';
 import { SETTINGS_ID } from '../model/settings';
 import { setDefaultModel, setTaskModel } from './assignment';
-import { setToolNote, translate, translatorOf, type Translating } from './translate';
-import { SHARED_CHAT, takeTurn, translateOnTool, translateText } from './turn';
+import { setToolNote, translate, translatorOf, translateOnTool, translateText, type Translating } from './translate';
+import { takeTurn } from './turn';
+import { SHARED_CHAT } from './features';
 import { translationInput } from './chat-context';
 
 const server = testServer();

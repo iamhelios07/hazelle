@@ -7,6 +7,9 @@ import { illustrateSwitches, translateSwitches, type IllustrateSetup, type Trans
 import { chatPrompt } from './prompts';
 import type { ObjectStore } from './store';
 
+// A new 캐릭터 없이 chat: what the 공용 layer resolves to when no chat or card of its own sets anything.
+export const SHARED_CHAT: Chat = { title: null, character: null, models: {} };
+
 type Features = Record<Feature, boolean>;
 type Reader = Pick<ObjectStore, 'get'>;
 type Place = Pick<Chat, 'character' | 'prompt' | 'features'>;

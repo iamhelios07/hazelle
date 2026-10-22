@@ -1,5 +1,5 @@
 import { providerFit } from './token-calibration';
-import { answerInstructionOf, scopeOf, translationInput, tokenLimits, sentSettings } from './chat-context';
+import { answerInstructionOf, translationInput, tokenLimits, sentSettings } from './chat-context';
 import { cacheSend, gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
 import { forecast, prior } from './cache';
 import type { RanAway } from '../engine/pipeline';
@@ -12,15 +12,14 @@ import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { Halted } from './scripts';
 import { appendUserMessage, type Written } from './chat-log';
-import { keepRow } from './usage';
 import type { Ask, TalkFailure } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
 import { endCall } from './streams';
-import { resumeTranslation, toolTranslatorOf, translate, translateWith, type TranslateFailure, type TranslateInput, type TranslationTarget } from './translate';
+import { resumeTranslation, translate, type TranslateFailure, type TranslationTarget } from './translate';
 import { findRecords } from './retrieval';
-import { preread, type PrereadFailure } from './preread';
-import { agentsOf, preAgents, type AgentFailed } from './agents';
-import type { Preparing } from './talk';
+import { preread } from './preread';
+import { agentsOf, preAgents } from './agents';
+import type { Preparing, Skip, StepFailure } from './turn-steps';
 
 // A turn also stops before sending on a new chat that was not saved, a pull that failed, a chat or message another
 // device deleted, a user's message that was not translated, a tokenizer that did not load, a prompt over the model's
@@ -37,40 +36,8 @@ export type TurnFailure = (
   | { kind: 'unpulled'; failure: ApiFailure }
   | { kind: 'gone' }
   | { kind: 'untranslated'; failure: TranslateFailure }
-  | { kind: 'preread'; failure: PrereadFailure }
-  | { kind: 'agent'; failure: AgentFailed }
+  | StepFailure
 ) & { kept?: true };
-
-// What a turn goes without: after a failed step, 토큰 절약 (줄이지 않고 보내기) or the pre agents (에이전트 없이 보내기);
-// notes, the pre notes the message's other versions made, which it would use again (노트 새로 만들어 다시 생성).
-export type Skip = Partial<Record<Preparing['step'] | 'notes', true>>;
-
-// A new 캐릭터 없이 chat: what the 공용 layer resolves to when no chat or card of its own sets anything.
-export const SHARED_CHAT: Chat = { title: null, character: null, models: {} };
-
-type Loose = Pick<Session, 'store' | 'credentials' | 'log' | 'tokens'>;
-
-// A character's text, as a new chat of its would translate it (its card's texts).
-export const translateText = (session: Loose, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) =>
-  translateLoose(session, chat, text, language, (input, target) => translate(session, input, target, signal, onText));
-
-export function translateOnTool(session: Loose, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
-  const tool = toolTranslatorOf(session.store);
-  if (!tool.ok) return Promise.resolve(tool);
-  return translateLoose(session, SHARED_CHAT, text, language, (input, target) => translateWith(session, tool.with, input, target, signal, onText));
-}
-
-// A text of no story, with no persona and no card: a card's text would go along as context of its own translation,
-// every time. Nothing is saved, so no marker is written. The call ends however it went, stopped too: the abort only
-// stops reading, and no reload picks this call up.
-function translateLoose(session: Loose, chat: Chat, text: string, language: string, run: (input: TranslateInput, target: TranslationTarget) => ReturnType<typeof translate>) {
-  const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language, lane: null };
-  const target: TranslationTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
-  return run(input, target).then(async (made) => {
-    if (made.ok) await keepRow(session.store, made.translation.receipt!, made.translation.at, { chat: null, character: chat.character });
-    return made;
-  }).finally(() => endCall(session.store, target.id));
-}
 
 // Automatic 응답 번역 is for replies received here, never for what a chat already holds: opening a chat, a greeting, a
 // version switched to and the switch turned on leave it to 번역 (user ruling, 2026-10-04). The reply is as saved; the
@@ -126,12 +93,17 @@ export async function receiveReply(session: Session, chat: string, reply: Writte
       if (!failure) return;
     }
   }
-  await session.polisher.polish(chat, reply.message ?? reply.id, reply.id);
-  await translateReceived(session, chat, reply.message ?? reply.id);
-  const received = shownReceived(session, chat, reply);
+  const message = reply.message ?? reply.id;
+  await polished(session, chat, message, reply.id);
+  const received = shownReceived(session, chat, message);
   if (!received) return;
   if (chatIllustrate(session.store, received.chat).auto) session.illustrator.draw(chat, received.message, received.version, { auto: true });
   if (featuresOf(session.store, received.chat).mascot) session.commentator.comment(chat, received.message, received.version);
+}
+
+async function polished(session: Session, chat: string, message: string, version: string) {
+  await session.polisher.polish(chat, message, version);
+  await translateReceived(session, chat, message);
 }
 
 // 다시 다듬기 (design §6.16): the post agents again on the version shown, from its text as written, which is then
@@ -140,8 +112,7 @@ export async function polishAgain(session: Session, chat: string, message: strin
   const lease = session.store.retainChat(chat);
   try {
     if (await lease.ready) return;
-    await session.polisher.polish(chat, message, version);
-    await translateReceived(session, chat, message);
+    await polished(session, chat, message, version);
   } finally {
     lease.release();
   }
@@ -150,10 +121,10 @@ export async function polishAgain(session: Session, chat: string, message: strin
 // What 삽화 on auto draws for and the mascot speaks on, as 응답 번역 translates it: the version of a reply received here
 // shown once the bot's onOutput ran, after any continuation, never the cut one it continued. null for a chat gone or a
 // version with no text.
-function shownReceived({ store }: Pick<Session, 'store'>, chat: string, reply: Written): { chat: Chat; message: string; version: string } | null {
+function shownReceived({ store }: Pick<Session, 'store'>, chat: string, received: string): { chat: Chat; message: string; version: string } | null {
   const stored = live(store.get('chat', chat));
   if (!stored) return null;
-  const message = fold(store.children('entry', chat)).find(({ id }) => id === (reply.message ?? reply.id));
+  const message = fold(store.children('entry', chat)).find(({ id }) => id === received);
   const version = message && shown(message);
   return version?.text.trim() ? { chat: stored.value, message: message!.id, version: version.id } : null;
 }

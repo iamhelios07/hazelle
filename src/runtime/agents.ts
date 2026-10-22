@@ -18,7 +18,8 @@ import { taskWriter } from './profiles';
 import { chatPrompt, ofSort, type StoredPrompt } from './prompts';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
-import { pageAnswer, type Preparing } from './talk';
+import { pageAnswer } from './talk';
+import type { Preparing } from './turn-steps';
 import { chatPlace, keepRow } from './usage';
 
 // 에이전트 (design §6.16): the lists on the ladder 공용 → 프롬프트 → 캐릭터 → 채팅, which stack; the pre agents a turn runs

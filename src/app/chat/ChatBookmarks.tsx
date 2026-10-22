@@ -8,12 +8,11 @@ import { useSession } from '../session';
 import { Empty, List, ListItem, MenuItem, MoreMenu, SidePanel, useWide } from '../ui';
 import { bookmarkRows, type BookmarkRow } from './bookmarks';
 import { speaker } from './ChatMessage';
-import type { speakers } from './ChatLog';
 import type { OpenChat } from './useChat';
 
 type Props = Pick<OpenChat, 'messages' | 'texts'> & {
   item: ChatItem;
-  names: ReturnType<typeof speakers>;
+  names: OpenChat['names'];
   onShow: OpenChat['actions']['showBookmark'];
   onUnmark: (id: string) => void;
   onRename: OpenChat['actions']['renameBookmark'];

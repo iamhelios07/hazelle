@@ -16,7 +16,7 @@ import { ChatInspect } from './ChatInspect';
 import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
-import { ChatLog, speakers } from './ChatLog';
+import { ChatLog } from './ChatLog';
 import { ChatMemory } from './ChatMemory';
 import { ChatMemoryRecord } from './ChatMemoryRecord';
 import { ChatSearch } from './ChatSearch';
@@ -105,7 +105,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
               renderRecord={(record) => <ChatMemoryRecord {...record} actions={actions} />}
             />
           ) : panel?.kind === 'bookmarks' ? (
-            chat.item && <ChatBookmarks item={chat.item} messages={chat.messages} texts={chat.texts} names={speakers(chat)} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
+            chat.item && <ChatBookmarks item={chat.item} messages={chat.messages} texts={chat.texts} names={chat.names} onShow={actions.showBookmark} onUnmark={actions.bookmark} onRename={actions.renameBookmark} onClose={actions.closePanel} />
           ) : panel?.kind === 'autopilot' ? (
             <ChatAutopilot autopilot={autopilot} busy={busy} onClose={actions.closePanel} />
           ) : panel?.kind === 'lore' ? (

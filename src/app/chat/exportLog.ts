@@ -4,9 +4,9 @@ import { shown } from '../../model/chat';
 import { byParagraph, placeMark, translatedMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import type { Shown } from '../../runtime/talk';
+import type { OpenChat } from './useChat';
 import { inlaid, type LogRow } from '../ui';
 import { shownHtml, speaker } from './ChatMessage';
-import type { speakers } from './ChatLog';
 import { seenText } from './search';
 
 export type LogText = 'translation' | 'original' | 'both';
@@ -30,7 +30,7 @@ type Illustrated = { placed: ReadonlyMap<number, string>; pictures: ReadonlyMap<
 // The rows a log draws, as the chat draws them, their pictures still named by pictureRef. A reply being written, a
 // failed one and an empty one are left out, and a message's boxes stand in it as they did when it was written. A
 // message's 삽화 go into its first text, the newest of each place, at its paragraph as the chat places it.
-export function logDraft(messages: Shown[], view: Display, { placed, pictures: drawn }: Illustrated, flipped: ReadonlySet<string>, bot: boolean, names: ReturnType<typeof speakers>, { hideMe, text, from, to }: LogChoices): LogDraft {
+export function logDraft(messages: Shown[], view: Display, { placed, pictures: drawn }: Illustrated, flipped: ReadonlySet<string>, bot: boolean, names: OpenChat['names'], { hideMe, text, from, to }: LogChoices): LogDraft {
   const decor = { bot, url: pictureRef };
   const rows: LogRow[] = [];
   for (let index = from - 1; index < Math.min(to, messages.length); index++) {

@@ -1,8 +1,7 @@
 import { entryName } from '../../connectors/types';
 import { ArrowRight, ChevronDown, ChevronUp, Eraser, Languages, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { setToolNote, toolTranslatorOf, type TranslatorFailure } from '../../runtime/translate';
-import { translateOnTool } from '../../runtime/turn';
+import { translateOnTool, setToolNote, toolTranslatorOf, type TranslatorFailure } from '../../runtime/translate';
 import { ACTS } from '../common/acts';
 import { describeTranslateFailure } from '../common/failure';
 import { LanguageMenu } from '../common/IntoLanguage';

@@ -18,7 +18,6 @@ import { useDisplay } from '../display';
 import { useFiles, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Progress, Row, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
-import type { speakers } from './ChatLog';
 import { logDraft, resolveLog, untranslated, type LogChoices, type LogText } from './exportLog';
 import type { OpenChat } from './useChat';
 
@@ -37,7 +36,7 @@ type Props = Pick<OpenChat, 'messages' | 'view' | 'placed' | 'pictures' | 'flipp
   item: ChatItem;
   bot: boolean;
   characterName: string | null;
-  names: ReturnType<typeof speakers>;
+  names: OpenChat['names'];
   replyLanguage: string;
   // Saves the translation to the chat, as the message's own 번역 tool does. Absent while 번역's 기능 is off, which offers
   // no translating here either.

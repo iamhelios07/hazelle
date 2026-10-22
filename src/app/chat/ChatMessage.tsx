@@ -2,14 +2,10 @@ import { Bookmark, Bot, Info, Languages, Pin, PinOff, SquarePen } from 'lucide-r
 import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
-import type { Box } from '../../engine/regex/scripts';
 import { firstLine, handEdited, shown, translationOutdated, type Message } from '../../model/chat';
-import type { PictureSizes } from '../../engine/illustrate';
 import { placeMark, translatedMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
-import { runs, type Drawing } from '../../runtime/illustrate';
-import type { Shown } from '../../runtime/talk';
-import type { Translating } from '../../runtime/translate';
+import { runs } from '../../runtime/illustrate';
 import { ACTS } from '../common/acts';
 import { MASCOT_PICTURES } from '../common/mascots';
 import { BOOKMARK } from '../common/words';
@@ -18,8 +14,7 @@ import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
 import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_RETRYING, PRE_READ_WAITING, RETRYING } from '../common/words';
-import type { Preparing } from '../../runtime/talk';
-import type { PolishStep } from '../../runtime/agents';
+import type { Preparing } from '../../runtime/turn-steps';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
@@ -27,9 +22,10 @@ import { useNow } from './ChatCache';
 import { ChatPicture } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
 import { picturePlaces } from './picturePlaces';
-import type { ToolActions } from './toolMenu';
 import type { ChatActions } from './useChat';
-import type { Editing, EditPart } from './useMessageEdit';
+import type { EditPart } from './useMessageEdit';
+import type { MessageRow } from './messageRow';
+import { rowEqual, sameParts } from './rowPart';
 import { seenText } from './search';
 import { useReveal } from './useReveal';
 import { useSelectedPart } from './useSelectedPart';
@@ -37,61 +33,7 @@ import { withOriginal } from './withOriginal';
 
 const preparingNote = (preparing: Preparing) => (preparing.step === 'agents' ? agentsWaiting(preparing) : preparing.retrying ? PRE_READ_RETRYING : PRE_READ_WAITING);
 
-type Props = {
-  message: Shown;
-  // Editing starts from the stored text.
-  text: string;
-  // text with its 삽화's marks as the display left them, null for none (runtime/read-model ChatScreen).
-  placed: string | null;
-  // The shown version's pictures, oldest first, and its 삽화 run, if any.
-  pictures: Stored<'illustration'>[];
-  drawing: Drawing | null;
-  // The shown version's 마스코트 line, null with none or with the 기능 off; fresh until opened once on this page.
-  remark: Stored<'remark'> | null;
-  fresh: boolean;
-  // What the chat's tools put on the shown version, and the actions they offer on a message.
-  badges: string[];
-  toolActions: ToolActions[];
-  decor: { bot: boolean; css: string; url: PictureUrl; buttons: 'live' | 'inert' };
-  hosted: (Box & { id: string })[];
-  offered: { id: string; name: string; marked: boolean }[];
-  translating: Translating;
-  // 번역's and 삽화's 기능: off, the message offers neither.
-  canTranslate: boolean;
-  canIllustrate: boolean;
-  pictureSizes: PictureSizes;
-  awaited: boolean;
-  // The post agent rewriting the reply shown now (runtime/agents Polisher), null while none is.
-  polishing: PolishStep | null;
-  // Whether the chat runs agents of each stage now: 다시 다듬기 and 노트 새로 만들어 다시 생성 are offered by them.
-  agents: { pre: boolean; post: boolean };
-  flipped: boolean;
-  showOriginal: boolean;
-  replyNext: boolean;
-  // Who replies: the chat's character, or with none, the model named on each reply.
-  character: { name: string; image: string | null } | null;
-  // Who the user plays: the chat's persona, which {{user}} names in the prompt, so the row shows the same name the
-  // model reads; null for a deleted persona, shown as missing rather than as the account.
-  me: { name: string; image: string | null } | null;
-  modelName: string | null;
-  // The greeting of a chat not started yet: its versions are the other greetings, and it has nothing
-  // to regenerate, edit or delete.
-  opening: boolean;
-  // The chat's last message: deleting any other asks whether the ones after it go too.
-  last: boolean;
-  busy: boolean;
-  editing: Editing | null;
-  bookmarked: boolean;
-  // One of the messages a memory record was made from, marked as StoryMessage's found; the collection seeks the first.
-  found: number;
-  // The search bar's current hit, marked until the bar moves on or closes.
-  marked: boolean;
-  // The search term as foldTerm makes it, lit in the text; '' while the bar is closed.
-  term: string;
-  branching: boolean;
-  modelMenu: MenuHandle;
-  actions: ChatActions;
-};
+type Props = { row: MessageRow; modelMenu: MenuHandle; actions: ChatActions };
 
 // A card's blank greeting, which starts the chat with no first message.
 const NO_GREETING = '첫 메시지 없이';
@@ -102,7 +44,18 @@ const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨', r
 const MARK = { length: 'length', 'no-terminal': 'length', stopped: 'stopped', refused: 'refused' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, pictureSizes, awaited, polishing, agents, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { row, modelMenu, actions } = props;
+  const { message, text: original, decor, opening, last, busy, branching } = row.story.value;
+  const { translatingText, untranslated, canTranslate, awaited, flipped, showOriginal } = row.translation.value;
+  const { placed, pictures, drawing, canIllustrate, pictureSizes } = row.illustration.value;
+  const { remark, fresh } = row.mascot.value;
+  const { badges, toolActions } = row.tools.value;
+  const { hosted, offered } = row.status.value;
+  const { polishing, agents } = row.agents.value;
+  const { character, me, modelName } = row.speakers.value;
+  const { editing, replyNext } = row.edit.value;
+  const { bookmarked } = row.bookmark.value;
+  const { found, marked, term } = row.search.value;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -111,8 +64,6 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const translation = version.translation ?? null;
   // A message sent translated keeps what the user typed as its translation; another translation offers a new one.
   const sentTranslated = translation?.sentIn !== undefined;
-  const translatingText = translating.live.get(version.id) ?? null;
-  const untranslated = translating.failed.get(version.id) ?? null;
   // 다듬기 전 답 보기 of a reply its post agents rewrote: the text as the model wrote it, as it is stored.
   const hasRaw = version.raw !== undefined && version.raw !== version.text;
   const [rawShown, setRawShown] = useState(false);
@@ -210,7 +161,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   } else if (opening && !version.text.trim()) {
     body = <Text variant="note">{`${NO_GREETING} 시작해요.`}</Text>;
   } else if (!empty || hosted.length > 0) {
-    const box = ({ id, html }: Props['hosted'][number]) => <Story key={id} html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} ref={actions.watch(id)} />;
+    const box = ({ id, html }: MessageRow['status']['value']['hosted'][number]) => <Story key={id} html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} ref={actions.watch(id)} />;
     body = (
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
@@ -406,7 +357,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {body}
     </StoryMessage>
   );
-}, sameRow);
+}, rowEqual<Props>({ actions: Object.is, modelMenu: Object.is, row: sameParts }));
 
 function Remark({ remark, fresh, onSeen }: { remark: Stored<'remark'>; fresh: boolean; onSeen: () => void }) {
   const { mascot, expression, line } = remark.value;
@@ -422,21 +373,8 @@ function Elapsed({ thinking }: { thinking: boolean }) {
   return <Waiting note={`${thinking ? '추론 중' : '기다리는 중'} · ${seconds}초`} />;
 }
 
-function sameRow(previous: Props, next: Props): boolean {
-  const { decor: aDecor, hosted: aHosted, offered: aOffered, character: aCharacter, me: aMe, translating: aTranslating, ...a } = previous;
-  const { decor: bDecor, hosted: bHosted, offered: bOffered, character: bCharacter, me: bMe, translating: bTranslating, ...b } = next;
-  if ((Object.keys(a) as (keyof typeof a)[]).some((key) => a[key] !== b[key])) return false;
-  if (aDecor.bot !== bDecor.bot || aDecor.css !== bDecor.css || aDecor.url !== bDecor.url || aDecor.buttons !== bDecor.buttons) return false;
-  if (aCharacter?.name !== bCharacter?.name || aCharacter?.image !== bCharacter?.image) return false;
-  if (aMe?.name !== bMe?.name || aMe?.image !== bMe?.image) return false;
-  if (aHosted.length !== bHosted.length || aHosted.some((box, index) => box.id !== bHosted[index]!.id || box.html !== bHosted[index]!.html || box.at !== bHosted[index]!.at)) return false;
-  if (aOffered.length !== bOffered.length || aOffered.some((box, index) => box.id !== bOffered[index]!.id || box.name !== bOffered[index]!.name || box.marked !== bOffered[index]!.marked)) return false;
-  const id = shown(next.message).id;
-  return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
-}
-
 export const speaker = (message: Message, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>
   message.role === 'user' ? (me?.name ?? NO_PERSONA) : (character?.name ?? shown(message).receipt?.modelName ?? modelName ?? '모델');
 
 // Without the bot's style, only the chat's own pictures show: its inlays, whose markup alone the plain display keeps.
-export const shownHtml = (text: string, { bot, url }: Pick<Props['decor'], 'bot' | 'url'>) => resolveAssets(storyHtml(text, bot), bot ? url : (kind, id) => (kind === 'inlay' ? url(kind, id) : undefined));
+export const shownHtml = (text: string, { bot, url }: { bot: boolean; url: PictureUrl }) => resolveAssets(storyHtml(text, bot), bot ? url : (kind, id) => (kind === 'inlay' ? url(kind, id) : undefined));
