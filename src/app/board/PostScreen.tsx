@@ -19,7 +19,6 @@ import {
 } from '../../runtime/board';
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
-import { linkify } from '../common/linkify';
 import { tourOf } from '../common/release';
 import { TOUR, TourDialog } from '../common/Tour';
 import { AuthorLine, authorName, PostMarks, statusIcon } from '../common/postRow';
@@ -34,7 +33,7 @@ import { useAccount } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, PostStat, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadEvent, ThreadItem, TourCard, VoteButton } from '../ui';
+import { Button, Callout, ChoiceGroup, CommentBox, ConfirmDialog, Dialog, Empty, MenuHeading, MenuItem, MoreMenu, NavBar, PostStat, Row, Screen, Section, Stack, Tag, Text, TextField, Thread, ThreadEvent, ThreadItem, TourCard, VoteButton, Written } from '../ui';
 import { useNicknameGate } from './nickname';
 import { counted, ReasonDialog } from './parts';
 import { useVotes } from './vote';
@@ -164,7 +163,7 @@ function PostView({ post, reload, back }: { post: Post; reload: () => void; back
             }
           />
         )}
-        {live ? <Text variant="written">{linkify(post.text!)}</Text> : <Text variant="note">삭제된 글이에요.</Text>}
+        {live ? <Written text={post.text!} /> : <Text variant="note">삭제된 글이에요.</Text>}
         {admin && post.diagnostics !== null && <TextField label="진단 정보" lines={8} value={post.diagnostics} onChange={() => {}} readOnly />}
         {live && post.visibility === 'public' && (
           <Row kind="center">
@@ -332,7 +331,7 @@ function Comments({ post, admin, guest, gate, onAsk, onChanged }: { post: Post; 
           />
         ) : live ? (
           <>
-            <Text variant="written">{linkify(comment.text!)}</Text>
+            <Written text={comment.text!} />
             {comment.hidden && <Text variant="note">{hiddenLine('댓글', comment.hidden)}</Text>}
           </>
         ) : (

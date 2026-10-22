@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Icon } from '../foundation/Icon';
+import { plainText } from '../foundation/Written';
 import styles from './PostCard.module.css';
 
 // A feed of posts, each a card of its own.
@@ -40,7 +41,7 @@ export function PostCard({ title, excerpt, marks, byline, stats, vote, tone = 'p
             {title}
           </button>
         </h3>
-        {excerpt && <p className={styles.excerpt}>{excerpt}</p>}
+        {excerpt && <p className={styles.excerpt}>{plainText(excerpt)}</p>}
         <div className={styles.foot}>
           {byline}
           {stats && <span className={styles.stats}>{stats}</span>}
