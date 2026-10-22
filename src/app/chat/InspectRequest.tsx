@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { refOf } from '../../connectors/assignment';
 import { tokenGroups, type From, type TokenSource } from '../../engine/pipeline';
 import type { ForecastPart } from '../../runtime/cache';
-import type { Rehearsal } from '../../runtime/scripts';
+import type { Rehearsal } from '../../runtime/script-preview';
 import { afterEnter, previewRequest, type AfterEnter, type Sending } from '../../runtime/turn-context';
 import { describeTurnFailure, runaway } from '../common/failure';
 import { MESSAGE_ROLES, SLOT } from '../common/prompt-words';
@@ -62,12 +62,12 @@ const UNBUILT = '이 연결 방식은 요청 본문을 미리 만들어 볼 수 
 
 // Mounted only while the 요청 tab shows and no reply is being written (ChatInspect), so a send never waits on one.
 function Rehearsed({ chat, sending, editor, onEdit }: { chat: string; sending: Sending; editor: (from: From) => Side | null; onEdit: (side: Side) => void }) {
-  const { scripts } = useSession();
+  const { scriptPreview } = useSession();
   const [rehearsal, setRehearsal] = useState<Rehearsal | null | 'failed' | undefined>(undefined);
   useEffect(() => {
     setRehearsal(undefined);
     const controller = new AbortController();
-    scripts.rehearse(chat, sending, controller.signal).then(
+    scriptPreview.rehearse(chat, sending, controller.signal).then(
       (result) => !controller.signal.aborted && setRehearsal(result),
       () => !controller.signal.aborted && setRehearsal('failed'),
     );

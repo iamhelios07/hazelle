@@ -29,7 +29,7 @@ function withTools(test: (session: Session, connect: (open: OpenFrame) => ToolHo
   return server.withSession((session) => test(session, (transport) => {
     open = transport;
     return session.tools as ToolHost;
-  }), (session, scripts) => new ToolHost(session, scripts, (page) => open(page)));
+  }), (session, services) => new ToolHost(session, services, (page) => open(page)));
 }
 const source = (version = '1', uses = '//@uses model\n') => {
   const result = readTool(new TextEncoder().encode(`//@api 1\n//@name test\n//@author jin\n//@version ${version}\n${uses}//@page Open\n//@menu now Now\n//@setting {"key":"title","type":"text","label":"Title","default":"A"}`));
@@ -49,7 +49,7 @@ async function fixture(session: Session, uses?: string, greeting?: string) {
   await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
   await session.store.projections.evaluate(chat);
   const tool = () => ({ module: added.data.id, tool: session.store.get('tool', toolId(added.data.id))!.value });
-  const context = () => session.scripts.pageContext(chat, added.data.id)!;
+  const context = () => session.scriptPages.pageContext(chat, added.data.id)!;
   return { chat, module: added.data.id, tool, context };
 }
 const page = (chat: string | null = null) => ({ window: {} as Window, chat, theme: 'dark' as const, close: vi.fn() });
@@ -158,8 +158,8 @@ it('asks once before a tool reaches the network, sends nothing when refused, and
     const chat = transport.frames[0]!.api!.page!.chat!;
     const init = { method: 'POST', headers: { authorization: 'Bearer secret' }, body: '{"q":1}' } as const;
     const refused = chat.fetch(url, init);
-    await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'plugin', grants: ['network'], hosts: [] } })]));
-    session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'no');
+    await vi.waitFor(() => expect(session.scriptInteractions.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'plugin', grants: ['network'], hosts: [] } })]));
+    session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'no');
     expect(await refused).toEqual({ ok: false, reason: 'not-allowed' });
     expect(log).toEqual([]);
     expect(session.store.get('module', f.module)!.value.network).toBe(false);
@@ -186,15 +186,15 @@ it('asks once before a tool reaches the network, sends nothing when refused, and
 
 it('asks one card for all of a plugin\'s uses once the tool starts in a chat, keeps it past a send, and saves its one answer to each', () => withTools(async (session) => {
   const f = await fixture(session, '//@uses network\n//@uses model\n');
-  session.scripts.claims(f.chat);
-  session.scripts.claims(f.chat);
-  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'plugin', grants: ['network', 'model'], hosts: [] } })]));
-  await session.scripts.pageWrite(f.chat, f.module, noOutcome());
-  expect(session.scripts.snapshot().questions).toHaveLength(1);
-  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  session.scriptInteractions.claims(f.chat);
+  session.scriptInteractions.claims(f.chat);
+  await vi.waitFor(() => expect(session.scriptInteractions.snapshot().questions).toEqual([expect.objectContaining({ question: { kind: 'plugin', grants: ['network', 'model'], hosts: [] } })]));
+  await session.scriptPages.pageWrite(f.chat, f.module, noOutcome());
+  expect(session.scriptInteractions.snapshot().questions).toHaveLength(1);
+  session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
   await vi.waitFor(() => expect(session.store.get('module', f.module)!.value).toMatchObject({ network: true, botModels: true }));
-  session.scripts.claims(f.chat);
-  expect(session.scripts.snapshot().questions).toEqual([]);
+  session.scriptInteractions.claims(f.chat);
+  expect(session.scriptInteractions.snapshot().questions).toEqual([]);
 }));
 
 it('moves a plugin card to the chat on screen that joins it, since a card shows only in its own chat, and not to a background one', () => withTools(async (session) => {
@@ -202,52 +202,52 @@ it('moves a plugin card to the chat on screen that joins it, since a card shows 
   const other = crypto.randomUUID();
   await server.hold(session.store, other);
   await startChat(session.store, other, { title: null, character: null, models: {} }, null);
-  session.scripts.claims(f.chat);
-  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toMatchObject([{ chat: f.chat }]));
-  session.scripts.claims(other);
-  expect(session.scripts.snapshot().questions).toMatchObject([{ chat: other, question: { kind: 'plugin', grants: ['model'] } }]);
-  session.scripts.screen(f.chat, { send: async () => null, rendered: () => null });
-  const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, new AbortController().signal);
-  expect(session.scripts.snapshot().questions).toMatchObject([{ chat: other }]);
-  session.scripts.claims(f.chat);
-  expect(session.scripts.snapshot().questions).toMatchObject([{ chat: f.chat }]);
-  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'no');
+  session.scriptInteractions.claims(f.chat);
+  await vi.waitFor(() => expect(session.scriptInteractions.snapshot().questions).toMatchObject([{ chat: f.chat }]));
+  session.scriptInteractions.claims(other);
+  expect(session.scriptInteractions.snapshot().questions).toMatchObject([{ chat: other, question: { kind: 'plugin', grants: ['model'] } }]);
+  session.scriptPages.screen(f.chat, { send: async () => null, rendered: () => null });
+  const sending = session.scriptPages.send(f.chat, '', { kind: 'module', id: f.module }, new AbortController().signal);
+  expect(session.scriptInteractions.snapshot().questions).toMatchObject([{ chat: other }]);
+  session.scriptInteractions.claims(f.chat);
+  expect(session.scriptInteractions.snapshot().questions).toMatchObject([{ chat: f.chat }]);
+  session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'no');
   await expect(sending).resolves.toEqual({ ok: false, reason: 'not-allowed' });
 }));
 
 it('tells that a consent answer could not be saved, and saves nothing for it', () => withTools(async (session) => {
   const f = await fixture(session, '//@uses model\n');
-  session.scripts.claims(f.chat);
-  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toHaveLength(1));
+  session.scriptInteractions.claims(f.chat);
+  await vi.waitFor(() => expect(session.scriptInteractions.snapshot().questions).toHaveLength(1));
   vi.spyOn(session.store, 'update').mockResolvedValueOnce({ ok: false, error: 'offline' });
-  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
-  await vi.waitFor(() => expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'answer-unsaved', failure: { ok: false, error: 'offline' } })));
+  session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
+  await vi.waitFor(() => expect(session.scriptInteractions.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'answer-unsaved', failure: { ok: false, error: 'offline' } })));
   expect(session.store.get('module', f.module)!.value.botModels).toBeUndefined();
 }));
 
 it('keeps a plugin card past the asker that stopped waiting, and sends nothing for it once answered', () => withTools(async (session) => {
   const f = await fixture(session, '//@uses model\n');
   const sent: string[] = [];
-  session.scripts.screen(f.chat, { send: async (text) => { sent.push(text); return null; }, rendered: () => null });
+  session.scriptPages.screen(f.chat, { send: async (text) => { sent.push(text); return null; }, rendered: () => null });
   const stop = new AbortController();
-  const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, stop.signal);
-  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toHaveLength(1));
+  const sending = session.scriptPages.send(f.chat, '', { kind: 'module', id: f.module }, stop.signal);
+  await vi.waitFor(() => expect(session.scriptInteractions.snapshot().questions).toHaveLength(1));
   stop.abort();
   await expect(sending).resolves.toEqual({ ok: false, reason: 'not-allowed' });
-  expect(session.scripts.snapshot().questions).toHaveLength(1);
-  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  expect(session.scriptInteractions.snapshot().questions).toHaveLength(1);
+  session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
   await vi.waitFor(() => expect(session.store.get('module', f.module)!.value.botModels).toBe(true));
   expect(sent).toEqual([]);
 }));
 
 it('lets no use borrow the answer of a card that never named it, as one asked before a re-import added the use', () => withTools(async (session) => {
   const f = await fixture(session, '//@uses memory\n');
-  session.scripts.claims(f.chat);
-  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['memory'] } }]));
+  session.scriptInteractions.claims(f.chat);
+  await vi.waitFor(() => expect(session.scriptInteractions.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['memory'] } }]));
   await session.store.update('tool', toolId(f.module), (tool) => ({ ...tool, manifest: { ...tool.manifest, uses: [...tool.manifest.uses, 'model'] } }));
-  session.scripts.screen(f.chat, { send: async () => null, rendered: () => null });
-  const sending = session.scripts.send(f.chat, '', { kind: 'module', id: f.module }, new AbortController().signal);
-  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  session.scriptPages.screen(f.chat, { send: async () => null, rendered: () => null });
+  const sending = session.scriptPages.send(f.chat, '', { kind: 'module', id: f.module }, new AbortController().signal);
+  session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
   await expect(sending).resolves.toEqual({ ok: false, reason: 'not-allowed' });
   expect(session.store.get('module', f.module)!.value).toMatchObject({ takesMemory: true });
   expect(session.store.get('module', f.module)!.value.botModels).toBeUndefined();
@@ -255,10 +255,10 @@ it('lets no use borrow the answer of a card that never named it, as one asked be
 
 it('keeps a switch answered while its plugin card waited', () => withTools(async (session) => {
   const f = await fixture(session, '//@uses network\n//@uses model\n');
-  session.scripts.claims(f.chat);
-  await vi.waitFor(() => expect(session.scripts.snapshot().questions).toHaveLength(1));
+  session.scriptInteractions.claims(f.chat);
+  await vi.waitFor(() => expect(session.scriptInteractions.snapshot().questions).toHaveLength(1));
   await setModels(session.store, { kind: 'module', id: f.module }, false);
-  session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+  session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
   await vi.waitFor(() => expect(session.store.get('module', f.module)!.value).toMatchObject({ network: true, botModels: false }));
 }));
 
@@ -348,7 +348,7 @@ it('resets stalls after loading, then disables three consecutive stalled loads a
     await stall();
     await host.warm(f.chat);
     await host.warm(f.chat);
-    expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'stuck' && note.disabled)).toHaveLength(1);
+    expect(session.scriptInteractions.snapshot().notes.filter((note) => note.kind === 'stuck' && note.disabled)).toHaveLength(1);
     expect(transport.frames).toHaveLength(5);
     expect(host.hears(f.module, 'showing')).toBe(false);
     const context = f.context();
@@ -367,7 +367,7 @@ it('waits for slow code and page chat reads before starting the load watchdog, a
     return { ...lease, ready: lease.ready.then(() => new Promise<null>((resolve) => { loaded = () => resolve(null); })) };
   });
   const context = f.context();
-  vi.spyOn(session.scripts, 'pageContext').mockReturnValue({ ...context, scope: { ...context.scope, persona: null } });
+  vi.spyOn(session.scriptPages, 'pageContext').mockReturnValue({ ...context, scope: { ...context.scope, persona: null } });
   const transport = inProcessTools(() => {});
   const host = connect(transport.open);
   try {
@@ -381,7 +381,7 @@ it('waits for slow code and page chat reads before starting the load watchdog, a
     loaded();
     await vi.advanceTimersByTimeAsync(0);
     expect(transport.frames[0]!.api!.page!.chat!.persona).toBeNull();
-    expect(session.scripts.snapshot().notes).toEqual([]);
+    expect(session.scriptInteractions.snapshot().notes).toEqual([]);
   } finally { vi.useRealTimers(); host.close(); }
 }));
 
@@ -495,7 +495,7 @@ it('notifies a running tool after pulling a data change written on another devic
   await startChat(account.store, chat, { title: null, character: null, models: {} }, null);
   const changes = vi.fn();
   const transport = inProcessTools((api) => { api.storage.onChange(changes); });
-  const host = new ToolHost(account, () => ({ report: () => {}, pageContext: () => null, pageWrite: async () => {}, send: async () => ({ ok: true as const }), rendered: () => null }), transport.open);
+  const host = new ToolHost(account, { journal: { report: () => {} }, pages: { pageContext: () => null, pageWrite: async () => {}, send: async () => ({ ok: true as const }), rendered: () => null } }, transport.open);
   try {
     await host.warm(chat);
     const peer = await account.open();
@@ -507,7 +507,7 @@ it('notifies a running tool after pulling a data change written on another devic
   } finally { host.close(); }
 });
 
-it('applies page chat writes through Scripts, distinguishes null and deletion, and keeps the page alive while open', () => withTools(async (session, connect) => {
+it('applies page chat writes through the page runtime, distinguishes null and deletion, and keeps the page alive while open', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
   const host = connect(transport.open);
@@ -545,7 +545,7 @@ it('writes the chat\'s own lorebook by name and its variables unprefixed, sends 
     const [hello] = await chat.messages();
     expect(await chat.rendered(hello!)).toBeNull();
     const drawn = { html: '<p>hello</p>', css: '', text: 'hello' };
-    const leave = session.scripts.screen(f.chat, { send: screen, rendered: (at) => (at.id === hello!.id && at.version === hello!.version ? drawn : null) });
+    const leave = session.scriptPages.screen(f.chat, { send: screen, rendered: (at) => (at.id === hello!.id && at.version === hello!.version ? drawn : null) });
     expect(await chat.rendered(hello!)).toEqual(drawn);
     await setModels(session.store, { kind: 'module', id: f.module }, true);
     chat.writeLore({ name: 'save', keys: ['hero'], text: '{}', always: false, on: true });
@@ -573,7 +573,7 @@ it('allows a standalone page storage but refuses chat calls with no chat capabil
     expect(frame.api!.page!.chat).toBeNull();
     frame.emit({ kind: 'call', call: 77, method: 'model', args: ['aux', []] });
     await vi.waitFor(() => expect(frame.host.sent).toContainEqual({ kind: 'answer', call: 77, ok: false, value: 'no-chat' }));
-    expect(session.scripts.snapshot().questions).toEqual([]);
+    expect(session.scriptInteractions.snapshot().questions).toEqual([]);
   } finally { close(); host.close(); }
 }));
 
@@ -581,7 +581,7 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
   const host = connect(transport.open);
-  const apply = vi.spyOn(session.scripts, 'pageWrite').mockResolvedValue();
+  const apply = vi.spyOn(session.scriptPages, 'pageWrite').mockResolvedValue();
   const close = host.page(f.module, page(f.chat));
   try {
     await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
@@ -597,8 +597,8 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
     vi.useRealTimers();
     for (let i = 0; i < 10; i++) frame.emit({ kind: 'failed', id: 0, message: 'same failure' });
     for (let i = 0; i < 10; i++) frame.emit({ kind: 'call', call: 100 + i, method: 'say', args: ['normal', `notice ${i}`] });
-    await vi.waitFor(() => expect(session.scripts.snapshot().notes).toHaveLength(3));
-    expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'failed')).toHaveLength(1);
+    await vi.waitFor(() => expect(session.scriptInteractions.snapshot().notes).toHaveLength(3));
+    expect(session.scriptInteractions.snapshot().notes.filter((note) => note.kind === 'failed')).toHaveLength(1);
   } finally { vi.useRealTimers(); close(); host.close(); }
 }));
 
@@ -625,7 +625,7 @@ it('runs a new chat\'s frame tool from its draft before the first save, and lets
     expect(host.frames().get(module)?.chat).toBe(chat);
     await server.hold(session.store, chat);
     await startChat(session.store, chat, draft, null);
-    await session.scripts.menu(chat, module, 'cast');
+    await session.scriptCommands.menu(chat, module, 'cast');
     await vi.waitFor(() => expect(pressed).toHaveBeenCalledWith(expect.any(Number)));
     expect(pressed).not.toHaveBeenCalledWith(-1);
     leave();
@@ -659,7 +659,7 @@ it('runs a frame tool as one frame: its registered items, a press from the chat,
     const { items } = host;
     await vi.waitFor(() => expect(items(module)).toEqual([{ id: 'cast', label: 'Cast' }]));
     expect(transport.frames.map((frame) => frame.api?.context)).toEqual(['frame']);
-    await session.scripts.menu(chat, module, 'cast');
+    await session.scriptCommands.menu(chat, module, 'cast');
     await vi.waitFor(() => expect(host.frames().get(module)).toEqual({ menu: [{ id: 'cast', label: 'Cast' }], actions: [], chat, asking: true }));
     expect(pressed.mock.calls[0]![0]).toEqual(expect.any(Number));
     expect(pressed.mock.calls[0]![0]).not.toBe(-1);
@@ -786,7 +786,7 @@ it('runs the porting sample as imported: each reply gets its picture as a 삽화
   try {
     await host.warm(chat);
     await vi.waitFor(() => expect(host.actions(module)).toEqual([{ id: 'redraw', label: '다시 그리기' }]));
-    const context = session.scripts.pageContext(chat, module)!;
+    const context = session.scriptPages.pageContext(chat, module)!;
     // The reply event ends before the picture is drawn; the picture lands after it, as a slow one would.
     await host.run(chat, { module, tool: session.store.get('tool', toolId(module))!.value }, context.scope, { kind: 'reply', reply: { index: 1, id: reply, version: reply } }, context.host);
     await vi.waitFor(() => expect(pictures()).toHaveLength(1));
@@ -800,7 +800,7 @@ it('runs the porting sample as imported: each reply gets its picture as a 삽화
     await vi.waitFor(() => expect(host.actions(module)).toEqual([{ id: 'redraw', label: '다시 그리기' }]));
     expect(transport.frames).toHaveLength(2);
     expect(pictures().map(({ id }) => id)).toEqual([first.id]);
-    await session.scripts.action(chat, module, 'redraw', reply);
+    await session.scriptCommands.action(chat, module, 'redraw', reply);
     await vi.waitFor(() => expect(pictures()[0]!.rev).toBeGreaterThan(first.rev));
     expect(pictures().map(({ id }) => id)).toEqual([first.id]);
     // Past the header's cap of three, or on a message no chat read holds, the call fails where the plugin can see it.

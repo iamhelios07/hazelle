@@ -9,13 +9,13 @@ import { useToast } from '../toast';
 // What the bots' scripts say, each shown once as a notice. It stands in the shell, not in the chat screen: a script
 // may speak for a chat that is not the one open.
 export function BotNotes() {
-  const { store, scripts } = useSession();
+  const { store, scriptInteractions } = useSession();
   const { notes } = useScripts();
   const toast = useToast();
 
   useEffect(() => {
     for (const note of notes) {
-      scripts.seen(note.id);
+      scriptInteractions.seen(note.id);
       const from = scriptVoice(store, note.from);
       switch (note.kind) {
         case 'said': {

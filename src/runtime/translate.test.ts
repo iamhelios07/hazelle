@@ -27,7 +27,7 @@ describe('Translator', () => {
       const writer = stream.writable.getWriter();
       const log = stubRelay(inTurn([new Response(stream.readable, { headers: { 'x-relay': 'upstream' } }), saying('안녕, 여행자.')]));
       // The bot's onOutput runs past the moment the reply lets its chat go.
-      vi.spyOn(session.scripts, 'ended').mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 50)));
+      vi.spyOn(session.scriptTurns, 'ended').mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 50)));
       const screen = vi.fn();
       const leave = session.talk.subscribe(screen);
       const turn = takeTurn(session, chat, { kind: 'answer' });
@@ -59,7 +59,7 @@ describe('Translator', () => {
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Hi' });
       stubRelay(inTurn([saying('Hello, traveler.'), saying('안녕, 여행자.')]));
       let ended = () => {};
-      vi.spyOn(session.scripts, 'ended').mockImplementation(() => new Promise((resolve) => { ended = () => resolve(); }));
+      vi.spyOn(session.scriptTurns, 'ended').mockImplementation(() => new Promise((resolve) => { ended = () => resolve(); }));
       expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
       const reply = shown(fold(session.store.children('entry', chat))[1]!).id;
       expect(session.translator.snapshot().awaited).toEqual(new Set([reply]));
@@ -99,7 +99,7 @@ describe('Translator', () => {
       const log = stubRelay(inTurn([saying('Hello')]));
       await takeTurn(session, chat, { kind: 'answer' });
       await setTranslate(session.store, null, { replies: true });
-      const read = session.read.screen(chat, session.talk, session.illustrator, { chat: opened, messages: [] });
+      const read = session.read.screen(chat, session.talk, session.illustrator, { chat: opened, messages: [] }, session.display);
       const leave = read.subscribe(() => {});
       await vi.waitFor(() => expect(read.snapshot().display.texts).toEqual(['Hello']));
       expect(session.translator.snapshot().live.size).toBe(0);
@@ -119,7 +119,7 @@ describe('Translator', () => {
       const version = crypto.randomUUID();
       const messages: Message[] = [{ id: version, role: 'assistant', at: 0, selected: 0, versions: [{ id: version, seed: version, text: 'Hello', receipt: null, edited: false, at: 0 }] }];
       const log = stubRelay(() => saying('안녕'));
-      const read = session.read.screen(chat, session.talk, session.illustrator, { chat: opened, messages });
+      const read = session.read.screen(chat, session.talk, session.illustrator, { chat: opened, messages }, session.display);
       const leave = read.subscribe(() => {});
       await vi.waitFor(() => expect(read.snapshot().display.texts).toEqual(['Hello']));
       expect(session.translator.snapshot().live.size).toBe(0);

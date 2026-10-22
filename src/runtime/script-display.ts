@@ -8,12 +8,14 @@ import type { UnfoundAssets } from './assets';
 import { EvaluationStopped, EvaluationStuck } from './evaluation';
 
 import { luaSnapshot, luaStanding } from './lua/snapshot';
-import { scriptsOf, type Scripts } from './scripts';
+import { scriptsOf } from './script-selection';
+import type { ScriptExecution } from './script-execution';
+import type { ScriptEffects } from './script-effects';
 import type { ToolUnit } from '../model/tool';
 import type { ObjectStore } from './store';
 import { packsOf, pinned, scopeOf } from './chat-context';
 
-// tools: those that may answer showing, run over each stretch after the Lua (Scripts.showing).
+// tools: those that may answer showing, run over each stretch after the Lua (ScriptExecution.showing).
 type Pass = { revision: number; generation: number; scripts: Script[]; tools: ToolUnit[]; scope: ChatScope; snapshot: Snapshot; items: Missed[]; remaining: number; installed: boolean; view: Display; signal?: AbortSignal };
 // generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks, and never used
 // twice, so a stretch begun under an older one lands as a last result and never as a fresh one.
@@ -41,13 +43,18 @@ export class ScriptDisplay {
   // engine decides who takes part: a listener may be registered under a computed name, which the source does not show.
   private readonly listens = new Map<string, boolean>();
 
+  private readonly stopReload: () => void;
+
   constructor(
     private readonly store: ObjectStore,
     private readonly open: () => Promise<LuaRunner>,
     private readonly report: (chat: string, result: Displayed | unknown) => void,
     private readonly unfound: UnfoundAssets,
-    private readonly tools: () => Pick<Scripts, 'showers' | 'showing'>,
-  ) {}
+    private readonly tools: Pick<ScriptExecution, 'showers' | 'showing'>,
+    effects: Pick<ScriptEffects, 'subscribeReload'>,
+  ) {
+    this.stopReload = effects.subscribeReload((chat) => this.stale(chat));
+  }
 
   subscribe(chat: string, listener: (display?: Display) => void | Promise<void>) {
     const listeners = this.listeners.get(chat) ?? new Set();
@@ -61,6 +68,7 @@ export class ScriptDisplay {
   }
 
   close() {
+    this.stopReload();
     for (const chat of this.listeners.keys()) this.release(chat);
     this.listeners.clear();
   }
@@ -82,7 +90,7 @@ export class ScriptDisplay {
     const take = pinned(reader, chat);
     const all = scriptsOf(packsOf(this.store, chat));
     const scripts = all.filter(({ code }) => this.listens.get(code) !== false);
-    const tools = this.tools().showers(chat);
+    const tools = this.tools.showers(chat);
     if (!scripts.length && !tools.length) {
       const previous = this.passes.get(id);
       if (previous) void this.runner?.then((runner) => runner.forgetDisplay(id, previous.revision));
@@ -158,7 +166,7 @@ export class ScriptDisplay {
           batch.listening.forEach((listening, at) => this.listens.set(pass.scripts[at]!.code, listening));
           if (pass.tools.length) {
             const lua = batch;
-            batch = { ...lua, texts: await this.tools().showing(chat, pass.tools, pass.scope, pass.items.slice(lua.from, lua.from + lua.texts.length).map((item, at) => ({ version: item.version, text: lua.texts[at]! }))) };
+            batch = { ...lua, texts: await this.tools.showing(chat, pass.tools, pass.scope, pass.items.slice(lua.from, lua.from + lua.texts.length).map((item, at) => ({ version: item.version, text: lua.texts[at]! }))) };
           }
         } catch (error) {
           // A pass that cannot be made shows the texts as they were, rather than nothing.

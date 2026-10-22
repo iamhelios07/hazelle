@@ -35,7 +35,16 @@ import { Usage } from './usage';
 import { LuaStuck, LuaWorker } from './lua/client';
 import { ReadModels } from './read-model';
 import { ScriptDisplay } from './script-display';
-import { Scripts } from './scripts';
+import { ScriptInteractions } from './script-interactions';
+import { ScriptSchedule } from './script-schedule';
+import { ScriptJournal } from './script-journal';
+import { ScriptEffects } from './script-effects';
+import { ScriptReach } from './script-reach';
+import { ScriptPages } from './script-pages';
+import { ScriptExecution } from './script-execution';
+import { ScriptTurns } from './script-turns';
+import { ScriptPreview } from './script-preview';
+import { ScriptCommands } from './script-commands';
 import { Streams } from './streams';
 import { backfillSummaries } from './summary';
 import { receiveReply, resumeSend } from './turn';
@@ -64,11 +73,17 @@ export type Session = {
   briefs: Briefs;
   drafts: Drafts;
   streams: Streams;
-  scripts: Scripts;
+  scriptInteractions: ScriptInteractions;
+  scriptJournal: ScriptJournal;
+  scriptPages: ScriptPages;
+  scriptTurns: ScriptTurns;
+  scriptPreview: ScriptPreview;
+  scriptCommands: ScriptCommands;
   tools: Tools;
   credentials: Credentials;
   catalogs: Catalogs;
   read: ReadModels;
+  display: ScriptDisplay;
   // Every way out of an open vault (잠그기, 로그아웃) and every restore the store hears end it (app/shell/Workspace).
   close: () => void;
   startBackground: () => void;
@@ -124,31 +139,45 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   let runner: Promise<LuaRunner> | null = null;
   // Asked for once the session has closed, it makes none: nothing would be left to end it.
   const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
+  const scriptClosing = new AbortController();
+  const scriptInteractions = new ScriptInteractions(store, scriptClosing.signal);
+  const scriptSchedule = new ScriptSchedule(store, scriptInteractions, scriptClosing.signal);
+  const scriptJournal = new ScriptJournal(store, scriptInteractions, scriptClosing.signal);
   const unfound = new UnfoundAssets();
-  const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result), unfound, () => scripts);
-  const read = new ReadModels(store, display);
+  const read = new ReadModels(store);
+  const scriptReach = new ScriptReach({ tokens, store, read, credentials, log, costs }, scriptInteractions, scriptClosing.signal);
   const likenesses = new Likenesses({ tokens, store, credentials, log, files, catalogs });
   const illustrator = new Illustrator({ tokens, store, credentials, log, files, likenesses });
   const commentator = new Commentator({ tokens, store, credentials, log });
   const polisher = new Polisher({ tokens, store, credentials, log });
   const briefs: Briefs = new Map();
-  const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
-  const scripts: Scripts = new Scripts({ tokens, store, read, credentials, log, costs, display }, { lua: machine, tools });
-  const memory = new Rememberer({ store, read, credentials, log, costs, scripts, tokens }, reading);
+  const scriptEffects = new ScriptEffects({ store, read }, scriptInteractions);
+  const scriptPages = new ScriptPages({ store, read }, scriptInteractions, scriptSchedule, scriptReach, scriptEffects, scriptClosing.signal);
+  const tools = (bindings.tools ?? createTools)({ store, files }, { pages: scriptPages, journal: scriptJournal });
+  const scriptExecution: ScriptExecution = new ScriptExecution({ store, read }, { lua: machine, tools }, scriptSchedule, scriptReach, scriptEffects, scriptJournal, scriptClosing.signal);
+  const display = new ScriptDisplay(store, machine, (chat, result) => scriptJournal.report(chat, result), unfound, scriptExecution, scriptEffects);
+  const scriptTurns = new ScriptTurns({ store, read }, scriptInteractions, scriptSchedule, scriptExecution, scriptClosing.signal);
+  const scriptPreview = new ScriptPreview({ store }, machine, scriptReach, scriptTurns);
+  const scriptCommands = new ScriptCommands({ store, read }, tools, scriptSchedule, scriptExecution, scriptClosing.signal);
+  const stopScripts = store.subscribe(() => {
+    scriptJournal.prune();
+    scriptTurns.prune();
+  });
+  const memory = new Rememberer({ store, read, credentials, log, costs, scriptTurns, tokens }, reading);
   const talk = new Talk(
     store,
     credentials,
     log,
     costs,
     tokens,
-    (chat, reply) => scripts.ending(chat, reply),
+    (chat, reply) => scriptTurns.ending(chat, reply),
     // The bot's onOutput may rewrite the reply, so what reads the reply waits for it. The lease, taken while Talk still
     // holds the chat, keeps it loaded for the continuation or translation however soon the chat is left.
     (chat, reply) => {
       const lease = store.retainChat(chat);
       // Here, before Talk ends the turn: the reply goes from live to awaited with no render between.
       const settle = translator.expect(chat, reply);
-      void scripts.ended(chat, reply).finally(() => {
+      void scriptTurns.ended(chat, reply).finally(() => {
         void receiveReply(session, chat, reply).finally(() => {
           settle();
           lease.release();
@@ -200,7 +229,11 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     streams.close();
     talk.close();
     log.close();
-    scripts.close();
+    scriptClosing.abort();
+    stopScripts();
+    scriptTurns.close();
+    scriptJournal.close();
+    scriptInteractions.close();
     tools.close();
     // One still being made is ended as it is made.
     void runner?.then((made) => made.close());
@@ -218,7 +251,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { transport, tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, polisher, briefs, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { transport, tools, username, store, files, assets, unfound, talk, log, costs, usage, tokens, translator, memory, illustrator, likenesses, commentator, polisher, briefs, drafts, streams, scriptInteractions, scriptJournal, scriptTurns, scriptPreview, scriptCommands, scriptPages, credentials, catalogs, read, display, close, startBackground };
   return { ok: true, data: session };
 }
 

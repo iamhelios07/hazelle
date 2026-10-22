@@ -4,7 +4,7 @@ import type { AskAnswer } from '../ui';
 
 const CONSENT: AskAnswer = { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] };
 
-// Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
+// Each value is what ScriptInteractions.answer takes for that kind (runtime/script-interactions): the line typed, 'yes' or a dismissal, an
 // option's index, and for a model call, a card write or a plugin's grants 'yes' or 'no'.
 export function asking(question: ScriptQuestion['question'], asker: Asker): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {

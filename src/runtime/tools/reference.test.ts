@@ -67,10 +67,10 @@ it('runs the reference notepad page and background, saves through merged storage
       await vi.waitFor(() => expect(pages[1]?.body.children.find(({ tag }) => tag === 'textarea')?.value).toBe('A note kept in the vault'));
       expect(transport.frames.filter(({ page }) => !page)).toHaveLength(1);
     } finally { close(); }
-  }, (session, scripts) => new ToolHost(session, scripts, transport.open));
+  }, (session, services) => new ToolHost(session, services, transport.open));
 });
 
-it('runs reference memory through real Scripts, the aux connection, the tool slot, and version replay', async () => {
+it('runs reference memory through the real script runtime, the aux connection, the tool slot, and version replay', async () => {
   const transport = inProcessTools((api, code) => { runInNewContext(code, { hazelle: api }, { timeout: 1000 }); });
   await server.withSession(async (session) => {
     await answerable(session);
@@ -81,8 +81,8 @@ it('runs reference memory through real Scripts, the aux connection, the tool slo
     let summaries = 0;
     const log = stubRelay(({ body }) => saying(body?.includes('Summarize the conversation') ? `summary ${++summaries}` : 'main reply'));
     await takeTurn(session, chat, { kind: 'send', text: 'The gate is open.' });
-    await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: module }, question: { kind: 'plugin' } }]);
-    session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+    await expect.poll(() => session.scriptInteractions.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: module }, question: { kind: 'plugin' } }]);
+    session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
     const messages = () => fold(session.store.children('entry', chat));
     const key = 'tool:hazelle/memory-lite:summary';
     await expect.poll(() => shown(messages()[1]!).after?.some(([name]) => name === key)).toBe(true);
@@ -106,5 +106,5 @@ it('runs reference memory through real Scripts, the aux connection, the tool slo
     expect(replacement.prompt.messages.some(({ content }) => content === 'summary 2')).toBe(false);
     await selectVersion(session.store, chat, messages()[3]!.id, original);
     expect(JSON.parse(shown(messages()[3]!).after!.find(([name]) => name === key)![1])).toBe('summary 2');
-  }, (session, scripts) => new ToolHost(session, scripts, transport.open));
+  }, (session, services) => new ToolHost(session, services, transport.open));
 });

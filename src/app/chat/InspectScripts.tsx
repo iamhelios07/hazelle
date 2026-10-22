@@ -11,10 +11,10 @@ export const STAGES: Record<string, string> = { load: '처음 실행', onInput: 
 };
 
 export function Scripts({ chat }: { chat: string }) {
-  const { scripts } = useSession();
+  const { scriptJournal } = useSession();
   const log = useSyncExternalStore(
-    (listener) => scripts.subscribeLog(chat, listener),
-    () => scripts.log(chat),
+    (listener) => scriptJournal.subscribeLog(chat, listener),
+    () => scriptJournal.log(chat),
   );
   const entries = log.entries.map((entry, index) => ({ entry, key: `${entry.at}:${log.omitted + index}` })).reverse();
   return (

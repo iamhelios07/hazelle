@@ -11,7 +11,7 @@ import { Files } from './files';
 import { backfillSummaries, saveSummaries, summaryId, summaryStale } from './summary';
 import type { api, ApiResult } from './api';
 import { EvaluationFailed, EvaluationStuck } from './evaluation';
-import { ReadModels } from './read-model';
+import { plainDisplay, ReadModels } from './read-model';
 import { planRemoval } from './removal';
 import { openSession } from './session';
 import { Streams } from './streams';
@@ -574,7 +574,7 @@ describe('per-chat read models', () => {
     const read = new ReadModels(store);
     const talk = liveTalk();
     const opening = { chat, messages: [] };
-    const screen = read.screen('a', talk, NO_DRAWINGS, opening);
+    const screen = read.screen('a', talk, NO_DRAWINGS, opening, plainDisplay(store));
     const leave = screen.subscribe(() => {});
     await hold(store, screen.id);
     screen.setInputs(opening, { width: 800, height: 600 });
@@ -614,12 +614,13 @@ describe('per-chat read models', () => {
     await store.create('chat', chat, { id: 'a' });
     await hold(store, 'a');
     const read = new ReadModels(store);
+    const open = plainDisplay(store);
     const talk = liveTalk();
     const opening = { chat, messages: [] };
-    const screen = read.screen('a', talk, NO_DRAWINGS, opening);
-    const display = read.open.display.bind(read.open);
+    const screen = read.screen('a', talk, NO_DRAWINGS, opening, open);
+    const display = open.display.bind(open);
     const passes: Promise<unknown>[] = [];
-    vi.spyOn(read.open, 'display').mockImplementation((...args) => {
+    vi.spyOn(open, 'display').mockImplementation((...args) => {
       const pass = new Promise<void>((resolve) => setTimeout(resolve, 30)).then(() => display(...args));
       passes.push(pass);
       return pass;
@@ -648,7 +649,7 @@ describe('per-chat read models', () => {
     const read = new ReadModels(store);
     const talk = liveTalk();
     const opening = { chat, messages: [] };
-    const screen = read.screen('a', talk, NO_DRAWINGS, opening);
+    const screen = read.screen('a', talk, NO_DRAWINGS, opening, plainDisplay(store));
     const shown: string[][] = [];
     const leave = screen.subscribe(() => shown.push(screen.snapshot().messages.map((each) => each.id)));
     screen.setInputs(opening, { width: 800, height: 600 });
@@ -678,7 +679,7 @@ describe('per-chat read models', () => {
     await hold(store, 'a');
     const read = new ReadModels(store);
     const opening = { chat, messages: [] };
-    const screen = read.screen('a', liveTalk(), NO_DRAWINGS, opening);
+    const screen = read.screen('a', liveTalk(), NO_DRAWINGS, opening, plainDisplay(store));
     screen.setInputs(opening, { width: 800, height: 600 });
     screen.subscribe(() => {})();
     const leave = screen.subscribe(() => {});
@@ -693,9 +694,10 @@ describe('per-chat read models', () => {
     await store.create('entry', message('hi'), { parent: 'a' });
     await hold(store, 'a');
     const read = new ReadModels(store);
+    const open = plainDisplay(store);
     const opening = { chat, messages: [] };
-    const screen = read.screen('a', liveTalk(), NO_DRAWINGS, opening);
-    const failing = vi.spyOn(read.open, 'display').mockRejectedValue(new Error('crash'));
+    const screen = read.screen('a', liveTalk(), NO_DRAWINGS, opening, open);
+    const failing = vi.spyOn(open, 'display').mockRejectedValue(new Error('crash'));
     const leave = screen.subscribe(() => {});
     screen.setInputs(opening, { width: 800, height: 600 });
     await vi.waitFor(() => expect(screen.snapshot().error).toBeInstanceOf(Error));
@@ -706,7 +708,7 @@ describe('per-chat read models', () => {
     expect(shown.pending).toBeUndefined();
     expect(shown.error).toBeUndefined();
     expect(shown.messages).toHaveLength(1);
-    vi.spyOn(read.open, 'display').mockRejectedValueOnce(new Error('again'));
+    vi.spyOn(open, 'display').mockRejectedValueOnce(new Error('again'));
     await screen.refresh();
     expect(screen.snapshot()).toEqual({ ...shown, error: new Error('again') });
     leave();
@@ -716,11 +718,12 @@ describe('per-chat read models', () => {
   it("shows a chat not saved yet whose display stuck without the bot's regex, and with it again once 다시 시도 clears that", async () => {
     const { store } = await account();
     const read = new ReadModels(store);
+    const open = plainDisplay(store);
     const opening = { chat, messages: [] };
-    const screen = read.screen('n', liveTalk(), NO_DRAWINGS, opening);
-    const display = read.open.display.bind(read.open);
+    const screen = read.screen('n', liveTalk(), NO_DRAWINGS, opening, open);
+    const display = open.display.bind(open);
     let stalled = false;
-    const displayed = vi.spyOn(read.open, 'display').mockImplementation(async (...args) => {
+    const displayed = vi.spyOn(open, 'display').mockImplementation(async (...args) => {
       if (stalled || !args[3]) return display(...args);
       stalled = true;
       throw new EvaluationStuck('stuck', true);
@@ -770,7 +773,7 @@ describe('per-chat read models', () => {
     const talk = liveTalk();
     const greeting: chatModel.Message = { id: 'opening', role: 'assistant', at: 0, versions: [{ id: 'g', seed: 'g', text: '{{screenwidth}}', receipt: null, edited: false, at: 0 }], selected: 0 };
     const opening = { chat, messages: [greeting] };
-    const screen = read.screen('new', talk, NO_DRAWINGS, opening);
+    const screen = read.screen('new', talk, NO_DRAWINGS, opening, plainDisplay(store));
     const leave = screen.subscribe(() => {});
     await hold(store, screen.id);
     screen.setInputs(opening, { width: 800, height: 600 });

@@ -10,7 +10,7 @@ import { chatTranslate, featuresOf } from '../../runtime/features';
 import { removeChat, renameChat, restoreChat, restoreRaw } from '../../runtime/chat-log';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
-import { triggersOf } from '../../runtime/scripts';
+import { triggersOf } from '../../runtime/script-selection';
 import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf } from '../../runtime/chat-context';
@@ -71,7 +71,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   useEffect(() => {
     if (!id) return session.tools.draft(chatId, chat);
     void session.tools.warm(id);
-    session.scripts.claims(id);
+    session.scriptInteractions.claims(id);
   }, [id, tools]);
   const toggles = toggleRows(togglesOf(store, chat, prompt));
   const card = shelf?.character.card ?? null;
@@ -233,7 +233,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     const unanswered = () => toast.show('아무 동작도 연결되지 않은 버튼이에요.');
     if (!scripted) return unanswered();
     if (button === null || !(await saved())) return;
-    const { waits, answered } = session.scripts.press(chatId, button);
+    const { waits, answered } = session.scriptCommands.press(chatId, button);
     if (waits) toast.show('앞선 작업이 끝나면 이 버튼이 동작해요.');
     if (!(await answered)) unanswered();
   }
@@ -263,7 +263,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
   const toolScreen = useRef({ send: sendForTool, rendered: renderedForTool });
   toolScreen.current = { send: sendForTool, rendered: renderedForTool };
-  useEffect(() => id === null ? undefined : session.scripts.screen(id, { send: (text) => toolScreen.current.send(id, text), rendered: (at) => toolScreen.current.rendered(at) }), [id]);
+  useEffect(() => id === null ? undefined : session.scriptPages.screen(id, { send: (text) => toolScreen.current.send(id, text), rendered: (at) => toolScreen.current.rendered(at) }), [id]);
 
   // A send's text went back to the draft, or was kept when its message was saved; either way the composer sends again.
   const sendSkipping = ({ target, skip }: { target: Target; skip: Skip }) => (target.kind === 'send' ? void send(skip) : ask(target, skip));
@@ -337,7 +337,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   function runTool(module: string, run: (chat: string) => Promise<unknown>) {
-    void saved().then((ok) => ok && run(chatId)).catch((error: unknown) => session.scripts.report(chatId, error, { kind: 'module', id: module }));
+    void saved().then((ok) => ok && run(chatId)).catch((error: unknown) => session.scriptJournal.report(chatId, error, { kind: 'module', id: module }));
   }
 
   function rename(name: string) {
@@ -429,8 +429,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       switchInspectTab: (tab: InspectTab) => setPanels((current) => current.inspect ? { ...current, inspect: { kind: 'inspect', tab } } : current),
       closeInspect: () => setPanels((current) => ({ ...current, inspect: null })),
       tool: (module: string) => void saved().then((ok) => ok && flipPanel({ kind: 'tool', module }, (current) => current.kind === 'tool' && current.module === module)),
-      toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scripts.menu(chat, module, item)),
-      toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),
+      toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scriptCommands.menu(chat, module, item)),
+      toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scriptCommands.action(chat, module, item, message)),
       side: (panel: Panel) => open(panel),
       closePanel: () => setPanels((current) => ({ ...current, panel: null })),
       openDialog: (which: NonNullable<typeof dialog>) => setDialog(which),

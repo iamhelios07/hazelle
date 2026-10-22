@@ -35,9 +35,9 @@ const ADDED: Record<ScriptList, string> = { regex: SCRIPTS.regex, triggers: 'Lua
 // the code editor offers by name.
 export function ScriptsEditor({ owner, pack, drill, status = [], variables }: { owner: PackOwner; pack: Pack; drill: boolean; status?: readonly string[]; variables?: Defaults }) {
   const store = useStore();
-  const { scripts } = useSession();
+  const { scriptPreview } = useSession();
   const trial = useTrial(owner, variables);
-  const lua = useMemo(() => luaLanguage((code) => scripts.check(code), trial.variables), [scripts, trial.variables]);
+  const lua = useMemo(() => luaLanguage((code) => scriptPreview.check(code), trial.variables), [scriptPreview, trial.variables]);
   const replacement = useMemo(() => cbsLanguage({ variables: trial.variables, placeholder: 'data' }), [trial.variables]);
   const rows = useOpenRows();
   // One at a time, so the open script is the only one.

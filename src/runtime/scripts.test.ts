@@ -24,7 +24,9 @@ import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { blankCard } from '../engine/import/card';
 import { chatNow, evaluateChat } from './chat-context';
-import { NOT_REHEARSED, SCRIPT_LOG_LIMITS, triggersOf } from './scripts';
+import { NOT_REHEARSED } from './script-preview';
+import { SCRIPT_LOG_LIMITS } from './script-journal';
+import { triggersOf } from './script-selection';
 import type { TurnContext } from './turn-context';
 import { takeTurn } from './turn';
 
@@ -135,7 +137,7 @@ describe("a turn with the bot's Lua", () => {
       expect(await takeTurn(session, chat, { kind: 'send', text: '/roll' })).toBeNull();
       expect(log).toHaveLength(0);
       expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', after: [['handled', '/roll']] });
-      expect(session.scripts.snapshot().notes).toEqual([]);
+      expect(session.scriptInteractions.snapshot().notes).toEqual([]);
     }));
 
   it('ends the turn on a stopChat from onInput, running nothing after it, keeping the message with what was written and saying so', () =>
@@ -152,7 +154,7 @@ describe("a turn with the bot's Lua", () => {
       expect(messages()).toHaveLength(2);
       expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', before: [['seen', '1']] });
       expect(shown(messages()[1]!).after).toBeUndefined();
-      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'input-stop' }]);
+      expect(session.scriptInteractions.snapshot().notes).toMatchObject([{ chat, kind: 'input-stop' }]);
     }));
 
   it("asks before the bot's first model call, keeps the answer on the character, counts the call in the chat's usage, and ends it on the server", () =>
@@ -167,9 +169,9 @@ describe("a turn with the bot's Lua", () => {
         return served(url, init);
       });
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
-      await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ chat, question: { kind: 'model' } }]);
+      await expect.poll(() => session.scriptInteractions.snapshot().questions).toMatchObject([{ chat, question: { kind: 'model' } }]);
       expect(log).toHaveLength(1);
-      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
       await expect.poll(() => shown(messages()[2]!).after).toEqual([['made', 'summary']]);
       expect(session.store.get('character', character)!.value.botModels).toBe(true);
       expect((JSON.parse(log[1]!.sent.body!) as { messages: unknown }).messages).toEqual([{ role: 'user', content: 'sum' }]);
@@ -184,13 +186,13 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const { chat } = await chatWith(session, `onButtonClick = async(function(id, data) setBackgroundEmbedding(id, data) end)`);
       const character = session.store.get('chat', chat)!.value.character!;
-      const pressing = session.scripts.press(chat, { data: '<style>.a{}</style>' }).answered;
-      await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ chat, question: { kind: 'card' } }]);
-      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      const pressing = session.scriptCommands.press(chat, { data: '<style>.a{}</style>' }).answered;
+      await expect.poll(() => session.scriptInteractions.snapshot().questions).toMatchObject([{ chat, question: { kind: 'card' } }]);
+      session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
       await pressing;
       expect(session.store.get('character', character)!.value).toMatchObject({ cardWrites: true, card: { background: '<style>.a{}</style>' } });
-      await session.scripts.press(chat, { data: '<style>.b{}</style>' }).answered;
-      expect(session.scripts.snapshot().questions).toEqual([]);
+      await session.scriptCommands.press(chat, { data: '<style>.b{}</style>' }).answered;
+      expect(session.scriptInteractions.snapshot().questions).toEqual([]);
       expect(session.store.get('character', character)!.value.card.background).toBe('<style>.b{}</style>');
     }));
 
@@ -204,19 +206,19 @@ describe("a turn with the bot's Lua", () => {
         url.startsWith('/api/streams/') && init?.method === 'POST' && starts++ ? Promise.resolve(Response.json({ error: 'too-many-bot-calls' }, { status: 429 })) : served(url, init),
       );
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
-      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(1);
-      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      await expect.poll(() => session.scriptInteractions.snapshot().questions).toHaveLength(1);
+      session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
       await expect.poll(() => shown(messages()[2]!).after).toEqual([['made', 'Error: too many model calls in a minute']]);
-      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'flood' }]);
+      expect(session.scriptInteractions.snapshot().notes).toMatchObject([{ chat, kind: 'flood' }]);
     }));
 
   it("answers a button with the script's function and keeps its writes after the last message", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `function open(id) setChatVar(id, 'door', 'open') alertNormal(id, 'opened') end`);
-      expect(await session.scripts.press(chat, { trigger: 'open', id: '' }).answered).toBe(true);
-      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' }).answered).toBe(false);
+      expect(await session.scriptCommands.press(chat, { trigger: 'open', id: '' }).answered).toBe(true);
+      expect(await session.scriptCommands.press(chat, { trigger: 'missing', id: '' }).answered).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
-      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
+      expect(session.scriptInteractions.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
     }));
 
   it('says a press waits behind a run calling a model, and joins the same button pressed again before it begins', () =>
@@ -227,12 +229,12 @@ describe("a turn with the bot's Lua", () => {
       const held = new Promise<void>((resolve) => (release = resolve));
       const reply = saying('summary');
       stubRelay(() => new Response(new ReadableStream({ async start(body) { await held; body.enqueue(new Uint8Array(await reply.arrayBuffer())); body.close(); } }), { headers: reply.headers }));
-      const slow = session.scripts.press(chat, { trigger: 'slow', id: '' });
+      const slow = session.scriptCommands.press(chat, { trigger: 'slow', id: '' });
       expect(slow.waits).toBe(false);
-      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(1);
-      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
-      const first = session.scripts.press(chat, { trigger: 'count', id: '' });
-      const again = session.scripts.press(chat, { trigger: 'count', id: '' });
+      await expect.poll(() => session.scriptInteractions.snapshot().questions).toHaveLength(1);
+      session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
+      const first = session.scriptCommands.press(chat, { trigger: 'count', id: '' });
+      const again = session.scriptCommands.press(chat, { trigger: 'count', id: '' });
       expect([first.waits, again.waits, again.answered === first.answered]).toEqual([true, true, true]);
       release();
       expect(await first.answered).toBe(true);
@@ -243,7 +245,7 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const { chat, messages, shownTexts } = await chatWith(session, `function edit(id) setChat(id, 0, getChat(id, 0).data .. '!') end`);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '{{setvar::hp::7}}health {{getvar::hp}}' });
-      expect(await session.scripts.press(chat, { trigger: 'edit', id: '' }).answered).toBe(true);
+      expect(await session.scriptCommands.press(chat, { trigger: 'edit', id: '' }).answered).toBe(true);
       expect(shown(messages()[1]!)).toMatchObject({ text: 'health 7!', staged: true, before: [['hp', '7']] });
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'still {{getvar::hp}}' });
       expect((await shownTexts()).slice(-2)).toEqual(['health 7!', 'still 7']);
@@ -253,14 +255,14 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
       const { chat } = await chatWith(session, `function grow(id) cbs(${doubling}) end`);
-      expect(await session.scripts.press(chat, { trigger: 'grow', id: '' }).answered).toBe(true);
-      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'runaway' }]);
+      expect(await session.scriptCommands.press(chat, { trigger: 'grow', id: '' }).answered).toBe(true);
+      expect(session.scriptInteractions.snapshot().notes).toMatchObject([{ chat, kind: 'runaway' }]);
     }));
 
   it('tells a display that did not end as the stuck note, not as an error', () =>
     server.withSession(async (session) => {
-      session.scripts.report('c', new EvaluationStuck('Evaluation worker stuck', true));
-      expect(session.scripts.snapshot().notes).toMatchObject([{ chat: 'c', kind: 'stuck' }]);
+      session.scriptJournal.report('c', new EvaluationStuck('Evaluation worker stuck', true));
+      expect(session.scriptInteractions.snapshot().notes).toMatchObject([{ chat: 'c', kind: 'stuck' }]);
     }));
 
   it('answers a button with the block trigger of its name, whose texts are CBS over what it wrote', () =>
@@ -271,8 +273,8 @@ describe("a turn with the bot's Lua", () => {
           { kind: 'add', role: 'char', value: { kind: 'text', text: 'The door is {{getvar::door}} at {{lastmessageid}}.' } },
         ] },
       ]);
-      expect(await session.scripts.press(chat, { trigger: 'open', id: '' }).answered).toBe(true);
-      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' }).answered).toBe(false);
+      expect(await session.scriptCommands.press(chat, { trigger: 'open', id: '' }).answered).toBe(true);
+      expect(await session.scriptCommands.press(chat, { trigger: 'missing', id: '' }).answered).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(messages()[1]).toMatchObject({ role: 'assistant' });
       expect(shown(messages()[1]!)).toMatchObject({ text: 'The door is open at -1.', staged: true });
@@ -299,7 +301,7 @@ describe("the bot scripts' machine", () => {
     const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { lua });
     if (!opened.ok) throw new Error(opened.error);
     const { chat } = await chatWith(opened.data, `function open(id) end`);
-    const pressed = opened.data.scripts.press(chat, { trigger: 'open', id: '' }).answered;
+    const pressed = opened.data.scriptCommands.press(chat, { trigger: 'open', id: '' }).answered;
     await vi.waitFor(() => expect(lua).toHaveBeenCalledOnce());
     opened.data.close();
     const close = vi.fn();
@@ -339,14 +341,14 @@ describe("the display with the bot's Lua", () => {
       const lua = luaDisplays();
       const release = lua.hold();
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening, session.display);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       expect(screen.snapshot().pending).toBe(true);
       await vi.waitFor(() => expect(screen.snapshot().display.texts).toEqual(['', '', '']));
       release();
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
-      await session.scripts.press(chat, { trigger: 'hit', id: '' }).answered;
+      await session.scriptCommands.press(chat, { trigger: 'hit', id: '' }).answered;
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:9>', '안녕 <0:null>', '왔구나 <1:9>']);
       lua.display.mockRestore();
       leave();
@@ -356,7 +358,7 @@ describe("the display with the bot's Lua", () => {
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value .. ' <' .. getGlobalVar(id, 'toggle_hard') .. '>' end)`, [{ key: 'hard', label: '어렵게', kind: 'check', default: '0' }]);
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening, session.display);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <0>']);
@@ -381,12 +383,12 @@ describe("the display with the bot's Lua", () => {
         return shown;
       });
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening, session.display);
       // As a chat screen does (useChatDisplay): a refresh while the first pass runs would make a second.
       screen.setInputs(opening, { width: 1200, height: 800 });
       const leave = screen.subscribe(() => {});
       await vi.waitFor(() => expect(passed).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [-1, 0]]));
-      await session.scripts.press(chat, { trigger: 'again', id: '' }).answered;
+      await session.scriptCommands.press(chat, { trigger: 'again', id: '' }).answered;
       await new Promise((resolve) => setTimeout(resolve, 200));
       release();
       await vi.waitFor(() => expect(passed.slice(2).flat()).toContain(-1));
@@ -399,7 +401,7 @@ describe("the display with the bot's Lua", () => {
       const open = async (script: string | Trigger[]) => {
         const { chat, messages } = await chatWith(session, script);
         const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-        const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
+        const screen = session.read.screen(chat, session.talk, session.illustrator, opening, session.display);
         screen.setInputs(opening, { width: 1200, height: 800 });
         const leave = screen.subscribe(() => {});
         return { texts: () => screen.snapshot().display.texts, again: () => screen.setInputs(opening, { width: 800, height: 800 }), leave };
@@ -438,7 +440,7 @@ describe("the display with the bot's Lua", () => {
 
 
 // The forecast's tool slots; a chat whose memory no tool holds reads no scope for them.
-const cachedTools = (session: Session, chat: string) => session.scripts.cachedPrompt(chat, { scope: { messages: [] } as unknown as TurnContext['scope'], memory: null }).tools;
+const cachedTools = (session: Session, chat: string) => session.scriptTurns.cachedPrompt(chat, { scope: { messages: [] } as unknown as TurnContext['scope'], memory: null }).tools;
 
 async function notesTool(session: Session) {
   const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name notes\n//@author jin\n//@display-name 메모\n//@uses model\n//@menu now 지금 정리\n//@action redo 다시 정리'));
@@ -525,7 +527,7 @@ describe('tool events through Scripts', () => {
     await server.withSession(async (session) => {
       const f = await toolChat(session);
       variable = f.variable;
-      const menu = session.scripts.menu(f.chat, f.module, 'now');
+      const menu = session.scriptCommands.menu(f.chat, f.module, 'now');
       await expect.poll(() => menuStarted).toBe(true);
       stubRelay(inTurn([saying('original'), saying('replacement')]));
       await takeTurn(session, f.chat, { kind: 'send', text: 'hello' });
@@ -538,7 +540,7 @@ describe('tool events through Scripts', () => {
       release();
       await menu;
       // A later lane job is a barrier for both reply applications, not just their bindings.
-      await session.scripts.menu(f.chat, f.module, 'now');
+      await session.scriptCommands.menu(f.chat, f.module, 'now');
       expect(heard).toEqual([{ version: original, snapshot: original }, { version: replacement, snapshot: replacement }]);
       expect(f.messages()).toHaveLength(2);
       expect(shown(f.messages()[1]!)).toMatchObject({ id: replacement, text: 'replacement' });
@@ -564,7 +566,7 @@ describe('tool events through Scripts', () => {
       expect(shown(f.messages()[0]!).text).toBe(advance ? 'hello' : 'changed user');
       expect(shown(f.messages().at(-1)!).text).toBe(advance ? 'newer' : 'added');
       expect(session.store.children('entry', f.chat).some(({ value }) => value.type === 'vars' && value.set.some(([key]) => key === f.variable))).toBe(true);
-      expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'stale-reply')).toHaveLength(advance ? 1 : 0);
+      expect(session.scriptInteractions.snapshot().notes.filter(({ kind }) => kind === 'stale-reply')).toHaveLength(advance ? 1 : 0);
     }, binding);
   });
 
@@ -592,7 +594,7 @@ describe('tool events through Scripts', () => {
       expect(heard).toEqual(['sending', 'prompt', 'requesting', 'replying', 'reply', 'change:edit:0']);
       expect(toolBadges(session.store, f.module, f.chat)).toEqual({ [said.id]: { version: shown(f.messages()[0]!).id, text: '고침' } });
 
-      void session.scripts.action(f.chat, f.module, 'redo', said.id);
+      void session.scriptCommands.action(f.chat, f.module, 'redo', said.id);
       await expect.poll(() => heard).toContain('action');
       expect(await takeTurn(session, f.chat, { kind: 'send', text: 'not held' })).toBeNull();
       await expect.poll(() => f.messages().length).toBe(4);
@@ -624,13 +626,13 @@ describe('tool events through Scripts', () => {
       await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       for (const text of ['one', 'two', 'three']) await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text });
-      session.scripts.claims(chat);
-      session.scripts.claims(chat);
-      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(2);
-      expect(session.scripts.snapshot().questions.map(({ question }) => question.kind)).toEqual(['plugin', 'plugin']);
-      await session.scripts.pageWrite(chat, modules[0]!, noOutcome());
-      expect(session.scripts.snapshot().questions).toHaveLength(2);
-      for (const { id } of session.scripts.snapshot().questions) session.scripts.answer(id, 'yes');
+      session.scriptInteractions.claims(chat);
+      session.scriptInteractions.claims(chat);
+      await expect.poll(() => session.scriptInteractions.snapshot().questions).toHaveLength(2);
+      expect(session.scriptInteractions.snapshot().questions.map(({ question }) => question.kind)).toEqual(['plugin', 'plugin']);
+      await session.scriptPages.pageWrite(chat, modules[0]!, noOutcome());
+      expect(session.scriptInteractions.snapshot().questions).toHaveLength(2);
+      for (const { id } of session.scriptInteractions.snapshot().questions) session.scriptInteractions.answer(id, 'yes');
       await expect.poll(() => modules.map((module) => session.store.get('module', module)!.value.takesMemory)).toEqual([true, true]);
       await session.store.projections.evaluate(chat);
       const gather = () => gatherTurn(session, chat, { kind: 'answer' });
@@ -638,7 +640,7 @@ describe('tool events through Scripts', () => {
       if (!turn || 'kind' in turn) throw new Error('fixture');
       expect(turn.memory).toEqual({ kind: 'tool', name: 'first', text: '', through: -1 });
       const prompted = async () => {
-        const result = await session.scripts.prompting(chat, turn, async () => gather(), new AbortController().signal);
+        const result = await session.scriptTurns.prompting(chat, turn, async () => gather(), new AbortController().signal);
         if ('kind' in result) throw new Error(result.kind);
         return result;
       };
@@ -648,11 +650,11 @@ describe('tool events through Scripts', () => {
       expect(first.turn.memory).toEqual({ kind: 'tool', name: 'first', text: 'remembered first', through: 1 });
       expect(first.tools.map(({ text }) => text)).toEqual(['recall first', 'recall second']);
       await prompted();
-      expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'memory-held')).toMatchObject([{ by: 'first', from: { id: modules[1] } }]);
+      expect(session.scriptInteractions.snapshot().notes.filter(({ kind }) => kind === 'memory-held')).toMatchObject([{ by: 'first', from: { id: modules[1] } }]);
 
       mode = 'last';
       expect((await prompted()).turn.memory).toMatchObject({ text: 'remembered first', through: -1 });
-      expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'failed', from: { kind: 'module', id: modules[0] } }));
+      expect(session.scriptInteractions.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'failed', from: { kind: 'module', id: modules[0] } }));
 
       mode = 'before-last';
       await prompted();
@@ -665,7 +667,7 @@ describe('tool events through Scripts', () => {
         expect(result.turn.memory).toEqual({ kind: 'tool', name: 'first', text: 'remembered first', through: 1 });
         expect(result.tools.map(({ text }) => text)).toEqual(['recall second']);
       } finally { vi.useRealTimers(); }
-      expect(session.scripts.cachedPrompt(chat, turn).memory).toMatchObject({ text: 'remembered first', through: 1 });
+      expect(session.scriptTurns.cachedPrompt(chat, turn).memory).toMatchObject({ text: 'remembered first', through: 1 });
     }, { run, close: () => {} });
   });
 
@@ -684,17 +686,17 @@ describe('tool events through Scripts', () => {
       await session.store.projections.evaluate(f.chat);
       const turn = gatherTurn(session, f.chat, { kind: 'answer' });
       if (!turn || 'kind' in turn) throw new Error('fixture');
-      await session.scripts.prompting(f.chat, turn, async () => turn, new AbortController().signal);
-      await session.scripts.requesting(f.chat, turn, { messages: [{ role: 'user', content: 'hello' }], parts: [{ from: { kind: 'script' }, tokens: 1, origin: 'message' }] });
+      await session.scriptTurns.prompting(f.chat, turn, async () => turn, new AbortController().signal);
+      await session.scriptTurns.requesting(f.chat, turn, { messages: [{ role: 'user', content: 'hello' }], parts: [{ from: { kind: 'script' }, tokens: 1, origin: 'message' }] });
       expect(answers).toEqual([{ ok: false, reason: 'not-allowed' }, expect.objectContaining({ success: false, reason: 'not-allowed' }), { ok: false, reason: 'not-allowed' }]);
-      expect(session.scripts.snapshot().questions).toEqual([]);
-      const pressed = session.scripts.menu(f.chat, f.module, 'now');
-      await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['model'] } }]);
-      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      expect(session.scriptInteractions.snapshot().questions).toEqual([]);
+      const pressed = session.scriptCommands.menu(f.chat, f.module, 'now');
+      await expect.poll(() => session.scriptInteractions.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['model'] } }]);
+      session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
       await pressed;
-      await session.scripts.menu(f.chat, f.module, 'now');
+      await session.scriptCommands.menu(f.chat, f.module, 'now');
       expect(answers.slice(3)).toEqual([{ ok: false, reason: 'no-model' }, { ok: false, reason: 'no-model' }]);
-      expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'no-model')).toMatchObject([{ role: 'embed' }]);
+      expect(session.scriptInteractions.snapshot().notes.filter(({ kind }) => kind === 'no-model')).toMatchObject([{ role: 'embed' }]);
     }, binding);
   });
 
@@ -712,7 +714,7 @@ describe('tool events through Scripts', () => {
         const gather = () => gatherTurn(session, chat, { kind: 'answer' });
         const turn = gather();
         if (!turn || 'kind' in turn) throw new Error('fixture');
-        await session.scripts.prompting(chat, turn, async () => gather(), new AbortController().signal);
+        await session.scriptTurns.prompting(chat, turn, async () => gather(), new AbortController().signal);
         expect(cachedTools(session, chat)).toHaveLength(1);
       };
       try {
@@ -751,11 +753,11 @@ describe('tool events through Scripts', () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         const reply: Written = { id: crypto.randomUUID(), message: null, replaces: null, at: Date.now(), text: 'again', receipt: { state: 'done' } as Written['receipt'] };
-        const ending = session.scripts.ending(f.chat, reply);
+        const ending = session.scriptTurns.ending(f.chat, reply);
         await vi.waitFor(() => expect(late).toHaveLength(1));
         await vi.advanceTimersByTimeAsync(5001);
         expect((await ending).text).toBe('again [lua]');
-        expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
+        expect(session.scriptInteractions.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
       } finally { vi.useRealTimers(); for (const resolve of late) resolve(); }
     }, { run, close: () => {} });
   });
@@ -795,11 +797,11 @@ describe('tool events through Scripts', () => {
       const prompt = { messages: [{ role: 'user' as const, content: 'hello' }], parts: [{ from: { kind: 'script' as const }, tokens: 1, origin: 'message' }] };
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
-        const requesting = session.scripts.requesting(f.chat, turn, prompt);
+        const requesting = session.scriptTurns.requesting(f.chat, turn, prompt);
         await vi.waitFor(() => expect(late).toHaveLength(1));
         await vi.advanceTimersByTimeAsync(5001);
         expect((await requesting).messages).toEqual(prompt.messages);
-        expect(session.scripts.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
+        expect(session.scriptInteractions.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
       } finally { vi.useRealTimers(); for (const resolve of late) resolve(); }
     }, { run, close: () => {} });
   });
@@ -812,7 +814,7 @@ describe('tool events through Scripts', () => {
       await notesTool(session);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening, session.display);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. [lua] [greeting]', '안녕 [lua] [0]']);
@@ -830,12 +832,12 @@ describe('tool events through Scripts', () => {
       const gather = () => gatherTurn(session, fixture.chat, { kind: 'answer' });
       const turn = gather();
       if (!turn || 'kind' in turn) throw new Error('fixture');
-      await session.scripts.prompting(fixture.chat, turn, async () => gather(), new AbortController().signal);
+      await session.scriptTurns.prompting(fixture.chat, turn, async () => gather(), new AbortController().signal);
       expect(cachedTools(session, fixture.chat)).toHaveLength(1);
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
-          const prompt = session.scripts.prompting(fixture.chat, turn, async () => gather(), new AbortController().signal);
+          const prompt = session.scriptTurns.prompting(fixture.chat, turn, async () => gather(), new AbortController().signal);
           await vi.advanceTimersByTimeAsync(0);
           expect(run).toHaveBeenCalledTimes(attempt + 2);
           await vi.advanceTimersByTimeAsync(5001);
@@ -843,7 +845,7 @@ describe('tool events through Scripts', () => {
           expect(cachedTools(session, fixture.chat)).toEqual([]);
           finish[attempt]!({ ...noOutcome(), value: 'too late', writes: [[fixture.variable, 'late']] });
         }
-        expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'late')).toMatchObject([{ from: { kind: 'module', id: fixture.module } }]);
+        expect(session.scriptInteractions.snapshot().notes.filter(({ kind }) => kind === 'late')).toMatchObject([{ from: { kind: 'module', id: fixture.module } }]);
         expect(session.store.children('entry', fixture.chat).filter(({ value }) => value.type === 'vars')).toEqual([]);
       } finally { vi.useRealTimers(); for (const resolve of finish) resolve(noOutcome()); }
     }, { run, close: () => {} });
@@ -867,14 +869,14 @@ describe('tool events through Scripts', () => {
       const turn = gatherTurn(session, f.chat, { kind: 'answer' });
       if (!turn || 'kind' in turn) throw new Error('fixture');
       const stop = new AbortController();
-      const pending = session.scripts.prompting(f.chat, turn, async () => turn, stop.signal);
-      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(1);
+      const pending = session.scriptTurns.prompting(f.chat, turn, async () => turn, stop.signal);
+      await expect.poll(() => session.scriptInteractions.snapshot().questions).toHaveLength(1);
       stop.abort();
       expect(await pending).toMatchObject({ tools: [], turn: { reply: { before: [] } } });
       expect(answer).toBeNull();
-      expect(session.scripts.snapshot()).toEqual({ notes: [], questions: [] });
+      expect(session.scriptInteractions.snapshot()).toEqual({ notes: [], questions: [] });
       finish({ ...noOutcome(), value: 'late', writes: [[f.variable, '"late"']], added: [{ role: 'char', text: 'late', before: null }] });
-      expect(await session.scripts.prompting(f.chat, turn, async () => turn, new AbortController().signal)).toMatchObject({ tools: [{ text: 'next' }] });
+      expect(await session.scriptTurns.prompting(f.chat, turn, async () => turn, new AbortController().signal)).toMatchObject({ tools: [{ text: 'next' }] });
       expect(cachedTools(session, f.chat)).toMatchObject([{ text: 'next' }]);
       expect(f.messages()).toHaveLength(1);
       expect(session.store.children('entry', f.chat).filter(({ value }) => value.type === 'vars')).toEqual([]);
@@ -892,14 +894,14 @@ describe('tool events through Scripts', () => {
       await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
-      const pressed = session.scripts.press(chat, { trigger: 'askModel', id: '' }).answered;
+      const pressed = session.scriptCommands.press(chat, { trigger: 'askModel', id: '' }).answered;
       if (!index) {
-        await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: added.data.id }, question: { kind: 'model' } }]);
-        session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+        await expect.poll(() => session.scriptInteractions.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: added.data.id }, question: { kind: 'model' } }]);
+        session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
       }
       await pressed;
       expect(session.store.get('module', added.data.id)!.value.botModels).toBe(true);
-      expect(session.scripts.snapshot().questions).toEqual([]);
+      expect(session.scriptInteractions.snapshot().questions).toEqual([]);
     }
     expect(log).toHaveLength(2);
   }));
@@ -920,26 +922,26 @@ it('keeps bounded per-chat hook logs with Lua output and writes, notifies reader
   const lease = session.store.retainChat(chat);
   await lease.ready;
   const notify = vi.fn();
-  const stop = session.scripts.subscribeLog(chat, notify);
+  const stop = session.scriptJournal.subscribeLog(chat, notify);
   try {
     await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, null);
     await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
-    expect(await session.scripts.press(chat, { data: 'awake' }).answered).toBe(true);
-    expect(session.scripts.log(chat).entries).toHaveLength(1);
-    const entry = session.scripts.log(chat).entries[0]!;
+    expect(await session.scriptCommands.press(chat, { data: 'awake' }).answered).toBe(true);
+    expect(session.scriptJournal.log(chat).entries).toHaveLength(1);
+    const entry = session.scriptJournal.log(chat).entries[0]!;
     expect(entry).toMatchObject({ stage: 'button', pack: { kind: 'character', id: character.data.id }, script: 'logger', writes: [['last', 'awake']], missing: ['request'], stopped: true, changed: false, errors: [] });
     expect(entry.logs.map((line) => JSON.parse(line))).toEqual([{ message: 'awake' }]);
     expect(entry.duration).toBeGreaterThanOrEqual(0);
     expect(notify).toHaveBeenCalledTimes(1);
-    for (let n = 0; n < 20; n++) await session.scripts.press(chat, { data: 'flood' }).answered;
-    const log = session.scripts.log(chat);
+    for (let n = 0; n < 20; n++) await session.scriptCommands.press(chat, { data: 'flood' }).answered;
+    const log = session.scriptJournal.log(chat);
     expect(log.entries.length).toBeLessThanOrEqual(SCRIPT_LOG_LIMITS.entries);
     expect(log.entries.reduce((size, each) => size + JSON.stringify(each).length, 0)).toBeLessThanOrEqual(SCRIPT_LOG_LIMITS.characters);
     expect(log.omitted).toBeGreaterThan(0);
     expect(log.entries.at(-1)!.truncated).toBe(true);
     lease.release();
     await expect.poll(() => session.store.scopeState(chat)).toBe('unloaded');
-    expect(session.scripts.log(chat)).toEqual({ entries: [], omitted: 0 });
+    expect(session.scriptJournal.log(chat)).toEqual({ entries: [], omitted: 0 });
   } finally { stop(); lease.release(); }
 }));
 
@@ -959,11 +961,11 @@ describe('a trial of one trigger', () => {
           LLM(id, { { role = 'user', content = 'hi' } })
         end)`,
       };
-      const trial = await session.scripts.trial(chat, scope, draft, { kind: 'output' }, new AbortController().signal);
+      const trial = await session.scriptPreview.trial(chat, scope, draft, { kind: 'output' }, new AbortController().signal);
       expect(trial.outcome.writes).toEqual([['last', '어서 와.']]);
       expect(trial).toMatchObject({ said: [{ tone: 'normal', text: 'hi' }], calls: { model: 1, embed: 0, background: 0 } });
       expect(messages()).toHaveLength(1);
-      expect(session.scripts.log(chat).entries).toEqual([]);
+      expect(session.scriptJournal.log(chat).entries).toEqual([]);
     }));
 });
 
@@ -983,11 +985,11 @@ describe('a rehearsal of the pre-send scripts', () => {
       );
       const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
       const entries = session.store.children('entry', chat).length;
-      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      const rehearsal = (await session.scriptPreview.rehearse(chat, sending, new AbortController().signal))!;
       expect(session.store.children('entry', chat)).toHaveLength(entries);
       expect(session.store.children('lore', chat)).toEqual([]);
       expect(messages()).toHaveLength(1);
-      expect(session.scripts.log(chat).entries).toEqual([]);
+      expect(session.scriptJournal.log(chat).entries).toEqual([]);
       expect(rehearsal.trace.entries.map(({ stage }) => stage)).toEqual(['onInput', 'editInput', 'onStart', 'editRequest']);
       expect(rehearsal).toMatchObject({ stopped: null, input: '안녕 [input]', changed: true });
       expect(rehearsal.scope.messages.slice(-2).map(({ text, before }) => [text, before])).toEqual([['안녕 [input]', [['order', 'input']]], ['narration', undefined]]);
@@ -1005,7 +1007,7 @@ describe('a rehearsal of the pre-send scripts', () => {
       const { chat } = await chatWith(session, `onStart = async(function(id) setChatVar(id, 'answer', LLM(id, { { role = 'user', content = 'hi' } }).result) end)`);
       const log = stubRelay(() => saying('never'));
       const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
-      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      const rehearsal = (await session.scriptPreview.rehearse(chat, sending, new AbortController().signal))!;
       expect(log).toHaveLength(0);
       expect(rehearsal.calls).toEqual({ model: 1, embed: 0, background: 0 });
       expect(rehearsal.scope.pending).toEqual([['answer', NOT_REHEARSED]]);
@@ -1020,7 +1022,7 @@ describe('a rehearsal of the pre-send scripts', () => {
         function onStart(id) loadLoreBooks(id) end`,
       );
       const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
-      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      const rehearsal = (await session.scriptPreview.rehearse(chat, sending, new AbortController().signal))!;
       expect(rehearsal.loreRanAway).toBe(true);
     }));
 
@@ -1030,7 +1032,7 @@ describe('a rehearsal of the pre-send scripts', () => {
       const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
       expect(sending.turn.memory?.kind).toBe('built-in');
       const prompt = vi.spyOn(session.store.evaluation, 'prompt');
-      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      const rehearsal = (await session.scriptPreview.rehearse(chat, sending, new AbortController().signal))!;
       const memory = prompt.mock.lastCall![1].memory;
       if (memory?.kind !== 'built-in') throw new Error(memory?.kind);
       expect(memory.shown.map(({ message }) => message)).toEqual(rehearsal.scope.messages.map(({ message }) => message));
@@ -1045,7 +1047,7 @@ describe('a rehearsal of the pre-send scripts', () => {
         listenEdit('editRequest', function(id, value) setChatVar(id, 'request', 'seen') return value end)`,
       );
       const sending = (await wouldSend(session, chat, { kind: 'send', text: '안녕' }, undefined, 'view'))!;
-      const rehearsal = (await session.scripts.rehearse(chat, sending, new AbortController().signal))!;
+      const rehearsal = (await session.scriptPreview.rehearse(chat, sending, new AbortController().signal))!;
       expect(rehearsal.scope.pending).toEqual([['turn', 'start'], ['request', 'seen']]);
     }));
 });

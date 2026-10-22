@@ -29,7 +29,7 @@ const PART_GAP = 1000;
 
 // One embedding call, in as many requests as the provider needs, with one receipt. On the relay, a script's call
 // (script) is counted once in its chat's bot cap, by its first request; memory's own calls are not a bot's and are not
-// counted there. Consent and the model pick are the caller's (Scripts). embedded: told each request's text count as its
+// counted there. Consent and the model pick are the caller's (ScriptReach). embedded: told each request's text count as its
 // vectors arrive. receipt: null when nothing reached the network, and only then is nothing logged.
 export async function embedTexts(
   deps: { credentials: Credentials; log: RequestLog; count(texts: string[]): Promise<number[]> },

@@ -36,8 +36,8 @@ export function memoryOwner(store: ObjectStore, chat: Chat): MemoryOwner {
   return setup.on && featuresOf(store, chat).memory ? { kind: 'built-in', setup } : null;
 }
 
-// The slot for a turn's scope, as gathered or as its scripts leave it (Scripts.rehearse). A tool's text comes with
-// the turn's prompt event (runtime/scripts prompting); until then it stands for no message.
+// The slot for a turn's scope, as gathered or as its scripts leave it (ScriptPreview.rehearse). A tool's text comes with
+// the turn's prompt event (runtime/script-turns prompting); until then it stands for no message.
 export function memoryFill(store: ObjectStore, id: string, chat: Chat, messages: ChatScope['messages']): MemoryFill | null {
   const owner = memoryOwner(store, chat);
   if (owner?.kind === 'tool') return { kind: 'tool', name: owner.unit.tool.manifest.displayName, text: '', through: -1 };

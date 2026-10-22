@@ -196,7 +196,7 @@ describe('Illustrator', () => {
         const file = await session.files.save([PNG]);
         const sent = { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
         await session.store.create('illustration', { message: reply.id, version: shown(reply).id, scene: { ...SCENE, paragraph: 1 }, receipt: null, model: { connection: 'c', model: 'm' }, sent, file: file.ok ? file.data[0]! : { id: '', key: '' }, type: 'image/png', size: 1, at: 1 }, { parent: chat });
-        const read = session.read.screen(chat, session.talk, session.illustrator, { chat: opened, messages: [] });
+        const read = session.read.screen(chat, session.talk, session.illustrator, { chat: opened, messages: [] }, session.display);
         const leave = read.subscribe(() => {});
         await vi.waitFor(() => expect(read.snapshot().display.texts[1]).toContain('She'));
         leave();

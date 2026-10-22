@@ -248,8 +248,8 @@ export function useStored<K extends Kind>(kind: K, id: string | null): Stored<K>
 }
 
 export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['screen']) {
-  const { read, talk, illustrator } = useSession();
-  const model = useMemo(() => read.screen(id, talk, illustrator, opening), [read, talk, illustrator, id]);
+  const { read, talk, illustrator, display } = useSession();
+  const model = useMemo(() => read.screen(id, talk, illustrator, opening, display), [read, talk, illustrator, display, id]);
   // The first layout installs viewport/greeting inputs before the external-store subscription; evaluation publishes asynchronously.
   useLayoutEffect(() => {
     model.setInputs(opening, screen);
@@ -301,8 +301,8 @@ export function useLikenessRuns(): LikenessRuns {
 }
 
 export function useScripts(): ScriptsState {
-  const { scripts } = useSession();
-  return useSyncExternalStore(scripts.subscribe, scripts.snapshot);
+  const { scriptInteractions } = useSession();
+  return useSyncExternalStore(scriptInteractions.subscribe, scriptInteractions.snapshot);
 }
 
 export function useRemembering(): Remembering {

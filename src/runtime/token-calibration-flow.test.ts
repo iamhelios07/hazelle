@@ -34,7 +34,7 @@ const measuredReply = (input: number) => upstream(200, { choices: [{ message: { 
 
 it('silently retries a context refusal with a smaller exact-wire cut, runs request scripts once and records one receipt', () => server.withSession(async (session) => {
   const { chat } = await ready(session);
-  const requesting = vi.spyOn(session.scripts, 'requesting');
+  const requesting = vi.spyOn(session.scriptTurns, 'requesting');
   let attempts = 0;
   const log = stubRelay(({ body }) => {
     const request = JSON.parse(body!) as { messages: { content: string }[] };
@@ -106,7 +106,7 @@ it('replays late ledger observations, deduplicates a copied call, separates auxi
 
 it('uses the calibrated allowance after scripts and refuses an untrimmable fixed prompt before any network call', () => server.withSession(async (session) => {
   const { chat } = await ready(session, 200);
-  vi.spyOn(session.scripts, 'requesting').mockImplementation(async () => ({ messages: [{ role: 'system', content: 'fixed '.repeat(400) }], writes: [] }));
+  vi.spyOn(session.scriptTurns, 'requesting').mockImplementation(async () => ({ messages: [{ role: 'system', content: 'fixed '.repeat(400) }], writes: [] }));
   const log = stubRelay(() => measuredReply(100));
   expect(await takeTurn(session, chat, { kind: 'answer' })).toMatchObject({ kind: 'too-long' });
   expect(log).toHaveLength(0);

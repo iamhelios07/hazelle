@@ -5,7 +5,7 @@ import type { Event, ScriptUnit } from '../../../engine/script-api';
 import type { LoreOwner } from '../../../model/library';
 import { chatNow } from '../../../runtime/chat-context';
 import type { TrialRead } from '../../../runtime/evaluation-core';
-import type { Trial } from '../../../runtime/scripts';
+import type { Trial } from '../../../runtime/script-preview';
 import { useChats, useSession } from '../../session';
 import { Button, Callout, ChoiceGroup, CodeBlock, Facts, Stack, StepList, Text, type CodeAside, type StepRow } from '../../ui';
 import { runaway } from '../failure';
@@ -187,7 +187,7 @@ const EVENT_OPTIONS = LUA_EVENTS.flatMap(({ name, text }) => (isTrialEvent(name)
 type Ran = { code: string; event: TrialEvent; trial: Trial | 'failed' };
 
 function LuaTrial({ unit, trial }: { unit: LuaUnit; trial: TrialChat }) {
-  const { scripts } = useSession();
+  const { scriptPreview } = useSession();
   const { chat } = trial;
   const scope = useTrialScope(trial);
   const [event, setEvent] = useState<TrialEvent>('onOutput');
@@ -199,7 +199,7 @@ function LuaTrial({ unit, trial }: { unit: LuaUnit; trial: TrialChat }) {
     const stop = (running.current = new AbortController());
     const at = { code: unit.code, event };
     setRan('running');
-    scripts.trial(chat ?? SAMPLE_CHAT, on, unit, EVENTS[event], stop.signal).then(
+    scriptPreview.trial(chat ?? SAMPLE_CHAT, on, unit, EVENTS[event], stop.signal).then(
       (trial) => !stop.signal.aborted && setRan({ ...at, trial }),
       () => !stop.signal.aborted && setRan({ ...at, trial: 'failed' }),
     );

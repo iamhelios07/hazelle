@@ -50,6 +50,7 @@ const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => (shelf && 
 export type ChatScopeRead = { state: ScopeState; error: ApiFailure | null };
 
 export type OpenDisplay = Pick<ScriptDisplay, 'display' | 'subscribe'>;
+export const plainDisplay = (store: ObjectStore): OpenDisplay => ({ display: (id, chat, messages, screen, signal) => evaluateChat({ store }, id, chat, messages, screen, signal), subscribe: () => () => {} });
 
 // store.list answers in the order of the last write, so read as it comes an edited object would drop to the end of
 // its list. The kinds screens list come by name instead.
@@ -96,10 +97,7 @@ export class ReadModels {
   readonly unreadable: Snapshot<number>;
   private readonly leave: () => void;
 
-  constructor(
-    readonly store: ObjectStore,
-    readonly open: OpenDisplay = { display: (id, chat, messages, screen, signal) => evaluateChat({ store }, id, chat, messages, screen, signal), subscribe: () => () => {} },
-  ) {
+  constructor(readonly store: ObjectStore) {
     this.folders = nest(store.list('folder'), 'character');
     this.settings = new Snapshot(store.get('settings', SETTINGS_ID)?.value ?? EMPTY_SETTINGS);
     this.unreadable = new Snapshot(store.unreadable());
@@ -174,8 +172,8 @@ export class ReadModels {
     return { state: this.store.scopeState(chat), error: this.store.scopeError(chat) };
   }
 
-  screen(id: string, talk: Pick<Talk, 'snapshot' | 'subscribe'>, drawings: Drawings, opening: Opening): ChatScreenRead {
-    return new ChatScreenRead(this, talk, drawings, id, opening);
+  screen(id: string, talk: Pick<Talk, 'snapshot' | 'subscribe'>, drawings: Drawings, opening: Opening, open: OpenDisplay): ChatScreenRead {
+    return new ChatScreenRead(this, talk, drawings, id, opening, open);
   }
 
   async displayed(id: string): Promise<ScreenChat | null> {
@@ -328,7 +326,7 @@ export class ChatScreenRead {
   private readonly listeners = new Set<() => void>();
   private leave: (() => void) | null = null;
 
-  constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, private readonly drawings: Drawings, readonly id: string, private opening: Opening) {
+  constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, private readonly drawings: Drawings, readonly id: string, private opening: Opening, private readonly open: OpenDisplay) {
     this.base = this.based();
     this.turn = this.currentTurn();
     this.drawing = drawingKey(id, drawings.snapshot());
@@ -358,7 +356,7 @@ export class ChatScreenRead {
         this.drawing = drawing;
         this.refresh();
       });
-      const passed = this.models.open.subscribe(this.id, (display) => {
+      const passed = this.open.subscribe(this.id, (display) => {
         if (!display) return this.refresh();
         this.state.set({ ...this.state.snapshot(), ...placing(display) });
       });
@@ -441,7 +439,7 @@ export class ChatScreenRead {
     const { store } = this.models;
     const { value, reads } = store.capture(() => {
       const places = store.scopeState(this.id) === 'loaded' ? placesOf(store, this.id, messages, this.drawings.snapshot()) : new Map<string, Set<number>>();
-      return this.models.open.display(this.id, chat, marked(messages, places), this.screen, evaluation.signal);
+      return this.open.display(this.id, chat, marked(messages, places), this.screen, evaluation.signal);
     });
     this.reads = reads;
     return value.then((display) => {

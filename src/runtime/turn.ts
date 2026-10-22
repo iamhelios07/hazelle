@@ -10,7 +10,7 @@ import type { Stored } from '../model/kinds';
 import { chatIllustrate, chatTranslate, featuresOf } from './features';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
-import type { Halted } from './scripts';
+import type { Halted } from './script-turns';
 import { appendUserMessage, type Written } from './chat-log';
 import type { Ask, TalkFailure } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
@@ -185,9 +185,9 @@ async function gatheredTurn(session: Pick<Session, 'store' | 'read'>, chat: stri
 async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => Promise<TurnContext | Blocked | Unevaluated | null>, preparing: (step: Preparing) => void, skip: Skip): Promise<Ask | Halted | TurnFailure> {
   const translated = gathered.said && chatTranslate(session.store, gathered.chat).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
   if ('kind' in translated) return translated;
-  const started = await session.scripts.starting(chat, translated, again, signal);
+  const started = await session.scriptTurns.starting(chat, translated, again, signal);
   if ('kind' in started) return started;
-  const prompted = await session.scripts.prompting(chat, started.turn, () => again(translated.said !== null && started.turn.said === null), signal);
+  const prompted = await session.scriptTurns.prompting(chat, started.turn, () => again(translated.said !== null && started.turn.said === null), signal);
   if ('kind' in prompted) return prompted;
   if (signal.aborted) return { kind: 'halted' };
   const { turn, tools } = prompted;
@@ -203,7 +203,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const fit = providerFit(route, settings, calibration.fit.allowance);
   const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, answerInstruction: answerInstructionOf(session.store), memory, notes: agents.notes }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
-  const requested = await session.scripts.requesting(chat, turn, prompt);
+  const requested = await session.scriptTurns.requesting(chat, turn, prompt);
   const rewritten = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));
   if ('kind' in rewritten) return { ...rewritten, ...kept };
   // After the scripts, so a bot's Lua sees the prompt as built and never the brief; before the forecast and the refit,

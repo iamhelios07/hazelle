@@ -4,7 +4,7 @@ import type { Toggle } from '../model/prompt';
 import { chatPrompt } from './prompts';
 import { chatTranslate, featuresOf } from './features';
 import { retrievalOf } from './retrieval';
-import { triggersOf } from './scripts';
+import { triggersOf } from './script-selection';
 import { toolsOf } from './tools/store';
 import { prepareChat } from '../connectors/preparation';
 import { batchLane, resolveConnection, resolveModel } from '../connectors/registry';
@@ -110,7 +110,7 @@ export type Sending = { turn: TurnContext; prompt: Assembled; calibration: Token
 // The prompt was evaluated and cannot go: its CBS ran away, it is over the model's budget, or the tokenizer did not load.
 export type Unsendable = Exclude<EvaluatedPrompt, Assembled>;
 
-type Forecaster = Pick<Session, 'store' | 'read' | 'scripts' | 'tokens'>;
+type Forecaster = Pick<Session, 'store' | 'read' | 'scriptTurns' | 'tokens'>;
 type Asker = 'forecast' | 'memory' | 'view';
 
 // For callers that act only on a request that can go.
@@ -135,7 +135,7 @@ export async function forecastSend(session: Forecaster, chat: string, target: Ta
     const snapshot = await session.tokens.snapshot(turn.route, turn.settings, tokenLimits(turn.route.model, sentSettings(session.store, turn.route)), 'conversation', chat, signal ?? new AbortController().signal);
     if (!snapshot.ok) return null;
     const fit = providerFit(turn.route, turn.settings, snapshot.data.fit.allowance);
-    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scripts.cachedPrompt(chat, turn), continuing: false, answerInstruction: answerInstructionOf(session.store) }, signal);
+    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scriptTurns.cachedPrompt(chat, turn), continuing: false, answerInstruction: answerInstructionOf(session.store) }, signal);
     if (signal?.aborted) return null;
     if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? prompt : { turn, prompt, calibration: snapshot.data };
   }

@@ -13,7 +13,8 @@ import type { ChatHeader, Down, EventName, Message, ToolOutcome } from '../../to
 import type { ToolState } from '../evaluation-core';
 import { changedTail } from '../history-delta';
 import type { ScriptOutcome } from '../lua/event';
-import type { Scripts } from '../scripts';
+import type { ScriptPages } from '../script-pages';
+import type { ScriptJournal } from '../script-journal';
 import { aborted, noOutcome, ToolStopped, ToolStuck, until, type Binding } from '../script-binding';
 import type { Session } from '../session';
 import type { StoreChange } from '../object-index';
@@ -148,6 +149,8 @@ function lorebookOf(chat: string, character: string | null, scope: ChatScope): H
 }
 const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
 
+type ToolServices = { pages: Pick<ScriptPages, 'pageContext' | 'pageWrite' | 'send' | 'rendered'>; journal: Pick<ScriptJournal, 'report'> };
+
 export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> {
   private readonly entries = new Map<string, Entry>();
   private readonly code = new Map<string, Promise<string>>();
@@ -162,7 +165,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   private called: ToolHosts = new Map();
   private ids = 0;
 
-  constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly scripts: () => Pick<Scripts, 'report' | 'pageContext' | 'pageWrite' | 'send' | 'rendered'>, private readonly open: OpenFrame = toolFrame) {
+  constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly services: ToolServices, private readonly open: OpenFrame = toolFrame) {
     this.writes = new ToolWrites(session.store);
     this.unsubscribe = session.store.subscribe((changes) => this.changed(changes));
   }
@@ -224,7 +227,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         if (isFrameTool(entry.tool) && entry.chat !== chat) { entry.chat = chat; this.publish(); }
         await this.background(entry);
       }
-      catch (error) { this.scripts().report(chat, error, { kind: 'module', id: module }); }
+      catch (error) { this.services.journal.report(chat, error, { kind: 'module', id: module }); }
     }));
   }
 
@@ -257,9 +260,9 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       frame = this.frame(entry, page);
       entry.pages.add(frame);
       this.idle(entry);
-      void frame.ready.catch((error: unknown) => this.scripts().report(page.chat ?? '', error, { kind: 'module', id: module }));
+      void frame.ready.catch((error: unknown) => this.services.journal.report(page.chat ?? '', error, { kind: 'module', id: module }));
     } catch (error) {
-      this.scripts().report(page.chat ?? '', error, { kind: 'module', id: module });
+      this.services.journal.report(page.chat ?? '', error, { kind: 'module', id: module });
       page.close();
       return () => {};
     }
@@ -273,7 +276,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       entry = this.entry(module);
       if (!isFrameTool(entry.tool) || (slot.chat !== null && !this.allowed(slot.chat, module))) throw new ToolStopped();
     } catch (error) {
-      this.scripts().report(slot.chat ?? '', error, { kind: 'module', id: module });
+      this.services.journal.report(slot.chat ?? '', error, { kind: 'module', id: module });
       slot.close();
       return () => {};
     }
@@ -289,7 +292,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       if (entry.slot !== slot) return;
       if (entry.shown) slot.place(frame.connection.frame);
       else this.send(frame, { kind: 'open' });
-    }, (error: unknown) => this.scripts().report(slot.chat ?? '', error, { kind: 'module', id: module }));
+    }, (error: unknown) => this.services.journal.report(slot.chat ?? '', error, { kind: 'module', id: module }));
     return () => {
       if (entry.slot !== slot) return;
       entry.slot = null;
@@ -371,7 +374,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     void Promise.all([connection.ready, this.source(entry.tool), lease?.ready]).then(([, code, failure]) => {
       if (failure) throw new Error(failure.error);
       if (frame.closing.signal.aborted) return;
-      const context = page?.chat ? this.scripts().pageContext(page.chat, entry.module, frame.closing.signal) : null;
+      const context = page?.chat ? this.services.pages.pageContext(page.chat, entry.module, frame.closing.signal) : null;
       if (page?.chat && !context) throw new ToolStopped();
       frame.loadTimer = setTimeout(() => this.stalled(frame), STUCK_MS);
       frame.heart.start(STUCK_MS);
@@ -427,7 +430,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       const id = Number(data.id);
       if (!Number.isSafeInteger(data.id)) return;
       if (id === 0) {
-        if (data.kind === 'failed' && typeof data.message === 'string') this.scripts().report(this.chatOf(frame) ?? '', new Error(data.message), { kind: 'module', id: frame.entry.module });
+        if (data.kind === 'failed' && typeof data.message === 'string') this.services.journal.report(this.chatOf(frame) ?? '', new Error(data.message), { kind: 'module', id: frame.entry.module });
         else if (data.kind === 'done' && this.chatOf(frame)) {
           void this.pageWrite(frame, data.outcome).then(
             () => this.send(frame, { kind: 'answer', call: 0, ok: true, value: null }),
@@ -462,7 +465,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       return pending;
     }
     const chat = this.chatOf(frame);
-    const context = chat && this.scripts().pageContext(chat, frame.entry.module, frame.closing.signal);
+    const context = chat && this.services.pages.pageContext(chat, frame.entry.module, frame.closing.signal);
     if (!context || !chat) throw new Error('no-chat');
     return { ...context, chat, signal: frame.closing.signal };
   }
@@ -481,7 +484,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       case 'frame.chat': {
         if (!own) break;
         const chat = this.chatOf(frame);
-        const context = chat && this.scripts().pageContext(chat, entry.module, frame.closing.signal);
+        const context = chat && this.services.pages.pageContext(chat, entry.module, frame.closing.signal);
         return context ? header(chat, context.scope) : null;
       }
       case 'frame.show':
@@ -514,7 +517,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         const log = { stage: 'call', pack: from, script: entry.tool.manifest.displayName, at: Date.now(), duration: 0, logs: [], writes: [], errors: [], missing: [first], stopped: false, changed: false, handled: false, truncated: false };
         // A declined name is told when read, which a plugin's typeof guard does too: 점검 lists it, no toast, since a
         // guard is not a failure and a call to it fails as an error anyway.
-        this.scripts().report(entry.chat ?? '', { errors: [], missing: RISU_DECLINED.has(first) ? [] : [first], trace: { entries: [log], omitted: 0 } }, from);
+        this.services.journal.report(entry.chat ?? '', { errors: [], missing: RISU_DECLINED.has(first) ? [] : [first], trace: { entries: [log], omitted: 0 } }, from);
         return;
       }
       case 'storage.get': if (typeof first === 'string') return toolData(this.session.store, entry.module, first); break;
@@ -548,12 +551,12 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
         if (typeof first !== 'string' || typeof second !== 'string') break;
         if (!this.allowed(first, entry.module)) throw new ToolStopped();
         if (!entry.tool.manifest.uses.includes('model')) return { ok: false, reason: 'not-declared' } satisfies Hazelle.SendAnswer;
-        return this.scripts().send(first, second, { kind: 'module', id: entry.module }, AbortSignal.any([frame.closing.signal, cancel]));
+        return this.services.pages.send(first, second, { kind: 'module', id: entry.module }, AbortSignal.any([frame.closing.signal, cancel]));
       }
       case 'chat.rendered': {
         if (typeof first !== 'string' || !isRecord(second) || typeof second.id !== 'string' || typeof second.version !== 'string') break;
         if (!this.allowed(first, entry.module)) throw new ToolStopped();
-        return this.scripts().rendered(first, { id: second.id, version: second.version });
+        return this.services.pages.rendered(first, { id: second.id, version: second.version });
       }
       case 'settings': return this.session.store.get('tool', toolId(entry.module))!.value.settings;
       case 'settings.set': {
@@ -686,7 +689,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     this.writes.take(frame.entry.module);
     const context = this.context(frame, undefined);
     const outcome = await this.convert(frame, context, value);
-    if (!frame.closing.signal.aborted) await this.scripts().pageWrite(context.chat, frame.entry.module, outcome);
+    if (!frame.closing.signal.aborted) await this.services.pages.pageWrite(context.chat, frame.entry.module, outcome);
   }
 
   private send(frame: Frame, message: Down) { if (!frame.closing.signal.aborted || frame.unloading) frame.connection.port.postMessage(message); }
@@ -703,7 +706,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     if (frame.closing.signal.aborted) return;
     this.stalls.set(frame.entry.module, (this.stalls.get(frame.entry.module) ?? 0) + 1);
     const error = new ToolStuck(this.stalls.get(frame.entry.module)! >= 3);
-    if (frame.loaded && !framesOf(frame.entry).some((each) => each.pending.size)) this.scripts().report([...frame.entry.chats].at(-1) ?? '', error, { kind: 'module', id: frame.entry.module });
+    if (frame.loaded && !framesOf(frame.entry).some((each) => each.pending.size)) this.services.journal.report([...frame.entry.chats].at(-1) ?? '', error, { kind: 'module', id: frame.entry.module });
     this.end(frame.entry, error);
   }
 
@@ -787,4 +790,4 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
   }
 }
 
-export const createTools = (session: Pick<Session, 'store' | 'files'>, scripts: () => Scripts): Tools & Binding<ToolUnit, ToolEvent, ToolReach> => new ToolHost(session, scripts);
+export const createTools = (session: Pick<Session, 'store' | 'files'>, services: ToolServices): Tools & Binding<ToolUnit, ToolEvent, ToolReach> => new ToolHost(session, services);
