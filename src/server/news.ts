@@ -5,13 +5,12 @@ import type { DatabaseSync } from 'node:sqlite';
 // sets it to null for one that brings nothing to tell; once published, the post is the record and is edited on the board.
 export type ReleaseNews = { version: string; title: string; text: string };
 export const RELEASE_NEWS: ReleaseNews | null = {
-  version: 'v0.4.3',
-  title: '처음 오신 분을 위한 튜토리얼이 생겼어요',
+  version: 'v0.4.4',
+  title: '답을 받는 동안 화면이 가벼워졌어요',
   text: [
-    '처음 오신 분은 AI를 연결하고 대화를 시작하기까지 실제 화면을 따라가며 해 볼 수 있어요. 눌러야 할 곳을 하나씩 짚어 주고, 대화창에 도착하면 끝나요. 아직 응답을 받아 본 적 없다면 캐릭터 둘러보기 맨 앞의 튜토리얼 보기에서 언제든 시작할 수 있어요.',
-    '실험실에 에이전트가 생겼어요. 답을 쓰기 전에 장면을 먼저 정리하는 전처리 에이전트와, 받은 답을 다듬는 후처리 에이전트를 붙일 수 있어요. 어떤 에이전트가 무엇을 보내고 받았는지는 응답 정보와 점검의 기록에서 볼 수 있어요.',
-    '전체 백업을 내보내고 복원할 때 그림을 더 많이 한꺼번에 주고받아요.',
-  ].join('\n\n'),
+    '- 답이 들어오는 동안 이미 받은 메시지까지 매번 다시 그리던 문제를 고쳤어요. 긴 채팅이나 휴대폰에서 답을 받을 때 덜 버벅여요.',
+    '- 번역한 메시지에서도 삽화가 화면에 보이는 문단 옆에 놓여요. 본문 위쪽에 줄이 늘어나도 삽화가 원래 문단을 따라가요.',
+  ].join('\n'),
 };
 
 // Once per version: a restart finds the post there. Nothing before an operator exists, since the operator writes it.
