@@ -6,10 +6,11 @@ import { newOf } from '../common/acts';
 import { noResults } from '../common/search';
 import { DIRECT_CONNECTION, NEEDS_ACCOUNT } from '../common/words';
 import { useAttempt } from '../common/useAttempt';
+import { MARKS } from '../common/tutorial';
 import { useAccount, useConnections, useSession } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, Empty, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
+import { Button, Callout, Empty, GuideMark, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
 import { connect } from './connect';
 
 const GROUPS: Record<ConnectionType['group'], string> = {
@@ -35,6 +36,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
     ['주요', query.trim() ? [] : shown.filter((type) => type.major)],
     ...(Object.keys(GROUPS) as ConnectionType['group'][]).map((group): [string, readonly ConnectionType[]] => [GROUPS[group], shown.filter((type) => type.group === group)]),
   ];
+  const firstShown = sections.find(([, types]) => types.length)?.[0];
 
   return (
     <Screen top={<NavBar title={newOf('연결')} {...backBar(back)} />}>
@@ -56,23 +58,25 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
       )}
       {sections.map(([title, types]) =>
         types.length ? (
-          <Section key={title} title={title}>
-            <List label={title} places>
-              {types.map((type) => {
-                const count = connected(type);
-                return (
-                  <ListItem
-                    key={type.id}
-                    title={type.label}
-                    description={type.description}
-                    tags={[type.signIn ? `${type.signIn.site} 로그인` : (type.keyForm?.label ?? 'API 키'), ...(count ? [`연결 ${count}개`] : []), ...(guest && !type.browser ? [NEEDS_ACCOUNT] : [])]}
-                    current={route.kind === 'connect' && route.type === type}
-                    onClick={() => navigate({ kind: 'connect', type })}
-                  />
-                );
-              })}
-            </List>
-          </Section>
+          <GuideMark key={title} name={title === firstShown ? MARKS.connectType : null}>
+            <Section title={title}>
+              <List label={title} places>
+                {types.map((type) => {
+                  const count = connected(type);
+                  return (
+                    <ListItem
+                      key={type.id}
+                      title={type.label}
+                      description={type.description}
+                      tags={[type.signIn ? `${type.signIn.site} 로그인` : (type.keyForm?.label ?? 'API 키'), ...(count ? [`연결 ${count}개`] : []), ...(guest && !type.browser ? [NEEDS_ACCOUNT] : [])]}
+                      current={route.kind === 'connect' && route.type === type}
+                      onClick={() => navigate({ kind: 'connect', type })}
+                    />
+                  );
+                })}
+              </List>
+            </Section>
+          </GuideMark>
         ) : null,
       )}
       <Section title="목록에 없는 제공자">

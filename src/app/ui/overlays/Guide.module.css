@@ -1,0 +1,55 @@
+.mark {
+  display: contents;
+}
+
+.ring {
+  position: fixed;
+  top: calc(var(--anchor-top) - var(--focus-ring-reach));
+  left: calc(var(--anchor-left) - var(--focus-ring-reach));
+  z-index: var(--layer-coach);
+  width: calc(var(--anchor-width) + 2 * var(--focus-ring-reach));
+  height: calc(var(--anchor-height) + 2 * var(--focus-ring-reach));
+  border: var(--focus-ring-width) solid var(--color-accent);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+
+.bubble {
+  composes: dropIn from '../foundation/motion.module.css';
+  position: fixed;
+  top: var(--coach-top);
+  left: var(--coach-left);
+  z-index: var(--layer-coach);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: min(var(--hint-width), calc(100vw - 2 * var(--menu-edge)));
+  padding: var(--space-12) var(--space-16);
+  border: var(--border-thin) solid var(--color-accent-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.title {
+  composes: title from '../foundation/type.module.css';
+}
+
+.note {
+  composes: note from '../foundation/type.module.css';
+  flex-shrink: 0;
+}
+
+.docked {
+  top: auto;
+  right: var(--menu-edge);
+  bottom: var(--menu-edge);
+  left: auto;
+}

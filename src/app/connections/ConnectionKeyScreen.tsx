@@ -2,10 +2,11 @@ import { useState, type FormEvent } from 'react';
 import type { ConnectionType } from '../../connectors/types';
 import { providerConnection } from '../../runtime/connections';
 import { useAttempt } from '../common/useAttempt';
+import { MARKS } from '../common/tutorial';
 import { useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, Intro, NavBar, Screen } from '../ui';
+import { Button, Callout, GuideMark, Intro, NavBar, Screen } from '../ui';
 import { connect } from './connect';
 import { KeyField } from './KeyField';
 
@@ -32,7 +33,9 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
       }
     >
       <Intro title={type.label}>{type.description}</Intro>
-      <KeyField type={type} value={key} onChange={setKey} />
+      <GuideMark name={MARKS.connectKey}>
+        <KeyField type={type} value={key} onChange={setKey} />
+      </GuideMark>
       {failure && (
         <Callout tone="warn" alert>
           {failure}

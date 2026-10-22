@@ -9,11 +9,12 @@ import { useFolderActions } from '../../common/folders/useFolderActions';
 import { CHARACTER_SORTS, useCharacterSort, useReorder, useSortedLibrary } from '../../common/characterOrder';
 import { TASK_NAMES } from '../../common/prompt-words';
 import { useSearch } from '../../common/useSearch';
+import { TUTORIAL, useTutorials } from '../../common/Tutorial';
 import { BIN, EMPTY_FOLDER, MODEL_SETTINGS, PAGES } from '../../common/words';
 import { useBin } from '../../session';
 import { backBar, navigate } from '../../shell/router';
 import { BIN_PLACE, type Back } from '../../shell/routes';
-import { Avatar, Button, CardGrid, ChoiceGroup, Empty, List, NavBar, Row, Screen, Section, Text } from '../../ui';
+import { Avatar, Button, CardGrid, ChoiceGroup, Empty, IconCard, List, NavBar, Row, Screen, Section, Text } from '../../ui';
 import { ShelfFace, shelfName } from '../shelf';
 import { binnedCharacter, binnedChat, binnedModule, binnedPersona, binnedProfile, binnedPrompt, useCharacterActions, type Binned } from '../useCharacterActions';
 import { aliased } from '../../common/alias';
@@ -43,6 +44,7 @@ export function GalleryScreen({ place, back, lead }: { place: string | null; bac
   const naming = useNaming(folderActions);
   const [purging, setPurging] = useState<Binned | null>(null);
   const [arranging, setArranging] = useState(false);
+  const tutorials = useTutorials();
 
   const binned = place === BIN_PLACE;
   // 휴지통 cannot be moved: there no pick shows and no card drags.
@@ -77,6 +79,7 @@ export function GalleryScreen({ place, back, lead }: { place: string | null; bac
   const folderCards = binned ? [] : at.folders;
   // One place's own cards have an order; search results from every folder have none.
   const ordering = !binned && search.words === '';
+  const door = !binned && place === null && search.words === '' && tutorials.offered.length > 0 ? 1 : 0;
   const characterIds = shown.map(({ id }) => id);
   const folderIds = folderCards.map(({ id }) => id);
   const orderOf = (ids: string[], id: string): Ordering | undefined => {
@@ -118,8 +121,10 @@ export function GalleryScreen({ place, back, lead }: { place: string | null; bac
       </FolderPath>
       {binned && <Text variant="note">{`${BIN}에 있는 항목은 ${KEEP_DAYS}일이 지나면 영구 삭제돼요.`}</Text>}
       {folderCards.length + shown.length > 0 && (
-        <CardGrid label="캐릭터" keys={[...folderCards.map(({ id }) => id), ...shown.map(({ id }) => id)]}>
-          {(index) => {
+        <CardGrid label="캐릭터" keys={[...(door ? ['tutorial'] : []), ...folderCards.map(({ id }) => id), ...shown.map(({ id }) => id)]}>
+          {(slot) => {
+            if (slot < door) return <IconCard icon={TUTORIAL.icon} name={TUTORIAL.open} note={tutorials.listed} onClick={tutorials.open} />;
+            const index = slot - door;
             if (index < folderCards.length) {
               const contents = library.byFolder.get(folderCards[index]!.id)!;
               const faces = contents.inside.slice(0, 4).map(({ face, character }) => ({ image: face, name: aliased(character.card.name, character.alias) }));

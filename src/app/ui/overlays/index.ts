@@ -1,6 +1,7 @@
 export { ConfirmDialog } from './ConfirmDialog';
 export { Dialog, Shortcuts } from './Dialog';
 export { DropOverlay } from './DropOverlay';
+export { Coach, GuideMark, guideShown, useGuideTarget } from './Guide';
 export { Hint, type Help } from './Hint';
 export { MoreMenu } from './MoreMenu';
 export { Menu, MenuHeading, MenuItem, useMenuClose, useMenuHandle, useMenuOpener, type MenuHandle } from './Menu';

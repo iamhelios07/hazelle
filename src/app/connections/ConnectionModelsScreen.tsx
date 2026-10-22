@@ -17,11 +17,12 @@ import { RetriesRow } from '../common/RetriesRow';
 import { followsRetries, profileLine } from '../common/settingWords';
 import { useAutosave } from '../common/useAutosave';
 import { MODEL_SETTINGS } from '../common/words';
+import { MARKS } from '../common/tutorial';
 import { useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Columns, Empty, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, Stack, Text, usePane } from '../ui';
+import { Button, Callout, ChoiceGroup, Columns, Empty, GuideMark, IconButton, ItemSection, List, ListItem, MenuItem, NavBar, Panel, Row, Screen, Stack, Text, usePane } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionKeyDialog } from './ConnectionKeyDialog';
 import { ConnectionMeters } from './ConnectionMeters';
@@ -141,7 +142,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     );
   }
 
-  function modelRow(model: Model) {
+  function modelRow(model: Model, first: boolean) {
     const count = entriesOf(connection, model.id).length;
     const status = count === 0 ? [] : [count > 1 ? `추가됨 ${count}` : '추가됨'];
     return (
@@ -150,7 +151,11 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         title={model.name}
         code={model.id}
         tags={[...status, ...(model.protocol === 'unsupported' ? ['지원 안 됨'] : []), ...tags(model)]}
-        trailing={<IconButton icon={ACTS.create.icon} label={addOf(model.name)} onClick={() => add(model)} />}
+        trailing={
+          <GuideMark name={first ? MARKS.modelAdd : null}>
+            <IconButton icon={ACTS.create.icon} label={addOf(model.name)} onClick={() => add(model)} />
+          </GuideMark>
+        }
       />
     );
   }
@@ -218,8 +223,12 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           )}
           {shown.length > 0 ? (
             <Stack gap="group">
-              {entriesShown.length > 0 && <List label="추가한 모델" keys={entriesShown.map(entryKey)} box>{(index) => entryRow(entriesShown[index]!)}</List>}
-              {modelsShown.length > 0 && <List label="모델" keys={modelsShown.map((model) => model.id)} box>{(index) => modelRow(modelsShown[index]!)}</List>}
+              {entriesShown.length > 0 && (
+                <GuideMark name={MARKS.modelAdded}>
+                  <List label="추가한 모델" keys={entriesShown.map(entryKey)} box>{(index) => entryRow(entriesShown[index]!)}</List>
+                </GuideMark>
+              )}
+              {modelsShown.length > 0 && <List label="모델" keys={modelsShown.map((model) => model.id)} box>{(index) => modelRow(modelsShown[index]!, index === 0)}</List>}
             </Stack>
           ) : (
             catalog?.ok && <Empty variant="section">{search.none ?? (filter !== 'all' ? '조건에 맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>

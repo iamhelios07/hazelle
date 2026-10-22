@@ -1,4 +1,4 @@
-import { Check, GripVertical } from 'lucide-react';
+import { Check, GripVertical, type LucideIcon } from 'lucide-react';
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { bothDrops, cardDrag, useCardDrop, useCardPlace } from './cardDrag';
 import { CardOrderScope, useOrderHandle } from './cardOrder';
@@ -124,6 +124,21 @@ export function FaceCard({ image, video = false, name, note, selected, current =
           <MenuSlot value={slot.held}>{menu}</MenuSlot>
         </div>
       )}
+    </div>
+  );
+}
+
+// A door among the cards, shaped as one, its picture an icon.
+export function IconCard({ icon, name, note, onClick }: { icon: LucideIcon; name: string; note: string; onClick: () => void }) {
+  return (
+    <div className={styles.cardBox}>
+      <button type="button" className={styles.card} onClick={onClick}>
+        <span className={`${styles.picture} ${styles.iconPicture}`}>
+          <Icon icon={icon} size="lg" />
+        </span>
+        <span className={styles.name}>{name}</span>
+        <span className={styles.detail}>{note}</span>
+      </button>
     </div>
   );
 }

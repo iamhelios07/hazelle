@@ -102,6 +102,11 @@
   font-size: var(--text-hero);
 }
 
+.iconPicture {
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+}
+
 .card:hover .picture {
   outline: var(--border-thin) solid var(--color-border-strong);
 }

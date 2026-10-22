@@ -538,10 +538,11 @@
   --ease-loop: ease-in-out;
 
   /* Layers, bottom to top. The toast is above every layer but the file drop (a message's tools, menus, the side panel,
-     dialogs), so a failure shown while one is open can be read and pressed. */
+     a tutorial's note, dialogs), so a failure shown while one is open can be read and pressed. */
   --layer-raised: 2;
   --layer-menu: 20;
   --layer-panel: 30;
+  --layer-coach: 35;
   --layer-dialog: 40;
   --layer-hint: 42;
   --layer-toast: 45;

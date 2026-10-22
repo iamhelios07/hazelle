@@ -142,6 +142,12 @@ function useKind<K extends Kind>(kind: K) {
 }
 
 export const useConnections = () => useKind('connection');
+// A model's reply received in this account, a deleted chat's too (a version with a receipt, Summary.recent): what ends
+// the tutorial and opens the release tours (design §6.15, §6.17).
+export function useReplied() {
+  const summaries = useKind('summary');
+  return useMemo(() => summaries.some(({ value }) => value.recent.length > 0), [summaries]);
+}
 export const useShares = () => useKind('share');
 // all is the memo's key only: it is a new array exactly when one changed.
 function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {

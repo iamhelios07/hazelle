@@ -3,10 +3,11 @@ import { useState } from 'react';
 import type { ConnectionType, SignIn } from '../../connectors/types';
 import { providerConnection } from '../../runtime/connections';
 import { ACTS } from '../common/acts';
+import { MARKS } from '../common/tutorial';
 import { useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, CodeCard, Intro, NavBar, Screen, Text } from '../ui';
+import { Button, Callout, CodeCard, GuideMark, Intro, NavBar, Screen, Text } from '../ui';
 import { connect } from './connect';
 import { useDeviceSignIn } from './useDeviceSignIn';
 
@@ -45,9 +46,11 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
             <Text variant="note">
               승인 대기 중 · 코드 유효 시간 {Math.round(code.expiresIn / 60)}분
             </Text>
-            <Button icon={ExternalLink} onClick={() => openSite(code)}>
-              코드 복사하고 {signIn.site} 열기
-            </Button>
+            <GuideMark name={MARKS.connectKey}>
+              <Button icon={ExternalLink} onClick={() => openSite(code)}>
+                코드 복사하고 {signIn.site} 열기
+              </Button>
+            </GuideMark>
           </>
         }
       >

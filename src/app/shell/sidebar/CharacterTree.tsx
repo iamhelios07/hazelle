@@ -7,12 +7,13 @@ import { ACTS, importOf, newOf } from '../../common/acts';
 import { useSearch } from '../../common/useSearch';
 import { ago } from '../../common/time';
 import { GuestLine } from '../../common/GuestNotice';
+import { TUTORIAL, useTutorials } from '../../common/Tutorial';
 import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../common/importing';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useNewCharacter } from '../../library/useCharacterActions';
 import { useCharacterSort, useSortedLibrary } from '../../common/characterOrder';
-import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, Viewport } from '../../ui';
+import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, Tag, TreeRow, Viewport } from '../../ui';
 import { navigate } from '../router';
 import { LayerButtons } from './LayerButtons';
 
@@ -34,6 +35,8 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
   const search = useSearch(characters, '캐릭터 검색', ({ character }) => characterTexts(character), { query: [query, onQuery] });
   const { words } = search;
   const opened = useMemo(() => new Set(openFolders), [openFolders]);
+  const tutorials = useTutorials();
+  const door = !words && tutorials.offered.length > 0 ? 1 : 0;
 
   const row = (shelf: Shelf<ChatSummary>) => {
     const latest = shelf.chats[0];
@@ -86,8 +89,9 @@ export function CharacterTree({ typing, onEnter, query, onQuery, openFolders, on
     >
       {empty && <Welcome />}
       {!empty && search.none && <Empty variant="side">{search.none}</Empty>}
-      {!empty && <Viewport keys={items.map(({ key }) => key)}>{(index) => {
-        const item = items[index]!;
+      {!empty && <Viewport keys={[...(door ? ['tutorial'] : []), ...items.map(({ key }) => key)]}>{(slot) => {
+        if (slot < door) return <ItemRow avatar={<Tag tone="accent" icon={TUTORIAL.icon} />} title={TUTORIAL.open} time="" typing={false} preview={tutorials.listed} onClick={tutorials.open} />;
+        const item = items[slot - door]!;
         return <TreeRow depth={item.depth}>{'shelf' in item ? row(item.shelf) :
           <FolderRow name={item.folder.value.name} count={byFolder.get(item.folder.id)!.inside.length}
             open={opened.has(item.folder.id)} onToggle={() => onToggleFolder(item.folder.id)} />}</TreeRow>;

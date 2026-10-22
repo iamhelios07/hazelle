@@ -10,12 +10,13 @@ import { describeFailure } from '../common/failure';
 import { readPosts } from '../../runtime/board';
 import { BUILT_VERSION, openedNewRelease, TOURS, tourToShow, type Tour } from '../common/release';
 import { TourDialog } from '../common/Tour';
+import { TutorialProvider, useTutorials } from '../common/Tutorial';
 import { count } from '../common/typedNumber';
 import { usePersisted } from '../common/usePersisted';
 import { DisplayProvider } from '../display';
 import { BIN, BOARD, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
-import { SessionProvider, useSaves, useSession } from '../session';
+import { SessionProvider, useReplied, useSaves, useSession } from '../session';
 import { ToastProvider, useToast, type Standing } from '../toast';
 import { Brand, Progress, Screen, Text } from '../ui';
 import { BotNotes } from './BotNotes';
@@ -110,10 +111,13 @@ function ReplyHold() {
 }
 
 // The release this device last opened, and the tour it saw (closing it in any way is seeing it); the ref: StrictMode
-// runs a mount's effect twice. A tour to show stands in for the toast of the same open, which says the release only
-// when the board holds its 소식 (server/news), and opens that post.
+// runs a mount's effect twice. The open's one dialog: the tutorials' welcome for an account with no reply yet, else a
+// tour; either stands in for the toast of the same open, which says the release only when the board holds its 소식
+// (server/news), and opens that post.
 function News() {
   const toast = useToast();
+  const replied = useReplied();
+  const tutorials = useTutorials();
   const [lastOpened, setLastOpened] = usePersisted('risu-alpha:opened-version', String, '', String);
   const [tourSeen, setTourSeen] = usePersisted('risu-alpha:tour-seen', String, '', String);
   const [tour, setTour] = useState<Tour | null>(null);
@@ -121,9 +125,10 @@ function News() {
   useEffect(() => {
     if (BUILT_VERSION === null || said.current) return;
     said.current = true;
-    const showing = tourToShow(BUILT_VERSION, tourSeen, TOURS);
+    const showing = tourToShow(BUILT_VERSION, tourSeen, TOURS, replied);
+    const welcoming = !replied && tutorials.welcome();
     if (showing) setTour(showing);
-    else if (openedNewRelease(BUILT_VERSION, lastOpened)) {
+    else if (!welcoming && openedNewRelease(BUILT_VERSION, lastOpened)) {
       void readPosts(null, { sort: 'new', category: 'news', limit: 1 }).then((read) => {
         const news = read.ok ? read.data.rows[0] : undefined;
         if (news?.version === BUILT_VERSION) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'post', id: news.id }) } });
@@ -215,11 +220,13 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
           <Unread facts={account.facts} kind="unreadBoard" />
           <Stale />
           <ReplyHold />
-          <News />
-          <BotNotes />
-          <ImportProvider>
-            <Layout />
-          </ImportProvider>
+          <TutorialProvider>
+            <News />
+            <BotNotes />
+            <ImportProvider>
+              <Layout />
+            </ImportProvider>
+          </TutorialProvider>
         </ToastProvider>
       </DisplayProvider>
     </SessionProvider>

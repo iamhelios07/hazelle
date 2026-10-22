@@ -1,7 +1,7 @@
 export { Bars } from './Bars';
 export { Breakdown } from './Breakdown';
 export { CardItem, CardList } from './CardList';
-export { CardGrid, FaceCard, FolderCard, Portrait, Preview, SelectionBar } from './CardGrid';
+export { CardGrid, FaceCard, FolderCard, IconCard, Portrait, Preview, SelectionBar } from './CardGrid';
 export { PathBar } from './PathBar';
 export { PostCard, PostFeed, PostStat } from './PostCard';
 export { Ranking, type Ranked } from './Ranking';
