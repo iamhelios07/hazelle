@@ -7,7 +7,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { toBase64 } from '../vault/aead';
 import type { FileRef } from '../vault/files';
 import { BackupZip, indexZip, readEntry, unzipEntry, type BackupOutput, type ZipEntry } from './backup-zip';
-import type { Files } from './files';
+import { inOrder, type Files } from './files';
 import { BACKUP_PAGE_BYTES as PAGE_BYTES, BACKUP_PAGE_ROWS as PAGE_ROWS, BackupStorageError, type BackupRecord, type BackupRecords } from './backup-records';
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
@@ -25,10 +25,9 @@ const MANIFEST = 'manifest.json';
 const OBJECTS = 'objects.jsonl';
 const FILES = 'files/';
 const HELD_BYTES = 8 * 1024 * 1024;
+// Pictures a restore hands the page in one save, each asking the server once which it lacks; how many go up at once is
+// runtime/files'.
 const PICTURE_ROWS = 12;
-// An export's reads ahead of the picture being written: as many as runtime/files UPLOADS, and no more bytes than this.
-const PICTURE_READS = 24;
-const READ_BYTES = 64 * 1024 * 1024;
 
 export const SEEDED: ReadonlySet<string> = new Set([...DEFAULT_PROMPT_IDS, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
 
@@ -147,29 +146,14 @@ export async function exportBackup(
     if (failure) return failure;
     await settle();
     await objects(new Uint8Array(), true);
-    // Written in order, since a zip is sequential, while the next ones are read: each written picture lets one more read
-    // start, so no read waits for a whole batch beside it. The first read always starts, whatever its size says.
-    const pictures = [...named.values()];
-    const reads: Promise<ApiResult<Uint8Array<ArrayBuffer>>>[] = [];
-    let next = 0;
-    let reading = 0;
-    try {
-      for (const { ref, size, uses } of pictures) {
-        while (next < pictures.length && reads.length < PICTURE_READS && (reads.length === 0 || reading + pictures[next]!.size <= READ_BYTES)) {
-          reading += pictures[next]!.size;
-          reads.push(files.read(pictures[next++]!.ref, { signal }));
-        }
-        signal.throwIfAborted();
-        const bytes = await reads.shift()!;
-        reading -= size;
-        if (!bytes.ok) return bytes;
-        // Pictures are compressed already.
-        const push = await zip.entry(FILES + ref.id, false);
-        await push(bytes.data, true);
-        landed('files', uses);
-      }
-    } finally {
-      await Promise.allSettled(reads);
+    // Written in order, as a zip is sequential, while the next ones are read.
+    for await (const [{ ref, uses }, bytes] of inOrder([...named.values()], ({ ref }) => files.read(ref, { signal }), { size: ({ size }) => size })) {
+      signal.throwIfAborted();
+      if (!bytes.ok) return bytes;
+      // Pictures are compressed already.
+      const push = await zip.entry(FILES + ref.id, false);
+      await push(bytes.data, true);
+      landed('files', uses);
     }
     // The pictures are read after the scans, with no timeline of their own: a restore heard meanwhile fails the export
     // as one between the scans does.
@@ -325,42 +309,37 @@ async function restoreOn(
     // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
     // would restore a picture that never opens. All files are checked before the first object write.
     const refused = new Set<string>();
-    let pictures: { ref: FileRef; bytes: Uint8Array<ArrayBuffer> }[] = [];
-    let pictureBytes = 0;
-    const savePictures = async () => {
+    // A chunk never holds another picture beside one past the bytes: that file cannot be cut.
+    const chunks: { ref: FileRef; entry: ZipEntry }[][] = [];
+    let chunk: { ref: FileRef; entry: ZipEntry }[] = [];
+    let chunkBytes = 0;
+    for (const ref of backup.files.values()) {
+      const entry = backup.entries.get(FILES + ref.id)!;
+      if (chunk.length && (chunk.length === PICTURE_ROWS || chunkBytes + entry.size > HELD_BYTES)) {
+        chunks.push(chunk);
+        chunk = [];
+        chunkBytes = 0;
+      }
+      chunk.push({ ref, entry });
+      chunkBytes += entry.size;
+    }
+    if (chunk.length) chunks.push(chunk);
+    const saveChunk = async (chunk: { entry: ZipEntry }[]) => {
+      const read = await Promise.all(chunk.map(({ entry }) => readEntry(backup.file, entry, signal).catch(() => null)));
+      if (read.some((bytes) => !bytes)) return null;
+      return files.save(read as Uint8Array<ArrayBuffer>[], { signal });
+    };
+    const sizeOf = (chunk: { entry: ZipEntry }[]) => chunk.reduce((sum, { entry }) => sum + entry.size, 0);
+    for await (const [chunk, saved] of inOrder(chunks, saveChunk, { size: sizeOf })) {
       signal.throwIfAborted();
-      const saved = await files.save(pictures.map(({ bytes }) => bytes), { signal });
+      if (!saved) return { ok: false, error: 'not-backup' };
       if (!saved.ok) return saved;
-      for (let i = 0; i < pictures.length; i++) {
-        const ref = pictures[i]!.ref;
-        const sealed = saved.data[i];
+      for (const [index, { ref }] of chunk.entries()) {
+        const sealed = saved.data[index];
         if (!sealed) refused.add(ref.id);
-        else if (sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false as const, error: 'not-backup' };
+        else if (sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false, error: 'not-backup' };
         landed('files');
       }
-      pictures = [];
-      pictureBytes = 0;
-      return saved;
-    };
-    for (const ref of backup.files.values()) {
-      signal.throwIfAborted();
-      const entry = backup.entries.get(FILES + ref.id)!;
-      // One picture may exceed the window; never hold another picture beside that indivisible file.
-      if (pictures.length && (pictures.length === PICTURE_ROWS || pictureBytes + entry.size > HELD_BYTES)) {
-        const saved = await savePictures();
-        if (!saved.ok) return saved;
-      }
-      const bytes = await readEntry(backup.file, entry, signal).catch(() => null);
-      if (!bytes) {
-        signal.throwIfAborted();
-        return { ok: false, error: 'not-backup' };
-      }
-      pictures.push({ ref, bytes });
-      pictureBytes += bytes.length;
-    }
-    if (pictures.length) {
-      const saved = await savePictures();
-      if (!saved.ok) return saved;
     }
     let skipped = 0;
     // In their old rev order, so each chat's entries fold as they did; owners follow every owned page.

@@ -109,7 +109,7 @@ export type Dropped = { prompt: number; persona: number; cast: number; models: n
 export async function importChat({ store, files }: Pick<Session, 'store' | 'files'>, file: ChatFile, character: string | null): Promise<ApiResult<{ id: string; dropped: Dropped }>> {
   const id = crypto.randomUUID();
   const ids = [...file.pictures.keys()];
-  const saved = await files.save(ids.map((each) => file.pictures.get(each)!));
+  const saved = await files.save(ids.map((each) => file.pictures.get(each)!), { bulk: true });
   if (!saved.ok) return saved;
   const refs = new Map(ids.map((each, index) => [each, saved.data[index]]));
   const resealed = <V extends { file: { id: string } }>(values: V[]) => values.flatMap((value) => {

@@ -98,7 +98,7 @@ class BackupWorker {
     if ('output' in host) {
       if (name === 'prepare') return pinBackup(host.store, signal);
       if (name === 'pin') return host.store.pin(signal);
-      if (name === 'readFile') return host.files.read(args as FileRef, { signal });
+      if (name === 'readFile') return host.files.read(args as FileRef, { signal, bulk: true });
       if (name === 'missingFiles') return host.files.missing(args as string[]);
       if (name === 'output') {
         const output = args as OutputCall;
@@ -115,7 +115,7 @@ class BackupWorker {
       }
       if (name === 'saveSummaries') return saveSummaries(host.store, args as string[], signal, (done, total) => this.options.progress?.({ kind: 'summaries', done, total }));
       if (name === 'saveFiles') {
-        return host.files.save((args as SaveFilesCall).bytes, { signal });
+        return host.files.save((args as SaveFilesCall).bytes, { signal, bulk: true });
       }
     }
     throw new Error('Unknown backup host call');

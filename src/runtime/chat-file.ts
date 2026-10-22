@@ -4,6 +4,7 @@ import type { Kind, Stored } from '../model/kinds';
 import { memoryId } from '../model/memory';
 import { fromBase64, toBase64 } from '../vault/aead';
 import type { ApiResult } from './api';
+import { inOrder } from './files';
 import { storedMemory } from './memory-read';
 import type { Session } from './session';
 import { readRow } from './upgrade';
@@ -52,16 +53,14 @@ export async function chatFile({ store, files }: Pick<Session, 'store' | 'files'
   const remarks = store.children('remark', id).map(row);
   const pictures: Record<string, string> = {};
   const pictured: Stored<(typeof PICTURED)[number]>[] = [];
-  for (const each of PICTURED.flatMap((kind) => store.children(kind, id))) {
-    const { file } = each.value;
-    if (!(file.id in pictures)) {
-      const read = await files.read(file);
-      if (!read.ok && read.error === 'file-blocked') continue;
-      if (!read.ok) return read;
-      pictures[file.id] = toBase64(read.data);
-    }
-    pictured.push(row(each));
+  const shown = PICTURED.flatMap((kind) => store.children(kind, id));
+  const unique = new Map(shown.map(({ value }) => [value.file.id, value]));
+  for await (const [{ file }, read] of inOrder([...unique.values()], ({ file }) => files.read(file, { bulk: true }), { size: ({ size }) => size })) {
+    if (!read.ok && read.error === 'file-blocked') continue;
+    if (!read.ok) return read;
+    pictures[file.id] = toBase64(read.data);
   }
+  for (const each of shown) if (each.value.file.id in pictures) pictured.push(row(each));
   return { ok: true, data: JSON.stringify({ ...FORMAT, character: character && { id: character.id, name: character.value.card.name }, rows: [row(chat), ...entries, ...(memory ? [row(memory)] : []), ...pictured, ...remarks, ...lore], pictures }) };
 }
 

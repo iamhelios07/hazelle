@@ -11,7 +11,7 @@ import { newShareKey, openShare, sealShare } from '../vault/shares';
 import { api, type ApiResult } from './api';
 import { charxContent, writeCharxFile, type CharxContent, type ExportStep } from './card-file';
 import type { BackupOutput } from './backup-zip';
-import type { Files } from './files';
+import { transfers, type Files } from './files';
 import { shareOf } from './share-link';
 import type { ObjectStore } from './store';
 
@@ -125,7 +125,7 @@ export async function openVersion(source: ShareSource, manifest: string, key: st
 
 // 파일로 받기: the same charx 내보내기 writes, from the share's files.
 export const writeShared = (source: ShareSource, content: CharxContent, output: BackupOutput, progress: (step: ExportStep) => void) =>
-  writeCharxFile(content, (ref) => readSharedFile(source, ref), output, progress);
+  writeCharxFile(content, (ref) => transfers.run(() => readSharedFile(source, ref), true), output, progress);
 
 // The charx whole in memory, for 헤이젤로 가져오기, which reads it as a dropped file.
 export async function sharedFile(source: ShareSource, content: CharxContent, name: string, progress: (step: ExportStep) => void): Promise<ApiResult<File>> {

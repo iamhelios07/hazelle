@@ -8,31 +8,86 @@ import type { ObjectStore } from './store';
 
 type Missing = Omit<MissingFiles, 'missing'> & { missing: Set<string> };
 
-// runtime/api's SLOWEST_UPLOAD assumes this many uploads sharing one uplink.
-const UPLOADS = 24;
+// How many transfers of stored files this page runs at once, reads and uploads together: over HTTP/1.1 a browser opens 6
+// connections to a host, which the store and replies need too. runtime/api's SLOWEST_UPLOAD assumes the larger sharing
+// one uplink.
+export const TRANSFERS = { multiplexed: 24, http1: 4 } as const;
+// What a run of transfers holds started and not yet taken (inOrder): a phone's memory sets it, not the speed.
+export const HELD_AHEAD = 64 * 1024 * 1024;
 const SWEEP_TRIES = 3;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
+
+// Plain http is always HTTP/1.1; behind https a browser that names no protocol is taken to multiplex.
+export function transferSlots(protocol: string, nextHop: string | undefined): number {
+  return protocol === 'https:' && nextHop !== 'http/1.1' ? TRANSFERS.multiplexed : TRANSFERS.http1;
+}
+
+// The page's one queue of transfers: each holds a slot until it ends, and the slot passes on at once, so a batch never
+// waits on its slowest while the link idles. bulk: one of many (a backup, an import, an export), which a picture
+// asked for on screen goes before.
+export class Transfers {
+  private running = 0;
+  private readonly waiting = { now: [] as (() => void)[], bulk: [] as (() => void)[] };
+
+  constructor(readonly slots: number) {}
+
+  async run<T>(work: () => Promise<T>, bulk = false): Promise<T> {
+    if (this.running < this.slots) this.running++;
+    else await new Promise<void>((resolve) => this.waiting[bulk ? 'bulk' : 'now'].push(resolve));
+    try {
+      return await work();
+    } finally {
+      const next = this.waiting.now.shift() ?? this.waiting.bulk.shift();
+      if (next) next();
+      else this.running--;
+    }
+  }
+}
+
+const navigation = typeof performance === 'undefined' ? undefined : (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined);
+export const transfers = new Transfers(transferSlots(globalThis.location?.protocol ?? '', navigation?.nextHopProtocol));
+
+// Starts each item's transfer ahead of the one taken, up to ahead items and, where size tells them, HELD_AHEAD bytes
+// started and not yet taken (the first always starts), and gives each with its result in order, as a zip or a check
+// by position takes them. A caller that stops early still waits for those under way.
+export async function* inOrder<T, R>(items: readonly T[], start: (item: T) => Promise<R>, { ahead = TRANSFERS.multiplexed, size = () => 0 }: { ahead?: number; size?: (item: T) => number } = {}): AsyncGenerator<[T, R]> {
+  const started: Promise<R>[] = [];
+  let next = 0;
+  let held = 0;
+  try {
+    for (const item of items) {
+      while (next < items.length && started.length < ahead && (started.length === 0 || held + size(items[next]!) <= HELD_AHEAD)) {
+        held += size(items[next]!);
+        started.push(start(items[next++]!));
+      }
+      const result = await started.shift()!;
+      held -= size(item);
+      yield [item, result];
+    }
+  } finally {
+    await Promise.allSettled(started);
+  }
+}
 
 export const namedFile = (value: unknown): string | null => (isRecord(value) && isRecord(value.file) && typeof value.file.id === 'string' && FILE_ID.test(value.file.id) ? value.file.id : null);
 
 // A file is sealed by its content, so one this account already holds is never sent again (accounts keep their own
 // copies, src/server/files.ts); an import cut short and tried again sends only what did not arrive. Asking, uploading and reading wait out a
 // dropped connection the way the store's calls do (store.reaching): a backup reads thousands of pictures in a row, and
-// one dropped read must not end it.
+// one dropped read must not end it. Every read and upload takes a slot of the page's transfers.
 export class Files {
   private sweeping: Promise<void> | null = null;
   private owed = false;
-  private uploading = 0;
-  private readonly queued: (() => void)[] = [];
 
   constructor(
     private readonly backend: Backend,
     private readonly store: ObjectStore,
+    private readonly queue: Transfers = transfers,
   ) {}
 
   // Each file's reference, in order; null for one the server refuses: too large, blocked (taken down by the operator),
   // or past the account's picture cap, which the caller leaves out and counts as it does a picture it cannot read.
-  async save(files: Uint8Array<ArrayBuffer>[], { signal }: { signal?: AbortSignal } = {}): Promise<ApiResult<(FileRef | null)[]>> {
+  async save(files: Uint8Array<ArrayBuffer>[], { signal, bulk }: { signal?: AbortSignal; bulk?: boolean } = {}): Promise<ApiResult<(FileRef | null)[]>> {
     if (signal?.aborted) return { ok: false, error: 'stopped' };
     const sealed = await Promise.all(files.map(sealFile));
     if (signal?.aborted) return { ok: false, error: 'stopped' };
@@ -53,32 +108,18 @@ export class Files {
     let failed: ApiFailure | undefined;
     await Promise.all(
       missing.map((id) =>
-        this.uploadSlot(async () => {
+        this.queue.run(async () => {
           if (failed || signal?.aborted) return;
           const put = await this.store.reaching(() => this.backend.putFile(id, bodies.get(id)!), signal);
           if (put.ok) return;
           if (REFUSED.has(put.error)) refused.add(id);
           else failed ??= put;
-        }),
+        }, bulk),
       ),
     );
     if (signal?.aborted) return { ok: false, error: 'stopped' };
     if (failed) return failed;
     return { ok: true, data: sealed.map(({ ref }) => (refused.has(ref.id) ? null : ref)) };
-  }
-
-  // Every save shares the UPLOADS slots, and a slot passes to the next upload the moment one ends: a batch never waits
-  // on its slowest upload while the link idles, and saves that overlap (runtime/characters saveAssets) never send more.
-  private async uploadSlot(upload: () => Promise<void>) {
-    if (this.uploading < UPLOADS) this.uploading++;
-    else await new Promise<void>((resolve) => this.queued.push(resolve));
-    try {
-      await upload();
-    } finally {
-      const next = this.queued.shift();
-      if (next) next();
-      else this.uploading--;
-    }
   }
 
   // The ids the server holds no readable file for (never stored, or blocked), the largest sealed body it takes and the
@@ -164,14 +205,14 @@ export class Files {
   // A body sealed elsewhere, a share's manifest, stored as it is under its hash, as every file is. Its id.
   async put(body: Uint8Array<ArrayBuffer>): Promise<ApiResult<string>> {
     const id = await fileId(body);
-    const put = await this.store.reaching(() => this.backend.putFile(id, body));
+    const put = await this.queue.run(() => this.store.reaching(() => this.backend.putFile(id, body)));
     return put.ok ? { ok: true, data: id } : put;
   }
 
   // A body that does not open answers 'unreadable', never empty bytes. The wait ends with signal (a backup's 중지), not
   // only with the store.
-  async read(ref: FileRef, { signal }: { signal?: AbortSignal } = {}): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
-    const result = await this.store.reaching(() => this.backend.readFile(ref.id), signal);
+  async read(ref: FileRef, { signal, bulk }: { signal?: AbortSignal; bulk?: boolean } = {}): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
+    const result = await this.queue.run(() => this.store.reaching(() => this.backend.readFile(ref.id), signal), bulk);
     if (!result.ok) return result;
     const bytes = await openFile(ref, result.data);
     return bytes ? { ok: true, data: bytes } : { ok: false, error: 'unreadable' };

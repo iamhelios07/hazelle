@@ -11,7 +11,7 @@ import type { ToggleValues } from '../model/prompt';
 import { ORDER_ID, rearrange, toFront } from '../model/order';
 import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
-import type { Files } from './files';
+import { inOrder, type Files } from './files';
 import { thumbnail } from './picture';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
@@ -22,7 +22,7 @@ export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving';
 
 type Owned = { avatar: Avatar | null; assets: Asset[]; lore: Lore[]; likeness: Likeness | null };
 
-// Files are read and sent this many at a time, so a bot of thousands never holds them all at once.
+// Files are read this many at a time and each window saved as one, so a bot of thousands never holds them all at once.
 const FILE_WINDOW = 32;
 
 // The character goes last with what it owns (store.batch), a move's chat roots right before it, so a failure midway
@@ -52,8 +52,8 @@ export async function addCharacter(store: ObjectStore, character: Character, { a
 export type ImportedCharacter = { id: string; unsupported: Unsupported; faceless: boolean };
 
 // typeOf: what a kept file is, null for one not kept; an inlay keeps pictures and a signature only (engine/import inlayType).
-// The next window is read and queued while the one before it uploads, so the link never idles between windows in Files'
-// shared upload slots; at most two windows' bytes are held.
+// The next window is read and queued while the one before it uploads, so the link never idles between windows; at most
+// two windows' bytes are held.
 export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress, typeOf: (bytes: Uint8Array) => string | null = assetType): Promise<ApiResult<{ kept: Asset[]; unsupported: Unsupported }>> {
   const kept: Asset[] = [];
   const tally: Tally = new Map();
@@ -65,25 +65,17 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
       else if (!type) add(tally, 'unsupported-file');
       return type ? [{ name, type, bytes: bytes! }] : [];
     });
-    return { read, saved: await files.save(read.map(({ bytes }) => bytes)) };
+    return { read, saved: await files.save(read.map(({ bytes }) => bytes), { bulk: true }) };
   };
-  let ahead = assets.length ? saveWindow(0) : null;
-  try {
-    for (let start = 0; ahead; start += FILE_WINDOW) {
-      progress({ kind: 'assets', done: start, total: assets.length });
-      const current = ahead;
-      ahead = start + FILE_WINDOW < assets.length ? saveWindow(start + FILE_WINDOW) : null;
-      const { read, saved } = await current;
-      if (!saved.ok) return saved;
-      read.forEach(({ name, type, bytes }, index) => {
-        const file = saved.data[index];
-        if (file) kept.push({ name, type, size: bytes.length, file });
-        else add(tally, isVideo(type) ? 'refused-video' : 'refused-picture');
-      });
-    }
-  } finally {
-    // A window still going when an earlier one fails is let finish, so nothing uploads after this returns.
-    await ahead?.catch(() => null);
+  const starts = Array.from({ length: Math.ceil(assets.length / FILE_WINDOW) }, (_, index) => index * FILE_WINDOW);
+  for await (const [start, { read, saved }] of inOrder(starts, saveWindow, { ahead: 2 })) {
+    progress({ kind: 'assets', done: start, total: assets.length });
+    if (!saved.ok) return saved;
+    read.forEach(({ name, type, bytes }, index) => {
+      const file = saved.data[index];
+      if (file) kept.push({ name, type, size: bytes.length, file });
+      else add(tally, isVideo(type) ? 'refused-video' : 'refused-picture');
+    });
   }
   if (assets.length) progress({ kind: 'assets', done: assets.length, total: assets.length });
   return { ok: true, data: { kept, unsupported: counted(UNSUPPORTED_KINDS, tally) } };

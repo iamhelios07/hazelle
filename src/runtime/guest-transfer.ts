@@ -10,6 +10,7 @@ import { api, type ApiFailure, type ApiResult } from './api';
 import { deviceCache } from './device-cache';
 import { clearGuestStore, guestBackend, guestBoardSecret } from './guest-store';
 import { SEEDED } from './backup-core';
+import { inOrder, transfers } from './files';
 import { toolAssetId, toolChatId, toolDataId } from './tools/store';
 
 export type GuestTransferStep = { kind: 'objects' | 'pictures'; done: number; total: number };
@@ -17,6 +18,8 @@ export type GuestTransferOptions = { signal?: AbortSignal; progress?: (step: Gue
 type Guest = { accountId: string; vaultKey: VaultKey };
 type Inventory = { rows: SealedChange[]; timeline: string; rev: number };
 const failed = (error: string) => ({ ok: false as const, error });
+// Pictures asked about at once; the next ones are asked while these go up, the room each answer gives counting only its own.
+const PICTURES_PER_ASK = 100;
 
 async function inventory(backend: Backend, signal?: AbortSignal): Promise<ApiResult<Inventory>> {
   const rows: SealedChange[] = [];
@@ -89,15 +92,13 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
   }
   progress({ kind: 'pictures', done: 0, total: pictures.length });
   let picturesDone = 0;
-  for (let start = 0; start < pictures.length; start += 24) {
-    if (signal?.aborted) return failed('stopped');
-    const ids = pictures.slice(start, start + 24);
+  const move = async (ids: string[]): Promise<ApiFailure | null> => {
     const missing = await target.missingFiles(ids);
     if (!missing.ok) return missing;
     const needed = new Set(missing.data.missing);
     let room = missing.data.room;
     let failure: ApiFailure | null = null;
-    await Promise.all(ids.map(async (id) => {
+    await Promise.all(ids.map((id) => transfers.run(async () => {
       if (failure || signal?.aborted) return;
       if (needed.has(id)) {
         const body = await source.readFile(id);
@@ -112,7 +113,12 @@ export async function transferGuest(accountId: string, vaultKey: VaultKey, optio
         if (!sent.ok) { failure ??= sent; return; }
       }
       progress({ kind: 'pictures', done: ++picturesDone, total: pictures.length });
-    }));
+    }, true)));
+    return failure;
+  };
+  const asks = Array.from({ length: Math.ceil(pictures.length / PICTURES_PER_ASK) }, (_, index) => pictures.slice(index * PICTURES_PER_ASK, (index + 1) * PICTURES_PER_ASK));
+  for await (const [, failure] of inOrder(asks, move, { ahead: 2 })) {
+    if (signal?.aborted) return failed('stopped');
     if (failure) return failure;
   }
   const present = new Map(destination.data.rows.map((row) => [row.id, row]));

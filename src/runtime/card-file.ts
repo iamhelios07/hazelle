@@ -8,13 +8,10 @@ import { likenessId } from '../model/likeness';
 import type { ApiResult } from './api';
 import type { BackupOutput } from './backup-zip';
 import { importCharacter, type ImportedCharacter, type Progress } from './characters';
-import type { Files } from './files';
+import { inOrder, type Files } from './files';
 import { importModule } from './modules';
 import type { ObjectStore } from './store';
 import type { FileRef } from '../vault/files';
-
-// Read and written in order this many at a time, as a backup's are, so a bot of thousands never holds them all at once.
-const PICTURE_WINDOW = 12;
 
 export type ExportStep = { done: number; total: number };
 
@@ -93,8 +90,8 @@ export function charxContent(store: ObjectStore, id: string): ApiResult<CharxCon
 
 type Read = (ref: FileRef) => Promise<ApiResult<Uint8Array<ArrayBuffer>>>;
 
-// The file written whole and closed, or aborted. Each picture is read in order PICTURE_WINDOW at a time and handed to
-// put in that order; one that cannot be read stops it, as the file already names it.
+// The file written whole and closed, or aborted. The pictures are read ahead (runtime/files inOrder) and handed to put in
+// order; one that cannot be read stops it, as the file already names it.
 async function writeFile(
   output: BackupOutput,
   pictures: FileRef[],
@@ -105,13 +102,11 @@ async function writeFile(
   let complete = false;
   try {
     await parts.head();
-    for (let start = 0; start < pictures.length; start += PICTURE_WINDOW) {
-      progress({ done: start, total: pictures.length });
-      const got = await Promise.all(pictures.slice(start, start + PICTURE_WINDOW).map(read));
-      for (const [index, bytes] of got.entries()) {
-        if (!bytes.ok) return bytes;
-        await parts.put(bytes.data, start + index);
-      }
+    let index = 0;
+    for await (const [, bytes] of inOrder(pictures, read)) {
+      progress({ done: index, total: pictures.length });
+      if (!bytes.ok) return bytes;
+      await parts.put(bytes.data, index++);
     }
     await parts.end();
     await output.close();
@@ -142,7 +137,7 @@ export async function exportModule(store: ObjectStore, files: Files, id: string,
   const stored = live(store.get('module', id));
   if (!stored) return { ok: false, error: 'gone' };
   const { files: pictures, ...module } = moduleOf(store, id, stored.value);
-  const written = await writeFile(output, pictures, (ref) => files.read(ref), progress, {
+  const written = await writeFile(output, pictures, (ref) => files.read(ref, { bulk: true }), progress, {
     head: () => output.write(risumHead(moduleSource(module))),
     put: (bytes) => output.write(risumBlock(bytes)),
     end: () => output.write(RISUM_END),
@@ -154,7 +149,7 @@ export async function exportModule(store: ObjectStore, files: Files, id: string,
 export async function exportCharacter(store: ObjectStore, files: Files, id: string, output: BackupOutput, progress: (step: ExportStep) => void): Promise<ApiResult<{ tools: number }>> {
   const content = charxContent(store, id);
   if (!content.ok) return content;
-  const written = await writeCharxFile(content.data, (ref) => files.read(ref), output, progress);
+  const written = await writeCharxFile(content.data, (ref) => files.read(ref, { bulk: true }), output, progress);
   return written.ok ? { ok: true, data: { tools: content.data.tools } } : written;
 }
 

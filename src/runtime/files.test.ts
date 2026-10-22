@@ -4,7 +4,7 @@ import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, type ApiResult } from './api';
 import { addAssets, copyCharacter, createCharacter, removeAssets, restoreAssets, saveAssets } from './characters';
-import { Files } from './files';
+import { Files, HELD_AHEAD, inOrder, transferSlots, Transfers, TRANSFERS } from './files';
 import { fillPictures, importRisuChats } from './move';
 import { markDeleted } from './removal';
 import { png, testServer } from './testing';
@@ -39,7 +39,7 @@ describe('files uploading', () => {
     const files = new Files(serverBackend(async <T,>(method: string, _path: string, body?: unknown) => {
       if (method === 'POST') return { ok: true as const, data: { missing: (body as { ids: string[] }).ids, maxBytes: 1 << 30, room: null } as T };
       return new Promise<ApiResult<T>>((done) => (holding ? puts.push(() => done({ ok: true, data: null as T })) : done({ ok: true, data: null as T })));
-    }), store);
+    }), store, new Transfers(TRANSFERS.multiplexed));
     const release = () => {
       holding = false;
       for (const put of puts) put();
@@ -69,6 +69,44 @@ describe('files uploading', () => {
     release();
     const saved = await saving;
     expect(saved.ok && saved.data.kept.map(({ name }) => name)).toEqual(assets.map(({ name }) => name));
+  });
+});
+
+describe('transfers', () => {
+  it('runs 4 at once over HTTP/1.1, whose connections the store shares, and 24 over a multiplexed one', () => {
+    expect([transferSlots('http:', undefined), transferSlots('https:', 'http/1.1'), transferSlots('https:', 'h2'), transferSlots('https:', '')]).toEqual([4, 4, 24, 24]);
+  });
+
+  it('lets a picture on screen go before the bulk transfers waiting', async () => {
+    const queue = new Transfers(1);
+    const order: string[] = [];
+    let free = () => {};
+    const first = queue.run(() => new Promise<void>((done) => (free = done)), true);
+    const bulk = queue.run(async () => void order.push('bulk'), true);
+    const shown = queue.run(async () => void order.push('shown'));
+    free();
+    await Promise.all([first, bulk, shown]);
+    expect(order).toEqual(['shown', 'bulk']);
+  });
+
+  it('starts ahead within the held bytes, the first whatever its size, and gives the results in order', async () => {
+    const sizes = [HELD_AHEAD * 2, HELD_AHEAD / 2, HELD_AHEAD / 2, 1];
+    const started: number[] = [];
+    const ends = new Map<number, () => void>();
+    const run = inOrder(sizes.map((_, at) => at), (at) => (started.push(at), new Promise<number>((done) => ends.set(at, () => done(at)))), { size: (at) => sizes[at]! });
+    const taking = (async () => {
+      const taken: number[] = [];
+      for await (const [, result] of run) taken.push(result);
+      return taken;
+    })();
+    await vi.waitFor(() => expect(started).toEqual([0]));
+    ends.get(0)!();
+    await vi.waitFor(() => expect(started).toEqual([0, 1, 2]));
+    ends.get(2)!();
+    ends.get(1)!();
+    await vi.waitFor(() => expect(started).toEqual([0, 1, 2, 3]));
+    ends.get(3)!();
+    expect(await taking).toEqual([0, 1, 2, 3]);
   });
 });
 

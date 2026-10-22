@@ -19,6 +19,11 @@ const RETIRED_COPY = {
   selector: `:matches(Literal[value=${RETIRED}], TemplateElement[value.raw=${RETIRED}], JSXText[value=${RETIRED}])`,
   message: 'A retired wording: say it the way src/app/common/words.ts does.',
 };
+// Every stored file a page reads or sends takes a slot of runtime/files' transfers, which this keeps from being passed by.
+const RAW_TRANSFER = {
+  selector: 'CallExpression[callee.property.name=/^(readFile|putFile)$/]',
+  message: 'Read and send stored files through runtime/files (Files, or transfers.run), which holds the page to one transfer policy.',
+};
 const STYLE_PROPS = {
   selector: 'JSXAttribute[name.name=/^(className|style)$/]',
   message: 'Only src/app/ui styles elements (src/app/ui/README.md).',
@@ -32,6 +37,11 @@ export default defineConfig([
     files: ['src/**'],
     plugins: { local: { rules: { boundaries } } },
     rules: { 'local/boundaries': 'error' },
+  },
+  {
+    files: ['src/runtime/**'],
+    ignores: ['src/runtime/files.ts', 'src/runtime/guest-transfer.ts', 'src/runtime/**/*.test.ts'],
+    rules: { 'no-restricted-syntax': ['error', RAW_TRANSFER] },
   },
   {
     files: ['src/app/**'],
