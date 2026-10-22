@@ -70,16 +70,14 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
     for (const [label, value] of settings) await expect(page.getByRole('textbox', { name: label, exact: true })).toHaveValue(value);
   });
 
-  await test.step('allow the memory claim, then the first model call when a chunk closes', async () => {
+  await test.step('allow the plugin once, for its memory claim and model calls, then a chunk closes', async () => {
     await page.goto('/');
     const report = await importFile(page, pickBot, CARD);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     await send('We climb the stairs.');
-    await expect(page.getByText('이 플러그인이 장기 기억을 대신 관리하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하고, 장기 기억을 대신 맡을 수 있어요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await send('The lamp is cold.');
-    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect.poll(() => embedded.length).toBe(1);
     expect(summaries()).toHaveLength(1);
     const log = summaries()[0]!.messages.map(({ content }) => content).join('\n');

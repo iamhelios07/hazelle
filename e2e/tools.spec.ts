@@ -97,13 +97,13 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
   });
 
   const chat = page.url();
-  await test.step('import memory and consent to its first auxiliary call as the module', async () => {
+  await test.step('import memory and consent to it once, before its first auxiliary call', async () => {
     await importPlugin(page, 'memory');
     await expect(page.getByRole('switch', { name: '모델 호출', exact: true })).not.toBeChecked();
     await page.goto(chat);
     await page.getByLabel('메시지', { exact: true }).fill('The gate is open now.');
     await page.getByRole('button', { name: '보내기', exact: true }).click();
-    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 모델을 추가로 호출할 수 있어요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect(page.getByRole('article').last()).toContainText(summary(1));
     expect(aux()).toHaveLength(1);
@@ -192,17 +192,15 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     await expect(page.getByRole('switch', { name: '장기 기억 맡기기', exact: true })).not.toBeChecked();
   });
 
-  await test.step('allow the memory claim when the chat opens, then the first model call when a chunk closes', async () => {
+  await test.step('allow the plugin once, for its memory claim and model calls, then a chunk closes', async () => {
     await page.goto('/');
     const report = await importFile(page, pickBot, RECALL_CARD);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     await send('We climb the stairs.');
-    await expect(page.getByText('이 플러그인이 장기 기억을 대신 관리하려고 해요', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하고, 장기 기억을 대신 맡을 수 있어요', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '허용', exact: true }).click();
     await send('The lamp is cold.');
     await send('We light the lamp.');
-    await expect(page.getByText('이 플러그인이 모델을 추가로 호출하려고 해요', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '허용', exact: true }).click();
     await expect.poll(() => embedded.length).toBe(1);
     expect(embedded[0]).toMatchObject({ model: FAKE_EMBED, input: [node(1)] });
     await expect(page.getByRole('article').nth(4)).toContainText('요약됨');
