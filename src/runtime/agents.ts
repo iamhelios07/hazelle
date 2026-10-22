@@ -18,7 +18,7 @@ import { taskWriter } from './profiles';
 import { chatPrompt, ofSort, type StoredPrompt } from './prompts';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
-import { pageAnswer } from './talk';
+import { pageAnswer, type Preparing } from './talk';
 import { chatPlace, keepRow } from './usage';
 
 // 에이전트 (design §6.16): the lists on the ladder 공용 → 프롬프트 → 캐릭터 → 채팅, which stack; the pre agents a turn runs
@@ -119,14 +119,14 @@ type Deps = Pick<Session, 'store' | 'tokens' | 'credentials' | 'log'>;
 
 // One call of one agent, and what it answered past its memory block. text: a post agent's input, absent for a pre
 // agent.
-async function call(session: Deps, chat: string, stored: Chat, { id, value: prompt }: Agent, scope: ChatScope, index: number, memory: string, text: string | undefined, signal: AbortSignal): Promise<{ run: AgentRun; text: string } | AgentFailure> {
+async function call(session: Deps, chat: string, stored: Chat, { id, value: prompt }: Agent, scope: ChatScope, index: number, memory: string, text: string | undefined, signal: AbortSignal, retrying: () => void): Promise<{ run: AgentRun; text: string } | AgentFailure> {
   const { store } = session;
   const writer = taskWriter(store, stored, prompt.model);
   if ('kind' in writer) return writer;
   const lane = { asker: text === undefined ? ('agent' as const) : ('polish' as const), chat };
   const assembled = await evaluatingTask(store.evaluation.agent(lane, { scope, prompt, index, ...(text !== undefined && { text }), memory, seed: crypto.randomUUID() }, signal));
   if ('kind' in assembled) return assembled;
-  const answer = await pageAnswer(session, writer, 'agent', chat, assembled.messages, signal);
+  const answer = await pageAnswer(session, writer, 'agent', chat, assembled.messages, signal, retrying);
   if ('receipt' in answer) session.log.attach(chat, answer.receipt.id, { agent: { name: prompt.name, stage: prompt.stage, sent: { messages: assembled.messages, parts: assembled.parts } } });
   if ('kind' in answer) return answer;
   const { receipt } = answer;
@@ -142,21 +142,26 @@ async function call(session: Deps, chat: string, stored: Chat, { id, value: prom
 // A turn's pre agents, all at once, over the chat as the turn sends it. again: the versions of the message the reply
 // takes the place of or is made beside (다시 시도, 다시 생성), newest first, whose notes are used again (user ruling,
 // 2026-10-15). messages: the chat's, before the reply. Any failure fails the turn (user ruling, 2026-10-21). running:
-// told the names of the calls still out, as each starts and ends, never an empty list: the last names stand until the reply's
-// own step takes over.
-export async function preAgents(session: Deps, chat: string, stored: Chat, scope: ChatScope, messages: readonly Message[], again: readonly Message['versions'][number][], signal: AbortSignal, running: (names: readonly string[], total: number) => void): Promise<{ runs: AgentRun[]; notes: string } | AgentFailed | { kind: 'stopped' }> {
+// told the names of the calls still out and of those among them sent again, as each starts, ends or is sent again, never
+// an empty list: the last names stand until the reply's own step takes over.
+export async function preAgents(session: Deps, chat: string, stored: Chat, scope: ChatScope, messages: readonly Message[], again: readonly Message['versions'][number][], signal: AbortSignal, running: (now: Omit<Extract<Preparing, { step: 'agents' }>, 'step'>) => void): Promise<{ runs: AgentRun[]; notes: string } | AgentFailed | { kind: 'stopped' }> {
   const { pre } = agentsOf(session.store, stored);
   if (pre.length === 0 || scope.messages.length === 0) return { runs: [], notes: '' };
   const earlier = again.flatMap((version) => version.receipt?.agents ?? []);
   const kept = pre.map((agent) => earlier.find((run) => run.agent === agent.id && run.stage === 'pre' && run.note !== undefined));
   const out = new Set(pre.filter((_, at) => !kept[at]));
-  const told = () => out.size > 0 && running(pre.filter((agent) => out.has(agent)).map(({ value }) => value.name), pre.length);
+  const resent = new Set<Agent>();
+  const names = (agents: Set<Agent>) => pre.filter((agent) => agents.has(agent) && out.has(agent)).map(({ value }) => value.name);
+  const told = () => out.size > 0 && running({ running: names(out), retrying: names(resent), total: pre.length });
   told();
   const ran = await Promise.all(
     pre.map(async (agent, at): Promise<AgentRun | AgentFailed | { kind: 'stopped' }> => {
       const reused = kept[at];
       if (reused) return { ...reused, name: agent.value.name, reused: true };
-      const made = await call(session, chat, stored, agent, scope, scope.messages.length - 1, memoryOf(messages, agent.id), undefined, signal).finally(() => {
+      const made = await call(session, chat, stored, agent, scope, scope.messages.length - 1, memoryOf(messages, agent.id), undefined, signal, () => {
+        resent.add(agent);
+        told();
+      }).finally(() => {
         out.delete(agent);
         told();
       });
@@ -170,8 +175,8 @@ export async function preAgents(session: Deps, chat: string, stored: Chat, scope
   return { runs, notes: agentNotes(runs.map(({ name, note }) => ({ name, note: note! }))) };
 }
 
-// The post agent at work on a reply: its name and place among them, from 1.
-export type PolishStep = { name: string; at: number; total: number };
+// The post agent at work on a reply: its name and place among them, from 1, and whether its call is sent again.
+export type PolishStep = { name: string; at: number; total: number; retrying?: true };
 
 // By the reply polished: the agent at work while they run, else why the last run stopped short, kept for the session.
 type Polish = { chat: string; message: string } & ({ step: PolishStep; failure?: never } | { failure: AgentFailed; step?: never });
@@ -245,8 +250,9 @@ export class Polisher {
     let failed: AgentFailed | null = null;
     const { post } = agentsOf(store, stored);
     for (const [at, agent] of post.entries()) {
-      working({ name: agent.value.name, at: at + 1, total: post.length });
-      const made = await call(this.deps, chat, stored, agent, scope, index, memoryOf(messages.slice(0, index), agent.id), text, signal);
+      const step = { name: agent.value.name, at: at + 1, total: post.length };
+      working(step);
+      const made = await call(this.deps, chat, stored, agent, scope, index, memoryOf(messages.slice(0, index), agent.id), text, signal, () => working({ ...step, retrying: true }));
       if ('kind' in made) {
         if (made.kind !== 'stopped') failed = { name: agent.value.name, failure: made };
         break;

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { RELAY_HEADER } from '../contracts/http';
 import { fold, shown } from '../model/chat';
 import { EMPTY_SETTINGS } from '../model/settings';
 import { setAgentAt } from './agents';
@@ -75,6 +76,17 @@ describe('에이전트', () => {
       expect(await takeTurn(session, chat, { kind: 'answer' }, null, { agents: true })).toBeNull();
       expect(log).toHaveLength(2);
       expect(shown(messages(session, chat)[1]!).text).toBe('The reply.');
+    }));
+
+  it('names a pre agent whose call is sent again while the reply waits for it', () =>
+    server.withSession(async (session) => {
+      const chat = await chatted(session);
+      await setAgentAt(session.store, { kind: 'chat', id: chat }, await agent(session, 'scene', '장면'), true);
+      stubRelay(() => new Response('{}', { status: 429, headers: { [RELAY_HEADER]: 'upstream', 'retry-after': '30' } }));
+      const turning = takeTurn(session, chat, { kind: 'answer' });
+      await vi.waitFor(() => expect(session.talk.snapshot(chat)?.preparing).toEqual({ step: 'agents', running: ['장면'], retrying: ['장면'], total: 1 }));
+      session.talk.stop(chat);
+      await turning;
     }));
 
   it('rewrites a saved reply in its place, keeps the raw text, and 원문으로 되돌리기 brings it back', () =>

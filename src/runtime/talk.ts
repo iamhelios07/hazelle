@@ -47,7 +47,8 @@ export type Turn = {
   stopping?: true;
   preparing?: Preparing;
 };
-export type Preparing = { step: 'preread' } | { step: 'agents'; running: readonly string[]; total: number };
+// retrying: a call of the step whose try failed and is sent again, by name for the agents.
+export type Preparing = { step: 'preread'; retrying?: true } | { step: 'agents'; running: readonly string[]; retrying: readonly string[]; total: number };
 
 // unstored: the user's message shown before the store has it. Nothing may be saved against it yet: fold skips, for
 // good, an entry that names a message saved after it.
@@ -356,10 +357,11 @@ export class Talk {
 // A 삽화 scene (runtime/illustrate), a likeness (runtime/likeness) or a mascot's line (runtime/mascot), read through the
 // server's stream like any model call but with no marker: a pick-up on another device would make it again and pay for
 // it twice. The caller parses the text.
-export async function pageAnswer(session: Pick<Session, 'store' | 'tokens' | 'credentials' | 'log'>, { route, settings }: { route: Route; settings: ModelSettings }, requestClass: Exclude<PageClass, 'script'>, chat: string | null, messages: GenerateInput['messages'], signal: AbortSignal): Promise<{ kind: 'stopped' } | { kind: 'failed'; receipt: Receipt } | { text: string; receipt: Receipt }> {
+export async function pageAnswer(session: Pick<Session, 'store' | 'tokens' | 'credentials' | 'log'>, { route, settings }: { route: Route; settings: ModelSettings }, requestClass: Exclude<PageClass, 'script'>, chat: string | null, messages: GenerateInput['messages'], signal: AbortSignal, retrying?: () => void): Promise<{ kind: 'stopped' } | { kind: 'failed'; receipt: Receipt } | { text: string; receipt: Receipt }> {
   const { store, credentials, log } = session;
   const text = gather();
   const call = await pageCall(session, route, requestClass, chat);
+  call.retrying = retrying;
   const answer = await generate({ credentials, log, connection: route.connection.value, model: route.model, settings, retries: retriesOf(store, route.connection.value, settings), messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
   if (answer.cut === 'stopped') return { kind: 'stopped' };
   const receipt = unsettled(receiptOf(callOf(route), answer));

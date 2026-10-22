@@ -237,7 +237,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in rewritten) return { ...rewritten, ...kept };
   // After the scripts, so a bot's Lua sees the prompt as built and never the brief; before the forecast and the refit,
   // which compare and fit what is sent.
-  const shortened = !skip.preread && featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, () => preparing({ step: 'preread' })) : { prompt: rewritten, preread: null };
+  const shortened = !skip.preread && featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, (retrying) => preparing({ step: 'preread', ...(retrying && { retrying }) })) : { prompt: rewritten, preread: null };
   if ('kind' in shortened) return { kind: 'preread', failure: shortened, ...kept };
   const sent = shortened.prompt;
   const before = [...(reply.before ?? []), ...requested.writes];
@@ -259,7 +259,7 @@ function runPre(session: Session, chat: string, turn: TurnContext, signal: Abort
   const at = reply.message === null ? messages.length : messages.findIndex(({ id }) => id === reply.message);
   const versions = reply.message === null ? [] : (messages[at]?.versions ?? []);
   const again = skip.notes ? [] : [...versions.filter(({ id }) => id === reply.replaces), ...versions.filter(({ id }) => id !== reply.replaces).reverse()];
-  return preAgents(session, chat, turn.chat, turn.scope, messages.slice(0, at), again, signal, (running, total) => preparing({ step: 'agents', running, total }));
+  return preAgents(session, chat, turn.chat, turn.scope, messages.slice(0, at), again, signal, (now) => preparing({ step: 'agents', ...now }));
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or

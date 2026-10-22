@@ -17,7 +17,7 @@ import { describeFailedReply, describeTranslateFailure } from '../common/failure
 import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
-import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_WAITING, RETRYING } from '../common/words';
+import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_RETRYING, PRE_READ_WAITING, RETRYING } from '../common/words';
 import type { Preparing } from '../../runtime/talk';
 import type { PolishStep } from '../../runtime/agents';
 import { SHORTCUTS, titled } from '../shortcuts';
@@ -35,7 +35,7 @@ import { useReveal } from './useReveal';
 import { useSelectedPart } from './useSelectedPart';
 import { withOriginal } from './withOriginal';
 
-const preparingNote = (preparing: Preparing) => (preparing.step === 'preread' ? PRE_READ_WAITING : agentsWaiting(preparing.running, preparing.total));
+const preparingNote = (preparing: Preparing) => (preparing.step === 'agents' ? agentsWaiting(preparing) : preparing.retrying ? PRE_READ_RETRYING : PRE_READ_WAITING);
 
 type Props = {
   message: Shown;

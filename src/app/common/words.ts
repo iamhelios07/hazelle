@@ -163,14 +163,17 @@ export const FEATURES_TITLE = '기능';
 export const PRE_READ = '토큰 절약';
 export const PRE_READ_HELP = `${MODEL_ROLES.aux}이 긴 내용을 먼저 읽고 줄여서 ${MODEL_ROLES.main} 입력을 아껴요. 답이 늦게 시작되고, 빠진 내용은 답에 안 나올 수 있어요. pdf-pod 플러그인에서 가져온 아이디어예요.`;
 export const PRE_READ_PARTS: Record<keyof PrereadParts, string> = { chat: '대화', system: '시스템 프롬프트', lore: '로어북' };
+// A call whose try failed before any of it came, sent again (design §6.7, retry on failure).
+const RESENDING = '응답을 받지 못해서 다시 보내고 있어요';
 export const PRE_READ_WAITING = `${MODEL_ROLES.aux}이 긴 내용을 먼저 줄이고 있어요.`;
+export const PRE_READ_RETRYING = `${MODEL_ROLES.aux}이 ${RESENDING}.`;
 // 에이전트 (runtime/agents, design §6.16), a 실험실 experiment.
 export const AGENTS = '에이전트';
 export const AGENTS_HELP = `답을 쓰기 전에 장면을 정리하거나(전처리), 받은 답을 다듬어요(후처리). 에이전트마다 모델을 한 번 더 불러요. Agents! P! 플러그인에서 가져온 아이디어예요.`;
 export const STAGE_NAMES: Record<AgentStage, string> = { pre: '전처리', post: '후처리' };
 // The waiting marks name the agents at work, and where more than one runs, how far they are.
-export const agentsWaiting = (running: readonly string[], total: number) => `${withParticle(running.join(', '), '이/가')} 먼저 읽고 있어요${total > 1 ? ` · ${total - running.length}/${total} 끝남` : '.'}`;
-export const polishingNow = ({ name, at, total }: { name: string; at: number; total: number }) => `${withParticle(name, '이/가')} 답을 다듬고 있어요${total > 1 ? ` · ${at}/${total}` : '.'}`;
+export const agentsWaiting = ({ running, retrying, total }: { running: readonly string[]; retrying: readonly string[]; total: number }) => `${withParticle((retrying.length ? retrying : running).join(', '), '이/가')} ${retrying.length ? RESENDING : '먼저 읽고 있어요'}${total > 1 ? ` · ${total - running.length}/${total} 끝남` : '.'}`;
+export const polishingNow = ({ name, at, total, retrying }: { name: string; at: number; total: number; retrying?: true }) => `${withParticle(name, '이/가')} ${retrying ? RESENDING : '답을 다듬고 있어요'}${total > 1 ? ` · ${at}/${total}` : '.'}`;
 export const FEATURE_NAMES: Record<Feature, string> = { translate: '번역', illustrate: '삽화', memory: '장기 기억', mascot: '마스코트', preread: PRE_READ, agents: AGENTS };
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
@@ -241,9 +244,8 @@ export const DISCOUNT_WAITING = '할인 받는 중이에요. 답이 다 만들�
 export const DISCOUNT_STOPPING = '멈추는 중이에요. 그사이에 응답이 다 만들어지면 완성된 응답을 보여 줘요.';
 export const PDF_SEND = 'PDF로 보내기';
 
-// A reply whose try failed before any of it came, sent again (design §6.7, retry on failure): the shared count, a
-// connection's or a 설정 묶음's.
-export const RETRYING = '응답을 받지 못해서 다시 보내고 있어요.';
+// The retry count is shared: a connection's or a 설정 묶음's.
+export const RETRYING = `${RESENDING}.`;
 export const RETRY_COUNT = '실패하면 다시 보내기';
 export const RETRY_HELP = '응답이 오기 전에 실패하면 이 횟수만큼 다시 시도해요. 다만 키나 요청 내용이 잘못됐을 때는 바로 알려 줘요.';
 export const LORE_BUDGET_LABEL = '로어북 최대 분량';

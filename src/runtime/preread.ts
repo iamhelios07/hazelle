@@ -82,9 +82,9 @@ function briefSettings({ route, settings }: { route: Route; settings: ModelSetti
 
 type Deps = Pick<Session, 'store' | 'tokens' | 'credentials' | 'log' | 'briefs'>;
 
-// main: the chat model's route, whose input price the saving is counted at. shown: the 토큰 절약 call is about to start,
+// main: the chat model's route, whose input price the saving is counted at. shown: the 토큰 절약 call is about to start, or is sent again,
 // which the reply's placeholder says. A request with less to shorten than batch, and no brief to reuse, goes as it is.
-export async function preread(session: Deps, chat: string, stored: Chat, scope: ChatScope, sent: Assembled, main: Route, seed: string, signal: AbortSignal, shown: () => void): Promise<{ prompt: Assembled; preread: Settle | null } | PrereadFailure> {
+export async function preread(session: Deps, chat: string, stored: Chat, scope: ChatScope, sent: Assembled, main: Route, seed: string, signal: AbortSignal, shown: (retrying?: true) => void): Promise<{ prompt: Assembled; preread: Settle | null } | PrereadFailure> {
   const { store, briefs } = session;
   const raw = { prompt: sent, preread: null };
   const setup = prereadSetup(store);
@@ -115,7 +115,7 @@ export async function preread(session: Deps, chat: string, stored: Chat, scope: 
   shown();
   const assembled = await evaluatingTask(store.evaluation.preread({ asker: 'send', chat }, { scope, prompt: prompt.prompt.value, material: plan.material, seed }, signal));
   if ('kind' in assembled) return assembled;
-  const answer = await pageAnswer(session, { route, settings: briefSettings(writer, setup.thinkLess) }, 'preread', chat, assembled.messages, signal);
+  const answer = await pageAnswer(session, { route, settings: briefSettings(writer, setup.thinkLess) }, 'preread', chat, assembled.messages, signal, () => shown(true));
   if ('kind' in answer) return answer;
   const brief = answer.text.trim();
   if (!brief) return { kind: 'failed', receipt: answer.receipt };
