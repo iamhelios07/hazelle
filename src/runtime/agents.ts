@@ -142,14 +142,15 @@ async function call(session: Deps, chat: string, stored: Chat, { id, value: prom
 // A turn's pre agents, all at once, over the chat as the turn sends it. again: the versions of the message the reply
 // takes the place of or is made beside (다시 시도, 다시 생성), newest first, whose notes are used again (user ruling,
 // 2026-10-15). messages: the chat's, before the reply. Any failure fails the turn (user ruling, 2026-10-21). running:
-// told the names of the calls still out, as each starts and ends.
+// told the names of the calls still out, as each starts and ends, never an empty list: the last names stand until the reply's
+// own step takes over.
 export async function preAgents(session: Deps, chat: string, stored: Chat, scope: ChatScope, messages: readonly Message[], again: readonly Message['versions'][number][], signal: AbortSignal, running: (names: readonly string[], total: number) => void): Promise<{ runs: AgentRun[]; notes: string } | AgentFailed | { kind: 'stopped' }> {
   const { pre } = agentsOf(session.store, stored);
   if (pre.length === 0 || scope.messages.length === 0) return { runs: [], notes: '' };
   const earlier = again.flatMap((version) => version.receipt?.agents ?? []);
   const kept = pre.map((agent) => earlier.find((run) => run.agent === agent.id && run.stage === 'pre' && run.note !== undefined));
   const out = new Set(pre.filter((_, at) => !kept[at]));
-  const told = () => running(pre.filter((agent) => out.has(agent)).map(({ value }) => value.name), pre.length);
+  const told = () => out.size > 0 && running(pre.filter((agent) => out.has(agent)).map(({ value }) => value.name), pre.length);
   told();
   const ran = await Promise.all(
     pre.map(async (agent, at): Promise<AgentRun | AgentFailed | { kind: 'stopped' }> => {
