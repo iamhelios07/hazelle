@@ -127,6 +127,7 @@ async function call(session: Deps, chat: string, stored: Chat, { id, value: prom
   const assembled = await evaluatingTask(store.evaluation.agent(lane, { scope, prompt, index, ...(text !== undefined && { text }), memory, seed: crypto.randomUUID() }, signal));
   if ('kind' in assembled) return assembled;
   const answer = await pageAnswer(session, writer, 'agent', chat, assembled.messages, signal);
+  if ('receipt' in answer) session.log.attach(chat, answer.receipt.id, { agent: { name: prompt.name, stage: prompt.stage, sent: { messages: assembled.messages, parts: assembled.parts } } });
   if ('kind' in answer) return answer;
   const { receipt } = answer;
   await keepRow(store, receipt, Date.now(), chatPlace(store, chat));
@@ -140,16 +141,24 @@ async function call(session: Deps, chat: string, stored: Chat, { id, value: prom
 
 // A turn's pre agents, all at once, over the chat as the turn sends it. again: the versions of the message the reply
 // takes the place of or is made beside (다시 시도, 다시 생성), newest first, whose notes are used again (user ruling,
-// 2026-10-15). messages: the chat's, before the reply. Any failure fails the turn (user ruling, 2026-10-21).
-export async function preAgents(session: Deps, chat: string, stored: Chat, scope: ChatScope, messages: readonly Message[], again: readonly Message['versions'][number][], signal: AbortSignal): Promise<{ runs: AgentRun[]; notes: string } | AgentFailed | { kind: 'stopped' }> {
+// 2026-10-15). messages: the chat's, before the reply. Any failure fails the turn (user ruling, 2026-10-21). running:
+// told the names of the calls still out, as each starts and ends.
+export async function preAgents(session: Deps, chat: string, stored: Chat, scope: ChatScope, messages: readonly Message[], again: readonly Message['versions'][number][], signal: AbortSignal, running: (names: readonly string[], total: number) => void): Promise<{ runs: AgentRun[]; notes: string } | AgentFailed | { kind: 'stopped' }> {
   const { pre } = agentsOf(session.store, stored);
   if (pre.length === 0 || scope.messages.length === 0) return { runs: [], notes: '' };
   const earlier = again.flatMap((version) => version.receipt?.agents ?? []);
+  const kept = pre.map((agent) => earlier.find((run) => run.agent === agent.id && run.stage === 'pre' && run.note !== undefined));
+  const out = new Set(pre.filter((_, at) => !kept[at]));
+  const told = () => running(pre.filter((agent) => out.has(agent)).map(({ value }) => value.name), pre.length);
+  told();
   const ran = await Promise.all(
-    pre.map(async (agent): Promise<AgentRun | AgentFailed | { kind: 'stopped' }> => {
-      const kept = earlier.find((run) => run.agent === agent.id && run.stage === 'pre' && run.note !== undefined);
-      if (kept) return { ...kept, name: agent.value.name, reused: true };
-      const made = await call(session, chat, stored, agent, scope, scope.messages.length - 1, memoryOf(messages, agent.id), undefined, signal);
+    pre.map(async (agent, at): Promise<AgentRun | AgentFailed | { kind: 'stopped' }> => {
+      const reused = kept[at];
+      if (reused) return { ...reused, name: agent.value.name, reused: true };
+      const made = await call(session, chat, stored, agent, scope, scope.messages.length - 1, memoryOf(messages, agent.id), undefined, signal).finally(() => {
+        out.delete(agent);
+        told();
+      });
       if (!('kind' in made)) return made.run;
       return made.kind === 'stopped' ? made : { name: agent.value.name, failure: made };
     }),
@@ -160,8 +169,12 @@ export async function preAgents(session: Deps, chat: string, stored: Chat, scope
   return { runs, notes: agentNotes(runs.map(({ name, note }) => ({ name, note: note! }))) };
 }
 
-// By the reply polished: failure null while its agents run, else why the last run stopped short, kept for the session.
-export type Polishing = ReadonlyMap<string, { chat: string; message: string; failure: AgentFailed | null }>;
+// The post agent at work on a reply: its name and place among them, from 1.
+export type PolishStep = { name: string; at: number; total: number };
+
+// By the reply polished: the agent at work while they run, else why the last run stopped short, kept for the session.
+type Polish = { chat: string; message: string } & ({ step: PolishStep; failure?: never } | { failure: AgentFailed; step?: never });
+export type Polishing = ReadonlyMap<string, Polish>;
 
 // The post agents of a saved reply, one after another, each given the text the last one left, which it rewrites or
 // adds to (AgentPrompt place). What they made is saved as a version in the reply's place that keeps the raw text
@@ -178,7 +191,7 @@ export class Polisher {
 
   readonly snapshot = () => this.state;
 
-  private change(version: string, entry: { chat: string; message: string; failure: AgentFailed | null } | null) {
+  private change(version: string, entry: Polish | null) {
     const next = new Map(this.state);
     if (entry) next.set(version, entry);
     else next.delete(version);
@@ -186,19 +199,18 @@ export class Polisher {
     this.changes.notify();
   }
 
-  // reply: the version Talk saved, which the bot's onOutput may have edited since. Resolves once the edit is saved or
-  // nothing is, so what reads the reply after (응답 번역, 삽화, 마스코트) reads the edited one. Its chat must stay loaded
-  // until this returns (session).
+  // reply: the version Talk saved, which the bot's onOutput may have edited since, or the one shown for 다시 다듬기.
+  // Resolves once the edit is saved or nothing is, so what reads the reply after (응답 번역, 삽화, 마스코트) reads the
+  // edited one. Its chat must stay loaded until this returns (session).
   async polish(chat: string, message: string, reply: string): Promise<void> {
-    if (this.closed) return;
+    if (this.closed || this.state.get(reply)?.step) return;
     const { store } = this.deps;
     const stored = live(store.get('chat', chat));
     if (!stored || agentsOf(store, stored.value).post.length === 0) return;
     const abort = new AbortController();
     this.aborts.add(abort);
-    this.change(reply, { chat, message, failure: null });
     try {
-      const failure = await this.run(chat, stored.value, message, reply, abort.signal);
+      const failure = await this.run(chat, stored.value, message, reply, abort.signal, (step) => this.change(reply, { chat, message, step }));
       this.change(reply, failure ? { chat, message, failure } : null);
     } catch (error) {
       this.change(reply, null);
@@ -213,7 +225,7 @@ export class Polisher {
     for (const abort of this.aborts) abort.abort();
   }
 
-  private async run(chat: string, stored: Chat, id: string, reply: string, signal: AbortSignal): Promise<AgentFailed | null> {
+  private async run(chat: string, stored: Chat, id: string, reply: string, signal: AbortSignal, working: (step: PolishStep) => void): Promise<AgentFailed | null> {
     const { store } = this.deps;
     const standing = () => {
       const messages = fold(store.children('entry', chat));
@@ -222,13 +234,17 @@ export class Polisher {
       return version && (version.id === reply || version.earlier?.includes(reply)) ? { messages, index, version } : null;
     };
     const start = standing();
-    if (!start?.version.text.trim()) return null;
-    const { messages, index, version } = start;
+    // Again on a polished reply, they work from the text as written, and their calls before stand no more.
+    const written = start && (start.version.raw ?? start.version.text);
+    if (!start || !written?.trim()) return null;
+    const { messages, index } = start;
     const scope = scopeOf({ store }, chat, stored, messages.slice(0, index + 1));
     const runs: AgentRun[] = [];
-    let text = version.text;
+    let text = written;
     let failed: AgentFailed | null = null;
-    for (const agent of agentsOf(store, stored).post) {
+    const { post } = agentsOf(store, stored);
+    for (const [at, agent] of post.entries()) {
+      working({ name: agent.value.name, at: at + 1, total: post.length });
       const made = await call(this.deps, chat, stored, agent, scope, index, memoryOf(messages.slice(0, index), agent.id), text, signal);
       if ('kind' in made) {
         if (made.kind !== 'stopped') failed = { name: agent.value.name, failure: made };
@@ -240,7 +256,7 @@ export class Polisher {
     }
     // The user may have edited, switched or deleted it meanwhile: the edit stands only on the version it was made from.
     const now = standing();
-    if (runs.length === 0 || !now || now.version.id !== version.id) return failed;
+    if (runs.length === 0 || !now || now.version.id !== start.version.id) return failed;
     const saved = await appendPolished(store, chat, now.messages[now.index]!, text, runs);
     return saved.ok ? failed : (failed ?? { name: runs.at(-1)!.name, failure: { kind: 'unsaved', failure: saved } });
   }

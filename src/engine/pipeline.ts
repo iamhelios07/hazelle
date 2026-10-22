@@ -577,9 +577,10 @@ export type AgentInput = {
 };
 
 // spans: what the tokens in a post agent's source stand for (engine/protect), which its answer must bring back.
-export const assembleAgent = (input: AgentInput): { messages: ChatMessage[]; spans: string[] } | ProtectInvalid | RanAway => stoppable(() => agent(input));
+// parts: where each message came from, as a reply's Assembled says it (점검's 블록별).
+export const assembleAgent = (input: AgentInput): { messages: ChatMessage[]; parts: Assembled['parts']; spans: string[] } | ProtectInvalid | RanAway => stoppable(() => agent(input));
 
-function agent({ scope, prompt, index, text, memory, seed, countTokens }: AgentInput): { messages: ChatMessage[]; spans: string[] } | ProtectInvalid {
+function agent({ scope, prompt, index, text, memory, seed, countTokens }: AgentInput): { messages: ChatMessage[]; parts: Assembled['parts']; spans: string[] } | ProtectInvalid {
   const rewrites = text !== undefined && prompt.place === undefined;
   const rules = protectRules(rewrites ? (prompt.protect ?? []) : []);
   if ('kind' in rules) return rules;
@@ -590,7 +591,8 @@ function agent({ scope, prompt, index, text, memory, seed, countTokens }: AgentI
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'agent', recent: recentOf(scope, texts, index, []), source, memory: keepsMemory(prompt) ? memorySheet(memory) : '' });
   const sent = parts.find((part): part is Sent => 'message' in part && part.from.kind === 'block' && part.from.slot === 'source');
   if (sent && spans.length) parts.splice(parts.indexOf(sent), 0, { message: { role: 'system', content: keepEditTokens(spans.length) }, from: sent.from });
-  return { messages: taskMessages(parts), spans: sent ? spans : [] };
+  const out = taskSent(parts);
+  return { messages: out.map(({ message }) => message), parts: out.map(({ message, from }) => ({ from, tokens: countTokens(message.content) })), spans: sent ? spans : [] };
 }
 
 export type MemoryTaskInput = {
@@ -629,8 +631,10 @@ function memoryTask({ scope, prompt, memory, before, budget, span: { from, to },
   return { messages: [...messages, { role: 'user', content: format }], span };
 }
 
+const taskSent = (parts: Part[]) => cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part)));
+
 function taskMessages(parts: Part[]): ChatMessage[] {
-  return cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
+  return taskSent(parts).map(({ message }) => message);
 }
 
 function add<K, V>(map: Map<K, V[]>, key: K, value: V) {

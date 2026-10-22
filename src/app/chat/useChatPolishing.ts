@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import type { Polishing } from '../../runtime/agents';
+import type { Polishing, PolishStep } from '../../runtime/agents';
 import { describeAgentFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
 import { usePolishing } from '../session';
@@ -8,8 +8,8 @@ import { useToast } from '../toast';
 // Each failure is said once on this page: the reply stays as written, which the toast says.
 const told = new WeakSet<NonNullable<ReturnType<Polishing['get']>>>();
 
-// The messages of the chat whose reply its post agents are working on now.
-export function useChatPolishing(chatId: string): ReadonlySet<string> {
+// By the messages of the chat whose reply its post agents are working on now, the agent at work.
+export function useChatPolishing(chatId: string): ReadonlyMap<string, PolishStep> {
   const toast = useToast();
   const polishing = usePolishing();
 
@@ -21,5 +21,5 @@ export function useChatPolishing(chatId: string): ReadonlySet<string> {
     }
   }, [polishing]);
 
-  return useMemo(() => new Set([...polishing.values()].flatMap(({ chat, message, failure }) => (chat === chatId && !failure ? [message] : []))), [polishing, chatId]);
+  return useMemo(() => new Map([...polishing.values()].flatMap(({ chat, message, step }): [string, PolishStep][] => (chat === chatId && step ? [[message, step]] : []))), [polishing, chatId]);
 }

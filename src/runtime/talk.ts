@@ -40,13 +40,14 @@ export type Turn = {
   whole?: true;
   // batch: waiting for a discount lane's batch (design §6.7), which answers whole. retrying: a try failed before any of it
   // came and is sent again (retry on failure). stopping: 멈추기 canceled the batch, which is asked about until it ends.
-  // preparing: a call the reply waits for runs first, 토큰 절약's (runtime/preread) or the pre agents' (runtime/agents).
+  // preparing: a call the reply waits for runs first, 토큰 절약's (runtime/preread) or the pre agents' (runtime/agents),
+  // by the names of those still running out of how many run.
   batch?: true;
   retrying?: true;
   stopping?: true;
   preparing?: Preparing;
 };
-export type Preparing = 'preread' | 'agents';
+export type Preparing = { step: 'preread' } | { step: 'agents'; running: readonly string[]; total: number };
 
 // unstored: the user's message shown before the store has it. Nothing may be saved against it yet: fold skips, for
 // good, an entry that names a message saved after it.

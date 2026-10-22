@@ -425,10 +425,11 @@ export function editMessage(store: ObjectStore, chat: string, message: Message, 
 }
 
 // The post agents' text in the place of the version shown (design §6.16), as an onOutput edit is, keeping the text it
-// takes the place of as raw and the agents' calls on its receipt. A reply always has a receipt.
+// takes the place of as raw and the agents' calls on its receipt, in place of the post calls of an earlier polish
+// (다시 다듬기). A reply always has a receipt.
 export function appendPolished(store: ObjectStore, chat: string, message: Message, text: string, runs: AgentRun[]) {
   const current = shown(message);
-  const receipt = { ...current.receipt!, agents: [...(current.receipt!.agents ?? []), ...runs] };
+  const receipt = { ...current.receipt!, agents: [...(current.receipt!.agents ?? []).filter(({ stage }) => stage === 'pre'), ...runs] };
   return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at: Date.now(), text, receipt, seed: current.seed, raw: current.raw ?? current.text });
 }
 

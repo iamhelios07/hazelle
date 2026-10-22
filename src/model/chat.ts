@@ -191,7 +191,9 @@ export type Writes = [string, string][];
 // byHand: the user's own writes (Entry vars byHand), set after the message's after, so they win over every write
 // standing with the message; every reader takes this order (runtime/chat-context scopeOf, engine/render renderChat).
 // memories: the agents' memory the user set at this version, by agent (Entry agentMemory), the latest standing.
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; byHand?: Writes; calls?: BotCall[]; reasoning?: string; greeting?: number; earlier?: string[]; raw?: string; memories?: Record<string, string> };
+// retouched: an edit of a polished version that changed its text, which 다시 다듬기 (from raw) would undo, so it is not
+// offered there (user ruling, 2026-10-22).
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; byHand?: Writes; calls?: BotCall[]; reasoning?: string; greeting?: number; earlier?: string[]; raw?: string; memories?: Record<string, string>; retouched?: true };
 export type BotCall = { receipt: Receipt; at: number };
 // after: the writes that stay with the message (Entry vars), set after its shown version's own.
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number; after?: Writes };
@@ -292,7 +294,10 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
         if (edited.calls) version.calls = edited.calls;
         if (edited.reasoning) version.reasoning = edited.reasoning;
         if (edited.memories) version.memories = edited.memories;
-        if (edited.raw !== undefined && entry.raw === undefined) version.raw = edited.raw;
+        if (edited.raw !== undefined && entry.raw === undefined) {
+          version.raw = edited.raw;
+          if (entry.text !== edited.raw) version.retouched = true;
+        }
         version.earlier = ids.get(edited)!;
       }
       own.set(id, version);

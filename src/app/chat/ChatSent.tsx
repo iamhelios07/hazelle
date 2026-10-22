@@ -66,9 +66,10 @@ export function SentRequest({ entry, receipt }: { entry: LogEntry | null; receip
     );
   }
   if (entry.picked) return <Empty variant="section">{PICKED}</Empty>;
-  // Only a chat reply keeps the parts it was assembled from; any other call shows its wire request.
-  if (!entry.prompt) return <RequestBody request={entry.request} unbuilt={UNBUILT} />;
-  return <RequestView prompt={entry.prompt} title="보낸 순서대로" request={() => entry.request} unbuilt={UNBUILT} />;
+  // Only a chat reply and an agent keep the parts they were assembled from; any other call shows its wire request.
+  const prompt = entry.prompt ?? entry.agent?.sent;
+  if (!prompt) return <RequestBody request={entry.request} unbuilt={UNBUILT} />;
+  return <RequestView prompt={prompt} title="보낸 순서대로" request={() => entry.request} unbuilt={UNBUILT} />;
 }
 
 const UNBUILT = '요청을 보내기 전에 멈춰서 본문이 없어요.';
@@ -82,7 +83,8 @@ export function SentResponse({ entry }: { entry: LogEntry | null }) {
 }
 
 type RequestViewProps = {
-  prompt: Pick<Assembled, 'messages' | 'parts' | 'problems'>;
+  // problems: absent where the text's 명령어 are not checked (an agent's).
+  prompt: Pick<Assembled, 'messages' | 'parts'> & Partial<Pick<Assembled, 'problems'>>;
   title: string;
   level?: 2 | 3;
   // Above the parts: what the view leaves out, as a note.
@@ -130,7 +132,8 @@ export function RequestView({ prompt, title, level = 3, lead, request, unbuilt, 
       return next;
     });
   const total = prompt.parts.reduce((sum, part) => sum + part.tokens, 0);
-  const { found, omitted } = prompt.problems;
+  const checked = prompt.problems ?? { found: [], omitted: 0 };
+  const { found, omitted } = checked;
   // A problem shows at the first part built from its text; a text that rendered to nothing has none.
   const owners = found.map((problem) => prompt.parts.findIndex(({ from }) => from.kind === problem.from.kind && 'id' in from && from.id === problem.from.id));
   const at = (index: number) => found.filter((_, problem) => owners[problem] === index);
@@ -153,7 +156,7 @@ export function RequestView({ prompt, title, level = 3, lead, request, unbuilt, 
       {view === 'parts' ? (
         <Stack gap="related">
           {lead}
-          {found.length > 0 && !(sameAs && sameProblems(prompt.problems, sameAs)) && (
+          {found.length > 0 && !(sameAs && sameProblems(checked, sameAs)) && (
             <Callout tone="warn">{`문제 ${found.length + omitted}개 · 모르는 ${COMMAND}나 오류 문구가 모델에 그대로 가요.${omitted ? ` ${omitted}개는 목록에서 뺐어요.` : ''}`}</Callout>
           )}
           <List label={title}>

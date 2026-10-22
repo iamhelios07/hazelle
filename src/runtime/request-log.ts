@@ -3,6 +3,7 @@ import type { Connection, HttpRequest } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
 import type { CacheForecast } from '../model/cache';
 import type { Receipt } from '../model/chat';
+import type { AgentStage } from '../model/prompt';
 import type { Stream } from '../model/stream';
 import type { ObjectStore } from './store';
 import type { PageClass } from './streams';
@@ -15,9 +16,13 @@ export type Logged = { chat: string | null; purpose: CallPurpose; call: Stream['
 
 export type SentRequest = Pick<HttpRequest, 'url' | 'body'>;
 
+// An agent's call (runtime/agents): whose it was, and the parts it sent.
+export type LoggedAgent = { name: string; stage: AgentStage; sent: Pick<Assembled, 'messages' | 'parts'> };
+
 // One model call this page made or picked up. picked: picked up after a reload, so its request and response were
-// never read here; request is null too for a call refused before it was built. prompt: a chat reply's (Talk attach).
-export type LogEntry = Omit<Logged, 'call'> & { at: number; picked: boolean; receipt: Receipt; request: SentRequest | null; response: string | null; prompt?: Assembled };
+// never read here; request is null too for a call refused before it was built. prompt: a chat reply's, agent an
+// agent's (attach).
+export type LogEntry = Omit<Logged, 'call'> & { at: number; picked: boolean; receipt: Receipt; request: SentRequest | null; response: string | null; prompt?: Assembled; agent?: LoggedAgent };
 
 export type ChatLog = { entries: readonly LogEntry[]; omitted: number };
 
@@ -93,12 +98,12 @@ export class RequestLog {
   }
 
   // forecast: what the send expected of the cache, as its receipt keeps it.
-  attach(chat: string, call: string, { prompt, forecast }: { prompt: Assembled; forecast?: CacheForecast }) {
+  attach(chat: string, call: string, { prompt, forecast, agent }: { prompt?: Assembled; forecast?: CacheForecast; agent?: LoggedAgent }) {
     const held = this.chats.get(chat);
     const at = held?.log.entries.findIndex((entry) => entry.receipt.id === call) ?? -1;
     if (!held || at === -1) return;
     const entry = held.log.entries[at]!;
-    held.log = { ...held.log, entries: held.log.entries.with(at, { ...entry, prompt, ...(forecast && { receipt: { ...entry.receipt, forecast } }) }) };
+    held.log = { ...held.log, entries: held.log.entries.with(at, { ...entry, ...(prompt && { prompt }), ...(agent && { agent }), ...(forecast && { receipt: { ...entry.receipt, forecast } }) }) };
     this.changes.notify();
   }
 

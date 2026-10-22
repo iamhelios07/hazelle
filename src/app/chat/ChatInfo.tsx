@@ -171,9 +171,12 @@ function PrereadCall({ preread: { material, brief, receipt, reused, saved } }: {
 }
 
 // An agent's call for the reply, with what a pre agent noted and the memory it left, which the user may set here: the
-// next replies read it (runtime/agents memoryOf).
+// next replies read it (runtime/agents memoryOf). Its 요청 원문 and 응답 원문 are the request log's, as the reply's are;
+// a post agent's 응답 원문 is the reply as that agent left it.
 function AgentCall({ chat, version, run: { agent, name, stage, receipt, note, memory, reused } }: { chat: string; version: Version; run: AgentRun }) {
   const store = useStore();
+  const { log } = useSession();
+  const entry = log.entry(chat, receipt.id);
   const toast = useToast();
   const kept = version.memories?.[agent] ?? memory;
   const [draft, setDraft] = useState<string | null>(null);
@@ -187,6 +190,12 @@ function AgentCall({ chat, version, run: { agent, name, stage, receipt, note, me
           <Text>{note}</Text>
         </Disclosure>
       )}
+      <Disclosure label="요청 원문">
+        <SentRequest entry={entry} receipt={receipt} />
+      </Disclosure>
+      <Disclosure label="응답 원문">
+        <SentResponse entry={entry} />
+      </Disclosure>
       {kept !== undefined && (
         <Disclosure label="기억">
           {draft === null ? (

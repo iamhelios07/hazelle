@@ -3,11 +3,11 @@ import { fold, shown } from '../model/chat';
 import { EMPTY_SETTINGS } from '../model/settings';
 import { setAgentAt } from './agents';
 import { setTranslate } from './characters';
-import { appendUserMessage, restoreRaw, startChat } from './chat-log';
+import { appendUserMessage, editMessage, restoreRaw, startChat } from './chat-log';
 import { addAgent, editPrompt } from './prompts';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
-import { takeTurn } from './turn';
+import { polishAgain, takeTurn } from './turn';
 
 const server = testServer();
 
@@ -49,6 +49,23 @@ describe('에이전트', () => {
       expect(shown(messages(session, chat)[1]!).receipt?.agents).toMatchObject([{ note: 'NOTE: the room is dark.', reused: true }]);
     }));
 
+  it('makes the notes anew when asked, and names the agent and its stage in the request log', () =>
+    server.withSession(async (session) => {
+      const chat = await chatted(session);
+      await setAgentAt(session.store, { kind: 'settings' }, await agent(session, 'scene', '장면'), true);
+      const log = stubRelay(inTurn([saying('NOTE: dark.'), saying('The reply.'), saying('NOTE: lit.'), saying('Again.')]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      const reply = messages(session, chat)[1]!;
+      expect(await takeTurn(session, chat, { kind: 'regenerate', message: reply.id }, null, { notes: true })).toBeNull();
+      expect(log).toHaveLength(4);
+      expect(body(log, 3)).toContain('NOTE: lit.');
+      expect(shown(messages(session, chat)[1]!).receipt?.agents).toMatchObject([{ note: 'NOTE: lit.' }]);
+      const logged = session.log.of(chat).entries.filter((entry) => entry.purpose === 'agent');
+      expect(logged).toHaveLength(2);
+      expect(logged[0]!.agent).toMatchObject({ name: '장면', stage: 'pre' });
+      expect(logged[0]!.agent!.sent.parts.map(({ from }) => from.kind === 'block' && from.slot)).toContain('source');
+    }));
+
   it('stops the turn when a pre agent fails, and sends without it when asked', () =>
     server.withSession(async (session) => {
       const chat = await chatted(session);
@@ -74,6 +91,25 @@ describe('에이전트', () => {
 
       expect((await restoreRaw(session.store, chat, reply)).ok).toBe(true);
       expect(shown(messages(session, chat)[1]!).text).toBe('The door, the door, it opens.');
+    }));
+
+  it('polishes again from the raw text in place of the last polish, and reads a hand edit after it as retouched', () =>
+    server.withSession(async (session) => {
+      const chat = await chatted(session);
+      await setAgentAt(session.store, { kind: 'chat', id: chat }, await agent(session, 'polish', '다듬기'), true);
+      const log = stubRelay(inTurn([saying('The door, the door, it opens.'), saying('The door opens.'), saying('A door opens.')]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      await vi.waitFor(() => expect(shown(messages(session, chat)[1]!).text).toBe('The door opens.'), { timeout: 5000 });
+      const polished = messages(session, chat)[1]!;
+      await polishAgain(session, chat, polished.id, shown(polished).id);
+      expect(body(log, 2)).toContain('The door, the door, it opens.');
+      const again = shown(messages(session, chat)[1]!);
+      expect(again).toMatchObject({ text: 'A door opens.', raw: 'The door, the door, it opens.' });
+      expect(again.receipt?.agents).toHaveLength(1);
+      expect(again.retouched).toBeUndefined();
+
+      expect((await editMessage(session.store, chat, messages(session, chat)[1]!, 'A red door opens.', null)).ok).toBe(true);
+      expect(shown(messages(session, chat)[1]!)).toMatchObject({ raw: 'The door, the door, it opens.', retouched: true });
     }));
 
   it('translates the rewritten reply, not the raw one', () =>

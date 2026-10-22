@@ -13,7 +13,8 @@ import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf } from '../../runtime/chat-context';
-import { takeTurn, type Skip, type TurnFailure } from '../../runtime/turn';
+import { polishAgain, takeTurn, type Skip, type TurnFailure } from '../../runtime/turn';
+import { agentsOf } from '../../runtime/agents';
 import type { PersonaChoice } from '../../runtime/personas';
 import type { PromptChoice } from '../../runtime/prompts';
 import { describeTurnFailure } from '../common/failure';
@@ -77,6 +78,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   useSettings();
   useStored('prompt', prompt.kind === 'prompt' ? prompt.prompt.id : null);
   const features = featuresOf(store, chat);
+  const stages = agentsOf(store, chat);
+  const agents = { pre: stages.pre.length > 0, post: stages.post.length > 0 };
   const translate = chatTranslate(store, chat);
   const { unstarted, pickGreeting, starting } = useNewChat(chatId, item === null, chat, shelf, translate.replyLanguage);
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
@@ -355,6 +358,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     ...status,
     infoPick,
     features,
+    agents,
     translate,
     ...translation,
     ...illustration,
@@ -403,6 +407,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       retryRegex,
       stop: () => talk.stop(chatId),
       regenerate: (message: Shown) => ask({ kind: 'regenerate', message: message.id }),
+      regenerateFresh: (message: Shown) => ask({ kind: 'regenerate', message: message.id }, { notes: true }),
+      polishAgain: (message: Shown) => void (id && polishAgain(session, id, message.id, shown(message).id)),
       retry: (message: Shown) => ask({ kind: 'retry', message: message.id, version: shown(message).id }),
       continue: (message: Shown) => ask({ kind: 'continue', message: message.id, version: shown(message).id }),
       restoreRaw: (message: Shown) => void (id && restoreRaw(store, id, message).then((saved) => saved.ok || toast.failed(saved))),

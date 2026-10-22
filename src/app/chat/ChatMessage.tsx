@@ -17,8 +17,9 @@ import { describeFailedReply, describeTranslateFailure } from '../common/failure
 import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
 import { timeOfDay } from '../common/time';
-import { AGENTS_WAITING, DISCOUNT_STOPPING, DISCOUNT_WAITING, POLISHING, PRE_READ_WAITING, RETRYING } from '../common/words';
+import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_WAITING, RETRYING } from '../common/words';
 import type { Preparing } from '../../runtime/talk';
+import type { PolishStep } from '../../runtime/agents';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
@@ -34,7 +35,7 @@ import { useReveal } from './useReveal';
 import { useSelectedPart } from './useSelectedPart';
 import { withOriginal } from './withOriginal';
 
-const PREPARING: Record<Preparing, string> = { preread: PRE_READ_WAITING, agents: AGENTS_WAITING };
+const preparingNote = (preparing: Preparing) => (preparing.step === 'preread' ? PRE_READ_WAITING : agentsWaiting(preparing.running, preparing.total));
 
 type Props = {
   message: Shown;
@@ -60,8 +61,10 @@ type Props = {
   canIllustrate: boolean;
   pictureSizes: PictureSizes;
   awaited: boolean;
-  // Its post agents are rewriting the reply shown (runtime/agents Polisher).
-  polishing: boolean;
+  // The post agent rewriting the reply shown now (runtime/agents Polisher), null while none is.
+  polishing: PolishStep | null;
+  // Whether the chat runs agents of each stage now: 다시 다듬기 and 노트 새로 만들어 다시 생성 are offered by them.
+  agents: { pre: boolean; post: boolean };
   flipped: boolean;
   showOriginal: boolean;
   replyNext: boolean;
@@ -99,7 +102,7 @@ const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨', r
 const MARK = { length: 'length', 'no-terminal': 'length', stopped: 'stopped', refused: 'refused' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, pictureSizes, awaited, polishing, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, remark, fresh, badges, toolActions, decor, hosted, offered, translating, canTranslate, canIllustrate, pictureSizes, awaited, polishing, agents, flipped, showOriginal, replyNext, character, me, modelName, opening, last, busy, editing, bookmarked, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -175,7 +178,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       />
     );
   } else if (live && empty) {
-    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : message.preparing ? PREPARING[message.preparing] : null;
+    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : message.preparing ? preparingNote(message.preparing) : null;
     body = waiting ? <Waiting note={waiting} /> : <Elapsed thinking={Boolean(version.reasoning)} />;
   } else if (failed) {
     body = (
@@ -261,6 +264,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const count = message.versions.length;
   // No call writes a greeting: its versions go round.
   const greeting = opening || version.greeting !== undefined;
+  // Only then would 다시 생성 use notes again (runtime/agents preAgents).
+  const noted = !mine && !greeting && message.versions.some(({ receipt }) => receipt?.agents?.some(({ stage }) => stage === 'pre'));
   const nextLabel = message.selected === count - 1 && !greeting ? '다시 생성' : '다음';
   const [back, forward] = SHORTCUTS.swipe.keys;
   const after = (
@@ -268,7 +273,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {selected && <SelectionButton icon={SquarePen} label="수정" at={selected.end} onPress={() => actions.edit(message, selected.part)} />}
       {editing === null && translationMark}
       {drawing?.writing && <Marker reason="illustration" label="장면 정하는 중" />}
-      {polishing && <Marker reason="agent" label={POLISHING} />}
+      {polishing && <Marker reason="agent" label={polishingNow(polishing)} />}
       {raw && <Marker reason="agent" label="다듬기 전 답" action={{ label: '다듬기 전으로 되돌리기', disabled: busy, onClick: () => actions.restoreRaw(message) }} />}
       {cut && (
         <Marker
@@ -356,6 +361,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           <MenuItem label={BOOKMARK} checked={bookmarked} multiple onClick={() => actions.bookmark(message.id)} />
           <MenuItem label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />
           {hasRaw && <MenuItem label="다듬기 전 답 보기" checked={rawShown} multiple onClick={() => setRawShown(!rawShown)} />}
+          {agents.post && !mine && !greeting && !empty && !polishing && !version.retouched && <MenuItem label="다시 다듬기" disabled={busy} onClick={() => actions.polishAgain(message)} />}
+          {agents.pre && noted && <MenuItem label="노트 새로 만들어 다시 생성" disabled={busy} onClick={() => actions.regenerateFresh(message)} />}
           {!mine && <MenuItem label="응답 정보" onClick={() => actions.info(message.id)} />}
           {offered.length > 0 && <MenuHeading>상태창으로 지정</MenuHeading>}
           {offered.map((script) => (

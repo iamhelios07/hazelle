@@ -3,7 +3,7 @@ import type { CallPurpose, LogEntry } from '../../runtime/request-log';
 import { describeReplyError } from '../common/failure';
 import { finish, seconds, tokens } from '../common/receipt';
 import { ago } from '../common/time';
-import { FEATURE_NAMES, ROLE_TAGS, SCRIPTS, TOOL, UNKNOWN } from '../common/words';
+import { FEATURE_NAMES, ROLE_TAGS, SCRIPTS, STAGE_NAMES, TOOL, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
 import { Button, Callout, Empty, List, ListItem, Section, Stack, Text } from '../ui';
 import { BROKEN, why } from './ChatCache';
@@ -70,7 +70,7 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
   const broken = receipt.forecast?.broken;
   return (
     <ListItem
-      title={PURPOSES[entry.purpose]}
+      title={entry.agent ? `${entry.agent.name} · ${STAGE_NAMES[entry.agent.stage]} ${PURPOSES.agent}` : PURPOSES[entry.purpose]}
       badge={counted && input > 0 ? `적중 ${Math.round((read / input) * 100)}%` : undefined}
       description={facts.join(' · ')}
       tags={used}

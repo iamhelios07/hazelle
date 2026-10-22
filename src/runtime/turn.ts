@@ -41,9 +41,9 @@ export type TurnFailure = (
   | { kind: 'agent'; failure: AgentFailed }
 ) & { kept?: true };
 
-// What a turn asked again after a failed step goes without: 토큰 절약 (줄이지 않고 보내기) or the pre agents (에이전트 없이
-// 보내기).
-export type Skip = Partial<Record<Preparing, true>>;
+// What a turn goes without: after a failed step, 토큰 절약 (줄이지 않고 보내기) or the pre agents (에이전트 없이 보내기);
+// notes, the pre notes the message's other versions made, which it would use again (노트 새로 만들어 다시 생성).
+export type Skip = Partial<Record<Preparing['step'] | 'notes', true>>;
 
 // A new 캐릭터 없이 chat: what the 공용 layer resolves to when no chat or card of its own sets anything.
 export const SHARED_CHAT: Chat = { title: null, character: null, models: {} };
@@ -76,10 +76,10 @@ function translateLoose(session: Loose, chat: Chat, text: string, language: stri
 // version switched to and the switch turned on leave it to 번역 (user ruling, 2026-10-04). The reply is as saved; the
 // bot's onOutput may have edited or removed its message since, so the message is read again. Its chat must stay
 // loaded until this returns (session).
-async function translateReceived(session: Pick<Session, 'store' | 'read' | 'translator'>, chat: string, reply: Written) {
+async function translateReceived(session: Pick<Session, 'store' | 'read' | 'translator'>, chat: string, message: string) {
   const view = await displayed(session, chat);
   if (!view || !chatTranslate(session.store, view.chat).replies) return;
-  const index = view.messages.findIndex((message) => message.id === (reply.message ?? reply.id));
+  const index = view.messages.findIndex(({ id }) => id === message);
   if (index === -1) return;
   const version = shown(view.messages[index]!);
   // Another version, already translated, may have been switched to while onOutput ran.
@@ -127,11 +127,24 @@ export async function receiveReply(session: Session, chat: string, reply: Writte
     }
   }
   await session.polisher.polish(chat, reply.message ?? reply.id, reply.id);
-  await translateReceived(session, chat, reply);
+  await translateReceived(session, chat, reply.message ?? reply.id);
   const received = shownReceived(session, chat, reply);
   if (!received) return;
   if (chatIllustrate(session.store, received.chat).auto) session.illustrator.draw(chat, received.message, received.version, { auto: true });
   if (featuresOf(session.store, received.chat).mascot) session.commentator.comment(chat, received.message, received.version);
+}
+
+// 다시 다듬기 (design §6.16): the post agents again on the version shown, from its text as written, which is then
+// translated as a reply just received is. 삽화 and 마스코트 stay with what they made of it.
+export async function polishAgain(session: Session, chat: string, message: string, version: string) {
+  const lease = session.store.retainChat(chat);
+  try {
+    if (await lease.ready) return;
+    await session.polisher.polish(chat, message, version);
+    await translateReceived(session, chat, message);
+  } finally {
+    lease.release();
+  }
 }
 
 // What 삽화 on auto draws for and the mascot speaks on, as 응답 번역 translates it: the version of a reply received here
@@ -210,7 +223,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const { route, settings, scope, budget, said, reply } = turn;
   const memory = turn.memory?.kind === 'built-in' ? { ...turn.memory, found: await findRecords(session, chat, scope.messages, signal) } : turn.memory;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const agents = !skip.agents && reply.continues === null && agentsOf(session.store, turn.chat).pre.length > 0 ? await runPre(session, chat, turn, signal, preparing) : { runs: [], notes: '' };
+  const agents = !skip.agents && reply.continues === null && agentsOf(session.store, turn.chat).pre.length > 0 ? await runPre(session, chat, turn, signal, preparing, skip) : { runs: [], notes: '' };
   if ('kind' in agents) return { kind: 'halted' };
   if ('failure' in agents) return { kind: 'agent', failure: agents, ...kept };
   const snapshot = await session.tokens.snapshot(route, settings, tokenLimits(route.model, sentSettings(session.store, route)), 'conversation', chat, signal);
@@ -224,7 +237,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in rewritten) return { ...rewritten, ...kept };
   // After the scripts, so a bot's Lua sees the prompt as built and never the brief; before the forecast and the refit,
   // which compare and fit what is sent.
-  const shortened = !skip.preread && featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, () => preparing('preread')) : { prompt: rewritten, preread: null };
+  const shortened = !skip.preread && featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, () => preparing({ step: 'preread' })) : { prompt: rewritten, preread: null };
   if ('kind' in shortened) return { kind: 'preread', failure: shortened, ...kept };
   const sent = shortened.prompt;
   const before = [...(reply.before ?? []), ...requested.writes];
@@ -240,14 +253,13 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
 }
 
 // The reply's message's other versions, the one it takes the place of first, are where its pre notes are found again.
-function runPre(session: Session, chat: string, turn: TurnContext, signal: AbortSignal, preparing: (step: Preparing) => void) {
+function runPre(session: Session, chat: string, turn: TurnContext, signal: AbortSignal, preparing: (step: Preparing) => void, skip: Skip) {
   const { reply } = turn;
   const messages = session.read.chat(chat).snapshot()!.messages;
   const at = reply.message === null ? messages.length : messages.findIndex(({ id }) => id === reply.message);
   const versions = reply.message === null ? [] : (messages[at]?.versions ?? []);
-  const again = [...versions.filter(({ id }) => id === reply.replaces), ...versions.filter(({ id }) => id !== reply.replaces).reverse()];
-  preparing('agents');
-  return preAgents(session, chat, turn.chat, turn.scope, messages.slice(0, at), again, signal);
+  const again = skip.notes ? [] : [...versions.filter(({ id }) => id === reply.replaces), ...versions.filter(({ id }) => id !== reply.replaces).reverse()];
+  return preAgents(session, chat, turn.chat, turn.scope, messages.slice(0, at), again, signal, (running, total) => preparing({ step: 'agents', running, total }));
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or
