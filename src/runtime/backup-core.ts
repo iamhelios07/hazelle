@@ -26,6 +26,9 @@ const OBJECTS = 'objects.jsonl';
 const FILES = 'files/';
 const HELD_BYTES = 8 * 1024 * 1024;
 const PICTURE_ROWS = 12;
+// An export's reads ahead of the picture being written: as many as runtime/files UPLOADS, and no more bytes than this.
+const PICTURE_READS = 24;
+const READ_BYTES = 64 * 1024 * 1024;
 
 export const SEEDED: ReadonlySet<string> = new Set([...DEFAULT_PROMPT_IDS, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
 
@@ -82,14 +85,14 @@ export async function exportBackup(
     const manifest = await zip.entry(MANIFEST, false);
     await manifest(strToU8(JSON.stringify(FORMAT)), true);
     const objects = await zip.entry(OBJECTS, true);
-    const named = new Map<string, { ref: FileRef; uses: number }>();
+    const named = new Map<string, { ref: FileRef; size: number; uses: number }>();
     const blocked = new Set<string>();
     let skipped = 0;
     let first = true;
     // readBackup refuses a line naming a file the archive lacks, so a blocked picture must be known before the first
     // line naming it is written. Lines are held from the first naming a picture not yet asked about, and the held
     // pictures are asked about together; only one the server does not hold is read early, to tell a block from a failure.
-    let held: { line: string; ref: FileRef | null }[] = [];
+    let held: { line: string; ref: FileRef | null; size: number }[] = [];
     let heldBytes = 0;
     const unasked = new Map<string, FileRef>();
     const settle = async () => {
@@ -103,7 +106,7 @@ export async function exportBackup(
         }
         unasked.clear();
       }
-      for (const { line, ref } of held) {
+      for (const { line, ref, size } of held) {
         signal.throwIfAborted();
         if (ref && blocked.has(ref.id)) {
           skipped++;
@@ -111,7 +114,7 @@ export async function exportBackup(
           landed('files');
           continue;
         }
-        if (ref) named.set(ref.id, { ref, uses: (named.get(ref.id)?.uses ?? 0) + 1 });
+        if (ref) named.set(ref.id, { ref, size, uses: (named.get(ref.id)?.uses ?? 0) + 1 });
         await objects(strToU8(`${first ? '' : '\n'}${line}`));
         first = false;
         landed('objects');
@@ -137,26 +140,36 @@ export async function exportBackup(
       const ref = fileOf(object);
       if (ref && !named.has(ref.id) && !blocked.has(ref.id)) unasked.set(ref.id, ref);
       const line = JSON.stringify(object);
-      held.push({ line, ref });
+      held.push({ line, ref, size: ref ? (value as { size: number }).size : 0 });
       heldBytes += line.length;
       if (!unasked.size || heldBytes > HELD_BYTES) await settle();
     }, pin);
     if (failure) return failure;
     await settle();
     await objects(new Uint8Array(), true);
-    // Read a window at a time, as the restore uploads one, and written in order: a zip is sequential.
+    // Written in order, since a zip is sequential, while the next ones are read: each written picture lets one more read
+    // start, so no read waits for a whole batch beside it. The first read always starts, whatever its size says.
     const pictures = [...named.values()];
-    for (let start = 0; start < pictures.length; start += PICTURE_ROWS) {
-      signal.throwIfAborted();
-      const window = pictures.slice(start, start + PICTURE_ROWS);
-      const read = await Promise.all(window.map(({ ref }) => files.read(ref, { signal })));
-      for (const [index, bytes] of read.entries()) {
+    const reads: Promise<ApiResult<Uint8Array<ArrayBuffer>>>[] = [];
+    let next = 0;
+    let reading = 0;
+    try {
+      for (const { ref, size, uses } of pictures) {
+        while (next < pictures.length && reads.length < PICTURE_READS && (reads.length === 0 || reading + pictures[next]!.size <= READ_BYTES)) {
+          reading += pictures[next]!.size;
+          reads.push(files.read(pictures[next++]!.ref, { signal }));
+        }
+        signal.throwIfAborted();
+        const bytes = await reads.shift()!;
+        reading -= size;
         if (!bytes.ok) return bytes;
         // Pictures are compressed already.
-        const push = await zip.entry(FILES + window[index]!.ref.id, false);
+        const push = await zip.entry(FILES + ref.id, false);
         await push(bytes.data, true);
-        landed('files', window[index]!.uses);
+        landed('files', uses);
       }
+    } finally {
+      await Promise.allSettled(reads);
     }
     // The pictures are read after the scans, with no timeline of their own: a restore heard meanwhile fails the export
     // as one between the scans does.

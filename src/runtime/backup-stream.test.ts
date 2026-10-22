@@ -220,9 +220,9 @@ it('refuses a backup of an earlier version, apart from a damaged file', async ()
   expect(await readBackup(file)).toEqual({ ok: false, error: 'other-version' });
 });
 
-it('reads pictures in bounded windows and writes them in order', async () => {
+it('reads pictures ahead in a bounded pool, past a slow one, and writes them in order', async () => {
   const source = await pictureObjects();
-  const pictures = await Promise.all(Array.from({ length: 25 }, async (_, i) => {
+  const pictures = await Promise.all(Array.from({ length: 30 }, async (_, i) => {
     const bytes = new Uint8Array([i]);
     return { bytes, ref: (await sealFile(bytes)).ref };
   }));
@@ -231,14 +231,20 @@ it('reads pictures in bounded windows and writes them in order', async () => {
   const target = destination();
   let inFlight = 0;
   let peak = 0;
+  let slowDone = false;
+  let pastSlow = false;
   const read = async (ref: FileRef) => {
+    const at = pictures.findIndex((picture) => picture.ref.id === ref.id);
     peak = Math.max(peak, ++inFlight);
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    if (at === 24) pastSlow = !slowDone;
+    await new Promise((resolve) => setTimeout(resolve, at === 1 ? 30 : 1));
+    if (at === 1) slowDone = true;
     inFlight--;
-    return { ok: true as const, data: pictures.find((picture) => picture.ref.id === ref.id)!.bytes };
+    return { ok: true as const, data: pictures[at]!.bytes };
   };
   expect(await exportBackup(store([character, ...assets]).api, { read, missing }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
-  expect(peak).toBe(12);
+  expect(peak).toBe(24);
+  expect(pastSlow).toBe(true);
   const opened = await backup(target.file());
   expect([...opened.files.keys()]).toEqual(pictures.map(({ ref }) => ref.id));
 });
