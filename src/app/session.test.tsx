@@ -5,7 +5,7 @@ import type { ChatScope } from '../engine/render';
 import type { Chat } from '../model/chat';
 import { AccountFacts } from '../runtime/account';
 import type { ApiResult, api } from '../runtime/api';
-import { ReadModels, type Opening, type ScreenChat } from '../runtime/read-model';
+import { plainDisplay, ReadModels, type Opening, type ScreenChat } from '../runtime/read-model';
 import type { Session } from '../runtime/session';
 import { ObjectStore } from '../runtime/store';
 import type { Turn } from '../runtime/talk';
@@ -32,7 +32,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   const listeners = new Set<() => void>();
   const talk = { snapshot: (id: string) => (turn?.chat === id ? turn : null), subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
   const illustrator = { snapshot: () => new Map(), subscribe: () => () => true };
-  const session = { store, read, talk, illustrator } as unknown as Session;
+  const session = { store, read, talk, illustrator, display: plainDisplay(store) } as unknown as Session;
   const opening: Opening = { chat, messages: [] };
   const screen = { width: 800, height: 600 } satisfies NonNullable<ChatScope['screen']>;
   let view: ScreenChat;
