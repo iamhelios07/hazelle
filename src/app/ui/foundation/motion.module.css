@@ -1,212 +1,216 @@
 /* Every animation in the kit. Keyframe names are local to this file, so a component takes one by composing its class. */
-.fadeIn {
-  animation: fade var(--duration-fast) var(--ease-enter);
-}
+@layer reset, looks;
 
-.riseIn {
-  animation: rise var(--duration-fast) var(--ease-enter);
-}
-
-.riseInSlow {
-  animation: rise var(--duration-slow) var(--ease-enter);
-}
-
-.dropIn {
-  animation: drop var(--duration-fast) var(--ease-enter);
-}
-
-/* Its duration is the user's: the class that composes it sets animation-duration. */
-.runDown {
-  animation: runDown var(--duration-instant) linear forwards;
-}
-
-.fadeAway {
-  animation: fadeAway var(--duration-found) var(--ease-enter) forwards;
-}
-
-.spin {
-  animation: spin var(--duration-spin) linear infinite;
-}
-
-.pulse {
-  animation: pulse var(--duration-pulse) var(--ease-loop) infinite;
-}
-
-.blink {
-  animation: blink var(--duration-blink) steps(1) infinite;
-}
-
-.dot {
-  animation: dot var(--duration-dot) var(--ease-loop) infinite;
-}
-
-.slide {
-  animation: slide var(--duration-slide) var(--ease-loop) infinite;
-}
-
-.sway {
-  animation: sway var(--duration-sway) var(--ease-loop) infinite;
-}
-
-.popIn {
-  animation: pop var(--duration-pop) var(--ease-enter) both;
-}
-
-/* A piece flies out along its --turn, by its share of the reach, and is gone. */
-.burst {
-  animation: burst var(--duration-burst) var(--ease-enter) both;
-}
-
-.ripple {
-  animation: ripple var(--duration-ripple) var(--ease-enter) infinite;
-}
-
-.twinkle {
-  animation: twinkle var(--duration-ripple) var(--ease-loop) infinite;
-}
-
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
-@keyframes drop {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
-@keyframes fadeAway {
-  60% {
-    opacity: 1;
+@layer looks {
+  .fadeIn {
+    animation: fade var(--duration-fast) var(--ease-enter);
   }
 
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.3;
-  }
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-
-@keyframes dot {
-  0%,
-  80%,
-  100% {
-    opacity: 0.2;
+  .riseIn {
+    animation: rise var(--duration-fast) var(--ease-enter);
   }
 
-  40% {
-    opacity: 1;
-  }
-}
-
-@keyframes slide {
-  from {
-    transform: translateX(-100%);
+  .riseInSlow {
+    animation: rise var(--duration-slow) var(--ease-enter);
   }
 
-  to {
-    transform: translateX(334%);
-  }
-}
-
-@keyframes sway {
-  0%,
-  50%,
-  100% {
-    transform: translateX(0);
+  .dropIn {
+    animation: drop var(--duration-fast) var(--ease-enter);
   }
 
-  65% {
-    transform: translateX(-2px);
+  /* Its duration is the user's: the class that composes it sets animation-duration. */
+  .runDown {
+    animation: runDown var(--duration-instant) linear forwards;
   }
 
-  80% {
-    transform: translateX(2px);
-  }
-}
-
-@keyframes pop {
-  from {
-    opacity: 0;
-    transform: scale(0.4);
+  .fadeAway {
+    animation: fadeAway var(--duration-found) var(--ease-enter) forwards;
   }
 
-  60% {
-    opacity: 1;
-    transform: scale(1.12);
-  }
-}
-
-@keyframes burst {
-  from {
-    opacity: 1;
-    transform: rotate(calc(var(--turn) * 1turn)) translateY(0) scale(0.3);
+  .spin {
+    animation: spin var(--duration-spin) linear infinite;
   }
 
-  70% {
-    opacity: 1;
+  .pulse {
+    animation: pulse var(--duration-pulse) var(--ease-loop) infinite;
   }
 
-  to {
-    opacity: 0;
-    transform: rotate(calc(var(--turn) * 1turn)) translateY(calc(var(--reach) * var(--cheer-reach) * -1)) rotate(calc(var(--turn) * 3turn)) scale(1);
-  }
-}
-
-@keyframes ripple {
-  from {
-    opacity: 0.7;
-    transform: scale(1);
+  .blink {
+    animation: blink var(--duration-blink) steps(1) infinite;
   }
 
-  70%,
-  to {
-    opacity: 0;
-    transform: scale(2.2);
-  }
-}
-
-@keyframes twinkle {
-  0%,
-  100% {
-    opacity: 0.25;
-    transform: scale(0.7);
+  .dot {
+    animation: dot var(--duration-dot) var(--ease-loop) infinite;
   }
 
-  50% {
-    opacity: 1;
-    transform: scale(1);
+  .slide {
+    animation: slide var(--duration-slide) var(--ease-loop) infinite;
   }
-}
 
-@keyframes runDown {
-  to {
-    transform: scaleX(0);
+  .sway {
+    animation: sway var(--duration-sway) var(--ease-loop) infinite;
+  }
+
+  .popIn {
+    animation: pop var(--duration-pop) var(--ease-enter) both;
+  }
+
+  /* A piece flies out along its --turn, by its share of the reach, and is gone. */
+  .burst {
+    animation: burst var(--duration-burst) var(--ease-enter) both;
+  }
+
+  .ripple {
+    animation: ripple var(--duration-ripple) var(--ease-enter) infinite;
+  }
+
+  .twinkle {
+    animation: twinkle var(--duration-ripple) var(--ease-loop) infinite;
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  @keyframes drop {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes fadeAway {
+    60% {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes dot {
+    0%,
+    80%,
+    100% {
+      opacity: 0.2;
+    }
+
+    40% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide {
+    from {
+      transform: translateX(-100%);
+    }
+
+    to {
+      transform: translateX(334%);
+    }
+  }
+
+  @keyframes sway {
+    0%,
+    50%,
+    100% {
+      transform: translateX(0);
+    }
+
+    65% {
+      transform: translateX(-2px);
+    }
+
+    80% {
+      transform: translateX(2px);
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+
+    60% {
+      opacity: 1;
+      transform: scale(1.12);
+    }
+  }
+
+  @keyframes burst {
+    from {
+      opacity: 1;
+      transform: rotate(calc(var(--turn) * 1turn)) translateY(0) scale(0.3);
+    }
+
+    70% {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+      transform: rotate(calc(var(--turn) * 1turn)) translateY(calc(var(--reach) * var(--cheer-reach) * -1)) rotate(calc(var(--turn) * 3turn)) scale(1);
+    }
+  }
+
+  @keyframes ripple {
+    from {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+
+    70%,
+    to {
+      opacity: 0;
+      transform: scale(2.2);
+    }
+  }
+
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0.25;
+      transform: scale(0.7);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes runDown {
+    to {
+      transform: scaleX(0);
+    }
   }
 }

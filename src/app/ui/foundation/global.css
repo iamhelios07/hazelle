@@ -1,81 +1,87 @@
 @import './tokens.css';
 @import './scrollbar.css';
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+/* The kit's two layers under every module's own rules: a composer overrides a look's property whichever order the build
+   puts their files in. Each layered file names the order, since the first to load sets it. */
+@layer reset, looks;
 
-body {
-  margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: var(--text-lg);
-  line-height: var(--leading-normal);
-  -webkit-font-smoothing: antialiased;
-  /* keep-all stops Korean words from splitting mid-word; anywhere still breaks long names and URLs. */
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.boot {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: var(--space-24);
-  color: var(--color-text-muted);
-}
-
-h1,
-h2,
-h3,
-p {
-  margin: 0;
-}
-
-input,
-button,
-textarea,
-select {
-  font: inherit;
-  color: inherit;
-}
-
-button {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-a {
-  color: var(--color-accent);
-}
-
-a:hover {
-  color: var(--color-accent-hover);
-}
-
-:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
-::placeholder {
-  color: var(--color-text-faint);
-}
-
-::selection {
-  background: var(--color-selection);
-}
-
-@media (prefers-reduced-motion: reduce) {
+@layer reset {
   *,
   *::before,
   *::after {
-    animation-duration: var(--duration-instant) !important;
-    transition-duration: var(--duration-instant) !important;
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-lg);
+    line-height: var(--leading-normal);
+    -webkit-font-smoothing: antialiased;
+    /* keep-all stops Korean words from splitting mid-word; anywhere still breaks long names and URLs. */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .boot {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: var(--space-24);
+    color: var(--color-text-muted);
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  button {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  a {
+    color: var(--color-accent);
+  }
+
+  a:hover {
+    color: var(--color-accent-hover);
+  }
+
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  ::placeholder {
+    color: var(--color-text-faint);
+  }
+
+  ::selection {
+    background: var(--color-selection);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: var(--duration-instant) !important;
+      transition-duration: var(--duration-instant) !important;
+    }
   }
 }

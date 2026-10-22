@@ -20,7 +20,7 @@ and only this folder styles elements.**
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
 - `foundation/motion.module.css` holds every keyframe, `foundation/a11y.module.css` the
   screen-reader-only box and the one-line ellipsis, and `type.module.css` and `surface.module.css` the looks several
-  components share (a note, a detail line, a row's title, a box of rows, a field, a fraction bar). Components take them with `composes` and never redeclare them.
+  components share (a note, a detail line, a row's title, a box of rows, a field, a fraction bar). Components take them with `composes` and never redeclare them. These four files sit in the `looks` cascade layer, and `global.css` in `reset` under it, so a component's own rule that changes a property of a look it composes wins whatever order the build gives the files.
 - `overlays/layers.ts` is the only document listener for keys and presses. Menus and dialogs join
   its stack with `useLayer`, and Esc or a press outside reaches the newest one only.
 - Each component is a `.tsx` named after its main export, with its own `.module.css`, in one of the

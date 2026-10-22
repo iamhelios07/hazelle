@@ -1,29 +1,33 @@
-/* A class named note anywhere in the kit is this sm line; an xs line is detail (or sub). */
-.note {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-}
+@layer reset, looks;
 
-.detail {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-}
+@layer looks {
+  /* A class named note anywhere in the kit is this sm line; an xs line is detail (or sub). */
+  .note {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
 
-.error {
-  composes: note;
-  color: var(--color-warn);
-}
+  .detail {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
 
-.title {
-  color: var(--color-text);
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
-}
+  .error {
+    composes: note;
+    color: var(--color-warn);
+  }
 
-.fieldLabel {
-  color: var(--color-text);
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
+  .title {
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .fieldLabel {
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+  }
 }

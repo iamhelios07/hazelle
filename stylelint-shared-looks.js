@@ -15,7 +15,7 @@ const TEXT = ['font-size', 'color', 'font-weight'];
 // postcss is stylelint's dependency, not this repo's; the looks are rules of one plain class each, which a pattern reads.
 function looksIn(file, names) {
   const looks = new Map();
-  for (const [, name, body] of readFileSync(new URL(file, FOUNDATION), 'utf8').matchAll(/^\.(\w+) \{([^}]*)\}/gm)) {
+  for (const [, name, body] of readFileSync(new URL(file, FOUNDATION), 'utf8').matchAll(/^\s*\.(\w+) \{([^}]*)\}/gm)) {
     if (!names.includes(name)) continue;
     const found = {};
     for (const [, prop, value] of body.matchAll(/([a-z-]+): ([^;]+);/g)) if (prop !== 'composes') found[prop] = value;
