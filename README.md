@@ -76,13 +76,14 @@ Hazelle runs as one container with its data in one Docker volume. You need Docke
 
 ### Start
 
-Clone the repository, or download the source archive of a [release](https://github.com/jiniill/hazelle/releases) (every instance also serves its own at `/source.tar.gz`), and start from the folder that holds `docker-compose.yml` and the `deploy/` folder beside it:
+Nothing is built. Download `docker-compose.yml` from the newest [release](https://github.com/jiniill/hazelle/releases) into an empty folder and start it there:
 
 ```sh
+curl -fLO https://github.com/jiniill/hazelle/releases/latest/download/docker-compose.yml
 docker compose up -d
 ```
 
-Open http://localhost:8080. The app listens on 127.0.0.1 only. The image is `ghcr.io/jiniill/hazelle`; `latest` is the newest release.
+Open http://localhost:8080. The app listens on 127.0.0.1 only. The image is `ghcr.io/jiniill/hazelle` (amd64 and arm64); `latest` is the newest release. The source is in this repository, and every instance serves its own at `/source.tar.gz`.
 
 The first account created on a fresh installation is the operator, and signup then closes. To let others in, raise the signup limit on the admin screen. The operator account cannot be deleted while it is the only operator.
 
@@ -98,9 +99,10 @@ The compose file allows three local model servers on the host machine: Ollama (1
 
 Every day after 03:00 UTC the app takes a snapshot of each account and writes a backup generation under `backup/` in its volume. Generations are kept for 7 days: the two newest and the newest of each day. To keep copies elsewhere, run the `backup` profile, which copies every complete generation to any rclone remote (S3, Backblaze, Google Drive, a second disk) with `rclone copy` (never `sync`), keeps the same set there, and marks each generation `copied` so the app knows it is safe:
 
-1. Create the remote's settings beside the compose file: `mkdir -p rclone && rclone config --config ./rclone/rclone.conf` (the copier reads `/config/rclone/rclone.conf`). The copier runs as uid 1000: `chown -R 1000 rclone && chmod 700 rclone && chmod 600 rclone/rclone.conf`. Remotes that refresh OAuth tokens (Google Drive, Dropbox) rewrite the file, which needs the directory to be writable by that uid as well.
-2. Put the remote and path in `.env` beside the compose file, e.g. `HAZELLE_BACKUP_REMOTE=mydrive:hazelle-backup`.
-3. `docker compose --profile backup up -d`
+1. Put the copier's script beside the compose file: `mkdir -p deploy && curl -fL -o deploy/rclone-backup.sh https://github.com/jiniill/hazelle/releases/latest/download/rclone-backup.sh`.
+2. Create the remote's settings beside the compose file: `mkdir -p rclone && rclone config --config ./rclone/rclone.conf` (the copier reads `/config/rclone/rclone.conf`). The copier runs as uid 1000: `chown -R 1000 rclone && chmod 700 rclone && chmod 600 rclone/rclone.conf`. Remotes that refresh OAuth tokens (Google Drive, Dropbox) rewrite the file, which needs the directory to be writable by that uid as well.
+3. Put the remote and path in `.env` beside the compose file, e.g. `HAZELLE_BACKUP_REMOTE=mydrive:hazelle-backup`.
+4. `docker compose --profile backup up -d`
 
 The copier checks every hour. `docker compose --profile backup exec backup /bin/sh /hazelle/rclone-backup.sh once` runs one pass now.
 

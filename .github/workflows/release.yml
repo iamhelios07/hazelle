@@ -1,7 +1,8 @@
 # A v* tag: the check, and beside it the source archive of the tag's commit and the image for amd64 and arm64 on GHCR
-# under the tag. Once both pass, a release carrying that archive and image-digest.txt (one line, sha256:…;
-# scripts/deploy.sh reads it), its notes the commits since the previous tag (scripts/release-notes.sh), and :latest
-# moves to the highest plain vMAJOR.MINOR.PATCH release. A tag whose check failed may have an image, but never a
+# under the tag. Once both pass, a release carrying that archive, image-digest.txt (one line, sha256:…;
+# scripts/deploy.sh reads it) and the files a self-hosted install starts from (docker-compose.yml, and
+# rclone-backup.sh for its backup profile), its notes the commits since the previous tag (scripts/release-notes.sh)
+# and how to start, and :latest moves to the highest plain vMAJOR.MINOR.PATCH release. A tag whose check failed may have an image, but never a
 # release, so neither a deploy nor :latest takes it.
 name: release
 
@@ -81,9 +82,18 @@ jobs:
           DIGEST: ${{ needs.image.outputs.digest }}
         run: |
           echo "$DIGEST" >release/image-digest.txt
-          scripts/release-notes.sh "$GITHUB_REF_NAME" >release/notes.md
-          gh release create "$GITHUB_REF_NAME" release/source.tar.gz release/image-digest.txt --title "$GITHUB_REF_NAME" \
-            --notes-file release/notes.md
+          {
+            scripts/release-notes.sh "$GITHUB_REF_NAME"
+            printf '\n## 직접 띄우기\n\n빌드할 필요 없어요. 빈 폴더에 docker-compose.yml을 받고 그 폴더에서 실행해요.\n\n'
+            printf '```sh\ncurl -fLO %s\ndocker compose up -d\n```\n\n' \
+              "$GITHUB_SERVER_URL/$GH_REPO/releases/download/$GITHUB_REF_NAME/docker-compose.yml"
+            printf '이 버전의 이미지는 `ghcr.io/jiniill/hazelle:%s`(amd64, arm64)예요. ' "$GITHUB_REF_NAME"
+            printf 'compose 파일은 `latest`, 가장 새 릴리스를 띄워요. 업데이트와 백업은 [README](%s#self-hosting)에 있어요.\n' \
+              "$GITHUB_SERVER_URL/$GH_REPO"
+          } >release/notes.md
+          cp deploy/rclone-backup.sh release/
+          gh release create "$GITHUB_REF_NAME" release/source.tar.gz release/image-digest.txt docker-compose.yml \
+            release/rclone-backup.sh --title "$GITHUB_REF_NAME" --notes-file release/notes.md
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
