@@ -2,7 +2,7 @@ import { ChangeSignal } from '../change-signal';
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
 import { chatTitle, shown, standing, type Chat, type ChatSummary, type Message } from '../model/chat';
-import { paragraphOf, withMarks, withoutMarks } from '../model/illustration';
+import { placeOf, withMarks, withoutMarks } from '../model/illustration';
 import type { Illustrating, Illustrator } from './illustrate';
 import type { Kind, Stored, Values } from '../model/kinds';
 import { indexFolders, nest, type FolderIndex, type FolderTree } from '../model/folders';
@@ -282,9 +282,11 @@ function placesOf(store: ObjectStore, chat: string, messages: readonly Message[]
   const places = new Map<string, Set<number>>();
   const add = (version: string, paragraph: number) => places.set(version, (places.get(version) ?? new Set()).add(paragraph));
   const versions = standing(messages);
+  const texts = new Map(messages.map((message) => [shown(message).id, shown(message).text]));
   for (const { value } of store.children('illustration', chat)) {
     const version = versions.get(value.version);
-    if (version) add(version, paragraphOf(value));
+    const text = version && texts.get(version);
+    if (text !== undefined) add(version!, placeOf(value, text));
   }
   for (const drawing of drawings.values()) if (drawing.chat === chat) for (const { scene } of drawing.sketches) add(drawing.version, scene.paragraph);
   return places;

@@ -791,7 +791,7 @@ it('runs the porting sample as imported: each reply gets its picture as a 삽화
     await host.run(chat, { module, tool: session.store.get('tool', toolId(module))!.value }, context.scope, { kind: 'reply', reply: { index: 1, id: reply, version: reply } }, context.host);
     await vi.waitFor(() => expect(pictures()).toHaveLength(1));
     const first = pictures()[0]!;
-    expect(first.value).toEqual({ message: reply, version: reply, file: expect.any(Object), type: 'image/png', size: atob(PICTURE).length, at: expect.any(Number), paragraph: 1, width: 1, height: 1, tool: { module, name: '포팅 예제' }, caption: '응답에 맞춘 색' });
+    expect(first.value).toEqual({ message: reply, version: reply, file: expect.any(Object), type: 'image/png', size: atob(PICTURE).length, at: expect.any(Number), paragraph: 1, line: expect.any(String), width: 1, height: 1, tool: { module, name: '포팅 예제' }, caption: '응답에 맞춘 색' });
 
     await setModuleAlways(session.store, module, false);
     await vi.waitFor(() => expect(transport.frames[0]!.host.closed).toBe(true), { timeout: 3000 });

@@ -70,6 +70,8 @@ export function ChatPicture({ place, message, running, url, draws, sizes, onDraw
   // The picture's own version may be one its message's edits replaced since.
   const { id: version, text } = shown(message);
   const { width, height } = 'tool' in value ? value : value.sent;
+  // Where it stands now, which the text may have moved since its scene was written.
+  const scene = 'tool' in value ? null : { ...value.scene, paragraph: place.paragraph };
   return (
     <StoryPicture
       src={url('illustration', picture.id)}
@@ -84,8 +86,8 @@ export function ChatPicture({ place, message, running, url, draws, sizes, onDraw
             <Text variant="note">{`${withParticle(moduleName(value.tool.name), '이/가')} 만든 이미지`}</Text>
           ) : draws && (
             <>
-              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={() => onDraw(message.id, version, value.scene)} />
-              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene: value.scene, sent: value.sent, paragraphs: paragraphsOf(text).length })} />
+              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={() => onDraw(message.id, version, scene)} />
+              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene: scene!, sent: value.sent, paragraphs: paragraphsOf(text).length })} />
             </>
           )}
           <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => onDrop(picture)} />

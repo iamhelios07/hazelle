@@ -20,7 +20,9 @@ export type Scene = { paragraph: number; shape: Shape; setting: string; framing:
 // sampler, and drew with the model's own. No cost: the image call reports none.
 type Tuning = 'steps' | 'scale' | 'rescale' | 'sampler';
 
-type Placed = { message: string; version: string; file: FileRef; type: string; size: number; at: number };
+// line: the paragraph it stands after as that read when it was placed, which placeOf finds again after the text
+// changes; absent on a picture placed before 2026-10-22, which keeps its number (user ruling, 2026-10-22).
+type Placed = { message: string; version: string; file: FileRef; type: string; size: number; at: number; line?: string };
 export type Drawn = Placed & {
   scene: Scene;
   receipt: Receipt | null;
@@ -34,7 +36,6 @@ export type Attached = Placed & { paragraph: number; width: number; height: numb
 // Told apart by tool, which no drawn picture holds.
 export type Illustration = Drawn | Attached;
 
-export const paragraphOf = (picture: Illustration) => ('tool' in picture ? picture.paragraph : picture.scene.paragraph);
 
 // Shared by every chat, or a character's own (Character.ownIllustrate). auto: draw after each reply received, off by default since every
 // picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
@@ -62,9 +63,17 @@ export function pictureCount(ladder: readonly Rung[], text: string): number {
   return Math.min(ladder.findLast(({ from }) => length >= from)?.count ?? 1, paragraphs.length);
 }
 
-// The paragraph a picture comes after in text as it stands now; null when an edit left fewer paragraphs, and the
-// picture goes at the message's end, never after another paragraph.
-export const placeOf = (scene: Pick<Scene, 'paragraph'>, text: string): number | null => (scene.paragraph < paragraphsOf(text).length ? scene.paragraph : null);
+// The paragraph a picture comes after in text as it stands now, its version's after its edits and a bot's later
+// writes: its line where that still stands, the nearest to its number where lines were added or taken above it, else its
+// number. One past the text's end gets no mark (withMarks) and goes at the message's end.
+export function placeOf(picture: Illustration, text: string): number {
+  const paragraph = 'tool' in picture ? picture.paragraph : picture.scene.paragraph;
+  if (picture.line === undefined) return paragraph;
+  const paragraphs = paragraphsOf(text);
+  if (paragraphs[paragraph] === picture.line) return paragraph;
+  const found = paragraphs.flatMap((line, index) => (line === picture.line ? [index] : []));
+  return found.length ? found.reduce((near, index) => (Math.abs(index - paragraph) < Math.abs(near - paragraph) ? index : near)) : paragraph;
+}
 
 // Where a picture stands while the chat's display reshapes the text: a mark on its own line after its paragraph, fed
 // to the bot's display scripts with the text and swapped for the picture where the story is drawn. A mark the scripts
@@ -104,12 +113,14 @@ export const withoutMarks = (text: string, keep: ReadonlySet<number> = new Set()
 
 // A version's pictures by the paragraph each stands after, in paragraph order, each place's oldest first: a place shows
 // one picture and pages through the others.
-export function byParagraph<T extends { value: Illustration }>(pictures: readonly T[]): Map<number, T[]> {
+// text: the version's as it stands now.
+export function byParagraph<T extends { value: Illustration }>(pictures: readonly T[], text: string): Map<number, T[]> {
   const places = new Map<number, T[]>();
-  for (const picture of [...pictures].sort((a, b) => paragraphOf(a.value) - paragraphOf(b.value) || a.value.at - b.value.at)) {
-    const place = places.get(paragraphOf(picture.value));
+  const placed = pictures.map((picture) => ({ picture, paragraph: placeOf(picture.value, text) }));
+  for (const { picture, paragraph } of placed.sort((a, b) => a.paragraph - b.paragraph || a.picture.value.at - b.picture.value.at)) {
+    const place = places.get(paragraph);
     if (place) place.push(picture);
-    else places.set(paragraphOf(picture.value), [picture]);
+    else places.set(paragraph, [picture]);
   }
   return places;
 }

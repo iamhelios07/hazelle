@@ -7,13 +7,13 @@ import type { Drawing, IllustrateFailure } from '../../runtime/illustrate';
 export type PicturePlace = { paragraph: number | null } & (
   | { kind: 'drawing'; scene: Scene }
   | { kind: 'failed'; failure: IllustrateFailure; version: string; scene: Scene | null }
-  | { kind: 'picture'; pictures: Stored<'illustration'>[] }
+  | { kind: 'picture'; paragraph: number; pictures: Stored<'illustration'>[] }
 );
 
-// pictures: the shown version's.
-export function picturePlaces(drawing: Drawing | null, pictures: Stored<'illustration'>[]): PicturePlace[] {
+// pictures: the shown version's, whose text is text.
+export function picturePlaces(drawing: Drawing | null, pictures: Stored<'illustration'>[], text: string): PicturePlace[] {
   const places = new Map<number, PicturePlace>();
-  for (const [paragraph, place] of byParagraph(pictures)) places.set(paragraph, { paragraph, kind: 'picture', pictures: place });
+  for (const [paragraph, place] of byParagraph(pictures, text)) places.set(paragraph, { paragraph, kind: 'picture', pictures: place });
   for (const { scene, failure } of drawing?.sketches ?? []) {
     const { paragraph } = scene;
     places.set(paragraph, failure ? { paragraph, kind: 'failed', failure, version: drawing!.version, scene } : { paragraph, kind: 'drawing', scene });

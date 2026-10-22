@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { paragraphsOf, pictureCount, placeMark, placeOf, translatedMarks, withMarks, withoutMarks } from './illustration';
+import { paragraphsOf, pictureCount, placeMark, placeOf, translatedMarks, withMarks, withoutMarks, type Illustration } from './illustration';
 
 it('takes each non-blank line as a paragraph, whether the prose breaks with one newline or two', () => {
   expect(paragraphsOf('  First line.\nSecond line.\n\n\nThird after a gap.  \n')).toEqual(['First line.', 'Second line.', 'Third after a gap.']);
@@ -12,9 +12,12 @@ it('counts no line of tags alone, in the paragraphs or the marks', () => {
   expect(withMarks(text, new Set([0]))).toBe(`<GT-SEP/>\n⏱️[11:21 AM]\n${placeMark(0)}\n<div class="box">\n<b>Hi.</b>\n</div>`);
 });
 
-it('places a picture whose paragraph an edit removed at the message end', () => {
-  expect(placeOf({ paragraph: 1 }, 'One.\nTwo.')).toBe(1);
-  expect(placeOf({ paragraph: 2 }, 'One.\nTwo.')).toBeNull();
+it('finds a picture its line again when lines come above it, and keeps the number of one placed without its line', () => {
+  const picture = (line?: string) => ({ scene: { paragraph: 1 }, ...(line !== undefined && { line }) }) as Illustration;
+  expect(placeOf(picture('Two.'), '<status>\nHP 100\nMP 50\n</status>\nOne.\nTwo.')).toBe(3);
+  expect(placeOf(picture('Two.'), 'Two.\nOne.\nThree.\nTwo.')).toBe(0);
+  expect(placeOf(picture('Two.'), 'One.\nTwo, rewritten.')).toBe(1);
+  expect(placeOf(picture(), 'Zero.\nOne.\nTwo.')).toBe(1);
 });
 
 it('marks a paragraph on its own line after it, none past the end, and takes the marks out but the ones kept', () => {

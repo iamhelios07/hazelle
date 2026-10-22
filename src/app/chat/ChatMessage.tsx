@@ -120,7 +120,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const text = seenText(original, version, translatingText, flipped);
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live && !message.whole);
-  const places = picturePlaces(drawing, pictures);
+  const places = picturePlaces(drawing, pictures, version.text);
   const paragraphs = new Set(places.flatMap(({ paragraph }) => (paragraph === null ? [] : [paragraph])));
   // A translation never goes through the display, so it takes its marks here, by the displayed paragraphs.
   const originalShown = text === original;

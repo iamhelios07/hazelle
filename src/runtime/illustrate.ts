@@ -61,7 +61,7 @@ export async function attachIllustration(
     if (!file) return { ok: false, error: 'picture-refused' };
     const value: Attached = {
       message: at.message, version: at.version, file, type: picture.type, size: bytes.byteLength, at: Date.now(),
-      paragraph: Math.max(0, paragraphsOf(version.text).length - 1), width: picture.width, height: picture.height, tool, ...(caption !== null && { caption }),
+      paragraph: Math.max(0, paragraphsOf(version.text).length - 1), line: paragraphsOf(version.text).at(-1), width: picture.width, height: picture.height, tool, ...(caption !== null && { caption }),
     };
     const written = held ? await store.update('illustration', held.id, () => value) : await store.create('illustration', value, { parent: chat });
     return written.ok ? { ok: true, data: null } : written;
@@ -241,7 +241,7 @@ export class Illustrator {
       }
       this.update(message, (drawing) => ({ ...drawing, writing: false, sketches: scenes.map((scene) => ({ scene, failure: null })) }));
     }
-    const drawn = { chat, message, version, route, prompt: prompt.prompt.value, portraits, spend: spend || switches.spend, signal };
+    const drawn = { chat, message, version, text, route, prompt: prompt.prompt.value, portraits, spend: spend || switches.spend, signal };
     // The scene call's row goes into the ledger once, with the first picture saved.
     let logged = false;
     // In turn: an image connection draws one picture at a time.
@@ -256,7 +256,7 @@ export class Illustrator {
 
   // null once the illustration is saved. Each picture of the run keeps the receipt of the call that wrote its scene.
   private async drawScene(
-    { chat, message, version, route, prompt, portraits, spend, signal }: { chat: string; message: string; version: string; route: ImageRoute; prompt: IllustratePrompt; portraits: Portrait[]; spend: boolean; signal: AbortSignal },
+    { chat, message, version, text, route, prompt, portraits, spend, signal }: { chat: string; message: string; version: string; text: string; route: ImageRoute; prompt: IllustratePrompt; portraits: Portrait[]; spend: boolean; signal: AbortSignal },
     scene: Scene,
     receipt: Receipt | null,
     log: boolean,
@@ -270,7 +270,7 @@ export class Illustrator {
     if (!saved.ok) return saved.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unsaved', failure: saved };
     const file = saved.data[0];
     if (!file) return { kind: 'file-refused' };
-    const illustration: Illustration = { message, version, scene, receipt, model: refOf(route.connection.id, route.model), sent: without(request, 'model'), file, type: drawn.type, size: drawn.bytes.byteLength, at: Date.now() };
+    const illustration: Illustration = { message, version, line: paragraphsOf(text)[scene.paragraph], scene, receipt, model: refOf(route.connection.id, route.model), sent: without(request, 'model'), file, type: drawn.type, size: drawn.bytes.byteLength, at: Date.now() };
     const created = await store.batch([
       { type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: chat, value: illustration },
       ...(receipt && log ? [receiptRow(receipt, illustration.at, chatPlace(store, chat))] : []),

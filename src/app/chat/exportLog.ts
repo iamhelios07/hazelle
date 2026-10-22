@@ -42,7 +42,7 @@ export function logDraft(messages: Shown[], view: Display, { placed, pictures: d
     const own = { text: original, original: true };
     const other = translation === null ? own : { text: translation, original: false };
     const said = (text === 'original' ? [own] : text === 'both' ? [...new Set([own, other])] : [seenText(original, version, null, flipped.has(version.id)) === original ? own : other]).filter((each) => each.text.trim());
-    const places = byParagraph(drawn.get(version.id) ?? []);
+    const places = byParagraph(drawn.get(version.id) ?? [], version.text);
     const story = ({ text, original }: (typeof said)[number], at: number) => {
       if (!places.size || at > 0) return shownHtml(text, decor);
       const paragraphs = new Set(places.keys());
