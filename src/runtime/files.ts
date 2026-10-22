@@ -58,7 +58,10 @@ export async function* inOrder<T, R>(items: readonly T[], start: (item: T) => Pr
     for (const item of items) {
       while (next < items.length && started.length < ahead && (started.length === 0 || held + size(items[next]!) <= HELD_AHEAD)) {
         held += size(items[next]!);
-        started.push(start(items[next++]!));
+        const run = start(items[next++]!);
+        // Awaited only once it is the head: one failing before then (a closed worker) must not read as unhandled.
+        run.catch(() => {});
+        started.push(run);
       }
       const result = await started.shift()!;
       held -= size(item);

@@ -28,6 +28,9 @@ const HELD_BYTES = 8 * 1024 * 1024;
 // Pictures a restore hands the page in one save, each asking the server once which it lacks; how many go up at once is
 // runtime/files'.
 const PICTURE_ROWS = 12;
+// Saves a restore runs ahead, enough to keep the transfer slots full: each is held three times over (here, cloned to the
+// page, sealed there).
+const RESTORE_AHEAD = 4;
 
 export const SEEDED: ReadonlySet<string> = new Set([...DEFAULT_PROMPT_IDS, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID, ORDER_ID]);
 
@@ -330,7 +333,7 @@ async function restoreOn(
       return files.save(read as Uint8Array<ArrayBuffer>[], { signal });
     };
     const sizeOf = (chunk: { entry: ZipEntry }[]) => chunk.reduce((sum, { entry }) => sum + entry.size, 0);
-    for await (const [chunk, saved] of inOrder(chunks, saveChunk, { size: sizeOf })) {
+    for await (const [chunk, saved] of inOrder(chunks, saveChunk, { ahead: RESTORE_AHEAD, size: sizeOf })) {
       signal.throwIfAborted();
       if (!saved) return { ok: false, error: 'not-backup' };
       if (!saved.ok) return saved;
