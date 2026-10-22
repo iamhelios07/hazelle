@@ -82,6 +82,23 @@ export function withMarks(text: string, paragraphs: ReadonlySet<number>): string
     .join('\n');
 }
 
+// A translation is made of the displayed text (engine/pipeline), whose lines the bot's display scripts may have
+// reshaped, a status window drawn over many lines, so its marks stand after the displayed paragraphs the marks in placed
+// follow, never after the stored text's paragraphs of the same number. placed: the displayed text with its marks.
+export function translatedMarks(translation: string, placed: string, keep: ReadonlySet<number>): string {
+  const after = new Map<number, number[]>();
+  for (const { index, 1: paragraph } of placed.matchAll(MARK)) {
+    if (!keep.has(Number(paragraph))) continue;
+    const at = paragraphsOf(withoutMarks(placed.slice(0, index))).length - 1;
+    after.set(at, [...(after.get(at) ?? []), Number(paragraph)]);
+  }
+  let seen = -1;
+  return translation
+    .split('\n')
+    .map((line) => (isParagraph(line) && after.has(++seen) ? [line, ...after.get(seen)!.map(placeMark)].join('\n') : line))
+    .join('\n');
+}
+
 // keep: the paragraphs whose marks stay.
 export const withoutMarks = (text: string, keep: ReadonlySet<number> = new Set()) => (text.includes('') ? text.replace(MARK, (whole, paragraph: string) => (keep.has(Number(paragraph)) ? whole : '')) : text);
 

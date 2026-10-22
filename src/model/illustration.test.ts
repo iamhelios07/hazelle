@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { paragraphsOf, pictureCount, placeMark, placeOf, withMarks, withoutMarks } from './illustration';
+import { paragraphsOf, pictureCount, placeMark, placeOf, translatedMarks, withMarks, withoutMarks } from './illustration';
 
 it('takes each non-blank line as a paragraph, whether the prose breaks with one newline or two', () => {
   expect(paragraphsOf('  First line.\nSecond line.\n\n\nThird after a gap.  \n')).toEqual(['First line.', 'Second line.', 'Third after a gap.']);
@@ -23,6 +23,13 @@ it('marks a paragraph on its own line after it, none past the end, and takes the
   expect(marked).toBe(`One.\n\n  Two.\n${placeMark(1)}\nThree.`);
   expect(withoutMarks(marked)).toBe(text);
   expect(withoutMarks(withMarks(text, new Set([0, 1])), new Set([1]))).toBe(`One.\n\n  Two.\n${placeMark(1)}\nThree.`);
+});
+
+it('marks a translation after the displayed paragraph its mark follows, past a status window the display drew over many lines', () => {
+  const status = '<div class="status">\n<b>HP</b> 100\n<b>MP</b> 50\n</div>';
+  // Stored as '[HP 100 | MP 50]\nOne.\nTwo.', its picture after paragraph 1.
+  const placed = `${status}\nOne.\n${placeMark(1)}\nTwo.`;
+  expect(translatedMarks(`${status}\n하나.\n둘.`, placed, new Set([1]))).toBe(`${status}\n하나.\n${placeMark(1)}\n둘.`);
 });
 
 it('counts the pictures of the highest rung the text reaches, without its tags, and never more than its paragraphs', () => {

@@ -1,7 +1,7 @@
 import { pictureRef, resolveAssets, type PictureKind, type PictureUrl } from '../../engine/assets';
 import type { Display } from '../../engine/display';
 import { shown } from '../../model/chat';
-import { byParagraph, placeMark, withMarks, withoutMarks } from '../../model/illustration';
+import { byParagraph, placeMark, translatedMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import type { Shown } from '../../runtime/talk';
 import { inlaid, type LogRow } from '../ui';
@@ -46,7 +46,8 @@ export function logDraft(messages: Shown[], view: Display, { placed, pictures: d
     const story = ({ text, original }: (typeof said)[number], at: number) => {
       if (!places.size || at > 0) return shownHtml(text, decor);
       const paragraphs = new Set(places.keys());
-      const marked = original ? withoutMarks(placed.get(index) ?? text, paragraphs) : withMarks(text, paragraphs);
+      const displayed = placed.get(index) ?? view.texts[index]!;
+      const marked = original ? withoutMarks(displayed, paragraphs) : translatedMarks(text, displayed, paragraphs);
       return [...places].reduce((html, [paragraph, pictures]) => inlaid(html, placeMark(paragraph), `<img src="${pictureRef('illustration', pictures.at(-1)!.id)}">`), shownHtml(marked, decor));
     };
     const boxes = view.boxes[index]!;

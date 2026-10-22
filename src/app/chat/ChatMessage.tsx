@@ -5,7 +5,7 @@ import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
 import { firstLine, handEdited, shown, translationOutdated, type Message } from '../../model/chat';
 import type { PictureSizes } from '../../engine/illustrate';
-import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
+import { placeMark, translatedMarks, withoutMarks } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
 import { runs, type Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
@@ -122,9 +122,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const reveal = useReveal(version.id, text, live && !message.whole);
   const places = picturePlaces(drawing, pictures);
   const paragraphs = new Set(places.flatMap(({ paragraph }) => (paragraph === null ? [] : [paragraph])));
-  // A translation never goes through the display, so it takes its marks here, by the same paragraphs.
+  // A translation never goes through the display, so it takes its marks here, by the displayed paragraphs.
   const originalShown = text === original;
-  const translatedText = !paragraphs.size ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraphs) : withMarks(text, paragraphs);
+  const translatedText = !paragraphs.size ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraphs) : translatedMarks(text, placed ?? original, paragraphs);
   // A message sent translated keeps 보낸 메시지 보기 only. Not left off while editing a part: findPart's lines are this text's.
   const both = showOriginal && translation !== null && !sentTranslated && translatingText === null && !originalShown;
   const storyText = both ? withOriginal(translatedText, original) : translatedText;
