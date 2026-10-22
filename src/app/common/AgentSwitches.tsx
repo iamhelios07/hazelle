@@ -35,7 +35,7 @@ export function AgentSwitches({ owner, own }: { owner: AgentOwner; own: string[]
   }
 
   const making = (
-    <Button variant="secondary" onClick={() => navigate({ kind: 'prompts', place: null })}>
+    <Button variant="secondary" onClick={() => navigate({ kind: 'prompts', place: null, sort: 'agent' })}>
       {`프롬프트에서 ${AGENTS} 만들기`}
     </Button>
   );

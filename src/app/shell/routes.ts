@@ -4,6 +4,7 @@ import { CATEGORIES, type Category } from '../../contracts/board';
 import { SHARE_ID } from '../../contracts/shares';
 import { FEATURES, type Feature } from '../../model/features';
 import type { Shelf } from '../../model/library';
+import { PROMPT_SORTS, type PromptSort } from '../../model/prompt';
 
 const ACCOUNT_SECTIONS = ['notices'] as const;
 export type AccountSection = (typeof ACCOUNT_SECTIONS)[number];
@@ -27,7 +28,7 @@ export type Route =
   | { kind: 'connection'; id: string }
   // pane: the prompt editor's pane that is open, which a door to a prompt's 토글, 모델 or 이미지 names; null, a block.
   // place on a list of things that folders hold: a folder's id, or null for the top.
-  | { kind: 'prompts'; place: string | null }
+  | { kind: 'prompts'; place: string | null; sort: PromptSort | null }
   | { kind: 'prompt'; id: string; pane: PromptPane | null }
   | { kind: 'personas'; place: string | null }
   | { kind: 'persona'; id: string }
@@ -131,7 +132,7 @@ export function parseRoute(at: string): Route {
     return type ? { kind: 'connect', type } : HOME;
   }
   if (top === 'prompts') {
-    if (id === undefined) return { kind: 'prompts', place: placeOf(params) };
+    if (id === undefined) return { kind: 'prompts', place: placeOf(params), sort: PROMPT_SORTS.find((each) => each === params.get('sort')) ?? null };
     if (!ID.test(id) || sub !== undefined) return HOME;
     const pane = params.get('pane');
     return { kind: 'prompt', id, pane: PROMPT_PANES.find((each) => each === pane) ?? null };
@@ -231,7 +232,7 @@ export function href(route: Route): string {
     case 'connection':
       return `/connections/${route.id}`;
     case 'prompts':
-      return placed('/prompts', route.place);
+      return route.sort ? `${placed('/prompts', route.place)}${route.place ? '&' : '?'}sort=${route.sort}` : placed('/prompts', route.place);
     case 'prompt':
       return `/prompts/${route.id}${route.pane ? `?pane=${route.pane}` : ''}`;
     case 'personas':
@@ -458,7 +459,7 @@ export function up(route: Below, chatShelf?: string | null): Route {
     case 'connect-direct':
       return { kind: 'add-connection' };
     case 'prompt':
-      return { kind: 'prompts', place: null };
+      return { kind: 'prompts', place: null, sort: null };
     case 'persona':
       return { kind: 'personas', place: null };
     case 'module':

@@ -49,9 +49,11 @@ type Props = {
   place: string | null;
   onGo: (place: string | null) => void;
   frame: Frame;
+  // The sort it opens on; one whose 실험실 switch is off opens 대화.
+  sort?: PromptSort | null;
 };
 
-export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame }: Props) {
+export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame, sort = null }: Props) {
   const store = useStore();
   const toast = useToast();
   const prompts = usePrompts();
@@ -66,7 +68,7 @@ export function PromptList({ onPick, inUse, defaults = false, place, onGo, frame
   const listed = useMemo(() => prompts.filter((prompt) => sorts.some(({ sort }) => ofSort(prompt, sort))), [prompts, sorts]);
   const uses = usePromptUse();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  const [shown, setShown] = useState<PromptSort>('conversation');
+  const [shown, setShown] = useState<PromptSort>(() => sorts.find((each) => each.sort === sort)?.sort ?? 'conversation');
   const [order, setOrder] = useState<Order>('name');
   const { pickPrompts } = useImport();
   const conversations = useMemo(() => grouped.top.filter((prompt) => ofSort(prompt, 'conversation')), [grouped]);

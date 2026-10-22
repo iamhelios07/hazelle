@@ -28,7 +28,12 @@ const EXAMPLES = {
     { kind: 'connect-direct', address: 'https://llm.example.com/v1?key=a b&x=1+2#top' },
   ],
   connection: [{ kind: 'connection', id: CHAT }],
-  prompts: [{ kind: 'prompts', place: null }, { kind: 'prompts', place: CHAT }],
+  prompts: [
+    { kind: 'prompts', place: null, sort: null },
+    { kind: 'prompts', place: CHAT, sort: null },
+    { kind: 'prompts', place: null, sort: 'agent' },
+    { kind: 'prompts', place: CHAT, sort: 'translate' },
+  ],
   prompt: [
     { kind: 'prompt', id: CHAT, pane: null },
     { kind: 'prompt', id: CHAT, pane: 'toggles' },

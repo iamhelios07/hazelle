@@ -27,7 +27,7 @@ const GROUPS: Group[] = [
     title: '롤플레이',
     places: [
       { page: 'chat', label: PAGES.chat, icon: MessageSquare, route: { kind: 'chat-settings' } },
-      { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts', place: null } },
+      { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts', place: null, sort: null } },
       { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas', place: null } },
       { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules', place: null } },
       { page: 'plugins', label: PAGES.plugins, icon: Puzzle, route: { kind: 'plugins' } },

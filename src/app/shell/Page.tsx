@@ -111,7 +111,7 @@ export function Page({ route, closeLayer, onPaired }: { route: Route; closeLayer
       case 'connection':
         return <ConnectionPage at={at} back={back(at)} />;
       case 'prompts':
-        return <PromptsScreen place={at.place} back={sideBack(at)} />;
+        return <PromptsScreen place={at.place} sort={at.sort} back={sideBack(at)} />;
       case 'prompt':
         return <ItemPage at={at} back={back(at)}>{(stored) => <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} />}</ItemPage>;
       case 'personas':

@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { entryName } from '../../connectors/types';
 import type { Feature } from '../../model/features';
+import type { PromptSort } from '../../model/prompt';
 import type { PrereadParts } from '../../model/settings';
 import { illustrateSwitches, setIllustrate, setTranslate, setTranslatorNote, translateSwitches } from '../../runtime/characters';
 import { availableFeatures } from '../../runtime/features';
@@ -29,7 +30,8 @@ import { FEATURE_HELP, FeatureSwitch } from './FeatureDefaults';
 
 import { MemoryDefaults } from './MemoryDefaults';
 
-const editPrompt = (door: PromptDoor) => navigate(door ? { kind: 'prompt', ...door } : { kind: 'prompts', place: null });
+// Without a prompt to open, the list opens on the feature's own sort.
+const editPrompt = (sort: PromptSort) => (door: PromptDoor) => navigate(door ? { kind: 'prompt', ...door } : { kind: 'prompts', place: null, sort });
 
 export function FeatureScreen({ feature, back }: { feature: Feature; back: Back }) {
   const available = availableFeatures(useSettings()).includes(feature);
@@ -63,7 +65,7 @@ function TranslateDefaults() {
         card={null}
         opens="down"
         onChange={(change) => void setTranslate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
-        onEditPrompt={editPrompt}
+        onEditPrompt={editPrompt('translate')}
       />
       <TranslatorNoteField
         saveKey="translator-note"
@@ -91,7 +93,7 @@ function IllustrateDefaults() {
       card={null}
       opens="down"
       onChange={(change) => void setIllustrate(store, null, change).then((saved) => saved.ok || toast.failed(saved))}
-      onEditPrompt={editPrompt}
+      onEditPrompt={editPrompt('illustrate')}
     />
   );
 }
@@ -115,7 +117,7 @@ function MascotDefaults() {
             heading="모든 채팅에 적용돼요."
             opens="down"
             onPick={(prompt) => void setDefaultPrompt(store, prompt!).then((saved) => saved.ok || toast.failed(saved))}
-            onEdit={editPrompt}
+            onEdit={editPrompt('mascot')}
           />
         }
       />
@@ -154,12 +156,12 @@ function PrereadDefaults() {
   return (
     <>
       {briefsWithChatModel(store, SHARED_CHAT) && (
-        <Callout tone="warn" action={{ label: `${PRE_READ} 모델 선택`, onClick: () => editPrompt(choice.kind === 'prompt' ? { id: choice.prompt.id, pane: 'model' } : null) }}>
+        <Callout tone="warn" action={{ label: `${PRE_READ} 모델 선택`, onClick: () => editPrompt('preread')(choice.kind === 'prompt' ? { id: choice.prompt.id, pane: 'model' } : null) }}>
           {`${PRE_READ} 모델이 ${MODEL_ROLES.main}과 같아요. 이러면 비용이 오히려 늘 수 있어요.`}
         </Callout>
       )}
       <SettingGroup label={PRE_READ}>
-        <TaskModelRow label={`${PRE_READ} 모델`} noun={PRE_READ} choice={choice} model={'kind' in writer ? describePrereadFailure(writer) : entryName(writer.route.model)} onEdit={editPrompt} />
+        <TaskModelRow label={`${PRE_READ} 모델`} noun={PRE_READ} choice={choice} model={'kind' in writer ? describePrereadFailure(writer) : entryName(writer.route.model)} onEdit={editPrompt('preread')} />
       </SettingGroup>
       <SettingGroup label="줄일 부분">
         {(Object.entries(PRE_READ_PARTS) as [keyof PrereadParts, string][]).map(([part, label]) => (
@@ -191,7 +193,7 @@ function PrereadDefaults() {
               heading="모든 채팅에 적용돼요."
               opens="down"
               onPick={(prompt) => void setDefaultPrompt(store, prompt!).then((saved) => saved.ok || toast.failed(saved))}
-              onEdit={editPrompt}
+              onEdit={editPrompt('preread')}
             />
           }
         />

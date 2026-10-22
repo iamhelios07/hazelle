@@ -4,7 +4,8 @@ import type { FeatureSwitches } from './features';
 
 export type Role = 'system' | 'user' | 'assistant';
 
-export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate' | 'mascot' | 'preread' | 'agent';
+export const PROMPT_SORTS = ['conversation', 'translate', 'memory', 'illustrate', 'mascot', 'preread', 'agent'] as const;
+export type PromptSort = (typeof PROMPT_SORTS)[number];
 
 // A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 텍스트 with
 // {{slot}} where its content goes; role is the one a new block of it starts with (app/prompts/edits newBlock).

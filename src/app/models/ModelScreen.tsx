@@ -46,7 +46,7 @@ function ImageModelScreen({ connection, model, back }: Props) {
   // A binned or missing default opens the list, never the missing page.
   const openPrompt = () => {
     const prompt = illustrationPrompt(store, undefined);
-    navigate(prompt.kind === 'prompt' ? { kind: 'prompt', id: prompt.prompt.id, pane: 'picture' } : { kind: 'prompts', place: null });
+    navigate(prompt.kind === 'prompt' ? { kind: 'prompt', id: prompt.prompt.id, pane: 'picture' } : { kind: 'prompts', place: null, sort: 'illustrate' });
   };
   return (
     <Screen
