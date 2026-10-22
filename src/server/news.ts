@@ -5,12 +5,12 @@ import type { DatabaseSync } from 'node:sqlite';
 // sets it to null for one that brings nothing to tell; once published, the post is the record and is edited on the board.
 export type ReleaseNews = { version: string; title: string; text: string };
 export const RELEASE_NEWS: ReleaseNews | null = {
-  version: 'v0.4.2',
-  title: '게시판 댓글은 글쓴이와 운영자의 대화가 돼요',
+  version: 'v0.4.3',
+  title: '처음 오신 분을 위한 튜토리얼이 생겼어요',
   text: [
-    '이제 게시판 글에는 글쓴이와 운영자만 댓글과 답글을 달 수 있어요. 다른 분들은 글을 읽고 추천할 수 있어요. 전에 달린 댓글은 그대로 남아요.',
-    '소식은 공지처럼 읽어요. 궁금한 점은 소식 글 아래 질문 쓰기로 남겨 주세요.',
-    '게시판 전체 맨 위에서 가장 최근 소식을 볼 수 있어요.',
+    '처음 오신 분은 AI를 연결하고 대화를 시작하기까지 실제 화면을 따라가며 해 볼 수 있어요. 눌러야 할 곳을 하나씩 짚어 주고, 대화창에 도착하면 끝나요. 아직 응답을 받아 본 적 없다면 캐릭터 둘러보기 맨 앞의 튜토리얼 보기에서 언제든 시작할 수 있어요.',
+    '실험실에 에이전트가 생겼어요. 답을 쓰기 전에 장면을 먼저 정리하는 전처리 에이전트와, 받은 답을 다듬는 후처리 에이전트를 붙일 수 있어요. 어떤 에이전트가 무엇을 보내고 받았는지는 응답 정보와 점검의 기록에서 볼 수 있어요.',
+    '전체 백업을 내보내고 복원할 때 그림을 더 많이 한꺼번에 주고받아요.',
   ].join('\n\n'),
 };
 
