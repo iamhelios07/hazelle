@@ -20,7 +20,7 @@ export function ChatPromptPicker({ prompt, open, onOpen }: { prompt: PromptChoic
     <ChipButton
       label={label}
       title="이 채팅의 프롬프트"
-      leading={<Icon icon={FileText} size="xs" />}
+      leading={<Icon icon={FileText} size="sm" />}
       tone={prompt.kind === 'missing' ? 'warn' : 'plain'}
       phone="icon"
       popup="dialog"

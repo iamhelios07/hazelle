@@ -111,7 +111,7 @@ export function FaceCard({ image, video = false, name, note, selected, current =
       >
         <span className={styles.picture}>
           <Face image={image} video={video} name={name} still={drag !== undefined} />
-          {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="xs" />}</span>}
+          {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="sm" />}</span>}
         </span>
         <span className={styles.name}>{name}</span>
         <span className={faint ? `${styles.detail} ${styles.faint}` : styles.detail}>{note}</span>

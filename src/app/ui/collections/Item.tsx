@@ -35,7 +35,7 @@ export function Item({ density, scheme, leading, title, meta, preview, trailing,
   // meta and preview are drawn even when empty: an empty time still keeps its gap beside the title.
   const content = (
     <>
-      {branch && <Icon icon={expanded ? ChevronDown : ChevronRight} size="xs" />}
+      {branch && <Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />}
       {leading}
       <span className={styles.text}>
         <span className={styles.head}>

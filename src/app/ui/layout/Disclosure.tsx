@@ -17,7 +17,7 @@ export function Disclosure({ label, menu, open: held, onOpen, children }: Props)
       <div className={styles.head}>
         <button type="button" className={styles.toggle} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
           <span className={styles.chevron}>
-            <Icon icon={ChevronRight} size="xs" />
+            <Icon icon={ChevronRight} size="sm" />
           </span>
           {label}
         </button>

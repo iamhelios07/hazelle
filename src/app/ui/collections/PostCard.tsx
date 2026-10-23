@@ -55,7 +55,7 @@ export function PostCard({ title, excerpt, marks, byline, stats, vote, tone = 'p
 export function PostStat({ icon, label, count }: { icon: LucideIcon; label: string; count: string }) {
   return (
     <span className={styles.stat} aria-label={`${label} ${count}`}>
-      <Icon icon={icon} size="xs" />
+      <Icon icon={icon} size="sm" />
       {count}
     </span>
   );

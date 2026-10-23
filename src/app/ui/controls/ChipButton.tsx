@@ -24,7 +24,7 @@ export function ChipButton({ label, title, leading, variant = 'chip', opens = 'd
     <button ref={ref} type="button" className={classes} title={title} aria-label={`${title} · ${label}`} aria-haspopup={popup} aria-expanded={expanded} onClick={onClick}>
       {leading}
       <span className={styles.label}>{label}</span>
-      <Icon icon={opens === 'down' ? ChevronDown : ChevronUp} size="xs" />
+      <Icon icon={opens === 'down' ? ChevronDown : ChevronUp} size="sm" />
     </button>
   );
 }

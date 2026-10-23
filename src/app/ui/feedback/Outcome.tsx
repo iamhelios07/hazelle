@@ -11,7 +11,7 @@ export function Outcome({ title, items }: { title: string; items: Item[] }) {
       {items.map((item, index) => (
         <div key={index} className={styles.item}>
           <span className={styles.icon}>
-            <Icon icon={Minus} size="xs" />
+            <Icon icon={Minus} size="sm" />
           </span>
           <span className={styles.text}>
             <span className={styles.title}>{item.title}</span>

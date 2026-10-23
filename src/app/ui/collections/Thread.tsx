@@ -46,7 +46,7 @@ export function ThreadEvent({ icon, note, children }: { icon: LucideIcon; note: 
   return (
     <li className={styles.event}>
       <span className={styles.mark}>
-        <Icon icon={icon} size="xs" />
+        <Icon icon={icon} size="sm" />
       </span>
       <span className={styles.what}>{children}</span>
       <span className={styles.when}>{note}</span>

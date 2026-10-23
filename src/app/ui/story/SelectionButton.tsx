@@ -30,7 +30,7 @@ export function SelectionButton({ icon, label, at, onPress }: { icon: LucideIcon
       onPointerDown={(event) => event.preventDefault()}
       onClick={onPress}
     >
-      <Icon icon={icon} size="xs" />
+      <Icon icon={icon} size="sm" />
       {label}
     </button>,
     document.body,

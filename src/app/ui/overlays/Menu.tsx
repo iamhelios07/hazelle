@@ -177,14 +177,14 @@ export function MenuItem({ label, sub, face, icon, avatar, tag, checked, multipl
       checked={checked}
       tone={tone}
       disabled={disabled}
-      leading={avatar ?? (icon && <Icon icon={icon} size="xs" />)}
+      leading={avatar ?? (icon && <Icon icon={icon} size="sm" />)}
       title={face === undefined ? label : <span className={styles.face} style={faceStyle(face)}>{label}</span>}
       meta={tag}
       preview={sub}
       trailing={
         checked && (
           <span className={styles.check}>
-            <Icon icon={Check} size="xs" />
+            <Icon icon={Check} size="sm" />
           </span>
         )
       }

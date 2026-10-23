@@ -20,7 +20,7 @@ export function SearchField({ label, value, onChange, size = 'md', grow = false,
   const id = useId();
   return (
     <div className={`${styles.field} ${size === 'sm' ? styles.sm : ''} ${grow ? styles.grow : ''}`}>
-      <Icon icon={Search} size={size === 'sm' ? 'xs' : 'md'} />
+      <Icon icon={Search} size={size} />
       <label className={styles.label} htmlFor={id}>
         {label}
       </label>

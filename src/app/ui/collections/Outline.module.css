@@ -238,7 +238,7 @@
 }
 
 .drill .button {
-  grid-template-columns: var(--outline-number) var(--outline-node-chat) minmax(0, 1fr) var(--outline-meta) var(--icon-xs);
+  grid-template-columns: var(--outline-number) var(--outline-node-chat) minmax(0, 1fr) var(--outline-meta) var(--icon-sm);
   color: var(--color-text-faint);
 }
 

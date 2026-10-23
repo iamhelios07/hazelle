@@ -112,14 +112,14 @@
 
 .dot {
   flex-shrink: 0;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   border: var(--border-medium) solid var(--color-border-strong);
   border-radius: var(--radius-full);
 }
 
 .list .choice[aria-pressed='true'] .dot {
-  border: calc(var(--icon-xs) / 3) solid var(--color-accent);
+  border: calc(var(--icon-sm) / 3) solid var(--color-accent);
 }
 
 .text {

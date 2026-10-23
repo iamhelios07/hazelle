@@ -24,7 +24,7 @@ const RECENT = 3;
 // Added models only, recent ones first. It never lists providers.
 export function ChatModelMenu({ current, label, onPick, handle }: Props) {
   return (
-    <Menu handle={handle} place="below-end" size="lg" label="모델" trigger={(opener) => <ChipButton label={label} title="모델 바꾸기" leading={<Icon icon={Layers} size="xs" />} phone="icon" {...opener} />}>
+    <Menu handle={handle} place="below-end" size="lg" label="모델" trigger={(opener) => <ChipButton label={label} title="모델 바꾸기" leading={<Icon icon={Layers} size="sm" />} phone="icon" {...opener} />}>
       <ModelChoices current={current} onPick={onPick} />
       <Divider variant="menu" />
       {current && <ProfileItem current={current} />}

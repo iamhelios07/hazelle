@@ -85,7 +85,7 @@ export function Hint({ label, children }: { label: string; children: Help }) {
           setState((now) => (now === 'pinned' ? 'closed' : 'pinned'));
         }}
       >
-        <Icon icon={Info} size="xs" />
+        <Icon icon={Info} size="sm" />
       </button>
       {state !== 'closed' &&
         createPortal(

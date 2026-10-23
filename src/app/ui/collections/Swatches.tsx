@@ -30,7 +30,7 @@ export function Swatches({ label, sample, items, onMove }: { label: string; samp
             <span className={styles.meta}>
               <span className={styles.name}>
                 {name}
-                {pressed && <Icon icon={Check} size="xs" />}
+                {pressed && <Icon icon={Check} size="sm" />}
               </span>
             </span>
           </button>

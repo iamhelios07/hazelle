@@ -26,7 +26,7 @@ export function PickCard({ label, value, note, help, tone = 'plain', popup, expa
         <span className={styles.label}>{label}</span>
         <span className={styles.line}>
           <span className={tone === 'warn' ? `${styles.value} ${styles.warn}` : styles.value}>{value}</span>
-          <Icon icon={popup ? ChevronDown : ChevronRight} size="xs" />
+          <Icon icon={popup ? ChevronDown : ChevronRight} size="sm" />
         </span>
         {note && <span className={styles.detail}>{note}</span>}
       </button>

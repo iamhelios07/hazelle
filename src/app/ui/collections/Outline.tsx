@@ -94,7 +94,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
     <span className={styles.plusAt}>
       {addMenu(index, (opener) => (
         <button type="button" className={styles.plus} aria-label={where} title="여기에 추가" ref={opener.ref} aria-haspopup="menu" aria-expanded={opener.expanded} onClick={opener.onClick}>
-          <Icon icon={Plus} size="xs" />
+          <Icon icon={Plus} size="sm" />
         </button>
       ))}
     </span>
@@ -104,7 +104,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
     stop?.cache && (
       <span className={`${styles.cut} ${styles[stop.cache]}`} aria-hidden>
         <span className={styles.cutLabel}>
-          <Icon icon={Bookmark} size="xs" />
+          <Icon icon={Bookmark} size="sm" />
           {stop.cache === 'set' ? '여기까지 캐시' : '자동 캐시'}
         </span>
       </span>
@@ -158,7 +158,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
                     {stop.badge && <Tag tone="accent">{stop.badge}</Tag>}
                   </span>
                   {reorder === 'drag' && <span className={styles.meta}>{stop.meta}</span>}
-                  {drill && reorder === 'drag' && <Icon icon={ChevronRight} size="xs" />}
+                  {drill && reorder === 'drag' && <Icon icon={ChevronRight} size="sm" />}
                 </button>
                 {reorder === 'drag' ? (
                   <span className={styles.tools}>
@@ -196,7 +196,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
       {reorder === 'drag' &&
         addMenu(stops.length, (opener) => (
           <button type="button" className={styles.append} ref={opener.ref} aria-haspopup="menu" aria-expanded={opener.expanded} onClick={opener.onClick}>
-            <Icon icon={Plus} size="xs" />
+            <Icon icon={Plus} size="sm" />
             <span>맨 끝에 추가</span>
           </button>
         ))}

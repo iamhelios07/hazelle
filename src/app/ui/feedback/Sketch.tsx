@@ -28,7 +28,7 @@ function SketchLine({ width }: { width: 'short' | 'medium' | 'long' }) {
 function SketchMark({ icon, count, lit = false }: { icon: LucideIcon; count?: number; lit?: boolean }) {
   return (
     <span className={lit ? `${styles.mark} ${styles.lit}` : styles.mark}>
-      <Icon icon={icon} size="xs" />
+      <Icon icon={icon} size="sm" />
       {count}
     </span>
   );

@@ -368,8 +368,7 @@
   --control-chip: 34px;
   --control-md: 44px;
   --control-lg: 50px;
-  --icon-xs: 16px;
-  --icon-sm: 18px;
+  --icon-sm: 16px;
   --icon-md: 22px;
   /* An icon inside a Tag, a step under the xs icon to sit in its small line. */
   --icon-tag: 14px;

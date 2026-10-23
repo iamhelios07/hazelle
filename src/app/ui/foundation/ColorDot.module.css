@@ -1,7 +1,7 @@
 .dot {
   flex-shrink: 0;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   border: var(--border-thin) solid var(--color-border-strong);
   border-radius: var(--radius-full);
 }

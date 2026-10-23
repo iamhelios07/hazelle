@@ -13,7 +13,7 @@ export function Divider(props: Props) {
     return (
       <div className={icon ? `${styles.story} ${styles.marked}` : styles.story} role={action ? undefined : 'separator'}>
         <span className={styles.rule} />
-        {icon && <Icon icon={icon} size="xs" />}
+        {icon && <Icon icon={icon} size="sm" />}
         {label}
         {action && (
           <Button variant="link" size="xs" onClick={action.onClick}>

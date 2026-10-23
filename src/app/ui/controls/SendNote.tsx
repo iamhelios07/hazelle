@@ -10,7 +10,7 @@ export function SendNote({ label, title, warning, onClick }: Props) {
   const className = [styles.sendNote, warning && styles.warn, onClick && styles.press].filter(Boolean).join(' ');
   const body = (
     <>
-      <Icon icon={warning ? TriangleAlert : Timer} size="xs" />
+      <Icon icon={warning ? TriangleAlert : Timer} size="sm" />
       {label}
       {warning && <span className={styles.words}>· {warning.words}</span>}
     </>

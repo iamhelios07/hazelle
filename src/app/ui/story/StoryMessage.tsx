@@ -171,7 +171,7 @@ const MARKS = { length: Scissors, stopped: Square, refused: Ban, translation: La
 export function Marker({ reason, label, action }: MarkerProps) {
   return (
     <div className={reason === 'stopped' ? `${styles.marker} ${styles.stopped}` : styles.marker}>
-      <Icon icon={MARKS[reason]} size="xs" />
+      <Icon icon={MARKS[reason]} size="sm" />
       <span>{action ? `${label} ·` : label}</span>
       {action && (
         <Button variant="link" size="xs" disabled={action.disabled} onClick={action.onClick}>
@@ -186,7 +186,7 @@ export function Failure({ title, children, actions }: { title: string; children:
   return (
     <div className={styles.failure} role="alert">
       <span className={styles.failureTitle}>
-        <Icon icon={TriangleAlert} size="xs" />
+        <Icon icon={TriangleAlert} size="sm" />
         {title}
       </span>
       <p className={styles.failureText}>{children}</p>

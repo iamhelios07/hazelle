@@ -33,7 +33,7 @@ export function ToolButton({ icon, label, detail, mark, phone = 'full', expanded
       aria-pressed={pressed}
       onClick={onClick}
     >
-      <Icon icon={icon} size="xs" />
+      <Icon icon={icon} size="sm" />
       <span className={styles.label}>{label}</span>
       {shown &&
         (mark.kind === 'dot' ? (

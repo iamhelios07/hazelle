@@ -85,7 +85,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
                   label={translator.ok ? entryName(translator.with.route.model) : `${MODEL_ROLES.aux} 없음`}
                   title={MODEL_ROLES.aux}
                   tone={translator.ok ? 'plain' : 'warn'}
-                  leading={<Icon icon={Languages} size="xs" />}
+                  leading={<Icon icon={Languages} size="sm" />}
                   {...opener}
                 />
               )}
@@ -94,7 +94,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
               <MenuItem label={opens(inSettings('models'))} onClick={() => navigate({ kind: 'models' })} />
               <MenuHeading>여기서 번역한 내용은 저장되지 않아요.</MenuHeading>
             </Menu>
-            <Icon icon={ArrowRight} size="xs" />
+            <Icon icon={ArrowRight} size="sm" />
             <LanguageMenu label="번역할 언어" value={language} opens="down" onPick={setLanguage} />
           </>
         }

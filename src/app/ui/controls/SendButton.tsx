@@ -14,7 +14,7 @@ export function SendButton({ streaming, disabled, title, onClick }: Props) {
       disabled={disabled}
       onClick={onClick}
     >
-      <Icon icon={streaming ? Square : ArrowUp} size="xs" />
+      <Icon icon={streaming ? Square : ArrowUp} size="sm" />
     </button>
   );
 }

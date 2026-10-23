@@ -15,7 +15,7 @@ export function PhraseField({ label, phrases, onChange }: Props) {
         <span key={phrase} className={styles.chip}>
           <span className={styles.text}>{phrase}</span>
           <button type="button" className={styles.remove} aria-label={`'${phrase}' 빼기`} onClick={() => onChange(phrases.filter((kept) => kept !== phrase))}>
-            <Icon icon={X} size="xs" />
+            <Icon icon={X} size="sm" />
           </button>
         </span>
       ))}
