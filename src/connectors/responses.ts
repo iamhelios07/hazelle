@@ -49,7 +49,7 @@ export const responses: Codec = {
   // It has no stop sequences, penalties, top_k or seed. max_output_tokens below 16 is refused.
   carries: {
     numbers: { maxOutput: { min: 16, max: null }, temperature: { min: 0, max: 2 }, topP: { min: 0, max: 1 } },
-    reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh'], budget: null, adaptive: false },
+    reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh'], least: null, budget: null, adaptive: false },
     stop: false,
     verbosity: true,
     serviceTier: false,

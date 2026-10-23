@@ -53,9 +53,6 @@ describe('토큰 절약', () => {
       expect(log).toHaveLength(2);
       expect(bodyOf(log, 0)).toContain('You prepare reading notes');
       expect(bodyOf(log, 0)).toContain('[chat · user]\\nThe knight swore an oath.');
-      // 생각 줄이기, on by default: the brief call asks for the least thinking, the reply keeps its 설정 묶음.
-      expect(bodyOf(log, 0)).toContain('minimal');
-      expect(bodyOf(log, 1)).not.toContain('minimal');
       expect(bodyOf(log, 0)).not.toContain('Go on');
       expect(bodyOf(log, 1)).toContain('NOTES: an oath, a key.');
       expect(bodyOf(log, 1)).toContain('Go on');
@@ -138,7 +135,7 @@ describe('토큰 절약', () => {
       expect(lastReply(session, chat).receipt!.preread).toBeUndefined();
     }));
 
-  it('packs the material into a PDF on a route that takes one, the instruction left out of it', () =>
+  it('packs the material into a PDF on a route that takes one, the instruction left out of it, asking for the least thinking its format knows', () =>
     server.withSession(async (session) => {
       const chat = await chatted(session);
       const flash = { ...bareModel('gemini-flash'), name: 'Flash', input: ['text' as const, 'file' as const] };
@@ -153,6 +150,8 @@ describe('토큰 절약', () => {
       expect(sent.contents.flatMap(({ parts }) => parts).some((part) => part.inlineData?.mimeType === 'application/pdf')).toBe(true);
       expect(bodyOf(log, 0)).not.toContain('The knight swore an oath.');
       expect(lastReply(session, chat).receipt!.preread!.receipt.pdf).toBe(true);
+      expect(bodyOf(log, 0)).toContain('"thinkingLevel":"low"');
+      expect(bodyOf(log, 1)).not.toContain('thinkingLevel');
     }));
 
   it('reads off while its 실험실 switch is off, whatever a layer set, and adds no default prompt', () =>

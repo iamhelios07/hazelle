@@ -128,7 +128,7 @@ export const chatCompletions: Codec = {
       minP: { min: 0, max: 1 },
       seed: { min: null, max: null },
     },
-    reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'], budget: null, adaptive: false },
+    reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'], least: null, budget: null, adaptive: false },
     stop: true,
     verbosity: true,
     serviceTier: false,

@@ -77,6 +77,11 @@ describe('생각 줄이기', () => {
   expect(leastReasoning({ ...schema, reasoning: { ...schema.reasoning, level: false, budget: { accepted: true, min: 1024, max: null, whole: true } } })).toEqual({ kind: 'budget', tokens: 1024 });
   expect(leastReasoning({ ...schema, reasoning: { ...schema.reasoning, level: false } })).toBeNull();
   });
+
+  it('asks a model its catalog is silent on for the least level its whole format takes, and leaves the level alone where the format names none', () => {
+    expect(leastReasoning(modelSettings(connection('google'), bare)!)).toEqual({ kind: 'level', level: 'low' });
+    expect(leastReasoning(modelSettings(generic, bare)!)).toBeNull();
+  });
 });
 
 describe('what a request carries', () => {

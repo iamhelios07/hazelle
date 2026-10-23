@@ -51,10 +51,11 @@ export type Bounds = { min: number | null; max: number | null };
 export type Takes = { settings: Setting[] | null; reasoning: ReasoningTakes | null };
 export type ReasoningTakes = { off: boolean | null; levels: string[] | null; budget: Bounds | false | null; adaptive: boolean | null };
 
-// No model on it takes a setting it cannot carry. always: the format sends that setting on every request.
+// No model on it takes a setting it cannot carry. always: the format sends that setting on every request. least: the
+// least level every model of the format that takes a level takes, null where its models differ.
 export type Carries = {
   numbers: { [S in NumberSetting]?: Bounds & { always?: true } };
-  reasoning: { off: boolean; levels: string[]; budget: Bounds | null; adaptive: boolean };
+  reasoning: { off: boolean; levels: string[]; least: string | null; budget: Bounds | null; adaptive: boolean };
   stop: boolean;
   verbosity: boolean;
   serviceTier: boolean;
@@ -75,7 +76,8 @@ export type SettingsSchema = {
   numbers: Record<NumberSetting, Rule>;
   context: Rule;
   stop: Accepts;
-  reasoning: { off: Accepts; level: Accepts; levels: string[]; budget: Rule; adaptive: Accepts };
+  // least: the least level the model is known to take, from its catalog, else its format's; null where neither says.
+  reasoning: { off: Accepts; level: Accepts; levels: string[]; least: string | null; budget: Rule; adaptive: Accepts };
   prefill: Accepts;
   cache: Accepts;
   verbosity: Accepts;
@@ -88,11 +90,10 @@ export type SettingsSchema = {
 const EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 // The least thinking the model is known to take: off only where the catalog says it can be turned off (Gemini 3
-// refuses a zero budget), else its least named level, else its smallest budget; null where nothing is known.
+// refuses a zero budget), else its least known level, else its smallest budget; null where nothing is known.
 export function leastReasoning({ reasoning }: SettingsSchema): Reasoning | null {
   if (reasoning.off === true) return { kind: 'off' };
-  const level = EFFORT_ORDER.find((name) => reasoning.levels.includes(name));
-  if (reasoning.level !== false && level) return { kind: 'level', level };
+  if (reasoning.level !== false && reasoning.least) return { kind: 'level', level: reasoning.least };
   if (reasoning.budget.accepted === true && reasoning.budget.min !== null) return { kind: 'budget', tokens: reasoning.budget.min };
   return null;
 }
@@ -139,6 +140,7 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
       off: control(carries.reasoning.off, facts?.off),
       level: control(true, levels && levels.length > 0),
       levels: levels ?? carries.reasoning.levels,
+      least: levels ? (EFFORT_ORDER.find((name) => levels.includes(name)) ?? null) : carries.reasoning.least,
       budget: {
         accepted: control(carriedBudget !== null, budget === null ? null : budget !== false),
         // A budget counts tokens, so none is below one where neither the protocol nor the catalog says.
