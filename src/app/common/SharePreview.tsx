@@ -6,7 +6,7 @@ import { ACTS } from './acts';
 import { downloadOutput, fileNamed } from './download';
 import { describeFailure } from './failure';
 import { count } from './typedNumber';
-import { SHARE } from './words';
+import { SAVING_FILE, SHARE } from './words';
 
 // What a share's version shows before anything is taken, on the link's page and in the operator's 열어 보기, with
 // 파일로 받기: the same charx 내보내기 writes. first: what comes before it in its row. received: 받은 횟수, beside the
@@ -30,7 +30,7 @@ export function SharePreview({ source, opened, first, received, onDownloaded, fa
     setBusy('받는 중');
     void (async () => {
       try {
-        const written = await writeShared(source, opened.content, await destination, ({ done, total }) => setBusy(`받는 중 · ${done} / ${total}`));
+        const written = await writeShared(source, opened.content, await destination, ({ done, total }) => setBusy(done < total ? `받는 중 · ${done} / ${total}` : `${SAVING_FILE} 중`));
         if (written.ok) onDownloaded?.();
         else failed(written.error === 'export-write' ? '파일을 저장하지 못했어요.' : describeFailure(written));
       } catch (error) {

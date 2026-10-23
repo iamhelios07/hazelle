@@ -108,6 +108,7 @@ async function writeFile(
       if (!bytes.ok) return bytes;
       await parts.put(bytes.data, index++);
     }
+    progress({ done: index, total: pictures.length });
     await parts.end();
     await output.close();
     complete = true;

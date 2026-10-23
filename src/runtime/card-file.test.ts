@@ -10,7 +10,7 @@ import { likenessId } from '../model/likeness';
 import { setService } from './admin';
 import { readTool } from '../engine/import/tool';
 import { toolId } from '../model/tool';
-import { exportCharacter, exportModule, importCardFile } from './card-file';
+import { exportCharacter, exportModule, importCardFile, type ExportStep } from './card-file';
 import { importCharacter } from './characters';
 import { importModule, setCharacterModule } from './modules';
 import type { ObjectStore } from './store';
@@ -115,7 +115,9 @@ describe('a character file', () => {
 
     const chunks: Uint8Array<ArrayBuffer>[] = [];
     const output = { write: async (chunk: Uint8Array<ArrayBuffer>) => void chunks.push(chunk), close: async () => {}, abort: async () => {} };
-    expect(await exportCharacter(store, files, id, output, () => {})).toEqual({ ok: true, data: { tools: 0 } });
+    const steps: ExportStep[] = [];
+    expect(await exportCharacter(store, files, id, output, (step) => steps.push(step))).toEqual({ ok: true, data: { tools: 0 } });
+    expect(steps.at(-1)).toEqual({ done: steps[0]!.total, total: steps[0]!.total });
     const file = new Uint8Array(await new Blob(chunks).arrayBuffer());
     // As RisuAI's CharXImporter reads it: fflate's streaming Unzip, fed in chunks, every file whole.
     const unzipped = new Map<string, Uint8Array>();

@@ -3,6 +3,7 @@ import type { BackupOutput } from '../../runtime/backup';
 import type { ExportStep } from '../../runtime/card-file';
 import type { Toasts } from '../toast';
 import { downloadOutput } from './download';
+import { SAVING_FILE } from './words';
 
 // 내보내기 of one file. Call in the press that asked for it: the save picker opens before any await. show takes the
 // button's busy label, null once it ends; a failure says what did not happen.
@@ -17,7 +18,7 @@ export function runExport<T>(
   show('내보내는 중');
   void (async () => {
     try {
-      const made = await write(await destination, ({ done, total }) => show(`내보내는 중 · ${done} / ${total}`));
+      const made = await write(await destination, ({ done, total }) => show(done < total ? `내보내는 중 · ${done} / ${total}` : `${SAVING_FILE} 중`));
       if (made.ok) done(made.data);
       // Only a write given a stop ends so, at the person's own press.
       else if (made.error === 'stopped') return;

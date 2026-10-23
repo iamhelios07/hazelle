@@ -5,7 +5,7 @@ import { exportBackup, readBackup, restoreBackup, type Backup, type BackupStep }
 import { ACTS, importOf } from '../common/acts';
 import { downloadOutput } from '../common/download';
 import { RestoresDialog } from '../common/RestoresDialog';
-import { ACCOUNT_ONLY, STOP } from '../common/words';
+import { ACCOUNT_ONLY, SAVING_FILE, STOP } from '../common/words';
 import { useToast } from '../toast';
 import { useAccount, useSaves, useSession } from '../session';
 import { Button, Dialog, FileButton, Panel, Progress, SettingGroup, SettingRow, type ProgressStep } from '../ui';
@@ -23,16 +23,18 @@ const today = () => new Date().toLocaleDateString('sv-SE');
 
 type Direction = 'save' | 'load';
 type Steps = Partial<Record<BackupStep['kind'], BackupStep>>;
-// In each job's order (runtime/backup-core): a save counts, then writes the objects while reading the pictures; a load
-// reads the file, uploads the pictures, writes the objects, then their summaries. The first stage has no count of its own.
-const STAGES: Record<Direction, { first: string; kinds: { kind: BackupStep['kind']; label: string }[] }> = {
-  save: { first: '집계', kinds: [{ kind: 'objects', label: '내용' }, { kind: 'files', label: '이미지' }] },
+// In each job's order (runtime/backup-core): a save counts, then writes the objects while reading the pictures, then the
+// browser finishes the file (Chrome copies and scans a picked file); a load reads the file, uploads
+// the pictures, writes the objects, then their summaries. The first and last stages have no count of their own.
+const STAGES: Record<Direction, { first: string; kinds: { kind: BackupStep['kind']; label: string }[]; last?: string }> = {
+  save: { first: '집계', kinds: [{ kind: 'objects', label: '내용' }, { kind: 'files', label: '이미지' }], last: SAVING_FILE },
   load: { first: '백업 읽기', kinds: [{ kind: 'files', label: '이미지' }, { kind: 'objects', label: '내용' }, { kind: 'summaries', label: '요약' }] },
 };
 const TITLE: Record<Direction, string> = { save: '백업 내보내는 중', load: '백업 가져오는 중' };
 const stages = (direction: Direction, steps: Steps): ProgressStep[] => [
   { label: STAGES[direction].first, finished: Object.keys(steps).length > 0 },
   ...STAGES[direction].kinds.map(({ kind, label }): ProgressStep => (steps[kind] ? { label, done: steps[kind].done, total: steps[kind].total } : { label })),
+  ...(STAGES[direction].last ? [{ label: STAGES[direction].last }] : []),
 ];
 
 export function BackupSection() {

@@ -101,6 +101,7 @@ async function writeChats(reader: Reader, chats: string[], write: (bytes: Uint8A
     first = false;
     left = plus(left, read.data.left);
   }
+  progress({ done: chats.length, total: chats.length });
   await write(encoder.encode(RISU_ALL_CHATS.tail));
   return { ok: true, data: left };
 }
@@ -163,6 +164,7 @@ export async function exportEveryCharacter(reader: Pick<Session, 'store' | 'file
       await json(new Uint8Array(0), true);
       left = plus(left, written.data);
     }
+    progress({ done: characters.length, total: characters.length });
     await zip.end();
     await buffered.close();
     complete = true;
