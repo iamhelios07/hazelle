@@ -1,12 +1,22 @@
 import { createHash } from 'node:crypto';
-import { closeSync, createReadStream, fsyncSync, mkdirSync, openSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { closeSync, createReadStream, existsSync, fsyncSync, mkdirSync, openSync, statSync } from 'node:fs';
+import { open } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 
-// What account files, snapshots and backup generations share to make a file durable before a row or a manifest names
-// it (README.md), and to check one against what was recorded of it.
+// What account files, snapshots, backup generations and disk pictures share to make a file durable before a row or a
+// manifest names it (README.md), and to check one against what was recorded of it.
+
+// Windows flushes a file only through a handle open for writing and refuses to flush a directory (EPERM); NTFS journals
+// a rename itself, so there a directory's sync is skipped. Elsewhere a read handle flushes either.
+function flushMode(path: string): 'r' | 'r+' | null {
+  if (process.platform !== 'win32') return 'r';
+  return statSync(path).isDirectory() ? null : 'r+';
+}
 
 export function fsyncPath(path: string): void {
-  const fd = openSync(path, 'r');
+  const mode = flushMode(path);
+  if (mode === null) return;
+  const fd = openSync(path, mode);
   try {
     fsyncSync(fd);
   } finally {
@@ -14,13 +24,25 @@ export function fsyncPath(path: string): void {
   }
 }
 
+export async function syncPath(path: string): Promise<void> {
+  const mode = flushMode(path);
+  if (mode === null) return;
+  const handle = await open(path, mode);
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 // mkdir -p whose new names survive a power loss: every directory it made is synced into its parent before this
-// returns. The entries the caller then puts in the deepest one are the caller's to sync.
+// returns. The entries the caller then puts in the deepest one are the caller's to sync. The missing directories are
+// found before the mkdir, not from what it returns: on Windows that is a \\?\ path, which relative() cannot compare.
 export function makeDirs(dir: string): void {
-  const created = mkdirSync(dir, { recursive: true });
-  if (created === undefined) return;
-  const made = [resolve(created)];
-  for (const name of relative(made[0]!, resolve(dir)).split(sep).filter(Boolean)) made.push(join(made.at(-1)!, name));
+  const made: string[] = [];
+  for (let path = resolve(dir); !existsSync(path); path = dirname(path)) made.unshift(path);
+  if (made.length === 0) return;
+  mkdirSync(dir, { recursive: true });
   for (const path of made) fsyncPath(dirname(path));
 }
 

@@ -2,19 +2,10 @@ import { randomBytes } from 'node:crypto';
 import { copyFile, open, readdir, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
-import { makeDirs } from '../db/durable';
+import { makeDirs, syncPath } from '../db/durable';
 import { checkedKey, checkedPrefix, isKey, isPrefix, type DiskBucket } from './bucket';
 
 const ID = /^[0-9a-f]{64}$/;
-
-async function syncPath(path: string): Promise<void> {
-  const handle = await open(path, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
 
 // ENOENT answers nothing: a deletion removes a directory or a file while a listing or a sweep walks it.
 export async function entries(dir: string): Promise<string[]> {
