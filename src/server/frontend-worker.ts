@@ -8,9 +8,10 @@ import type { ShareCover } from '../contracts/shares';
 import { endToEnd } from './hop-by-hop';
 import { clientFiles } from './static';
 
-export type FrontendOptions = { port: number; apiPort: number; clientDir: string; trustedProxies: BlockList };
+// host undefined listens on every interface, as Docker's port mapping needs.
+export type FrontendOptions = { port: number; host: string | undefined; apiPort: number; clientDir: string; trustedProxies: BlockList };
 
-const { port, apiPort, clientDir, trustedProxies } = workerData as FrontendOptions;
+const { port, host, apiPort, clientDir, trustedProxies } = workerData as FrontendOptions;
 // A share page's embed text, asked of the API, which owns the database; a failure leaves the page without one.
 async function cover(id: string): Promise<ShareCover | null> {
   try {
@@ -98,7 +99,7 @@ const server = createServer((incoming, outgoing) => {
   });
 });
 
-server.listen(port, () => parentPort!.postMessage('listening'));
+server.listen(port, host, () => parentPort!.postMessage('listening'));
 parentPort!.on('message', (message: string) => {
   if (message !== 'drain' || draining) return;
   draining = true;

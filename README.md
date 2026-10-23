@@ -6,7 +6,7 @@ What sets it apart:
 
 - Data is stored per chat and per character instead of in one save file, so opening a chat loads only that chat.
 - Everything is encrypted in the browser before upload. The server stores ciphertext and cannot read chats or API keys.
-- One server, one Docker image. Run it on your own machine, or use the hosted instance at [hazelle.app](https://hazelle.app).
+- One server, one Docker image. Run it on your own machine (Docker, a Windows folder, or Termux on Android), or use the hosted instance at [hazelle.app](https://hazelle.app).
 - Replies keep streaming on the server after the tab closes; reopening the chat resumes them.
 
 The project is in alpha. The UI is in Korean.
@@ -73,7 +73,7 @@ RisuAI's bugs and quirks are deliberately not reproduced, even where existing bo
 
 ## Self-hosting
 
-Hazelle runs as one container with its data in one Docker volume. You need Docker with Compose v2.24 or newer.
+Hazelle runs as one container with its data in one Docker volume. You need Docker with Compose v2.24 or newer. Without Docker, see [Without Docker](#without-docker). [README.ko.md](README.ko.md) walks through every way in Korean.
 
 ### Start
 
@@ -86,7 +86,18 @@ docker compose up -d
 
 Open http://localhost:8080. The app listens on 127.0.0.1 only. The image is `ghcr.io/jiniill/hazelle` (amd64 and arm64); `latest` is the newest release. The source is in this repository, and every instance serves its own at `/source.tar.gz`.
 
+`install-docker.sh` (macOS, Linux) and `install-docker.ps1` (Windows) in each release do the same in `~/hazelle-docker`, wait for the app and open it; run again, they update.
+
 The first account created on a fresh installation is the operator, and signup then closes. To let others in, raise the signup limit on the admin screen. The operator account cannot be deleted while it is the only operator.
+
+### Without Docker
+
+Each release also carries the image's app outside the image, run by Node instead of a container. It listens on 127.0.0.1:8080 (`PORT` changes the port), keeps its data in a `data` folder beside the app, and allows Ollama, LM Studio and koboldcpp at `localhost` (11434, 1234, 5001).
+
+- **Windows:** unzip `hazelle-windows-x64.zip`, which bundles Node, and run `start-hazelle.bat`. To update, unzip the new release elsewhere and move the `data` folder into it.
+- **Termux, Linux, macOS:** `curl -fsSL https://github.com/jiniill/hazelle/releases/latest/download/install.sh | sh` installs into `~/hazelle` with Node 24 or newer (Termux installs it) and starts it; `sh ~/hazelle/start` starts it later. Run the installer again to update, with Hazelle stopped.
+
+The daily snapshots and generations below are taken here too, inside `data`; the off-site copier and the restore command are Docker's. Copy the `data` folder while Hazelle is stopped to keep a copy elsewhere.
 
 ### Phones and other devices
 

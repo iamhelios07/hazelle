@@ -65,13 +65,16 @@ function proxiesFrom(name: string): BlockList {
   return trusted;
 }
 const port = wholeFrom('PORT', 8080, 1, 65535);
+// The non-Docker launcher (launch.ts) sets 127.0.0.1; blank listens on every interface.
+const host = process.env.HAZELLE_HOST || undefined;
 const trustedProxies = proxiesFrom('HAZELLE_TRUSTED_PROXIES');
 const drainMs = wholeFrom('HAZELLE_DRAIN_SECONDS', 60, 0, 3600) * 1000;
 const snapshotHour = wholeFrom('HAZELLE_SNAPSHOT_HOUR', 3, 0, 23);
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
 const clientDir = process.env.HAZELLE_CLIENT ?? 'dist/client';
-// The Dockerfile's HAZELLE_VERSION, the tag the image was built from; a build without one says none.
+// The Dockerfile's HAZELLE_VERSION, the tag the image was built from, written into the bundle by build:server's define,
+// so the app copied out of the image (launch.ts) carries it too; a build without one says none.
 const version = process.env.HAZELLE_VERSION || null;
 let files: Services['files'];
 try {
@@ -165,7 +168,7 @@ const server = serve({ fetch: (request) => root.fetch(request, services, ctx), h
 await once(server, 'listening');
 // The public listener owns no databases, so even a synchronous SQL operation cannot hold its asset responses.
 const frontend = new Worker(new URL(import.meta.url.endsWith('.ts') ? './frontend-worker.ts' : './frontend-worker.js', import.meta.url), {
-  workerData: { port, apiPort: (server.address() as AddressInfo).port, clientDir, trustedProxies } satisfies FrontendOptions,
+  workerData: { port, host, apiPort: (server.address() as AddressInfo).port, clientDir, trustedProxies } satisfies FrontendOptions,
 });
 frontend.on('error', (error) => { log('frontend failed', { error: String(error) }); process.exit(1); });
 frontend.on('exit', (code) => { if (!draining) { log('frontend stopped', { code }); process.exit(1); } });
@@ -268,3 +271,5 @@ process.on('SIGUSR2', () => {
 });
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
+// A closed Windows console window or Termux session; Windows ends the process about 10 s later whatever the drain.
+process.on('SIGHUP', () => void shutdown('SIGHUP'));

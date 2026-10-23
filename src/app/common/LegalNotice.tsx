@@ -17,6 +17,7 @@ export function LegalNotice() {
       </Text>
       <Row kind="tags">
         <Link href={source}>GitHub</Link>
+        <Link href={`${REPOSITORY}/blob/master/README.ko.md`}>내 기기에 설치</Link>
         <Link href="/source.tar.gz" download="hazelle-source.tar.gz">
           소스 코드 받기
         </Link>

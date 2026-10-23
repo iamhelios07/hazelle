@@ -1,0 +1,100 @@
+# 헤이젤 설치 안내
+
+헤이젤을 내 컴퓨터나 폰에 직접 설치하는 방법이에요. 설치 없이 바로 쓰려면 [hazelle.app](https://hazelle.app)을 열면 돼요.
+
+## 어떤 방법이 맞을까요
+
+|  | 윈도우 (도커 없이) | 도커 | 안드로이드 (Termux) |
+|---|---|---|---|
+| 미리 필요한 것 | 없음 | Docker Desktop | Termux 앱 |
+| 설치 | zip 풀고 더블클릭 | 명령어 한 줄 | 명령어 한 줄 |
+| 업데이트 | 새 폴더로 `data` 옮기기 | 같은 명령어 다시 | 같은 명령어 다시 |
+
+도커를 모르면 윈도우 방법으로 시작하세요.
+
+어느 방법이든 처음 만든 계정이 이 설치의 관리자가 되고, 그 뒤로는 가입이 닫혀요. 다른 사람을 들이려면 관리자 화면에서 가입 한도를 올려요.
+
+## 윈도우 (도커 없이)
+
+1. [hazelle-windows-x64.zip](https://github.com/jiniill/hazelle/releases/latest/download/hazelle-windows-x64.zip)을 받아요.
+2. 원하는 곳에 압축을 풀어요. `hazelle` 폴더가 생겨요.
+3. `hazelle` 폴더의 `start-hazelle.bat`을 더블클릭해요. 처음 실행할 때 Windows가 경고 창을 띄우면 `실행`(또는 `추가 정보` → `실행`)을 눌러요.
+4. 브라우저에서 http://localhost:8080 이 열려요.
+
+검은 창이 헤이젤이에요. 창을 닫으면 헤이젤도 꺼져요. 이미 켜져 있을 때 `start-hazelle.bat`을 다시 실행하면 브라우저만 열려요.
+
+데이터는 `hazelle\data` 폴더에 쌓여요. 8080 포트를 다른 프로그램이 쓰고 있으면 `start-hazelle.bat`을 메모장으로 열고 `node\node.exe`로 시작하는 줄 위에 `set PORT=8081`을 넣어요.
+
+### 업데이트
+
+1. 검은 창을 닫아 헤이젤을 꺼요.
+2. [새 zip](https://github.com/jiniill/hazelle/releases/latest/download/hazelle-windows-x64.zip)을 다른 곳에 풀어요.
+3. 원래 `hazelle` 폴더의 `data` 폴더를 새 `hazelle` 폴더로 옮겨요.
+4. 새 폴더의 `start-hazelle.bat`을 실행해요. 잘 열리면 원래 폴더는 지워도 돼요.
+
+새 버전이 나올 때 알림을 받으려면 [GitHub 저장소](https://github.com/jiniill/hazelle)에서 `Watch` → `Custom` → `Releases`를 켜요.
+
+## 도커
+
+Docker Desktop을 설치하고 켠 다음, 아래 명령어를 실행해요. 설치하고 실행한 뒤 브라우저까지 열어 줘요.
+
+윈도우 (PowerShell):
+
+```powershell
+iex ([Text.Encoding]::UTF8.GetString((iwr -useb https://github.com/jiniill/hazelle/releases/latest/download/install-docker.ps1).Content))
+```
+
+macOS, 리눅스:
+
+```sh
+curl -fsSL https://github.com/jiniill/hazelle/releases/latest/download/install-docker.sh | sh
+```
+
+설정 파일은 홈 폴더의 `hazelle-docker`에, 데이터는 도커 볼륨 `hazelle_data`에 있어요. 업데이트할 때는 같은 명령어를 다시 실행해요. 데이터는 그대로 남아요. 다른 곳으로 자동 백업하기, 복원, 그 밖의 설정은 [README의 Self-hosting](README.md#self-hosting)(영어)에 있어요.
+
+## 안드로이드 (Termux)
+
+1. [Termux](https://termux.dev/)를 F-Droid나 GitHub에서 받아요.
+2. Termux에서 아래 명령어를 실행해요. Node.js 설치부터 헤이젤 실행까지 한 번에 하고, 끝나면 브라우저가 열려요.
+
+```sh
+curl -fsSL https://github.com/jiniill/hazelle/releases/latest/download/install.sh | sh
+```
+
+다음부터는 Termux에서 `sh ~/hazelle/start`로 켜요. 끌 때는 Termux에서 `Ctrl` + `C`를 눌러요. 데이터는 `~/hazelle/data`에 있어요.
+
+화면이 꺼져도 헤이젤이 계속 돌도록, 켤 때 Termux의 wake lock이 함께 켜져요. 그래도 꺼지면 휴대폰 설정에서 Termux의 배터리 사용을 `제한 없음`으로 바꿔요.
+
+업데이트할 때는 헤이젤을 끄고 같은 명령어를 다시 실행해요. 데이터는 그대로 남아요.
+
+Node.js 24 이상이 깔린 리눅스나 macOS에서도 같은 명령어로 설치할 수 있어요.
+
+## 백업
+
+- 계정 하나: `설정 › 계정 › 백업`의 전체 백업이 계정의 모든 것을 zip 하나로 저장해요.
+- 설치 전체: 헤이젤을 끈 다음 `data` 폴더를 통째로 다른 곳에 복사해요. 켜진 채로 복사하면 파일이 깨질 수 있어요.
+- 헤이젤도 매일 계정마다 스냅샷을 만들어요. 계정 설정에서 지난 일주일 안의 시점으로 되돌릴 수 있어요. 다만 스냅샷은 같은 디스크에 있어서, 디스크가 고장 나면 함께 사라져요.
+
+## 로컬 모델 연결
+
+헤이젤의 새 연결에서 주소를 이렇게 넣어요.
+
+| 모델 서버 | 윈도우, Termux | 도커 |
+|---|---|---|
+| Ollama | `http://localhost:11434/v1` | `http://host.docker.internal:11434/v1` |
+| LM Studio | `http://localhost:1234/v1` | `http://host.docker.internal:1234/v1` |
+| koboldcpp | `http://localhost:5001/v1` | `http://host.docker.internal:5001/v1` |
+
+도커에서는 모델 서버가 같은 컴퓨터의 다른 프로그램에서 오는 접속도 받아야 해요. Ollama는 `OLLAMA_HOST=0.0.0.0`으로 실행하고, LM Studio는 로컬 네트워크에서 서비스하는 스위치를 켜요.
+
+## 폰이나 다른 기기에서 쓰기
+
+로그인과 암호화는 `https://` 주소이거나 같은 기기의 `localhost`에서만 돼요. 그래서 다른 기기에서 `http://192.168.x.x:8080`으로 열면 설정과 상관없이 쓸 수 없어요.
+
+[Tailscale](https://tailscale.com/)을 쓰면 https 주소를 쉽게 만들 수 있어요.
+
+1. 헤이젤을 설치한 컴퓨터와 폰에 Tailscale을 설치하고 같은 계정으로 로그인해요.
+2. 컴퓨터의 터미널에서 `tailscale serve --bg 8080`을 실행해요. HTTPS를 켜라는 안내가 나오면 따라 해요.
+3. 출력된 `https://<컴퓨터 이름>.<tailnet 이름>.ts.net` 주소를 폰에서 열어요.
+
+주소가 다르면 다른 사이트로 취급돼요. 그래서 폰에서는 처음에 한 번 다시 로그인해야 해요.

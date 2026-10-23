@@ -1,3 +1,4 @@
 # Left out of the source archive the app offers (scripts/source.sh): working notes for the tools that edit this repo,
 # not part of the program.
 .claude export-ignore
+*.bat eol=crlf
