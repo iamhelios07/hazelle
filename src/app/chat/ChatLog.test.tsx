@@ -16,6 +16,7 @@ vi.mock('../ui', async (original) => ({
   ...await original<typeof import('../ui')>(),
   StoryMessage: (props: { id: string }) => rendered(props),
   Divider: () => null,
+  useWide: () => true,
   Viewport: ({ keys, children }: { keys: string[]; children: (index: number) => ReactNode }) => keys.map((key, index) => <Fragment key={key}>{children(index)}</Fragment>),
 }));
 

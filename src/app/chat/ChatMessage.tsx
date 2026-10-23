@@ -17,7 +17,7 @@ import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_R
 import type { Preparing } from '../../runtime/turn-steps';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMenuOpener, useWide, Waiting, type MenuHandle } from '../ui';
 import { useNow } from './ChatCache';
 import { ChatPicture } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
@@ -57,6 +57,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const { bookmarked } = row.bookmark.value;
   const { found, marked, term } = row.search.value;
   const otherModel = useMenuOpener(modelMenu);
+  const wide = useWide();
   const version = shown(message);
   const receipt = version.receipt;
   const mine = message.role === 'user';
@@ -219,6 +220,14 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const noted = !mine && !greeting && message.versions.some(({ receipt }) => receipt?.agents?.some(({ stage }) => stage === 'pre'));
   const nextLabel = message.selected === count - 1 && !greeting ? '다시 생성' : '다음';
   const [back, forward] = SHORTCUTS.swipe.keys;
+  const switcher = !mine && count > 1 && editing === null && (
+    <Switcher
+      count={`${message.selected + 1} / ${count}`}
+      prev={{ label: '이전', title: titled('이전', [back]), disabled: busy, onClick: () => actions.swipe(message, -1) }}
+      next={{ label: nextLabel, title: titled(nextLabel, [forward]), disabled: busy, onClick: () => actions.swipe(message, 1) }}
+      pick={{ versions: message.versions.map((each) => firstLine(each.translation?.text ?? each.text) || NO_GREETING), selected: message.selected, disabled: busy, onPick: (index) => actions.pick(message, index) }}
+    />
+  );
   const after = (
     <>
       {selected && <SelectionButton icon={SquarePen} label="수정" at={selected.end} onPress={() => actions.edit(message, selected.part)} />}
@@ -239,14 +248,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           }
         />
       )}
-      {!mine && count > 1 && editing === null && (
-        <Switcher
-          count={`${message.selected + 1} / ${count}`}
-          prev={{ label: '이전', title: titled('이전', [back]), disabled: busy, onClick: () => actions.swipe(message, -1) }}
-          next={{ label: nextLabel, title: titled(nextLabel, [forward]), disabled: busy, onClick: () => actions.swipe(message, 1) }}
-          pick={{ versions: message.versions.map((each) => firstLine(each.translation?.text ?? each.text) || NO_GREETING), selected: message.selected, disabled: busy, onPick: (index) => actions.pick(message, index) }}
-        />
-      )}
+      {!wide && switcher}
     </>
   );
 
@@ -285,6 +287,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     </>
   ) : opening ? (
     <>
+      {wide && switcher}
       {translateTool}
       {!empty && <IconButton icon={ACTS.copy.icon} size="sm" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
       {statusTool}
@@ -297,6 +300,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   ) : (
     <>
       {remark && <Remark remark={remark} fresh={fresh} onSeen={() => actions.seeRemark(remark.id)} />}
+      {/* Ruling (2026-10-23): wide, the switcher stands in the tools so it floats with them mid-read, where the stuck foot
+          hides the markers beside it; a phone's row has no room and keeps it there. Right of the remark, which comes and
+          goes with the version shown: left of it, the switcher would move under the pointer while flipping. */}
+      {wide && switcher}
       {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="sm" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="sm" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}

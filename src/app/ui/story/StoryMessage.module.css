@@ -163,6 +163,7 @@
   .foot {
     position: sticky;
     bottom: calc(var(--footer-height) + var(--space-8));
+    --above-pill: calc(var(--footer-height) + var(--space-12) + var(--control-chip) + var(--space-8));
     container-type: scroll-state;
     pointer-events: none;
     /* Sticky makes the foot a stacking context: without a layer, a menu opened from it falls under the next message,
@@ -184,8 +185,14 @@
      which met at 507px (measured 2026-10-15). */
   @container story (max-width: 560px) {
     .foot {
-      bottom: calc(var(--footer-height) + var(--space-12) + var(--control-chip) + var(--space-8));
+      bottom: var(--above-pill);
     }
+  }
+
+  /* The tools holding the version switcher (wide screens, ChatMessage) reach the pill at every reading width: 378px with
+     a mascot remark against a 720px story, whose pill spans 317–403px (measured 2026-10-23). */
+  .foot:has(.tools .switcher) {
+    bottom: var(--above-pill);
   }
 
   @container scroll-state(stuck: bottom) {
@@ -260,7 +267,7 @@
 }
 
 /* A version stepper stands under the story's text, its first chevron on the text's edge. */
-.versions {
+.after .versions {
   margin-left: calc(var(--space-8) * -1);
 }
 
