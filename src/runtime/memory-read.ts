@@ -36,10 +36,15 @@ export function memoryOwner(store: ObjectStore, chat: Chat): MemoryOwner {
   return setup.on && featuresOf(store, chat).memory ? { kind: 'built-in', setup } : null;
 }
 
-// The slot for a turn's scope, as gathered or as its scripts leave it (ScriptPreview.rehearse). A tool's text comes with
-// the turn's prompt event (runtime/script-turns prompting); until then it stands for no message.
-export function memoryFill(store: ObjectStore, id: string, chat: Chat, messages: ChatScope['messages']): MemoryFill | null {
+const shownOf = (messages: ChatScope['messages']) => messages.map(({ message, id: version }) => ({ message, version }));
+
+// The slot for a turn's scope as gathered. A tool's text comes with the turn's prompt event (runtime/script-turns
+// prompting); until then it stands for no message. id null: a new chat not saved yet, which has no memory.
+export function memoryFill(store: ObjectStore, id: string | null, chat: Chat, messages: ChatScope['messages']): MemoryFill | null {
   const owner = memoryOwner(store, chat);
   if (owner?.kind === 'tool') return { kind: 'tool', name: owner.unit.tool.manifest.displayName, text: '', through: -1 };
-  return owner && { kind: 'built-in', memory: chatMemory(store, id), budget: owner.setup.budget, shown: messages.map(({ message, id: version }) => ({ message, version })), found: [] };
+  return owner && { kind: 'built-in', memory: id === null ? emptyMemory() : chatMemory(store, id), budget: owner.setup.budget, shown: shownOf(messages), found: [] };
 }
+
+// The same slot over the scope a turn's scripts leave (ScriptPreview.rehearse).
+export const memoryOver = (fill: MemoryFill | null, messages: ChatScope['messages']): MemoryFill | null => (fill?.kind === 'built-in' ? { ...fill, shown: shownOf(messages) } : fill);

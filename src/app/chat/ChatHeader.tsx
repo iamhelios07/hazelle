@@ -83,7 +83,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         {item && features.memory && <MenuItem icon={Brain} label={FEATURE_NAMES.memory} sub={failed ? '정리 실패' : indexing ? `검색 준비 ${indexing.done}/${indexing.total}` : undefined} onClick={toggleMemory} />}
         {item && <MenuItem icon={ToggleRight} label={FEATURES_TITLE} onClick={openFeatures.onClick} />}
         {item && <MenuItem icon={BookKey} label={CHAT_LORE} onClick={actions.lore} />}
-        {item && <MenuItem icon={ScanSearch} label="점검" onClick={() => actions.openInspect('request')} />}
+        <MenuItem icon={ScanSearch} label="점검" onClick={() => actions.openInspect('request')} />
         {item && <MenuItem icon={PlaneTakeoff} label="오토파일럿" onClick={actions.autopilot} />}
         {tools.length > 0 && <>
           <Divider variant="menu" />

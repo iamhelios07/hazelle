@@ -62,18 +62,21 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
   return 'kind' in scope ? scope : null;
 }
 
+// A new chat as its first save will write it (useNewChat): its greeting, if it saves one, as its only message.
+export type Unsaved = { chat: Chat; messages: Message[] };
+
 // null: the chat, or the message the target names, is gone; for a continue, so is the version it names. ids are
-// the ones the turn was shown under, for a new chat shown before it was saved.
-export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
-  const stored = live(session.store.get('chat', chat));
-  if (!stored) return null;
-  const route = chatModel(session.store, stored.value, 'main');
+// the ones the turn was shown under, for a new chat shown before it was saved. unsaved: the chat is not saved yet.
+export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }, unsaved: Unsaved | null = null): TurnContext | Blocked | null {
+  const value = unsaved ? unsaved.chat : live(session.store.get('chat', chat))?.value;
+  if (!value) return null;
+  const route = chatModel(session.store, value, 'main');
   if ('kind' in route) return route;
   const profile = modelProfile(session.store, route.model);
   if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
   const { settings } = profile.profile.value;
 
-  const messages = session.read.chat(chat).snapshot()!.messages;
+  const messages = unsaved ? unsaved.messages : session.read.chat(chat).snapshot()!.messages;
   const message = 'message' in target ? target.message : null;
   const at = message === null ? messages.length : messages.findIndex((candidate) => candidate.id === message);
   if (at === -1) return null;
@@ -90,17 +93,17 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
   const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
   // 반전 모드 sends the messages before the target as the reader reads them. A continuation's prompt ends with the
   // version it continues, as its text, which the continuation is written after.
-  const before = asSent(session.store, stored.value, messages.slice(0, at));
+  const before = asSent(session.store, value, messages.slice(0, at));
   const history = continues ? [...before, { ...messages[at]!, selected: index }] : [...before, ...sending];
-  const scope = sendable(session, scopeOf(session, chat, stored.value, history), stored.value);
+  const scope = sendable(session, scopeOf(session, unsaved ? null : chat, value, history), value);
   if ('kind' in scope) return scope;
   return {
-    chat: stored.value,
+    chat: value,
     route,
     settings,
     scope,
     budget: budgetOf(route.model, sentSettings(session.store, route)),
-    memory: memoryFill(session.store, chat, stored.value, scope.messages),
+    memory: memoryFill(session.store, unsaved ? null : chat, value, scope.messages),
     said,
     reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, ...(message === null && { follows: said ? said.id : follows }), continues },
   };
@@ -114,22 +117,22 @@ type Forecaster = Pick<Session, 'store' | 'read' | 'scriptTurns' | 'tokens'>;
 type Asker = 'forecast' | 'memory' | 'view';
 
 // For callers that act only on a request that can go.
-export const wouldSend = async (session: Forecaster, chat: string, target: Target, signal?: AbortSignal, asker: Asker = 'forecast'): Promise<Sending | null> => {
-  const sending = await forecastSend(session, chat, target, signal, asker);
+export const wouldSend = async (session: Forecaster, chat: string, target: Target, signal?: AbortSignal, asker: Asker = 'forecast', unsaved: Unsaved | null = null): Promise<Sending | null> => {
+  const sending = await forecastSend(session, chat, target, signal, asker, unsaved);
   return sending && 'kind' in sending ? null : sending;
 };
 
 // null: the chat or its turn cannot be gathered, the calibration did not load, or it was aborted. asker: whose forecast
 // this is, each with its own evaluation lane, kept with the chat so a forecast sends the worker only what changed since
 // its last: the composer's, background memory's (Rememberer) and the memory panel's. One lane shared by two would have
-// each cancel the other's.
-export async function forecastSend(session: Forecaster, chat: string, target: Target, signal?: AbortSignal, asker: Asker = 'forecast'): Promise<Sending | Unsendable | null> {
+// each cancel the other's. unsaved: a new chat not saved yet, which has no projection to wait for.
+export async function forecastSend(session: Forecaster, chat: string, target: Target, signal?: AbortSignal, asker: Asker = 'forecast', unsaved: Unsaved | null = null): Promise<Sending | Unsendable | null> {
   // What the prompt reads may change while it is evaluated: it is gathered and evaluated again once, so a save landing
   // mid-flight does not cost memory its round.
   for (let tries = 0; tries < 2; tries++) {
-    const projection = await session.store.projections.evaluate(chat);
-    if (!projection) return null;
-    const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
+    const projection = unsaved ? null : await session.store.projections.evaluate(chat);
+    if (!unsaved && !projection) return null;
+    const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target, undefined, unsaved));
     const revisions = reads.map((read) => session.store.revision(read));
     if (turn === null || 'kind' in turn) return null;
     const snapshot = await session.tokens.snapshot(turn.route, turn.settings, tokenLimits(turn.route.model, sentSettings(session.store, turn.route)), 'conversation', chat, signal ?? new AbortController().signal);
@@ -137,7 +140,7 @@ export async function forecastSend(session: Forecaster, chat: string, target: Ta
     const fit = providerFit(turn.route, turn.settings, snapshot.data.fit.allowance);
     const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scriptTurns.cachedPrompt(chat, turn), continuing: false, answerInstruction: answerInstructionOf(session.store) }, signal);
     if (signal?.aborted) return null;
-    if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? prompt : { turn, prompt, calibration: snapshot.data };
+    if ((!projection || session.store.loadedHead(chat) === projection.summary.head) && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? prompt : { turn, prompt, calibration: snapshot.data };
   }
   return null;
 }

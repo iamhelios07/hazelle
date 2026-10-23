@@ -6,7 +6,7 @@ import { breakCost, forecast, lastCache, prior, type Forecast } from '../../runt
 import { leaving } from '../../runtime/memory-view';
 import type { Shown } from '../../runtime/talk';
 import type { SentRequest } from '../../runtime/request-log';
-import { cacheSend, forecastSend, previewRequest, type Sending, type Unsendable } from '../../runtime/turn-context';
+import { cacheSend, forecastSend, previewRequest, type Sending, type Unsendable, type Unsaved } from '../../runtime/turn-context';
 import { useSession } from '../session';
 
 const SETTLE_MS = 400;
@@ -19,8 +19,8 @@ export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Se
 export type CacheNotes = { until: number | null; next: { forecast: Forecast; cost: ReturnType<typeof breakCost>; route: Route } | null | undefined };
 
 // The draft is read again after any store change settles, so an edit to the prompt, a lorebook or the model shows in
-// the forecast while it is open.
-export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean): SendNotes {
+// the forecast while it is open. unsaved: a new chat not saved yet, forecast as its first save will write it.
+export function useSendNotes(id: string, unsaved: Unsaved | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean): SendNotes {
   const session = useSession();
   const last = useMemo(() => lastCache(messages), [messages]);
   const [next, setNext] = useState<CacheNotes['next']>(undefined);
@@ -34,16 +34,16 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
   }, []);
 
   useEffect(() => {
-    if (id === null || busy) {
-      setNext(id === null ? null : undefined);
-      setSending(id === null ? null : undefined);
+    if (busy) {
+      setNext(undefined);
+      setSending(undefined);
       return setLeft(null);
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       // A message sent translated goes out as its translation, which is not made yet, so it stands in as typed. Nothing
       // typed sends 응답 받기.
-      void forecastSend(session, id, text.trim() ? { kind: 'send', text } : { kind: 'answer' }, controller.signal).then((result) => {
+      void forecastSend(session, id, text.trim() ? { kind: 'send', text } : { kind: 'answer' }, controller.signal, 'forecast', unsaved).then((result) => {
         if (controller.signal.aborted) return;
         setSending(result);
         const sending = result && 'turn' in result ? result : null;
@@ -63,7 +63,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [id, chat, messages, memory, text, busy, changes]);
+  }, [id, unsaved, chat, messages, memory, text, busy, changes]);
 
   const cache = useMemo((): CacheNotes => ({ until: last?.until ?? null, next }), [last, next]);
   const request = useMemo(() => {

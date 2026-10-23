@@ -6,6 +6,7 @@ import { draftKey } from '../../runtime/drafts';
 import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
 import type { Shown } from '../../runtime/talk';
 import type { Starting } from '../../runtime/turn';
+import type { Unsaved } from '../../runtime/turn-context';
 import { useSession } from '../session';
 import { navigate } from '../shell/router';
 
@@ -28,6 +29,12 @@ export function useNewChat(chatId: string, fresh: boolean, chat: Chat, shelf: Ch
     const preview = greetingPreview(choices, openedAt);
     return preview && { ...preview, live: null };
   }, [choices, openedAt]);
+  // What the first save will write, which a forecast reads: a blank greeting is shown but not saved.
+  const unsaved = useMemo((): Unsaved | null => {
+    if (!fresh) return null;
+    const greeting = greetingPreview(startingGreetings(choices), openedAt);
+    return { chat, messages: greeting ? [greeting] : [] };
+  }, [fresh, chat, choices, openedAt]);
 
   // The one save, which the first send and a press on the greeting share until it lands; a failed one is begun afresh
   // by the next.
@@ -57,5 +64,5 @@ export function useNewChat(chatId: string, fresh: boolean, chat: Chat, shelf: Ch
     return (start.current = { greeting: greetings && greetings.choices[greetings.selected]!.id, saved });
   }
 
-  return { unstarted, pickGreeting, starting };
+  return { unstarted, unsaved, pickGreeting, starting };
 }

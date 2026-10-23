@@ -86,7 +86,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const post = stages.post.length > 0;
   const agents = useMemo(() => ({ pre, post }), [pre, post]);
   const translate = chatTranslate(store, chat);
-  const { unstarted, pickGreeting, starting } = useNewChat(chatId, item === null, chat, shelf, translate.replyLanguage);
+  const { unstarted, unsaved, pickGreeting, starting } = useNewChat(chatId, item === null, chat, shelf, translate.replyLanguage);
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
   const { messages, display: view, placed, pending: displayPending, error: displayError, retry: retryDisplay, retryRegex, stuck } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
@@ -125,7 +125,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, anchor, reply === 'stay');
   const story = useStorySteps(messages, scroll.scrollRef, seekTo, follow);
   const memory = useChatMemory(id);
-  const sendNotes = useSendNotes(id, chat, messages, memory, draft.text, busy || displayPending === true);
+  const sendNotes = useSendNotes(chatId, unsaved, chat, messages, memory, draft.text, busy || displayPending === true);
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
