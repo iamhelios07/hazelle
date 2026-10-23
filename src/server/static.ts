@@ -29,7 +29,8 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
 const INDEXED = new Set(['/', PULSE_PAGE.path, '/terms', '/privacy']);
 const LANDING = { title: '헤이젤 · RisuAI 봇으로 캐릭터 챗', line: 'RisuAI 봇과 포켓리스 백업을 가져와 내 API 키로 캐릭터 챗을 해요. 가입 없이 바로 써요.' };
 
-export function clientFiles(clientDir: string, cover: (share: string) => Promise<ShareCover | null>, pulse: () => Promise<PulseAnswer>, visit: (page: PageVisit) => void = () => {}) {
+// selfHost: someone's own installation (node.ts), which no search engine lists and whose page says so to the client.
+export function clientFiles(clientDir: string, cover: (share: string) => Promise<ShareCover | null>, pulse: () => Promise<PulseAnswer>, visit: (page: PageVisit) => void = () => {}, selfHost = false) {
   const client = new Hono();
   client.use(async (c, next) => {
     const started = performance.now();
@@ -49,8 +50,10 @@ export function clientFiles(clientDir: string, cover: (share: string) => Promise
   const page = async (c: Context, shape: (html: string) => string = (html) => html) => {
     const nonce = randomBytes(18).toString('base64');
     c.header('Content-Security-Policy', pageCsp(nonce));
-    if (!INDEXED.has(c.req.path)) c.header('X-Robots-Tag', 'noindex');
-    return c.html(shape((await readFile(join(clientDir, 'index.html'), 'utf8')).replaceAll(NONCE, nonce)));
+    if (selfHost || !INDEXED.has(c.req.path)) c.header('X-Robots-Tag', 'noindex');
+    const html = (await readFile(join(clientDir, 'index.html'), 'utf8')).replaceAll(NONCE, nonce);
+    // Read by main.tsx (runtime/installation.ts), before any request, so pages shown before sign-in know it too.
+    return c.html(shape(selfHost ? html.replace('<html', '<html data-self-host') : html));
   };
   client.use(async (c, next) => {
     await next();

@@ -9,9 +9,9 @@ import { endToEnd } from './hop-by-hop';
 import { clientFiles } from './static';
 
 // host undefined listens on every interface, as Docker's port mapping needs.
-export type FrontendOptions = { port: number; host: string | undefined; apiPort: number; clientDir: string; trustedProxies: BlockList };
+export type FrontendOptions = { port: number; host: string | undefined; apiPort: number; clientDir: string; trustedProxies: BlockList; selfHost: boolean };
 
-const { port, host, apiPort, clientDir, trustedProxies } = workerData as FrontendOptions;
+const { port, host, apiPort, clientDir, trustedProxies, selfHost } = workerData as FrontendOptions;
 // A share page's embed text, asked of the API, which owns the database; a failure leaves the page without one.
 async function cover(id: string): Promise<ShareCover | null> {
   try {
@@ -27,7 +27,7 @@ async function pulse(): Promise<PulseAnswer> {
   if (!answer.ok) throw new Error(`pulse ${answer.status}`);
   return (await answer.json()) as PulseAnswer;
 }
-const files = getRequestListener(clientFiles(clientDir, cover, pulse, (page) => parentPort!.postMessage(page)).fetch);
+const files = getRequestListener(clientFiles(clientDir, cover, pulse, (page) => parentPort!.postMessage(page), selfHost).fetch);
 // A finite socket timeout lets Node honor the API's shorter keep-alive hint; zero keeps idle sockets until
 // the server closes them and races reuse. The agent destroys timed-out free sockets, not active requests.
 const agent = new Agent({ keepAlive: true, timeout: 5000 });

@@ -68,6 +68,17 @@ describe('the client files', () => {
     writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
   });
 
+  it("marks a self-host's page for the client and keeps all of it out of the index", async () => {
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><html lang="ko">page</html>');
+    const own = clientFiles(dir, async () => null, async () => ({ at: 0, board: null }), () => {}, true);
+    for (const path of ['/', '/now', '/terms']) {
+      const response = await own.request(path, { headers: PAGE });
+      expect([path, response.headers.get('x-robots-tag'), await response.text()]).toEqual([path, 'noindex', expect.stringContaining('<html data-self-host lang="ko">')]);
+    }
+    expect(await (await client.request('/', { headers: PAGE })).text()).not.toContain('data-self-host');
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>page');
+  });
+
   it("fills a share page's embed with its escaped cover text, and never with a picture", async () => {
     writeFileSync(join(dir, 'index.html'), '<title>헤이젤</title><meta name="description" content="app" /><meta property="og:title" content="헤이젤" /><meta property="og:description" content="app" /><meta property="og:image" content="https://hazelle.app/og.png" /><meta name="twitter:card" content="summary_large_image" />');
     const covered = await (await client.request('/s/covered-share-id', { headers: PAGE })).text();

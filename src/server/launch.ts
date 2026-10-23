@@ -15,7 +15,7 @@ const defaults = {
   HAZELLE_HOST: '127.0.0.1',
   // Ollama, LM Studio and koboldcpp, as in docker-compose.yml, but at localhost: no container stands in between.
   HAZELLE_LOCAL_PROVIDERS: 'localhost:11434,localhost:1234,localhost:5001',
-  HAZELLE_PULSE_FORWARD: 'https://hazelle.app',
+  HAZELLE_SELF_HOST: '1',
 };
 for (const [name, value] of Object.entries(defaults)) process.env[name] ??= value;
 

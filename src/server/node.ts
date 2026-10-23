@@ -29,6 +29,7 @@ import { streamStore } from './db/streams-db';
 import app from './worker';
 import { publishNews, RELEASE_NEWS } from './news';
 import { VERSION_HEADER } from '../contracts/http';
+import { HOSTED } from '../contracts/installation';
 import { openVisits, visitDay, type FrontendMessage } from './visits';
 
 // Configuration is the environment (docs/research/docker-port-plan.md §11).
@@ -65,17 +66,9 @@ function proxiesFrom(name: string): BlockList {
   return trusted;
 }
 const port = wholeFrom('PORT', 8080, 1, 65535);
-// The board a self-host's counts also go to (pulse.ts forwarded): docker-compose.yml and launch.ts set hazelle.app; the
-// hosted machine and a development server set nothing, and forward nothing.
-let pulseBoard: URL | null = null;
-if (process.env.HAZELLE_PULSE_FORWARD) {
-  try {
-    pulseBoard = new URL(process.env.HAZELLE_PULSE_FORWARD);
-  } catch {
-    console.error(`hazelle: HAZELLE_PULSE_FORWARD must be an address: ${process.env.HAZELLE_PULSE_FORWARD}`);
-    process.exit(1);
-  }
-}
+// Someone's own installation, not hazelle.app: docker-compose.yml and launch.ts set it, and the hosted machine resets it.
+// A development server sets nothing and runs as hazelle.app does, so a missing flag shows the hosted terms and limits.
+const selfHost = wholeFrom('HAZELLE_SELF_HOST', 0, 0, 1) === 1;
 // The non-Docker launcher (launch.ts) sets 127.0.0.1; blank listens on every interface.
 const host = process.env.HAZELLE_HOST || undefined;
 const trustedProxies = proxiesFrom('HAZELLE_TRUSTED_PROXIES');
@@ -114,7 +107,8 @@ try {
 
 const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
-publishNews(raw, version, RELEASE_NEWS, Date.now());
+// A self-host's 소식 are hazelle.app's board, which its 게시판 link opens.
+if (!selfHost) publishNews(raw, version, RELEASE_NEWS, Date.now());
 const db = serviceDb(raw);
 const visits = openVisits(raw);
 let dayClose: ReturnType<typeof setTimeout>;
@@ -127,9 +121,10 @@ const scheduleDayClose = () => {
 };
 scheduleDayClose();
 const limits = {
+  // hazelle.app's budget against using its relay as an open proxy; a self-host's relay is its owner's, unlimited unless set.
   relay: relayBudget(
-    wholeFrom('HAZELLE_RELAY_DAILY_BYTES', RELAY_DAILY.bytes, 1, Number.MAX_SAFE_INTEGER),
-    wholeFrom('HAZELLE_RELAY_DAILY_HOSTS', RELAY_DAILY.hosts, 1, 100_000),
+    wholeFrom('HAZELLE_RELAY_DAILY_BYTES', selfHost ? Infinity : RELAY_DAILY.bytes, 1, Number.MAX_SAFE_INTEGER),
+    wholeFrom('HAZELLE_RELAY_DAILY_HOSTS', selfHost ? Infinity : RELAY_DAILY.hosts, 1, 100_000),
   ),
   calls: tokenBucket(240), botCalls: tokenBucket(20), visitors: visitorLimits(), uploads: uploadBudget(),
 };
@@ -145,7 +140,7 @@ const services: Services = {
   localProviders: local,
   limits,
   backups: backups(dataDir, snapshotHour, operatorAlerts),
-  pulse: pulseBoard ? forwarded(openPulse(db), pulseBoard, outbound) : openPulse(db),
+  pulse: selfHost ? forwarded(openPulse(db), new URL(HOSTED), outbound) : openPulse(db),
 };
 
 // Work a request leaves running after its answer; the shutdown waits for it.
@@ -179,7 +174,7 @@ const server = serve({ fetch: (request) => root.fetch(request, services, ctx), h
 await once(server, 'listening');
 // The public listener owns no databases, so even a synchronous SQL operation cannot hold its asset responses.
 const frontend = new Worker(new URL(import.meta.url.endsWith('.ts') ? './frontend-worker.ts' : './frontend-worker.js', import.meta.url), {
-  workerData: { port, host, apiPort: (server.address() as AddressInfo).port, clientDir, trustedProxies } satisfies FrontendOptions,
+  workerData: { port, host, apiPort: (server.address() as AddressInfo).port, clientDir, trustedProxies, selfHost } satisfies FrontendOptions,
 });
 frontend.on('error', (error) => { log('frontend failed', { error: String(error) }); process.exit(1); });
 frontend.on('exit', (code) => { if (!draining) { log('frontend stopped', { code }); process.exit(1); } });

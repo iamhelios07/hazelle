@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { BackupWarning } from '../../contracts/admin';
 import { readService, readBoardSettings, setBoardGuests } from '../../runtime/admin';
+import { selfHost } from '../../runtime/installation';
 import { useAttempt } from '../common/useAttempt';
 import { describeFailure } from '../common/failure';
 import { PAGES } from '../common/words';
@@ -27,8 +28,11 @@ const WARNINGS: Record<BackupWarning, string> = {
 // Each list shows its head here and opens whole on its own page (AdminListScreen). Every act lands in the log, whose
 // head is asked again after one, as are the service's counts and the flagged accounts, which an act on an account may
 // change. Whole-service usage is refreshed separately by the operator; with one person it would repeat that person's
-// row. A failed service read shows every section: it cannot tell that nothing waits in them.
+// row. A failed service read shows every section: it cannot tell that nothing waits in them. A self-host keeps only its
+// own: its board and share links are not its own (hazelle.app's board, files instead of links), so nothing is reported,
+// posted to its operator or held, and nobody visits it.
 export function AdminScreen({ back }: { back: Back | null }) {
+  const own = selfHost();
   const service = useLoaded(readService);
   const accounts = useAccounts(true);
   const [acts, setActs] = useState(0);
@@ -43,16 +47,16 @@ export function AdminScreen({ back }: { back: Back | null }) {
       {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
       {service.failure}
       <Beside side={<LogSection key={acts} head />}>
-        {moderating && <ReportsSection head onActed={acted} />}
-        <OperatorPostsSection />
-        <VisitsSection />
-        <GuestBoardSection onSaved={acted} />
+        {!own && moderating && <ReportsSection head onActed={acted} />}
+        {!own && <OperatorPostsSection />}
+        {!own && <VisitsSection />}
+        {!own && <GuestBoardSection onSaved={acted} />}
         <AccountsSection loaded={accounts} total={service.data?.accounts ?? null} onActed={acted}>
           {shared && <UsageRow />}
         </AccountsSection>
         {service.loading}
         {service.data && <ServiceSection service={service.data} onSaved={acted} />}
-        {moderating && <ToolsSection onActed={acted} />}
+        {!own && moderating && <ToolsSection onActed={acted} />}
       </Beside>
     </Screen>
   );

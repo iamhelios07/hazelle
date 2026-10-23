@@ -4,6 +4,7 @@ import { ACTS, exportOf } from '../common/acts';
 import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Link, Screen, Steps, Text } from '../ui';
 import { download } from '../common/download';
 import { PRIVACY, TERMS } from '../common/legal';
+import { selfHost } from '../../runtime/installation';
 
 const FILENAME = 'hazelle-recovery.txt';
 
@@ -47,12 +48,17 @@ export function RecoveryKeyScreen({ username, recoveryKey, saved: savedBefore, f
           <Button disabled={!downloaded || !saved} onClick={onStart}>
             시작하기
           </Button>
-          <Text variant="note" align="center">
-            시작하기를 누르면 아래 두 문서에 동의하는 것으로 봐요.
-          </Text>
-          <Text variant="note" align="center">
-            <Link href={TERMS.path}>{TERMS.title}</Link> · <Link href={PRIVACY.path}>{PRIVACY.title}</Link>
-          </Text>
+          {/* A self-host has no terms: its operator is the person setting it up (common/legal.ts OUTBOUND). */}
+          {!selfHost() && (
+            <>
+              <Text variant="note" align="center">
+                시작하기를 누르면 아래 두 문서에 동의하는 것으로 봐요.
+              </Text>
+              <Text variant="note" align="center">
+                <Link href={TERMS.path}>{TERMS.title}</Link> · <Link href={PRIVACY.path}>{PRIVACY.title}</Link>
+              </Text>
+            </>
+          )}
           <Text variant="note" align="center">
             이 단계는 건너뛸 수 없어요.
           </Text>

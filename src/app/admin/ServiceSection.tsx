@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { setService, type Service } from '../../runtime/admin';
+import { selfHost } from '../../runtime/installation';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
@@ -62,7 +63,7 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
           control={<NumberInput label="계정당 이미지 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}
         />
       </SettingGroup>
-      <Text variant="note">{`서비스 데이터베이스 ${sizeText(service.databaseBytes)} · 공유 링크 ${count(service.links)}개`}</Text>
+      <Text variant="note">{selfHost() ? `서비스 데이터베이스 ${sizeText(service.databaseBytes)}` : `서비스 데이터베이스 ${sizeText(service.databaseBytes)} · 공유 링크 ${count(service.links)}개`}</Text>
       {failure && (
         <Callout tone="warn" alert>
           {failure}

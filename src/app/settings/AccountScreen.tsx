@@ -1,4 +1,5 @@
 import { logOutOthers } from '../../runtime/account';
+import { selfHost } from '../../runtime/installation';
 import { setPulseSharing, sharesPulse } from '../../runtime/pulse';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
@@ -33,7 +34,7 @@ export function AccountScreen({ section, back }: { section: AccountSection | nul
       <Columns min="panel">
         <Stack gap="section">
           <Storage />
-          <SharedLinksSection />
+          {!selfHost() && <SharedLinksSection />}
         </Stack>
         <BackupSection />
       </Columns>

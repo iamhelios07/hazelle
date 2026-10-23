@@ -265,13 +265,13 @@ export const settingsPage = (page: Page, label: string) =>
 
 // A built server of a spec's own (npm run e2e builds first), on a port and data directory apart from the suite's, for a
 // spec that stops it or needs signup still open; it lets the fake provider through like the suite's (playwright.config.ts).
-export async function startServer(port: number, data: string, fresh = false): Promise<ChildProcess> {
+export async function startServer(port: number, data: string, fresh = false, env: Record<string, string> = {}): Promise<ChildProcess> {
   const health = () => fetch(`http://localhost:${port}/api/health`).then((response) => response.status, () => 0);
   // A server an earlier run left on the port would answer for this one; its data directory is checked for only after.
   expect(await health()).toBe(0);
   if (fresh) rmSync(data, { recursive: true, force: true });
   const server = spawn(process.execPath, ['dist/server/node.js'], {
-    env: { ...process.env, HAZELLE_DATA: data, HAZELLE_CLIENT: 'dist/client', PORT: String(port), HAZELLE_LOCAL_PROVIDERS: FAKE_PROVIDER },
+    env: { ...process.env, HAZELLE_DATA: data, HAZELLE_CLIENT: 'dist/client', PORT: String(port), HAZELLE_LOCAL_PROVIDERS: FAKE_PROVIDER, ...env },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   await expect.poll(health, { timeout: 30_000 }).toBe(200);

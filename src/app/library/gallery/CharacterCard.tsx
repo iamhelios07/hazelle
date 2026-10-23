@@ -1,6 +1,7 @@
 import { Link2, SquarePen } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
+import { selfHost } from '../../../runtime/installation';
 import { ACTS, exportOf } from '../../common/acts';
 import { ACCOUNT_ONLY, RISU_CHAT_FILE, SHARE } from '../../common/words';
 import { aliased } from '../../common/alias';
@@ -69,14 +70,15 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
 }
 
 export function CharacterActionItems({ shelf, actions, disabled, onRemoved }: { shelf: CharacterShelf<ChatSummary>; actions: CharacterActions; disabled?: boolean; onRemoved?: () => void }) {
-  // A share link lives on the server, which holds nothing of a guest's (design §6.14).
+  // A share link lives on the server, which holds nothing of a guest's (design §6.14). A self-host has none: its
+  // characters travel as files.
   const { guest } = useAccount();
   return (
     <>
       <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={disabled} onClick={() => void actions.copy(shelf)} />
       <MenuItem icon={ACTS.export.icon} label={ACTS.export.label} disabled={disabled} onClick={() => actions.exportFile(shelf)} />
       <MenuItem icon={ACTS.export.icon} label={exportOf(RISU_CHAT_FILE)} disabled={disabled} onClick={() => actions.exportChats(shelf)} />
-      <MenuItem icon={Link2} label={SHARE.act} sub={guest ? ACCOUNT_ONLY : undefined} disabled={disabled || Boolean(guest)} onClick={() => actions.share(shelf)} />
+      {!selfHost() && <MenuItem icon={Link2} label={SHARE.act} sub={guest ? ACCOUNT_ONLY : undefined} disabled={disabled || Boolean(guest)} onClick={() => actions.share(shelf)} />}
       <MenuItem
         icon={ACTS.remove.icon}
         label={ACTS.remove.label}

@@ -1,5 +1,7 @@
 import { Link, Row, Stack, Text } from '../ui';
-import { OPERATOR, PRIVACY, REPOSITORY, TERMS } from './legal';
+import { HOSTED } from '../../contracts/installation';
+import { selfHost } from '../../runtime/installation';
+import { OPERATOR, OUTBOUND, PRIVACY, REPOSITORY, TERMS } from './legal';
 import { BUILT_VERSION } from './release';
 import { PULSE } from './words';
 
@@ -22,9 +24,19 @@ export function LegalNotice() {
           소스 코드 받기
         </Link>
         <Link href="/license.txt">라이선스 전문</Link>
-        <Link href={TERMS.path}>{TERMS.title}</Link>
-        <Link href={PRIVACY.path}>{PRIVACY.title}</Link>
-        <Link href={PULSE.path}>{PULSE.title}</Link>
+        {selfHost() ? (
+          <>
+            <Link href={OUTBOUND.path}>{OUTBOUND.title}</Link>
+            <Link href={HOSTED + PRIVACY.path}>hazelle.app {PRIVACY.title}</Link>
+            <Link href={HOSTED + PULSE.path}>{PULSE.title}</Link>
+          </>
+        ) : (
+          <>
+            <Link href={TERMS.path}>{TERMS.title}</Link>
+            <Link href={PRIVACY.path}>{PRIVACY.title}</Link>
+            <Link href={PULSE.path}>{PULSE.title}</Link>
+          </>
+        )}
       </Row>
     </Stack>
   );

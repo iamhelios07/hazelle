@@ -90,9 +90,11 @@ Open http://localhost:8080. The app listens on 127.0.0.1 only. The image is `ghc
 
 A fresh installation admits one account, which makes it one person's: the first visit sets a password, the account it makes is the operator, and every later sign-in asks for that password alone, with no username and no guest. To let others in, raise the signup limit on the admin screen; the guest home, signup and usernames come back. The operator account cannot be deleted while it is the only operator.
 
-### 헤이젤 나우
+### Your own installation
 
-A self-hosted installation counts its own 헤이젤 나우 and, by default, also sends each count to hazelle.app's board: the role, connection type and model id, with a hash of the account in place of its id. Each account turns it off with 헤이젤 나우 집계 참여 in 앱 정보, which stops both. To stop forwarding for the whole installation, remove `HAZELLE_PULSE_FORWARD` from `docker-compose.yml`.
+`HAZELLE_SELF_HOST: 1` in `docker-compose.yml`, which the start without Docker sets too, marks the installation as someone's own rather than hazelle.app. Its relay has no daily limits (`HAZELLE_RELAY_DAILY_BYTES` and `HAZELLE_RELAY_DAILY_HOSTS` set some). 헤이젤 나우 and 게시판 open on hazelle.app, where release news and questions live. There are no share links: characters travel as files. The legal page lists what leaves the installation instead of hazelle.app's terms, and the admin screen keeps signups, storage caps, accounts and its log. An installation that admits one account has no storage caps.
+
+Each 헤이젤 나우 count also goes to hazelle.app's board: the role, connection type and model id, with a hash of the account in place of its id. Each account turns it off with 헤이젤 나우 집계 참여 in 앱 정보.
 
 ### Without Docker
 

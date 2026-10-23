@@ -12,8 +12,8 @@ services:
     environment:
       # No local model servers here: every plain-http or private destination is refused.
       HAZELLE_LOCAL_PROVIDERS: !reset null
-      # This is the board the self-hosts forward to.
-      HAZELLE_PULSE_FORWARD: !reset null
+      # This is hazelle.app, which the self-hosts send to.
+      HAZELLE_SELF_HOST: !reset null
       # The edge network's subnet: Caddy is the only other container on it and no port of the app is published, so a
       # peer from it is Caddy, and its X-Forwarded-For names the visitor. Change both together.
       HAZELLE_TRUSTED_PROXIES: 172.30.0.0/24

@@ -5,6 +5,7 @@ import { legalPage } from './common/LegalPage';
 import { applyStoredScheme } from './common/reading';
 import { ScreenLoad } from './common/ScreenLoad';
 import { watchProblems } from '../runtime/diagnostics';
+import { markSelfHost } from '../runtime/installation';
 import { pulsePage } from './pulse/PulsePage';
 import { sharePage } from './share/SharePage';
 import { markScrollbars } from './ui';
@@ -15,6 +16,7 @@ const Workspace = lazy(() => import('./shell/Workspace').then(({ Workspace }) =>
 const root = document.getElementById('root');
 if (!root) throw new Error('index.html has no #root element');
 
+markSelfHost(document.documentElement.hasAttribute('data-self-host'));
 watchProblems();
 applyStoredScheme();
 markScrollbars();

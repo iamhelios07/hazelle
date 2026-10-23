@@ -1,5 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { href, parseRoute, type Back, type Route } from './routes';
+import { HOSTED } from '../../contracts/installation';
+import { selfHost } from '../../runtime/installation';
+import { href, onBoard, parseRoute, type Back, type Route } from './routes';
 
 // A router library would add nothing for a handful of fixed paths.
 const NAVIGATED = 'risu-alpha:navigate';
@@ -22,6 +24,8 @@ export function useRoute(): Route {
 
 export function navigate(route: Route, { replace = false } = {}) {
   const at = href(route);
+  // A self-host's 게시판 is hazelle.app's, where release news and questions meet, so every way into it opens there.
+  if (selfHost() && onBoard(route)) return void window.open(HOSTED + at, '_blank', 'noopener');
   if (at === address()) return;
   history[replace ? 'replaceState' : 'pushState'](null, '', at);
   window.scrollTo(0, 0);

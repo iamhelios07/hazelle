@@ -1,4 +1,5 @@
 import { CloudOff, Eraser, HardDriveDownload, MonitorSmartphone, Smartphone, Unplug } from 'lucide-react';
+import { selfHost } from '../../runtime/installation';
 import { CONTACT, PRIVACY, REPOSITORY, TERMS } from './legal';
 import { evictsUnlessInstalled } from './platform';
 import { useAccount, type GuestDoors } from '../session';
@@ -24,9 +25,11 @@ export function GuestNotice({ guest, onClose }: { guest: GuestDoors; onClose?: (
       onClose={onClose}
       actions={<Doors guest={guest} signIn="계정이 있으면 로그인" />}
       foot={
-        <>
-          쓰면 <Link href={TERMS.path}>{TERMS.title}</Link>과 <Link href={PRIVACY.path}>{PRIVACY.title}</Link>에 동의하게 돼요.
-        </>
+        selfHost() ? undefined : (
+          <>
+            쓰면 <Link href={TERMS.path}>{TERMS.title}</Link>과 <Link href={PRIVACY.path}>{PRIVACY.title}</Link>에 동의하게 돼요.
+          </>
+        )
       }
     />
   );

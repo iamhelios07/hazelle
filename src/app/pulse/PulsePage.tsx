@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { PULSE_FLOORS, PULSE_ROLES, type PulseAnswer, type PulseBoard, type PulseOrder, type PulseRanking, type PulseRole } from '../../contracts/pulse';
+import { HOSTED } from '../../contracts/installation';
+import { selfHost } from '../../runtime/installation';
 import { readPulse, readPulseWeek } from '../../runtime/pulse';
 import { LegalNotice } from '../common/LegalNotice';
 import { count } from '../common/typedNumber';
@@ -19,7 +21,13 @@ const RANKING_HELP = {
 
 // main.tsx asks before the account flow, as for /terms: the page reads the same signed in or out.
 export function pulsePage(path: string) {
-  return path === PULSE.path ? <PulsePage /> : null;
+  if (path !== PULSE.path) return null;
+  // A self-host's 헤이젤 나우 is hazelle.app's, where its counts go.
+  if (selfHost()) {
+    location.replace(HOSTED + PULSE.path);
+    return <></>;
+  }
+  return <PulsePage />;
 }
 
 function PulsePage() {

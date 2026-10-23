@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { hearServedVersion } from '../../runtime/api';
 import type { AccountFacts } from '../../runtime/account';
 import { Drafts } from '../../runtime/drafts';
+import { selfHost } from '../../runtime/installation';
 import { openGuestSession, openSession, type Session } from '../../runtime/session';
 import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
@@ -129,7 +130,9 @@ function News() {
     const welcoming = !settled && tutorials.welcome();
     if (showing) setTour(showing);
     else if (!welcoming && openedNewRelease(BUILT_VERSION, lastOpened)) {
-      void readPosts(null, { sort: 'new', category: 'news', limit: 1 }).then((read) => {
+      // A self-host publishes no 소식 of its own; its board link opens hazelle.app's.
+      if (selfHost()) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'board', operator: false, category: 'news' }) } });
+      else void readPosts(null, { sort: 'new', category: 'news', limit: 1 }).then((read) => {
         const news = read.ok ? read.data.rows[0] : undefined;
         if (news?.version === BUILT_VERSION) toast.show('새 버전으로 바뀌었어요', { action: { label: '바뀐 점 보기', onClick: () => navigate({ kind: 'post', id: news.id }) } });
       });

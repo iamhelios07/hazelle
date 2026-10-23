@@ -32,7 +32,7 @@ describe('the service adapter', () => {
   it('answers first, all and run as the routes read them', async () => {
     const { db } = fresh();
     expect(await db.prepare('SELECT signup_cap FROM service').first('signup_cap')).toBe(1);
-    expect(await db.prepare('SELECT signup_cap, account_bytes_cap AS cap FROM service').first()).toEqual({ signup_cap: 1, cap: 300000000 });
+    expect(await db.prepare('SELECT signup_cap, account_bytes_cap AS cap FROM service').first()).toEqual({ signup_cap: 1, cap: null });
     expect(await db.prepare('SELECT 1 FROM accounts').first()).toBeNull();
     expect(await db.prepare('SELECT id FROM accounts').first('id')).toBeNull();
     const ran = await db.prepare("INSERT INTO file_blocks (id, blocked_at) VALUES (?, ?)").bind('a', 1).run();

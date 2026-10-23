@@ -311,3 +311,36 @@ export const PRIVACY: LegalText = {
     },
   ],
 };
+
+// A self-host's page in place of TERMS and PRIVACY, which are hazelle.app's: what leaves the installation and where.
+export const OUTBOUND: LegalText = {
+  path: '/outbound',
+  title: '밖으로 나가는 정보',
+  sections: [
+    {
+      title: '이 헤이젤',
+      body: [
+        '이 헤이젤은 설치한 사람이 직접 운영합니다. hazelle.app의 이용약관과 개인정보 처리방침은 이 설치에 적용되지 않습니다.',
+        '저장한 내용은 이 설치의 데이터 폴더(도커는 볼륨)에만 보관합니다. 아래에 적은 것 말고는 밖으로 보내지 않습니다.',
+      ],
+    },
+    {
+      title: 'hazelle.app으로 보내는 정보',
+      body: [
+        `설정 › 계정 › 앱 정보의 ${PULSE.sharing}가 켜져 있는 계정은 모델 호출이 성공할 때마다 역할, 연결 종류, 요청한 모델 id를 hazelle.app의 ${PULSE.title}로 보냅니다. 계정 id 대신 그것을 해시한 값을 보내며, 대화 내용과 API 키, 직접 연결의 주소는 보내지 않습니다. 기본값은 켜짐이고, 끄면 보내지 않습니다.`,
+        `hazelle.app이 받은 정보를 처리하는 방식은 hazelle.app의 ${PRIVACY.title}을 따릅니다.`,
+        `앱의 게시판과 ${PULSE.title}는 hazelle.app에서 열립니다. 그곳에서는 hazelle.app의 이용약관이 적용됩니다.`,
+      ],
+    },
+    {
+      title: '다른 곳으로 가는 정보',
+      body: [
+        [
+          '모델 호출과 모델 목록 조회는 이 설치의 서버가 이용자가 연결한 제공자에게 보냅니다. 제공자는 이 서버의 IP 주소를 알 수 있습니다.',
+          '모델 정보(가격, 컨텍스트 길이)는 이 서버가 models.dev에서 받아 옵니다.',
+          '윈도우에서 도커 없이 쓰면 켤 때마다 GitHub에 최신 버전을 묻습니다.',
+        ],
+      ],
+    },
+  ],
+};
