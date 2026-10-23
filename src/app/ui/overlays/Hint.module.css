@@ -21,6 +21,7 @@
 }
 
 .bubble {
+  composes: floating from '../foundation/surface.module.css';
   composes: dropIn from '../foundation/motion.module.css';
   composes: note from '../foundation/type.module.css';
   position: fixed;
@@ -31,10 +32,7 @@
   width: max-content;
   max-width: min(var(--hint-width), calc(100vw - 2 * var(--menu-edge)));
   padding: var(--space-8) var(--space-12);
-  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-popover);
   font-weight: var(--weight-regular);
   text-align: start;
   white-space: normal;

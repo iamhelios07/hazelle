@@ -43,13 +43,11 @@
 }
 
 .chrome {
+  composes: floating from '../foundation/surface.module.css';
   display: flex;
   align-items: center;
   padding: var(--space-2);
-  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-full);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-popover);
   pointer-events: auto;
 }
 

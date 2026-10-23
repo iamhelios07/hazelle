@@ -79,7 +79,7 @@ export function PortraitsEditor({ owner }: { owner: string }) {
     <Stack gap="section">
       <Section
         title="삽화 프로필"
-        note={building ? '만드는 중' : undefined}
+        note={building ? '만드는 중…' : undefined}
         help="삽화에서 인물을 늘 같은 모습으로 그릴 때 쓰는 태그예요. 처음 삽화를 그릴 때 자동으로 만들어지고, 직접 고치거나 추가한 프로필은 다시 만들어도 그대로 남아요."
         action={
           <>

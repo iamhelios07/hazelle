@@ -36,6 +36,7 @@ function declarations(rule) {
 const textLooks = looksIn('type.module.css', ['note', 'detail', 'title', 'fieldLabel', 'error']);
 textLooks.set('error', { ...textLooks.get('note'), ...textLooks.get('error') });
 const track = looksIn('surface.module.css', ['track']).get('track');
+const grounds = looksIn('surface.module.css', ['glass', 'floating']);
 
 // A text look is redeclared where a rule sets what tells it apart, its font-size with its weight (or, without one, its
 // colour), and no text property to another value: xs muted text with a weight of its own is another look.
@@ -45,6 +46,11 @@ const redeclaresText = (own, look) =>
 // A fraction bar's track is its height and radius; each bar fills it in its own colour.
 const redeclaresTrack = (own) => own.height === track.height && own['border-radius'] === track['border-radius'] && (own.background ?? own['background-color']) !== undefined;
 
+// A ground is redeclared where a rule sets all of its values. Only a lone class outside an at-rule can take composes,
+// so a :global selector or a rule in a container query repeats it and is not reported.
+const redeclaresGround = (node, own, look) =>
+  node.parent.type === 'root' && /^\.[\w-]+$/.test(node.selector) && Object.entries(look).every(([prop, value]) => own[prop] === value);
+
 const rule = (enabled) => (root, result) => {
   if (!stylelint.utils.validateOptions(result, ruleName, { actual: enabled, possible: [true] })) return;
   root.walkRules((node) => {
@@ -53,6 +59,9 @@ const rule = (enabled) => (root, result) => {
       if (redeclaresText(own, values)) stylelint.utils.report({ ruleName, result, node, message: messages.look(look, 'type.module.css') });
     }
     if (redeclaresTrack(own)) stylelint.utils.report({ ruleName, result, node, message: messages.look('track', 'surface.module.css') });
+    for (const [look, values] of grounds) {
+      if (redeclaresGround(node, own, values)) stylelint.utils.report({ ruleName, result, node, message: messages.look(look, 'surface.module.css') });
+    }
   });
 };
 rule.ruleName = ruleName;

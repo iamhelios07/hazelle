@@ -193,10 +193,12 @@
       visibility: hidden;
     }
 
+    /* surface.module.css's glass: composes cannot stand in a container query. */
     .tools {
-      border-color: var(--color-border-strong);
-      background: var(--color-surface-raised);
-      box-shadow: var(--shadow-popover);
+      border-color: var(--color-glass-edge);
+      background: var(--color-glass);
+      box-shadow: var(--shadow-glass);
+      backdrop-filter: var(--filter-glass);
     }
   }
 }

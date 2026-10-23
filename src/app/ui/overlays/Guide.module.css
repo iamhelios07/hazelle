@@ -16,6 +16,7 @@
 }
 
 .bubble {
+  composes: floating from '../foundation/surface.module.css';
   composes: dropIn from '../foundation/motion.module.css';
   position: fixed;
   top: var(--coach-top);
@@ -26,10 +27,8 @@
   gap: var(--space-8);
   width: min(var(--hint-width), calc(100vw - 2 * var(--menu-edge)));
   padding: var(--space-12) var(--space-16);
-  border: var(--border-thin) solid var(--color-accent-border);
+  border-color: var(--color-accent-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-popover);
 }
 
 .head {

@@ -42,6 +42,7 @@
    the tab, so a pointer crossing the edge does not bring it, and leaves a moment after the pointer does, so a pointer
    passing from the tab to it does not close it. */
 .drawer {
+  composes: floating from '../foundation/surface.module.css';
   position: absolute;
   top: 50%;
   right: var(--space-12);
@@ -49,10 +50,9 @@
   flex-direction: column;
   width: min(calc(var(--read-width) - 2 * var(--read-gutter) + 2 * var(--space-24)), calc(100% - 2 * var(--space-12)));
   max-height: 100%;
-  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-lg);
+  /* The story's ground, which a bot's box is drawn for. */
   background: var(--color-bg);
-  box-shadow: var(--shadow-popover);
   visibility: hidden;
   transform: translate(calc(100% + var(--space-12)), -50%);
   transition:

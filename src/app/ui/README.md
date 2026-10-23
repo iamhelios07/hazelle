@@ -96,7 +96,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | foundation | — | `motion.module.css` | Every animation: fade, rise, drop, fade away, spin, pulse, blink, waiting dots, sway |
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
 | foundation | — | `type.module.css` | Shared text looks: a note (sm; a class named `note` is this one), a detail line (xs; a class named `detail` or `sub`), a row's title, an error line, a field's label |
-| foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, a field's frame, a field and its compact size, a fraction bar's track and fill, where a dragged thing would land, an accent dot, a count of what waits behind a button |
+| foundation | — | `surface.module.css` | Shared surfaces: a box of rows and the line between them, glass over the story, the floating ground of a menu, a dialog or a bubble, a field's frame, a field and its compact size, a fraction bar's track and fill, where a dragged thing would land, an accent dot, a count of what waits behind a button |
 | foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`, `usePanelsBeside`, `useViewport`, `hasFinePointer`) | — | Every breakpoint and media query |
 | foundation | `theme.ts` (`applyScheme`, `schemeAttributes`, `THEME`, `BG`, `INK`, `ACCENT`) | — | The theme and color picks on the document or an element |
 | foundation | `ColorDot` | `ColorDot.module.css` | A color pick as the current theme draws it |
@@ -236,7 +236,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 - stylelint (`hazelle/shared-looks`, `stylelint-shared-looks.js`): a `.module.css` outside `foundation` fails on a rule that
   redeclares a look of `type.module.css` (its font-size with its weight, or with its colour where it has none, and no
   text property set otherwise) or the fraction bar's `track` of `surface.module.css` (its height and radius with a
-  background of its own); it takes the look with `composes`. It reads the looks from those files. It does not see a
+  background of its own), or all of `glass`'s or `floating`'s values in a lone class outside an at-rule; it takes the look with `composes`. It reads the looks from those files. It does not see a
   look with a text property of its own added (compose the look, then add it), a grouped or nested selector, or
   `surface`'s other looks.
 - Vitest: `foundation/media.test.ts` fails on a media query that `MEDIA` does not list.

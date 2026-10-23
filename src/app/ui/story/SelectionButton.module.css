@@ -1,4 +1,5 @@
 .button {
+  composes: glass from '../foundation/surface.module.css';
   composes: dropIn from '../foundation/motion.module.css';
   position: fixed;
   /* A phone's selection handles hang below its last line. */
@@ -10,10 +11,7 @@
   gap: var(--space-4);
   height: var(--control-xs);
   padding: 0 var(--space-12);
-  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-full);
-  background: var(--color-surface-raised);
-  box-shadow: var(--shadow-popover);
   color: var(--color-text);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -22,7 +20,7 @@
 }
 
 .button:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-glass-press);
 }
 
 .button[data-above] {

@@ -15,6 +15,13 @@
     backdrop-filter: var(--filter-glass);
   }
 
+  /* Floats over the app: a menu, a dialog, a bubble. Its corner is its size's: a bubble md, a panel lg, a bar full. */
+  .floating {
+    border: var(--border-thin) solid var(--color-border-strong);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-popover);
+  }
+
   .ruled + .ruled {
     border-top: var(--border-thin) solid var(--color-divider);
   }

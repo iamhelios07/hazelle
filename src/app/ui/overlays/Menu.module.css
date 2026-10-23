@@ -4,6 +4,7 @@
 }
 
 .menu {
+  composes: floating from '../foundation/surface.module.css';
   composes: dropIn from '../foundation/motion.module.css';
   position: absolute;
   z-index: var(--layer-menu);
@@ -13,10 +14,7 @@
   max-height: min(var(--menu-max-height), var(--room, var(--menu-max-height)));
   padding: var(--space-8);
   overflow-y: auto;
-  border: var(--border-thin) solid var(--color-border-strong);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-popover);
   translate: var(--nudge, 0) 0;
 }
 
