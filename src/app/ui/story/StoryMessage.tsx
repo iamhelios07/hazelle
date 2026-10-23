@@ -1,6 +1,7 @@
 import { Ban, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageIcon, Languages, Receipt, Scissors, Square, TriangleAlert, WandSparkles } from 'lucide-react';
 import { createContext, useContext, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Button } from '../controls/Button';
+import { Facts, type FactItem } from '../collections/Facts';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import { Text } from '../foundation/Text';
@@ -165,23 +166,10 @@ export function Switcher({ count, prev, next, pick, axis = 'across' }: SwitcherP
   );
 }
 
-// press: the whole marker is the button, for words that are themselves what opens (a reply's usage opens its 응답 정보).
-type MarkerProps = {
-  reason: 'length' | 'stopped' | 'refused' | 'translation' | 'illustration' | 'agent' | 'usage';
-  label: string;
-  action?: { label: string; disabled: boolean; onClick: () => void };
-  press?: { label: string; onClick: () => void };
-};
-const MARKS = { length: Scissors, stopped: Square, refused: Ban, translation: Languages, illustration: ImageIcon, agent: WandSparkles, usage: Receipt };
+type MarkerProps = { reason: 'length' | 'stopped' | 'refused' | 'translation' | 'illustration' | 'agent'; label: string; action?: { label: string; disabled: boolean; onClick: () => void } };
+const MARKS = { length: Scissors, stopped: Square, refused: Ban, translation: Languages, illustration: ImageIcon, agent: WandSparkles };
 
-export function Marker({ reason, label, action, press }: MarkerProps) {
-  if (press)
-    return (
-      <button type="button" className={`${styles.marker} ${styles.pressable}`} title={press.label} aria-label={`${label} · ${press.label}`} onClick={press.onClick}>
-        <Icon icon={MARKS[reason]} size="sm" />
-        <span>{label}</span>
-      </button>
-    );
+export function Marker({ reason, label, action }: MarkerProps) {
   return (
     <div className={reason === 'stopped' ? `${styles.marker} ${styles.stopped}` : styles.marker}>
       <Icon icon={MARKS[reason]} size="sm" />
@@ -190,6 +178,29 @@ export function Marker({ reason, label, action, press }: MarkerProps) {
         <Button variant="link" size="xs" disabled={action.disabled} onClick={action.onClick}>
           {action.label}
         </Button>
+      )}
+    </div>
+  );
+}
+
+// A reply's usage at the end of its text: a line that opens its facts below it, and from them the whole account (more).
+// Not in the foot's markers: the foot sticks to the bottom of the view, and the opened facts would stick with it.
+export function Usage({ line, facts, more }: { line: string; facts: FactItem[]; more: { label: string; onClick: () => void } }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={styles.usage}>
+      <button type="button" className={styles.usageLine} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon icon={Receipt} size="sm" />
+        <span>{line}</span>
+        <Icon icon={open ? ChevronUp : ChevronDown} size="sm" />
+      </button>
+      {open && (
+        <div className={styles.usageFacts}>
+          <Facts items={facts} />
+          <Button variant="link" size="xs" onClick={more.onClick}>
+            {more.label}
+          </Button>
+        </div>
       )}
     </div>
   );

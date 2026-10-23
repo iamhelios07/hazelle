@@ -12,13 +12,13 @@ import { BOOKMARK } from '../common/words';
 import { describeFailedReply, describeTranslateFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
-import { usageLine } from '../common/receipt';
+import { usageFacts, usageLine } from '../common/receipt';
 import { timeOfDay } from '../common/time';
 import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_RETRYING, PRE_READ_WAITING, RETRYING } from '../common/words';
 import type { Preparing } from '../../runtime/turn-steps';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, useMenuOpener, useWide, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, MascotRemark, Menu, MenuHeading, MenuItem, MoreMenu, pressed, SelectionButton, Story, StoryMessage, Switcher, Text, Usage, useMenuOpener, useWide, Waiting, type MenuHandle } from '../ui';
 import { useNow } from './ChatCache';
 import { ChatPicture } from './ChatPicture';
 import { linesOf, markPart, PART_MARK, partOf } from './editPart';
@@ -249,9 +249,6 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           }
         />
       )}
-      {usageShown && receipt && !live && !failed && (
-        <Marker reason="usage" label={usageLine(receipt)} press={{ label: '응답 정보', onClick: () => actions.info(message.id) }} />
-      )}
       {!wide && switcher}
     </>
   );
@@ -366,6 +363,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       writing={live || reveal.revealing}
     >
       {body}
+      {usageShown && receipt && !live && !failed && editing === null && (
+        <Usage line={usageLine(receipt)} facts={usageFacts(receipt)} more={{ label: '자세히', onClick: () => actions.info(message.id) }} />
+      )}
     </StoryMessage>
   );
 }, rowEqual<Props>({ actions: Object.is, modelMenu: Object.is, row: sameParts }));

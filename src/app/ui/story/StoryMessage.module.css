@@ -296,14 +296,38 @@
   fill: currentColor;
 }
 
-.pressable {
+.usage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.usageLine {
+  composes: marker;
   padding: 0;
 }
 
 @media (hover: hover) {
-  .pressable:hover {
+  .usageLine:hover {
     color: var(--color-text);
   }
+}
+
+.usageFacts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-8);
+  align-self: stretch;
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.usageFacts > dl {
+  align-self: stretch;
 }
 
 .failure {

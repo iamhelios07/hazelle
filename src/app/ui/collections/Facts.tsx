@@ -1,11 +1,11 @@
 import styles from './Facts.module.css';
 
 // notes: smaller lines under the value.
-type Item = { label: string; value: string; notes?: string[]; tone?: 'muted' | 'warn' };
+export type FactItem = { label: string; value: string; notes?: string[]; tone?: 'muted' | 'warn' };
 
 // tiles: on a panel's own ground, two to a line. row: all in one line, as a few periods compared; two to a line on a
 // phone. figures: a row of counts on a page, the value leading.
-export function Facts({ items, variant = 'plain' }: { items: Item[]; variant?: 'plain' | 'tiles' | 'row' | 'figures' }) {
+export function Facts({ items, variant = 'plain' }: { items: FactItem[]; variant?: 'plain' | 'tiles' | 'row' | 'figures' }) {
   return (
     <dl className={[styles.facts, variant !== 'plain' && styles[variant]].filter(Boolean).join(' ')}>
       {items.map((item) => (

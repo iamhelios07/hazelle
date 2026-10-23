@@ -1,7 +1,7 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import type { CallPurpose, LogEntry } from '../../runtime/request-log';
 import { describeReplyError } from '../common/failure';
-import { finish, seconds, tokens } from '../common/receipt';
+import { cacheShare, finish, seconds, tokens } from '../common/receipt';
 import { ago } from '../common/time';
 import { FEATURE_NAMES, ROLE_TAGS, SCRIPTS, STAGE_NAMES, TOOL, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
@@ -65,13 +65,14 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
   const read = usage?.cachedInputTokens ?? null;
   const written = usage?.cacheWriteInputTokens ?? null;
   const counted = input !== null && read !== null;
+  const share = cacheShare(usage);
   const facts = [receipt.modelName, finish(receipt).value, seconds(receipt.totalMs), ...(entry.purpose === 'embedding' ? [] : [`첫 토큰 ${seconds(receipt.firstTextMs)}`])];
   const used = !usage ? [`사용량 ${UNKNOWN}`] : counted ? [`읽음 ${tokens(read)}`, `저장 ${tokens(written)}`, `그 외 ${tokens(input - read - (written ?? 0))}`, `출력 ${tokens(usage.outputTokens)}`] : [`입력 ${tokens(input)}`, `출력 ${tokens(usage.outputTokens)}`];
   const broken = receipt.forecast?.broken;
   return (
     <ListItem
       title={entry.agent ? `${entry.agent.name} · ${STAGE_NAMES[entry.agent.stage]} ${PURPOSES.agent}` : PURPOSES[entry.purpose]}
-      badge={counted && input > 0 ? `적중 ${Math.round((read / input) * 100)}%` : undefined}
+      badge={share === null ? undefined : `적중 ${share}%`}
       description={facts.join(' · ')}
       tags={used}
       note={ago(entry.at)}

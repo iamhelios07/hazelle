@@ -1,4 +1,4 @@
-import type { Cost } from '../../connectors/types';
+import type { Cost, Usage } from '../../connectors/types';
 import type { Receipt } from '../../model/chat';
 import { money } from './money';
 import { count } from './typedNumber';
@@ -16,11 +16,6 @@ export function cost(value: Cost | 'pending' | null): string {
   return value.source === 'reported' ? amount : `약 ${amount}`;
 }
 
-export function usageLine({ usage, cost: spent }: Pick<Receipt, 'usage' | 'cost'>): string {
-  const used = usage ? `입력 ${tokens(usage.inputTokens)} · 출력 ${tokens(usage.outputTokens)}` : `사용량 ${UNKNOWN}`;
-  return `${used} · ${spent === null || spent === 'pending' ? `비용 ${cost(spent)}` : cost(spent)}`;
-}
-
 const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김', refused: '제공자가 차단' } as const;
 
 export function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
@@ -36,4 +31,38 @@ const MEASURABLE_MS = 250;
 export function speed(outputTokens: number | null, firstTextMs: number | null, totalMs: number): string {
   if (outputTokens === null || firstTextMs === null || totalMs - firstTextMs < MEASURABLE_MS) return UNKNOWN;
   return `${Math.round(outputTokens / ((totalMs - firstTextMs) / 1000))} tok/s`;
+}
+
+// The share of the input read from the provider's cache; null where the provider does not say what it read.
+export function cacheShare(usage: Usage | null): number | null {
+  const input = usage?.inputTokens ?? null;
+  const read = usage?.cachedInputTokens ?? null;
+  return input === null || read === null || input === 0 ? null : Math.round((read / input) * 100);
+}
+
+// 사용량 표시: the line under a reply, and the facts it opens. The line leaves out a cache the provider does not report,
+// which the facts read as unknown.
+export function usageLine(receipt: Receipt): string {
+  const { usage } = receipt;
+  const share = cacheShare(usage);
+  return [
+    usage ? `${tokens(usage.inputTokens)} → ${tokens(usage.outputTokens)}` : `사용량 ${UNKNOWN}`,
+    ...(share === null ? [] : [`캐시 ${share}%`]),
+    receipt.cost === null || receipt.cost === 'pending' ? `비용 ${cost(receipt.cost)}` : cost(receipt.cost),
+    seconds(receipt.totalMs),
+  ].join(' · ');
+}
+
+export function usageFacts(receipt: Receipt) {
+  const { usage } = receipt;
+  const share = cacheShare(usage);
+  const reasoning = usage?.reasoningTokens ?? null;
+  return [
+    { label: '입력', value: tokens(usage?.inputTokens ?? null), notes: [`캐시 적중 ${share === null ? UNKNOWN : `${share}%`}`] },
+    { label: '출력', value: tokens(usage?.outputTokens ?? null), notes: [`추론 ${tokens(reasoning)}`] },
+    { label: '비용', value: cost(receipt.cost), tone: receipt.cost === null ? ('muted' as const) : undefined },
+    { label: '걸린 시간', value: seconds(receipt.totalMs), notes: [`첫 토큰 ${seconds(receipt.firstTextMs)}`] },
+    { label: '속도', value: speed(usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
+    { label: '모델', value: receipt.modelName, notes: [receipt.source] },
+  ];
 }

@@ -1,5 +1,5 @@
 export { ORIGINAL_MARK, READER_RESIZED, Story, storySelection, storySnapshot, type BotButton } from './Story';
-export { Failure, Marker, StoryMessage, Switcher, TimePinContext, useTimePin, Waiting } from './StoryMessage';
+export { Failure, Marker, StoryMessage, Switcher, TimePinContext, Usage, useTimePin, Waiting } from './StoryMessage';
 export { ReadingPreview, type PreviewRow } from './ReadingPreview';
 export { MascotRemark } from './MascotRemark';
 export { StatusBox } from './StatusBox';
