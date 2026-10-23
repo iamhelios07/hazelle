@@ -92,7 +92,7 @@ A fresh installation admits one account, which makes it one person's: the first 
 
 ### Your own installation
 
-`HAZELLE_SELF_HOST: 1` in `docker-compose.yml`, which the start without Docker sets too, marks the installation as someone's own rather than hazelle.app. Its relay has no daily limits (`HAZELLE_RELAY_DAILY_BYTES` and `HAZELLE_RELAY_DAILY_HOSTS` set some). 헤이젤 나우 and 게시판 open on hazelle.app, where release news and questions live. There are no share links: characters travel as files. The legal page lists what leaves the installation instead of hazelle.app's terms, and the admin screen keeps signups, storage caps, accounts and its log. An installation that admits one account has no storage caps.
+`HAZELLE_SELF_HOST: 1` in `docker-compose.yml`, which the start without Docker sets too, marks the installation as someone's own rather than hazelle.app. Its relay has no daily limits (`HAZELLE_RELAY_DAILY_BYTES` and `HAZELLE_RELAY_DAILY_HOSTS` set some). 헤이젤 나우 and 게시판 open on hazelle.app, where release news and questions live. There are no share links: characters travel as files. The legal page lists what leaves the installation instead of hazelle.app's terms, and the admin screen keeps signups, storage caps, accounts and its log. An installation that admits one account has no storage caps. The server asks GitHub for the newest release every hour, and 앱 정보 says when there is a newer one. New connections list the model servers of the machine that answer at the allowed addresses, each connected in one tap.
 
 Each 헤이젤 나우 count also goes to hazelle.app's board: the role, connection type and model id, with a hash of the account in place of its id. Each account turns it off with 헤이젤 나우 집계 참여 in 앱 정보.
 
@@ -103,7 +103,7 @@ Each release also carries the image's app outside the image, run by Node instead
 - **Windows:** unzip `hazelle-windows-x64.zip`, which bundles Node, and run `start-hazelle.bat`. Each start checks for a newer release and, when there is one, shows both versions and asks; a yes replaces `node` and `app` before starting, and `data` and the batch file stay.
 - **Termux, Linux, macOS:** `curl -fsSL https://github.com/jiniill/hazelle/releases/latest/download/install.sh | sh` installs into `~/hazelle` with Node 24 or newer (Termux installs it) and starts it; `sh ~/hazelle/start` starts it later. Run the installer again to update, with Hazelle stopped.
 
-The daily snapshots and generations below are taken here too, inside `data`; the off-site copier and the restore command are Docker's. Copy the `data` folder while Hazelle is stopped to keep a copy elsewhere.
+The daily snapshots and generations below are taken here too, inside `data`, from 00:00 UTC, so a machine that is on for part of the day takes one at its first start of each UTC day (`HAZELLE_SNAPSHOT_HOUR` moves it). To keep copies elsewhere, enter a folder on another disk or a synced folder as 백업 폴더 on the admin screen: each generation is copied there, in the layout the rclone copier gives a remote, and the folder keeps the same set. Restore one into an empty `data` with Hazelle stopped: `node app/dist/server/restore-cli.js <folder>/<generation> data` (Windows: `node\node.exe app\dist\server\restore-cli.js`), run from the folder holding `app`.
 
 ### Phones and other devices
 
@@ -115,7 +115,7 @@ The compose file allows three local model servers on the host machine: Ollama (1
 
 ### Backups
 
-Every day after 03:00 UTC the app takes a snapshot of each account and writes a backup generation under `backup/` in its volume. Generations are kept for 7 days: the two newest and the newest of each day. To keep copies elsewhere, run the `backup` profile, which copies every complete generation to any rclone remote (S3, Backblaze, Google Drive, a second disk) with `rclone copy` (never `sync`), keeps the same set there, and marks each generation `copied` so the app knows it is safe:
+Every day after 03:00 UTC (00:00 on your own installation) the app takes a snapshot of each account and writes a backup generation under `backup/` in its volume. Generations are kept for 7 days: the two newest and the newest of each day. To keep copies elsewhere, run the `backup` profile, which copies every complete generation to any rclone remote (S3, Backblaze, Google Drive, a second disk) with `rclone copy` (never `sync`), keeps the same set there, and marks each generation `copied` so the app knows it is safe:
 
 1. Put the copier's script beside the compose file: `mkdir -p deploy && curl -fL -o deploy/rclone-backup.sh https://github.com/jiniill/hazelle/releases/latest/download/rclone-backup.sh`.
 2. Create the remote's settings beside the compose file: `mkdir -p rclone && rclone config --config ./rclone/rclone.conf` (the copier reads `/config/rclone/rclone.conf`). The copier runs as uid 1000: `chown -R 1000 rclone && chmod 700 rclone && chmod 600 rclone/rclone.conf`. Remotes that refresh OAuth tokens (Google Drive, Dropbox) rewrite the file, which needs the directory to be writable by that uid as well.
@@ -126,7 +126,7 @@ The copier checks every hour. `docker compose --profile backup exec backup /bin/
 
 ### Alerts
 
-`/api/health` reports `backupAgeHours` (since the newest generation that was copied off-site) and `diskFreePercent`. The admin screen shows a banner when no copied generation is newer than 36 hours, or the disk is less than 20 % free. Set `HAZELLE_ALERT_WEBHOOK` in `.env` to a Discord- or Slack-compatible webhook URL to get the same warnings, plus a failed daily backup job and a server falling behind (its event loop delayed over 0.25 s in three 10-second windows within an hour), at most once a day each.
+`/api/health` reports `backupAgeHours` (since the newest generation that was copied off-site) and `diskFreePercent`. The admin screen shows a banner when no copied generation is newer than 36 hours (on your own installation, only once something copies them: the backup profile or a backup folder), or the disk is less than 20 % free. Set `HAZELLE_ALERT_WEBHOOK` in `.env` to a Discord- or Slack-compatible webhook URL to get the same warnings, plus a failed daily backup job and a server falling behind (its event loop delayed over 0.25 s in three 10-second windows within an hour), at most once a day each.
 
 ### Restore
 

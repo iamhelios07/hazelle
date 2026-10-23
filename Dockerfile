@@ -22,7 +22,7 @@ RUN VITE_HAZELLE_VERSION=$HAZELLE_VERSION ./node_modules/.bin/vite build \
  && cp -r node_modules/undici /out/node_modules/
 
 FROM node:24-alpine
-ENV NODE_ENV=production HAZELLE_DATA=/data PORT=8080
+ENV NODE_ENV=production HAZELLE_DATA=/data PORT=8080 HAZELLE_CONTAINER=1
 # node.ts finds dist/client relative to the working directory and migrations/ two levels above dist/server.
 WORKDIR /app
 COPY --from=build /src/package.json ./

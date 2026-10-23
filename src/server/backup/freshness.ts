@@ -23,7 +23,10 @@ export async function freePercent(path: string): Promise<number> {
   return Math.floor((bavail / blocks) * 1000) / 10;
 }
 
-export async function freshness(env: Services, dataDir: string, now: number, free: DiskFree): Promise<Freshness> {
+// expectsCopies: whether a copier should be writing copied markers here. hazelle.app's always is; a self-host's is its
+// backup folder once one is set, or the Docker copier it may run, which shows itself only by its markers. Without one,
+// no copy is overdue: the admin screen's 백업 폴더 row says the backups stay on this disk.
+export async function freshness(env: Services, dataDir: string, now: number, free: DiskFree, expectsCopies: boolean): Promise<Freshness> {
   const complete = (await listGenerations(dataDir))
     .filter(({ id }) => existsSync(join(generationsDir(dataDir), id, MANIFEST)) && existsSync(join(generationsDir(dataDir), id, COPIED)))
     .map(({ capturedAt }) => capturedAt);
@@ -32,7 +35,7 @@ export async function freshness(env: Services, dataDir: string, now: number, fre
   const diskFreePercent = Math.min(...(await Promise.all([dataDir, ...(existsSync(files) ? [files] : [])].map(free))));
   // With no complete generation yet, the installation's own age is how long it has gone without one.
   const unbackedHours =
-    backupAgeHours ?? (now - (await env.db.prepare('SELECT created_at FROM installation').first<number>('created_at'))!) / HOUR_MS;
+    backupAgeHours ?? (expectsCopies ? (now - (await env.db.prepare('SELECT created_at FROM installation').first<number>('created_at'))!) / HOUR_MS : 0);
   const warnings: BackupWarning[] = [];
   if (unbackedHours > STALE_HOURS) warnings.push('backup-stale');
   if (diskFreePercent < MIN_FREE_PERCENT) warnings.push('disk-full');

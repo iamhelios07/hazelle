@@ -1,6 +1,8 @@
+import type { BackupCopyFailure } from '../../contracts/admin';
 import type { Alerts } from '../alerts';
 import { DAY_MS, type Services } from '../http';
 import { recordDeparture } from './departures';
+import { checkFolder, copyToFolder } from './folder';
 import { freePercent, freshness, type DiskFree, type Freshness } from './freshness';
 import { captureGeneration, expireGenerations, generationsDir, namedArchives } from './generation';
 import { dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
@@ -12,6 +14,10 @@ const HOUR_MS = 60 * 60 * 1000;
 
 type Outcome = { outcome: 'ok' | 'failed'; error: string | null };
 
+// Where copies of the generations go: hazelle.app's Docker copier, which must be running; a self-host's in Docker, which
+// may be; a self-host's backup folder (folder.ts), once one is set.
+export type Copier = 'remote' | 'optional' | 'folder';
+
 export type Backups = {
   // Lifecycle steps, file claims on object writes or share publication, and file sweeps hold off generation capture.
   // A hold waits while a generation is being captured; capture waits for existing holds. Writes naming no files take none. Holds never
@@ -20,7 +26,8 @@ export type Backups = {
   // Runs the daily job unless today's (UTC) generation is already captured or the hour has not come: a failed
   // generation is tried again on the next tick, and a run the process missed while down happens on the first tick
   // after it. A baseline that failed beside a captured generation waits for tomorrow; its failed run raises the alert.
-  // Then sends each standing alert to the webhook, at most once a UTC day per condition.
+  // Then copies to the backup folder what is not there yet, and sends each standing alert to the webhook, at most once a
+  // UTC day per condition.
   tick(env: Services, now: number): Promise<void>;
   freshness(env: Services, now: number): Promise<Freshness>;
   daily(env: Services, now: number): Promise<{ snapshots: Outcome; generation: Outcome }>;
@@ -30,10 +37,19 @@ export type Backups = {
   fresh(env: Services): Promise<{ snapshots: Outcome; generation: Outcome }>;
   // Records an account's departure (departures.ts), durably, before any of it is destroyed.
   depart(account: string, incarnation: string, at: number): void;
+  copier: Copier;
+  checkFolder(typed: string): ReturnType<typeof checkFolder>;
+  // Why the last pass to the backup folder failed; null after one that did not, and before the first.
+  copyFailure(): BackupCopyFailure | null;
 };
 
-export function backups(dataDir: string, hour: number, alerts: Alerts, free: DiskFree = freePercent): Backups {
+const FAILURES: Record<string, BackupCopyFailure> = { ENOENT: 'missing', EACCES: 'denied', EPERM: 'denied', EROFS: 'denied', ENOSPC: 'full' };
+
+export const savedFolder = async (env: Services) => env.db.prepare('SELECT backup_folder FROM service').first<string | null>('backup_folder');
+
+export function backups(dataDir: string, hour: number, alerts: Alerts, free: DiskFree = freePercent, copier: Copier = 'remote'): Backups {
   let holds = 0;
+  let copyFailure: BackupCopyFailure | null = null;
   let capturing: Promise<void> | null = null;
   let drained: (() => void) | null = null;
   let running: ReturnType<Backups['daily']> | null = null;
@@ -105,10 +121,24 @@ export function backups(dataDir: string, hour: number, alerts: Alerts, free: Dis
     return running;
   };
 
+  const expectsCopies = async (env: Services) => copier === 'remote' || (copier === 'folder' && (await savedFolder(env)) !== null);
+  const readFreshness = async (env: Services, now: number) => freshness(env, dataDir, now, free, await expectsCopies(env));
+
+  const copyOut = async (env: Services, now: number) => {
+    const folder = await savedFolder(env);
+    try {
+      if (folder !== null) await copyToFolder(dataDir, folder, now);
+      copyFailure = null;
+    } catch (error) {
+      copyFailure = FAILURES[(error as NodeJS.ErrnoException).code ?? ''] ?? 'failed';
+      console.error('backup folder copy failed', String(error));
+    }
+  };
+
   const alert = async (env: Services, now: number) => {
     const day = dayStart(now);
     const failed = await env.db.prepare("SELECT 1 FROM backup_runs WHERE outcome = 'failed' AND started_at >= ?1 AND started_at < ?1 + ?2").bind(day, DAY_MS).first();
-    const standing = [...(await freshness(env, dataDir, now, free)).warnings, ...(failed === null ? [] : ['job-failed' as const])];
+    const standing = [...(await readFreshness(env, now)).warnings, ...(failed === null ? [] : ['job-failed' as const])];
     for (const condition of standing) await alerts.send(env, condition, now);
   };
 
@@ -121,8 +151,11 @@ export function backups(dataDir: string, hour: number, alerts: Alerts, free: Dis
       while (running) await running;
       return job(env, Date.now(), true);
     },
-    freshness: (env, now) => freshness(env, dataDir, now, free),
+    freshness: readFreshness,
     depart: (account, incarnation, at) => recordDeparture(generationsDir(dataDir), { account, incarnation, leftAt: at }),
+    copier,
+    checkFolder: (typed) => checkFolder(dataDir, typed),
+    copyFailure: () => copyFailure,
     // One tick at a time: a second that comes while one runs gets that one, so no alert goes out twice. Today is the
     // UTC day itself, not "from its start on": a run stamped by a clock since put back belongs to no day yet.
     tick: (env, now) =>
@@ -134,6 +167,7 @@ export function backups(dataDir: string, hour: number, alerts: Alerts, free: Dis
             .first();
           if (done === null) await daily(env, now);
         }
+        if (copier === 'folder') await copyOut(env, now);
         await alert(env, now);
       })().finally(() => {
         ticking = null;

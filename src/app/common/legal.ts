@@ -7,6 +7,7 @@ import { PULSE } from './words';
 
 export const OPERATOR = '정말고마워요';
 export const REPOSITORY = 'https://github.com/jiniill/hazelle';
+export const INSTALL_GUIDE = `${REPOSITORY}/blob/master/README.ko.md`;
 // The date the current text takes effect, set by the operator. Changing either text sets it anew.
 export const EFFECTIVE: string = '2026년 10월 21일';
 
@@ -338,7 +339,7 @@ export const OUTBOUND: LegalText = {
         [
           '모델 호출과 모델 목록 조회는 이 설치의 서버가 이용자가 연결한 제공자에게 보냅니다. 제공자는 이 서버의 IP 주소를 알 수 있습니다.',
           '모델 정보(가격, 컨텍스트 길이)는 이 서버가 models.dev에서 받아 옵니다.',
-          '윈도우에서 도커 없이 쓰면 켤 때마다 GitHub에 최신 버전을 묻습니다.',
+          '이 서버가 한 시간마다 GitHub에 최신 버전을 묻습니다. 윈도우에서 도커 없이 쓰면 켤 때마다 한 번 더 묻습니다.',
         ],
       ],
     },

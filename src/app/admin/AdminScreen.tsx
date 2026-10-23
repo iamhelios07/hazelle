@@ -9,6 +9,7 @@ import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Beside, Callout, NavBar, Screen, Section, SettingGroup, SettingRow, Switch } from '../ui';
 import { AccountsSection } from './AccountsSection';
+import { BackupCopierNote, BackupFolderSection } from './BackupFolderSection';
 import { LogSection } from './LogSection';
 import { OperatorPostsSection } from './OperatorPostsSection';
 import { ReportsSection } from './ReportsSection';
@@ -56,6 +57,8 @@ export function AdminScreen({ back }: { back: Back | null }) {
         </AccountsSection>
         {service.loading}
         {service.data && <ServiceSection service={service.data} onSaved={acted} />}
+        {service.data?.backupFolder && <BackupFolderSection folder={service.data.backupFolder} backupAgeHours={service.data.backupAgeHours} onSaved={acted} />}
+        {own && service.data && !service.data.backupFolder && service.data.backupAgeHours === null && <BackupCopierNote />}
         {!own && moderating && <ToolsSection onActed={acted} />}
       </Beside>
     </Screen>

@@ -74,11 +74,16 @@ async function place(source: string, target: string) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'EEXIST') return;
     if (code !== 'EXDEV') throw error;
-    const temp = join(dirname(target), `.tmp-${randomBytes(8).toString('hex')}`);
-    await copyFile(source, temp);
-    fsyncPath(temp);
-    await rename(temp, target);
+    await copyWhole(source, target);
   }
+}
+
+// A copy that appears under its name only whole: a cut-off one leaves a .tmp-* beside it. The caller syncs the directory.
+export async function copyWhole(source: string, target: string) {
+  const temp = join(dirname(target), `.tmp-${randomBytes(8).toString('hex')}`);
+  await copyFile(source, temp);
+  fsyncPath(temp);
+  await rename(temp, target);
 }
 
 type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'bucket' | 'snapshotStore'>;
@@ -247,8 +252,11 @@ export async function readManifest(root: string): Promise<Manifest | null> {
   }
 }
 
-export async function listGenerations(dataDir: string): Promise<{ id: string; capturedAt: number }[]> {
-  return (await entries(generationsDir(dataDir))).flatMap((name) => {
+export const listGenerations = (dataDir: string) => generationsIn(generationsDir(dataDir));
+
+// root: backup/ or a folder its generations are copied to (folder.ts), which share one layout.
+export async function generationsIn(root: string): Promise<{ id: string; capturedAt: number }[]> {
+  return (await entries(root)).flatMap((name) => {
     const at = GENERATION.exec(name)?.[1];
     return at === undefined ? [] : [{ id: name, capturedAt: Number(at) }];
   });
@@ -271,14 +279,17 @@ export async function namedArchives(dataDir: string): Promise<Map<string, number
 // captures one, and of those only the latest two are kept for a rollback (ruled 2026-10-12). Then every picture in the
 // pool that no remaining disk generation names: an r2 one names pictures in the store, so the pool of the generations
 // before a switch to R2 empties as they expire. Runs inside the daily job, so no capture is writing.
-// deploy/rclone-backup.sh prune applies the same rule to the remote: change both together.
-export async function expireGenerations(dataDir: string, now: number): Promise<{ removed: number; pictures: number }> {
+// A backup folder is thinned by the same rule (folder.ts); deploy/rclone-backup.sh prune applies it to a remote by hand:
+// change both together.
+export const expireGenerations = (dataDir: string, now: number) => thinGenerations(generationsDir(dataDir), now);
+
+export async function thinGenerations(dir: string, now: number): Promise<{ removed: number; pictures: number }> {
   let removed = 0;
   let whole = 0;
   const days = new Set<number>();
   const kept = new Set<string>();
-  for (const { id, capturedAt } of (await listGenerations(dataDir)).toSorted((a, b) => b.capturedAt - a.capturedAt)) {
-    const root = join(generationsDir(dataDir), id);
+  for (const { id, capturedAt } of (await generationsIn(dir)).toSorted((a, b) => b.capturedAt - a.capturedAt)) {
+    const root = join(dir, id);
     const manifest = await readManifest(root);
     let keep: boolean;
     if (manifest === null) keep = capturedAt > now - DAY_MS;
@@ -295,7 +306,7 @@ export async function expireGenerations(dataDir: string, now: number): Promise<{
     await pass();
   }
   let pictures = 0;
-  const pool = join(generationsDir(dataDir), POOL);
+  const pool = join(dir, POOL);
   for (const name of await readdir(pool).catch(() => [])) {
     if (kept.has(name)) continue;
     await rm(join(pool, name), { force: true });

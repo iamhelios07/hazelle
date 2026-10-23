@@ -128,7 +128,7 @@ prune_snapshots() {
 
 # A generation goes at the retention, and one with a manifest sooner unless it is one of the two newest with a manifest
 # or the newest with a manifest of its UTC day; then the pool. Read from the remote listing alone, so a machine that lost
-# its generations never empties the remote. The same rule as expireGenerations (src/server/backup/generation.ts) for a
+# its generations never empties the remote. The same rule as thinGenerations (src/server/backup/generation.ts) for a
 # copied generation: change both together. One without a manifest is a copy cut off, which the next pass completes.
 prune() {
   now_ms=$(($(date +%s) * 1000))

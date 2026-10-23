@@ -4,6 +4,11 @@ export const MAX_NOTICE_LENGTH = 2000;
 export type VisitDay = { day: number; visitors: number; guests: number; accounts: number; converted: number };
 
 export type BackupWarning = 'backup-stale' | 'disk-full';
+// Why the last pass to a self-host's backup folder failed (server/backup/folder.ts): the folder is gone, refused writing,
+// or its disk is full.
+export type BackupCopyFailure = 'missing' | 'denied' | 'full' | 'failed';
+// path: null while none is set. Absent where the installation offers none (server/node.ts).
+export type BackupFolder = { path: string | null; failure: BackupCopyFailure | null };
 // restoring: held by a restore until it ends. leaving: its deletion stopped before the end; removing it again finishes it.
 export type AccountState = 'active' | 'restoring' | 'leaving';
 

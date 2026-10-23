@@ -12,6 +12,7 @@ import { alerts, slowLoop } from './alerts';
 import { serviceReads } from './account-store';
 import { forgetOldRecords } from './admin';
 import { backups } from './backup/backups';
+import { freePercent } from './backup/freshness';
 import { listGenerations } from './backup/generation';
 import { accountRegistry } from './db/account-db';
 import { migrate } from './db/migrate';
@@ -29,7 +30,8 @@ import { streamStore } from './db/streams-db';
 import app from './worker';
 import { publishNews, RELEASE_NEWS } from './news';
 import { VERSION_HEADER } from '../contracts/http';
-import { HOSTED } from '../contracts/installation';
+import { HOSTED, type Release } from '../contracts/installation';
+import { releases } from './releases';
 import { openVisits, visitDay, type FrontendMessage } from './visits';
 
 // Configuration is the environment (docs/research/docker-port-plan.md §11).
@@ -73,7 +75,10 @@ const selfHost = wholeFrom('HAZELLE_SELF_HOST', 0, 0, 1) === 1;
 const host = process.env.HAZELLE_HOST || undefined;
 const trustedProxies = proxiesFrom('HAZELLE_TRUSTED_PROXIES');
 const drainMs = wholeFrom('HAZELLE_DRAIN_SECONDS', 60, 0, 3600) * 1000;
-const snapshotHour = wholeFrom('HAZELLE_SNAPSHOT_HOUR', 3, 0, 23);
+// A self-host's computer may be on for part of the day only; from hour 0 its first start of each UTC day takes the day's.
+const snapshotHour = wholeFrom('HAZELLE_SNAPSHOT_HOUR', selfHost ? 0 : 3, 0, 23);
+// The Dockerfile sets it: inside the image a folder the admin names is the container's own, gone at the next update.
+const container = wholeFrom('HAZELLE_CONTAINER', 0, 0, 1) === 1;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
 const clientDir = process.env.HAZELLE_CLIENT ?? 'dist/client';
@@ -131,6 +136,7 @@ const limits = {
 const operatorAlerts = alerts(process.env.HAZELLE_ALERT_WEBHOOK || null);
 const local = localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? '');
 const outbound = pinnedOutbound(local);
+const release = releases(outbound, version);
 const services: Services = {
   db,
   files,
@@ -139,7 +145,7 @@ const services: Services = {
   outbound,
   localProviders: local,
   limits,
-  backups: backups(dataDir, snapshotHour, operatorAlerts),
+  backups: backups(dataDir, snapshotHour, operatorAlerts, freePercent, !selfHost ? 'remote' : !container && files.kind === 'disk' ? 'folder' : 'optional'),
   pulse: selfHost ? forwarded(openPulse(db), new URL(HOSTED), outbound) : openPulse(db),
 };
 
@@ -166,6 +172,7 @@ root.get('/api/health', async (c) => {
   const { backupAgeHours, diskFreePercent } = await services.backups.freshness(services, Date.now());
   return c.json({ ok: true, liveCalls: services.streams.live(), backupAgeHours, diskFreePercent });
 });
+root.get('/api/release', (c) => c.json({ newer: release.newer() } satisfies Release));
 root.route('/', app);
 // An unknown API path is a real 404, never the page.
 root.all('/api/*', (c) => fail(c, 404, 'not-found'));
@@ -190,6 +197,7 @@ const hourly = () => {
   ctx.waitUntil(forgetOldRecords(db));
   ctx.waitUntil(forgetPulse(db));
   ctx.waitUntil(reconcile(dataDir, db, files).then(({ removed }) => removed.length && log('reconciled', { removed })));
+  if (selfHost) ctx.waitUntil(release.refresh());
 };
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();

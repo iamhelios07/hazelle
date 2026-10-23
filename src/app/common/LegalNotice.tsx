@@ -1,7 +1,7 @@
 import { Link, Row, Stack, Text } from '../ui';
 import { HOSTED } from '../../contracts/installation';
 import { selfHost } from '../../runtime/installation';
-import { OPERATOR, OUTBOUND, PRIVACY, REPOSITORY, TERMS } from './legal';
+import { INSTALL_GUIDE, OPERATOR, OUTBOUND, PRIVACY, REPOSITORY, TERMS } from './legal';
 import { BUILT_VERSION } from './release';
 import { PULSE } from './words';
 
@@ -19,7 +19,7 @@ export function LegalNotice() {
       </Text>
       <Row kind="tags">
         <Link href={source}>GitHub</Link>
-        <Link href={`${REPOSITORY}/blob/master/README.ko.md`}>내 기기에 설치</Link>
+        <Link href={INSTALL_GUIDE}>내 기기에 설치</Link>
         <Link href="/source.tar.gz" download="hazelle-source.tar.gz">
           소스 코드 받기
         </Link>

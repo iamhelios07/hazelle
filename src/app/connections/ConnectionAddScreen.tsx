@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { resolveConnection, searchTypes } from '../../connectors/registry';
-import type { ConnectionType } from '../../connectors/types';
-import { providerConnection } from '../../runtime/connections';
+import { useEffect, useState } from 'react';
+import { GENERIC, resolveConnection, searchTypes } from '../../connectors/registry';
+import type { Connection, ConnectionType } from '../../connectors/types';
+import { newAccount, providerConnection } from '../../runtime/connections';
+import { count as counted } from '../common/typedNumber';
 import { newOf } from '../common/acts';
 import { noResults } from '../common/search';
 import { DIRECT_CONNECTION, NEEDS_ACCOUNT } from '../common/words';
@@ -19,9 +20,43 @@ const GROUPS: Record<ConnectionType['group'], string> = {
   subscription: '구독 계정으로',
 };
 
+// Ollama, LM Studio and koboldcpp at the ports launch.ts and docker-compose.yml list; another listed one goes by its address.
+const LOCAL_NAMES: Partial<Record<string, string>> = { '11434': 'Ollama', '1234': 'LM Studio', '5001': 'koboldcpp' };
+
+const localConnection = (address: string): Connection => ({
+  type: GENERIC,
+  label: LOCAL_NAMES[address.split(':').at(-1)!] ?? address,
+  baseUrl: `http://${address}/v1`,
+  protocol: 'chat-completions',
+  accounts: [newAccount('')],
+  turns: null,
+  starred: [],
+});
+
+// The model servers a self-host lists (HAZELLE_LOCAL_PROVIDERS) that answer with a model list now; hazelle.app lists none.
+function useLocalServers(addresses: readonly string[]) {
+  const session = useSession();
+  const [found, setFound] = useState<{ address: string; connection: Connection; models: number }[]>([]);
+  useEffect(() => {
+    let open = true;
+    void Promise.all(
+      addresses.map(async (address) => {
+        const connection = localConnection(address);
+        const catalog = await session.catalogs.load(connection);
+        return catalog.ok ? [{ address, connection, models: catalog.models.length }] : [];
+      }),
+    ).then((lists) => open && setFound(lists.flat()));
+    return () => {
+      open = false;
+    };
+  }, [session, addresses]);
+  return found;
+}
+
 export function ConnectionAddScreen({ back }: { back: Back }) {
   const session = useSession();
-  const { guest } = useAccount();
+  const { guest, localProviders } = useAccount();
+  const local = useLocalServers(localProviders);
   const connections = useConnections();
   const route = useRoute();
   const [query, setQuery] = useState('');
@@ -55,6 +90,24 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
         <Callout tone="warn" alert>
           {failure}
         </Callout>
+      )}
+      {!query.trim() && local.length > 0 && (
+        <Section title="이 컴퓨터의 모델 서버">
+          <List label="이 컴퓨터의 모델 서버" places>
+            {local.map(({ address, connection, models }) => {
+              const count = connections.filter((entry) => entry.value.baseUrl === connection.baseUrl).length;
+              return (
+                <ListItem
+                  key={address}
+                  title={connection.label}
+                  description={connection.label === address ? `모델 ${counted(models)}개` : `${address} · 모델 ${counted(models)}개`}
+                  tags={count ? [`연결 ${count}개`] : []}
+                  onClick={() => void run((signal) => connect(session, connection, signal))}
+                />
+              );
+            })}
+          </List>
+        </Section>
       )}
       {sections.map(([title, types]) =>
         types.length ? (

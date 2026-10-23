@@ -1,5 +1,5 @@
 import { logOutOthers } from '../../runtime/account';
-import { selfHost } from '../../runtime/installation';
+import { readRelease, selfHost } from '../../runtime/installation';
 import { setPulseSharing, sharesPulse } from '../../runtime/pulse';
 import { sizeText } from '../common/size';
 import { count } from '../common/typedNumber';
@@ -9,6 +9,8 @@ import { backBar, navigate } from '../shell/router';
 import type { AccountSection, Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
+import { INSTALL_GUIDE } from '../common/legal';
+import { useLoaded } from '../common/useLoaded';
 import { BUILT_VERSION } from '../common/release';
 import { BIN, BOARD, PAGES, PULSE, UNKNOWN } from '../common/words';
 import { Avatar, Button, Columns, FaceRow, Gauge, NavBar, Panel, Screen, SettingGroup, SettingRow, Stack, Switch, Text } from '../ui';
@@ -146,6 +148,23 @@ function BoardRows() {
   );
 }
 
+// A self-host updates itself the way it was installed, which the guide says per way.
+function NewerRelease() {
+  const release = useLoaded(readRelease);
+  const newer = release.data?.newer;
+  if (!newer) return null;
+  return (
+    <SettingRow
+      label={`새 버전 ${newer}이 나왔어요`}
+      control={
+        <Button variant="secondary" size="sm" onClick={() => window.open(INSTALL_GUIDE, '_blank', 'noopener')}>
+          업데이트 방법
+        </Button>
+      }
+    />
+  );
+}
+
 function AppInfo() {
   const toast = useToast();
   const store = useStore();
@@ -158,6 +177,7 @@ function AppInfo() {
     <Panel title="앱 정보">
       <SettingGroup label="앱 정보">
         <SettingRow label="버전" control={<Text>{BUILT_VERSION ?? UNKNOWN}</Text>} />
+        {selfHost() && <NewerRelease />}
         <SettingRow
           label="새 소식"
           control={

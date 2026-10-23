@@ -68,6 +68,10 @@ const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in On
   'picture-unreadable': UNREADABLE_IMAGE,
   'picture-refused': '이미지 용량이 너무 크거나, 차단된 파일이거나, 파일 한도를 넘었어요.',
   'file-blocked': '운영자가 차단한 파일이라 올리거나 열 수 없어요.',
+  // The admin screen's 백업 폴더 (server/backup/folder.ts).
+  'folder-not-absolute': '전체 경로를 입력해 주세요. 예: D:\\헤이젤 백업',
+  'folder-in-data': '헤이젤 데이터 폴더 밖에 있는 폴더를 정해 주세요.',
+  'folder-unwritable': '이 폴더에 쓸 수 없어요. 폴더가 있는지, 쓸 권한이 있는지 확인해 주세요.',
   'too-many-reports': '운영자가 아직 확인하지 않은 알림이 많아서 더 보낼 수 없어요.',
   'bad-nickname': `닉네임은 ${count(NICKNAME_LENGTH.min)}~${count(NICKNAME_LENGTH.max)}자로, @ # / 같은 기호 없이 지을 수 있어요.`,
   'nickname-taken': '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 지어 주세요.',

@@ -2,7 +2,8 @@ import type { BoardSettings } from '../contracts/board';
 import type { PulseSettings } from '../contracts/pulse';
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { type AccountState, type RestoreAction, MAX_NOTICE_LENGTH } from '../contracts/admin';
+import { type AccountState, type BackupFolder, type RestoreAction, MAX_NOTICE_LENGTH } from '../contracts/admin';
+import { savedFolder } from './backup/backups';
 import { SHARE_ID } from '../contracts/shares';
 import { blockFiles, fileBlocks } from './files';
 import { forgetCut, serveShareFile } from './shares';
@@ -341,7 +342,26 @@ admin.get('/service', async (c) => {
        (SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()) AS databaseBytes
      FROM service`,
   ).first();
-  return c.json({ ...row, ...(await c.env.backups.freshness(c.env, Date.now())) });
+  const backups = c.env.backups;
+  const backupFolder: BackupFolder | undefined = backups.copier === 'folder' ? { path: await savedFolder(c.env), failure: backups.copyFailure() } : undefined;
+  return c.json({ ...row, ...(await backups.freshness(c.env, Date.now())), backupFolder });
+});
+
+// null clears it. A saved folder is copied to at once, so its first pass is not an hour away.
+admin.put('/backup-folder', async (c) => {
+  if (c.env.backups.copier !== 'folder') return fail(c, 404, 'not-found');
+  const body = await readObject(c);
+  const typed = body?.folder;
+  if (typed !== null && typeof typed !== 'string') return fail(c, 400, 'bad-input');
+  const checked = typed === null ? { ok: true as const, folder: null } : await c.env.backups.checkFolder(typed);
+  if (!checked.ok) return fail(c, 400, checked.error);
+  const db = c.env.db;
+  await db.batch([
+    db.prepare("INSERT INTO admin_log (at, action, target, detail) VALUES (?, 'set-backup-folder', 'service', ?)").bind(Date.now(), JSON.stringify({ folder: checked.folder })),
+    db.prepare('UPDATE service SET backup_folder = ?').bind(checked.folder),
+  ]);
+  c.executionCtx.waitUntil(c.env.backups.tick(c.env, Date.now()));
+  return c.body(null, 204);
 });
 
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;

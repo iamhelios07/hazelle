@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { ChildProcess } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { settingsPage, setUp, startServer, stopServer } from './helpers';
+import { enter, FAKE_MODEL, FAKE_PROVIDER, fakeProvider, settingsPage, setUp, startServer, stopServer } from './helpers';
 
 // Someone's own installation, as docker-compose.yml and the start without Docker run it: a server of its own, since the
 // suite's runs as hazelle.app. hazelle.app itself is answered here, so nothing leaves the machine.
@@ -33,4 +33,12 @@ test("a self-host opens 게시판 and 헤이젤 나우 on hazelle.app and lists 
 
   await page.goto('/now');
   await expect(page).toHaveURL('https://hazelle.app/now');
+});
+
+test('a self-host offers the model servers of its machine that answer, and connects one in a tap', async ({ page }) => {
+  await fakeProvider();
+  await enter(page, 'self-host-password');
+  await page.getByRole('button', { name: /^새 연결/ }).click();
+  await page.getByRole('button', { name: new RegExp(`^${FAKE_PROVIDER.replaceAll('.', '\\.')}`) }).click();
+  await expect(page.getByRole('button', { name: `${FAKE_MODEL} 추가`, exact: true })).toBeVisible();
 });
