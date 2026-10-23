@@ -1,4 +1,4 @@
-import { Ban, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageIcon, Languages, Receipt, Scissors, Square, TriangleAlert, WandSparkles } from 'lucide-react';
+import { Ban, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageIcon, Languages, Scissors, Square, TriangleAlert, WandSparkles } from 'lucide-react';
 import { createContext, useContext, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Button } from '../controls/Button';
 import { Facts, type FactItem } from '../collections/Facts';
@@ -185,12 +185,13 @@ export function Marker({ reason, label, action }: MarkerProps) {
 
 // A reply's usage at the end of its text: a line that opens its facts below it, and from them the whole account (more).
 // Not in the foot's markers: the foot sticks to the bottom of the view, and the opened facts would stick with it.
-export function Usage({ line, facts, more }: { line: string; facts: FactItem[]; more: { label: string; onClick: () => void } }) {
+// lead: the fact read first (a cost), brighter than the rest; null leaves the line to the rest.
+export function Usage({ lead, line, facts, more }: { lead: string | null; line: string; facts: FactItem[]; more: { label: string; onClick: () => void } }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={styles.usage}>
       <button type="button" className={styles.usageLine} aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Icon icon={Receipt} size="sm" />
+        {lead && <span className={styles.usageLead}>{lead}</span>}
         <span>{line}</span>
         <Icon icon={open ? ChevronUp : ChevronDown} size="sm" />
       </button>

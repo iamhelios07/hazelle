@@ -40,17 +40,19 @@ export function cacheShare(usage: Usage | null): number | null {
   return input === null || read === null || input === 0 ? null : Math.round((read / input) * 100);
 }
 
-// 사용량 표시: the line under a reply, and the facts it opens. The line leaves out a cache the provider does not report,
-// which the facts read as unknown.
-export function usageLine(receipt: Receipt): string {
+// 사용량 표시: the line under a reply, led by its cost, and the facts it opens. Neither shows a cost the app does not
+// know (the user's pick, 2026-10-24; 응답 정보 still says it); the line also leaves out an unreported cache, which the
+// facts read as unknown. A cost still booking stays in both, as such.
+export function usageLine(receipt: Receipt): { lead: string | null; line: string } {
   const { usage } = receipt;
   const share = cacheShare(usage);
-  return [
-    usage ? `${tokens(usage.inputTokens)} → ${tokens(usage.outputTokens)}` : `사용량 ${UNKNOWN}`,
+  const line = [
+    ...(usage ? [`입력 ${tokens(usage.inputTokens)}`, `출력 ${tokens(usage.outputTokens)}`] : [`사용량 ${UNKNOWN}`]),
     ...(share === null ? [] : [`캐시 ${share}%`]),
-    receipt.cost === null || receipt.cost === 'pending' ? `비용 ${cost(receipt.cost)}` : cost(receipt.cost),
+    ...(receipt.cost === 'pending' ? [`비용 ${cost('pending')}`] : []),
     seconds(receipt.totalMs),
-  ].join(' · ');
+  ];
+  return { lead: receipt.cost === null || receipt.cost === 'pending' ? null : cost(receipt.cost), line: line.join(' · ') };
 }
 
 export function usageFacts(receipt: Receipt) {
@@ -60,7 +62,7 @@ export function usageFacts(receipt: Receipt) {
   return [
     { label: '입력', value: tokens(usage?.inputTokens ?? null), notes: [`캐시 적중 ${share === null ? UNKNOWN : `${share}%`}`] },
     { label: '출력', value: tokens(usage?.outputTokens ?? null), notes: [`추론 ${tokens(reasoning)}`] },
-    { label: '비용', value: cost(receipt.cost), tone: receipt.cost === null ? ('muted' as const) : undefined },
+    ...(receipt.cost === null ? [] : [{ label: '비용', value: cost(receipt.cost) }]),
     { label: '걸린 시간', value: seconds(receipt.totalMs), notes: [`첫 토큰 ${seconds(receipt.firstTextMs)}`] },
     { label: '속도', value: speed(usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
     { label: '모델', value: receipt.modelName, notes: [receipt.source] },

@@ -364,7 +364,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     >
       {body}
       {usageShown && receipt && !live && !failed && editing === null && (
-        <Usage line={usageLine(receipt)} facts={usageFacts(receipt)} more={{ label: '자세히', onClick: () => actions.info(message.id) }} />
+        <Usage {...usageLine(receipt)} facts={usageFacts(receipt)} more={{ label: '자세히', onClick: () => actions.info(message.id) }} />
       )}
     </StoryMessage>
   );
